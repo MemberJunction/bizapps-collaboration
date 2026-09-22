@@ -38,7 +38,7 @@ A professional-services engagement, an association committee, and a certificatio
 
 > **The one idea:** a Space is simultaneously the **permission boundary** and the **agent's retrieval boundary**, defined once. An agent cannot answer from a document the person asking is not allowed to open. Sub-spaces narrow both together and can never widen either.
 
-**Scope (2026-09-21):** single-tenant per deployment. One association running it for member and committee collaboration, or one firm running it for client work. It is not multi-tenant SaaS and it does not depend on BCSaaS. **Distribution (2026-09-22):** it ships free. No tiers, no per-seat line, no AI add-on SKU. How that free app is licensed and published is still open ([plan §11](plans/plan.md)).
+**Scope (2026-09-21):** single-tenant per deployment. One association running it for member and committee collaboration, or one firm running it for client work. It is not multi-tenant SaaS. **Distribution (2026-09-22):** it ships free. No tiers, no per-seat line, no AI add-on SKU. How that free app is licensed and published is still open ([plan §11](plans/plan.md)).
 
 ---
 
@@ -47,7 +47,7 @@ A professional-services engagement, an association committee, and a certificatio
 | ✅ This is | ❌ This is not |
 |---|---|
 | A thin Open App: five entities in `__mj_BizAppsCollaboration`, everything else composed from what already ships | A second copy of conversations, tasks, files, or governance |
-| The resource id the estate has been missing — `MJ: Resource Permissions`, magic-link `Kind:'resource-share'`, and the `{{ScopeResourceID}}` token are each parameterised on a resource nothing else supplies | A core framework primitive (core declares zero dependencies on any app, so a core Space could never consume BizApps Tasks) |
+| The resource id those mechanisms have been missing — `MJ: Resource Permissions`, magic-link `Kind:'resource-share'`, and the `{{ScopeResourceID}}` token are each parameterised on a resource nothing else supplies | A core framework primitive (core declares zero dependencies on any app, so a core Space could never consume BizApps Tasks) |
 | A tree: perpetual root per relationship, sub-spaces for the work inside it | A folder per project that dies when the engagement does |
 | The place an outsider joins a group — one roster for staff and external participants | Org-wide chat (Slack / Teams), or a rewrite of [BizApps Secure Messaging](https://github.com/MemberJunction/bizapps-secure-messaging) into group chat |
 | The container Committees, Tasks, Files, and Caliber were each missing | A document-management system (files stay in MJ Storage) or the community surface (discoverability and join mode are modelled in v1; moderation, reputation, and public profiles are a later release) |
@@ -88,11 +88,11 @@ Collaboration declares dependencies. It does not reimplement the domains next to
 | Governance vocabulary | [BizApps Committees](https://github.com/MemberJunction/bizapps-committees) — motions, ballots, quorum, minutes | Committees refactors onto Space in a later phase. Collaboration does not import Committees |
 | Notifications, e-signature, usage | `NotificationEngine`, `MJ: Signature Requests` (polymorphic on EntityID/RecordID), `MJ: Artifact Uses` | Reuse. Point signatures at `SpaceItem` |
 
-[BizApps Secure Messaging](https://github.com/MemberJunction/bizapps-secure-messaging) stays a **sibling, not a dependency**. It is strictly 1:1, published at 2.0.0, and already named by other catalogue plans. Its e-signature routing is core and reachable without it. The File Request lifecycle is the only thing it uniquely owns; if a space needs that shape, lift the fields rather than take the dependency ([plan §4b](plans/plan.md)).
+[BizApps Secure Messaging](https://github.com/MemberJunction/bizapps-secure-messaging) stays a **sibling, not a dependency**. It is strictly 1:1 and published at 2.0.0. Its e-signature routing is core and reachable without it. The File Request lifecycle is the only thing it uniquely owns; if a space needs that shape, lift the fields rather than take the dependency ([plan §4b](plans/plan.md)).
 
 ### Why an app, not a core primitive
 
-Core declares zero dependencies on any app package. A core Space could never consume `bizapps-tasks` and would be stuck with core `MJ: Tasks`, which the tasks plan rejected as agent-orchestration-shaped. An Open App simply declares the dependency, the way Committees already declares Common and Tasks. `MJ: Resource Types` and `MJ: Permission Domains` are metadata-seeded catalogs resolved by `@RegisterClass` name, so nothing is given up by staying an app. `bizapps-forms` already ships an app-schema entity, an app role, and an app RLS filter from its own repo. Collaboration follows that path.
+Core declares zero dependencies on any app package. A core Space could never consume `bizapps-tasks` and would be stuck with core `MJ: Tasks`, which is shaped for agent orchestration rather than human work. An Open App simply declares the dependency, the way Committees already declares Common and Tasks. `MJ: Resource Types` and `MJ: Permission Domains` are metadata-seeded catalogs resolved by `@RegisterClass` name, so nothing is given up by staying an app. `bizapps-forms` already ships an app-schema entity, an app role, and an app RLS filter from its own repo. Collaboration follows that path.
 
 ---
 
@@ -107,7 +107,7 @@ Committees can govern, and it requires every participant to be a staff user. Sec
 | One-off / view-once reviewer | Magic link, `Kind: 'resource-share'` |
 | Account-less 1:1 exchange, no space | BizApps Secure Messaging |
 
-The restricted-login pattern is the one Sidecar LXP proved with its `Learner` role. The load-bearing finding: **never give a space participant the `UI` role.** MJ's RLS fails open — `UserExemptFromRowLevelSecurity` returns true the moment any role the user holds has a permission row on that entity with a NULL filter, and `UI` carries hundreds of unfiltered rows. Before adding any RLS filter, audit every role those users hold. Prefer **one participant role with one filter**. Role RLS OR-composes every filter a user holds, so a second role can only widen.
+**Never give a space participant the `UI` role.** MJ's RLS fails open — `UserExemptFromRowLevelSecurity` returns true the moment any role the user holds has a permission row on that entity with a NULL filter, and `UI` carries a large set of unfiltered rows. Before adding any RLS filter, audit every role those users hold. Prefer **one participant role with one filter**. Role RLS OR-composes every filter a user holds, so a second role can only widen.
 
 A participant must be able to invite their own team. The ceiling is four clauses, all of them in `SpaceMemberEntityServer.Save()`:
 
@@ -118,7 +118,7 @@ A participant must be able to invite their own team. The ceiling is four clauses
 
 `MJ: Application Roles` is a front door, not a vault. Zero role rows on an application means open to everyone, and the check is client-side. Treat application access as reachability. The boundary is the security model below.
 
-The full incident list — shell grants that disclose nothing, the branded no-access page shipping before lockdown, the cast on `{{ScopeResourceID}}`, and why BCSaaS defaults are refused — is [plan §5](plans/plan.md).
+The rest of the door — shell grants that disclose nothing, the branded no-access page shipping before lockdown, and the cast on `{{ScopeResourceID}}` — is [plan §5](plans/plan.md).
 
 ---
 
@@ -136,7 +136,7 @@ Downward-inclusive, never upward. Ask from the root and you get everything benea
 
 Every space-scoped table carries a real `SpaceID`, `NOT NULL`, meaning the same thing on every table. Because `IsHierarchy` emits `ParentIDPath`, one membership subquery covers the tree. `{{UserID}}` is a token MJ's unresolved-token guard covers. The filter is equality / `IN` form — never `NOT IN`, `<>`, or `NOT LIKE` against a token. Start computed; materialize only if it stops being fast, and if you materialize, recompute on **both** space create/move and membership change. Collections writes descendant grants on share and never revisits them on create. That is the defect not to copy.
 
-**Writes are not RLS.** They are `BaseEntity` subclasses. The write-side RLS slots exist and, across the estate, go unused. A subclass is where a rule reaches MJ's generated CRUD mutations, API and MCP alike. `isNew` is load-bearing: on an INSERT every field's `.Dirty` is false. No constructor on the subclass — a throwing constructor makes MJ fall back to plain `BaseEntity` and the guard vanishes.
+**Writes are not RLS.** They are `BaseEntity` subclasses. The write-side RLS slots exist and, in practice, go unused. A subclass is where a rule reaches MJ's generated CRUD mutations, API and MCP alike. `isNew` is load-bearing: on an INSERT every field's `.Dirty` is false. No constructor on the subclass — a throwing constructor makes MJ fall back to plain `BaseEntity` and the guard vanishes.
 
 **Two bands, from day one.** Team is the engagement team's working material and is never in the client-facing agent's scope. Shared is promoted deliberately, with an actor and a timestamp. A band on `SpaceItem` fails loudly at promotion time. A folder convention fails silently the first time someone files a transcript in the wrong place.
 
@@ -167,7 +167,7 @@ BizApps Collaboration will be a [MemberJunction Open App](https://github.com/Mem
 mj app install https://github.com/MemberJunction/bizapps-collaboration
 ```
 
-That command does nothing useful yet. This commit has no `mj-app.json`, no migrations, and no packages. When the manifest exists, the app id will be `mj-bizapps-collaboration`, the schema `__mj_BizAppsCollaboration`, and the dependency it declares is [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks). Committees consumes Space later; it is not a dependency. Secure Messaging and BCSaaS are not dependencies.
+That command does nothing useful yet. This commit has no `mj-app.json`, no migrations, and no packages. When the manifest exists, the app id will be `mj-bizapps-collaboration`, the schema `__mj_BizAppsCollaboration`, and the dependency it declares is [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks). Committees consumes Space later; it is not a dependency. Secure Messaging is not a dependency.
 
 The host shells are MemberJunction's own `MJAPI` and `MJExplorer`. A BizApps repo ships libraries (`packages/`), migrations, and metadata. It does not ship a private API or Explorer app.
 
@@ -261,7 +261,7 @@ bizapps-collaboration/
     └── plan.md
 ```
 
-`pnpm install` for day-to-day work in the joined M5 checkout runs at the workspace parent, not inside this repo. Generated entity classes come from CodeGen. Hand-written `EntityField` DML does not go in a migration.
+Generated entity classes come from CodeGen. Hand-written `EntityField` DML does not go in a migration.
 
 ---
 
@@ -273,7 +273,7 @@ bizapps-collaboration/
 2. **`MJ: Artifact Uses`** — does it cover plain files, or only artifacts?
 3. **File Requests** — lift the shape into Collaboration, or revisit Secure Messaging as an optional dependency later?
 4. **Committees adopting Space** — Phase 3 as written, or a separate decision?
-5. **License and distribution** — free is decided; source-available in the manner of `bizapps-forms`, or a free app in the MJC catalog, is not. This repo has no `LICENSE` file until that is settled.
+5. **License and distribution** — free is decided; source-available in the manner of `bizapps-forms`, or another free distribution, is not. This repo has no `LICENSE` file until that is settled.
 6. **The deliverable agent after the engagement ends** — the perpetual root makes it possible; the business rule is unwritten.
 7. **Which door creates an external participant's identity** — invite, or open self-signup? Settle it before writing a provisioning service.
 
@@ -297,7 +297,7 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 
 | Layer | Technology | Version |
 |---|---|---|
-| **Platform** | [MemberJunction](https://github.com/MemberJunction/MJ) | 6.1 (the line the plan was read against; LXP findings from 5.51 get re-verified on this pin, not ported) |
+| **Platform** | [MemberJunction](https://github.com/MemberJunction/MJ) | 6.1 (the line the plan was read against; 5.51 workarounds are not ported) |
 | **Runtime** | Node.js | 18+ |
 | **Language** | TypeScript | 5.9 (strict) |
 | **Database (primary)** | SQL Server / Azure SQL | 2019+ |
