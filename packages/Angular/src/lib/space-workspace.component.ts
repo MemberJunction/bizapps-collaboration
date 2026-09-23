@@ -3,6 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
     membershipReaches,
+    rosterBySeat,
     refuseInvite,
     type Band,
     type InviteDecision,
@@ -190,19 +191,20 @@ export class SpaceWorkspaceComponent {
         return !!this.reach(this.selected?.id)?.role.canContribute;
     }
 
-    parentName(space: WorkspaceSpace): string {
-        return this.spaces.find((item) => item.id === space.parentId)?.name ?? 'the parent';
-    }
-
-    parentRoster(space: WorkspaceSpace): (MemberSnapshot & { displayName?: string })[] | null {
-        if (!space.inheritsMembership || !space.parentId || !this.reach(space.parentId)) return null;
-        const direct = new Set(this.membersHere(space.id).map((member) => member.userId));
-        const rows = this.members.filter((member) => member.spaceId === space.parentId && member.status === 'Active' && !direct.has(member.userId));
-        return rows.length ? rows : null;
-    }
-
-    sharesParentRoster(space: WorkspaceSpace): boolean {
-        return !!space.inheritsMembership && !!space.parentId && !this.reach(space.parentId);
+    ancestorGroups(space: WorkspaceSpace): { id: string; name: string; members: (MemberSnapshot & { displayName?: string })[] | null }[] {
+        const groups = rosterBySeat(this.spaces, this.members, space.id).filter((group) => group.spaceId !== space.id);
+        const shown = [];
+        for (const group of groups) {
+            const name = this.spaces.find((item) => item.id === group.spaceId)?.name ?? 'the parent';
+            if (!this.reach(group.spaceId)) {
+                shown.push({ id: group.spaceId, name, members: null });
+                break;
+            }
+            const people = group.members
+                .map((member) => this.members.find((row) => row.userId === member.userId && row.spaceId === member.spaceId) ?? member);
+            if (people.length) shown.push({ id: group.spaceId, name, members: people });
+        }
+        return shown;
     }
 
     private reach(spaceId: string | null | undefined) {

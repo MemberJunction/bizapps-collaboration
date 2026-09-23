@@ -3,7 +3,7 @@
     <p class="eyebrow">Spaces</p>
     @if (canCreateHere()) {
       <form class="invite" (submit)="$event.preventDefault(); sendCreate()">
-        <label>New space<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
+        <label>{{ viewerIsStaff && !ownsSelected() ? 'New top-level space' : 'New space' }}<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
         <label>Type
           <select name="new-type" [(ngModel)]="createTypeId">
             <option value="">Choose a type</option>
@@ -66,19 +66,21 @@
               <li class="empty">Nobody is on this roster yet. The owner seats themselves first, then invites.</li>
             }
           </ul>
-          @if (parentRoster(space); as inherited) {
-            <h3>Through {{ parentName(space) }}</h3>
-            <ul class="roster">
-              @for (member of inherited; track member.userId) {
-                <li>
-                  <span class="who">{{ member.displayName || member.userId }}</span>
-                  <span class="pill">{{ member.band }}</span>
-                  <span class="pill">{{ member.status }}</span>
-                </li>
-              }
-            </ul>
-          } @else if (sharesParentRoster(space)) {
-            <p class="empty">This space shares its parent's roster.</p>
+          @for (group of ancestorGroups(space); track group.id) {
+            @if (group.members; as people) {
+              <h3>Through {{ group.name }}</h3>
+              <ul class="roster">
+                @for (member of people; track member.userId) {
+                  <li>
+                    <span class="who">{{ member.displayName || member.userId }}</span>
+                    <span class="pill">{{ member.band }}</span>
+                    <span class="pill">{{ member.status }}</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="empty">This space shares {{ group.name }}'s roster.</p>
+            }
           }
 
           @if (canInviteHere()) {

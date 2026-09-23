@@ -9,6 +9,7 @@ import {
     leavingWouldStrand,
     wouldStrandLastOwner,
     membershipReaches,
+    rosterBySeat,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
@@ -66,6 +67,7 @@ function member(partial: Partial<MemberSnapshot> & Pick<MemberSnapshot, 'spaceId
 const tree: SpaceNode[] = [
     space({ id: 'root', ownerId: 'ada' }),
     space({ id: 'child', parentId: 'root' }),
+    space({ id: 'grandchild', parentId: 'child' }),
     space({ id: 'sealed', parentId: 'root', inheritsMembership: false }),
     space({ id: 'under-sealed', parentId: 'sealed' }),
 ];
@@ -96,6 +98,28 @@ describe('membershipReaches', () => {
     it('ignores invited and removed rows', () => {
         const memberships = [member({ spaceId: 'root', userId: 'cy', role: ownerRole, status: 'Invited' })];
         assert.equal(membershipReaches(tree, memberships, 'cy', 'root'), null);
+    });
+});
+
+describe('rosterBySeat', () => {
+    const seated = [
+        member({ spaceId: 'root', userId: 'ada', role: ownerRole }),
+        member({ spaceId: 'child', userId: 'bea', role: readerRole, band: 'Shared' }),
+        member({ spaceId: 'grandchild', userId: 'lee', role: readerRole, band: 'Shared' }),
+        member({ spaceId: 'sealed', userId: 'sam', role: ownerRole }),
+    ];
+
+    it('lists a three-level chain by the seat, nearest first', () => {
+        const groups = rosterBySeat(tree, seated, 'grandchild');
+        assert.deepEqual(groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.deepEqual(groups[2].members.map((member) => member.userId), ['ada']);
+    });
+
+    it('stops the list at a sealed space', () => {
+        const groups = rosterBySeat(tree, seated, 'under-sealed');
+        assert.deepEqual(groups.map((group) => group.spaceId), ['sealed']);
+        assert.equal(membershipReaches(tree, seated, 'ada', 'under-sealed'), null);
+        assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
     });
 });
 

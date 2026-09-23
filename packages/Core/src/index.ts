@@ -8,6 +8,7 @@ export {
     isSelfRemoval,
     leavingWouldStrand,
     membershipReaches,
+    rosterBySeat,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
@@ -28,6 +29,7 @@ export type {
     PromotionDecision,
     Retention,
     RoleFlags,
+    RosterGroup,
     SpaceNode,
     InviteDecision,
 } from './rules.js';

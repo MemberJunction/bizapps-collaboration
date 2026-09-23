@@ -101,6 +101,40 @@ export function membershipReaches(
     return null;
 }
 
+export interface RosterGroup {
+    /** The space these people are seated on. The first group is the target. */
+    spaceId: string;
+    members: MemberSnapshot[];
+}
+
+/**
+ * Everyone who reaches `targetId`, grouped by the space they sit on.
+ * The walk is the same one `membershipReaches` uses: up through inheriting
+ * parents, and it stops at a sealed space.
+ */
+export function rosterBySeat(
+    spaces: readonly SpaceNode[],
+    memberships: readonly MemberSnapshot[],
+    targetId: string,
+): RosterGroup[] {
+    const index = byId(spaces);
+    const groups: RosterGroup[] = [];
+    let current = index.get(idKey(targetId));
+    const seen = new Set<string>();
+    while (current && !seen.has(idKey(current.id))) {
+        seen.add(idKey(current.id));
+        const seated = memberships.filter((member) => idKey(member.spaceId) === idKey(current!.id) && member.status === ACTIVE);
+        if (seated.length) {
+            groups.push({ spaceId: current.id, members: seated });
+        }
+        if (!current.inheritsMembership || !current.parentId) {
+            break;
+        }
+        current = index.get(idKey(current.parentId));
+    }
+    return groups;
+}
+
 /** Every space this person's active memberships reach, including sealed stops. */
 export function visibleSpaces(
     spaces: readonly SpaceNode[],

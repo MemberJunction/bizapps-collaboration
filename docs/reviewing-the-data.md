@@ -30,9 +30,13 @@ Delivery's agent scope is `ExcludedFromParentScope`. `Closed last year` is `Excl
 
 `Closed this month` uses retention `Month` and a close date 7 days ago, so a former client is still inside the window. `Closed last year` uses `Month` and a close date 400 days ago, so the window has passed. `Closed indefinite` leaves `Retention` empty, so the workspace type default `Indefinite` applies.
 
-Studio uses the world-owned Workshop type: `AutoApprove` and a member cap of 2. Ada and Sam fill it.
+Studio uses the world-owned type `world-workshop`: `AutoApprove` and a member cap of 3. Ada and Sam leave one seat free, so a non-owner invite can auto-approve before a later invite hits the cap. Its id is `E1000001-…`, not the next migration id.
 
-The extra role `team-reader` is level 10 and can see Team. Casey, a client admin, can invite up to level 10 but cannot see Team, so granting `team-reader` is the flag the ceiling check refuses.
+Committee and Cohort retention stay `Year`, from the migration. The loader reads those rows and does not write them. `Cohort archive` is a child of the cohort, closed 400 days ago, with `Retention` empty, so the Year default is what the check reads.
+
+Field notes sits under Discovery, so seeing it walks two steps. Delivery room sits under sealed Delivery: Sam reaches it, and Casey, who only sits on Northwind, does not.
+
+The flag-ceiling role is not in this world. That check creates the role inside a transaction and rolls it back, so a staff member cannot grant Team visibility on a real host.
 
 ## What the loader still has to do
 

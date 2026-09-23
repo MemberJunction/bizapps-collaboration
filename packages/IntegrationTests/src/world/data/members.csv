@@ -12,6 +12,9 @@ committee,pat,guest,Shared,Invited
 cohort,ada,owner,Team,Active
 cohort,lee,client-member,Shared,Active
 cohort,rio,client-member,Shared,Active
+field-notes,ada,owner,Team,Active
+delivery-room,ada,owner,Team,Active
+cohort-archive,ada,owner,Team,Active
 harbor,harbor,owner,Team,Active
 harbor,harper,client-member,Shared,Active
 closed-recent,ada,owner,Team,Active
