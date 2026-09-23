@@ -30,6 +30,8 @@ export type {
     Retention,
     RoleFlags,
     RosterGroup,
+    RosterStop,
+    RosterWalk,
     SpaceNode,
     InviteDecision,
 } from './rules.js';

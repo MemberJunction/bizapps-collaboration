@@ -110,16 +110,35 @@ describe('rosterBySeat', () => {
     ];
 
     it('lists a three-level chain by the seat, nearest first', () => {
-        const groups = rosterBySeat(tree, seated, 'grandchild');
-        assert.deepEqual(groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
-        assert.deepEqual(groups[2].members.map((member) => member.userId), ['ada']);
+        const walk = rosterBySeat(tree, seated, 'grandchild');
+        assert.equal(walk.stop, 'root');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.deepEqual(walk.groups[2].members.map((member) => member.userId), ['ada']);
+    });
+
+    it('lists a person once, under their nearest seat', () => {
+        const both = [...seated, member({ spaceId: 'child', userId: 'ada', role: ownerRole })];
+        const walk = rosterBySeat(tree, both, 'grandchild');
+        const seats = walk.groups.flatMap((group) => group.members.filter((member) => member.userId === 'ada').map(() => group.spaceId));
+        assert.deepEqual(seats, ['child']);
     });
 
     it('stops the list at a sealed space', () => {
-        const groups = rosterBySeat(tree, seated, 'under-sealed');
-        assert.deepEqual(groups.map((group) => group.spaceId), ['sealed']);
+        const walk = rosterBySeat(tree, seated, 'under-sealed');
+        assert.equal(walk.stop, 'sealed');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['sealed']);
         assert.equal(membershipReaches(tree, seated, 'ada', 'under-sealed'), null);
         assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
+    });
+
+    it('reports a parent the viewer was not given, the way a row filter hides it', () => {
+        const visible = tree.filter((space) => space.id === 'child' || space.id === 'grandchild');
+        const visibleMembers = seated.filter((member) => member.spaceId === 'child' || member.spaceId === 'grandchild');
+        const walk = rosterBySeat(visible, visibleMembers, 'grandchild');
+        assert.equal(walk.stop, 'unloaded-parent');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild', 'child']);
+        assert.equal(membershipReaches(visible, visibleMembers, 'ada', 'grandchild'), null);
+        assert.equal(membershipReaches(visible, visibleMembers, 'bea', 'grandchild')?.userId, 'bea');
     });
 });
 

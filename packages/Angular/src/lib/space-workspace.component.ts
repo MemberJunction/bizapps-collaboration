@@ -191,20 +191,19 @@ export class SpaceWorkspaceComponent {
         return !!this.reach(this.selected?.id)?.role.canContribute;
     }
 
-    ancestorGroups(space: WorkspaceSpace): { id: string; name: string; members: (MemberSnapshot & { displayName?: string })[] | null }[] {
-        const groups = rosterBySeat(this.spaces, this.members, space.id).filter((group) => group.spaceId !== space.id);
-        const shown = [];
-        for (const group of groups) {
-            const name = this.spaces.find((item) => item.id === group.spaceId)?.name ?? 'the parent';
-            if (!this.reach(group.spaceId)) {
-                shown.push({ id: group.spaceId, name, members: null });
-                break;
-            }
-            const people = group.members
-                .map((member) => this.members.find((row) => row.userId === member.userId && row.spaceId === member.spaceId) ?? member);
-            if (people.length) shown.push({ id: group.spaceId, name, members: people });
-        }
-        return shown;
+    ancestorGroups(space: WorkspaceSpace): { id: string; name: string; members: (MemberSnapshot & { displayName?: string })[] }[] {
+        return rosterBySeat(this.spaces, this.members, space.id).groups
+            .filter((group) => group.spaceId !== space.id)
+            .map((group) => ({
+                id: group.spaceId,
+                name: this.spaces.find((item) => item.id === group.spaceId)?.name ?? 'the parent',
+                members: group.members.map((member) => this.members.find((row) => row.userId === member.userId && row.spaceId === member.spaceId) ?? member),
+            }))
+            .filter((group) => group.members.length > 0);
+    }
+
+    sharesUnseenRoster(space: WorkspaceSpace): boolean {
+        return rosterBySeat(this.spaces, this.members, space.id).stop === 'unloaded-parent';
     }
 
     private reach(spaceId: string | null | undefined) {

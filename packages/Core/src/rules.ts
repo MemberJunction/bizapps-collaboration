@@ -107,32 +107,62 @@ export interface RosterGroup {
     members: MemberSnapshot[];
 }
 
+export type RosterStop = 'root' | 'sealed' | 'unloaded-parent';
+
+export interface RosterWalk {
+    groups: RosterGroup[];
+    /** Why the walk ended. `unloaded-parent` means the next parent was not in `spaces`. */
+    stop: RosterStop;
+}
+
 /**
  * Everyone who reaches `targetId`, grouped by the space they sit on.
- * The walk is the same one `membershipReaches` uses: up through inheriting
- * parents, and it stops at a sealed space.
+ * Each person is listed once, under their nearest active seat. That is the
+ * seat `membershipReaches` returns. The walk stops at a root, at a sealed
+ * space, or at a parent the caller did not load.
  */
 export function rosterBySeat(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     targetId: string,
-): RosterGroup[] {
+): RosterWalk {
     const index = byId(spaces);
     const groups: RosterGroup[] = [];
+    const listed = new Set<string>();
     let current = index.get(idKey(targetId));
     const seen = new Set<string>();
+    if (!current) {
+        return { groups, stop: 'unloaded-parent' };
+    }
+    let stop: RosterStop = 'root';
     while (current && !seen.has(idKey(current.id))) {
         seen.add(idKey(current.id));
-        const seated = memberships.filter((member) => idKey(member.spaceId) === idKey(current!.id) && member.status === ACTIVE);
+        const seated = memberships.filter((member) => {
+            if (idKey(member.spaceId) !== idKey(current!.id) || member.status !== ACTIVE) return false;
+            const key = idKey(member.userId);
+            if (listed.has(key)) return false;
+            listed.add(key);
+            return true;
+        });
         if (seated.length) {
             groups.push({ spaceId: current.id, members: seated });
         }
-        if (!current.inheritsMembership || !current.parentId) {
+        if (!current.inheritsMembership) {
+            stop = 'sealed';
             break;
         }
-        current = index.get(idKey(current.parentId));
+        if (!current.parentId) {
+            stop = 'root';
+            break;
+        }
+        const parent = index.get(idKey(current.parentId));
+        if (!parent) {
+            stop = 'unloaded-parent';
+            break;
+        }
+        current = parent;
     }
-    return groups;
+    return { groups, stop };
 }
 
 /** Every space this person's active memberships reach, including sealed stops. */

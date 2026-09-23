@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const stylesheet = join(dirname(require.resolve('@memberjunction/ng-shared-generic/package.json')), 'dist/lib/_tokens.scss');
-const allowed = new Set(readFileSync(stylesheet, 'utf8').match(/--mj-[a-z0-9-]+/g) ?? []);
+const allowed = new Set(readFileSync(stylesheet, 'utf8').match(/--mj-[a-z0-9-]+(?=:)/g) ?? []);
 const used = new Map();
 
 function walk(dir) {

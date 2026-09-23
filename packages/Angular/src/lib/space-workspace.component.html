@@ -67,20 +67,19 @@
             }
           </ul>
           @for (group of ancestorGroups(space); track group.id) {
-            @if (group.members; as people) {
-              <h3>Through {{ group.name }}</h3>
-              <ul class="roster">
-                @for (member of people; track member.userId) {
-                  <li>
-                    <span class="who">{{ member.displayName || member.userId }}</span>
-                    <span class="pill">{{ member.band }}</span>
-                    <span class="pill">{{ member.status }}</span>
-                  </li>
-                }
-              </ul>
-            } @else {
-              <p class="empty">This space shares {{ group.name }}'s roster.</p>
-            }
+            <h3>Through {{ group.name }}</h3>
+            <ul class="roster">
+              @for (member of group.members; track member.userId) {
+                <li>
+                  <span class="who">{{ member.displayName || member.userId }}</span>
+                  <span class="pill">{{ member.band }}</span>
+                  <span class="pill">{{ member.status }}</span>
+                </li>
+              }
+            </ul>
+          }
+          @if (sharesUnseenRoster(space)) {
+            <p class="empty">This space shares its parent's roster.</p>
           }
 
           @if (canInviteHere()) {
