@@ -11,7 +11,7 @@ The sample world is `COLLAB-WORLD`. The catalog is the CSV under `packages/Integ
 | Key | Who | Where they belong |
 | --- | --- | --- |
 | ada | Staff owner | Owns Northwind, Delivery, the committee, the cohort, the closed spaces, and Studio |
-| sam | Staff member | Northwind, Delivery, and Studio |
+| sam | Staff member | Northwind, Delivery, the committee, and Studio. Sam invites Pat |
 | casey | Client admin | Seated on Northwind, so Discovery is inherited. Not seated on sealed Delivery |
 | bea | Client member | Discovery, and the closed sub-spaces. Cannot invite |
 | dana | Outside director | The audit committee only |
@@ -41,9 +41,13 @@ The flag-ceiling role is not in this world. That check creates the role inside a
 ## Loading it
 
 ```bash
-node --env-file=.env test-harnesses/load-world.mjs
+pnpm --filter @mj-biz-apps/collaboration-integration-tests run build
+node --env-file=.env packages/IntegrationTests/dist/world/purge-world.js
+node --env-file=.env packages/IntegrationTests/dist/world/load-world.js
 ```
 
-The database in that env file must already have the Collaboration migrations. The script creates each root as its owner, seats that owner, then creates children. A second run finds the same ids. This database has no People entity, so the loader creates Users and their MemberJunction roles. Linked Person rows are created when that entity is present.
+The database in that env file must already have the Collaboration migrations and bizapps-common, because the loader creates a Person for every persona and throws if `MJ_BizApps_Common: People` is missing. Each Person stores `LinkedUserID`.
+
+The system user writes the users, their MemberJunction roles, the People, and the world-owned space type. Each root is created by its owner, that owner is seated, then children are created. Pat's Invited seat is saved by Sam. Remy's seat is created and then removed by Ada in the same run. Ada is not given a seat on Discovery. The load reads the database back and throws if a space, seat, status, or band disagrees with the catalog. A second run finds the same ids. The purge deletes only rows with those ids.
 
 Files, conversations, share notices, item uses, the project plan, and committee governance rows join this catalog when those stores are seeded.

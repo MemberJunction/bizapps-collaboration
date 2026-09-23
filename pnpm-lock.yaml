@@ -129,6 +129,40 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/IntegrationTests:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.3
+        version: 6.1.3
+      '@memberjunction/core-entities':
+        specifier: 6.1.3
+        version: 6.1.3
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.3
+        version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.1.3
+        version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
+      '@mj-biz-apps/collaboration-entities':
+        specifier: workspace:*
+        version: link:../Entities
+      '@mj-biz-apps/collaboration-server':
+        specifier: workspace:*
+        version: link:../Server
+      '@mj-biz-apps/common-entities':
+        specifier: 5.45.0
+        version: 5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
+      mssql:
+        specifier: 12.7.0
+        version: 12.7.0
+    devDependencies:
+      '@types/mssql':
+        specifier: 12.3.0
+        version: 12.3.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/Server:
     dependencies:
       '@mj-biz-apps/collaboration-actions':
@@ -1834,6 +1868,12 @@ packages:
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
+  '@mj-biz-apps/common-entities@5.45.0':
+    resolution: {integrity: sha512-4cGUSr4tZoHvpNXZEceizrgYQT9Em5Am4805JORjMl8tEaJStTP4HHciSytQkKUhuYVo2r2ckvdMIeG8rmZTQg==}
+    peerDependencies:
+      '@memberjunction/core': ^6.1.0-edge.6
+      '@memberjunction/global': ^6.1.0-edge.6
+
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
     engines: {node: '>=18'}
@@ -2317,6 +2357,9 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
+
+  '@types/mssql@12.3.0':
+    resolution: {integrity: sha512-+jy+AJtfuTDI5+nhh0hDNcir1p8P+pf+qsHXpUpYvg7EikxUUePBe+a+Kr6j/Xs89o4EbHlVzrh0HOxbqWM31Q==}
 
   '@types/node-fetch@2.6.13':
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
@@ -4720,8 +4763,8 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  mssql@12.7.2:
-    resolution: {integrity: sha512-zhpPw+WXBWLw7d7J6Y0aWgQy0EV8HKDGNSvmkAjP8bSM4H41X0fweAeKWI+bg9Ri+JHCbsf/QScjmACBFcEo8A==}
+  mssql@12.7.0:
+    resolution: {integrity: sha512-J6SJKXi1jYbhHjjooLNtPnX7+s3cq5IJ701Wgy/UW1SXRpgFlJJsYi3IPve9RVgCUkq0Cqv2aaaSJ4IXtIF3mg==}
     engines: {node: '>=18.19.0'}
     hasBin: true
 
@@ -8412,7 +8455,7 @@ snapshots:
       '@memberjunction/templates': 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@memberjunction/templates-base-types': 6.1.3
       dotenv: 17.4.2
-      mssql: 12.7.2
+      mssql: 12.7.0
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@azure/msal-browser'
@@ -8703,7 +8746,7 @@ snapshots:
       cosmiconfig: 9.0.0(typescript@5.9.3)
       fs-extra: 11.4.1
       glob: 13.0.6
-      mssql: 12.7.2
+      mssql: 12.7.0
       ora-classic: 5.4.2
       pg: 8.23.0
       tree-kill: 1.2.2
@@ -9169,7 +9212,7 @@ snapshots:
       '@memberjunction/core': 6.1.3
       '@memberjunction/data-context': 6.1.3
       '@memberjunction/global': 6.1.3
-      mssql: 12.7.2
+      mssql: 12.7.0
     transitivePeerDependencies:
       - supports-color
 
@@ -9395,7 +9438,7 @@ snapshots:
       '@memberjunction/core-entities': 6.1.3
       '@memberjunction/external-data-sources': 6.1.3
       '@memberjunction/global': 6.1.3
-      mssql: 12.7.2
+      mssql: 12.7.0
     transitivePeerDependencies:
       - supports-color
 
@@ -10762,7 +10805,7 @@ snapshots:
       jsonwebtoken: 9.0.3
       jwks-rsa: 3.2.2
       lru-cache: 11.5.3
-      mssql: 12.7.2
+      mssql: 12.7.0
       ora: 8.2.0
       pg: 8.23.0
       reflect-metadata: 0.2.2
@@ -10840,7 +10883,7 @@ snapshots:
       '@memberjunction/query-processor': 6.1.3
       '@memberjunction/queue': 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@memberjunction/sql-dialect': 6.1.3
-      mssql: 12.7.2
+      mssql: 12.7.0
       rxjs: 7.8.2
       uuid: 13.0.2
     transitivePeerDependencies:
@@ -11133,6 +11176,12 @@ snapshots:
       - utf-8-validate
 
   '@mixmark-io/domino@2.2.0': {}
+
+  '@mj-biz-apps/common-entities@5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)':
+    dependencies:
+      '@memberjunction/core': 6.1.3
+      '@memberjunction/global': 6.1.3
+      zod: 3.25.76
 
   '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
     dependencies:
@@ -11521,26 +11570,26 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/caseless@0.12.5': {}
 
   '@types/cli-progress@3.11.6':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/compression@1.8.1':
     dependencies:
       '@types/express': 5.0.6
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/d3-array@3.2.2': {}
 
@@ -11680,7 +11729,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.3':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -11700,7 +11749,7 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/leaflet@1.9.22':
     dependencies:
@@ -11710,9 +11759,17 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
+  '@types/mssql@12.3.0':
+    dependencies:
+      '@types/node': 25.9.8
+      tarn: 3.1.2
+      tedious: 20.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       form-data: 4.0.6
 
   '@types/node@14.18.63': {}
@@ -11733,7 +11790,7 @@ snapshots:
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       pg-protocol: 1.16.0
       pg-types: 2.2.0
 
@@ -11751,12 +11808,12 @@ snapshots:
 
   '@types/readable-stream@4.0.24':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/request@2.48.13':
     dependencies:
       '@types/caseless': 0.12.5
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       '@types/tough-cookie': 4.0.5
       form-data: 2.5.6
 
@@ -11766,12 +11823,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@types/tough-cookie@4.0.5': {}
 
@@ -11779,7 +11836,7 @@ snapshots:
 
   '@types/uuid@11.0.0':
     dependencies:
-      uuid: 13.0.2
+      uuid: 14.0.2
 
   '@types/validator@13.15.10': {}
 
@@ -11791,7 +11848,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
 
   '@typespec/ts-http-runtime@0.3.9':
     dependencies:
@@ -14406,7 +14463,7 @@ snapshots:
 
   ms@2.1.3: {}
 
-  mssql@12.7.2:
+  mssql@12.7.0:
     dependencies:
       '@tediousjs/connection-string': 1.1.0
       commander: 11.1.0
@@ -14834,7 +14891,7 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.2
       '@types/long': 4.0.2
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       long: 4.0.0
 
   protobufjs@7.6.6:
@@ -14848,7 +14905,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.2
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       long: 5.3.2
 
   proxy-addr@2.0.8:
@@ -15390,7 +15447,7 @@ snapshots:
       '@azure/identity': 4.13.3
       '@azure/keyvault-keys': 4.10.2
       '@js-joda/core': 6.1.0
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       bl: 6.1.6
       iconv-lite: 0.7.3
       js-md4: 0.3.2
@@ -15536,7 +15593,7 @@ snapshots:
 
   type-graphql@2.0.0-beta.3(class-validator@0.14.4)(graphql-scalars@1.26.0(graphql@16.14.2))(graphql@16.14.2):
     dependencies:
-      '@types/node': 24.10.11
+      '@types/node': 25.9.8
       '@types/semver': 7.8.0
       graphql: 16.14.2
       graphql-query-complexity: 0.12.0(graphql@16.14.2)

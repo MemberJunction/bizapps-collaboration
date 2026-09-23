@@ -1,0 +1,380 @@
+/**
+ * Load COLLAB-WORLD through the entity gates and commit it.
+ *
+ * The system user writes users, their MemberJunction roles, People, and the
+ * world-owned space type. Every space is saved by its owner. Every other seat
+ * is saved by a member the gate accepts. An owner's invite is always Active,
+ * so an Invited seat is created by a non-owner who can invite. A Removed seat
+ * is created and then removed by the owner in the same run.
+ *
+ * An owner who already reaches a space through its parent may grant another
+ * owner seat. This loader does not do that. It seats only the catalog.
+ *
+ * `recent` is 7 days before this run. `past` is 400 days. Any other word throws.
+ */
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import '@memberjunction/core-entities';
+import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import '@mj-biz-apps/common-entities';
+import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
+import '@mj-biz-apps/collaboration-entities';
+import {
+    mjBizAppsCollaborationSpaceEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
+    mjBizAppsCollaborationSpaceTypeEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import { LoadBizAppsCollaborationServer } from '@mj-biz-apps/collaboration-server';
+import sql from 'mssql';
+import { readCsv } from './csv.js';
+
+const SPACES = 'MJ_BizApps_Collaboration: Spaces';
+const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
+const TYPES = 'MJ_BizApps_Collaboration: Space Types';
+const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
+const USERS = 'MJ: Users';
+const USER_ROLES = 'MJ: User Roles';
+const PEOPLE = 'MJ_BizApps_Common: People';
+
+type Row = Record<string, string>;
+type Persona = Row & { id: string };
+
+function dataDir(): string {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const beside = join(here, 'data');
+    return existsSync(join(beside, 'spaces.csv')) ? beside : join(here, '..', '..', 'src', 'world', 'data');
+}
+
+function closedAt(word: string): Date | null {
+    if (!word) return null;
+    if (word !== 'recent' && word !== 'past') throw new Error(`Unknown ClosedAt "${word}". Use recent, past, or leave it empty.`);
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - (word === 'recent' ? 7 : 400));
+    return date;
+}
+
+function quote(value: string): string {
+    return value.replace(/'/g, "''");
+}
+
+async function findId(provider: SQLServerDataProvider, entityName: string, filter: string, user: UserInfo): Promise<string | null> {
+    const view = RunView.FromMetadataProvider(provider);
+    const result = await view.RunView<{ ID: string }>({ EntityName: entityName, ExtraFilter: filter, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, user);
+    if (!result.Success) throw new Error(`${entityName}: ${result.ErrorMessage ?? 'the read failed'}`);
+    return result.Results?.[0]?.ID ?? null;
+}
+
+function requireMap(map: Map<string, string>, key: string, label: string): string {
+    const value = map.get(key);
+    if (!value) throw new Error(`Unknown ${label} ${key}.`);
+    return value;
+}
+
+export async function loadWorld(): Promise<void> {
+    const { DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD } = process.env;
+    if (!DB_HOST || !DB_DATABASE || !DB_USERNAME || !DB_PASSWORD) throw new Error('Set DB_HOST, DB_DATABASE, DB_USERNAME and DB_PASSWORD.');
+    const pool = await new sql.ConnectionPool({
+        server: DB_HOST,
+        port: Number(DB_PORT ?? 1433),
+        database: DB_DATABASE,
+        user: DB_USERNAME,
+        password: DB_PASSWORD,
+        options: { trustServerCertificate: true, encrypt: false },
+    }).connect();
+    const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, process.env.MJ_CORE_SCHEMA || '__mj'));
+    const owner = UserCache.Users.find((user) => user?.Type?.trim().toLowerCase() === 'owner');
+    if (!owner) throw new Error('No Owner-type user. The loader will not guess.');
+    const system: UserInfo = owner;
+    if (!new Metadata().EntityByName(PEOPLE)) {
+        throw new Error(`${PEOPLE} is not in this database. Install bizapps-common before loading the world.`);
+    }
+    LoadBizAppsCollaborationServer();
+    const dir = dataDir();
+    const personas = readCsv(join(dir, 'personas.csv'));
+    const typeRows = readCsv(join(dir, 'types.csv'));
+    const spaceRows = readCsv(join(dir, 'spaces.csv'));
+    const memberRows = readCsv(join(dir, 'members.csv'));
+
+    const people = new Map<string, Persona>();
+    for (const persona of personas) {
+        const byEmail = await findId(provider, USERS, `Email = '${quote(persona.Email)}'`, system);
+        const byId = await findId(provider, USERS, `ID = '${persona.ID}'`, system);
+        if (byEmail && byId && byEmail.toLowerCase() !== byId.toLowerCase()) {
+            throw new Error(`${persona.Email} is already a different user than ${persona.ID}.`);
+        }
+        if (byEmail && !byId) throw new Error(`${persona.Email} already belongs to ${byEmail}, not catalog id ${persona.ID}.`);
+        if (byId && !byEmail) throw new Error(`${persona.ID} already exists with a different email than ${persona.Email}.`);
+        let id = byId ?? byEmail;
+        if (!id) {
+            const user = await new Metadata().GetEntityObject<MJUserEntity>(USERS, system);
+            user.NewRecord();
+            user.ID = persona.ID;
+            user.Name = `${persona.FirstName} ${persona.LastName}`;
+            user.Email = persona.Email;
+            user.Type = 'User';
+            if (!(await user.Save())) throw new Error(`user ${persona.Key}: ${user.LatestResult?.CompleteMessage ?? 'save failed'}`);
+            id = user.ID;
+        }
+        const roleId = await findId(provider, 'MJ: Roles', `Name = '${quote(persona.MjRole)}'`, system);
+        if (!roleId) throw new Error(`Missing MemberJunction role ${persona.MjRole}.`);
+        if (!(await findId(provider, USER_ROLES, `UserID = '${id}' AND RoleID = '${roleId}'`, system))) {
+            const link = await new Metadata().GetEntityObject<MJUserRoleEntity>(USER_ROLES, system);
+            link.NewRecord();
+            link.UserID = id;
+            link.RoleID = roleId;
+            if (!(await link.Save())) throw new Error(`role ${persona.Key}: ${link.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
+        const personId = await findId(provider, PEOPLE, `LinkedUserID = '${id}'`, system);
+        if (!personId) {
+            const person = await new Metadata().GetEntityObject<mjBizAppsCommonPersonEntity>(PEOPLE, system);
+            person.NewRecord();
+            person.FirstName = persona.FirstName;
+            person.LastName = persona.LastName;
+            person.Email = persona.Email;
+            person.LinkedUserID = id;
+            if (!(await person.Save())) throw new Error(`person ${persona.Key}: ${person.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
+        people.set(persona.Key, { ...persona, id });
+    }
+    await UserCache.Instance.Refresh(provider);
+    const actor = (key: string): UserInfo => {
+        const id = people.get(key)?.id;
+        if (!id) throw new Error(`Unknown persona ${key}.`);
+        const cached = UserCache.Users.find((user) => user.ID.toLowerCase() === id.toLowerCase());
+        if (!cached) throw new Error(`User cache has no ${key} after refresh.`);
+        return cached;
+    };
+
+    const types = new Map<string, string>();
+    for (const code of ['workspace', 'committee', 'cohort']) {
+        const id = await findId(provider, TYPES, `Code = '${code}'`, system);
+        if (!id) throw new Error(`Seeded type ${code} is missing. Run the Collaboration migrations first.`);
+        types.set(code, id);
+    }
+    for (const type of typeRows) {
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(TYPES, system);
+        const existing = await findId(provider, TYPES, `ID = '${type.ID}'`, system);
+        if (existing) {
+            if (!(await record.Load(existing))) throw new Error(`Could not load type ${type.Key}.`);
+        } else {
+            record.NewRecord();
+            record.ID = type.ID;
+        }
+        record.Code = type.Code;
+        record.Name = type.Name;
+        record.Vocabulary = type.Name;
+        record.InviteApproval = type.InviteApproval as 'Approve' | 'AutoApprove';
+        record.MemberCap = type.MemberCap ? Number(type.MemberCap) : null;
+        record.DefaultRetention = type.DefaultRetention as 'Month' | 'Year' | 'Indefinite';
+        if (!(await record.Save())) throw new Error(`type ${type.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        types.set(type.Key, record.ID);
+    }
+
+    const roles = new Map<string, string>();
+    for (const code of ['owner', 'admin', 'member', 'guest', 'client-admin', 'client-member']) {
+        const id = await findId(provider, ROLES, `Code = '${code}'`, system);
+        if (!id) throw new Error(`Seeded role ${code} is missing.`);
+        roles.set(code, id);
+    }
+
+    const spaceIds = new Map<string, string>();
+    const seated = new Set<string>();
+    const seatKey = (spaceKey: string, personKey: string) => `${spaceKey}\0${personKey}`;
+
+    const saveSpace = async (space: Row) => {
+        const typeId = requireMap(types, space.Type, 'space type');
+        const owner = actor(space.Owner);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, owner);
+        const existing = await findId(provider, SPACES, `ID = '${space.ID}'`, system);
+        if (existing) {
+            if (!(await record.Load(existing))) throw new Error(`Could not load space ${space.Key}.`);
+        } else {
+            record.NewRecord();
+            record.ID = space.ID;
+        }
+        record.Name = space.Name;
+        record.SpaceTypeID = typeId;
+        record.OwnerID = people.get(space.Owner)?.id ?? '';
+        if (!record.OwnerID) throw new Error(`Space ${space.Key} names unknown owner ${space.Owner}.`);
+        record.ParentID = space.Parent ? requireMap(spaceIds, space.Parent, 'parent space') : null;
+        record.InheritsMembership = space.InheritsMembership === '1';
+        record.AgentRetrieval = space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
+        record.ClosedAt = closedAt(space.ClosedAt);
+        record.Retention = (space.Retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
+        if (!(await record.Save())) throw new Error(`space ${space.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        spaceIds.set(space.Key, record.ID);
+    };
+
+    async function saveMember(row: Row): Promise<void> {
+        const spaceId = spaceIds.get(row.Space);
+        const userId = people.get(row.Person)?.id;
+        if (!spaceId || !userId) throw new Error(`Bad member row ${row.Person} on ${row.Space}.`);
+        const roleId = requireMap(roles, row.Role, 'role');
+        const space = spaceRows.find((item) => item.Key === row.Space);
+        if (!space) throw new Error(`Member row names unknown space ${row.Space}.`);
+        const inviter = row.Status === 'Invited' ? nonOwnerInviter(row.Space) : space.Owner;
+        const who = actor(row.Role === 'owner' ? row.Person : inviter);
+        let record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, who);
+        const existing = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${userId}'`, system);
+        if (!existing) {
+            record.NewRecord();
+            record.SpaceID = spaceId;
+            record.UserID = userId;
+            record.SpaceRoleTypeID = roleId;
+            record.Band = row.Band as 'Team' | 'Shared';
+            record.Status = 'Active';
+            if (!(await record.Save())) throw new Error(`member ${row.Person} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+            if (row.Status !== 'Removed' && record.Status.trim() !== row.Status) {
+                throw new Error(`${row.Person} on ${row.Space} saved as ${record.Status.trim()}, catalog says ${row.Status}.`);
+            }
+        }
+        if (row.Status === 'Removed') {
+            record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, actor(space.Owner));
+            const id = existing ?? await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${userId}'`, system);
+            if (!id || !(await record.Load(id))) throw new Error(`Could not reload ${row.Person} on ${row.Space} to remove them.`);
+            record.Status = 'Removed';
+            if (!(await record.Save())) throw new Error(`remove ${row.Person} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
+        seated.add(seatKey(row.Space, row.Person));
+    }
+
+    function nonOwnerInviter(spaceKey: string): string {
+        const member = memberRows.find((row) => row.Space === spaceKey && row.Role === 'member' && row.Status === 'Active' && seated.has(seatKey(spaceKey, row.Person)));
+        if (!member) throw new Error(`${spaceKey} has an Invited seat but no active member who can invite is seated yet.`);
+        return member.Person;
+    }
+
+    const pending = [...spaceRows];
+    while (pending.length) {
+        const ready = pending.filter((space) => !space.Parent || spaceIds.has(space.Parent));
+        if (!ready.length) throw new Error(`Could not order spaces: ${pending.map((space) => space.Key).join(', ')}`);
+        for (const space of ready) {
+            pending.splice(pending.indexOf(space), 1);
+            await saveSpace(space);
+        }
+        for (const space of ready) {
+            for (const row of memberRows.filter((member) => member.Space === space.Key && member.Role === 'owner')) {
+                await saveMember(row);
+            }
+        }
+    }
+    for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
+
+    await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
+    console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces and ${memberRows.length} seats match the catalog.`);
+    console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
+    console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
+    await pool.close();
+}
+
+function asBool(value: unknown): boolean {
+    return value === true || value === 1 || value === '1';
+}
+
+function closedAgeDays(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const time = value instanceof Date ? value.getTime() : Date.parse(String(value));
+    if (Number.isNaN(time)) throw new Error(`Unreadable ClosedAt ${String(value)}.`);
+    return (Date.now() - time) / 86_400_000;
+}
+
+async function assertCatalog(
+    provider: SQLServerDataProvider,
+    user: UserInfo,
+    spaceRows: Row[],
+    memberRows: Row[],
+    personas: Row[],
+    people: Map<string, Persona>,
+    spaceIds: Map<string, string>,
+    types: Map<string, string>,
+    roles: Map<string, string>,
+): Promise<void> {
+    const view = RunView.FromMetadataProvider(provider);
+    for (const persona of personas) {
+        const linked = people.get(persona.Key)?.id;
+        if (!linked) throw new Error(`Missing user for ${persona.Key}.`);
+        const person = await view.RunView<{ ID: string; LinkedUserID: string; FirstName: string; LastName: string }>({
+            EntityName: PEOPLE,
+            ExtraFilter: `LinkedUserID = '${linked}'`,
+            Fields: ['ID', 'LinkedUserID', 'FirstName', 'LastName'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, user);
+        if (!person.Success || !person.Results?.length) throw new Error(`No Person linked to ${persona.Key}.`);
+        const row = person.Results[0];
+        if (row.FirstName?.trim() !== persona.FirstName || row.LastName?.trim() !== persona.LastName) {
+            throw new Error(`Person ${persona.Key} is ${row.FirstName} ${row.LastName}.`);
+        }
+    }
+    const spaces = await view.RunView<{
+        ID: string;
+        Name: string;
+        ParentID: string | null;
+        OwnerID: string;
+        SpaceTypeID: string;
+        InheritsMembership: boolean;
+        AgentRetrieval: string;
+        Retention: string | null;
+        ClosedAt: string | Date | null;
+    }>({
+        EntityName: SPACES,
+        ExtraFilter: `ID IN (${spaceRows.map((row) => `'${row.ID}'`).join(',')})`,
+        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'Retention', 'ClosedAt'],
+        ResultType: 'simple',
+    }, user);
+    if (!spaces.Success || spaces.Results?.length !== spaceRows.length) {
+        throw new Error(`Expected ${spaceRows.length} spaces, read ${spaces.Results?.length ?? 0}. ${spaces.ErrorMessage ?? ''}`);
+    }
+    for (const row of spaceRows) {
+        const found = spaces.Results?.find((space) => space.ID.toLowerCase() === row.ID.toLowerCase());
+        if (!found) throw new Error(`Missing space ${row.Key}.`);
+        const parentId = row.Parent ? spaceIds.get(row.Parent) ?? null : null;
+        const foundParent = found.ParentID ? found.ParentID.toLowerCase() : null;
+        if (found.Name?.trim() !== row.Name) throw new Error(`${row.Key} is named ${found.Name}.`);
+        if (foundParent !== (parentId ? parentId.toLowerCase() : null)) throw new Error(`${row.Key} parent does not match the catalog.`);
+        if (found.OwnerID.toLowerCase() !== people.get(row.Owner)!.id.toLowerCase()) throw new Error(`${row.Key} owner does not match the catalog.`);
+        if (found.SpaceTypeID.toLowerCase() !== requireMap(types, row.Type, 'space type').toLowerCase()) throw new Error(`${row.Key} type does not match the catalog.`);
+        if (asBool(found.InheritsMembership) !== (row.InheritsMembership === '1')) throw new Error(`${row.Key} inheritance does not match the catalog.`);
+        if (String(found.AgentRetrieval).trim() !== row.AgentRetrieval) throw new Error(`${row.Key} agent retrieval is ${found.AgentRetrieval}.`);
+        if ((found.Retention?.trim() || null) !== (row.Retention || null)) throw new Error(`${row.Key} retention is ${found.Retention}.`);
+        const age = closedAgeDays(found.ClosedAt);
+        const expected = row.ClosedAt === 'recent' ? 7 : row.ClosedAt === 'past' ? 400 : null;
+        if (expected === null) {
+            if (age !== null) throw new Error(`${row.Key} is closed and the catalog leaves it open.`);
+        } else if (age === null || Math.abs(age - expected) > 0.5) {
+            throw new Error(`${row.Key} closed age is ${age}, catalog says ${row.ClosedAt}.`);
+        }
+    }
+    const members = await view.RunView<{ SpaceID: string; UserID: string; Status: string; Band: string; SpaceRoleTypeID: string }>({
+        EntityName: MEMBERS,
+        ExtraFilter: `SpaceID IN (${[...spaceIds.values()].map((id) => `'${id}'`).join(',')})`,
+        Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+        ResultType: 'simple',
+    }, user);
+    if (!members.Success) throw new Error(members.ErrorMessage ?? 'Could not read the roster.');
+    if ((members.Results?.length ?? 0) !== memberRows.length) {
+        throw new Error(`Expected ${memberRows.length} seats, read ${members.Results?.length ?? 0}.`);
+    }
+    for (const row of memberRows) {
+        const found = members.Results?.find((member) => member.SpaceID.toLowerCase() === spaceIds.get(row.Space)!.toLowerCase() && member.UserID.toLowerCase() === people.get(row.Person)!.id.toLowerCase());
+        if (!found) throw new Error(`Missing seat ${row.Person} on ${row.Space}.`);
+        if (found.Status.trim() !== row.Status || found.Band.trim() !== row.Band) {
+            throw new Error(`${row.Person} on ${row.Space} is ${found.Status.trim()} ${found.Band.trim()}, catalog says ${row.Status} ${row.Band}.`);
+        }
+        if (found.SpaceRoleTypeID.toLowerCase() !== requireMap(roles, row.Role, 'role').toLowerCase()) {
+            throw new Error(`${row.Person} on ${row.Space} has the wrong role.`);
+        }
+    }
+}
+
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+    loadWorld().then(() => process.exit(0)).catch((error) => {
+        console.error(error instanceof Error ? error.message : error);
+        process.exit(1);
+    });
+}
