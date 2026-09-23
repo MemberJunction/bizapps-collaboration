@@ -140,6 +140,19 @@ describe('refuseInvite', () => {
         if (!decision.ok) assert.equal(decision.code, 'not-a-member');
     });
 
+    it('seats the owner when the ids differ only by case', () => {
+        const decision = refuseInvite({
+            ...base,
+            callerUserId: 'ADA',
+            inviteeUserId: 'ada',
+            targetSpaceId: 'ROOT',
+            granted: ownerRole,
+            memberships: [],
+            spaces: tree.map((space) => space.id === 'root' ? { ...space, id: 'Root', ownerId: 'Ada' } : space),
+        });
+        assert.deepEqual(decision, { ok: true, status: 'Active' });
+    });
+
     it('lets the owner seat themselves when the roster is empty', () => {
         const decision = refuseInvite({
             ...base,

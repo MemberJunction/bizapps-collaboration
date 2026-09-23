@@ -318,7 +318,7 @@ export function flagExceedsGrantor(granted: RoleFlags, grantor: RoleFlags): stri
 }
 
 function countTowardCap(memberships: readonly MemberSnapshot[], spaceId: string): number {
-    return memberships.filter((member) => member.spaceId === spaceId && member.status !== 'Removed').length;
+    return memberships.filter((member) => idKey(member.spaceId) === idKey(spaceId) && member.status !== 'Removed').length;
 }
 
 /**
@@ -343,7 +343,7 @@ export function refuseInvite(input: {
     if (!input.callerUserId) {
         return { ok: false, code: 'not-signed-in', message: 'Invite refused: there is no signed-in user to grant it.' };
     }
-    const target = input.spaces.find((space) => space.id === input.targetSpaceId);
+    const target = input.spaces.find((space) => idKey(space.id) === idKey(input.targetSpaceId));
     if (!target) {
         return { ok: false, code: 'unknown-space', message: 'Invite refused: that space does not exist.' };
     }
@@ -359,7 +359,7 @@ export function refuseInvite(input: {
 
     const grantor = membershipReaches(input.spaces, input.memberships, input.callerUserId, target.id);
     if (!grantor) {
-        const seatingSelf = input.callerUserId === input.inviteeUserId && input.callerUserId === target.ownerId && input.granted.isOwnerRole;
+        const seatingSelf = idKey(input.callerUserId) === idKey(input.inviteeUserId) && idKey(input.callerUserId) === idKey(target.ownerId) && input.granted.isOwnerRole;
         const nobodyHere = occupied === 0;
         if (seatingSelf && nobodyHere) {
             return { ok: true, status: 'Active' };
@@ -479,11 +479,11 @@ export function agentMayQuote(input: {
     }
     current = itemSpace;
     const between = new Set<string>();
-    while (current && current.id !== input.askedFromSpaceId && !between.has(current.id)) {
+    while (current && idKey(current.id) !== idKey(input.askedFromSpaceId) && !between.has(idKey(current.id))) {
         if (current.agentRetrieval === 'ExcludedFromParentScope') {
             return false;
         }
-        between.add(current.id);
+        between.add(idKey(current.id));
         current = current.parentId ? index.get(current.parentId) : undefined;
     }
     return true;

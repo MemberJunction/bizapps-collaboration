@@ -96,10 +96,14 @@ describe('loadWriteContext on SQL Server ids', () => {
                 RunViewProviderToUse: provider,
                 ProviderToUse: provider,
             } as unknown as BaseEntity;
-            const context = await loadWriteContext(entity, { ID: USER } as UserInfo, USER, ROLE);
+            const context = await loadWriteContext(entity, { ID: USER } as UserInfo, SPACE, ROLE);
             assert.equal(context.memberships[0]?.role.isOwnerRole, true);
             assert.equal(context.memberships[0]?.role.canInvite, true);
             assert.equal(context.role?.isOwnerRole, true);
+            assert.equal(context.spaces[0]?.id, SPACE.toLowerCase());
+            assert.equal(context.spaces[0]?.ownerId, USER.toLowerCase());
+            assert.equal(context.ownerCount, 1);
+            assert.equal(context.approval, 'Approve');
         } finally {
             source.GetSystemUser = original;
         }
