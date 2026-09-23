@@ -22,7 +22,7 @@ import { Message } from '@memberjunction/communication-types';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import '@mj-biz-apps/common-entities';
 import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
-import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, refuseInvite } from '@mj-biz-apps/collaboration-core';
+import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { loadWriteContext, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 
@@ -118,13 +118,6 @@ export async function mintSpaceLink(input: {
         accountId = created.id;
         createdUser = true;
     }
-    const access = await ensureAccess(input.provider, system, accountId);
-    if (access.ok === false) {
-        if (createdUser) await deleteNewAccount(input.provider, system, accountId);
-        await refreshUsers(input.provider);
-        return { ok: false, message: access.message };
-    }
-    await refreshUsers(input.provider);
 
     const seated = await findSeat(input.provider, input.spaceId, accountId, system);
     if (seated.ok === false) {
@@ -132,26 +125,28 @@ export async function mintSpaceLink(input: {
         await refreshUsers(input.provider);
         return { ok: false, message: seated.message };
     }
-    const existingSeat = seated.status;
-    let status = existingSeat;
-    if (!status) {
-        const member = await input.provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, input.user);
-        member.NewRecord();
-        member.SpaceID = input.spaceId;
-        member.UserID = accountId;
-        member.SpaceRoleTypeID = input.roleId;
-        member.Status = 'Active';
-        member.Band = granted.canSeeTeamBand ? 'Team' : 'Shared';
-        if (!(await member.Save())) {
+    const callerIsOwner = !!membershipReaches(context.spaces, context.memberships, input.user.ID, input.spaceId)?.role.isOwnerRole;
+    const band = granted.canSeeTeamBand ? 'Team' : 'Shared';
+    let status = seated.status;
+    const restoring = status === 'Removed';
+    if (!status || restoring) {
+        const written = await writeSeat(input, accountId, band, preview.status, restoring ? seated.id : null);
+        if (written.ok === false) {
             if (createdUser) await deleteNewAccount(input.provider, system, accountId);
             await refreshUsers(input.provider);
-            return { ok: false, message: member.LatestResult?.CompleteMessage ?? 'Invite refused: the seat could not be saved.' };
+            return { ok: false, message: written.message };
         }
-        status = member.Status.trim();
+        status = written.status;
+    } else if (status === 'Active' && !callerIsOwner) {
+        return { ok: true, sent: false, message: 'They are already seated. The owner sends the sign-in link.' };
     }
-    if (status !== preview.status && !existingSeat) {
-        return { ok: true, sent: false, message: `The seat was saved as ${status}. The gate had decided ${preview.status}.` };
+    if ((!seated.status || restoring) && status !== preview.status) {
+        const grant = await grantAfterSeat(input.provider, system, accountId);
+        const mismatch = `The seat was saved as ${status}. The gate had decided ${preview.status}.`;
+        return { ok: true, sent: false, message: grant ?? mismatch };
     }
+    const access = await grantAfterSeat(input.provider, system, accountId);
+    if (access) return { ok: true, sent: false, message: access };
     try {
         await ensurePerson(input.provider, system, accountId, email);
     } catch (error) {
@@ -245,17 +240,53 @@ async function findUserId(provider: IMetadataProvider, email: string, user: User
     return { ok: true, id: rows.Results?.[0]?.ID ?? null };
 }
 
-async function findSeat(provider: IMetadataProvider, spaceId: string, userId: string, user: UserInfo): Promise<{ ok: true; status: string | null } | { ok: false; message: string }> {
+async function findSeat(provider: IMetadataProvider, spaceId: string, userId: string, user: UserInfo): Promise<{ ok: true; id: string | null; status: string | null } | { ok: false; message: string }> {
     const view = RunView.FromMetadataProvider(provider);
-    const rows = await view.RunView<{ Status: string }>({
+    const rows = await view.RunView<{ ID: string; Status: string }>({
         EntityName: MEMBERS,
         ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${userId}'`,
-        Fields: ['Status'],
+        Fields: ['ID', 'Status'],
         MaxRows: 1,
         ResultType: 'simple',
     }, user);
     if (!rows.Success) return { ok: false, message: 'Invite refused: the roster could not be read.' };
-    return { ok: true, status: rows.Results?.[0]?.Status?.trim() ?? null };
+    const row = rows.Results?.[0];
+    return { ok: true, id: row?.ID ?? null, status: row?.Status?.trim() ?? null };
+}
+
+async function writeSeat(
+    input: { provider: IMetadataProvider; user: UserInfo; spaceId: string; roleId: string },
+    accountId: string,
+    band: 'Team' | 'Shared',
+    decided: 'Invited' | 'Active',
+    existingId: string | null,
+): Promise<{ ok: true; status: string } | { ok: false; message: string }> {
+    const member = await input.provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, input.user);
+    if (existingId) {
+        if (!(await member.Load(existingId))) return { ok: false, message: 'Invite refused: the removed seat could not be read.' };
+        member.SpaceRoleTypeID = input.roleId;
+        member.Status = decided;
+        member.Band = band;
+    } else {
+        member.NewRecord();
+        member.SpaceID = input.spaceId;
+        member.UserID = accountId;
+        member.SpaceRoleTypeID = input.roleId;
+        member.Status = 'Active';
+        member.Band = band;
+    }
+    if (!(await member.Save())) {
+        return { ok: false, message: member.LatestResult?.CompleteMessage ?? 'Invite refused: the seat could not be saved.' };
+    }
+    return { ok: true, status: member.Status.trim() };
+}
+
+/** Grants after the seat exists. Returns a message when the grant fails. */
+async function grantAfterSeat(provider: IMetadataProvider, system: UserInfo, accountId: string): Promise<string | null> {
+    const access = await ensureAccess(provider, system, accountId);
+    await refreshUsers(provider);
+    if (access.ok === false) return `The seat was saved. ${access.message}`;
+    return null;
 }
 
 async function createAccount(provider: IMetadataProvider, system: UserInfo, email: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {

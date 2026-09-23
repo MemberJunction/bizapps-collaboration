@@ -8,13 +8,21 @@
  * catalog role. People are removed and created again.
  */
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
+
+function storedObjectPath(root: string, providerKey: string | null): string | null {
+    const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
+    if (!cleaned || cleaned.split(/[/\\]/).some((part) => part === '..' || part === '.')) return null;
+    const full = resolve(root, cleaned);
+    if (full !== root && !full.startsWith(root + sep)) return null;
+    return full;
+}
 
 function dataDir(): string {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -42,6 +50,15 @@ export async function purgeWorld(): Promise<void> {
         password: DB_PASSWORD,
         options: { trustServerCertificate: true, encrypt: false },
     });
+    const stored = await pool.request().query(`
+        SELECT f.ProviderKey AS ProviderKey
+        FROM [${core}].[File] AS f
+        WHERE f.ID IN (
+            SELECT TRY_CAST(SUBSTRING(i.RecordID, 4, 36) AS uniqueidentifier)
+            FROM __mj_BizAppsCollaboration.SpaceItem AS i
+            WHERE i.SpaceID IN (${spaceIds}) AND i.RecordID LIKE 'ID|%'
+        )
+    `);
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
@@ -90,7 +107,13 @@ export async function purgeWorld(): Promise<void> {
         await transaction.rollback();
         throw error;
     }
-    await rm(worldStorageRoot(), { recursive: true, force: true });
+    const root = resolve(worldStorageRoot());
+    for (const row of stored.recordset as Array<{ ProviderKey: string | null }>) {
+        const file = storedObjectPath(root, row.ProviderKey);
+        if (!file) continue;
+        await rm(file, { force: true });
+        await rm(`${file}.mjmeta.json`, { force: true });
+    }
     console.log(`COLLAB-WORLD app rows purged from ${DB_DATABASE}. The user accounts were kept.`);
     await pool.close();
 }

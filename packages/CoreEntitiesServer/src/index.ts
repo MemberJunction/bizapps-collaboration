@@ -1,4 +1,3 @@
-import './local-directory-storage.js';
 export { LoadSpaceEntityServer, SpaceEntityServer } from './SpaceEntityServer.js';
 export { LoadSpaceItemEntityServer, releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMemberEntityServer.js';
@@ -6,8 +5,7 @@ export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntitySer
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
-export { collaborationFileStore, ensureLocalStorageAccount, readStoredFile, COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID } from './local-storage-account.js';
-export { COLLABORATION_STORAGE_DRIVER_KEY } from './local-directory-storage.js';
+export { collaborationFileStore } from './collaboration-file-store.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

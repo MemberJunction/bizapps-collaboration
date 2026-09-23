@@ -149,9 +149,15 @@ importers:
       '@memberjunction/generic-database-provider':
         specifier: 6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
+      '@memberjunction/global':
+        specifier: 6.1.3
+        version: 6.1.3
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
+      '@memberjunction/storage':
+        specifier: 6.1.3
+        version: 6.1.3(encoding@0.1.13)(typescript@5.9.3)
       '@mj-biz-apps/collaboration-core':
         specifier: workspace:*
         version: link:../Core

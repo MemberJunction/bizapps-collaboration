@@ -54,7 +54,9 @@ A seat that already exists is not rewritten. If Pat were left Active by an earli
 
 ## Files
 
-`files.csv` is the library. The loader stores each one through `uploadSpaceFile`, in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. That directory is the storage account `Collaboration local`. It is created on load and removed on purge. The credential is not a default API key.
+`files.csv` is the library. The loader stores each one through `uploadSpaceFile` and passes the sample account id. Every other upload leaves the account to MemberJunction, which picks the host's active account. The sample provider is inactive, so a host that also has a cloud account does not pick this directory.
+
+The bytes live in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. The credential is not a default API key. A purge deletes the storage paths on the world's file rows, and leaves the rest of that directory alone. The driver is in the integration package, not the published server. The private API imports `packages/IntegrationTests/dist/world/local-directory-storage.js` so it can open these files.
 
 | Key | Who uploads | Where | Band |
 | --- | --- | --- | --- |

@@ -8,15 +8,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { storedContentType } from '@mj-biz-apps/collaboration-core';
-import {
-    COLLABORATION_STORAGE_ACCOUNT_ID,
-    collaborationFileStore,
-    decideUploadBand,
-    ensureLocalStorageAccount,
-    readStoredFile,
-    uploadSpaceFile,
-} from '@mj-biz-apps/collaboration-core-entities-server';
+import { collaborationFileStore, decideUploadBand, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readCsv } from './csv.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile } from './local-storage-account.js';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 const USES = 'MJ_BizApps_Collaboration: Item Uses';
@@ -51,9 +45,9 @@ export async function seedWorldFiles(input: {
     dataDir: string;
     rootDir: string;
 }): Promise<void> {
-    const rows = readCsv(join(input.dataDir, 'files.csv')) as unknown as CatalogFile[];
+    const rows = catalogFiles(readCsv(join(input.dataDir, 'files.csv')));
     await ensureLocalStorageAccount(input.provider, input.system, input.rootDir);
-    const store = collaborationFileStore(input.provider);
+    const store = collaborationFileStore(input.provider, COLLABORATION_STORAGE_ACCOUNT_ID);
     for (const row of rows) {
         const spaceId = input.spaceId(row.Space);
         const uploader = input.actor(row.Uploader);
@@ -84,6 +78,26 @@ export async function seedWorldFiles(input: {
         }
         await assertFile(input, row, spaceId, uploader.ID, itemId, storagePath, content);
     }
+}
+
+const FILE_COLUMNS = ['Key', 'Space', 'Uploader', 'FileName', 'MimeType', 'Folder', 'Kind', 'Band'] as const;
+
+function catalogFiles(rows: Array<Record<string, string>>): CatalogFile[] {
+    return rows.map((row, index) => {
+        for (const column of FILE_COLUMNS) {
+            if (!row[column]?.trim()) throw new Error(`files.csv row ${index + 1} is missing ${column}.`);
+        }
+        return {
+            Key: row.Key.trim(),
+            Space: row.Space.trim(),
+            Uploader: row.Uploader.trim(),
+            FileName: row.FileName.trim(),
+            MimeType: row.MimeType.trim(),
+            Folder: row.Folder.trim(),
+            Kind: row.Kind.trim(),
+            Band: row.Band.trim(),
+        };
+    });
 }
 
 export function worldStorageRoot(): string {

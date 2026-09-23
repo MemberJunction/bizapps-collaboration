@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { LocalDirectoryStorage } from '../dist/local-directory-storage.js';
+import { LocalDirectoryStorage } from './dist/world/local-directory-storage.js';
 
 describe('local directory storage', () => {
     it('writes a file and reads the same bytes back', async () => {
