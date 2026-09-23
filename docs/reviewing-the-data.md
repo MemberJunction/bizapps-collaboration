@@ -56,7 +56,22 @@ A seat that already exists is not rewritten. If Pat were left Active by an earli
 
 `files.csv` is the library. The loader stores each one through `uploadSpaceFile` and passes the sample account id. Every other upload leaves the account to MemberJunction, which picks the host's active account. The sample provider is inactive, so a host that also has a cloud account does not pick this directory.
 
-The bytes live in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. The credential is not a default API key. A purge deletes the storage paths on the world's file rows, and leaves the rest of that directory alone. The driver is in the integration package, not the published server. The private API imports `packages/IntegrationTests/dist/world/local-directory-storage.js` so it can open these files.
+The bytes live in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. The credential is not a default API key. A purge deletes the storage paths on the world's file rows, and leaves the rest of that directory alone. The suite's host keeps only this sample account, so those paths are the files. A host that also has a cloud account is outside this suite: the purge does not delete objects in that bucket.
+
+The driver is in the integration package, not the published server. Build it, then start the private API from `MJ/packages/MJAPI` with that file imported:
+
+```bash
+pnpm --filter @mj-biz-apps/collaboration-integration-tests run build
+cd ../MJ/packages/MJAPI
+MJAPI_PUBLIC_URL=http://127.0.0.1:4117 \
+  node --import ../../../bizapps-collaboration/packages/IntegrationTests/dist/world/local-directory-storage.js \
+  --env-file=/tmp/collab-host/.env \
+  --disable-warning=DEP0180 \
+  --experimental-specifier-resolution=node \
+  --import ./register.js ./src/index.ts
+```
+
+`MJAPI_PUBLIC_URL` is the API's own address, so a redeemed session is checked against this process. The Explorer for this host is `ng serve --configuration=collab --port 4217 --host 127.0.0.1` from `MJ/packages/MJExplorer`. That configuration is a local MemberJunction setting: GraphQL on port 4117 and the page on port 4217. It is not in this repository. Open http://127.0.0.1:4217/. The Auth0 callback is registered for port 4201, so sign in with a magic link from this API.
 
 | Key | Who uploads | Where | Band |
 | --- | --- | --- | --- |
