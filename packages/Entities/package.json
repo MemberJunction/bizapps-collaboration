@@ -1,0 +1,31 @@
+{
+  "name": "@mj-biz-apps/collaboration-entities",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Generated entity classes and the shared Collaboration rules.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": { "access": "public" },
+  "files": ["/dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm test --prefix ../Core"
+  },
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "@memberjunction/core": "^6.1.2",
+    "@memberjunction/global": "^6.1.2"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@memberjunction/core": "6.1.3",
+    "@memberjunction/global": "6.1.3",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/bizapps-collaboration"
+  }
+}

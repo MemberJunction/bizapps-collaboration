@@ -1,0 +1,29 @@
+{
+  "name": "@mj-biz-apps/collaboration-actions",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Generated action subclasses for BizApps Collaboration. Hand-written server behavior lives in the server package so this one stays browser-safe.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": { "access": "public" },
+  "files": ["/dist"],
+  "scripts": { "build": "tsc" },
+  "license": "UNLICENSED",
+  "peerDependencies": {
+    "@memberjunction/actions": "^6.1.2",
+    "@memberjunction/actions-base": "^6.1.2",
+    "@memberjunction/core": "^6.1.2",
+    "@memberjunction/global": "^6.1.2"
+  },
+  "devDependencies": {
+    "@memberjunction/actions": "6.1.3",
+    "@memberjunction/actions-base": "6.1.3",
+    "@memberjunction/core": "6.1.3",
+    "@memberjunction/global": "6.1.3",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/bizapps-collaboration"
+  }
+}

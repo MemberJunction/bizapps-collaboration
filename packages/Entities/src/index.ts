@@ -1,0 +1,1 @@
+export * from './generated/entity_subclasses.js';

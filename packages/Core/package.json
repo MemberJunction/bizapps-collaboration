@@ -1,0 +1,27 @@
+{
+  "name": "@mj-biz-apps/collaboration-core",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Pure rules for BizApps Collaboration: invitation ceiling, membership reach, bands, and agent retrieval. No database and no MemberJunction imports, so the same functions run in the browser, the server, and node:test.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-strip-types --test src/rules.test.ts"
+  },
+  "author": "MemberJunction.com",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/bizapps-collaboration"
+  }
+}

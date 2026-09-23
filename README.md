@@ -16,6 +16,7 @@
   <a href="#security-model">Security</a> &middot;
   <a href="#the-agent">The agent</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
+  <a href="docs/HOW_THE_SYSTEM_WORKS.md">How it works</a> &middot;
   <a href="plans/plan.md">Plan</a>
 </p>
 
@@ -61,7 +62,7 @@ Schema `__mj_BizAppsCollaboration`. Entity names use the prefix `MJ_BizApps_Coll
 | Entity | What it is |
 |---|---|
 | **`SpaceType`** | Metadata, not code. Vocabulary, which panels are live, lifecycle, retention default, agent policy, band defaults, and the two axes that make an open community expressible later: `Discoverability` (`Hidden \| Listed \| Open`) and `JoinMode` (`InviteOnly \| RequestToJoin \| SelfServe`). *"Just messaging"* is a type with one panel on. |
-| **`Space`** | The container. Single-column PK, a Name field, `OwnerID` → `MJ: Users`, and a self-referencing `ParentID` with `IsHierarchy: true`. CodeGen then emits `RootParentID`, `ParentIDPath`, `ParentIDDepth`, `ParentIDIsLeaf`, `ParentIDChildCount`, plus the four traversal functions, on SQL Server and PostgreSQL. Lifecycle (`StartedAt` / `ClosedAt` / retention) lives on the space so closure never sits on the root. `InheritsMembership` lets a sub-space seal itself. `AgentRetrieval` (`Included \| ExcludedFromParentScope \| ExcludedEntirely`) lets a space a human may read stay invisible to every agent. |
+| **`Space`** | The container. Single-column PK, a Name field, `OwnerID` → `MJ: Users`, and a self-referencing `ParentID`. `ParentID` does not carry the `IsHierarchy` flag (set in one migration, cleared in the next), so CodeGen emits no path columns or traversal functions. Access uses `fnCollaborationAccess`, which is T-SQL and needs a PostgreSQL port. Lifecycle (`StartedAt` / `ClosedAt` / retention) lives on the space so closure never sits on the root. `InheritsMembership` lets a sub-space seal itself. `AgentRetrieval` (`Included \| ExcludedFromParentScope \| ExcludedEntirely`) lets a space a human may read stay invisible to every agent. |
 | **`SpaceMember`** | Internal users and external participants in **one** roster. `SpaceRoleTypeID`, a visibility band, and a `Status`. This is the row that lets a director who is not a staff user sit on a committee. |
 | **`SpaceRoleType`** | Behaviour flags the engine reads — `CanInvite`, `MaxGrantableLevel`, `CanPromoteBand`, `CanSeeTeamBand`, `IsOwnerRole` — never a role *name* the engine compares. Same idiom as `DealRole.IsOwnerRole` in BizApps Sales. This is what makes delegated invitation safe. |
 | **`SpaceItem`** | `EntityID + RecordID` plus the band. A file, artifact, conversation, task, committee, deal, or meeting. The same polymorphic idiom `TaskLink` and `File Entity Record Links` already use. |
@@ -134,7 +135,7 @@ Retrieval for a tree:
 
 Downward-inclusive, never upward. Ask from the root and you get everything beneath it that you can read. Ask from a child and you get that child's subtree only. A sub-space with `InheritsMembership = 0` seals itself.
 
-Every space-scoped table carries a real `SpaceID`, `NOT NULL`, meaning the same thing on every table. Because `IsHierarchy` emits `ParentIDPath`, one membership subquery covers the tree. `{{UserID}}` is a token MJ's unresolved-token guard covers. The filter is equality / `IN` form — never `NOT IN`, `<>`, or `NOT LIKE` against a token. Start computed; materialize only if it stops being fast, and if you materialize, recompute on **both** space create/move and membership change. Collections writes descendant grants on share and never revisits them on create. That is the defect not to copy.
+Every space-scoped table carries a real `SpaceID`, `NOT NULL`, meaning the same thing on every table. The tree walk is `fnCollaborationAccess`, a table function that starts at the caller's active memberships and steps into children that inherit. A sealed space stops the walk. The nearest membership wins when two paths reach the same space. `{{UserID}}` is passed through `TRY_CAST`, so a missing token matches nothing instead of raising a conversion error. The filter text is T-SQL. A PostgreSQL host needs a dialect of the same function before these filters will run there. Start computed; materialize only if it stops being fast, and if you materialize, recompute on **both** space create/move and membership change.
 
 **Writes are not RLS.** They are `BaseEntity` subclasses. The write-side RLS slots exist and, in practice, go unused. A subclass is where a rule reaches MJ's generated CRUD mutations, API and MCP alike. `isNew` is load-bearing: on an INSERT every field's `.Dirty` is false. No constructor on the subclass — a throwing constructor makes MJ fall back to plain `BaseEntity` and the guard vanishes.
 
@@ -183,7 +184,7 @@ The set matches the other BizApps Open Apps. None of these exist in this commit.
 | **Core Entities Server** | `@mj-biz-apps/collaboration-core-entities-server` | Server-only subclasses — `SpaceEntityServer` and `SpaceMemberEntityServer` hold the write gates |
 | **Angular** | `@mj-biz-apps/collaboration-ng` | Bootstrap (`LoadBizAppsCollaborationClient`) and Explorer UI |
 
-SQL Server is the source of truth for migrations. PostgreSQL comes from `@memberjunction/sql-converter`, the same toolchain Orders uses. `IsHierarchy` codegen emits the tree functions for both dialects, which is why the hierarchy is a flag rather than hand-written SQL.
+SQL Server is the source of truth for migrations. PostgreSQL comes from `@memberjunction/sql-converter`, the same toolchain Orders uses. `ParentID` does not carry the `IsHierarchy` flag, so CodeGen emits no path columns or traversal functions. The hierarchy walk is hand-written T-SQL, `fnCollaborationAccess`. A PostgreSQL host needs a port of that function before the filters run.
 
 ---
 
@@ -283,6 +284,7 @@ Generated entity classes come from CodeGen. Hand-written `EntityField` DML does 
 
 | Document | Description |
 |---|---|
+| [How it works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the server, the workspace, and the database share |
 | [Collaboration Spaces plan](plans/plan.md) | Draft v0.2. Architecture, security model, roadmap, risks, open decisions |
 | [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks) | The work substrate a Space projects |
 | [BizApps Committees](https://github.com/MemberJunction/bizapps-committees) | Governance depth that later sits on a Space |
@@ -307,6 +309,10 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 | **Build** | Turborepo + pnpm | pnpm 10 |
 
 ---
+
+## Upgrading
+
+After a MemberJunction upgrade that adds core entities, re-apply the participant shell grant so every `__mj` entity has a Space Participant read row. The statement is the `INSERT … SELECT` at the bottom of `migrations/V202609230110__v0.1.x__Contribute_Shell_And_Nav.sql`. `NOT EXISTS` makes it safe to run again. `scripts/persona-check.sql` asserts that every core entity has that row, and that every participant filter executes.
 
 ## License
 

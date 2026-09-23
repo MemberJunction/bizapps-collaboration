@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.memberjunction.org/mj-app/v1.json",
+  "manifestVersion": 1,
+  "name": "mj-bizapps-collaboration",
+  "displayName": "BizApps Collaboration",
+  "description": "Spaces: the permission boundary and the agent retrieval boundary for client, committee, and cohort work.",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "publisher": {
+    "name": "MemberJunction",
+    "url": "https://memberjunction.com"
+  },
+  "repository": "https://github.com/MemberJunction/bizapps-collaboration",
+  "mjVersionRange": ">=6.1.2 <7.0.0",
+  "dependencies": {},
+  "schema": {
+    "name": "__mj_BizAppsCollaboration",
+    "createIfNotExists": true
+  },
+  "migrations": {
+    "directory": "migrations",
+    "engine": "skyway"
+  },
+  "metadata": {
+    "directory": "metadata"
+  },
+  "packages": {
+    "server": [
+      {
+        "name": "@mj-biz-apps/collaboration-server",
+        "role": "bootstrap",
+        "startupExport": "LoadBizAppsCollaborationServer"
+      },
+      {
+        "name": "@mj-biz-apps/collaboration-core-entities-server",
+        "role": "library"
+      }
+    ],
+    "client": [
+      {
+        "name": "@mj-biz-apps/collaboration-ng",
+        "role": "bootstrap",
+        "startupExport": "LoadBizAppsCollaborationClient"
+      }
+    ],
+    "shared": [
+      {
+        "name": "@mj-biz-apps/collaboration-entities",
+        "role": "library"
+      },
+      {
+        "name": "@mj-biz-apps/collaboration-actions",
+        "role": "library"
+      },
+      {
+        "name": "@mj-biz-apps/collaboration-core",
+        "role": "library"
+      }
+    ]
+  },
+  "code": {
+    "visibility": "public",
+    "sourceDirectory": "packages"
+  },
+  "categories": ["Business", "Collaboration"],
+  "tags": ["space", "membership", "permissions"]
+}
