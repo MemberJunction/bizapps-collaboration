@@ -42,6 +42,7 @@ import {
 import sql from 'mssql';
 import { readCsv } from './csv.js';
 import { sqlUuid } from './ids.js';
+import { seedWorldFiles, worldStorageRoot } from './seed-files.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -289,8 +290,21 @@ export async function loadWorld(): Promise<void> {
     }
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
+    await seedWorldFiles({
+        provider,
+        system,
+        actor,
+        spaceId: (key) => {
+            const id = spaceIds.get(key);
+            if (!id) throw new Error(`Unknown space ${key}.`);
+            return id;
+        },
+        dataDir: dir,
+        rootDir: worldStorageRoot(),
+    });
+
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
-    console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces and ${memberRows.length} seats match the catalog.`);
+    console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
     console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
     console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
     await pool.close();

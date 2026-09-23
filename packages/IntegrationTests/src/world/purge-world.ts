@@ -11,8 +11,10 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
+import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
+import { worldStorageRoot } from './seed-files.js';
 
 function dataDir(): string {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -45,6 +47,11 @@ export async function purgeWorld(): Promise<void> {
     try {
         const request = new sql.Request(transaction);
         await request.query(`
+            SELECT DISTINCT TRY_CAST(SUBSTRING(RecordID, 4, 36) AS uniqueidentifier) AS FileID
+            INTO #worldfiles
+            FROM __mj_BizAppsCollaboration.SpaceItem
+            WHERE SpaceID IN (${spaceIds}) AND RecordID LIKE 'ID|%';
+
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
@@ -74,12 +81,16 @@ export async function purgeWorld(): Promise<void> {
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
                 DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds});
             DELETE FROM [${core}].UserRole WHERE UserID IN (${userIds});
+
+            DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
+            DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
         `);
         await transaction.commit();
     } catch (error) {
         await transaction.rollback();
         throw error;
     }
+    await rm(worldStorageRoot(), { recursive: true, force: true });
     console.log(`COLLAB-WORLD app rows purged from ${DB_DATABASE}. The user accounts were kept.`);
     await pool.close();
 }

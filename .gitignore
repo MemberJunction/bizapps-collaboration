@@ -3,3 +3,4 @@ migrations/codegen/
 codegen.output.log
 node_modules/
 dist/
+.local-storage/

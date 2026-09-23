@@ -52,4 +52,17 @@ The system user writes the users, their MemberJunction roles, the People, and th
 
 A seat that already exists is not rewritten. If Pat were left Active by an earlier run, the read-back throws instead of repairing the row. A suite that reloads the world purges first, then loads. The purge keeps the user accounts, because a signed-in persona owns MemberJunction rows that reference them, and deletes the spaces, seats, People, and role grants.
 
-Files, conversations, share notices, item uses, the project plan, and committee governance rows join this catalog when those stores are seeded.
+## Files
+
+`files.csv` is the library. The loader stores each one through `uploadSpaceFile`, in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. That directory is the storage account `Collaboration local`. It is created on load and removed on purge. The credential is not a default API key.
+
+| Key | Who uploads | Where | Band |
+| --- | --- | --- | --- |
+| brief | Ada | Discovery, folder Briefs | Team. A PDF |
+| notes | Ada | Field notes, folder Notes | Team. Plain text |
+| photo | Bea | Discovery, folder Photos | Shared. A PNG. Bea cannot see Team, so the gate lands it on Shared |
+| welcome | Lee | Spring cohort, folder Welcome | Shared. The claim is `text/html`. It is stored as `text/plain` |
+
+A Shared file writes a share notice for everyone who can see it except the uploader, and an item use of kind `upload`. A Team file writes the item use and no share notice. A second load finds the same file name in the space and reads the bytes back instead of storing them again.
+
+Conversations, the project plan, and committee governance rows join this catalog when those stores are seeded.

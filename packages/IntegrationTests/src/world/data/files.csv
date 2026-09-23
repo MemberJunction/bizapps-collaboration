@@ -1,0 +1,5 @@
+Key,Space,Uploader,FileName,MimeType,Folder,Kind,Band
+brief,discovery,ada,discovery-brief.pdf,application/pdf,Briefs,pdf,Team
+notes,field-notes,ada,field-notes.txt,text/plain,Notes,text,Team
+photo,discovery,bea,site-photo.png,image/png,Photos,png,Shared
+welcome,cohort,lee,welcome.html,text/html,Welcome,html,Shared
