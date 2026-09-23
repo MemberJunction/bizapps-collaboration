@@ -22,7 +22,7 @@ import { Message } from '@memberjunction/communication-types';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import '@mj-biz-apps/common-entities';
 import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
-import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
+import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, magicLinkBlocksAccount, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { loadWriteContext, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 
@@ -49,6 +49,8 @@ export interface MagicLinkHost {
     communicationProvider?: string;
     fromAddress: string;
     defaultExpiresInHours: number;
+    /** MJ's default is block. warn still issues a link MJ will redeem with a warning. */
+    provisioningGuard: 'block' | 'warn';
 }
 
 export interface MintSpaceLinkResult {
@@ -155,6 +157,21 @@ export async function mintSpaceLink(input: {
     }
     if (status === 'Invited') {
         return { ok: true, sent: false, message: 'They are seated as Invited. The sign-in link waits until an owner approves them. The owner can send it again after that.' };
+    }
+    const invitee = UserCache.Users.find((user) => (user?.Email ?? '').trim().toLowerCase() === email.toLowerCase());
+    if (invitee && magicLinkBlocksAccount({
+        userType: invitee.Type,
+        roleNames: (invitee.UserRoles ?? []).map((role) => role.Role ?? ''),
+        restrictedRoleName: input.host.restrictedRoleName,
+        grantableRoleNames: input.host.grantableRoleNames,
+        invitedRoleName: participantName,
+        provisioningGuard: input.host.provisioningGuard,
+    })) {
+        return {
+            ok: true,
+            sent: false,
+            message: "They are seated. This account signs in with the host's sign-in. A magic link would be refused, so none was issued.",
+        };
     }
     return deliverLink(input, system, email);
 }

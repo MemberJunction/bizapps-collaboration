@@ -434,6 +434,33 @@ export function resourcesFromRoster(input: {
     return listed;
 }
 
+/**
+ * MJ refuses to redeem a link onto an existing Owner, or onto an account that
+ * holds a role outside the restricted role, the grantable names, and the role
+ * the link itself grants. It consumes the link before that check. `block` is
+ * MJ's default. `warn` still issues the link.
+ */
+export function magicLinkBlocksAccount(input: {
+    userType: string | null | undefined;
+    roleNames: readonly string[];
+    restrictedRoleName: string;
+    grantableRoleNames: readonly string[];
+    invitedRoleName: string;
+    provisioningGuard: 'block' | 'warn';
+}): boolean {
+    if (input.provisioningGuard !== 'block') return false;
+    if ((input.userType ?? '').trim().toLowerCase() === 'owner') return true;
+    const allowed = new Set(
+        [input.restrictedRoleName, ...input.grantableRoleNames, input.invitedRoleName]
+            .map((name) => name.trim().toLowerCase())
+            .filter((name) => name.length > 0),
+    );
+    return input.roleNames.some((name) => {
+        const normalized = name.trim().toLowerCase();
+        return normalized.length > 0 && !allowed.has(normalized);
+    });
+}
+
 /** Where a sign-in link goes. `withhold` means the response carries no URL. */
 export function linkHandoff(input: { emailChannel: boolean; callerIsIssuer: boolean }): 'email' | 'show' | 'withhold' {
     if (input.emailChannel) return 'email';

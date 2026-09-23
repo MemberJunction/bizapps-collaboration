@@ -56,6 +56,7 @@ export class MintSpaceLinkResolver extends ResolverBase {
                     communicationProvider: magic?.communicationProvider,
                     fromAddress: magic?.fromAddress ?? '',
                     defaultExpiresInHours: magic?.defaultExpiresInHours ?? 72,
+                    provisioningGuard: magic?.provisioningGuard === 'warn' ? 'warn' : 'block',
                 },
             });
             if (!result.ok) return { Success: false, Sent: false, ErrorMessage: result.message };

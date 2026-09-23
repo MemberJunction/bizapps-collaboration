@@ -12,6 +12,7 @@ import {
     handInviteToEngine,
     inviteEmail,
     linkHandoff,
+    magicLinkBlocksAccount,
     resourcesFromRoster,
     membershipReaches,
     rosterActions,
@@ -140,6 +141,27 @@ describe('magic link and roster permission', () => {
         assert.ok(names.has('field-notes'));
         assert.ok(names.has('delivery-room'));
         assert.deepEqual(names.get('discovery'), ['Read']);
+    });
+
+    it('does not issue a link MJ would refuse, unless the host warns instead', () => {
+        const staff = {
+            userType: 'User',
+            roleNames: ['UI'],
+            restrictedRoleName: 'Space Participant',
+            grantableRoleNames: ['Space Participant'],
+            invitedRoleName: 'Space Participant',
+        };
+        assert.equal(magicLinkBlocksAccount({ ...staff, provisioningGuard: 'block' }), true);
+        assert.equal(magicLinkBlocksAccount({ ...staff, provisioningGuard: 'warn' }), false);
+        assert.equal(magicLinkBlocksAccount({ ...staff, userType: 'Owner', roleNames: [], provisioningGuard: 'block' }), true);
+        assert.equal(magicLinkBlocksAccount({
+            userType: 'User',
+            roleNames: ['Space Participant'],
+            restrictedRoleName: 'Space Participant',
+            grantableRoleNames: ['Space Participant'],
+            invitedRoleName: 'Space Participant',
+            provisioningGuard: 'block',
+        }), false);
     });
 
     it('sends the invite email with a from address and the link', async () => {

@@ -71,7 +71,17 @@ MJAPI_PUBLIC_URL=http://127.0.0.1:4117 \
   --import ./register.js ./src/index.ts
 ```
 
-`MJAPI_PUBLIC_URL` is the API's own address, so a redeemed session is checked against this process. The Explorer for this host is `ng serve --configuration=collab --port 4217 --host 127.0.0.1` from `MJ/packages/MJExplorer`. That configuration is a local MemberJunction setting: GraphQL on port 4117 and the page on port 4217. It is not in this repository. Open http://127.0.0.1:4217/. The Auth0 callback is registered for port 4201, so sign in with a magic link from this API.
+`MJAPI_PUBLIC_URL` is the API's own address, so a redeemed session is checked against this process. The Explorer for this host is `ng serve --configuration=collab --port 4217 --host 127.0.0.1` from `MJ/packages/MJExplorer`. Open http://127.0.0.1:4217/.
+
+Three pieces of that host live outside this repository. None of the values below are secrets.
+
+- **The env file** names the private database and sets `GRAPHQL_PORT` to `4117`. `MJAPI_PUBLIC_URL` on the process is `http://127.0.0.1:4117`.
+- **`magicLink` in that host's `mj.config.cjs`:** `enabled: true`, `grantableRoleNames` includes `Space Participant`, and `provisioningGuard` stays `block` (MemberJunction's default). Leave `restrictedRoleName` as the host's own default. Do not add `UI` to `grantableRoleNames`.
+- **The Explorer `collab` configuration:** GraphQL at `http://127.0.0.1:4117/` (or `http://localhost:4117/`), and the page on port `4217`. It is a local MemberJunction setting.
+
+A browser check for this app ignores console lines from other apps the private Explorer still loads. Those are `MJ_BizApps_FPNA: Streams not found in metadata` and the `mjo-overview-cards` component-id collision. They are not this app.
+
+Staff accounts hold `UI`, so a magic link is not issued for them. They use the host's Auth0 sign-in. That callback has to include port `4217`, or the staff half of a signed-in run uses an Explorer whose callback is already registered and whose API is this one.
 
 | Key | Who uploads | Where | Band |
 | --- | --- | --- | --- |
