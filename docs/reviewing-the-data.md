@@ -38,6 +38,12 @@ Field notes sits under Discovery, so seeing it walks two steps. Delivery room si
 
 The flag-ceiling role is not in this world. That check creates the role inside a transaction and rolls it back, so a staff member cannot grant Team visibility on a real host.
 
-## What the loader still has to do
+## Loading it
 
-Load through the gates, as each owner, owners seated before anyone else. `recent` and `past` become offsets at load time. Files, conversations, share notices, item uses, the project plan, and committee governance rows join this catalog when those stores are seeded. Rows that cannot pass a gate are listed in the loader, and only those use the system user.
+```bash
+node --env-file=.env test-harnesses/load-world.mjs
+```
+
+The database in that env file must already have the Collaboration migrations. The script creates each root as its owner, seats that owner, then creates children. A second run finds the same ids. This database has no People entity, so the loader creates Users and their MemberJunction roles. Linked Person rows are created when that entity is present.
+
+Files, conversations, share notices, item uses, the project plan, and committee governance rows join this catalog when those stores are seeded.
