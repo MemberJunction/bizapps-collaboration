@@ -6,6 +6,21 @@ import { loadAncestorChain, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACE_RESOURCE = '33642155-617E-4825-A2CC-F071A60F3739';
+
+/** The roster `recordShare` already loaded, keyed by the notice object it is about to save. */
+const decidedRosters = new WeakMap<object, { spaces: SpaceNode[]; memberships: MemberSnapshot[] }>();
+
+export function rememberShareRoster(notice: object, roster: { spaces: SpaceNode[]; memberships: MemberSnapshot[] }): void {
+    decidedRosters.set(notice, roster);
+}
+
+export function rosterForNotice(notice: object): { spaces: SpaceNode[]; memberships: MemberSnapshot[] } | undefined {
+    return decidedRosters.get(notice);
+}
+
+export function forgetShareRoster(notice: object): void {
+    decidedRosters.delete(notice);
+}
 const SHARE_TYPE = 'Collaboration Share';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
@@ -71,7 +86,14 @@ export async function recordShare(
         notice.SpaceID = space;
         notice.ItemID = item;
         notice.RecipientUserID = recipient;
-        if (!(await notice.Save())) {
+        rememberShareRoster(notice, graph);
+        let saved = false;
+        try {
+            saved = await notice.Save();
+        } finally {
+            forgetShareRoster(notice);
+        }
+        if (!saved) {
             LogError(`Share notice was not recorded: ${notice.LatestResult?.CompleteMessage ?? 'save returned false'}`);
             continue;
         }

@@ -4,7 +4,7 @@ import { authorizeNoticeWrite, type Band } from '@mj-biz-apps/collaboration-core
 import { mjBizAppsCollaborationShareNoticeEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, requireSystemUser } from './load-graph.js';
 import { failLibrary, requireIds } from './library-audit.js';
-import { loadShareRoster } from './library-events.js';
+import { loadShareRoster, rosterForNotice } from './library-events.js';
 import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Share Notices';
@@ -51,7 +51,7 @@ async function noticeDecision(
     if (!found.Success) return found.ErrorMessage || 'The item could not be read.';
     const item = found.Results?.[0];
     if (!item) return 'The item is not in this space.';
-    const roster = await loadShareRoster(entity, spaceId);
+    const roster = rosterForNotice(entity) ?? await loadShareRoster(entity, spaceId);
     const decision = authorizeNoticeWrite({
         callerUserId: caller,
         recipientUserId: recipient,

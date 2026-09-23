@@ -133,10 +133,6 @@ export class OpenSpaceFileResolver extends ResolverBase {
         if (info?.Name !== 'MJ: Files') {
             return { Success: false, ErrorMessage: 'This item is not a file.' };
         }
-        const recorded = await recordItemUse(item, user, item.ID, item.SpaceID, 'open');
-        if (!recorded) {
-            return { Success: false, ErrorMessage: 'The open was not recorded.' };
-        }
         const fileId = item.RecordID.startsWith('ID|') ? item.RecordID.slice(3) : item.RecordID;
         const file = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
         if (!(await file.Load(fileId))) {
@@ -151,7 +147,17 @@ export class OpenSpaceFileResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
             }
             const driver = await FileStorageEngine.Instance.GetDriver(account.ID, system);
-            const bytes = await driver.GetObject({ fullPath: file.ProviderKey || file.Name });
+            const path = file.ProviderKey || file.Name;
+            const metadata = await driver.GetObjectMetadata({ fullPath: path });
+            const maxBytes = configuredMaxBytes();
+            if (metadata.size > maxBytes) {
+                return { Success: false, ErrorMessage: `Open refused: files are limited to ${maxBytes} bytes.` };
+            }
+            const recorded = await recordItemUse(item, user, item.ID, item.SpaceID, 'open');
+            if (!recorded) {
+                return { Success: false, ErrorMessage: 'The open was not recorded.' };
+            }
+            const bytes = await driver.GetObject({ fullPath: path });
             const mime = storedContentType(file.ContentType);
             return { Success: true, Base64: Buffer.from(bytes).toString('base64'), MimeType: mime, Mode: openMode(mime), Name: file.Name };
         } catch (error) {
