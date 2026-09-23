@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+    flagExceedsGrantor,
     membershipReaches,
     rosterBySeat,
     refuseInvite,
@@ -74,8 +75,6 @@ export class SpaceWorkspaceComponent {
     createAtTop = false;
 
     selectedId: string | null = null;
-    inviteUserId = '';
-    inviteRoleId = '';
     linkEmail = '';
     linkRoleId = '';
 
@@ -139,19 +138,20 @@ export class SpaceWorkspaceComponent {
         this.uploadFolder = '';
     }
 
+    grantableRoles(): WorkspaceRole[] {
+        const reach = this.reach(this.selected?.id);
+        if (!reach?.role.canInvite) return [];
+        return this.roles.filter((role) => role.level <= reach.role.maxGrantableLevel && !flagExceedsGrantor(role, reach.role));
+    }
+
     preview(): InviteDecision | null {
         const space = this.selected;
-        const role = this.roles.find((candidate) => candidate.id === this.inviteRoleId);
-        const invitee = this.inviteUserId.trim();
-        if (!space || !role || !invitee) {
-            return null;
-        }
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invitee)) {
-            return { ok: false, code: 'not-a-member', message: 'Enter their account id.' };
-        }
+        const role = this.grantableRoles().find((candidate) => candidate.id === this.linkRoleId);
+        const email = this.linkEmail.trim();
+        if (!space || !role || !email.includes('@')) return null;
         return refuseInvite({
             callerUserId: this.viewerUserId,
-            inviteeUserId: this.inviteUserId.trim(),
+            inviteeUserId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
             targetSpaceId: space.id,
             granted: role,
             approval: space.approval ?? this.approval,
@@ -166,16 +166,6 @@ export class SpaceWorkspaceComponent {
         const parentId = !this.ownsSelected() || this.createAtTop || !this.selected ? null : this.selected.id;
         this.create.emit({ name: this.createName.trim(), parentId, typeId: this.createTypeId });
         this.createName = '';
-    }
-
-    sendInvite(): void {
-        const space = this.selected;
-        const decision = this.preview();
-        if (!space || !decision?.ok) {
-            return;
-        }
-        this.invite.emit({ spaceId: space.id, userId: this.inviteUserId.trim(), roleId: this.inviteRoleId });
-        this.inviteUserId = '';
     }
 
     sendMint(): void {

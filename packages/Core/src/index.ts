@@ -8,7 +8,10 @@ export {
     isSelfRemoval,
     leavingWouldStrand,
     callerMayReceiveLink,
+    handInviteToEngine,
+    inviteEmail,
     linkHandoff,
+    resourcesFromRoster,
     membershipReaches,
     rosterActions,
     rosterBySeat,
@@ -38,4 +41,5 @@ export type {
     RosterWalk,
     SpaceNode,
     InviteDecision,
+    InviteEmail,
 } from './rules.js';

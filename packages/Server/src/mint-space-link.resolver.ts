@@ -54,6 +54,7 @@ export class MintSpaceLinkResolver extends ResolverBase {
                     grantableRoleNames: magic?.grantableRoleNames ?? [],
                     inviteIssuerRoleNames: magic?.inviteIssuerRoleNames ?? [],
                     communicationProvider: magic?.communicationProvider,
+                    fromAddress: magic?.fromAddress ?? '',
                     defaultExpiresInHours: magic?.defaultExpiresInHours ?? 72,
                 },
             });

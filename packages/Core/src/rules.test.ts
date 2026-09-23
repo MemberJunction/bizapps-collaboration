@@ -9,7 +9,10 @@ import {
     leavingWouldStrand,
     wouldStrandLastOwner,
     callerMayReceiveLink,
+    handInviteToEngine,
+    inviteEmail,
     linkHandoff,
+    resourcesFromRoster,
     membershipReaches,
     rosterActions,
     rosterBySeat,
@@ -20,6 +23,7 @@ import {
     strandFromSavedRow,
     retentionDeadline,
     visibleSpaces,
+    type InviteEmail,
     type MemberSnapshot,
     type RoleFlags,
     type SpaceNode,
@@ -117,6 +121,40 @@ describe('magic link and roster permission', () => {
         assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: false }), 'withhold');
         assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: true }), 'show');
         assert.equal(linkHandoff({ emailChannel: true, callerIsIssuer: false }), 'email');
+    });
+
+    it('lists the spaces Sam reaches, including children he is not seated on', () => {
+        const samTree: SpaceNode[] = [
+            space({ id: 'northwind', ownerId: 'ada' }),
+            space({ id: 'discovery', parentId: 'northwind' }),
+            space({ id: 'field-notes', parentId: 'discovery' }),
+            space({ id: 'delivery', parentId: 'northwind', inheritsMembership: false }),
+            space({ id: 'delivery-room', parentId: 'delivery' }),
+        ];
+        const samSeats = [
+            member({ spaceId: 'northwind', userId: 'sam', role: readerRole }),
+            member({ spaceId: 'delivery', userId: 'sam', role: readerRole }),
+        ];
+        const names = new Map(resourcesFromRoster({ callerUserId: 'sam', spaces: samTree, memberships: samSeats }).map((row) => [row.spaceId, row.actions]));
+        assert.ok(names.has('discovery'));
+        assert.ok(names.has('field-notes'));
+        assert.ok(names.has('delivery-room'));
+        assert.deepEqual(names.get('discovery'), ['Read']);
+    });
+
+    it('sends the invite email with a from address and the link', async () => {
+        const sent: InviteEmail[] = [];
+        const message = inviteEmail({ from: 'invites@example.com', to: 'bea@example.com', url: 'http://host/magic-link/redeem?token=abc' });
+        const ok = await handInviteToEngine({
+            SendSingleMessage: async (_provider, _type, email) => {
+                sent.push(email);
+                return { Success: true };
+            },
+        }, 'smtp', message);
+        assert.equal(ok, true);
+        assert.equal(sent[0]?.from, 'invites@example.com');
+        assert.equal(sent[0]?.to, 'bea@example.com');
+        assert.match(sent[0]?.body ?? '', /token=abc/);
     });
 
     it('grants read to a member who reaches the space, and update to the owner', () => {

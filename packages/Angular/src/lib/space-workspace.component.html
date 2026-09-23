@@ -83,28 +83,6 @@
           }
 
           @if (canInviteHere()) {
-          <form class="invite" (submit)="$event.preventDefault(); sendInvite()">
-            <h3>Invite</h3>
-            <label>
-              User
-              <input name="user" [(ngModel)]="inviteUserId" autocomplete="off" placeholder="Their account id" />
-            </label>
-            <label>
-              Role
-              <select name="role" [(ngModel)]="inviteRoleId">
-                <option value="">Choose a role</option>
-                @for (role of roles; track role.id) {
-                  <option [value]="role.id">{{ role.name }}</option>
-                }
-              </select>
-            </label>
-            @if (preview(); as decision) {
-              <p class="verdict" [class.no]="!decision.ok">{{ decision.ok ? 'This invite will be ' + decision.status + '.' : decision.message }}</p>
-            }
-            <button type="submit" [disabled]="!preview()?.ok">Invite</button>
-          </form>
-          }
-          @if (canInviteHere()) {
           <form class="invite" (submit)="$event.preventDefault(); sendMint()">
             <h3>Invite by email</h3>
             <label>
@@ -115,12 +93,15 @@
               Role
               <select name="link-role" [(ngModel)]="linkRoleId">
                 <option value="">Choose a role</option>
-                @for (role of roles; track role.id) {
+                @for (role of grantableRoles(); track role.id) {
                   <option [value]="role.id">{{ role.name }}</option>
                 }
               </select>
             </label>
-            <button type="submit" [disabled]="!linkEmail.includes('@') || !linkRoleId">Send invite</button>
+            @if (preview(); as decision) {
+              <p class="verdict" [class.no]="!decision.ok">{{ decision.ok ? 'This invite will be ' + decision.status + '.' : decision.message }}</p>
+            }
+            <button type="submit" [disabled]="!preview()?.ok">Send invite</button>
           </form>
           }
         </section>

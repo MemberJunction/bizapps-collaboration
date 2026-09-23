@@ -133,8 +133,16 @@ export async function loadWorld(): Promise<void> {
             user.Name = `${persona.FirstName} ${persona.LastName}`;
             user.Email = persona.Email;
             user.Type = 'User';
+            user.IsActive = true;
             if (!(await user.Save())) throw new Error(`user ${persona.Key}: ${user.LatestResult?.CompleteMessage ?? 'save failed'}`);
             id = user.ID;
+        } else {
+            const existing = await new Metadata().GetEntityObject<MJUserEntity>(USERS, system);
+            if (!(await existing.Load(id))) throw new Error(`Could not load user ${persona.Key}.`);
+            if (!existing.IsActive) {
+                existing.IsActive = true;
+                if (!(await existing.Save())) throw new Error(`user ${persona.Key}: could not activate the account.`);
+            }
         }
         const roleId = await findId(provider, 'MJ: Roles', `Name = '${quote(persona.MjRole)}'`, system);
         if (!roleId) throw new Error(`Missing MemberJunction role ${persona.MjRole}.`);
@@ -340,6 +348,18 @@ async function assertCatalog(
         if (mine.length !== 1 || mine[0].RoleID.toLowerCase() !== expected) {
             throw new Error(`${persona.Key} has ${mine.length} MemberJunction roles. The catalog grants only ${persona.MjRole}.`);
         }
+    }
+    const accounts = await view.RunView<{ ID: string; IsActive: boolean | number }>({
+        EntityName: USERS,
+        ExtraFilter: `ID IN (${[...people.values()].map((persona) => sqlUuid(persona.id, persona.Key)).join(',')})`,
+        Fields: ['ID', 'IsActive'],
+        ResultType: 'simple',
+    }, user);
+    if (!accounts.Success) throw new Error(accounts.ErrorMessage ?? 'Could not read the accounts.');
+    for (const persona of people.values()) {
+        const account = (accounts.Results ?? []).find((row) => row.ID.toLowerCase() === persona.id.toLowerCase());
+        const active = account?.IsActive === true || account?.IsActive === 1;
+        if (!active) throw new Error(`${persona.Key} is not an active account.`);
     }
     const spaces = await view.RunView<{
         ID: string;

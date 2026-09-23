@@ -389,6 +389,51 @@ export function callerMayReceiveLink(input: {
     return input.roleNames.some((name) => allowed.has(name.trim().toLowerCase()));
 }
 
+export interface InviteEmail {
+    from: string;
+    to: string;
+    subject: string;
+    body: string;
+}
+
+/** The message MJ's mailer is asked to send. `from` is the host's magicLink.fromAddress. */
+export function inviteEmail(input: { from: string; to: string; url: string }): InviteEmail {
+    return {
+        from: input.from,
+        to: input.to,
+        subject: "You've been invited to Collaboration",
+        body: `Open this link to sign in:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+    };
+}
+
+export async function handInviteToEngine(
+    engine: { SendSingleMessage: (provider: string, type: string, message: InviteEmail) => Promise<{ Success?: boolean } | null | undefined> },
+    providerName: string,
+    message: InviteEmail,
+): Promise<boolean> {
+    const result = await engine.SendSingleMessage(providerName, 'Email', message);
+    return !!result?.Success;
+}
+
+/** Spaces the roster grants this person, including spaces they reach through a parent. */
+export function resourcesFromRoster(input: {
+    callerUserId: string;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): { spaceId: string; actions: RosterAction[] }[] {
+    const listed: { spaceId: string; actions: RosterAction[] }[] = [];
+    for (const space of input.spaces) {
+        const actions = rosterActions({
+            callerUserId: input.callerUserId,
+            spaceId: space.id,
+            spaces: input.spaces,
+            memberships: input.memberships,
+        });
+        if (actions.length) listed.push({ spaceId: space.id, actions });
+    }
+    return listed;
+}
+
 /** Where a sign-in link goes. `withhold` means the response carries no URL. */
 export function linkHandoff(input: { emailChannel: boolean; callerIsIssuer: boolean }): 'email' | 'show' | 'withhold' {
     if (input.emailChannel) return 'email';

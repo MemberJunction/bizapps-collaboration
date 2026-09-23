@@ -14,7 +14,7 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
-import { rosterActions, type MemberSnapshot, type RoleFlags, type RosterAction, type SpaceNode } from '@mj-biz-apps/collaboration-core';
+import { resourcesFromRoster, rosterActions, type MemberSnapshot, type RoleFlags, type RosterAction, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -60,29 +60,49 @@ export class CollaborationSpacePermissionProvider extends PermissionProviderBase
         const userId = asUuid(user.ID);
         if (!userId) return [];
         const view = viewFor(provider);
-        const spaces = await view.RunView<{ ID: string; Name: string }>({
+        const spaces = await view.RunView<{ ID: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: SpaceNode['agentRetrieval'] }>({
             EntityName: SPACES,
-            ExtraFilter: `ID IN (SELECT SpaceID FROM __mj_BizAppsCollaboration.fnCollaborationAccess('${userId}'))`,
-            Fields: ['ID', 'Name'],
+            ExtraFilter: 'ID IS NOT NULL',
+            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval'],
             ResultType: 'simple',
             MaxRows: PAGE,
         }, user);
-        if (!spaces.Success) return [];
-        if ((spaces.Results?.length ?? 0) >= PAGE) return [];
-        const graph = await rosterGraph(user, userId, provider);
-        const results: NormalizedPermission[] = [];
-        for (const space of spaces.Results ?? []) {
-            const actions = rosterActions({ callerUserId: user.ID, spaceId: space.ID, spaces: graph.spaces, memberships: graph.memberships });
-            if (!actions.length) continue;
-            results.push(this.permission(space.ID, user.ID, user.Name, actions));
-        }
-        return results;
+        if (!spaces.Success || (spaces.Results?.length ?? 0) >= PAGE) return [];
+        const members = await view.RunView<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>({
+            EntityName: MEMBERS,
+            ExtraFilter: `UserID = '${userId}' AND Status = 'Active'`,
+            Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+            ResultType: 'simple',
+            MaxRows: PAGE,
+        }, user);
+        if (!members.Success || (members.Results?.length ?? 0) >= PAGE) return [];
+        const flags = await roleFlags(view, user, (members.Results ?? []).map((row) => row.SpaceRoleTypeID));
+        if (!flags) return [];
+        const empty = blankRole();
+        const graph = {
+            spaces: (spaces.Results ?? []).map((row) => ({
+                id: row.ID,
+                parentId: row.ParentID,
+                inheritsMembership: !!row.InheritsMembership,
+                ownerId: row.OwnerID,
+                agentRetrieval: row.AgentRetrieval,
+            })),
+            memberships: (members.Results ?? []).map((row) => ({
+                spaceId: row.SpaceID,
+                userId: row.UserID,
+                status: row.Status,
+                band: row.Band,
+                role: flags.get(row.SpaceRoleTypeID.toLowerCase()) ?? empty,
+            })),
+        };
+        return resourcesFromRoster({ callerUserId: user.ID, spaces: graph.spaces, memberships: graph.memberships })
+            .map((row) => this.permission(row.spaceId, user.ID, user.Name, row.actions));
     }
 
     async GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'Space') return [];
         const spaceId = asUuid(resourceId);
-        const caller = new Metadata().CurrentUser;
+        const caller = provider?.CurrentUser ?? new Metadata().CurrentUser;
         if (!spaceId || !caller) return [];
         const graph = await rosterGraph(caller, spaceId, provider);
         const people = new Map<string, string>();
@@ -111,6 +131,35 @@ export class CollaborationSpacePermissionProvider extends PermissionProviderBase
 function asUuid(value: string | null | undefined): string | null {
     const normalized = NormalizeUUID(value);
     return normalized && UUID.test(normalized) ? normalized : null;
+}
+
+function blankRole(): RoleFlags {
+    return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
+}
+
+async function roleFlags(view: RunView, user: UserInfo, roleIds: string[]): Promise<Map<string, RoleFlags> | null> {
+    const wanted = [...new Set(roleIds.map((id) => asUuid(id)).filter((id): id is string => !!id))];
+    const roles = await view.RunView<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute: boolean }>({
+        EntityName: ROLES,
+        ExtraFilter: wanted.length ? `ID IN (${wanted.map((id) => `'${id}'`).join(',')})` : '1 = 0',
+        Fields: ['ID', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole', 'CanContribute'],
+        ResultType: 'simple',
+        MaxRows: 50,
+    }, user);
+    if (!roles.Success) return null;
+    const flags = new Map<string, RoleFlags>();
+    for (const role of roles.Results ?? []) {
+        flags.set(role.ID.toLowerCase(), {
+            level: Number(role.Level),
+            maxGrantableLevel: Number(role.MaxGrantableLevel),
+            canInvite: !!role.CanInvite,
+            canPromoteBand: !!role.CanPromoteBand,
+            canSeeTeamBand: !!role.CanSeeTeamBand,
+            isOwnerRole: !!role.IsOwnerRole,
+            canContribute: !!role.CanContribute,
+        });
+    }
+    return flags;
 }
 
 function viewFor(provider?: IMetadataProvider): RunView {
@@ -159,27 +208,10 @@ async function rosterGraph(user: UserInfo, spaceId: string, provider?: IMetadata
         ResultType: 'simple',
         MaxRows: PAGE,
     }, user);
-    if ((members.Results?.length ?? 0) >= PAGE) return { spaces, memberships: [] };
-    const roles = await view.RunView<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute: boolean }>({
-        EntityName: ROLES,
-        ExtraFilter: 'ID IS NOT NULL',
-        Fields: ['ID', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole', 'CanContribute'],
-        ResultType: 'simple',
-        MaxRows: 50,
-    }, user);
-    const flags = new Map<string, RoleFlags>();
-    for (const role of roles.Results ?? []) {
-        flags.set(role.ID.toLowerCase(), {
-            level: Number(role.Level),
-            maxGrantableLevel: Number(role.MaxGrantableLevel),
-            canInvite: !!role.CanInvite,
-            canPromoteBand: !!role.CanPromoteBand,
-            canSeeTeamBand: !!role.CanSeeTeamBand,
-            isOwnerRole: !!role.IsOwnerRole,
-            canContribute: !!role.CanContribute,
-        });
-    }
-    const empty: RoleFlags = { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
+    if (!members.Success || (members.Results?.length ?? 0) >= PAGE) return { spaces, memberships: [] };
+    const flags = await roleFlags(view, user, (members.Results ?? []).map((member) => member.SpaceRoleTypeID));
+    if (!flags) return { spaces, memberships: [] };
+    const empty = blankRole();
     const memberships = (members.Results ?? []).map((member) => ({
         spaceId: member.SpaceID,
         userId: member.UserID,
