@@ -461,7 +461,7 @@ export function agentMayQuote(input: {
         return false;
     }
     const index = byId(input.spaces);
-    const itemSpace = index.get(input.itemSpaceId);
+    const itemSpace = index.get(idKey(input.itemSpaceId));
     if (!itemSpace) {
         return false;
     }
@@ -470,12 +470,12 @@ export function agentMayQuote(input: {
     }
     let current: SpaceNode | undefined = itemSpace;
     const seen = new Set<string>();
-    while (current && !seen.has(current.id)) {
+    while (current && !seen.has(idKey(current.id))) {
         if (current.agentRetrieval === 'ExcludedEntirely') {
             return false;
         }
-        seen.add(current.id);
-        current = current.parentId ? index.get(current.parentId) : undefined;
+        seen.add(idKey(current.id));
+        current = current.parentId ? index.get(idKey(current.parentId)) : undefined;
     }
     current = itemSpace;
     const between = new Set<string>();
@@ -484,7 +484,7 @@ export function agentMayQuote(input: {
             return false;
         }
         between.add(idKey(current.id));
-        current = current.parentId ? index.get(current.parentId) : undefined;
+        current = current.parentId ? index.get(idKey(current.parentId)) : undefined;
     }
     return true;
 }

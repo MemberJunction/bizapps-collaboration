@@ -424,6 +424,25 @@ describe('agent exclusion covers descendants', () => {
         assert.equal(agentMayQuote({ ...base, itemSpaceId: 'econ-q3', askedFromSpaceId: 'root' }), false);
         assert.equal(agentMayQuote({ ...base, itemSpaceId: 'econ-q3', askedFromSpaceId: 'econ-q3' }), false);
     });
+    it('treats mixed-case ids the same as lowercase', () => {
+        const upper: SpaceNode[] = [
+            space({ id: 'ROOT', agentRetrieval: 'ExcludedEntirely' }),
+            space({ id: 'CHILD', parentId: 'ROOT' }),
+        ];
+        const baseQuote = { callerCanRead: true, callerCanSeeTeam: true, itemBand: 'Shared' as const };
+        assert.equal(agentMayQuote({ ...baseQuote, itemSpaceId: 'child', askedFromSpaceId: 'root', spaces: upper }), false);
+        const between: SpaceNode[] = [
+            space({ id: 'ROOT' }),
+            space({ id: 'MID', parentId: 'ROOT', agentRetrieval: 'ExcludedFromParentScope' }),
+            space({ id: 'CHILD', parentId: 'MID' }),
+        ];
+        assert.equal(agentMayQuote({ ...baseQuote, itemSpaceId: 'child', askedFromSpaceId: 'root', spaces: between }), false);
+        const included: SpaceNode[] = [
+            space({ id: 'ROOT' }),
+            space({ id: 'CHILD', parentId: 'ROOT' }),
+        ];
+        assert.equal(agentMayQuote({ ...baseQuote, itemSpaceId: 'CHILD', askedFromSpaceId: 'ROOT', spaces: included }), true);
+    });
     it('excludes a memo under a parent-excluded space when asked from above', () => {
         assert.equal(agentMayQuote({ ...base, itemSpaceId: 'legal-memo', askedFromSpaceId: 'root' }), false);
         assert.equal(agentMayQuote({ ...base, itemSpaceId: 'legal-memo', askedFromSpaceId: 'legal' }), true);
