@@ -310,6 +310,19 @@ describe('flag ceiling', () => {
 describe('space writes', () => {
     const here = member({ spaceId: 'child', userId: 'ada', role: ownerRole });
     const onRoot = member({ spaceId: 'root', userId: 'ada', role: ownerRole });
+    it('treats mixed-case parent ids as the same parent, and mixed-case owners as the same person', () => {
+        const parent = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee2';
+        const owner = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1';
+        assert.equal(planSpaceWrite({ isNew: false, previousParentId: parent.toUpperCase(), nextParentId: parent }), 'edit');
+        assert.equal(authorizeSpaceWrite({
+            kind: 'create-root',
+            callerUserId: owner,
+            callerIsStaff: true,
+            nextOwnerId: owner.toUpperCase(),
+            here: null,
+            onParent: null,
+        }).ok, true);
+    });
     it('lets staff create a root they will own', () => {
         assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: null }), 'create-root');
         assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here: null, onParent: null }).ok, true);

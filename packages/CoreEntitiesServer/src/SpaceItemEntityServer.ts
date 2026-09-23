@@ -21,7 +21,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!user || !caller || !spaceId) {
             return fail(result, 'Item change refused: the signer and the space must be real ids.');
         }
-        const previousSpace = this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue as string | null | undefined;
+        const previousRaw = this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue as string | null | undefined;
+        const previousSpace = previousRaw ? parseUuid(String(previousRaw)) : null;
+        if (previousRaw && !previousSpace) {
+            return fail(result, 'Item change refused: the saved space id is not valid.');
+        }
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
         let context;
         try {

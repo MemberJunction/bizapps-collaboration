@@ -200,7 +200,7 @@ export function planSpaceWrite(input: {
     if (input.isNew) {
         return input.nextParentId ? 'create-child' : 'create-root';
     }
-    if ((input.previousParentId ?? null) !== (input.nextParentId ?? null)) {
+    if (idKey(input.previousParentId) !== idKey(input.nextParentId)) {
         return 'move';
     }
     return 'edit';
@@ -227,7 +227,7 @@ export function authorizeSpaceWrite(input: {
         return { ok: false, code: 'not-signed-in', message: 'Space change refused: there is no signed-in user.' };
     }
     if (input.kind === 'create-root') {
-        if (!input.callerIsStaff || input.nextOwnerId !== input.callerUserId) {
+        if (!input.callerIsStaff || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
             return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may create a root, and they must own it.' };
         }
         return { ok: true };

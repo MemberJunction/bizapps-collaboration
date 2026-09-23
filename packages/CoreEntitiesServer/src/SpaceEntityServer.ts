@@ -25,15 +25,27 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (this.IsSaved && dirty.length === 0) {
             return result;
         }
+        const spaceId = this.ID ? parseUuid(this.ID) : null;
+        if (this.ID && !spaceId) {
+            return fail(result, 'ID', 'Space change refused: the space id is not valid.');
+        }
+        const ownerId = parseUuid(this.OwnerID);
+        if (!ownerId) {
+            return fail(result, 'OwnerID', 'Space change refused: the owner id is not valid.');
+        }
         const parentId = this.ParentID ? parseUuid(this.ParentID) : null;
         if (this.ParentID && !parentId) {
             return fail(result, 'ParentID', 'Space change refused: the parent id is not valid.');
         }
-        const previousParent = (this.Fields.find((field) => field.Name === 'ParentID')?.OldValue as string | null | undefined) ?? null;
+        const previousRaw = this.Fields.find((field) => field.Name === 'ParentID')?.OldValue as string | null | undefined;
+        const previousParent = previousRaw ? parseUuid(String(previousRaw)) : null;
+        if (previousRaw && !previousParent) {
+            return fail(result, 'ParentID', 'Space change refused: the saved parent id is not valid.');
+        }
         const kind = planSpaceWrite({ isNew: !this.IsSaved, previousParentId: previousParent, nextParentId: parentId });
         const toRoot = kind === 'move' && !parentId;
         const chains = chainsForSpaceWrite(kind, toRoot);
-        const hereId = this.IsSaved ? this.ID : null;
+        const hereId = this.IsSaved ? spaceId : null;
         let hereContext: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
         let destination: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
         try {
@@ -52,7 +64,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             kind,
             callerUserId: caller,
             callerIsStaff: isStaff(user),
-            nextOwnerId: this.OwnerID,
+            nextOwnerId: ownerId,
             toRoot,
             here,
             onParent,
@@ -63,7 +75,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         let systemNodes: Awaited<ReturnType<typeof loadAncestorChain>> = [];
         try {
             const system = await requireSystemUser(this);
-            const cycleRoot = parentId || this.ID;
+            const cycleRoot = parentId || spaceId;
             if (cycleRoot) {
                 systemNodes = await loadAncestorChain(this, cycleRoot, system);
             }
@@ -72,7 +84,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         const hereSpaces = hereContext?.spaces ?? [];
         const nodes = [...systemNodes, ...hereSpaces.filter((space) => !systemNodes.some((have) => have.id === space.id))];
-        if (this.ID && parentCreatesCycle(nodes.map((space) => space.id === this.ID ? { ...space, parentId } : space), this.ID, parentId)) {
+        if (spaceId && parentCreatesCycle(nodes.map((space) => space.id === spaceId ? { ...space, parentId } : space), spaceId, parentId)) {
             return fail(result, 'ParentID', 'This parent would put the space inside its own subtree.');
         }
         return result;
