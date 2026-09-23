@@ -6,6 +6,6 @@
   "license": "UNLICENSED",
   "scripts": {
     "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts",
-    "build": "tsc -p packages/Core && tsc -p packages/Entities && tsc -p packages/Actions && tsc -p packages/CoreEntitiesServer && tsc -p packages/Server && npm run build --prefix packages/Angular"
+    "build": "pnpm --filter \"./packages/*\" run build"
   }
 }

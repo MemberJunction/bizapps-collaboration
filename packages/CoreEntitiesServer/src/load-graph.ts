@@ -1,7 +1,7 @@
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import type { MemberSnapshot, RoleFlags, SpaceNode } from '@mj-biz-apps/collaboration-core';
-import { parseUuid } from './uuid.js';
+import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -37,13 +37,7 @@ function toNode(row: SpaceRow): SpaceNode {
 }
 
 function runViewFor(entity: BaseEntity): RunView {
-    const provider = entity.ProviderToUse;
-    // ProviderBase is both the entity provider and the view provider. The interfaces
-    // are split, so this checks for the method instead of casting through unknown.
-    if (!('RunViews' in provider)) {
-        throw new Error('The entity provider cannot run views.');
-    }
-    return new RunView(provider);
+    return new RunView(entity.RunViewProviderToUse);
 }
 
 async function one<T>(rv: RunView, entityName: string, filter: string, user: UserInfo): Promise<T[]> {
@@ -58,21 +52,25 @@ async function one<T>(rv: RunView, entityName: string, filter: string, user: Use
 }
 
 /** Ancestors of `startId`, including it, following ParentID. Stops if a parent is not visible. */
-async function chain(rv: RunView, startId: string, user: UserInfo): Promise<SpaceNode[]> {
+async function chain(rv: RunView, startId: string, user: UserInfo): Promise<{ nodes: SpaceNode[]; typeId: string | null }> {
     const nodes: SpaceNode[] = [];
+    let typeId: string | null = null;
     let current: string | null = startId;
     const seen = new Set<string>();
     while (current && !seen.has(current)) {
         seen.add(current);
-        const rows = await one<SpaceRow>(rv, SPACES, `ID = '${current}'`, user);
-        const row = rows[0];
+        const rows: SpaceRow[] = await one<SpaceRow>(rv, SPACES, `ID = '${current}'`, user);
+        const row: SpaceRow | undefined = rows[0];
         if (!row) {
             break;
+        }
+        if (!typeId) {
+            typeId = row.SpaceTypeID;
         }
         nodes.push(toNode(row));
         current = row.ParentID;
     }
-    return nodes;
+    return { nodes, typeId };
 }
 
 /**
@@ -89,7 +87,6 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
         { EntityName: ROLES, ExtraFilter: roleId && parseUuid(roleId) ? `ID = '${parseUuid(roleId)}'` : '1 = 0', MaxRows: 5 },
-        { EntityName: MEMBERS, ExtraFilter: `SpaceID = '${space}' AND Status <> 'Removed'`, MaxRows: 2000 },
     ], user);
     for (const result of results) {
         if (!result.Success) {
@@ -99,8 +96,10 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
             throw new Error('Refusing the write: a roster page came back full, so the check would be incomplete.');
         }
     }
-    const spaces = await chain(rv, space, user);
-    const typeId = spaces[0] ? (await one<{ SpaceTypeID: string }>(rv, SPACES, `ID = '${space}'`, user))[0]?.SpaceTypeID : null;
+    const counted = await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status <> 'Removed'`, (await rosterReader(entity)) ?? user);
+    const walked = await chain(rv, space, user);
+    const spaces = walked.nodes;
+    const typeId = walked.typeId;
     const typeRows = typeId && parseUuid(typeId)
         ? await one<{ InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null }>(rv, TYPES, `ID = '${parseUuid(typeId)}'`, user)
         : [];
@@ -132,7 +131,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         role: granted,
         approval: typeRows[0]?.InviteApproval ?? 'Approve',
         memberCap: typeRows[0]?.MemberCap ?? null,
-        memberCount: (results[2].Results ?? []).length,
+        memberCount: counted.length,
     };
 }
 
@@ -146,6 +145,14 @@ function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: bool
         isOwnerRole: !!role.IsOwnerRole,
         canContribute: !!role.CanContribute,
     };
+}
+
+async function rosterReader(entity: BaseEntity): Promise<UserInfo | null> {
+    const provider = asMetadata(entity.ProviderToUse);
+    if (!provider) {
+        return null;
+    }
+    return WellKnownUserSource.Instance.GetSystemUser(provider);
 }
 
 function emptyRole(): RoleFlags {

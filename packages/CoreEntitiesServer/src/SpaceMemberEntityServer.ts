@@ -1,6 +1,6 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
+import { isSelfRemoval, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { parseUuid } from './uuid.js';
@@ -24,6 +24,15 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             return fail(result, 'UserID', 'Invite refused: the user, space, and role must be real ids.');
         }
 
+        if (this.IsSaved) {
+            const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
+            if (dirty.includes('SpaceID') || dirty.includes('UserID')) {
+                return fail(result, 'SpaceID', 'A membership stays on the space and the person it was created for.');
+            }
+            if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
+                return result;
+            }
+        }
         const previous = previousStatus(this);
         let context;
         try {

@@ -310,6 +310,10 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 
 ---
 
+## Upgrading
+
+After a MemberJunction upgrade that adds core entities, re-apply the participant shell grant so every `__mj` entity has a Space Participant read row. The statement is the `INSERT … SELECT` at the bottom of `migrations/V202609230110__v0.1.x__Contribute_Shell_And_Nav.sql`. `NOT EXISTS` makes it safe to run again. `scripts/persona-check.sql` asserts that every core entity has that row, and that every participant filter executes.
+
 ## License
 
 Not chosen. Free distribution is decided; the license and the publish path are [plan §11 decision 5](plans/plan.md). No `LICENSE` file ships in this commit.

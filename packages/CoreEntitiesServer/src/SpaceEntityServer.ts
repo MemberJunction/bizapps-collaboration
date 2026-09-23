@@ -1,9 +1,10 @@
-import { BaseEntity, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
-import { parseUuid } from './uuid.js';
+import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 
@@ -31,39 +32,47 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const previousParent = (this.Fields.find((field) => field.Name === 'ParentID')?.OldValue as string | null | undefined) ?? null;
         const kind = planSpaceWrite({ isNew: !this.IsSaved, previousParentId: previousParent, nextParentId: parentId });
         const hereId = this.IsSaved ? this.ID : null;
-        const parentToLoad = kind === 'create-child' || kind === 'move' ? parentId : hereId;
-        let context;
+        let hereContext: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
+        let destination: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
         try {
-            context = await loadWriteContext(this, user, parentToLoad || this.ID, null);
+            if (hereId) {
+                hereContext = await loadWriteContext(this, user, hereId, null);
+            }
+            if (parentId) {
+                destination = await loadWriteContext(this, user, parentId, null);
+            }
         } catch (error) {
             return fail(result, 'ParentID', error instanceof Error ? error.message : 'Space change refused: the tree could not be read completely.');
         }
-        let destination = context;
-        if (kind === 'move' && parentId) {
-            try {
-                destination = await loadWriteContext(this, user, parentId, null);
-            } catch (error) {
-                return fail(result, 'ParentID', error instanceof Error ? error.message : 'Space change refused: the destination could not be read.');
-            }
-        }
-        const here = hereId ? membershipReaches(context.spaces, context.memberships, caller, hereId) : null;
-        const onParent = parentId ? membershipReaches(destination.spaces, destination.memberships, caller, parentId) : null;
+        const here = hereId && hereContext ? membershipReaches(hereContext.spaces, hereContext.memberships, caller, hereId) : null;
+        const onParent = parentId && destination ? membershipReaches(destination.spaces, destination.memberships, caller, parentId) : null;
         const decision = authorizeSpaceWrite({
             kind,
             callerUserId: caller,
             callerIsStaff: isStaff(user),
             nextOwnerId: this.OwnerID,
+            toRoot: kind === 'move' && !parentId,
             here,
             onParent,
         });
         if (!decision.ok) {
             return fail(result, 'ParentID', decision.message);
         }
-        const nodes = [...context.spaces, ...destination.spaces.filter((space) => !context.spaces.some((have) => have.id === space.id))];
+        const hereSpaces = hereContext?.spaces ?? [];
+        const destSpaces = destination?.spaces ?? [];
+        const nodes = [...hereSpaces, ...destSpaces.filter((space) => !hereSpaces.some((have) => have.id === space.id))];
         if (this.ID && parentCreatesCycle(nodes.map((space) => space.id === this.ID ? { ...space, parentId } : space), this.ID, parentId)) {
             return fail(result, 'ParentID', 'This parent would put the space inside its own subtree.');
         }
         return result;
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        const ok = await super.Save(options);
+        if (ok && this.ContextCurrentUser && this.ID) {
+            await ensureConversation(this, this.ContextCurrentUser);
+        }
+        return ok;
     }
 }
 
@@ -81,24 +90,31 @@ function fail(result: ValidationResult, field: string, message: string): Validat
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 
-SpaceEntityServer.prototype.Save = async function (this: SpaceEntityServer, options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
-    const creating = !this.IsSaved;
-    const ok = await mjBizAppsCollaborationSpaceEntity.prototype.Save.call(this, options);
-    if (!ok || !creating || !this.ContextCurrentUser || !this.ID) {
-        return ok;
+async function ensureConversation(space: SpaceEntityServer, user: NonNullable<SpaceEntityServer['ContextCurrentUser']>): Promise<void> {
+    const metadata = asMetadata(space.ProviderToUse);
+    if (!metadata) {
+        LogError('Space conversation was not bound: the provider cannot create entities.');
+        return;
     }
-    try {
-        const conversation = await new Metadata().GetEntityObject('MJ: Conversations', this.ContextCurrentUser);
-        conversation.NewRecord();
-        conversation.Set('Name', this.Name);
-        conversation.Set('LinkedEntityID', SPACES_ENTITY_ID);
-        conversation.Set('LinkedRecordID', this.ID);
-        await conversation.Save();
-    } catch (error) {
-        LogError(`Space conversation was not bound: ${error instanceof Error ? error.message : String(error)}`);
+    const existing = await new RunView(space.RunViewProviderToUse).RunView({
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${space.ID}'`,
+        MaxRows: 1,
+    }, user);
+    if ((existing.Results?.length ?? 0) > 0) {
+        return;
     }
-    return true;
-};
+    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+    conversation.NewRecord();
+    conversation.UserID = user.ID;
+    conversation.Name = space.Name;
+    conversation.LinkedEntityID = SPACES_ENTITY_ID;
+    conversation.LinkedRecordID = space.ID;
+    const saved = await conversation.Save();
+    if (!saved) {
+        LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+    }
+}
 
 export function LoadSpaceEntityServer(): void {
     void SpaceEntityServer;

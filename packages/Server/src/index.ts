@@ -11,6 +11,14 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import './generated/generated.js';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
+const here = fileURLToPath(new URL('.', import.meta.url));
+
+/** Passed to the host schema builder. Importing the resolvers is not enough. */
+export const RESOLVER_PATHS = [resolve(here, 'generated/generated.{js,ts}')];
 
 export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceEntityServer();

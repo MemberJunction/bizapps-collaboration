@@ -31,9 +31,10 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [roles]="roles"
           [types]="types"
           [viewerUserId]="viewerId"
+          [viewerIsStaff]="viewerIsStaff"
           (invite)="onInvite($event)"
+          (approve)="onApprove($event)"
           (promote)="onPromote($event)"
-          (accept)="onAccept($event)"
           (create)="onCreate($event)" />
       }
     `,
@@ -46,14 +47,17 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
     viewerId: string | null = null;
+    viewerIsStaff = false;
     denied = false;
     message = '';
     private readonly changes = inject(ChangeDetectorRef);
 
     override ngOnInit(): void {
         super.ngOnInit();
-        this.NotifyLoadComplete();
-        void this.reload();
+        void this.reload().finally(() => {
+            this.NotifyLoadComplete();
+            this.changes.markForCheck();
+        });
     }
 
     private user(): UserInfo | undefined {
@@ -64,8 +68,10 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     private async reload(): Promise<void> {
         const user = this.user();
         this.viewerId = user?.ID ?? null;
+        this.viewerIsStaff = (user?.UserRoles ?? []).some((role) => role.Role === 'UI' || role.Role === 'Developer' || role.Role === 'Integration');
         if (!user) {
             this.denied = true;
+            this.changes.markForCheck();
             return;
         }
         const rv = new RunView();
@@ -78,6 +84,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         ], user);
         if (!spaceRows.Success) {
             this.denied = true;
+            this.changes.markForCheck();
             return;
         }
         const types = new Map((typeRows.Results ?? []).map((row: { ID: string; Vocabulary: string; InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null }) => [row.ID, row]));
@@ -136,7 +143,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         await this.saveMember(event.spaceId, event.userId, event.roleId);
     }
 
-    async onAccept(event: { memberUserId: string; spaceId: string }): Promise<void> {
+    async onApprove(event: { memberUserId: string; spaceId: string }): Promise<void> {
         const user = this.user();
         if (!user) return;
         const found = await new RunView().RunView({
@@ -204,5 +211,5 @@ export class CollaborationSectionResource extends BaseResourceComponent {
 }
 
 function emptyRole(): RoleFlags {
-    return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false };
+    return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
 }

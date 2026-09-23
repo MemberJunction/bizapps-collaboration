@@ -9,6 +9,9 @@
           @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
         </select>
       </label>
+      @if (viewerIsStaff) {
+        <label><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
+      }
       <button type="submit">Create</button>
     </form>
     @if (spaces.length === 0) {
@@ -48,8 +51,8 @@
                 <span class="who">{{ member.displayName || member.userId }}</span>
                 <span class="pill">{{ member.band }}</span>
                 <span class="pill">{{ member.status }}</span>
-                @if (member.status === 'Invited' && member.userId === viewerUserId) {
-                  <button type="button" class="text" (click)="accept.emit({ memberUserId: member.userId, spaceId: space.id })">Accept</button>
+                @if (member.status === 'Invited' && viewerCanApprove(space.id)) {
+                  <button type="button" class="text" (click)="approve.emit({ memberUserId: member.userId, spaceId: space.id })">Approve</button>
                 }
               </li>
             } @empty {

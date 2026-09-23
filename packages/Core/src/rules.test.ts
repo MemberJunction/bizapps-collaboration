@@ -4,7 +4,7 @@ import {
     agentMayQuote,
     authorizeItemWrite,
     authorizeSpaceWrite,
-    isSelfAccept,
+    isSelfRemoval,
     membershipReaches,
     parentCreatesCycle,
     planSpaceWrite,
@@ -108,7 +108,7 @@ describe('refuseInvite', () => {
     };
 
     it('lets a reaching member invite at or below their ceiling, as Invited', () => {
-        assert.deepEqual(refuseInvite(base), { ok: true, status: 'Invited' });
+        assert.deepEqual(refuseInvite(base), { ok: true, status: 'Active' });
     });
 
     it('auto-approves when the type says so', () => {
@@ -155,10 +155,23 @@ describe('refuseInvite', () => {
     });
 
     it('lets the invited person accept, and refuses a cycle in the tree', () => {
-        assert.equal(isSelfAccept({ callerUserId: 'bea', inviteeUserId: 'bea', previousStatus: 'Invited', nextStatus: 'Active' }), true);
-        assert.equal(isSelfAccept({ callerUserId: 'ada', inviteeUserId: 'bea', previousStatus: 'Invited', nextStatus: 'Active' }), false);
+        assert.equal(isSelfRemoval({ callerUserId: 'bea', inviteeUserId: 'bea', nextStatus: 'Removed' }), true);
+        assert.equal(isSelfRemoval({ callerUserId: 'ada', inviteeUserId: 'bea', nextStatus: 'Removed' }), false);
         assert.equal(parentCreatesCycle(tree, 'root', 'child'), true);
         assert.equal(parentCreatesCycle(tree, 'child', 'root'), false);
+    });
+
+    it('refuses the owner reseating themselves when the roster is not empty', () => {
+        const decision = refuseInvite({
+            ...base,
+            callerUserId: 'ada',
+            inviteeUserId: 'ada',
+            targetSpaceId: 'child',
+            granted: ownerRole,
+            memberships: [],
+            occupied: 2,
+        });
+        assert.equal(decision.ok, false);
     });
 
     it('stops at the member cap', () => {

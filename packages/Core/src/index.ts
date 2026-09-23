@@ -4,7 +4,7 @@ export {
     authorizeSpaceWrite,
     flagExceedsGrantor,
     initialMemberStatus,
-    isSelfAccept,
+    isSelfRemoval,
     membershipReaches,
     parentCreatesCycle,
     planSpaceWrite,
@@ -23,4 +23,5 @@ export type {
     Retention,
     RoleFlags,
     SpaceNode,
-} from './rules.ts';
+    InviteDecision,
+} from './rules.js';

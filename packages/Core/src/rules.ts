@@ -61,8 +61,12 @@ export type InviteDecision =
 
 const ACTIVE = 'Active';
 
+function idKey(value: string | null | undefined): string {
+    return (value ?? '').trim().toLowerCase();
+}
+
 function byId(spaces: readonly SpaceNode[]): Map<string, SpaceNode> {
-    return new Map(spaces.map((space) => [space.id, space]));
+    return new Map(spaces.map((space) => [idKey(space.id), space]));
 }
 
 /**
@@ -80,19 +84,19 @@ export function membershipReaches(
     targetId: string,
 ): MemberSnapshot | null {
     const index = byId(spaces);
-    const active = memberships.filter((member) => member.userId === userId && member.status === ACTIVE);
-    let current = index.get(targetId);
+    const active = memberships.filter((member) => idKey(member.userId) === idKey(userId) && member.status === ACTIVE);
+    let current = index.get(idKey(targetId));
     const seen = new Set<string>();
-    while (current && !seen.has(current.id)) {
-        seen.add(current.id);
-        const direct = active.find((member) => member.spaceId === current!.id);
+    while (current && !seen.has(idKey(current.id))) {
+        seen.add(idKey(current.id));
+        const direct = active.find((member) => idKey(member.spaceId) === idKey(current!.id));
         if (direct) {
             return direct;
         }
         if (!current.inheritsMembership || !current.parentId) {
             return null;
         }
-        current = index.get(current.parentId);
+        current = index.get(idKey(current.parentId));
     }
     return null;
 }
@@ -106,16 +110,9 @@ export function visibleSpaces(
     return spaces.filter((space) => membershipReaches(spaces, memberships, userId, space.id) !== null);
 }
 
-/** The invited person may flip their own row from Invited to Active. Nobody else may, except through a new grant. */
-export function isSelfAccept(input: {
-    callerUserId: string | null;
-    inviteeUserId: string;
-    previousStatus: MemberStatus;
-    nextStatus: MemberStatus;
-}): boolean {
-    return input.callerUserId === input.inviteeUserId
-        && input.previousStatus === 'Invited'
-        && input.nextStatus === 'Active';
+/** A person may set their own roster row to Removed. They may not change anything else that way. */
+export function isSelfRemoval(input: { callerUserId: string | null; inviteeUserId: string; nextStatus: MemberStatus }): boolean {
+    return idKey(input.callerUserId) !== '' && idKey(input.callerUserId) === idKey(input.inviteeUserId) && input.nextStatus === 'Removed';
 }
 
 /** True when setting `parentId` on `spaceId` would put the space inside its own subtree. */
@@ -123,18 +120,18 @@ export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string
     if (!parentId) {
         return false;
     }
-    if (parentId === spaceId) {
+    if (idKey(parentId) === idKey(spaceId)) {
         return true;
     }
     const index = byId(spaces);
-    let current = index.get(parentId);
+    let current = index.get(idKey(parentId));
     const seen = new Set<string>();
-    while (current && !seen.has(current.id)) {
-        if (current.id === spaceId) {
+    while (current && !seen.has(idKey(current.id))) {
+        if (idKey(current.id) === idKey(spaceId)) {
             return true;
         }
-        seen.add(current.id);
-        current = current.parentId ? index.get(current.parentId) : undefined;
+        seen.add(idKey(current.id));
+        current = current.parentId ? index.get(idKey(current.parentId)) : undefined;
     }
     return false;
 }
@@ -170,6 +167,8 @@ export function authorizeSpaceWrite(input: {
     callerUserId: string | null;
     callerIsStaff: boolean;
     nextOwnerId: string;
+    /** True when a move clears ParentID. Staff and the current owner may do that. */
+    toRoot?: boolean;
     /** Reaching membership on the space being edited, before the move. Null on create. */
     here: MemberSnapshot | null;
     /** Reaching membership on the destination parent. */
@@ -192,6 +191,12 @@ export function authorizeSpaceWrite(input: {
     }
     if (!input.here?.role.isOwnerRole) {
         return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change it.' };
+    }
+    if (input.kind === 'move' && input.toRoot) {
+        if (!input.callerIsStaff) {
+            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may move a space to the top level.' };
+        }
+        return { ok: true };
     }
     if (input.kind === 'move' && !input.onParent?.role.isOwnerRole) {
         return { ok: false, code: 'not-a-member', message: 'Space change refused: only an owner of the destination parent may move a space there.' };
@@ -224,11 +229,16 @@ export function authorizeItemWrite(input: {
     if (!next.role.canContribute) {
         return { ok: false, code: 'cannot-invite', message: 'Item change refused: this role cannot add or move material.' };
     }
-    if (input.previousSpaceId && input.previousSpaceId !== input.nextSpaceId) {
+    const crossesSpace = !!input.previousSpaceId && idKey(input.previousSpaceId) !== idKey(input.nextSpaceId);
+    if (crossesSpace && input.previousSpaceId) {
         const previous = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.previousSpaceId);
         if (!previous) {
             return { ok: false, code: 'not-a-member', message: 'Item change refused: the signer does not reach the space this item is leaving.' };
         }
+    }
+    const sharedMove = crossesSpace && input.previousBand === 'Shared' && input.nextBand === 'Shared';
+    if (sharedMove && !next.role.canPromoteBand) {
+        return { ok: false, code: 'cannot-invite', message: 'Item change refused: moving shared material to another space requires promote rights there.' };
     }
     const enteringShared = input.nextBand === 'Shared' && input.previousBand !== 'Shared';
     const leavingShared = input.previousBand === 'Shared' && input.nextBand === 'Team';
@@ -238,7 +248,7 @@ export function authorizeItemWrite(input: {
     if (input.nextBand === 'Team') {
         return { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null, rewriteStamp: true };
     }
-    if (enteringShared) {
+    if (enteringShared || sharedMove) {
         return { ok: true, band: 'Shared', promotedAt: input.now, promotedByUserId: input.callerUserId, rewriteStamp: true };
     }
     return { ok: true, band: 'Shared', promotedAt: null, promotedByUserId: null, rewriteStamp: false };
@@ -331,7 +341,8 @@ export function refuseInvite(input: {
         };
     }
 
-    return { ok: true, status: initialMemberStatus(input.approval) };
+    const status = input.approval === 'AutoApprove' || grantor.role.isOwnerRole ? 'Active' : 'Invited';
+    return { ok: true, status };
 }
 
 export interface PromotionDecision {
@@ -430,14 +441,14 @@ export function agentMayQuote(input: {
 }
 
 function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nodeId: string): boolean {
-    let current = index.get(nodeId);
+    let current = index.get(idKey(nodeId));
     const seen = new Set<string>();
-    while (current && !seen.has(current.id)) {
-        if (current.id === ancestorId) {
+    while (current && !seen.has(idKey(current.id))) {
+        if (idKey(current.id) === idKey(ancestorId)) {
             return true;
         }
-        seen.add(current.id);
-        current = current.parentId ? index.get(current.parentId) : undefined;
+        seen.add(idKey(current.id));
+        current = current.parentId ? index.get(idKey(current.parentId)) : undefined;
     }
     return false;
 }

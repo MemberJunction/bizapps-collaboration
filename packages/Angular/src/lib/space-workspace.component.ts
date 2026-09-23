@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+    membershipReaches,
     refuseInvite,
     type Band,
     type InviteDecision,
@@ -47,11 +48,13 @@ export class SpaceWorkspaceComponent {
 
     @Output() readonly invite = new EventEmitter<{ spaceId: string; userId: string; roleId: string }>();
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
-    @Output() readonly accept = new EventEmitter<{ memberUserId: string; spaceId: string }>();
+    @Output() readonly approve = new EventEmitter<{ memberUserId: string; spaceId: string }>();
     @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
     @Input() types: { id: string; name: string }[] = [];
+    @Input() viewerIsStaff = false;
     createName = '';
     createTypeId = '';
+    createAtTop = false;
 
     selectedId: string | null = null;
     inviteUserId = '';
@@ -74,7 +77,7 @@ export class SpaceWorkspaceComponent {
         this.selectedId = id;
     }
 
-    membersHere(spaceId: string): MemberSnapshot[] {
+    membersHere(spaceId: string): (MemberSnapshot & { displayName?: string })[] {
         return this.members.filter((member) => member.spaceId === spaceId && member.status !== 'Removed');
     }
 
@@ -102,7 +105,8 @@ export class SpaceWorkspaceComponent {
 
     sendCreate(): void {
         if (!this.createName.trim() || !this.createTypeId) return;
-        this.create.emit({ name: this.createName.trim(), parentId: this.selected?.id ?? null, typeId: this.createTypeId });
+        const parentId = this.createAtTop || !this.selected ? null : this.selected.id;
+        this.create.emit({ name: this.createName.trim(), parentId, typeId: this.createTypeId });
         this.createName = '';
     }
 
@@ -117,7 +121,13 @@ export class SpaceWorkspaceComponent {
     }
 
     viewerCanPromote(spaceId: string): boolean {
-        return this.members.some((member) => member.userId === this.viewerUserId && member.spaceId === spaceId && member.status === 'Active' && member.role.canPromoteBand);
+        if (!this.viewerUserId) return false;
+        return !!membershipReaches(this.spaces, this.members, this.viewerUserId, spaceId)?.role.canPromoteBand;
+    }
+
+    viewerCanApprove(spaceId: string): boolean {
+        if (!this.viewerUserId) return false;
+        return !!membershipReaches(this.spaces, this.members, this.viewerUserId, spaceId)?.role.isOwnerRole;
     }
 
     depth(space: WorkspaceSpace): number {

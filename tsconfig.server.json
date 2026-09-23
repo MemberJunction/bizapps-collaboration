@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "sourceMap": true,
     "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "declaration": true,
     "declarationMap": true,
     "esModuleInterop": true,

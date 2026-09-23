@@ -1,9 +1,9 @@
-import { BaseEntity, CompositeKey, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
-import { parseUuid } from './uuid.js';
+import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 
@@ -74,9 +74,9 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
     if (!entityId || !item.RecordID) {
         return false;
     }
-    const provider = item.ProviderToUse;
-    if (!('EntityByID' in provider)) {
-        LogError('Space item target check: the provider has no EntityByID.');
+    const provider = asMetadata(item.ProviderToUse);
+    if (!provider) {
+        LogError('Space item target check: the provider has no entity metadata.');
         return false;
     }
     const info = provider.EntityByID(entityId);
@@ -90,8 +90,13 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
         LogError(`Space item target check: ${error instanceof Error ? error.message : String(error)}`);
         return false;
     }
-    const record = await new Metadata().GetEntityObject(info.Name, user);
-    return record.InnerLoad(key);
+    try {
+        const record = await provider.GetEntityObject(info.Name, user);
+        return await record.InnerLoad(key);
+    } catch (error) {
+        LogError(`Space item target check: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+    }
 }
 
 function fail(result: ValidationResult, message: string): ValidationResult {
