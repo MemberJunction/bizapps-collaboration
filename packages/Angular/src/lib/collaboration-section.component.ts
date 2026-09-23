@@ -4,7 +4,7 @@ import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo }
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
-import { openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
+import { lockoutMessage, openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
@@ -22,7 +22,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
       @if (denied) {
-        <mj-collaboration-no-access />
+        <mj-collaboration-no-access [detail]="lockout" />
       } @else {
         @if (message) { <p class="verdict">{{ message }}</p> }
         <mj-collaboration-workspace
@@ -66,6 +66,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     viewerId: string | null = null;
     viewerIsStaff = false;
     denied = false;
+    lockout = lockoutMessage([]);
     message = '';
     private readonly changes = inject(ChangeDetectorRef);
     private readonly apps = inject(ApplicationManager);
@@ -185,7 +186,15 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             .filter((row) => row.LinkedRecordID)
             .map((row) => ({ spaceId: row.LinkedRecordID, id: row.ID }));
         this.types = (typeRows.Results ?? []).map((row: { ID: string; Name: string }) => ({ id: row.ID, name: row.Name }));
-        this.denied = false;
+        const ownSeats = (memberRows.Results ?? [])
+            .filter((row: { UserID: string }) => row.UserID?.toLowerCase() === user.ID.toLowerCase())
+            .map((row: { Status: string; Space?: string }) => ({ status: row.Status ?? '', spaceName: row.Space ?? '' }));
+        if (!this.viewerIsStaff && this.spaces.length === 0) {
+            this.denied = true;
+            this.lockout = lockoutMessage(ownSeats);
+        } else {
+            this.denied = false;
+        }
         this.changes.markForCheck();
     }
 

@@ -11,6 +11,7 @@ export {
     handInviteToEngine,
     inviteEmail,
     linkHandoff,
+    lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
     membershipReaches,

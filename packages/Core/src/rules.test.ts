@@ -12,6 +12,7 @@ import {
     handInviteToEngine,
     inviteEmail,
     linkHandoff,
+    lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
     membershipReaches,
@@ -162,6 +163,18 @@ describe('magic link and roster permission', () => {
             invitedRoleName: 'Space Participant',
             provisioningGuard: 'block',
         }), false);
+    });
+
+    it('names an invited seat and a removed seat on the no-access page', () => {
+        assert.equal(
+            lockoutMessage([{ spaceName: 'Audit committee', status: 'Invited' }]),
+            "Your invite to Audit committee is waiting for an owner's approval.",
+        );
+        assert.equal(
+            lockoutMessage([{ spaceName: 'Discovery', status: 'Removed' }]),
+            'Your seat on Discovery was removed.',
+        );
+        assert.match(lockoutMessage([]), /invite your account/);
     });
 
     it('sends the invite email with a from address and the link', async () => {

@@ -461,6 +461,19 @@ export function magicLinkBlocksAccount(input: {
     });
 }
 
+/**
+ * What to tell someone who reaches no space. An Invited seat is waiting.
+ * A Removed seat names the space. Anyone else gets the general line.
+ */
+export function lockoutMessage(seats: readonly { spaceName: string; status: string }[]): string {
+    const own = seats.filter((seat) => seat.spaceName.trim().length > 0);
+    const invited = own.find((seat) => seat.status.trim() === 'Invited');
+    if (invited) return `Your invite to ${invited.spaceName.trim()} is waiting for an owner's approval.`;
+    const removed = own.find((seat) => seat.status.trim() === 'Removed');
+    if (removed) return `Your seat on ${removed.spaceName.trim()} was removed.`;
+    return 'Ask a member of the space to invite your account. Signing in is not the same thing as being on the roster.';
+}
+
 /** Where a sign-in link goes. `withhold` means the response carries no URL. */
 export function linkHandoff(input: { emailChannel: boolean; callerIsIssuer: boolean }): 'email' | 'show' | 'withhold' {
     if (input.emailChannel) return 'email';
