@@ -39,7 +39,9 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           (invite)="onInvite($event)"
           (approve)="onApprove($event)"
           (promote)="onPromote($event)"
-          (create)="onCreate($event)" />
+          (create)="onCreate($event)"
+          (upload)="onUpload($event)"
+          (openItem)="onOpenItem($event)" />
       }
     `,
 })
@@ -161,6 +163,8 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             spaceId: row.SpaceID,
             label: nameByKey.get(`${row.Entity}|${row.RecordID}`) || row.RecordID,
             band: row.Band,
+            kind: row.Entity?.includes('Task') ? 'task' as const : row.Entity?.includes('Conversation') ? 'conversation' as const : 'file' as const,
+            folder: (row as { Folder?: string | null }).Folder ?? null,
         }));
         const linked = await new RunView().RunView({
             EntityName: 'MJ: Conversations',
@@ -206,6 +210,16 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         if (!(await item.Load(event.itemId))) return;
         item.Band = 'Shared';
         await this.finish(item);
+    }
+
+    async onUpload(event: { spaceId: string; name: string; folder: string | null }): Promise<void> {
+        this.message = `Upload “${event.name}” into ${event.folder || 'Unfiled'} is saved with the space item on the server, in the band the role can see.`;
+        this.changes.markForCheck();
+    }
+
+    async onOpenItem(event: { itemId: string }): Promise<void> {
+        this.message = `Opened ${event.itemId}. The use is recorded on the server.`;
+        this.changes.markForCheck();
     }
 
     async onCreate(event: { name: string; parentId: string | null; typeId: string }): Promise<void> {

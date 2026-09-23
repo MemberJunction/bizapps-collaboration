@@ -1,4 +1,4 @@
-import { membershipReaches, type Band, type MemberSnapshot, type SpaceNode } from './rules.ts';
+import { idKey, membershipReaches, type Band, type MemberSnapshot, type SpaceNode } from './rules.ts';
 
 export interface LibraryItem {
     id: string;
@@ -13,7 +13,7 @@ export interface LibraryItem {
 export function foldersIn(items: readonly LibraryItem[], spaceId: string): string[] {
     const names = new Set<string>();
     for (const item of items) {
-        if (item.spaceId === spaceId && item.kind === 'file' && item.folder) names.add(item.folder);
+        if (idKey(item.spaceId) === idKey(spaceId) && item.kind === 'file' && item.folder) names.add(item.folder);
     }
     return [...names].sort();
 }
@@ -27,7 +27,7 @@ export function shareRecipients(input: {
 }): string[] {
     const people = new Set<string>();
     for (const member of input.memberships) {
-        if (member.status !== 'Active' || member.userId === input.promoterUserId) continue;
+        if (member.status !== 'Active' || idKey(member.userId) === idKey(input.promoterUserId)) continue;
         if (membershipReaches(input.spaces, input.memberships, member.userId, input.spaceId)) {
             people.add(member.userId);
         }

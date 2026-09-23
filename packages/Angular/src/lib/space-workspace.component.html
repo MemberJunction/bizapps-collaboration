@@ -90,9 +90,16 @@
         <section aria-labelledby="items-heading">
           <h2 id="items-heading">Material</h2>
           <div class="tabs" role="tablist">
-            <button type="button" class="node" [class.on]="material === 'library'" (click)="material = 'library'">Library</button>
-            <button type="button" class="node" [class.on]="material === 'work'" (click)="material = 'work'">Work</button>
+            @if (panels.library !== false) {
+              <button type="button" role="tab" class="node" [class.on]="material === 'library'" [attr.aria-selected]="material === 'library'" (click)="material = 'library'">Library</button>
+            }
+            @if (panels.work) {
+              <button type="button" role="tab" class="node" [class.on]="material === 'work'" [attr.aria-selected]="material === 'work'" (click)="material = 'work'">Work</button>
+            }
           </div>
+          @if (panels.governance) {
+            <p class="empty">Governance waits for the Committees move onto Space.</p>
+          }
           @if (material === 'library') {
             <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
               <label>Upload<input name="upload" [(ngModel)]="uploadName" placeholder="File name" /></label>
@@ -103,7 +110,7 @@
               <h3>{{ folder }}</h3>
               <ul class="items">
                 @for (item of itemsHere(space.id, 'file'); track item.id) {
-                  @if (item.folder === folder) {
+                  @if ((folder === 'Unfiled' && !item.folder) || item.folder === folder) {
                     <li>
                       <button type="button" class="text" (click)="openItem.emit({ itemId: item.id })">{{ item.label }}</button>
                       <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>

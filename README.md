@@ -174,7 +174,7 @@ The host shells are MemberJunction's own `MJAPI` and `MJExplorer`. A BizApps rep
 
 ### Packages this repo will grow
 
-The set matches the other BizApps Open Apps. None of these exist in this commit.
+The set matches the other BizApps Open Apps. These packages are in the repository.
 
 | Package | NPM name | Role |
 |---|---|---|

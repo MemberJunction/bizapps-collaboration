@@ -1,4 +1,4 @@
-import type { Band, MemberSnapshot, RoleFlags, SpaceNode } from './rules.ts';
+import { idKey, type Band, type MemberSnapshot, type RoleFlags, type SpaceNode } from './rules.ts';
 
 /**
  * Phase 0 is three shapes of the same object: an engagement with a sub-space,
@@ -53,5 +53,5 @@ export const phase0Items: Phase0Item[] = [
 ];
 
 export function itemsIn(spaceId: string, kind?: Phase0Item['kind']): Phase0Item[] {
-    return phase0Items.filter((item) => item.spaceId === spaceId && (kind ? item.kind === kind : true));
+    return phase0Items.filter((item) => idKey(item.spaceId) === idKey(spaceId) && (kind ? item.kind === kind : true));
 }

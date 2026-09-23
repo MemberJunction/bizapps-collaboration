@@ -58,6 +58,7 @@ export class SpaceWorkspaceComponent {
     @Input() types: { id: string; name: string }[] = [];
     @Input() viewerIsStaff = false;
     @Input() conversations: { spaceId: string; id: string }[] = [];
+    @Input() panels: { messaging?: boolean; library?: boolean; work?: boolean; governance?: boolean } = { messaging: true, library: true, work: true, governance: false };
     @Input() canOpenChat = false;
     @Output() readonly openConversation = new EventEmitter<string>();
     createName = '';
@@ -94,7 +95,9 @@ export class SpaceWorkspaceComponent {
     }
 
     foldersHere(spaceId: string): string[] {
-        return [...new Set(this.itemsHere(spaceId, 'file').map((item) => item.folder).filter((folder): folder is string => !!folder))].sort();
+        const files = this.itemsHere(spaceId, 'file');
+        const named = [...new Set(files.map((item) => item.folder).filter((folder): folder is string => !!folder))].sort();
+        return files.some((item) => !item.folder) ? ['Unfiled', ...named] : named;
     }
 
     sendUpload(): void {
