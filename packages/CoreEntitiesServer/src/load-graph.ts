@@ -30,10 +30,10 @@ interface SpaceRow {
 
 function toNode(row: SpaceRow): SpaceNode {
     return {
-        id: row.ID,
-        parentId: row.ParentID,
+        id: parseUuid(row.ID) ?? row.ID,
+        parentId: row.ParentID ? parseUuid(row.ParentID) : null,
         inheritsMembership: !!row.InheritsMembership,
-        ownerId: row.OwnerID,
+        ownerId: parseUuid(row.OwnerID) ?? row.OwnerID,
         agentRetrieval: row.AgentRetrieval,
     };
 }
@@ -132,11 +132,11 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     return {
         spaces,
         memberships: memberRows.map((row) => ({
-            spaceId: row.SpaceID,
-            userId: row.UserID,
+            spaceId: parseUuid(row.SpaceID) ?? row.SpaceID,
+            userId: parseUuid(row.UserID) ?? row.UserID,
             status: row.Status,
             band: row.Band,
-            role: roleLookup.get(row.SpaceRoleTypeID) ?? emptyRole(),
+            role: roleLookup.get(parseUuid(row.SpaceRoleTypeID) ?? '') ?? emptyRole(),
         })),
         role: roleId ? (roleLookup.get(parseUuid(roleId) ?? '') ?? granted) : granted,
         roles: roleLookup,
