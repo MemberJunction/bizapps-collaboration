@@ -115,6 +115,9 @@ importers:
 
   packages/Entities:
     dependencies:
+      '@mj-biz-apps/collaboration-core':
+        specifier: 0.1.0
+        version: link:../Core
       zod:
         specifier: 3.25.76
         version: 3.25.76

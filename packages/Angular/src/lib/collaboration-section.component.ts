@@ -189,21 +189,24 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         this.changes.markForCheck();
     }
 
-    async onMintLink(event: { spaceId: string; email: string }): Promise<void> {
+    async onMintLink(event: { spaceId: string; email: string; roleId: string }): Promise<void> {
         const gql = this.gql();
         if (!gql) {
-            this.message = 'A link needs the API connection.';
+            this.message = 'An invite needs the API connection.';
             this.changes.markForCheck();
             return;
         }
         try {
             const result = await gql(`mutation MintSpaceLink($input: MintSpaceLinkInput!) {
-                MintSpaceLink(input: $input) { Success RedemptionUrl ErrorMessage }
-            }`, { input: { SpaceID: event.spaceId, Email: event.email } });
+                MintSpaceLink(input: $input) { Success Sent RedemptionUrl ErrorMessage }
+            }`, { input: { SpaceID: event.spaceId, Email: event.email, RoleID: event.roleId } });
             const payload = result?.MintSpaceLink as { Success?: boolean; RedemptionUrl?: string; ErrorMessage?: string } | undefined;
-            this.message = payload?.Success ? (payload.RedemptionUrl || 'The link was minted.') : (payload?.ErrorMessage || 'The link was refused.');
-        } catch (error) {
-            this.message = error instanceof Error ? error.message : 'The link was refused.';
+            this.message = payload?.Success
+                ? [payload.ErrorMessage, payload.RedemptionUrl].filter((part) => !!part).join(' ')
+                : (payload?.ErrorMessage || 'Invite refused.');
+            if (payload?.Success) await this.reload();
+        } catch {
+            this.message = 'Invite refused.';
         }
         this.changes.markForCheck();
     }

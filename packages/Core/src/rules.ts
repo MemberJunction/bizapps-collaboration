@@ -373,24 +373,27 @@ export function authorizeItemWrite(input: {
 }
 
 /**
- * A magic-link for one space. Anyone who can invite may seat a person.
- * Only an owner may mint a link, because the link admits someone who is not
- * on the roster yet.
+ * Who may be handed the raw sign-in link. An email channel delivers it to the
+ * address instead. Otherwise only an Owner-type account, or a role the host
+ * listed in `inviteIssuerRoleNames`, may see it. A space owner is not enough:
+ * the link signs in as the address it names.
  */
-export function mayMintSpaceLink(input: {
-    callerUserId: string | null;
-    targetSpaceId: string;
-    spaces: readonly SpaceNode[];
-    memberships: readonly MemberSnapshot[];
-}): { ok: true } | InviteRefusal {
-    if (!input.callerUserId) {
-        return { ok: false, code: 'not-signed-in', message: 'Link refused: there is no signed-in user.' };
-    }
-    const owner = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.targetSpaceId);
-    if (!owner?.role.isOwnerRole) {
-        return { ok: false, code: 'cannot-invite', message: 'Link refused: only an owner of this space can mint a link.' };
-    }
-    return { ok: true };
+export function callerMayReceiveLink(input: {
+    userType: string | null | undefined;
+    roleNames: readonly string[];
+    issuerRoleNames: readonly string[];
+}): boolean {
+    if ((input.userType ?? '').trim().toLowerCase() === 'owner') return true;
+    const allowed = new Set(input.issuerRoleNames.map((name) => name.trim().toLowerCase()).filter((name) => name.length > 0));
+    if (allowed.size === 0) return false;
+    return input.roleNames.some((name) => allowed.has(name.trim().toLowerCase()));
+}
+
+/** Where a sign-in link goes. `withhold` means the response carries no URL. */
+export function linkHandoff(input: { emailChannel: boolean; callerIsIssuer: boolean }): 'email' | 'show' | 'withhold' {
+    if (input.emailChannel) return 'email';
+    if (input.callerIsIssuer) return 'show';
+    return 'withhold';
 }
 
 export type RosterAction = 'Read' | 'Update' | 'Share';

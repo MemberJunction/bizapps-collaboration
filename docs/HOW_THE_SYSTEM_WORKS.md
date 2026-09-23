@@ -35,9 +35,9 @@ A file, a conversation, or a task is an item. This app does not copy those table
 
 - `fnCollaborationAccess(@UserID)`, the SQL form of the reach walk, plus whether that reach may see the team band.
 - Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on a grant the person holds exempts them from row-level security for that operation. A share notice is readable only by the member it is addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either row carries a create filter, and the server subclass is the rest of the gate.
-- A `ResourceType` named `Space`, so a magic link of kind `resource-share` can name a space.
+- A `ResourceType` named `Space`. An email invitation does not use it. Access comes from the seat.
 
-The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can read that one space and its Shared items.
+The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can still read one space, but this app's invites are app sessions, not resource shares, so a removed seat takes effect at once.
 
 Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permissions, and one unfiltered permission exempts the user from every filter.
 
@@ -50,7 +50,7 @@ Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permi
 These are named in the plan and belong in other repositories. They are not implemented here, and the live checkouts of those repositories are not modified by this work.
 
 - Hierarchy path columns and traversal functions. `ParentID` does not carry the `IsHierarchy` flag (set in one migration, cleared in the next), so CodeGen emits no path columns or traversal functions. Access uses `fnCollaborationAccess`, which is T-SQL and needs a PostgreSQL port.
-- Minting a magic-link token. That stays in MemberJunction's magic-link API. This app registers the `Space` resource type and accepts `{{ScopeResourceID}}`. A host mints `Kind: resource-share` with that space id and the Space Participant role.
+- MemberJunction's `CreateInvite` still does not accept a resource id. This app does not write a resource-share. An email invitation saves a seat through the member gate. The sign-in link is an app session for Space Participant. It is emailed when the host has `magicLink.communicationProvider`. Otherwise the raw URL is returned only to an Owner-type user, or a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL. The host must set `magicLink.enabled` and `magicLink.restrictedRoleName` to `Space Participant` (or list that role in `grantableRoleNames`).
 - The filter text is T-SQL (`TRY_CAST`, bracketed names). A PostgreSQL host needs a dialect of the same function before the filters run.
 - Committees moving its membership onto Space.
 - Platform work in MemberJunction itself: presence, @mention notifications, per-user read state, live message fan-out, and the search fixes.

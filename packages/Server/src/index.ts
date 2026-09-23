@@ -7,7 +7,6 @@
 import '@mj-biz-apps/collaboration-entities';
 import '@mj-biz-apps/collaboration-actions';
 import {
-    LoadCollaborationPermissionProvider,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
     LoadSpaceEntityServer,
@@ -30,7 +29,6 @@ export const RESOLVER_PATHS = [
 export { mintSpaceLink } from './mint-space-link.js';
 
 export function LoadBizAppsCollaborationServer(): void {
-    LoadCollaborationPermissionProvider();
     LoadItemUseEntityServer();
     LoadShareNoticeEntityServer();
     LoadSpaceEntityServer();

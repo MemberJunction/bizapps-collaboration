@@ -104,14 +104,23 @@
             <button type="submit" [disabled]="!preview()?.ok">Invite</button>
           </form>
           }
-          @if (ownsSelected()) {
+          @if (canInviteHere()) {
           <form class="invite" (submit)="$event.preventDefault(); sendMint()">
-            <h3>Link</h3>
+            <h3>Invite by email</h3>
             <label>
               Email
               <input name="link-email" type="email" [(ngModel)]="linkEmail" autocomplete="off" placeholder="Their email" />
             </label>
-            <button type="submit" [disabled]="!linkEmail.includes('@')">Mint a link</button>
+            <label>
+              Role
+              <select name="link-role" [(ngModel)]="linkRoleId">
+                <option value="">Choose a role</option>
+                @for (role of roles; track role.id) {
+                  <option [value]="role.id">{{ role.name }}</option>
+                }
+              </select>
+            </label>
+            <button type="submit" [disabled]="!linkEmail.includes('@') || !linkRoleId">Send invite</button>
           </form>
           }
         </section>

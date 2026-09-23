@@ -4,7 +4,6 @@ export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMem
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
-export { LoadCollaborationPermissionProvider } from './space-permission-provider.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { recordItemUse, recordShare } from './library-events.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

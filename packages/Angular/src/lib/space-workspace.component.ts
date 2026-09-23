@@ -52,7 +52,7 @@ export class SpaceWorkspaceComponent {
     @Input() memberCap: number | null = null;
 
     @Output() readonly invite = new EventEmitter<{ spaceId: string; userId: string; roleId: string }>();
-    @Output() readonly mintLink = new EventEmitter<{ spaceId: string; email: string }>();
+    @Output() readonly mintLink = new EventEmitter<{ spaceId: string; email: string; roleId: string }>();
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
@@ -77,6 +77,7 @@ export class SpaceWorkspaceComponent {
     inviteUserId = '';
     inviteRoleId = '';
     linkEmail = '';
+    linkRoleId = '';
 
     get selected(): WorkspaceSpace | null {
         const id = this.selectedId ?? this.roots[0]?.id ?? null;
@@ -180,8 +181,8 @@ export class SpaceWorkspaceComponent {
     sendMint(): void {
         const space = this.selected;
         const email = this.linkEmail.trim();
-        if (!space || !email.includes('@') || !this.ownsSelected()) return;
-        this.mintLink.emit({ spaceId: space.id, email });
+        if (!space || !email.includes('@') || !this.linkRoleId || !this.canInviteHere()) return;
+        this.mintLink.emit({ spaceId: space.id, email, roleId: this.linkRoleId });
         this.linkEmail = '';
     }
 

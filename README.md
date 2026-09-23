@@ -172,6 +172,8 @@ That command does nothing useful yet. This commit has no `mj-app.json`, no migra
 
 The host shells are MemberJunction's own `MJAPI` and `MJExplorer`. A BizApps repo ships libraries (`packages/`), migrations, and metadata. It does not ship a private API or Explorer app.
 
+Email invites need magic links turned on. In the host config, `magicLink.enabled` is true and `magicLink.restrictedRoleName` is `Space Participant`, or that role is listed in `magicLink.grantableRoleNames`. Set `magicLink.communicationProvider` to email the sign-in link. Without it, the raw URL is returned only to an Owner-type user or a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL.
+
 ### Packages this repo will grow
 
 The set matches the other BizApps Open Apps. These packages are in the repository.

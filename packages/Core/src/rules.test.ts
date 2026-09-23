@@ -8,7 +8,8 @@ import {
     isSelfRemoval,
     leavingWouldStrand,
     wouldStrandLastOwner,
-    mayMintSpaceLink,
+    callerMayReceiveLink,
+    linkHandoff,
     membershipReaches,
     rosterActions,
     rosterBySeat,
@@ -109,11 +110,13 @@ describe('magic link and roster permission', () => {
         member({ spaceId: 'root', userId: 'sam', role: readerRole, band: 'Shared' }),
     ];
 
-    it('lets an owner mint a link and refuses a member who only reaches the space', () => {
-        assert.equal(mayMintSpaceLink({ callerUserId: 'ada', targetSpaceId: 'child', spaces: tree, memberships }).ok, true);
-        const refused = mayMintSpaceLink({ callerUserId: 'sam', targetSpaceId: 'child', spaces: tree, memberships });
-        assert.equal(refused.ok, false);
-        if (!refused.ok) assert.equal(refused.code, 'cannot-invite');
+    it('withholds the sign-in link from a space owner who is not a host issuer', () => {
+        assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: [] }), false);
+        assert.equal(callerMayReceiveLink({ userType: 'Owner', roleNames: [], issuerRoleNames: [] }), true);
+        assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: ['UI'] }), true);
+        assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: false }), 'withhold');
+        assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: true }), 'show');
+        assert.equal(linkHandoff({ emailChannel: true, callerIsIssuer: false }), 'email');
     });
 
     it('grants read to a member who reaches the space, and update to the owner', () => {
