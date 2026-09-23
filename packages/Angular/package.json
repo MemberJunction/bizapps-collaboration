@@ -14,13 +14,13 @@
     "@mj-biz-apps/collaboration-entities": "0.1.0"
   },
   "peerDependencies": {
-    "@angular/common": "21.2.23",
-    "@angular/core": "21.2.23",
-    "@angular/forms": "21.2.23",
-    "@memberjunction/core": "^6.1.0-edge.5",
-    "@memberjunction/core-entities": "^6.1.0-edge.5",
-    "@memberjunction/global": "^6.1.0-edge.5",
-    "@memberjunction/ng-shared": "^6.1.0-edge.5"
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@memberjunction/core": "^6.1.2",
+    "@memberjunction/core-entities": "^6.1.2",
+    "@memberjunction/global": "^6.1.2",
+    "@memberjunction/ng-shared": "^6.1.2"
   },
   "devDependencies": {
     "@angular/compiler": "21.2.23",

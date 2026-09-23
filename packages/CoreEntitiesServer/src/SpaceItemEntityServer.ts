@@ -52,6 +52,10 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!decision.ok) {
             return fail(result, decision.message);
         }
+        const canonical = canonicalRecordId(this);
+        if (canonical) {
+            this.RecordID = canonical;
+        }
         const readable = await callerCanReadTarget(this, user);
         if (!readable) {
             return fail(result, 'Item change refused: the signer cannot read the record this item points at.');
@@ -66,6 +70,24 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (by) this.PromotedByUserID = (by.OldValue as string | null) ?? null;
         }
         return result;
+    }
+}
+
+function canonicalRecordId(item: SpaceItemEntityServer): string | null {
+    const provider = asMetadata(item.ProviderToUse);
+    const entityId = parseUuid(item.EntityID);
+    if (!provider || !entityId || !item.RecordID) {
+        return null;
+    }
+    const info = provider.EntityByID(entityId);
+    if (!info) {
+        return null;
+    }
+    try {
+        return CompositeKey.FromURLSegment(info, item.RecordID).ToRecordID();
+    } catch (error) {
+        LogError(`Space item record id: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
     }
 }
 

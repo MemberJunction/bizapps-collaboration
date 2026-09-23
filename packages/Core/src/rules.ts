@@ -115,6 +115,11 @@ export function isSelfRemoval(input: { callerUserId: string | null; inviteeUserI
     return idKey(input.callerUserId) !== '' && idKey(input.callerUserId) === idKey(input.inviteeUserId) && input.nextStatus === 'Removed';
 }
 
+/** The last Active owner cannot leave. After that, nobody can manage the space. */
+export function leavingWouldStrand(input: { isOwner: boolean; activeOwners: number }): boolean {
+    return input.isOwner && input.activeOwners <= 1;
+}
+
 /** True when setting `parentId` on `spaceId` would put the space inside its own subtree. */
 export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string, parentId: string | null): boolean {
     if (!parentId) {
@@ -143,6 +148,14 @@ export type SpaceWriteKind = 'create-root' | 'create-child' | 'edit' | 'move';
  * on the parent, because the new row has no roster yet. A move checks the
  * space as it is now and the destination parent separately.
  */
+/** Which chains a space write loads. `here` is the space as it stands. `destination` is the new parent. */
+export function chainsForSpaceWrite(kind: SpaceWriteKind, toRoot = false): { here: boolean; destination: boolean } {
+    if (kind === 'create-root') return { here: false, destination: false };
+    if (kind === 'create-child') return { here: false, destination: true };
+    if (kind === 'edit') return { here: true, destination: false };
+    return { here: true, destination: !toRoot };
+}
+
 export function planSpaceWrite(input: {
     isNew: boolean;
     previousParentId: string | null;

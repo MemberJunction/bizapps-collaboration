@@ -15,6 +15,7 @@ export interface WriteContext {
     approval: 'Approve' | 'AutoApprove';
     memberCap: number | null;
     memberCount: number;
+    ownerCount: number;
 }
 
 interface SpaceRow {
@@ -82,7 +83,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, approval: 'Approve', memberCap: null, memberCount: 0 };
+        return { spaces: [], memberships: [], role: null, approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0 };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
@@ -96,7 +97,13 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
             throw new Error('Refusing the write: a roster page came back full, so the check would be incomplete.');
         }
     }
-    const counted = await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status <> 'Removed'`, (await rosterReader(entity)) ?? user);
+    const system = await requireSystemUser(entity);
+    const counted = await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status <> 'Removed'`, system);
+    const ownerRoles = await one<{ ID: string }>(rv, ROLES, 'IsOwnerRole = 1', system);
+    const ownerIds = ownerRoles.map((role) => `'${role.ID}'`).join(', ');
+    const owners = ownerIds
+        ? await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status = 'Active' AND SpaceRoleTypeID IN (${ownerIds})`, system)
+        : [];
     const walked = await chain(rv, space, user);
     const spaces = walked.nodes;
     const typeId = walked.typeId;
@@ -132,6 +139,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         approval: typeRows[0]?.InviteApproval ?? 'Approve',
         memberCap: typeRows[0]?.MemberCap ?? null,
         memberCount: counted.length,
+        ownerCount: owners.length,
     };
 }
 
@@ -147,12 +155,18 @@ function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: bool
     };
 }
 
-async function rosterReader(entity: BaseEntity): Promise<UserInfo | null> {
+export async function requireSystemUser(entity: BaseEntity): Promise<UserInfo> {
     const provider = asMetadata(entity.ProviderToUse);
-    if (!provider) {
-        return null;
+    const system = provider ? await WellKnownUserSource.Instance.GetSystemUser(provider) : null;
+    if (!system) {
+        throw new Error('Refusing the write: the system user is not available, so the roster cannot be counted.');
     }
-    return WellKnownUserSource.Instance.GetSystemUser(provider);
+    return system;
+}
+
+export async function loadAncestorChain(entity: BaseEntity, spaceId: string, user: UserInfo): Promise<SpaceNode[]> {
+    const walked = await chain(runViewFor(entity), parseUuid(spaceId) ?? spaceId, user);
+    return walked.nodes;
 }
 
 function emptyRole(): RoleFlags {

@@ -4,6 +4,7 @@ SET XACT_ABORT ON;
 BEGIN TRAN;
 
 DECLARE @User uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1);
+DECLARE @Other uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1 AND ID <> @User);
 DECLARE @Participant uniqueidentifier = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 DECLARE @Type uniqueidentifier = 'A1000001-0000-4000-8000-000000000001';
 DECLARE @Guest uniqueidentifier = 'B2000001-0000-4000-8000-000000000004';
@@ -11,20 +12,26 @@ DECLARE @Ours uniqueidentifier = NEWID();
 DECLARE @Sibling uniqueidentifier = NEWID();
 DECLARE @Sealed uniqueidentifier = NEWID();
 
-IF @User IS NULL THROW 50000, 'No active user to stand in as the participant.', 1;
+IF @User IS NULL OR @Other IS NULL THROW 50000, 'Need two active users for the persona.', 1;
 
 INSERT INTO __mj_BizAppsCollaboration.Space (ID, SpaceTypeID, Name, OwnerID, InheritsMembership, AgentRetrieval)
 VALUES
     (@Ours, @Type, N'Ours', @User, 1, N'Included'),
-    (@Sibling, @Type, N'Sibling', @User, 1, N'Included'),
-    (@Sealed, @Type, N'Sealed', @User, 0, N'Included');
+    (@Sibling, @Type, N'Sibling', @Other, 1, N'Included'),
+    (@Sealed, @Type, N'Sealed', @Other, 0, N'Included');
 UPDATE __mj_BizAppsCollaboration.Space SET ParentID = @Ours WHERE ID = @Sealed;
 
 INSERT INTO __mj_BizAppsCollaboration.SpaceMember (SpaceID, UserID, SpaceRoleTypeID, Band, Status)
 VALUES (@Ours, @User, @Guest, N'Shared', N'Active');
 
+DECLARE @File uniqueidentifier = NEWID();
+INSERT INTO __mj.[File] (ID, Name, ProviderID, Status)
+VALUES (@File, N'Persona file', 'C4B9433E-F36B-1410-8DA0-00021F8B792E', N'Active');
 INSERT INTO __mj_BizAppsCollaboration.SpaceItem (SpaceID, EntityID, RecordID, Band, PromotedAt, PromotedByUserID)
-SELECT @Ours, e.ID, CONVERT(nvarchar(36), NEWID()), N'Shared', SYSUTCDATETIME(), @User
+SELECT @Ours, e.ID, N'ID|' + CONVERT(nvarchar(36), @File), N'Shared', SYSUTCDATETIME(), @User
+FROM __mj.Entity e WHERE e.Name = N'MJ: Files';
+INSERT INTO __mj_BizAppsCollaboration.SpaceItem (SpaceID, EntityID, RecordID, Band)
+SELECT @Ours, e.ID, N'ID|' + CONVERT(nvarchar(36), NEWID()), N'Team'
 FROM __mj.Entity e WHERE e.Name = N'MJ: Files';
 
 DECLARE @Seen int = (

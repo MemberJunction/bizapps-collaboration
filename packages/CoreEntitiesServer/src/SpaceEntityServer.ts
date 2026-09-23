@@ -3,7 +3,7 @@ import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadWriteContext } from './load-graph.js';
+import { callerUuid, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -58,9 +58,18 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (!decision.ok) {
             return fail(result, 'ParentID', decision.message);
         }
+        let systemNodes: Awaited<ReturnType<typeof loadAncestorChain>> = [];
+        try {
+            const system = await requireSystemUser(this);
+            const cycleRoot = parentId || this.ID;
+            if (cycleRoot) {
+                systemNodes = await loadAncestorChain(this, cycleRoot, system);
+            }
+        } catch (error) {
+            return fail(result, 'ParentID', error instanceof Error ? error.message : 'Space change refused: the system user could not read the tree.');
+        }
         const hereSpaces = hereContext?.spaces ?? [];
-        const destSpaces = destination?.spaces ?? [];
-        const nodes = [...hereSpaces, ...destSpaces.filter((space) => !hereSpaces.some((have) => have.id === space.id))];
+        const nodes = [...systemNodes, ...hereSpaces.filter((space) => !systemNodes.some((have) => have.id === space.id))];
         if (this.ID && parentCreatesCycle(nodes.map((space) => space.id === this.ID ? { ...space, parentId } : space), this.ID, parentId)) {
             return fail(result, 'ParentID', 'This parent would put the space inside its own subtree.');
         }
@@ -70,7 +79,11 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
-            await ensureConversation(this, this.ContextCurrentUser);
+            try {
+                await ensureConversation(this, this.ContextCurrentUser);
+            } catch (error) {
+                LogError(`Space conversation was not bound: ${error instanceof Error ? error.message : String(error)}`);
+            }
         }
         return ok;
     }
@@ -96,17 +109,22 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         LogError('Space conversation was not bound: the provider cannot create entities.');
         return;
     }
+    const system = await requireSystemUser(space);
     const existing = await new RunView(space.RunViewProviderToUse).RunView({
         EntityName: 'MJ: Conversations',
         ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${space.ID}'`,
         MaxRows: 1,
-    }, user);
+    }, system);
+    if (!existing.Success) {
+        LogError(`Space conversation was not bound: ${existing.ErrorMessage ?? 'the lookup failed'}`);
+        return;
+    }
     if ((existing.Results?.length ?? 0) > 0) {
         return;
     }
     const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
     conversation.NewRecord();
-    conversation.UserID = user.ID;
+    conversation.UserID = space.OwnerID;
     conversation.Name = space.Name;
     conversation.LinkedEntityID = SPACES_ENTITY_ID;
     conversation.LinkedRecordID = space.ID;

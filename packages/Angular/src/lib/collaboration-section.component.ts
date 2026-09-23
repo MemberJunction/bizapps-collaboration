@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import type { ResourceData } from '@memberjunction/core-entities';
 import type { Band, MemberSnapshot, RoleFlags } from '@mj-biz-apps/collaboration-core';
@@ -128,10 +128,23 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             band: row.Band,
             role: roleById.get(row.SpaceRoleTypeID) ?? emptyRole(),
         }));
-        this.items = (itemRows.Results ?? []).map((row: { ID: string; SpaceID: string; Band: Band; RecordID: string; Entity?: string }) => ({
+        const itemSource = (itemRows.Results ?? []) as { ID: string; SpaceID: string; Band: Band; RecordID: string; Entity?: string; EntityID?: string }[];
+        const md = new Metadata();
+        const lookups: EntityRecordNameInput[] = [];
+        for (const row of itemSource) {
+            const info = md.Entities.find((entity) => entity.Name === row.Entity || entity.ID === row.EntityID);
+            if (!info || !row.RecordID) continue;
+            const input = new EntityRecordNameInput();
+            input.EntityName = info.Name;
+            input.CompositeKey = CompositeKey.FromURLSegment(info, row.RecordID);
+            lookups.push(input);
+        }
+        const names = lookups.length ? await md.GetEntityRecordNames(lookups, user) : [];
+        const nameByKey = new Map(names.filter((name) => name.Success && name.RecordName).map((name) => [`${name.EntityName}|${name.CompositeKey?.ToRecordID?.() ?? ''}`, name.RecordName as string]));
+        this.items = itemSource.map((row) => ({
             id: row.ID,
             spaceId: row.SpaceID,
-            label: row.Entity ? `${row.Entity}` : row.RecordID,
+            label: nameByKey.get(`${row.Entity}|${row.RecordID}`) || row.RecordID,
             band: row.Band,
         }));
         this.types = (typeRows.Results ?? []).map((row: { ID: string; Name: string }) => ({ id: row.ID, name: row.Name }));

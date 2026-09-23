@@ -4,7 +4,9 @@ import {
     agentMayQuote,
     authorizeItemWrite,
     authorizeSpaceWrite,
+    chainsForSpaceWrite,
     isSelfRemoval,
+    leavingWouldStrand,
     membershipReaches,
     parentCreatesCycle,
     planSpaceWrite,
@@ -310,6 +312,12 @@ describe('space writes', () => {
         assert.equal(planSpaceWrite({ isNew: false, previousParentId: 'root', nextParentId: 'legal' }), 'move');
         assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: onRoot }).ok, true);
     });
+    it('lets staff move a space to the top level and refuses an owner who is not staff', () => {
+        assert.deepEqual(chainsForSpaceWrite('move', true), { here: true, destination: false });
+        assert.deepEqual(chainsForSpaceWrite('move', false), { here: true, destination: true });
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, true);
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, false);
+    });
     it('refuses a move under a descendant and a guest edit', () => {
         assert.equal(parentCreatesCycle(tree, 'root', 'child'), true);
         const guest = member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' });
@@ -346,6 +354,30 @@ describe('item writes', () => {
         assert.equal(shared.ok && shared.rewriteStamp, true);
         const team = authorizeItemWrite({ ...base, previousSpaceId: 'child', nextSpaceId: 'child', previousBand: 'Shared', nextBand: 'Team' });
         assert.equal(team.ok && team.band, 'Team');
+    });
+    it('re-stamps a shared move and refuses it without promote rights', () => {
+        const client: RoleFlags = { ...guestRole, canContribute: true, canPromoteBand: false };
+        const refused = authorizeItemWrite({
+            ...base, callerUserId: 'bea', previousSpaceId: 'child', nextSpaceId: 'root', previousBand: 'Shared', nextBand: 'Shared',
+            memberships: [member({ spaceId: 'root', userId: 'bea', role: client, band: 'Shared' })],
+        });
+        assert.equal(refused.ok, false);
+        const allowed = authorizeItemWrite({ ...base, previousSpaceId: 'child', nextSpaceId: 'root', previousBand: 'Shared', nextBand: 'Shared' });
+        assert.equal(allowed.ok && allowed.rewriteStamp, true);
+    });
+    it('keeps a non-owner invite Invited under Approve', () => {
+        const admin: RoleFlags = { ...ownerRole, isOwnerRole: false, level: 30, maxGrantableLevel: 20 };
+        const decision = refuseInvite({
+            callerUserId: 'bea', inviteeUserId: 'cy', targetSpaceId: 'child', granted: guestRole,
+            approval: 'Approve', memberCap: null, spaces: tree,
+            memberships: [member({ spaceId: 'root', userId: 'bea', role: admin })],
+        });
+        assert.deepEqual(decision, { ok: true, status: 'Invited' });
+    });
+    it('refuses the last owner leaving', () => {
+        assert.equal(leavingWouldStrand({ isOwner: true, activeOwners: 1 }), true);
+        assert.equal(leavingWouldStrand({ isOwner: true, activeOwners: 2 }), false);
+        assert.equal(leavingWouldStrand({ isOwner: false, activeOwners: 1 }), false);
     });
     it('requires reach on both spaces for a move', () => {
         const decision = authorizeItemWrite({ ...base, previousSpaceId: 'sealed', nextSpaceId: 'child', previousBand: 'Team', nextBand: 'Team' });
