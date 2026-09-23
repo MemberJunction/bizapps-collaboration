@@ -1,0 +1,13 @@
+Space,Person,Role,Band,Status
+northwind,ada,owner,Team,Active
+northwind,sam,member,Team,Active
+discovery,casey,client-admin,Shared,Active
+discovery,bea,client-member,Shared,Active
+delivery,sam,member,Team,Active
+committee,ada,owner,Team,Active
+committee,dana,guest,Shared,Active
+cohort,ada,owner,Team,Active
+cohort,lee,client-member,Shared,Active
+harbor,harbor,owner,Team,Active
+closed-recent,bea,client-member,Shared,Active
+closed-past,bea,client-member,Shared,Active

@@ -1,0 +1,9 @@
+Key,Email,FirstName,LastName,Kind
+ada,ada.owner@collab-world.example,Ada,Owner,staff
+sam,sam.member@collab-world.example,Sam,Member,staff
+casey,casey.admin@collab-world.example,Casey,Admin,client
+bea,bea.member@collab-world.example,Bea,Member,client
+dana,dana.director@collab-world.example,Dana,Director,director
+lee,lee.learner@collab-world.example,Lee,Learner,learner
+nora,nora.none@collab-world.example,Nora,None,staff
+harbor,harbor.owner@collab-world.example,Harbor,Owner,sibling
