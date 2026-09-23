@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [next]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm test
+      - run: node scripts/check-mj-tokens.mjs
+
+      # The integration suite (item 22) and the Playwright tour (item 23)
+      # run locally against a private database and host. They are not part of
+      # this job. ExplainScope joins this job when the agent (item 12) lands.

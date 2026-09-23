@@ -1,9 +1,11 @@
 Key,ID,Name,Type,Parent,Owner,InheritsMembership,AgentRetrieval,ClosedAt,Retention
 northwind,C1000001-0000-4000-8000-000000000001,Northwind relationship,workspace,,ada,1,Included,,
 discovery,C1000001-0000-4000-8000-000000000002,Discovery,workspace,northwind,ada,1,Included,,
-delivery,C1000001-0000-4000-8000-000000000003,Delivery,workspace,northwind,ada,0,Included,,
+delivery,C1000001-0000-4000-8000-000000000003,Delivery,workspace,northwind,ada,0,ExcludedFromParentScope,,
 committee,C1000001-0000-4000-8000-000000000004,Audit committee,committee,,ada,1,Included,,
 cohort,C1000001-0000-4000-8000-000000000005,Spring cohort,cohort,,ada,1,Included,,
 harbor,C1000001-0000-4000-8000-000000000006,Harbor relationship,workspace,,harbor,1,Included,,
 closed-recent,C1000001-0000-4000-8000-000000000007,Closed this month,workspace,northwind,ada,1,Included,recent,Month
-closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,Included,past,Month
+closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,ExcludedEntirely,past,Month
+closed-open,C1000001-0000-4000-8000-000000000009,Closed indefinite,workspace,northwind,ada,1,Included,past,
+studio,C1000001-0000-4000-8000-000000000010,Studio,workshop,,ada,1,Included,,

@@ -1,19 +1,21 @@
 <div class="workspace">
   <nav class="tree" aria-label="Spaces">
     <p class="eyebrow">Spaces</p>
-    <form class="invite" (submit)="$event.preventDefault(); sendCreate()">
-      <label>New space<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
-      <label>Type
-        <select name="new-type" [(ngModel)]="createTypeId">
-          <option value="">Choose a type</option>
-          @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
-        </select>
-      </label>
-      @if (viewerIsStaff) {
-        <label><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
-      }
-      <button type="submit">Create</button>
-    </form>
+    @if (canCreateHere()) {
+      <form class="invite" (submit)="$event.preventDefault(); sendCreate()">
+        <label>New space<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
+        <label>Type
+          <select name="new-type" [(ngModel)]="createTypeId">
+            <option value="">Choose a type</option>
+            @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
+          </select>
+        </label>
+        @if (viewerIsStaff && ownsSelected()) {
+          <label class="check"><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
+        }
+        <button type="submit">Create</button>
+      </form>
+    }
     @if (spaces.length === 0) {
       <p class="empty">No spaces yet. A root space is one relationship. The work inside it is a sub-space.</p>
     }
@@ -64,7 +66,22 @@
               <li class="empty">Nobody is on this roster yet. The owner seats themselves first, then invites.</li>
             }
           </ul>
+          @if (parentRoster(space); as inherited) {
+            <h3>Through {{ parentName(space) }}</h3>
+            <ul class="roster">
+              @for (member of inherited; track member.userId) {
+                <li>
+                  <span class="who">{{ member.displayName || member.userId }}</span>
+                  <span class="pill">{{ member.band }}</span>
+                  <span class="pill">{{ member.status }}</span>
+                </li>
+              }
+            </ul>
+          } @else if (sharesParentRoster(space)) {
+            <p class="empty">This space shares its parent's roster.</p>
+          }
 
+          @if (canInviteHere()) {
           <form class="invite" (submit)="$event.preventDefault(); sendInvite()">
             <h3>Invite</h3>
             <label>
@@ -85,6 +102,7 @@
             }
             <button type="submit" [disabled]="!preview()?.ok">Invite</button>
           </form>
+          }
         </section>
 
         <section aria-labelledby="items-heading">
@@ -101,10 +119,17 @@
             <p class="empty">Governance waits for the Committees move onto Space.</p>
           }
           @if (material === 'library' && space.libraryPanel !== false && panels.library !== false) {
-            @if (uploadEnabled) {
+            @if (uploadEnabled && canContributeHere()) {
             <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
               <label>Upload<input name="upload" type="file" (change)="chooseFile($event)" /></label>
-              <label>Folder<input name="folder" [(ngModel)]="uploadFolder" placeholder="Deliverables" /></label>
+              <label>Folder
+                <input name="folder" list="space-folders" [(ngModel)]="uploadFolder" placeholder="Deliverables" />
+                <datalist id="space-folders">
+                  @for (folder of foldersHere(space.id); track folder) {
+                    @if (folder !== 'Unfiled') { <option [value]="folder"></option> }
+                  }
+                </datalist>
+              </label>
               <button type="submit">Add file</button>
             </form>
             @if (uploadMessage) { <p class="empty">{{ uploadMessage }}</p> }

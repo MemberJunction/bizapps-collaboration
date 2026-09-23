@@ -138,8 +138,12 @@ export class SpaceWorkspaceComponent {
     preview(): InviteDecision | null {
         const space = this.selected;
         const role = this.roles.find((candidate) => candidate.id === this.inviteRoleId);
-        if (!space || !role || !this.inviteUserId.trim()) {
+        const invitee = this.inviteUserId.trim();
+        if (!space || !role || !invitee) {
             return null;
+        }
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invitee)) {
+            return { ok: false, code: 'not-a-member', message: 'Enter their account id.' };
         }
         return refuseInvite({
             callerUserId: this.viewerUserId,
@@ -155,7 +159,7 @@ export class SpaceWorkspaceComponent {
 
     sendCreate(): void {
         if (!this.createName.trim() || !this.createTypeId) return;
-        const parentId = this.createAtTop || !this.selected ? null : this.selected.id;
+        const parentId = !this.ownsSelected() || this.createAtTop || !this.selected ? null : this.selected.id;
         this.create.emit({ name: this.createName.trim(), parentId, typeId: this.createTypeId });
         this.createName = '';
     }
@@ -168,6 +172,42 @@ export class SpaceWorkspaceComponent {
         }
         this.invite.emit({ spaceId: space.id, userId: this.inviteUserId.trim(), roleId: this.inviteRoleId });
         this.inviteUserId = '';
+    }
+
+    canCreateHere(): boolean {
+        return this.viewerIsStaff || this.ownsSelected();
+    }
+
+    ownsSelected(): boolean {
+        return !!this.reach(this.selected?.id)?.role.isOwnerRole;
+    }
+
+    canInviteHere(): boolean {
+        return !!this.reach(this.selected?.id)?.role.canInvite;
+    }
+
+    canContributeHere(): boolean {
+        return !!this.reach(this.selected?.id)?.role.canContribute;
+    }
+
+    parentName(space: WorkspaceSpace): string {
+        return this.spaces.find((item) => item.id === space.parentId)?.name ?? 'the parent';
+    }
+
+    parentRoster(space: WorkspaceSpace): (MemberSnapshot & { displayName?: string })[] | null {
+        if (!space.inheritsMembership || !space.parentId || !this.reach(space.parentId)) return null;
+        const direct = new Set(this.membersHere(space.id).map((member) => member.userId));
+        const rows = this.members.filter((member) => member.spaceId === space.parentId && member.status === 'Active' && !direct.has(member.userId));
+        return rows.length ? rows : null;
+    }
+
+    sharesParentRoster(space: WorkspaceSpace): boolean {
+        return !!space.inheritsMembership && !!space.parentId && !this.reach(space.parentId);
+    }
+
+    private reach(spaceId: string | null | undefined) {
+        if (!spaceId || !this.viewerUserId) return null;
+        return membershipReaches(this.spaces, this.members, this.viewerUserId, spaceId);
     }
 
     viewerCanPromote(spaceId: string): boolean {

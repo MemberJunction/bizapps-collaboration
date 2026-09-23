@@ -1,0 +1,5 @@
+Key,ID,Name,InviteApproval,MemberCap,DefaultRetention
+workspace,A1000001-0000-4000-8000-000000000001,Workspace,Approve,,Indefinite
+committee,A1000001-0000-4000-8000-000000000002,Committee,Approve,,Indefinite
+cohort,A1000001-0000-4000-8000-000000000003,Cohort,Approve,,Indefinite
+workshop,A1000001-0000-4000-8000-000000000004,Workshop,AutoApprove,2,Indefinite
