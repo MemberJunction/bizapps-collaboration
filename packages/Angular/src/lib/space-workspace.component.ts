@@ -51,12 +51,12 @@ export class SpaceWorkspaceComponent {
 
     @Output() readonly invite = new EventEmitter<{ spaceId: string; userId: string; roleId: string }>();
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
-    @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null }>();
+    @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
     material: 'library' | 'work' = 'library';
-    uploadEnabled = false;
-    uploadName = '';
+    uploadEnabled = true;
     uploadFolder = '';
+    private chosenFile: File | null = null;
     @Output() readonly approve = new EventEmitter<{ memberUserId: string; spaceId: string }>();
     @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
     @Input() types: { id: string; name: string }[] = [];
@@ -107,11 +107,25 @@ export class SpaceWorkspaceComponent {
         return files.some((item) => !item.folder) ? ['Unfiled', ...named] : named;
     }
 
-    sendUpload(): void {
+    chooseFile(event: Event): void {
+        const input = event.target as HTMLInputElement;
+        this.chosenFile = input.files?.[0] ?? null;
+    }
+
+    async sendUpload(): Promise<void> {
         const space = this.selected;
-        if (!space || !this.uploadName.trim()) return;
-        this.upload.emit({ spaceId: space.id, name: this.uploadName.trim(), folder: this.uploadFolder.trim() || null });
-        this.uploadName = '';
+        const file = this.chosenFile;
+        if (!space || !file) return;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        this.upload.emit({
+            spaceId: space.id,
+            name: file.name,
+            folder: this.uploadFolder.trim() || null,
+            mimeType: file.type || 'application/octet-stream',
+            base64: encodeBase64(bytes),
+        });
+        this.chosenFile = null;
+        this.uploadFolder = '';
     }
 
     preview(): InviteDecision | null {
@@ -174,4 +188,13 @@ export class SpaceWorkspaceComponent {
         }
         return depth;
     }
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const step = 0x8000;
+    for (let index = 0; index < bytes.length; index += step) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + step));
+    }
+    return btoa(binary);
 }

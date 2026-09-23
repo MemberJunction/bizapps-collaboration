@@ -18,7 +18,10 @@ import { resolve } from 'node:path';
 const here = fileURLToPath(new URL('.', import.meta.url));
 
 /** Passed to the host schema builder. Importing the resolvers is not enough. */
-export const RESOLVER_PATHS = [resolve(here, 'generated/generated.{js,ts}')];
+export const RESOLVER_PATHS = [
+    resolve(here, 'generated/generated.{js,ts}'),
+    resolve(here, 'upload-space-file.resolver.{js,ts}'),
+];
 
 export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceEntityServer();

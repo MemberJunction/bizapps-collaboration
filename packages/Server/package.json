@@ -18,12 +18,14 @@
   "peerDependencies": {
     "@memberjunction/core": "^6.1.2",
     "@memberjunction/global": "^6.1.2",
-    "@memberjunction/server": "^6.1.2"
+    "@memberjunction/server": "^6.1.2",
+    "@memberjunction/storage": "^6.1.2"
   },
   "devDependencies": {
     "@memberjunction/core": "6.1.3",
     "@memberjunction/global": "6.1.3",
     "@memberjunction/server": "6.1.3",
+    "@memberjunction/storage": "6.1.3",
     "typescript": "5.9.3"
   },
   "repository": {

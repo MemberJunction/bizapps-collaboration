@@ -77,6 +77,12 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         });
     }
 
+    private gql(): ((query: string, variables: unknown) => Promise<Record<string, unknown>>) | null {
+        const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: unknown) => Promise<Record<string, unknown>> } | undefined;
+        if (!provider?.ExecuteGQL) return null;
+        return provider.ExecuteGQL.bind(provider);
+    }
+
     private user(): UserInfo | undefined {
         const current = new Metadata().CurrentUser;
         return current ?? undefined;
@@ -215,13 +221,60 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         await this.finish(item);
     }
 
-    async onUpload(event: { spaceId: string; name: string; folder: string | null }): Promise<void> {
-        this.message = `Upload isn't available yet.`;
+    async onUpload(event: { spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }): Promise<void> {
+        const gql = this.gql();
+        if (!gql) {
+            this.message = 'Upload needs the API connection.';
+            this.changes.markForCheck();
+            return;
+        }
+        try {
+            const result = await gql(`mutation UploadSpaceFile($input: UploadSpaceFileInput!) {
+                UploadSpaceFile(input: $input) { Success ItemID ErrorMessage }
+            }`, {
+                input: { SpaceID: event.spaceId, FileName: event.name, MimeType: event.mimeType, Base64Data: event.base64, Folder: event.folder },
+            });
+            const payload = result?.UploadSpaceFile as { Success?: boolean; ErrorMessage?: string } | undefined;
+            this.message = payload?.Success ? '' : (payload?.ErrorMessage || 'The upload was refused.');
+            if (payload?.Success) await this.reload();
+        } catch (error) {
+            this.message = error instanceof Error ? error.message : 'The upload was refused.';
+        }
         this.changes.markForCheck();
     }
 
     async onOpenItem(event: { itemId: string }): Promise<void> {
-        this.message = `Opening a file isn't available yet.`;
+        const user = this.user();
+        const gql = this.gql();
+        if (!user || !gql) return;
+        const item = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items', user);
+        if (!(await item.Load(event.itemId))) return;
+        const info = new Metadata().EntityByID(item.EntityID);
+        if (info?.Name !== 'MJ: Files') {
+            this.message = 'This item is not a file.';
+            this.changes.markForCheck();
+            return;
+        }
+        const fileId = item.RecordID.startsWith('ID|') ? item.RecordID.slice(3) : item.RecordID;
+        try {
+            const result = await gql(`query GetFileContents($fileId: String!) {
+                GetFileContents(fileId: $fileId) { Success Base64 MimeType ErrorMessage }
+            }`, { fileId });
+            const payload = result?.GetFileContents as { Success?: boolean; Base64?: string; MimeType?: string; ErrorMessage?: string } | undefined;
+            if (!payload?.Success || !payload.Base64) {
+                this.message = payload?.ErrorMessage || 'The file could not be opened.';
+                this.changes.markForCheck();
+                return;
+            }
+            const raw = atob(payload.Base64);
+            const bytes = new Uint8Array(raw.length);
+            for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+            const url = URL.createObjectURL(new Blob([bytes], { type: payload.MimeType || 'application/octet-stream' }));
+            window.open(url, '_blank', 'noopener');
+            this.message = '';
+        } catch (error) {
+            this.message = error instanceof Error ? error.message : 'The file could not be opened.';
+        }
         this.changes.markForCheck();
     }
 

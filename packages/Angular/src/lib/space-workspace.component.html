@@ -103,7 +103,7 @@
           @if (material === 'library' && space.libraryPanel !== false && panels.library !== false) {
             @if (uploadEnabled) {
             <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
-              <label>Upload<input name="upload" [(ngModel)]="uploadName" placeholder="File name" /></label>
+              <label>Upload<input name="upload" type="file" (change)="chooseFile($event)" /></label>
               <label>Folder<input name="folder" [(ngModel)]="uploadFolder" placeholder="Deliverables" /></label>
               <button type="submit">Add file</button>
             </form>
