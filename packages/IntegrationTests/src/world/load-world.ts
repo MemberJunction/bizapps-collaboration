@@ -11,6 +11,10 @@
  * owner seat. This loader does not do that. It seats only the catalog.
  *
  * `recent` is 7 days before this run. `past` is 400 days. Any other word throws.
+ *
+ * A seat that already exists is left as it is. A drifted seat fails the
+ * read-back instead of being repaired, so a suite reloads by purging first.
+ * The purge keeps the user accounts.
  */
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -28,9 +32,16 @@ import {
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { LoadBizAppsCollaborationServer } from '@mj-biz-apps/collaboration-server';
+import {
+    LoadItemUseEntityServer,
+    LoadShareNoticeEntityServer,
+    LoadSpaceEntityServer,
+    LoadSpaceItemEntityServer,
+    LoadSpaceMemberEntityServer,
+} from '@mj-biz-apps/collaboration-core-entities-server';
 import sql from 'mssql';
 import { readCsv } from './csv.js';
+import { sqlUuid } from './ids.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -41,7 +52,7 @@ const USER_ROLES = 'MJ: User Roles';
 const PEOPLE = 'MJ_BizApps_Common: People';
 
 type Row = Record<string, string>;
-type Persona = Row & { id: string };
+type Persona = Row & { id: string; roleId: string };
 
 function dataDir(): string {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -92,7 +103,13 @@ export async function loadWorld(): Promise<void> {
     if (!new Metadata().EntityByName(PEOPLE)) {
         throw new Error(`${PEOPLE} is not in this database. Install bizapps-common before loading the world.`);
     }
-    LoadBizAppsCollaborationServer();
+    // Common.LogActivity stays unloaded. On this one shared provider its post-commit
+    // save interleaves with the entity save and rolls the user back.
+    LoadSpaceEntityServer();
+    LoadSpaceMemberEntityServer();
+    LoadSpaceItemEntityServer();
+    LoadItemUseEntityServer();
+    LoadShareNoticeEntityServer();
     const dir = dataDir();
     const personas = readCsv(join(dir, 'personas.csv'));
     const typeRows = readCsv(join(dir, 'types.csv'));
@@ -138,7 +155,7 @@ export async function loadWorld(): Promise<void> {
             person.LinkedUserID = id;
             if (!(await person.Save())) throw new Error(`person ${persona.Key}: ${person.LatestResult?.CompleteMessage ?? 'save failed'}`);
         }
-        people.set(persona.Key, { ...persona, id });
+        people.set(persona.Key, { ...persona, id, roleId });
     }
     await UserCache.Instance.Refresh(provider);
     const actor = (key: string): UserInfo => {
@@ -308,6 +325,20 @@ async function assertCatalog(
         const row = person.Results[0];
         if (row.FirstName?.trim() !== persona.FirstName || row.LastName?.trim() !== persona.LastName) {
             throw new Error(`Person ${persona.Key} is ${row.FirstName} ${row.LastName}.`);
+        }
+    }
+    const grants = await view.RunView<{ UserID: string; RoleID: string }>({
+        EntityName: USER_ROLES,
+        ExtraFilter: `UserID IN (${[...people.values()].map((persona) => sqlUuid(persona.id, persona.Key)).join(',')})`,
+        Fields: ['UserID', 'RoleID'],
+        ResultType: 'simple',
+    }, user);
+    if (!grants.Success) throw new Error(grants.ErrorMessage ?? 'Could not read MemberJunction roles.');
+    for (const persona of people.values()) {
+        const mine = (grants.Results ?? []).filter((grant) => grant.UserID.toLowerCase() === persona.id.toLowerCase());
+        const expected = persona.roleId.toLowerCase();
+        if (mine.length !== 1 || mine[0].RoleID.toLowerCase() !== expected) {
+            throw new Error(`${persona.Key} has ${mine.length} MemberJunction roles. The catalog grants only ${persona.MjRole}.`);
         }
     }
     const spaces = await view.RunView<{

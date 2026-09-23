@@ -1,13 +1,18 @@
 /**
- * Delete only COLLAB-WORLD rows, by the ids in the catalog.
- * Seats, items, notices, and uses go before spaces. People, user roles,
- * and users go last. Nothing outside those ids is deleted.
+ * Delete COLLAB-WORLD app rows, by the ids in the catalog.
+ *
+ * User accounts stay. A signed-in persona owns MemberJunction rows (a
+ * workspace, settings, an application grant) that reference the user, and
+ * deleting the user rolls the purge back. The loader finds those fixed ids
+ * again. Role grants are removed so the next load can require exactly the
+ * catalog role. People are removed and created again.
  */
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { readCsv } from './csv.js';
+import { coreSchema, sqlUuid } from './ids.js';
 
 function dataDir(): string {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -15,19 +20,21 @@ function dataDir(): string {
     return existsSync(join(beside, 'spaces.csv')) ? beside : join(here, '..', '..', 'src', 'world', 'data');
 }
 
+function idList(rows: Array<Record<string, string>>, label: string): string {
+    return rows.map((row) => sqlUuid(row.ID, label)).join(',');
+}
+
 export async function purgeWorld(): Promise<void> {
     const { DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD } = process.env;
     if (!DB_HOST || !DB_DATABASE || !DB_USERNAME || !DB_PASSWORD) throw new Error('Set DB_HOST, DB_DATABASE, DB_USERNAME and DB_PASSWORD.');
     const dir = dataDir();
-    const personas = readCsv(join(dir, 'personas.csv'));
-    const spaces = readCsv(join(dir, 'spaces.csv'));
-    const types = readCsv(join(dir, 'types.csv'));
-    const userIds = personas.map((row) => `'${row.ID}'`).join(',');
-    const spaceIds = spaces.map((row) => `'${row.ID}'`).join(',');
-    const typeIds = types.map((row) => `'${row.ID}'`).join(',');
+    const userIds = idList(readCsv(join(dir, 'personas.csv')), 'persona');
+    const spaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
+    const typeIds = idList(readCsv(join(dir, 'types.csv')), 'space type');
+    const core = coreSchema();
     const pool = await sql.connect({
         server: DB_HOST,
-        port: Number(process.env.DB_PORT ?? 1433),
+        port: Number(DB_PORT ?? 1433),
         database: DB_DATABASE,
         user: DB_USERNAME,
         password: DB_PASSWORD,
@@ -56,28 +63,24 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
 
-            SELECT ID INTO #conv FROM __mj.Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
+            SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
             UPDATE conversation SET LastConversationID = NULL
-            FROM __mj.Conversation AS conversation
+            FROM [${core}].Conversation AS conversation
             WHERE conversation.ID IN (SELECT ID FROM #conv)
                OR conversation.LastConversationID IN (SELECT ID FROM #conv);
-            DELETE FROM __mj.ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
-            DELETE FROM __mj.Conversation WHERE ID IN (SELECT ID FROM #conv);
+            DELETE FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
+            DELETE FROM [${core}].Conversation WHERE ID IN (SELECT ID FROM #conv);
 
-            DELETE FROM __mj.RecordChange WHERE UserID IN (${userIds});
-            DELETE FROM __mj.UserNotification WHERE UserID IN (${userIds});
-            DELETE FROM __mj.AuditLog WHERE UserID IN (${userIds});
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
                 DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds});
-            DELETE FROM __mj.UserRole WHERE UserID IN (${userIds});
-            DELETE FROM __mj.[User] WHERE ID IN (${userIds});
+            DELETE FROM [${core}].UserRole WHERE UserID IN (${userIds});
         `);
         await transaction.commit();
     } catch (error) {
         await transaction.rollback();
         throw error;
     }
-    console.log(`COLLAB-WORLD purged from ${DB_DATABASE}.`);
+    console.log(`COLLAB-WORLD app rows purged from ${DB_DATABASE}. The user accounts were kept.`);
     await pool.close();
 }
 

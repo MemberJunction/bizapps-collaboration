@@ -48,6 +48,8 @@ node --env-file=.env packages/IntegrationTests/dist/world/load-world.js
 
 The database in that env file must already have the Collaboration migrations and bizapps-common, because the loader creates a Person for every persona and throws if `MJ_BizApps_Common: People` is missing. Each Person stores `LinkedUserID`.
 
-The system user writes the users, their MemberJunction roles, the People, and the world-owned space type. Each root is created by its owner, that owner is seated, then children are created. Pat's Invited seat is saved by Sam. Remy's seat is created and then removed by Ada in the same run. Ada is not given a seat on Discovery. The load reads the database back and throws if a space, seat, status, or band disagrees with the catalog. A second run finds the same ids. The purge deletes only rows with those ids.
+The system user writes the users, their MemberJunction roles, the People, and the world-owned space type. Each root is created by its owner, that owner is seated, then children are created. Pat's Invited seat is saved by Sam. Remy's seat is created and then removed by Ada in the same run. Ada is not given a seat on Discovery. The load reads the database back and throws if a space, seat, status, band, or MemberJunction role disagrees with the catalog. Each persona must have exactly the one role named in the catalog.
+
+A seat that already exists is not rewritten. If Pat were left Active by an earlier run, the read-back throws instead of repairing the row. A suite that reloads the world purges first, then loads. The purge keeps the user accounts, because a signed-in persona owns MemberJunction rows that reference them, and deletes the spaces, seats, People, and role grants.
 
 Files, conversations, share notices, item uses, the project plan, and committee governance rows join this catalog when those stores are seeded.
