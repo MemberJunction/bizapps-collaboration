@@ -278,9 +278,9 @@ export function authorizeItemWrite(input: {
     if (!next.role.canContribute) {
         return { ok: false, code: 'cannot-invite', message: 'Item change refused: this role cannot add or move material.' };
     }
-    // Someone who cannot see Team cannot file into it. Their own upload lands in Shared,
-    // stamped as them, because the material is already theirs.
-    if (!next.role.canSeeTeamBand && input.nextBand === 'Team' && !input.previousSpaceId) {
+    // A new item from someone who cannot see Team lands in Shared, whichever band was asked for.
+    // It is stamped as them. The material is already theirs.
+    if (!next.role.canSeeTeamBand && !input.previousSpaceId) {
         return { ok: true, band: 'Shared', promotedAt: input.now, promotedByUserId: input.callerUserId, rewriteStamp: true };
     }
     const crossesSpace = !!input.previousSpaceId && idKey(input.previousSpaceId) !== idKey(input.nextSpaceId);

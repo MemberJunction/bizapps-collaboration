@@ -90,22 +90,26 @@
         <section aria-labelledby="items-heading">
           <h2 id="items-heading">Material</h2>
           <div class="tabs" role="tablist">
-            @if (panels.library !== false) {
+            @if (space.libraryPanel !== false && panels.library !== false) {
               <button type="button" role="tab" class="node" [class.on]="material === 'library'" [attr.aria-selected]="material === 'library'" (click)="material = 'library'">Library</button>
             }
-            @if (panels.work) {
+            @if (space.workPanel !== false && panels.work) {
               <button type="button" role="tab" class="node" [class.on]="material === 'work'" [attr.aria-selected]="material === 'work'" (click)="material = 'work'">Work</button>
             }
           </div>
-          @if (panels.governance) {
+          @if (space.governancePanel || panels.governance) {
             <p class="empty">Governance waits for the Committees move onto Space.</p>
           }
-          @if (material === 'library') {
+          @if (material === 'library' && space.libraryPanel !== false && panels.library !== false) {
+            @if (uploadEnabled) {
             <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
               <label>Upload<input name="upload" [(ngModel)]="uploadName" placeholder="File name" /></label>
               <label>Folder<input name="folder" [(ngModel)]="uploadFolder" placeholder="Deliverables" /></label>
               <button type="submit">Add file</button>
             </form>
+            } @else {
+              <p class="empty">Upload isn't available yet.</p>
+            }
             @for (folder of foldersHere(space.id); track folder) {
               <h3>{{ folder }}</h3>
               <ul class="items">

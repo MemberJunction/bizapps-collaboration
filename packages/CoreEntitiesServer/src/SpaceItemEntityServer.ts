@@ -64,6 +64,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!readable) {
             return fail(result, 'Item change refused: the signer cannot read the record this item points at.');
         }
+        this.Band = decision.band;
         if (decision.rewriteStamp) {
             this.PromotedAt = decision.promotedAt;
             this.PromotedByUserID = decision.promotedByUserId;

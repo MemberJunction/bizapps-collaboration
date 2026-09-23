@@ -17,6 +17,9 @@ export interface WorkspaceSpace extends SpaceNode {
     closedAt: string | null;
     approval?: 'Approve' | 'AutoApprove';
     memberCap?: number | null;
+    libraryPanel?: boolean;
+    workPanel?: boolean;
+    governancePanel?: boolean;
 }
 
 export interface WorkspaceRole extends RoleFlags {
@@ -51,6 +54,7 @@ export class SpaceWorkspaceComponent {
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
     material: 'library' | 'work' = 'library';
+    uploadEnabled = false;
     uploadName = '';
     uploadFolder = '';
     @Output() readonly approve = new EventEmitter<{ memberUserId: string; spaceId: string }>();
@@ -84,6 +88,9 @@ export class SpaceWorkspaceComponent {
 
     select(id: string): void {
         this.selectedId = id;
+        const space = this.spaces.find((item) => item.id === id);
+        if (space?.libraryPanel === false) this.material = 'work';
+        if (space?.workPanel === false) this.material = 'library';
     }
 
     membersHere(spaceId: string): (MemberSnapshot & { displayName?: string })[] {

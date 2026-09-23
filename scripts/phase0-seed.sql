@@ -1,12 +1,15 @@
--- Phase 0 pilot rows. Rolls back. Not a shipped migration.
--- Engagement with Discovery, an audit committee with an outside director, and a cohort.
+-- Phase 0 pilot rows. Not a shipped migration.
+-- Set the four user ids, then run. @Commit = 0 rolls back. @Commit = 1 keeps the rows.
 SET XACT_ABORT ON;
 BEGIN TRAN;
 
-DECLARE @Ada uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1 ORDER BY ID);
-DECLARE @Bea uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1 AND ID <> @Ada ORDER BY ID);
-DECLARE @Director uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1 AND ID NOT IN (@Ada, @Bea) ORDER BY ID);
-IF @Ada IS NULL OR @Bea IS NULL OR @Director IS NULL THROW 50000, 'Need three active users.', 1;
+DECLARE @Commit bit = 0;
+DECLARE @Ada uniqueidentifier = NULL;       -- staff owner
+DECLARE @Bea uniqueidentifier = NULL;       -- client on Discovery
+DECLARE @Director uniqueidentifier = NULL;  -- outside director
+DECLARE @Learner uniqueidentifier = NULL;   -- cohort learner
+IF @Ada IS NULL OR @Bea IS NULL OR @Director IS NULL OR @Learner IS NULL
+    THROW 50000, 'Set @Ada, @Bea, @Director and @Learner to real user ids before running.', 1;
 
 DECLARE @Workspace uniqueidentifier = 'A1000001-0000-4000-8000-000000000001';
 DECLARE @Committee uniqueidentifier = 'A1000001-0000-4000-8000-000000000002';
@@ -32,7 +35,8 @@ VALUES
     (@Discovery, @Bea, @Guest, N'Shared', N'Active'),
     (@CommitteeSpace, @Ada, @Owner, N'Team', N'Active'),
     (@CommitteeSpace, @Director, @Guest, N'Shared', N'Active'),
-    (@CohortSpace, @Ada, @Owner, N'Team', N'Active');
+    (@CohortSpace, @Ada, @Owner, N'Team', N'Active'),
+    (@CohortSpace, @Learner, 'B2000001-0000-4000-8000-000000000006', N'Shared', N'Active');
 
 DECLARE @FileEntity uniqueidentifier = (SELECT ID FROM __mj.Entity WHERE Name = N'MJ: Files');
 INSERT INTO __mj_BizAppsCollaboration.SpaceItem (SpaceID, EntityID, RecordID, Band, PromotedAt, PromotedByUserID)
@@ -45,4 +49,4 @@ IF (SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@Bea) W
 IF (SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@Director) WHERE SpaceID = @Discovery) <> 0
     THROW 50000, 'The director reached Discovery.', 1;
 
-ROLLBACK TRAN;
+IF @Commit = 1 COMMIT TRAN; ELSE ROLLBACK TRAN;

@@ -180,7 +180,7 @@ The set matches the other BizApps Open Apps. These packages are in the repositor
 |---|---|---|
 | **Entities** | `@mj-biz-apps/collaboration-entities` | Generated entity classes for the five tables |
 | **Actions** | `@mj-biz-apps/collaboration-actions` | Server-side action handlers |
-| **Server** | `@mj-biz-apps/collaboration-server` | Bootstrap (`LoadBizAppsCollaborationServer`), resolvers, the projection onto Tasks and Files |
+| **Server** | `@mj-biz-apps/collaboration-server` | Bootstrap (`LoadBizAppsCollaborationServer`) and resolvers. The task and file projection is not in the server yet. |
 | **Core Entities Server** | `@mj-biz-apps/collaboration-core-entities-server` | Server-only subclasses — `SpaceEntityServer` and `SpaceMemberEntityServer` hold the write gates |
 | **Angular** | `@mj-biz-apps/collaboration-ng` | Bootstrap (`LoadBizAppsCollaborationClient`) and Explorer UI |
 

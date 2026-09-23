@@ -104,7 +104,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             this.changes.markForCheck();
             return;
         }
-        const types = new Map((typeRows.Results ?? []).map((row: { ID: string; Vocabulary: string; InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null }) => [row.ID, row]));
+        const types = new Map((typeRows.Results ?? []).map((row: { ID: string; Vocabulary: string; InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null; LibraryPanel?: boolean; WorkPanel?: boolean; GovernancePanel?: boolean }) => [row.ID, row]));
         this.spaces = (spaceRows.Results ?? []).map((row: { ID: string; Name: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: WorkspaceSpace['agentRetrieval']; SpaceTypeID: string; ClosedAt: string | null }) => ({
             id: row.ID,
             name: row.Name,
@@ -116,6 +116,9 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             closedAt: row.ClosedAt,
             approval: types.get(row.SpaceTypeID)?.InviteApproval ?? 'Approve',
             memberCap: types.get(row.SpaceTypeID)?.MemberCap ?? null,
+            libraryPanel: types.get(row.SpaceTypeID)?.LibraryPanel !== false,
+            workPanel: !!types.get(row.SpaceTypeID)?.WorkPanel,
+            governancePanel: !!types.get(row.SpaceTypeID)?.GovernancePanel,
         }));
         this.members = (memberRows.Results ?? []).map((row: { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: Band; User: string; SpaceRoleTypeID: string }) => ({
             spaceId: row.SpaceID,
@@ -163,7 +166,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             spaceId: row.SpaceID,
             label: nameByKey.get(`${row.Entity}|${row.RecordID}`) || row.RecordID,
             band: row.Band,
-            kind: row.Entity?.includes('Task') ? 'task' as const : row.Entity?.includes('Conversation') ? 'conversation' as const : 'file' as const,
+            kind: row.Entity === 'MJ_BizApps_Tasks: Tasks' ? 'task' as const : row.Entity === 'MJ: Conversations' ? 'conversation' as const : 'file' as const,
             folder: (row as { Folder?: string | null }).Folder ?? null,
         }));
         const linked = await new RunView().RunView({
@@ -213,12 +216,12 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onUpload(event: { spaceId: string; name: string; folder: string | null }): Promise<void> {
-        this.message = `Upload “${event.name}” into ${event.folder || 'Unfiled'} is saved with the space item on the server, in the band the role can see.`;
+        this.message = `Upload isn't available yet.`;
         this.changes.markForCheck();
     }
 
     async onOpenItem(event: { itemId: string }): Promise<void> {
-        this.message = `Opened ${event.itemId}. The use is recorded on the server.`;
+        this.message = `Opening a file isn't available yet.`;
         this.changes.markForCheck();
     }
 

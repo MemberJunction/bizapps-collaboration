@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { agentMayQuote, authorizeItemWrite, visibleSpaces } from './rules.ts';
 import { foldersIn, recordUse, shareRecipients } from './phase2.ts';
-import { itemsIn, phase0Items, phase0Members, phase0Spaces } from './phase0.ts';
+import { itemsIn, phase0Items, phase0Members, phase0Spaces } from './phase0.fixture.ts';
 
 describe('phase 0 uses one set of rules', () => {
     it('shows the client only the discovery sub-space, and not the team band', () => {
@@ -78,6 +78,17 @@ describe('phase 2 library, share, and use', () => {
         });
         assert.equal(decision.ok && decision.band, 'Shared');
         assert.equal(decision.ok && decision.promotedByUserId, 'lee');
+        const askedShared = authorizeItemWrite({
+            callerUserId: 'lee',
+            previousSpaceId: null,
+            nextSpaceId: 'cohort',
+            previousBand: null,
+            nextBand: 'Shared',
+            now: new Date('2026-09-23T00:00:00Z'),
+            spaces: phase0Spaces,
+            memberships: phase0Members,
+        });
+        assert.equal(askedShared.ok && askedShared.band, 'Shared');
     });
 
     it('records an open', () => {
