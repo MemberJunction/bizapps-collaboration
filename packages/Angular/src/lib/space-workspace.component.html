@@ -89,19 +89,46 @@
 
         <section aria-labelledby="items-heading">
           <h2 id="items-heading">Material</h2>
-          <ul class="items">
-            @for (item of itemsHere(space.id); track item.id) {
-              <li>
-                <span>{{ item.label }}</span>
-                <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
-                @if (item.band === 'Team' && viewerCanPromote(space.id)) {
-                  <button type="button" class="text" (click)="promote.emit({ itemId: item.id })">Share</button>
+          <div class="tabs" role="tablist">
+            <button type="button" class="node" [class.on]="material === 'library'" (click)="material = 'library'">Library</button>
+            <button type="button" class="node" [class.on]="material === 'work'" (click)="material = 'work'">Work</button>
+          </div>
+          @if (material === 'library') {
+            <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
+              <label>Upload<input name="upload" [(ngModel)]="uploadName" placeholder="File name" /></label>
+              <label>Folder<input name="folder" [(ngModel)]="uploadFolder" placeholder="Deliverables" /></label>
+              <button type="submit">Add file</button>
+            </form>
+            @for (folder of foldersHere(space.id); track folder) {
+              <h3>{{ folder }}</h3>
+              <ul class="items">
+                @for (item of itemsHere(space.id, 'file'); track item.id) {
+                  @if (item.folder === folder) {
+                    <li>
+                      <button type="button" class="text" (click)="openItem.emit({ itemId: item.id })">{{ item.label }}</button>
+                      <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
+                      @if (item.band === 'Team' && viewerCanPromote(space.id)) {
+                        <button type="button" class="text" (click)="promote.emit({ itemId: item.id })">Share</button>
+                      }
+                    </li>
+                  }
                 }
-              </li>
+              </ul>
             } @empty {
-              <li class="empty">Files, conversations, and tasks show up here as items. Each one has one space.</li>
+              <p class="empty">No files in this space yet. An upload becomes one item, in one folder.</p>
             }
-          </ul>
+          } @else {
+            <ul class="items">
+              @for (item of itemsHere(space.id, 'task'); track item.id) {
+                <li>
+                  <span>{{ item.label }}</span>
+                  <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
+                </li>
+              } @empty {
+                <li class="empty">Tasks in this space show up here. They stay BizApps Tasks records. This list is the projection.</li>
+              }
+            </ul>
+          }
         </section>
       </div>
     } @else {

@@ -5,7 +5,7 @@
   "description": "BizApps Collaboration — spaces for client, committee, and cohort work.",
   "license": "UNLICENSED",
   "scripts": {
-    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts",
+    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts",
     "build": "pnpm --filter \"./packages/*\" run build"
   }
 }

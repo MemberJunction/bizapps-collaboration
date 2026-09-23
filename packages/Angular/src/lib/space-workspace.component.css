@@ -120,6 +120,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .text { padding: 0; border: 0; text-decoration: underline; }
 
+.tabs { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+
 @media (max-width: 800px) {
   .workspace, .columns { grid-template-columns: 1fr; }
   .tree { border-right: 0; border-bottom: 1px solid var(--mj-border, transparent); }

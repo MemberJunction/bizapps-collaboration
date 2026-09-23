@@ -40,7 +40,7 @@ export interface WorkspaceRole extends RoleFlags {
 export class SpaceWorkspaceComponent {
     @Input() spaces: WorkspaceSpace[] = [];
     @Input() members: (MemberSnapshot & { displayName?: string })[] = [];
-    @Input() items: { id: string; spaceId: string; label: string; band: Band }[] = [];
+    @Input() items: { id: string; spaceId: string; label: string; band: Band; kind?: 'file' | 'task' | 'conversation'; folder?: string | null }[] = [];
     @Input() roles: WorkspaceRole[] = [];
     @Input() viewerUserId: string | null = null;
     @Input() approval: 'Approve' | 'AutoApprove' = 'Approve';
@@ -48,6 +48,11 @@ export class SpaceWorkspaceComponent {
 
     @Output() readonly invite = new EventEmitter<{ spaceId: string; userId: string; roleId: string }>();
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
+    @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null }>();
+    @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
+    material: 'library' | 'work' = 'library';
+    uploadName = '';
+    uploadFolder = '';
     @Output() readonly approve = new EventEmitter<{ memberUserId: string; spaceId: string }>();
     @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
     @Input() types: { id: string; name: string }[] = [];
@@ -84,8 +89,19 @@ export class SpaceWorkspaceComponent {
         return this.members.filter((member) => member.spaceId === spaceId && member.status !== 'Removed');
     }
 
-    itemsHere(spaceId: string): { id: string; spaceId: string; label: string; band: Band }[] {
-        return this.items.filter((item) => item.spaceId === spaceId);
+    itemsHere(spaceId: string, kind?: 'file' | 'task' | 'conversation') {
+        return this.items.filter((item) => item.spaceId === spaceId && (kind ? (item.kind ?? 'file') === kind : true));
+    }
+
+    foldersHere(spaceId: string): string[] {
+        return [...new Set(this.itemsHere(spaceId, 'file').map((item) => item.folder).filter((folder): folder is string => !!folder))].sort();
+    }
+
+    sendUpload(): void {
+        const space = this.selected;
+        if (!space || !this.uploadName.trim()) return;
+        this.upload.emit({ spaceId: space.id, name: this.uploadName.trim(), folder: this.uploadFolder.trim() || null });
+        this.uploadName = '';
     }
 
     preview(): InviteDecision | null {
