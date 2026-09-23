@@ -104,6 +104,16 @@
             <button type="submit" [disabled]="!preview()?.ok">Invite</button>
           </form>
           }
+          @if (ownsSelected()) {
+          <form class="invite" (submit)="$event.preventDefault(); sendMint()">
+            <h3>Link</h3>
+            <label>
+              Email
+              <input name="link-email" type="email" [(ngModel)]="linkEmail" autocomplete="off" placeholder="Their email" />
+            </label>
+            <button type="submit" [disabled]="!linkEmail.includes('@')">Mint a link</button>
+          </form>
+          }
         </section>
 
         <section aria-labelledby="items-heading">

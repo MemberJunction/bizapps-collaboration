@@ -37,6 +37,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [viewerUserId]="viewerId"
           [viewerIsStaff]="viewerIsStaff"
           (invite)="onInvite($event)"
+          (mintLink)="onMintLink($event)"
           (approve)="onApprove($event)"
           (promote)="onPromote($event)"
           (create)="onCreate($event)"
@@ -185,6 +186,25 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             .map((row) => ({ spaceId: row.LinkedRecordID, id: row.ID }));
         this.types = (typeRows.Results ?? []).map((row: { ID: string; Name: string }) => ({ id: row.ID, name: row.Name }));
         this.denied = false;
+        this.changes.markForCheck();
+    }
+
+    async onMintLink(event: { spaceId: string; email: string }): Promise<void> {
+        const gql = this.gql();
+        if (!gql) {
+            this.message = 'A link needs the API connection.';
+            this.changes.markForCheck();
+            return;
+        }
+        try {
+            const result = await gql(`mutation MintSpaceLink($input: MintSpaceLinkInput!) {
+                MintSpaceLink(input: $input) { Success RedemptionUrl ErrorMessage }
+            }`, { input: { SpaceID: event.spaceId, Email: event.email } });
+            const payload = result?.MintSpaceLink as { Success?: boolean; RedemptionUrl?: string; ErrorMessage?: string } | undefined;
+            this.message = payload?.Success ? (payload.RedemptionUrl || 'The link was minted.') : (payload?.ErrorMessage || 'The link was refused.');
+        } catch (error) {
+            this.message = error instanceof Error ? error.message : 'The link was refused.';
+        }
         this.changes.markForCheck();
     }
 

@@ -372,6 +372,42 @@ export function authorizeItemWrite(input: {
     return { ok: true, band: 'Shared', promotedAt: null, promotedByUserId: null, rewriteStamp: false };
 }
 
+/**
+ * A magic-link for one space. Anyone who can invite may seat a person.
+ * Only an owner may mint a link, because the link admits someone who is not
+ * on the roster yet.
+ */
+export function mayMintSpaceLink(input: {
+    callerUserId: string | null;
+    targetSpaceId: string;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): { ok: true } | InviteRefusal {
+    if (!input.callerUserId) {
+        return { ok: false, code: 'not-signed-in', message: 'Link refused: there is no signed-in user.' };
+    }
+    const owner = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.targetSpaceId);
+    if (!owner?.role.isOwnerRole) {
+        return { ok: false, code: 'cannot-invite', message: 'Link refused: only an owner of this space can mint a link.' };
+    }
+    return { ok: true };
+}
+
+export type RosterAction = 'Read' | 'Update' | 'Share';
+
+/** What the roster grants on one space. Read follows reach. Update and Share follow the owner role. */
+export function rosterActions(input: {
+    callerUserId: string | null;
+    spaceId: string;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): RosterAction[] {
+    if (!input.callerUserId) return [];
+    const reach = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.spaceId);
+    if (!reach) return [];
+    return reach.role.isOwnerRole ? ['Read', 'Update', 'Share'] : ['Read'];
+}
+
 export function initialMemberStatus(approval: InviteApproval): 'Invited' | 'Active' {
     return approval === 'AutoApprove' ? 'Active' : 'Invited';
 }

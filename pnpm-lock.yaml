@@ -177,6 +177,9 @@ importers:
       '@mj-biz-apps/collaboration-entities':
         specifier: 0.1.0
         version: link:../Entities
+      '@mj-biz-apps/common-entities':
+        specifier: 5.45.0
+        version: 5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       class-validator:
         specifier: 0.14.2
         version: 0.14.2

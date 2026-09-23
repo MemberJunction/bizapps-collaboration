@@ -8,7 +8,9 @@ import {
     isSelfRemoval,
     leavingWouldStrand,
     wouldStrandLastOwner,
+    mayMintSpaceLink,
     membershipReaches,
+    rosterActions,
     rosterBySeat,
     parentCreatesCycle,
     planSpaceWrite,
@@ -98,6 +100,26 @@ describe('membershipReaches', () => {
     it('ignores invited and removed rows', () => {
         const memberships = [member({ spaceId: 'root', userId: 'cy', role: ownerRole, status: 'Invited' })];
         assert.equal(membershipReaches(tree, memberships, 'cy', 'root'), null);
+    });
+});
+
+describe('magic link and roster permission', () => {
+    const memberships = [
+        member({ spaceId: 'root', userId: 'ada', role: ownerRole }),
+        member({ spaceId: 'root', userId: 'sam', role: readerRole, band: 'Shared' }),
+    ];
+
+    it('lets an owner mint a link and refuses a member who only reaches the space', () => {
+        assert.equal(mayMintSpaceLink({ callerUserId: 'ada', targetSpaceId: 'child', spaces: tree, memberships }).ok, true);
+        const refused = mayMintSpaceLink({ callerUserId: 'sam', targetSpaceId: 'child', spaces: tree, memberships });
+        assert.equal(refused.ok, false);
+        if (!refused.ok) assert.equal(refused.code, 'cannot-invite');
+    });
+
+    it('grants read to a member who reaches the space, and update to the owner', () => {
+        assert.deepEqual(rosterActions({ callerUserId: 'sam', spaceId: 'child', spaces: tree, memberships }), ['Read']);
+        assert.deepEqual(rosterActions({ callerUserId: 'ada', spaceId: 'sealed', spaces: tree, memberships }), []);
+        assert.deepEqual(rosterActions({ callerUserId: 'ada', spaceId: 'child', spaces: tree, memberships }), ['Read', 'Update', 'Share']);
     });
 });
 
