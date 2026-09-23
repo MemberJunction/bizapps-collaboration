@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
     agentMayQuote,
+    authorizeItemWrite,
+    authorizeSpaceWrite,
     isSelfAccept,
     membershipReaches,
     parentCreatesCycle,
@@ -182,7 +184,7 @@ describe('promotionStamps', () => {
             spaces,
             memberships,
         });
-        assert.deepEqual(decision, { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null });
+        assert.deepEqual(decision, { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null, rewriteStamp: true });
     });
 
     it('records who promoted a shared item, and when', () => {
@@ -195,7 +197,7 @@ describe('promotionStamps', () => {
             spaces,
             memberships,
         });
-        assert.deepEqual(decision, { ok: true, band: 'Shared', promotedAt: now, promotedByUserId: 'ada' });
+        assert.deepEqual(decision, { ok: true, band: 'Shared', promotedAt: now, promotedByUserId: 'ada', rewriteStamp: true });
     });
 
     it('refuses a guest who cannot promote', () => {
@@ -250,6 +252,131 @@ describe('agentMayQuote', () => {
 
     it('does not widen a caller who cannot read', () => {
         assert.equal(agentMayQuote({ ...base, callerCanRead: false, itemSpaceId: 'root', askedFromSpaceId: 'root' }), false);
+    });
+});
+
+describe('flag ceiling', () => {
+    const wideGuest: RoleFlags = { ...guestRole, level: 10, canSeeTeamBand: true, canPromoteBand: true };
+    it('refuses a lower level that can see the team band the grantor cannot', () => {
+        const decision = refuseInvite({
+            callerUserId: 'bea',
+            inviteeUserId: 'cy',
+            targetSpaceId: 'child',
+            granted: wideGuest,
+            approval: 'Approve',
+            memberCap: null,
+            spaces: tree,
+            memberships: [member({ spaceId: 'root', userId: 'bea', role: { ...guestRole, level: 50 }, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) assert.equal(decision.code, 'above-ceiling');
+    });
+});
+
+describe('space writes', () => {
+    const memberships = [member({ spaceId: 'root', userId: 'ada', role: ownerRole })];
+    it('lets an owner change structure', () => {
+        assert.equal(authorizeSpaceWrite({
+            callerUserId: 'ada', spaceId: 'child', nextParentId: 'root', previousParentId: 'root',
+            structuralChange: true, spaces: tree, memberships,
+        }).ok, true);
+    });
+    it('refuses a guest changing structure', () => {
+        const decision = authorizeSpaceWrite({
+            callerUserId: 'bea', spaceId: 'child', nextParentId: 'root', previousParentId: 'root',
+            structuralChange: true, spaces: tree,
+            memberships: [member({ spaceId: 'root', userId: 'bea', role: guestRole, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, false);
+    });
+    it('refuses a move onto a parent the caller does not own', () => {
+        const decision = authorizeSpaceWrite({
+            callerUserId: 'ada', spaceId: 'under-sealed', nextParentId: 'sealed', previousParentId: null,
+            structuralChange: true, spaces: tree, memberships,
+        });
+        assert.equal(decision.ok, false);
+    });
+});
+
+describe('item writes', () => {
+    const now = new Date('2026-09-22T00:00:00Z');
+    const memberships = [member({ spaceId: 'root', userId: 'ada', role: ownerRole })];
+    const base = { callerUserId: 'ada', now, spaces: tree, memberships };
+    it('refuses placing an item in a space the caller does not reach', () => {
+        assert.equal(authorizeItemWrite({ ...base, callerUserId: 'cy', previousSpaceId: null, nextSpaceId: 'child', previousBand: null, nextBand: 'Team' }).ok, false);
+    });
+    it('requires promote to demote', () => {
+        const decision = authorizeItemWrite({
+            ...base,
+            callerUserId: 'bea',
+            previousSpaceId: 'child',
+            nextSpaceId: 'child',
+            previousBand: 'Shared',
+            nextBand: 'Team',
+            memberships: [member({ spaceId: 'root', userId: 'bea', role: guestRole, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, false);
+    });
+    it('does not rewrite the stamp when a shared item stays shared', () => {
+        const decision = authorizeItemWrite({ ...base, previousSpaceId: 'child', nextSpaceId: 'child', previousBand: 'Shared', nextBand: 'Shared' });
+        assert.equal(decision.ok && decision.rewriteStamp, false);
+    });
+    it('stamps a new shared item and clears a team item', () => {
+        const shared = authorizeItemWrite({ ...base, previousSpaceId: null, nextSpaceId: 'child', previousBand: null, nextBand: 'Shared' });
+        assert.equal(shared.ok && shared.rewriteStamp, true);
+        const team = authorizeItemWrite({ ...base, previousSpaceId: 'child', nextSpaceId: 'child', previousBand: 'Shared', nextBand: 'Team' });
+        assert.equal(team.ok && team.band, 'Team');
+    });
+    it('requires reach on both spaces for a move', () => {
+        const decision = authorizeItemWrite({ ...base, previousSpaceId: 'sealed', nextSpaceId: 'child', previousBand: 'Team', nextBand: 'Team' });
+        assert.equal(decision.ok, false);
+    });
+});
+
+describe('agent exclusion covers descendants', () => {
+    const spaces: SpaceNode[] = [
+        space({ id: 'root' }),
+        space({ id: 'econ', parentId: 'root', agentRetrieval: 'ExcludedEntirely' }),
+        space({ id: 'econ-q3', parentId: 'econ' }),
+        space({ id: 'legal', parentId: 'root', agentRetrieval: 'ExcludedFromParentScope' }),
+        space({ id: 'legal-memo', parentId: 'legal' }),
+    ];
+    const base = { callerCanRead: true, callerCanSeeTeam: true, itemBand: 'Shared' as const, spaces };
+    it('excludes a descendant of an entirely excluded space', () => {
+        assert.equal(agentMayQuote({ ...base, itemSpaceId: 'econ-q3', askedFromSpaceId: 'root' }), false);
+        assert.equal(agentMayQuote({ ...base, itemSpaceId: 'econ-q3', askedFromSpaceId: 'econ-q3' }), false);
+    });
+    it('excludes a memo under a parent-excluded space when asked from above', () => {
+        assert.equal(agentMayQuote({ ...base, itemSpaceId: 'legal-memo', askedFromSpaceId: 'root' }), false);
+        assert.equal(agentMayQuote({ ...base, itemSpaceId: 'legal-memo', askedFromSpaceId: 'legal' }), true);
+    });
+});
+
+describe('external participant persona', () => {
+    const sibling: SpaceNode[] = [
+        space({ id: 'root' }),
+        space({ id: 'theirs', parentId: 'root' }),
+        space({ id: 'ours', parentId: 'root' }),
+    ];
+    const memberships = [member({ spaceId: 'ours', userId: 'guest', role: guestRole, band: 'Shared' })];
+    it('sees only its own space, and not the team band', () => {
+        assert.deepEqual(visibleSpaces(sibling, memberships, 'guest').map((s) => s.id), ['ours']);
+        assert.equal(agentMayQuote({
+            callerCanRead: true,
+            callerCanSeeTeam: false,
+            itemBand: 'Team',
+            itemSpaceId: 'ours',
+            askedFromSpaceId: 'ours',
+            spaces: sibling,
+        }), false);
+        assert.equal(agentMayQuote({
+            callerCanRead: false,
+            callerCanSeeTeam: false,
+            itemBand: 'Shared',
+            itemSpaceId: 'theirs',
+            askedFromSpaceId: 'root',
+            spaces: sibling,
+        }), false);
     });
 });
 

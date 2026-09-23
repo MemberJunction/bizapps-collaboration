@@ -2,16 +2,11 @@ import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationRe
 import { RegisterClass } from '@memberjunction/global';
 import { isSelfAccept, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerId, loadCollaborationGraph } from './load-graph.js';
-import { requireUuid } from './uuid.js';
+import { callerUuid, loadWriteContext } from './load-graph.js';
+import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
-/**
- * The invitation ceiling. Write-side row-level security is unused across
- * MemberJunction, so the four clauses live here, where generated Create and
- * Update both pass.
- */
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -21,33 +16,41 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        if (!user) {
-            return fail(result, 'UserID', 'Invite refused: there is no signed-in user to grant it.');
+        const caller = callerUuid(user);
+        const invitee = parseUuid(this.UserID);
+        const spaceId = parseUuid(this.SpaceID);
+        const roleId = parseUuid(this.SpaceRoleTypeID);
+        if (!user || !caller || !invitee || !spaceId || !roleId) {
+            return fail(result, 'UserID', 'Invite refused: the user, space, and role must be real ids.');
         }
 
-        const caller = callerId(user);
-        const invitee = requireUuid(this.UserID, 'UserID');
-        const spaceId = requireUuid(this.SpaceID, 'SpaceID');
-        const previous = this.IsSaved ? previousStatus(this) : null;
-        if (previous && isSelfAccept({ callerUserId: caller, inviteeUserId: invitee, previousStatus: previous, nextStatus: this.Status })) {
+        const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
+        const previous = previousStatus(this);
+        if (this.IsSaved && dirty.length === 1 && dirty[0] === 'Status' && previous
+            && isSelfAccept({ callerUserId: caller, inviteeUserId: invitee, previousStatus: previous, nextStatus: this.Status })) {
             return result;
         }
 
-        const graph = await loadCollaborationGraph(user);
-        const granted = graph.roles.get(requireUuid(this.SpaceRoleTypeID, 'SpaceRoleTypeID'));
-        if (!granted) {
+        let context;
+        try {
+            context = await loadWriteContext(this, user, spaceId, roleId);
+        } catch (error) {
+            return fail(result, 'SpaceRoleTypeID', error instanceof Error ? error.message : 'Invite refused: the roster could not be read completely.');
+        }
+        if (!context.role) {
             return fail(result, 'SpaceRoleTypeID', 'Invite refused: that role does not exist.');
         }
-        const type = graph.typeBySpaceId.get(spaceId) ?? { approval: 'Approve' as const, memberCap: null };
+        const occupied = this.IsSaved && previous && previous !== 'Removed' ? Math.max(0, context.memberCount - 1) : context.memberCount;
         const decision = refuseInvite({
             callerUserId: caller,
             inviteeUserId: invitee,
             targetSpaceId: spaceId,
-            granted,
-            approval: type.approval,
-            memberCap: type.memberCap,
-            spaces: graph.spaces,
-            memberships: graph.memberships.filter((row) => row.userId !== invitee || row.spaceId !== spaceId),
+            granted: context.role,
+            approval: context.approval,
+            memberCap: context.memberCap,
+            occupied,
+            spaces: context.spaces,
+            memberships: context.memberships,
         });
         if (!decision.ok) {
             return fail(result, 'SpaceRoleTypeID', decision.message);

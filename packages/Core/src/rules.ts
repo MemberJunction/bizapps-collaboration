@@ -137,8 +137,92 @@ export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string
     return false;
 }
 
+/**
+ * Structural writes: creating a child, or changing owner, retrieval, inheritance, or parent.
+ * The caller must hold the owner role on the space being changed, and on the
+ * destination parent when the parent changes.
+ */
+export function authorizeSpaceWrite(input: {
+    callerUserId: string | null;
+    spaceId: string;
+    nextParentId: string | null;
+    previousParentId: string | null;
+    structuralChange: boolean;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): InviteRefusal | { ok: true } {
+    if (!input.callerUserId) {
+        return { ok: false, code: 'not-signed-in', message: 'Space change refused: there is no signed-in user.' };
+    }
+    if (!input.structuralChange) {
+        return { ok: true };
+    }
+    const here = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.spaceId);
+    if (!here?.role.isOwnerRole) {
+        return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change its structure.' };
+    }
+    if (input.nextParentId && input.nextParentId !== input.previousParentId) {
+        const onParent = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.nextParentId);
+        if (!onParent?.role.isOwnerRole) {
+            return { ok: false, code: 'not-a-member', message: 'Space change refused: only an owner of the destination parent may move a space there.' };
+        }
+    }
+    return { ok: true };
+}
+
+/**
+ * Placing, moving, or demoting an item. The caller must reach every space
+ * involved. Leaving the shared band, or entering it, requires CanPromoteBand.
+ * A shared item that stays shared does not rewrite the promotion stamp.
+ */
+export function authorizeItemWrite(input: {
+    callerUserId: string | null;
+    previousSpaceId: string | null;
+    nextSpaceId: string;
+    previousBand: Band | null;
+    nextBand: Band;
+    now: Date;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): PromotionDecision | InviteRefusal {
+    if (!input.callerUserId) {
+        return { ok: false, code: 'not-signed-in', message: 'Item change refused: there is no signed-in user.' };
+    }
+    const next = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.nextSpaceId);
+    if (!next) {
+        return { ok: false, code: 'not-a-member', message: 'Item change refused: the signer does not reach this space.' };
+    }
+    if (input.previousSpaceId && input.previousSpaceId !== input.nextSpaceId) {
+        const previous = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.previousSpaceId);
+        if (!previous) {
+            return { ok: false, code: 'not-a-member', message: 'Item change refused: the signer does not reach the space this item is leaving.' };
+        }
+    }
+    const enteringShared = input.nextBand === 'Shared' && input.previousBand !== 'Shared';
+    const leavingShared = input.previousBand === 'Shared' && input.nextBand === 'Team';
+    if ((enteringShared || leavingShared) && !next.role.canPromoteBand) {
+        return { ok: false, code: 'cannot-invite', message: 'Item change refused: this role cannot change the band.' };
+    }
+    if (input.nextBand === 'Team') {
+        return { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null, rewriteStamp: true };
+    }
+    if (enteringShared) {
+        return { ok: true, band: 'Shared', promotedAt: input.now, promotedByUserId: input.callerUserId, rewriteStamp: true };
+    }
+    return { ok: true, band: 'Shared', promotedAt: null, promotedByUserId: null, rewriteStamp: false };
+}
+
 export function initialMemberStatus(approval: InviteApproval): 'Invited' | 'Active' {
     return approval === 'AutoApprove' ? 'Active' : 'Invited';
+}
+
+/** A granted flag the grantor does not hold is a wider role, even when its level is lower. */
+export function flagExceedsGrantor(granted: RoleFlags, grantor: RoleFlags): string | null {
+    if (granted.canSeeTeamBand && !grantor.canSeeTeamBand) return 'see the team band';
+    if (granted.canPromoteBand && !grantor.canPromoteBand) return 'promote to the shared band';
+    if (granted.canInvite && !grantor.canInvite) return 'invite';
+    if (granted.isOwnerRole && !grantor.isOwnerRole) return 'own the space';
+    return null;
 }
 
 function countTowardCap(memberships: readonly MemberSnapshot[], spaceId: string): number {
@@ -159,6 +243,8 @@ export function refuseInvite(input: {
     granted: RoleFlags;
     approval: InviteApproval;
     memberCap: number | null;
+    /** When set, the roster size already counted by the server. Otherwise counted from memberships. */
+    occupied?: number;
     spaces: readonly SpaceNode[];
     memberships: readonly MemberSnapshot[];
 }): InviteDecision {
@@ -170,7 +256,7 @@ export function refuseInvite(input: {
         return { ok: false, code: 'unknown-space', message: 'Invite refused: that space does not exist.' };
     }
 
-    const occupied = countTowardCap(input.memberships, target.id);
+    const occupied = input.occupied ?? countTowardCap(input.memberships, target.id);
     if (input.memberCap !== null && occupied >= input.memberCap) {
         return {
             ok: false,
@@ -203,6 +289,14 @@ export function refuseInvite(input: {
             message: 'Invite refused: that role is above the level this member may grant.',
         };
     }
+    const flagGap = flagExceedsGrantor(input.granted, grantor.role);
+    if (flagGap) {
+        return {
+            ok: false,
+            code: 'above-ceiling',
+            message: `Invite refused: the granted role can ${flagGap}, and the signer cannot.`,
+        };
+    }
 
     return { ok: true, status: initialMemberStatus(input.approval) };
 }
@@ -212,6 +306,8 @@ export interface PromotionDecision {
     band: Band;
     promotedAt: Date | null;
     promotedByUserId: string | null;
+    /** False when a Shared item stays Shared: the existing stamp is the audit record. */
+    rewriteStamp: boolean;
 }
 
 /**
@@ -227,7 +323,7 @@ export function promotionStamps(input: {
     memberships: readonly MemberSnapshot[];
 }): PromotionDecision | InviteRefusal {
     if (input.nextBand === 'Team') {
-        return { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null };
+        return { ok: true, band: 'Team', promotedAt: null, promotedByUserId: null, rewriteStamp: true };
     }
     if (!input.callerUserId) {
         return { ok: false, code: 'not-signed-in', message: 'Promotion refused: there is no signed-in user to record.' };
@@ -244,6 +340,7 @@ export function promotionStamps(input: {
         band: 'Shared',
         promotedAt: input.now,
         promotedByUserId: input.callerUserId,
+        rewriteStamp: true,
     };
 }
 
@@ -275,18 +372,26 @@ export function agentMayQuote(input: {
     if (!itemSpace) {
         return false;
     }
-    if (itemSpace.agentRetrieval === 'ExcludedEntirely') {
+    if (!isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId)) {
         return false;
     }
-    const inSubtree = isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId);
-    if (!inSubtree) {
-        return false;
-    }
-    if (itemSpace.agentRetrieval === 'ExcludedFromParentScope' && input.askedFromSpaceId !== input.itemSpaceId) {
-        const askedIsStrictAncestor = input.askedFromSpaceId !== input.itemSpaceId && isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId);
-        if (askedIsStrictAncestor) {
+    let current: SpaceNode | undefined = itemSpace;
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+        if (current.agentRetrieval === 'ExcludedEntirely') {
             return false;
         }
+        seen.add(current.id);
+        current = current.parentId ? index.get(current.parentId) : undefined;
+    }
+    current = itemSpace;
+    const between = new Set<string>();
+    while (current && current.id !== input.askedFromSpaceId && !between.has(current.id)) {
+        if (current.agentRetrieval === 'ExcludedFromParentScope') {
+            return false;
+        }
+        between.add(current.id);
+        current = current.parentId ? index.get(current.parentId) : undefined;
     }
     return true;
 }

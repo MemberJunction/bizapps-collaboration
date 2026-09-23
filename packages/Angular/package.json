@@ -7,7 +7,7 @@
   "types": "dist/public-api.d.ts",
   "publishConfig": { "access": "public" },
   "files": ["/dist"],
-  "scripts": { "build": "tsc" },
+  "scripts": { "build": "ngc" },
   "license": "UNLICENSED",
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0"

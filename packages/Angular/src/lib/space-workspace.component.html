@@ -35,7 +35,7 @@
           <ul class="roster">
             @for (member of membersHere(space.id); track member.userId) {
               <li>
-                <span class="who">{{ member.userId }}</span>
+                <span class="who">{{ member.displayName || member.userId }}</span>
                 <span class="pill">{{ member.band }}</span>
                 <span class="pill">{{ member.status }}</span>
                 @if (member.status === 'Invited' && member.userId === viewerUserId) {
@@ -76,7 +76,7 @@
               <li>
                 <span>{{ item.label }}</span>
                 <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
-                @if (item.band === 'Team') {
+                @if (item.band === 'Team' && viewerCanPromote(space.id)) {
                   <button type="button" class="text" (click)="promote.emit({ itemId: item.id })">Share</button>
                 }
               </li>

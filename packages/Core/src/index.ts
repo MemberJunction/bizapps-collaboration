@@ -1,5 +1,8 @@
 export {
     agentMayQuote,
+    authorizeItemWrite,
+    authorizeSpaceWrite,
+    flagExceedsGrantor,
     initialMemberStatus,
     isSelfAccept,
     membershipReaches,
@@ -8,7 +11,7 @@ export {
     refuseInvite,
     retentionDeadline,
     visibleSpaces,
-} from './rules.ts';
+} from './rules.js';
 export type {
     AgentRetrieval,
     Band,

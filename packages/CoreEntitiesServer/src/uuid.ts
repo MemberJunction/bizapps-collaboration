@@ -1,9 +1,9 @@
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-/** A value that will be interpolated into ExtraFilter. Anything else is refused. */
-export function requireUuid(value: string | null | undefined, field: string): string {
+/** Null when the value is not a UUID. Callers turn that into a validation error, not a throw. */
+export function parseUuid(value: string | null | undefined): string | null {
     if (!value || !UUID.test(value)) {
-        throw new Error(`${field} must be a UUID before it can be used in a filter.`);
+        return null;
     }
     return value;
 }

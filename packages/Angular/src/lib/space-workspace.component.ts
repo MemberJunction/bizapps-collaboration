@@ -14,6 +14,8 @@ export interface WorkspaceSpace extends SpaceNode {
     name: string;
     vocabulary: string;
     closedAt: string | null;
+    approval?: 'Approve' | 'AutoApprove';
+    memberCap?: number | null;
 }
 
 export interface WorkspaceRole extends RoleFlags {
@@ -36,7 +38,7 @@ export interface WorkspaceRole extends RoleFlags {
 })
 export class SpaceWorkspaceComponent {
     @Input() spaces: WorkspaceSpace[] = [];
-    @Input() members: MemberSnapshot[] = [];
+    @Input() members: (MemberSnapshot & { displayName?: string })[] = [];
     @Input() items: { id: string; spaceId: string; label: string; band: Band }[] = [];
     @Input() roles: WorkspaceRole[] = [];
     @Input() viewerUserId: string | null = null;
@@ -87,8 +89,8 @@ export class SpaceWorkspaceComponent {
             inviteeUserId: this.inviteUserId.trim(),
             targetSpaceId: space.id,
             granted: role,
-            approval: this.approval,
-            memberCap: this.memberCap,
+            approval: space.approval ?? this.approval,
+            memberCap: space.memberCap ?? this.memberCap,
             spaces: this.spaces,
             memberships: this.members,
         });
@@ -102,6 +104,10 @@ export class SpaceWorkspaceComponent {
         }
         this.invite.emit({ spaceId: space.id, userId: this.inviteUserId.trim(), roleId: this.inviteRoleId });
         this.inviteUserId = '';
+    }
+
+    viewerCanPromote(spaceId: string): boolean {
+        return this.members.some((member) => member.userId === this.viewerUserId && member.spaceId === spaceId && member.status === 'Active' && member.role.canPromoteBand);
     }
 
     depth(space: WorkspaceSpace): number {

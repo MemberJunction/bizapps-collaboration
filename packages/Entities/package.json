@@ -12,9 +12,6 @@
     "test": "npm test --prefix ../Core"
   },
   "license": "UNLICENSED",
-  "dependencies": {
-    "@mj-biz-apps/collaboration-core": "0.1.0"
-  },
   "peerDependencies": {
     "@memberjunction/core": "^6.1.0-edge.5",
     "@memberjunction/global": "^6.1.0-edge.5"
