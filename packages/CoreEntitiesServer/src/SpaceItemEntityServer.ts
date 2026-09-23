@@ -8,6 +8,25 @@ import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 
+/** File ids this process just stored. Not a field, so a client cannot set it. */
+const vouchedFiles = new Set<string>();
+
+export function vouchStoredFile(fileId: string): void {
+    const id = parseUuid(fileId);
+    if (id) vouchedFiles.add(id);
+}
+
+export function releaseStoredFile(fileId: string): void {
+    const id = parseUuid(fileId);
+    if (id) vouchedFiles.delete(id);
+}
+
+function isVouched(recordId: string): boolean {
+    const raw = recordId.startsWith('ID|') ? recordId.slice(3) : recordId;
+    const id = parseUuid(raw);
+    return !!id && vouchedFiles.has(id);
+}
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -127,6 +146,9 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
     const info = provider.EntityByID(entityId);
     if (!info) {
         return false;
+    }
+    if (isVouched(item.RecordID)) {
+        return true;
     }
     let key: CompositeKey;
     try {

@@ -107,6 +107,7 @@
               <label>Folder<input name="folder" [(ngModel)]="uploadFolder" placeholder="Deliverables" /></label>
               <button type="submit">Add file</button>
             </form>
+            @if (uploadMessage) { <p class="empty">{{ uploadMessage }}</p> }
             } @else {
               <p class="empty">Upload isn't available yet.</p>
             }

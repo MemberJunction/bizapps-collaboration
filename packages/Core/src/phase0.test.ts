@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { agentMayQuote, authorizeItemWrite, visibleSpaces } from './rules.ts';
-import { authorizeNoticeWrite, authorizeUseWrite, foldersIn, recordUse, shareRecipients } from './phase2.ts';
+import { authorizeNoticeWrite, authorizeUseWrite, foldersIn, openMode, recordUse, requestedItemBand, shareRecipients, storedContentType } from './phase2.ts';
 import { itemsIn, phase0Items, phase0Members, phase0Spaces } from './phase0.fixture.ts';
 
 describe('phase 0 uses one set of rules', () => {
@@ -109,6 +109,22 @@ describe('phase 2 library, share, and use', () => {
         assert.equal(authorizeNoticeWrite({ ...notice, itemBand: 'Team' }).ok, false);
         assert.equal(authorizeNoticeWrite({ ...notice, callerUserId: 'lee', recipientUserId: 'ada', spaceId: 'cohort', itemSpaceId: 'cohort' }).ok, true);
         assert.equal(authorizeNoticeWrite({ ...notice, isNew: false }).ok, false);
+    });
+
+    it('requests the type default when the caller may place it, and Team otherwise', () => {
+        assert.equal(requestedItemBand('Shared', true, true), 'Shared');
+        assert.equal(requestedItemBand('Shared', false, false), 'Shared');
+        assert.equal(requestedItemBand('Shared', true, false), 'Team');
+        assert.equal(requestedItemBand('Team', true, true), 'Team');
+    });
+
+    it('keeps only passive content types', () => {
+        assert.equal(storedContentType('text/html'), 'text/plain');
+        assert.equal(storedContentType('image/svg+xml'), 'application/octet-stream');
+        assert.equal(storedContentType('application/pdf'), 'application/pdf');
+        assert.equal(openMode('text/html'), 'download');
+        assert.equal(openMode('text/plain'), 'text');
+        assert.equal(openMode('image/png'), 'inline');
     });
 
     it('records an open', () => {

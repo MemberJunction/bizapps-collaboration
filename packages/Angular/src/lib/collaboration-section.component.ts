@@ -4,7 +4,7 @@ import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo }
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
-import type { Band, MemberSnapshot, RoleFlags } from '@mj-biz-apps/collaboration-core';
+import { openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
@@ -278,8 +278,8 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             const raw = atob(payload.Base64);
             const bytes = new Uint8Array(raw.length);
             for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
-            const url = URL.createObjectURL(new Blob([bytes], { type: payload.MimeType || 'application/octet-stream' }));
-            window.open(url, '_blank', 'noopener');
+            const label = this.items.find((row) => row.id === event.itemId)?.label ?? 'download';
+            presentFile(bytes, payload.MimeType, label);
             this.message = '';
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The file could not be opened.';
@@ -327,4 +327,20 @@ export class CollaborationSectionResource extends BaseResourceComponent {
 
 function emptyRole(): RoleFlags {
     return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
+}
+
+function presentFile(bytes: Uint8Array, claimedType: string | undefined, name: string): void {
+    const mode = openMode(claimedType);
+    const type = mode === 'inline' ? (claimedType ?? '').split(';')[0].trim().toLowerCase() : mode === 'text' ? 'text/plain' : 'application/octet-stream';
+    const url = URL.createObjectURL(new Blob([bytes.slice()], { type }));
+    if (mode === 'download') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name || 'download';
+        link.click();
+        URL.revokeObjectURL(url);
+        return;
+    }
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

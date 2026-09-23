@@ -198,7 +198,7 @@ A non-obvious payoff: because the filter is a **subquery over membership** rathe
 
 - **Root `All<Entity>`** — an unfiltered grant on this lane reads every row. Fixed by **closing the lane** at the GraphQL route, not by adding another filter.
 - **`RunQuery` / datasets / reports** — a documented MJ bypass. Any stored query we ship carries its scope predicate *inside* the query SQL.
-- **A bespoke resolver reading by a client-supplied id.** Authenticated-only, with no ownership predicate, it returns the record — and any pre-authorized storage URL — for an id the caller names. **A read-by-client-supplied-id is a gate site, always.**
+- **A bespoke resolver reading by a client-supplied id.** Authenticated-only, with no ownership predicate, it returns the record — and any pre-authorized storage URL — for an id the caller names. **A read-by-client-supplied-id is a gate site, always.** In MemberJunction 6.1.3, `CreatePreAuthDownloadUrl` and `SearchAcrossAccounts` check only entity-level Read on `MJ: Files` and then act on a client-supplied storage account id and object key, so the row filter never applies. A participant holds that Read grant. Not knowing an account id is all that stops them. This is core behavior; this app does not grant create on `MJ: Files` and does not call those routes.
 
 Three scope guardrails, all shipped, all worth turning on deliberately:
 

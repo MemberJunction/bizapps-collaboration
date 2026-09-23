@@ -130,6 +130,9 @@ importers:
       '@mj-biz-apps/collaboration-actions':
         specifier: 0.1.0
         version: link:../Actions
+      '@mj-biz-apps/collaboration-core':
+        specifier: 0.1.0
+        version: link:../Core
       '@mj-biz-apps/collaboration-core-entities-server':
         specifier: 0.1.0
         version: link:../CoreEntitiesServer
@@ -141,6 +144,9 @@ importers:
         version: 0.14.2
     devDependencies:
       '@memberjunction/core':
+        specifier: 6.1.3
+        version: 6.1.3
+      '@memberjunction/core-entities':
         specifier: 6.1.3
         version: 6.1.3
       '@memberjunction/global':

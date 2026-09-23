@@ -1,9 +1,12 @@
-import { LogError, type UserInfo } from '@memberjunction/core';
+import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { SPACE_UPLOAD_MAX_BYTES, storedContentType, type Band } from '@mj-biz-apps/collaboration-core';
+import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { releaseStoredFile, vouchStoredFile } from './SpaceItemEntityServer.js';
 
 const FILES = 'MJ: Files';
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 
-/** The bytes and the name. The store writes the MJ: Files row. */
+/** The bytes and the name. The store writes the MJ: Files row as the storage user. */
 export interface SpaceFileUpload {
     content: Uint8Array;
     fileName: string;
@@ -11,39 +14,33 @@ export interface SpaceFileUpload {
     user: UserInfo;
 }
 
-/** Puts the bytes in MJStorage and can remove that file if the item is refused. */
+export interface StoredSpaceFile {
+    fileId: string;
+    storagePath: string;
+    accountId: string;
+}
+
+/** Puts the bytes in MJStorage and can remove that object and its row. */
 export interface SpaceFileStore {
-    put(input: SpaceFileUpload): Promise<{ fileId: string }>;
-    remove(fileId: string, user: UserInfo): Promise<void>;
-}
-
-interface ItemRecord {
-    NewRecord(): void;
-    SpaceID: string;
-    EntityID: string;
-    RecordID: string;
-    Band: string;
-    Folder: string | null;
-    ID: string;
-    Save(): Promise<boolean>;
-    LatestResult?: { CompleteMessage?: string };
-}
-
-/** Enough of the metadata provider to register the item against MJ: Files. */
-export interface SpaceFileProvider {
-    Entities: { Name: string; ID: string }[];
-    GetEntityObject(entityName: string, contextUser?: UserInfo): Promise<ItemRecord>;
+    put(input: SpaceFileUpload): Promise<StoredSpaceFile>;
+    remove(stored: StoredSpaceFile, user: UserInfo): Promise<boolean>;
 }
 
 export interface UploadSpaceFileRequest {
+    /** The signed-in member. The space item is saved as this user. */
     user: UserInfo;
-    provider: SpaceFileProvider;
+    /** The system user. The file row and the storage object are written as this user. */
+    storageUser: UserInfo;
+    provider: IMetadataProvider;
     store: SpaceFileStore;
     spaceId: string;
     folder: string | null;
     fileName: string;
     mimeType: string;
     content: Uint8Array;
+    maxBytes?: number;
+    /** Runs before any bytes are stored. Returns the band the item should request. */
+    gate: () => Promise<{ ok: true; band: Band } | { ok: false; message: string }>;
 }
 
 export type UploadSpaceFileOutcome =
@@ -51,35 +48,44 @@ export type UploadSpaceFileOutcome =
     | { ok: false; message: string };
 
 /**
- * One operation. The file is stored, then the space item is saved.
- * The item's band is a request for Team; the item subclass rewrites it
- * when the caller cannot see that band. If the item is refused, the file
- * is removed so it is not left outside the space.
+ * One operation. The caller is authorized before anything is stored. The file
+ * is stored as the system user, then the space item is saved as the caller.
+ * The item subclass is told, in process, that this file was just stored, so
+ * the caller does not need create rights on MJ: Files. If the item is refused,
+ * the storage object and the file row are both removed.
  */
 export async function uploadSpaceFile(request: UploadSpaceFileRequest): Promise<UploadSpaceFileOutcome> {
     const fileName = request.fileName.trim();
     const folder = request.folder?.trim() || null;
+    const maxBytes = request.maxBytes ?? SPACE_UPLOAD_MAX_BYTES;
     if (!fileName) {
         return { ok: false, message: 'Upload refused: the file needs a name.' };
     }
     if (folder && folder.length > 200) {
         return { ok: false, message: 'Upload refused: a folder name is at most 200 characters.' };
     }
-    if (!request.content.length) {
+    if (!request.content.byteLength) {
         return { ok: false, message: 'Upload refused: the file is empty.' };
     }
-    const files = request.provider.Entities.find((entity) => entity.Name === FILES);
+    if (request.content.byteLength > maxBytes) {
+        return { ok: false, message: `Upload refused: files are limited to ${maxBytes} bytes.` };
+    }
+    const decision = await request.gate();
+    if (!decision.ok) {
+        return { ok: false, message: decision.message };
+    }
+    const files = request.provider.EntityByName(FILES);
     if (!files) {
         return { ok: false, message: 'Upload refused: MJ: Files is not in this database.' };
     }
 
-    let stored: { fileId: string };
+    let stored: StoredSpaceFile;
     try {
         stored = await request.store.put({
             content: request.content,
             fileName,
-            mimeType: request.mimeType || 'application/octet-stream',
-            user: request.user,
+            mimeType: storedContentType(request.mimeType),
+            user: request.storageUser,
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -87,33 +93,39 @@ export async function uploadSpaceFile(request: UploadSpaceFileRequest): Promise<
         return { ok: false, message };
     }
 
-    const item = await request.provider.GetEntityObject(ITEMS, request.user);
+    const item = await request.provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(ITEMS, request.user);
     item.NewRecord();
     item.SpaceID = request.spaceId;
     item.EntityID = files.ID;
     item.RecordID = `ID|${stored.fileId}`;
-    item.Band = 'Team';
+    item.Band = decision.band;
     item.Folder = folder;
+    vouchStoredFile(stored.fileId);
     let saved = false;
     try {
         saved = await item.Save();
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`Space file item: ${message}`);
-        await removeStored(request, stored.fileId);
+        await removeStored(request, stored);
         return { ok: false, message };
+    } finally {
+        releaseStoredFile(stored.fileId);
     }
     if (!saved) {
         const message = item.LatestResult?.CompleteMessage || 'Upload refused: the item was not saved.';
-        await removeStored(request, stored.fileId);
+        await removeStored(request, stored);
         return { ok: false, message };
     }
     return { ok: true, itemId: item.ID, fileId: stored.fileId };
 }
 
-async function removeStored(request: UploadSpaceFileRequest, fileId: string): Promise<void> {
+async function removeStored(request: UploadSpaceFileRequest, stored: StoredSpaceFile): Promise<void> {
     try {
-        await request.store.remove(fileId, request.user);
+        const removed = await request.store.remove(stored, request.storageUser);
+        if (!removed) {
+            LogError(`Space file cleanup incomplete for ${stored.fileId}.`);
+        }
     } catch (error) {
         LogError(`Space file cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }

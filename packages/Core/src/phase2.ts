@@ -18,6 +18,37 @@ export function foldersIn(items: readonly LibraryItem[], spaceId: string): strin
     return [...names].sort();
 }
 
+/** Ten megabytes. A host can pass a smaller cap into the upload operation. */
+export const SPACE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
+const INLINE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+/** The type we store. The client's claim is not kept when it can carry script. */
+export function storedContentType(claimed: string | null | undefined): string {
+    const mime = (claimed ?? '').split(';')[0].trim().toLowerCase();
+    if (INLINE_TYPES.has(mime)) return mime;
+    if (mime.startsWith('text/')) return 'text/plain';
+    return 'application/octet-stream';
+}
+
+/** How the browser may show a stored type. Anything else is a download. */
+export function openMode(stored: string | null | undefined): 'inline' | 'text' | 'download' {
+    const mime = (stored ?? '').split(';')[0].trim().toLowerCase();
+    if (INLINE_TYPES.has(mime)) return 'inline';
+    if (mime === 'text/plain') return 'text';
+    return 'download';
+}
+
+/**
+ * The band a new item asks for. The space type's default is used when this
+ * role may place an item there. Otherwise the request is Team, and the item
+ * gate still decides.
+ */
+export function requestedItemBand(defaultBand: Band | null, canSeeTeamBand: boolean, canPromoteBand: boolean): Band {
+    if (defaultBand === 'Shared' && (!canSeeTeamBand || canPromoteBand)) return 'Shared';
+    return 'Team';
+}
+
 export type LibraryDecision = { ok: true } | { ok: false; message: string };
 
 function refuse(message: string): LibraryDecision {

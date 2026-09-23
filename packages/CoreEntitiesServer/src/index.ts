@@ -1,9 +1,9 @@
 export { LoadSpaceEntityServer, SpaceEntityServer } from './SpaceEntityServer.js';
-export { LoadSpaceItemEntityServer, SpaceItemEntityServer } from './SpaceItemEntityServer.js';
+export { LoadSpaceItemEntityServer, releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMemberEntityServer.js';
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
-export { loadWriteContext } from './load-graph.js';
+export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { recordItemUse, recordShare } from './library-events.js';
-export type { SpaceFileProvider, SpaceFileStore, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
+export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

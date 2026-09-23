@@ -9,6 +9,7 @@ import {
     type MemberSnapshot,
     type RoleFlags,
     type SpaceNode,
+    SPACE_UPLOAD_MAX_BYTES,
 } from '@mj-biz-apps/collaboration-core';
 
 export interface WorkspaceSpace extends SpaceNode {
@@ -56,6 +57,7 @@ export class SpaceWorkspaceComponent {
     material: 'library' | 'work' = 'library';
     uploadEnabled = true;
     uploadFolder = '';
+    uploadMessage = '';
     private chosenFile: File | null = null;
     @Output() readonly approve = new EventEmitter<{ memberUserId: string; spaceId: string }>();
     @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
@@ -116,6 +118,11 @@ export class SpaceWorkspaceComponent {
         const space = this.selected;
         const file = this.chosenFile;
         if (!space || !file) return;
+        if (file.size > SPACE_UPLOAD_MAX_BYTES) {
+            this.uploadMessage = `Upload refused: files are limited to ${Math.round(SPACE_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.`;
+            return;
+        }
+        this.uploadMessage = '';
         const bytes = new Uint8Array(await file.arrayBuffer());
         this.upload.emit({
             spaceId: space.id,
