@@ -1,6 +1,7 @@
 import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
+import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -75,6 +76,23 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (by) this.PromotedByUserID = (by.OldValue as string | null) ?? null;
         }
         return result;
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        const wasNew = !this.IsSaved;
+        const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
+        const ok = await super.Save(options);
+        const user = this.ContextCurrentUser;
+        if (!ok || !user || !this.ID) return ok;
+        const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
+        try {
+            if (wasNew) await recordItemUse(this, user, this.ID, this.SpaceID, 'upload');
+            else if (becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
+            if (becameShared) await recordShare(this, user, this.ID, this.SpaceID, 'Shared');
+        } catch (error) {
+            LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return ok;
     }
 }
 

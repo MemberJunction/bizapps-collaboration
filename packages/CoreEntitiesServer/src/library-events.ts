@@ -1,0 +1,144 @@
+import { LogError, RunView, type BaseEntity, type UserInfo } from '@memberjunction/core';
+import { NotificationEngine } from '@memberjunction/notifications';
+import { authorizeNoticeWrite, shareRecipients, type Band, type MemberSnapshot, type RoleFlags, type SpaceNode } from '@mj-biz-apps/collaboration-core';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity } from '@mj-biz-apps/collaboration-entities';
+import { loadAncestorChain, requireSystemUser } from './load-graph.js';
+import { asMetadata, parseUuid } from './uuid.js';
+
+const SPACE_RESOURCE = '33642155-617E-4825-A2CC-F071A60F3739';
+const SHARE_TYPE = 'Collaboration Share';
+const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
+const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
+
+export async function recordItemUse(
+    entity: BaseEntity,
+    user: UserInfo,
+    itemId: string,
+    spaceId: string,
+    kind: 'open' | 'upload' | 'promote',
+): Promise<boolean> {
+    const metadata = asMetadata(entity.ProviderToUse);
+    if (!metadata) return false;
+    const use = await metadata.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', user);
+    use.NewRecord();
+    use.ItemID = itemId;
+    use.SpaceID = spaceId;
+    use.UserID = user.ID;
+    use.UsedAt = new Date();
+    use.Kind = kind;
+    if (!(await use.Save())) {
+        LogError(`Item use was not recorded: ${use.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+        return false;
+    }
+    return true;
+}
+
+/** Writes one notice per recipient and asks NotificationEngine to deliver it in app. */
+export async function recordShare(
+    entity: BaseEntity,
+    user: UserInfo,
+    itemId: string,
+    spaceId: string,
+    band: Band,
+): Promise<void> {
+    const metadata = asMetadata(entity.ProviderToUse);
+    const caller = parseUuid(user.ID);
+    const space = parseUuid(spaceId);
+    const item = parseUuid(itemId);
+    if (!metadata || !caller || !space || !item) return;
+    const graph = await shareGraph(entity, space);
+    const recipients = shareRecipients({
+        spaces: graph.spaces,
+        memberships: graph.memberships,
+        spaceId: space,
+        promoterUserId: caller,
+    });
+    for (const recipient of recipients) {
+        const decision = authorizeNoticeWrite({
+            callerUserId: caller,
+            recipientUserId: recipient,
+            spaceId: space,
+            itemSpaceId: space,
+            itemBand: band,
+            spaces: graph.spaces,
+            memberships: graph.memberships,
+            isNew: true,
+        });
+        if (!decision.ok) continue;
+        const notice = await metadata.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', user);
+        notice.NewRecord();
+        notice.SpaceID = space;
+        notice.ItemID = item;
+        notice.RecipientUserID = recipient;
+        if (!(await notice.Save())) {
+            LogError(`Share notice was not recorded: ${notice.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            continue;
+        }
+        await deliverShare(user, recipient, space, metadata);
+    }
+}
+
+async function deliverShare(user: UserInfo, recipient: string, spaceId: string, provider: NonNullable<ReturnType<typeof asMetadata>>): Promise<void> {
+    try {
+        await NotificationEngine.Instance.Config(false, user, provider);
+        await NotificationEngine.Instance.SendNotification({
+            userId: recipient,
+            typeNameOrId: SHARE_TYPE,
+            title: 'An item was shared with you',
+            message: 'A member shared an item into a space you can read.',
+            resourceTypeId: SPACE_RESOURCE,
+            resourceRecordId: spaceId,
+            forceDeliveryChannels: { inApp: true, email: false, sms: false },
+        }, user);
+    } catch (error) {
+        LogError(`Share notification was not delivered: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+async function shareGraph(entity: BaseEntity, spaceId: string): Promise<{ spaces: SpaceNode[]; memberships: MemberSnapshot[] }> {
+    const system = await requireSystemUser(entity);
+    const spaces = await loadAncestorChain(entity, spaceId, system);
+    const ids = spaces.map((space) => `'${space.id}'`).join(', ');
+    if (!ids) return { spaces, memberships: [] };
+    const view = new RunView(entity.RunViewProviderToUse);
+    const members = await view.RunView<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>({
+        EntityName: MEMBERS,
+        ExtraFilter: `SpaceID IN (${ids}) AND Status = 'Active'`,
+        MaxRows: 2000,
+    }, system);
+    if (!members.Success) {
+        LogError(`Share notices were not recorded: ${members.ErrorMessage ?? 'the roster could not be read'}`);
+        return { spaces, memberships: [] };
+    }
+    const roleIds = [...new Set((members.Results ?? []).map((row) => parseUuid(row.SpaceRoleTypeID)).filter((id): id is string => !!id))];
+    const roles = roleIds.length
+        ? await view.RunView<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }>({
+            EntityName: ROLES,
+            ExtraFilter: `ID IN (${roleIds.map((id) => `'${id}'`).join(', ')})`,
+            MaxRows: 50,
+        }, system)
+        : { Results: [] as { ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }[] };
+    const flags = new Map<string, RoleFlags>();
+    for (const role of roles.Results ?? []) {
+        const id = parseUuid(role.ID);
+        if (!id) continue;
+        flags.set(id, {
+            level: role.Level,
+            maxGrantableLevel: role.MaxGrantableLevel,
+            canInvite: !!role.CanInvite,
+            canPromoteBand: !!role.CanPromoteBand,
+            canSeeTeamBand: !!role.CanSeeTeamBand,
+            isOwnerRole: !!role.IsOwnerRole,
+            canContribute: !!role.CanContribute,
+        });
+    }
+    const empty: RoleFlags = { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
+    const memberships = (members.Results ?? []).map((row) => ({
+        spaceId: parseUuid(row.SpaceID) ?? row.SpaceID,
+        userId: parseUuid(row.UserID) ?? row.UserID,
+        status: row.Status,
+        band: row.Band,
+        role: flags.get(parseUuid(row.SpaceRoleTypeID) ?? '') ?? empty,
+    }));
+    return { spaces, memberships };
+}

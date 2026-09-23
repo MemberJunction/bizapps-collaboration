@@ -256,6 +256,15 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         const fileId = item.RecordID.startsWith('ID|') ? item.RecordID.slice(3) : item.RecordID;
+        const recorded = await gql(`mutation RecordSpaceItemOpen($itemId: String!) {
+            RecordSpaceItemOpen(itemId: $itemId) { Success ErrorMessage }
+        }`, { itemId: event.itemId });
+        const opened = recorded?.RecordSpaceItemOpen as { Success?: boolean; ErrorMessage?: string } | undefined;
+        if (!opened?.Success) {
+            this.message = opened?.ErrorMessage || 'The open was not recorded.';
+            this.changes.markForCheck();
+            return;
+        }
         try {
             const result = await gql(`query GetFileContents($fileId: String!) {
                 GetFileContents(fileId: $fileId) { Success Base64 MimeType ErrorMessage }

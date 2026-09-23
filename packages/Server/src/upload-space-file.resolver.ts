@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { uploadSpaceFile, type SpaceFileProvider } from '@mj-biz-apps/collaboration-core-entities-server';
+import { recordItemUse, uploadSpaceFile, type SpaceFileProvider } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 
 @InputType()
 export class UploadSpaceFileInput {
@@ -79,6 +80,24 @@ export class UploadSpaceFileResolver extends ResolverBase {
             return { Success: false, ErrorMessage: outcome.message };
         }
         return { Success: true, ItemID: outcome.itemId, FileID: outcome.fileId };
+    }
+}
+
+@Resolver()
+export class RecordSpaceItemOpenResolver extends ResolverBase {
+    @Mutation(() => UploadSpaceFilePayload)
+    async RecordSpaceItemOpen(@Arg('itemId', () => String) itemId: string, @Ctx() context: AppContext): Promise<UploadSpaceFilePayload> {
+        const provider = GetReadWriteProvider(context.providers);
+        const user = this.GetUserFromPayload(context.userPayload);
+        const item = await provider.GetEntityObject('MJ_BizApps_Collaboration: Space Items', user) as unknown as mjBizAppsCollaborationSpaceItemEntity;
+        if (!(await item.Load(itemId))) {
+            return { Success: false, ErrorMessage: 'That item is not visible.' };
+        }
+        const recorded = await recordItemUse(item, user, item.ID, item.SpaceID, 'open');
+        if (!recorded) {
+            return { Success: false, ErrorMessage: 'The open was not recorded.' };
+        }
+        return { Success: true, ItemID: item.ID };
     }
 }
 

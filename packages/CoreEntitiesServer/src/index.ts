@@ -5,4 +5,5 @@ export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntitySer
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
 export { loadWriteContext } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
+export { recordItemUse, recordShare } from './library-events.js';
 export type { SpaceFileProvider, SpaceFileStore, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
