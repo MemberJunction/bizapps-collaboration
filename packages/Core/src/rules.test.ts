@@ -13,6 +13,7 @@ import {
     planSpaceWrite,
     promotionStamps,
     refuseInvite,
+    strandFromSavedRow,
     retentionDeadline,
     visibleSpaces,
     type MemberSnapshot,
@@ -382,6 +383,14 @@ describe('item writes', () => {
         assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: true, nextIsOwner: false, activeOwners: 1 }), true);
         assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: false, nextIsOwner: true, activeOwners: 1 }), true);
         assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: false, nextIsOwner: false, activeOwners: 2 }), false);
+        const approve = strandFromSavedRow({ savedStatus: 'Invited', savedIsOwner: false, nextStatus: 'Active', nextIsOwner: false, activeOwners: 1 });
+        assert.equal(wouldStrandLastOwner(approve), false);
+        const removeGuest = strandFromSavedRow({ savedStatus: 'Active', savedIsOwner: false, nextStatus: 'Removed', nextIsOwner: false, activeOwners: 1 });
+        assert.equal(wouldStrandLastOwner(removeGuest), false);
+        const demoteSelf = strandFromSavedRow({ savedStatus: 'Active', savedIsOwner: true, nextStatus: 'Active', nextIsOwner: false, activeOwners: 1 });
+        assert.equal(wouldStrandLastOwner(demoteSelf), true);
+        const coOwner = strandFromSavedRow({ savedStatus: 'Active', savedIsOwner: true, nextStatus: 'Removed', nextIsOwner: true, activeOwners: 2 });
+        assert.equal(wouldStrandLastOwner(coOwner), false);
     });
     it('requires reach on both spaces for a move', () => {
         const decision = authorizeItemWrite({ ...base, previousSpaceId: 'sealed', nextSpaceId: 'child', previousBand: 'Team', nextBand: 'Team' });

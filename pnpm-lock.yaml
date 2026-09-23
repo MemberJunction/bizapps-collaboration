@@ -59,6 +59,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.3
         version: 6.1.3
+      '@memberjunction/ng-base-application':
+        specifier: 6.1.3
+        version: 6.1.3(@angular/common@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))
       '@memberjunction/ng-base-forms':
         specifier: 6.1.3
         version: 6.1.3(80e675d190f605f70a6bd96715c5fe37)

@@ -12,6 +12,7 @@ export interface WriteContext {
     spaces: SpaceNode[];
     memberships: MemberSnapshot[];
     role: RoleFlags | null;
+    roles: Map<string, RoleFlags>;
     approval: 'Approve' | 'AutoApprove';
     memberCap: number | null;
     memberCount: number;
@@ -78,16 +79,16 @@ async function chain(rv: RunView, startId: string, user: UserInfo): Promise<{ no
  * The rows a write needs: the target chain, the caller's memberships, the
  * granted role, and the target's roster count. Not the whole estate.
  */
-export async function loadWriteContext(entity: BaseEntity, user: UserInfo, spaceId: string, roleId: string | null): Promise<WriteContext> {
+export async function loadWriteContext(entity: BaseEntity, user: UserInfo, spaceId: string, roleId: string | null, previousRoleId: string | null = null): Promise<WriteContext> {
     const rv = runViewFor(entity);
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0 };
+        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0 };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
-        { EntityName: ROLES, ExtraFilter: roleId && parseUuid(roleId) ? `ID = '${parseUuid(roleId)}'` : '1 = 0', MaxRows: 5 },
+        { EntityName: ROLES, ExtraFilter: roleFilter(roleId, previousRoleId), MaxRows: 5 },
     ], user);
     for (const result of results) {
         if (!result.Success) {
@@ -121,11 +122,13 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
             `ID IN (${roleIds.map((id) => `'${id}'`).join(',')})`,
             user,
         );
-        for (const role of loaded) {
-            roleLookup.set(role.ID, flags(role));
-        }
+        roleRows.push(...loaded);
     }
-    const granted = roleRows[0] ? flags(roleRows[0]) : null;
+    for (const role of roleRows) {
+        const id = parseUuid(role.ID);
+        if (id) roleLookup.set(id, flags(role));
+    }
+    const granted = parseUuid(roleId) ? roleLookup.get(parseUuid(roleId) ?? '') ?? null : null;
     return {
         spaces,
         memberships: memberRows.map((row) => ({
@@ -135,12 +138,19 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
             band: row.Band,
             role: roleLookup.get(row.SpaceRoleTypeID) ?? emptyRole(),
         })),
-        role: granted,
+        role: roleId ? (roleLookup.get(parseUuid(roleId) ?? '') ?? granted) : granted,
+        roles: roleLookup,
         approval: typeRows[0]?.InviteApproval ?? 'Approve',
         memberCap: typeRows[0]?.MemberCap ?? null,
         memberCount: counted.length,
         ownerCount: owners.length,
     };
+}
+
+function roleFilter(roleId: string | null, previousRoleId: string | null): string {
+    const ids = [parseUuid(roleId), parseUuid(previousRoleId)].filter((id): id is string => !!id);
+    if (!ids.length) return '1 = 0';
+    return `ID IN (${ids.map((id) => `'${id}'`).join(', ')})`;
 }
 
 function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }): RoleFlags {

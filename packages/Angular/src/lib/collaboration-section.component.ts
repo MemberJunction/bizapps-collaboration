@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
 import type { Band, MemberSnapshot, RoleFlags } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
@@ -31,6 +32,8 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [roles]="roles"
           [types]="types"
           [conversations]="conversations"
+          [canOpenChat]="canOpenChat"
+          (openConversation)="openConversation($event)"
           [viewerUserId]="viewerId"
           [viewerIsStaff]="viewerIsStaff"
           (invite)="onInvite($event)"
@@ -48,11 +51,21 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
     conversations: { spaceId: string; id: string }[] = [];
+    get canOpenChat(): boolean {
+        return !!this.apps.GetAppByName('Chat');
+    }
+
+    openConversation(id: string): void {
+        const chat = this.apps.GetAppByName('Chat');
+        if (!chat) return;
+        this.navigationService.OpenNavItemByName('Conversations', { conversationId: id }, chat.ID);
+    }
     viewerId: string | null = null;
     viewerIsStaff = false;
     denied = false;
     message = '';
     private readonly changes = inject(ChangeDetectorRef);
+    private readonly apps = inject(ApplicationManager);
 
     override ngOnInit(): void {
         super.ngOnInit();

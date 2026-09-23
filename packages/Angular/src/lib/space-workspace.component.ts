@@ -53,6 +53,8 @@ export class SpaceWorkspaceComponent {
     @Input() types: { id: string; name: string }[] = [];
     @Input() viewerIsStaff = false;
     @Input() conversations: { spaceId: string; id: string }[] = [];
+    @Input() canOpenChat = false;
+    @Output() readonly openConversation = new EventEmitter<string>();
     createName = '';
     createTypeId = '';
     createAtTop = false;

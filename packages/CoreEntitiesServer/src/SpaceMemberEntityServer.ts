@@ -1,6 +1,6 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { isSelfRemoval, membershipReaches, refuseInvite, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
+import { isSelfRemoval, membershipReaches, refuseInvite, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { parseUuid } from './uuid.js';
@@ -33,18 +33,21 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         const previous = previousStatus(this);
         let context;
         try {
-            context = await loadWriteContext(this, user, spaceId, roleId);
+            const oldRole = this.IsSaved ? parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceRoleTypeID')?.OldValue ?? '')) : null;
+            context = await loadWriteContext(this, user, spaceId, roleId, oldRole);
         } catch (error) {
             return fail(result, 'SpaceRoleTypeID', error instanceof Error ? error.message : 'Invite refused: the roster could not be read completely.');
         }
         if (this.IsSaved) {
-            const mine = context.memberships.find((row) => row.userId.toLowerCase() === caller.toLowerCase() && row.spaceId.toLowerCase() === spaceId.toLowerCase());
-            if (wouldStrandLastOwner({
-                currentlyActiveOwner: mine?.status === 'Active' && !!mine.role.isOwnerRole,
-                nextIsActive: this.Status === 'Active',
+            const oldRoleId = parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceRoleTypeID')?.OldValue ?? roleId));
+            const savedIsOwner = !!(oldRoleId && context.roles.get(oldRoleId)?.isOwnerRole);
+            if (wouldStrandLastOwner(strandFromSavedRow({
+                savedStatus: previous ?? this.Status,
+                savedIsOwner,
+                nextStatus: this.Status,
                 nextIsOwner: !!context.role?.isOwnerRole,
                 activeOwners: context.ownerCount,
-            })) {
+            }))) {
                 return fail(result, 'Status', 'You are the last owner of this space. Seat another owner before you leave.');
             }
             const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);

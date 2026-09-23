@@ -11,6 +11,7 @@ export {
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
+    strandFromSavedRow,
     refuseInvite,
     retentionDeadline,
     visibleSpaces,

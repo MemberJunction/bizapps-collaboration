@@ -124,6 +124,25 @@ export function leavingWouldStrand(input: { isOwner: boolean; activeOwners: numb
  * True when this save takes the last Active owner out of ownership,
  * whether by status, by role, or by both at once.
  */
+/**
+ * Build the last-owner check from the row being saved, not from the person editing.
+ * The saved status and saved owner flag are the database values. The next values are the save.
+ */
+export function strandFromSavedRow(input: {
+    savedStatus: MemberStatus;
+    savedIsOwner: boolean;
+    nextStatus: MemberStatus;
+    nextIsOwner: boolean;
+    activeOwners: number;
+}): { currentlyActiveOwner: boolean; nextIsActive: boolean; nextIsOwner: boolean; activeOwners: number } {
+    return {
+        currentlyActiveOwner: input.savedStatus === 'Active' && input.savedIsOwner,
+        nextIsActive: input.nextStatus === 'Active',
+        nextIsOwner: input.nextIsOwner,
+        activeOwners: input.activeOwners,
+    };
+}
+
 export function wouldStrandLastOwner(input: {
     currentlyActiveOwner: boolean;
     nextIsActive: boolean;

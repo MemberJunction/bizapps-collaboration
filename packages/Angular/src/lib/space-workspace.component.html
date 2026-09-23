@@ -29,8 +29,10 @@
       <header>
         <p class="eyebrow">{{ space.vocabulary }}</p>
         <h1>{{ space.name }}</h1>
-        @if (conversationFor(space.id); as conversationId) {
-          <p><a [href]="'#/conversation/' + conversationId">Open the space conversation</a></p>
+        @if (canOpenChat) {
+          @if (conversationFor(space.id); as conversationId) {
+            <p><button type="button" class="text" (click)="openConversation.emit(conversationId)">Open the space conversation</button></p>
+          }
         }
         <p class="meta">
           @if (space.closedAt) {
