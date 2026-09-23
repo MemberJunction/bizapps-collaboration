@@ -48,6 +48,12 @@ DECLARE @Seen int = (
     SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) a
     WHERE a.SpaceID IN (@Sibling, @Sealed)
 );
+IF EXISTS (
+    SELECT 1 FROM __mj.Entity
+    WHERE SchemaName = N'__mj_BizAppsCollaboration' AND AllowAllRowsAPI <> 0
+)
+    THROW 50000, 'A collaboration entity allows the All query.', 1;
+
 IF @Seen <> 0 THROW 50000, 'Participant reached a sibling or a sealed space.', 1;
 
 IF NOT EXISTS (SELECT 1 FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) WHERE SpaceID = @Ours)
@@ -133,7 +139,10 @@ DECLARE @Item uniqueidentifier = (
     SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID = @Ours AND Band = N'Shared'
 );
 INSERT INTO __mj_BizAppsCollaboration.ShareNotice (SpaceID, ItemID, RecipientUserID)
-VALUES (@Ours, @Item, @User), (@Sibling, @Item, @Other);
+VALUES
+    (@Ours, @Item, @User),
+    (@Ours, @Item, @Other),
+    (@Sibling, @Item, @User);
 INSERT INTO __mj_BizAppsCollaboration.ItemUse (ItemID, UserID, UsedAt, Kind, SpaceID)
 VALUES
     (@Item, @User, SYSUTCDATETIME(), N'open', @Ours),
@@ -144,9 +153,12 @@ FROM __mj.RowLevelSecurityFilter f
 INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
 INNER JOIN __mj.Entity e ON e.ID = p.EntityID
 WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Share Notices';
-SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND ' + @pred;
-EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @out int OUTPUT', @Ours, @n OUTPUT;
-IF @n <> 1 THROW 50000, 'Notices filter did not return the notice in reach.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND RecipientUserID = @user AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @user uniqueidentifier, @out int OUTPUT', @Ours, @User, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Notices filter did not return the notice addressed to the caller.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND RecipientUserID = @other AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @other uniqueidentifier, @out int OUTPUT', @Ours, @Other, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notices filter returned a notice addressed to someone else.', 1;
 SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @sibling AND ' + @pred;
 EXEC sys.sp_executesql @countSql, N'@sibling uniqueidentifier, @out int OUTPUT', @Sibling, @n OUTPUT;
 IF @n <> 0 THROW 50000, 'Notices filter returned the sibling notice.', 1;

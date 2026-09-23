@@ -34,7 +34,7 @@ A file, a conversation, or a task is an item. This app does not copy those table
 `migrations/V202609230010__v0.1.x__Access.sql` creates:
 
 - `fnCollaborationAccess(@UserID)`, the SQL form of the reach walk, plus whether that reach may see the team band.
-- Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on any role a person holds exempts them from row-level security. Share notices are readable inside spaces the caller reaches. Item uses are the caller's own rows, inside those spaces.
+- Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on a grant the person holds exempts them from row-level security for that operation. A share notice is readable only by the member it is addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either row carries a create filter, and the server subclass is the rest of the gate.
 - A `ResourceType` named `Space`, so a magic link of kind `resource-share` can name a space.
 
 The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can read that one space and its Shared items.
@@ -55,6 +55,10 @@ These are named in the plan and belong in other repositories. They are not imple
 - Committees moving its membership onto Space.
 - Platform work in MemberJunction itself: presence, @mention notifications, per-user read state, live message fan-out, and the search fixes.
 - A license. Distribution is free. The license text is still an open decision.
+
+## The All query
+
+CodeGen emits an `All…` query only when `AllowAllRowsAPI` is 1. Every Collaboration entity leaves that flag at 0, so this app generates no `All…` route. MemberJunction 6.1.3 still ships `All…` queries for metadata entities such as Users and Roles. Each of those appends the caller's read filter. None of them covers Conversations, Conversation Details, or Files, and BizApps Tasks generates none. The lane is as safe as the grants: a NULL filter on a Space Participant read row would open it, and `scripts/persona-check.sql` asserts there is no such row and that every Collaboration entity keeps `AllowAllRowsAPI` at 0.
 
 ## Tests
 

@@ -17,7 +17,7 @@ export {
     visibleSpaces,
     wouldStrandLastOwner,
 } from './rules.js';
-export { foldersIn, recordUse, shareRecipients } from './phase2.js';
+export { authorizeNoticeWrite, authorizeUseWrite, foldersIn, recordUse, shareRecipients } from './phase2.js';
 export type { LibraryItem, ItemUse } from './phase2.js';
 export type {
     AgentRetrieval,

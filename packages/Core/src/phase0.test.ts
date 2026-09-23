@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { agentMayQuote, authorizeItemWrite, visibleSpaces } from './rules.ts';
-import { foldersIn, recordUse, shareRecipients } from './phase2.ts';
+import { authorizeNoticeWrite, authorizeUseWrite, foldersIn, recordUse, shareRecipients } from './phase2.ts';
 import { itemsIn, phase0Items, phase0Members, phase0Spaces } from './phase0.fixture.ts';
 
 describe('phase 0 uses one set of rules', () => {
@@ -89,6 +89,26 @@ describe('phase 2 library, share, and use', () => {
             memberships: phase0Members,
         });
         assert.equal(askedShared.ok && askedShared.band, 'Shared');
+    });
+
+    it('refuses an item use in someone else\'s name, outside the space, or on a Team item the caller cannot see', () => {
+        const shared = { callerUserId: 'bea', userId: 'bea', spaceId: 'discovery', itemSpaceId: 'discovery', itemBand: 'Shared' as const, spaces: phase0Spaces, memberships: phase0Members, isNew: true };
+        assert.equal(authorizeUseWrite(shared).ok, true);
+        assert.equal(authorizeUseWrite({ ...shared, userId: 'ada' }).ok, false);
+        assert.equal(authorizeUseWrite({ ...shared, itemSpaceId: 'committee' }).ok, false);
+        assert.equal(authorizeUseWrite({ ...shared, itemBand: 'Team' }).ok, false);
+        assert.equal(authorizeUseWrite({ ...shared, callerUserId: 'ada', userId: 'ada', itemBand: 'Team' }).ok, true);
+        assert.equal(authorizeUseWrite({ ...shared, isNew: false }).ok, false);
+    });
+
+    it('refuses a notice to the promoter, to someone outside the share, or about a Team item they cannot see', () => {
+        const notice = { callerUserId: 'ada', recipientUserId: 'bea', spaceId: 'discovery', itemSpaceId: 'discovery', itemBand: 'Shared' as const, spaces: phase0Spaces, memberships: phase0Members, isNew: true };
+        assert.equal(authorizeNoticeWrite(notice).ok, true);
+        assert.equal(authorizeNoticeWrite({ ...notice, recipientUserId: 'ada' }).ok, false);
+        assert.equal(authorizeNoticeWrite({ ...notice, recipientUserId: 'lee' }).ok, false);
+        assert.equal(authorizeNoticeWrite({ ...notice, itemBand: 'Team' }).ok, false);
+        assert.equal(authorizeNoticeWrite({ ...notice, callerUserId: 'lee', recipientUserId: 'ada', spaceId: 'cohort', itemSpaceId: 'cohort' }).ok, true);
+        assert.equal(authorizeNoticeWrite({ ...notice, isNew: false }).ok, false);
     });
 
     it('records an open', () => {

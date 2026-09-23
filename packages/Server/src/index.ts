@@ -7,6 +7,8 @@
 import '@mj-biz-apps/collaboration-entities';
 import '@mj-biz-apps/collaboration-actions';
 import {
+    LoadItemUseEntityServer,
+    LoadShareNoticeEntityServer,
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
@@ -24,6 +26,8 @@ export const RESOLVER_PATHS = [
 ];
 
 export function LoadBizAppsCollaborationServer(): void {
+    LoadItemUseEntityServer();
+    LoadShareNoticeEntityServer();
     LoadSpaceEntityServer();
     LoadSpaceItemEntityServer();
     LoadSpaceMemberEntityServer();
