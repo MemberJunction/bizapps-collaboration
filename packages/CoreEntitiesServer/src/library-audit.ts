@@ -18,8 +18,11 @@ export async function libraryDecision(
         ExtraFilter: `ID = '${itemId}'`,
         MaxRows: 1,
     }, system);
+    if (!found.Success) {
+        return found.ErrorMessage || 'The item could not be read.';
+    }
     const item = found.Results?.[0];
-    if (!found.Success || !item) {
+    if (!item) {
         return 'The item is not in this space.';
     }
     const context = await loadWriteContext(entity, user, spaceId, null);

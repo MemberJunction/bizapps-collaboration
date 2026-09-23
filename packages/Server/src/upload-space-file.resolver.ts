@@ -1,8 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
 import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
-import { deleteObject, FileStorageEngine, type UserContextOptions } from '@memberjunction/storage';
-import { authorizeItemWrite, membershipReaches, requestedItemBand, SPACE_UPLOAD_MAX_BYTES, type Band } from '@mj-biz-apps/collaboration-core';
+import { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
+import { authorizeItemWrite, membershipReaches, openMode, requestedItemBand, SPACE_UPLOAD_MAX_BYTES, storedContentType, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, requireSystemUser, uploadSpaceFile, loadWriteContext } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
@@ -38,6 +38,27 @@ export class UploadSpaceFilePayload {
 
     @Field({ nullable: true })
     FileID?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+
+@ObjectType()
+export class OpenSpaceFilePayload {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    Base64?: string;
+
+    @Field({ nullable: true })
+    MimeType?: string;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -99,20 +120,45 @@ export class UploadSpaceFileResolver extends ResolverBase {
 }
 
 @Resolver()
-export class RecordSpaceItemOpenResolver extends ResolverBase {
-    @Mutation(() => UploadSpaceFilePayload)
-    async RecordSpaceItemOpen(@Arg('itemId', () => String) itemId: string, @Ctx() context: AppContext): Promise<UploadSpaceFilePayload> {
+export class OpenSpaceFileResolver extends ResolverBase {
+    @Mutation(() => OpenSpaceFilePayload)
+    async OpenSpaceFile(@Arg('itemId', () => String) itemId: string, @Ctx() context: AppContext): Promise<OpenSpaceFilePayload> {
         const provider = GetReadWriteProvider(context.providers);
         const user = this.GetUserFromPayload(context.userPayload);
         const item = await provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(ITEMS, user);
         if (!(await item.Load(itemId))) {
             return { Success: false, ErrorMessage: 'That item is not visible.' };
         }
+        const info = provider.EntityByID(item.EntityID);
+        if (info?.Name !== 'MJ: Files') {
+            return { Success: false, ErrorMessage: 'This item is not a file.' };
+        }
         const recorded = await recordItemUse(item, user, item.ID, item.SpaceID, 'open');
         if (!recorded) {
             return { Success: false, ErrorMessage: 'The open was not recorded.' };
         }
-        return { Success: true, ItemID: item.ID };
+        const fileId = item.RecordID.startsWith('ID|') ? item.RecordID.slice(3) : item.RecordID;
+        const file = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+        if (!(await file.Load(fileId))) {
+            return { Success: false, ErrorMessage: 'That file is not visible.' };
+        }
+        try {
+            const system = await requireSystemUser(item);
+            await FileStorageEngine.Instance.Config(false, system, provider);
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+            const account = accounts[0];
+            if (!account) {
+                return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
+            }
+            const driver = await FileStorageEngine.Instance.GetDriver(account.ID, system);
+            const bytes = await driver.GetObject({ fullPath: file.ProviderKey || file.Name });
+            const mime = storedContentType(file.ContentType);
+            return { Success: true, Base64: Buffer.from(bytes).toString('base64'), MimeType: mime, Mode: openMode(mime), Name: file.Name };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`OpenSpaceFile failed: ${message}`);
+            return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
+        }
     }
 }
 
@@ -160,21 +206,23 @@ async function deleteStoredFile(
 ): Promise<boolean> {
     let objectGone = false;
     try {
-        const file = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
-        if (await file.Load(stored.fileId)) {
-            const storageProvider = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
-            if (file.ProviderID && await storageProvider.Load(file.ProviderID)) {
-                const context: UserContextOptions = { userID: user.ID, contextUser: user };
-                objectGone = await deleteObject(storageProvider, file.ProviderKey || stored.storagePath, context);
-            }
-            const rowGone = await file.Delete();
-            if (!objectGone || !rowGone) {
-                LogError(`Space file cleanup incomplete for ${stored.fileId}: object=${objectGone} row=${rowGone}.`);
-            }
-            return objectGone && rowGone;
-        }
+        await FileStorageEngine.Instance.Config(false, user, provider);
+        const driver = await FileStorageEngine.Instance.GetDriver(stored.accountId, user);
+        objectGone = await driver.DeleteObject(stored.storagePath);
     } catch (error) {
         LogError(`Space file cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return false;
+    let rowGone = false;
+    try {
+        const file = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+        if (await file.Load(stored.fileId)) {
+            rowGone = await file.Delete();
+        }
+    } catch (error) {
+        LogError(`Space file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!objectGone || !rowGone) {
+        LogError(`Space file cleanup incomplete for ${stored.fileId}: object=${objectGone} row=${rowGone}.`);
+    }
+    return objectGone && rowGone;
 }

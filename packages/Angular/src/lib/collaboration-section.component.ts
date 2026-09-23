@@ -255,21 +255,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             this.changes.markForCheck();
             return;
         }
-        const fileId = item.RecordID.startsWith('ID|') ? item.RecordID.slice(3) : item.RecordID;
-        const recorded = await gql(`mutation RecordSpaceItemOpen($itemId: String!) {
-            RecordSpaceItemOpen(itemId: $itemId) { Success ErrorMessage }
-        }`, { itemId: event.itemId });
-        const opened = recorded?.RecordSpaceItemOpen as { Success?: boolean; ErrorMessage?: string } | undefined;
-        if (!opened?.Success) {
-            this.message = opened?.ErrorMessage || 'The open was not recorded.';
-            this.changes.markForCheck();
-            return;
-        }
         try {
-            const result = await gql(`query GetFileContents($fileId: String!) {
-                GetFileContents(fileId: $fileId) { Success Base64 MimeType ErrorMessage }
-            }`, { fileId });
-            const payload = result?.GetFileContents as { Success?: boolean; Base64?: string; MimeType?: string; ErrorMessage?: string } | undefined;
+            const result = await gql(`mutation OpenSpaceFile($itemId: String!) {
+                OpenSpaceFile(itemId: $itemId) { Success Base64 MimeType Name ErrorMessage }
+            }`, { itemId: event.itemId });
+            const payload = result?.OpenSpaceFile as { Success?: boolean; Base64?: string; MimeType?: string; Name?: string; ErrorMessage?: string } | undefined;
             if (!payload?.Success || !payload.Base64) {
                 this.message = payload?.ErrorMessage || 'The file could not be opened.';
                 this.changes.markForCheck();
@@ -278,8 +268,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             const raw = atob(payload.Base64);
             const bytes = new Uint8Array(raw.length);
             for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
-            const label = this.items.find((row) => row.id === event.itemId)?.label ?? 'download';
-            presentFile(bytes, payload.MimeType, label);
+            presentFile(bytes, payload.MimeType, payload.Name || 'download');
             this.message = '';
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The file could not be opened.';

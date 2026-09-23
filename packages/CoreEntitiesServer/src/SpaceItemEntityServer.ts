@@ -8,23 +8,15 @@ import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
 
-/** File ids this process just stored. Not a field, so a client cannot set it. */
-const vouchedFiles = new Set<string>();
+/** The item object this upload created. Another request's item cannot match it. */
+const vouchedItems = new WeakSet<object>();
 
-export function vouchStoredFile(fileId: string): void {
-    const id = parseUuid(fileId);
-    if (id) vouchedFiles.add(id);
+export function vouchStoredFile(item: object): void {
+    vouchedItems.add(item);
 }
 
-export function releaseStoredFile(fileId: string): void {
-    const id = parseUuid(fileId);
-    if (id) vouchedFiles.delete(id);
-}
-
-function isVouched(recordId: string): boolean {
-    const raw = recordId.startsWith('ID|') ? recordId.slice(3) : recordId;
-    const id = parseUuid(raw);
-    return !!id && vouchedFiles.has(id);
+export function releaseStoredFile(item: object): void {
+    vouchedItems.delete(item);
 }
 
 @RegisterClass(BaseEntity, ENTITY)
@@ -105,8 +97,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!ok || !user || !this.ID) return ok;
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
         try {
-            if (wasNew) await recordItemUse(this, user, this.ID, this.SpaceID, 'upload');
-            else if (becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
+            if (!wasNew && becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
             if (becameShared) await recordShare(this, user, this.ID, this.SpaceID, 'Shared');
         } catch (error) {
             LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
@@ -147,7 +138,7 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
     if (!info) {
         return false;
     }
-    if (isVouched(item.RecordID)) {
+    if (vouchedItems.has(item)) {
         return true;
     }
     let key: CompositeKey;

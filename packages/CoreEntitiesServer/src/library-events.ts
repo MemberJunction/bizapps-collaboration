@@ -17,6 +17,7 @@ export async function recordItemUse(
     spaceId: string,
     kind: 'open' | 'upload' | 'promote',
 ): Promise<boolean> {
+    if (!entity.ProviderToUse) return false;
     const metadata = asMetadata(entity.ProviderToUse);
     if (!metadata) return false;
     const use = await metadata.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', user);
@@ -46,25 +47,25 @@ export async function recordShare(
     const space = parseUuid(spaceId);
     const item = parseUuid(itemId);
     if (!metadata || !caller || !space || !item) return;
-    const graph = await shareGraph(entity, space);
+    const graph = await loadShareRoster(entity, space);
     const recipients = shareRecipients({
         spaces: graph.spaces,
         memberships: graph.memberships,
         spaceId: space,
         promoterUserId: caller,
-    });
+    }).filter((recipient) => authorizeNoticeWrite({
+        callerUserId: caller,
+        recipientUserId: recipient,
+        spaceId: space,
+        itemSpaceId: space,
+        itemBand: band,
+        spaces: graph.spaces,
+        memberships: graph.memberships,
+        isNew: true,
+    }).ok);
+    const label = await shareLabel(entity, space, item);
+    const system = await requireSystemUser(entity);
     for (const recipient of recipients) {
-        const decision = authorizeNoticeWrite({
-            callerUserId: caller,
-            recipientUserId: recipient,
-            spaceId: space,
-            itemSpaceId: space,
-            itemBand: band,
-            spaces: graph.spaces,
-            memberships: graph.memberships,
-            isNew: true,
-        });
-        if (!decision.ok) continue;
         const notice = await metadata.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', user);
         notice.NewRecord();
         notice.SpaceID = space;
@@ -74,28 +75,63 @@ export async function recordShare(
             LogError(`Share notice was not recorded: ${notice.LatestResult?.CompleteMessage ?? 'save returned false'}`);
             continue;
         }
-        await deliverShare(user, recipient, space, metadata);
+        await deliverShare(system, recipient, space, label, metadata);
     }
 }
 
-async function deliverShare(user: UserInfo, recipient: string, spaceId: string, provider: NonNullable<ReturnType<typeof asMetadata>>): Promise<void> {
+async function deliverShare(
+    system: UserInfo,
+    recipient: string,
+    spaceId: string,
+    label: { spaceName: string; itemName: string },
+    provider: NonNullable<ReturnType<typeof asMetadata>>,
+): Promise<void> {
     try {
-        await NotificationEngine.Instance.Config(false, user, provider);
+        await NotificationEngine.Instance.Config(false, system, provider);
         await NotificationEngine.Instance.SendNotification({
             userId: recipient,
             typeNameOrId: SHARE_TYPE,
-            title: 'An item was shared with you',
-            message: 'A member shared an item into a space you can read.',
+            title: `${label.itemName} was shared`,
+            message: `${label.itemName} was shared in ${label.spaceName}.`,
             resourceTypeId: SPACE_RESOURCE,
             resourceRecordId: spaceId,
             forceDeliveryChannels: { inApp: true, email: false, sms: false },
-        }, user);
+        }, system);
     } catch (error) {
         LogError(`Share notification was not delivered: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
-async function shareGraph(entity: BaseEntity, spaceId: string): Promise<{ spaces: SpaceNode[]; memberships: MemberSnapshot[] }> {
+async function shareLabel(entity: BaseEntity, spaceId: string, itemId: string): Promise<{ spaceName: string; itemName: string }> {
+    const system = await requireSystemUser(entity);
+    const view = new RunView(entity.RunViewProviderToUse);
+    const spaces = await view.RunView<{ Name: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+        ExtraFilter: `ID = '${spaceId}'`,
+        MaxRows: 1,
+    }, system);
+    const items = await view.RunView<{ Entity: string; RecordID: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Items',
+        ExtraFilter: `ID = '${itemId}'`,
+        MaxRows: 1,
+    }, system);
+    const item = items.Results?.[0];
+    let itemName = 'An item';
+    const recordId = item?.RecordID ?? '';
+    const fileId = recordId.startsWith('ID|') ? parseUuid(recordId.slice(3)) : null;
+    if (item?.Entity === 'MJ: Files' && fileId) {
+        const files = await view.RunView<{ Name: string }>({
+            EntityName: 'MJ: Files',
+            ExtraFilter: `ID = '${fileId}'`,
+            MaxRows: 1,
+        }, system);
+        if (files.Results?.[0]?.Name) itemName = files.Results[0].Name;
+    }
+    return { spaceName: spaces.Results?.[0]?.Name || 'a space', itemName };
+}
+
+/** The space chain and every active member on it. Not the caller's own rows. */
+export async function loadShareRoster(entity: BaseEntity, spaceId: string): Promise<{ spaces: SpaceNode[]; memberships: MemberSnapshot[] }> {
     const system = await requireSystemUser(entity);
     const spaces = await loadAncestorChain(entity, spaceId, system);
     const ids = spaces.map((space) => `'${space.id}'`).join(', ');

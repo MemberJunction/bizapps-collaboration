@@ -1,6 +1,7 @@
 import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { SPACE_UPLOAD_MAX_BYTES, storedContentType, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { recordItemUse } from './library-events.js';
 import { releaseStoredFile, vouchStoredFile } from './SpaceItemEntityServer.js';
 
 const FILES = 'MJ: Files';
@@ -100,7 +101,7 @@ export async function uploadSpaceFile(request: UploadSpaceFileRequest): Promise<
     item.RecordID = `ID|${stored.fileId}`;
     item.Band = decision.band;
     item.Folder = folder;
-    vouchStoredFile(stored.fileId);
+    vouchStoredFile(item);
     let saved = false;
     try {
         saved = await item.Save();
@@ -110,12 +111,18 @@ export async function uploadSpaceFile(request: UploadSpaceFileRequest): Promise<
         await removeStored(request, stored);
         return { ok: false, message };
     } finally {
-        releaseStoredFile(stored.fileId);
+        releaseStoredFile(item);
     }
     if (!saved) {
         const message = item.LatestResult?.CompleteMessage || 'Upload refused: the item was not saved.';
         await removeStored(request, stored);
         return { ok: false, message };
+    }
+    if (item.ProviderToUse) {
+        const recorded = await recordItemUse(item, request.user, item.ID, request.spaceId, 'upload');
+        if (!recorded) {
+            LogError('The upload was saved, but the item use was not recorded.');
+        }
     }
     return { ok: true, itemId: item.ID, fileId: stored.fileId };
 }
