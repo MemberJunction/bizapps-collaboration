@@ -49,7 +49,7 @@ Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permi
 
 These are named in the plan and belong in other repositories. They are not implemented here, and the live checkouts of those repositories are not modified by this work.
 
-- Hierarchy view columns. `IsHierarchy` is left unset. Hosts do not run CodeGen for an app schema, so those columns would never arrive. The walk is the function.
+- Hierarchy path columns and traversal functions. `ParentID` carries the `IsHierarchy` flag, and nothing here emits `ParentIDPath` or the four tree functions, because a host does not run CodeGen. Access uses `fnCollaborationAccess`, which is T-SQL.
 - Minting a magic-link token. That stays in MemberJunction's magic-link API. This app registers the `Space` resource type and accepts `{{ScopeResourceID}}`. A host mints `Kind: resource-share` with that space id and the Space Participant role.
 - The filter text is T-SQL (`TRY_CAST`, bracketed names). A PostgreSQL host needs a dialect of the same function before the filters run.
 - Committees moving its membership onto Space.

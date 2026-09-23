@@ -62,7 +62,7 @@ Schema `__mj_BizAppsCollaboration`. Entity names use the prefix `MJ_BizApps_Coll
 | Entity | What it is |
 |---|---|
 | **`SpaceType`** | Metadata, not code. Vocabulary, which panels are live, lifecycle, retention default, agent policy, band defaults, and the two axes that make an open community expressible later: `Discoverability` (`Hidden \| Listed \| Open`) and `JoinMode` (`InviteOnly \| RequestToJoin \| SelfServe`). *"Just messaging"* is a type with one panel on. |
-| **`Space`** | The container. Single-column PK, a Name field, `OwnerID` → `MJ: Users`, and a self-referencing `ParentID` with `IsHierarchy: true`. CodeGen then emits `RootParentID`, `ParentIDPath`, `ParentIDDepth`, `ParentIDIsLeaf`, `ParentIDChildCount`, plus the four traversal functions, on SQL Server and PostgreSQL. Lifecycle (`StartedAt` / `ClosedAt` / retention) lives on the space so closure never sits on the root. `InheritsMembership` lets a sub-space seal itself. `AgentRetrieval` (`Included \| ExcludedFromParentScope \| ExcludedEntirely`) lets a space a human may read stay invisible to every agent. |
+| **`Space`** | The container. Single-column PK, a Name field, `OwnerID` → `MJ: Users`, and a self-referencing `ParentID`. The field carries the `IsHierarchy` flag. No path columns or traversal functions ship with it, because a host does not run CodeGen. Access walks the tree with `fnCollaborationAccess`, which is T-SQL. Lifecycle (`StartedAt` / `ClosedAt` / retention) lives on the space so closure never sits on the root. `InheritsMembership` lets a sub-space seal itself. `AgentRetrieval` (`Included \| ExcludedFromParentScope \| ExcludedEntirely`) lets a space a human may read stay invisible to every agent. |
 | **`SpaceMember`** | Internal users and external participants in **one** roster. `SpaceRoleTypeID`, a visibility band, and a `Status`. This is the row that lets a director who is not a staff user sit on a committee. |
 | **`SpaceRoleType`** | Behaviour flags the engine reads — `CanInvite`, `MaxGrantableLevel`, `CanPromoteBand`, `CanSeeTeamBand`, `IsOwnerRole` — never a role *name* the engine compares. Same idiom as `DealRole.IsOwnerRole` in BizApps Sales. This is what makes delegated invitation safe. |
 | **`SpaceItem`** | `EntityID + RecordID` plus the band. A file, artifact, conversation, task, committee, deal, or meeting. The same polymorphic idiom `TaskLink` and `File Entity Record Links` already use. |
@@ -184,7 +184,7 @@ The set matches the other BizApps Open Apps. None of these exist in this commit.
 | **Core Entities Server** | `@mj-biz-apps/collaboration-core-entities-server` | Server-only subclasses — `SpaceEntityServer` and `SpaceMemberEntityServer` hold the write gates |
 | **Angular** | `@mj-biz-apps/collaboration-ng` | Bootstrap (`LoadBizAppsCollaborationClient`) and Explorer UI |
 
-SQL Server is the source of truth for migrations. PostgreSQL comes from `@memberjunction/sql-converter`, the same toolchain Orders uses. `IsHierarchy` codegen emits the tree functions for both dialects, which is why the hierarchy is a flag rather than hand-written SQL.
+SQL Server is the source of truth for migrations. PostgreSQL comes from `@memberjunction/sql-converter`, the same toolchain Orders uses. The hierarchy walk is hand-written T-SQL, `fnCollaborationAccess`. A PostgreSQL host needs a port of that function before the filters run. The `IsHierarchy` flag is set on `ParentID`, and it does not by itself emit path columns.
 
 ---
 
