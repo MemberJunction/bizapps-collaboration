@@ -16,6 +16,7 @@
   <a href="#security-model">Security</a> &middot;
   <a href="#the-agent">The agent</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
+  <a href="docs/HOW_THE_SYSTEM_WORKS.md">How it works</a> &middot;
   <a href="plans/plan.md">Plan</a>
 </p>
 
@@ -283,6 +284,7 @@ Generated entity classes come from CodeGen. Hand-written `EntityField` DML does 
 
 | Document | Description |
 |---|---|
+| [How it works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the server, the workspace, and the database share |
 | [Collaboration Spaces plan](plans/plan.md) | Draft v0.2. Architecture, security model, roadmap, risks, open decisions |
 | [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks) | The work substrate a Space projects |
 | [BizApps Committees](https://github.com/MemberJunction/bizapps-committees) | Governance depth that later sits on a Space |

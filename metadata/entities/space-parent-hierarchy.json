@@ -1,0 +1,29 @@
+[
+  {
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Spaces"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces&Name=ParentID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"
+    },
+    "_comments": [
+      "ParentID is the space tree. IsHierarchy tells CodeGen to emit the path columns and the four traversal functions."
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "name": "@mj-biz-apps/collaboration-server",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "BizApps Collaboration server bootstrap.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": { "access": "public" },
+  "files": ["/dist"],
+  "scripts": { "build": "tsc" },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@mj-biz-apps/collaboration-actions": "0.1.0",
+    "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
+    "@mj-biz-apps/collaboration-entities": "0.1.0"
+  },
+  "peerDependencies": {
+    "@memberjunction/core": "^6.1.0-edge.5",
+    "@memberjunction/global": "^6.1.0-edge.5"
+  },
+  "devDependencies": { "typescript": "^5.9.3" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/bizapps-collaboration"
+  }
+}

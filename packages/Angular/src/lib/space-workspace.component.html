@@ -1,0 +1,108 @@
+<div class="workspace">
+  <nav class="tree" aria-label="Spaces">
+    <p class="eyebrow">Spaces</p>
+    @if (spaces.length === 0) {
+      <p class="empty">No spaces yet. A root space is one relationship. The work inside it is a sub-space.</p>
+    }
+    <ul>
+      @for (space of roots; track space.id) {
+        <ng-container *ngTemplateOutlet="node; context: { $implicit: space }" />
+      }
+    </ul>
+  </nav>
+
+  <section class="main">
+    @if (selected; as space) {
+      <header>
+        <p class="eyebrow">{{ space.vocabulary }}</p>
+        <h1>{{ space.name }}</h1>
+        <p class="meta">
+          @if (space.closedAt) {
+            <span class="pill">Closed</span>
+          } @else {
+            <span class="pill open">Open</span>
+          }
+          @if (!space.inheritsMembership) {
+            <span class="pill">Sealed roster</span>
+          }
+          <span class="pill">Agent {{ space.agentRetrieval }}</span>
+        </p>
+      </header>
+
+      <div class="columns">
+        <section aria-labelledby="roster-heading">
+          <h2 id="roster-heading">People</h2>
+          <ul class="roster">
+            @for (member of membersHere(space.id); track member.userId) {
+              <li>
+                <span class="who">{{ member.userId }}</span>
+                <span class="pill">{{ member.band }}</span>
+                <span class="pill">{{ member.status }}</span>
+                @if (member.status === 'Invited' && member.userId === viewerUserId) {
+                  <button type="button" class="text" (click)="accept.emit({ memberUserId: member.userId, spaceId: space.id })">Accept</button>
+                }
+              </li>
+            } @empty {
+              <li class="empty">Nobody is on this roster yet. The owner seats themselves first, then invites.</li>
+            }
+          </ul>
+
+          <form class="invite" (submit)="$event.preventDefault(); sendInvite()">
+            <h3>Invite</h3>
+            <label>
+              User
+              <input name="user" [(ngModel)]="inviteUserId" autocomplete="off" placeholder="Their account id" />
+            </label>
+            <label>
+              Role
+              <select name="role" [(ngModel)]="inviteRoleId">
+                <option value="">Choose a role</option>
+                @for (role of roles; track role.id) {
+                  <option [value]="role.id">{{ role.name }}</option>
+                }
+              </select>
+            </label>
+            @if (preview(); as decision) {
+              <p class="verdict" [class.no]="!decision.ok">{{ decision.ok ? 'This invite will be ' + decision.status + '.' : decision.message }}</p>
+            }
+            <button type="submit" [disabled]="!preview()?.ok">Invite</button>
+          </form>
+        </section>
+
+        <section aria-labelledby="items-heading">
+          <h2 id="items-heading">Material</h2>
+          <ul class="items">
+            @for (item of itemsHere(space.id); track item.id) {
+              <li>
+                <span>{{ item.label }}</span>
+                <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
+                @if (item.band === 'Team') {
+                  <button type="button" class="text" (click)="promote.emit({ itemId: item.id })">Share</button>
+                }
+              </li>
+            } @empty {
+              <li class="empty">Files, conversations, and tasks show up here as items. Each one has one space.</li>
+            }
+          </ul>
+        </section>
+      </div>
+    } @else {
+      <p class="empty">Select a space.</p>
+    }
+  </section>
+</div>
+
+<ng-template #node let-space>
+  <li>
+    <button type="button" class="node" [class.on]="selected?.id === space.id" [style.padding-left.rem]="0.75 + depth(space) * 0.9" (click)="select(space.id)">
+      {{ space.name }}
+    </button>
+    @if (children(space.id).length) {
+      <ul>
+        @for (child of children(space.id); track child.id) {
+          <ng-container *ngTemplateOutlet="node; context: { $implicit: child }" />
+        }
+      </ul>
+    }
+  </li>
+</ng-template>

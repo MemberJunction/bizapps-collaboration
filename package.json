@@ -1,0 +1,10 @@
+{
+  "name": "bizapps-collaboration",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BizApps Collaboration — spaces for client, committee, and cohort work.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts"
+  }
+}
