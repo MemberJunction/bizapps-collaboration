@@ -12,12 +12,7 @@
   },
   "repository": "https://github.com/MemberJunction/bizapps-collaboration",
   "mjVersionRange": ">=6.1.0-edge.5 <7.0.0",
-  "dependencies": {
-    "mj-bizapps-tasks": {
-      "version": ">=1.4.0 <2.0.0",
-      "repository": "https://github.com/MemberJunction/bizapps-tasks"
-    }
-  },
+  "dependencies": {},
   "schema": {
     "name": "__mj_BizAppsCollaboration",
     "createIfNotExists": true

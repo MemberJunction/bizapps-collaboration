@@ -20,6 +20,8 @@ export interface RoleFlags {
     canPromoteBand: boolean;
     canSeeTeamBand: boolean;
     isOwnerRole: boolean;
+    /** May place and move items. Guest is false. Client members are true without the team band. */
+    canContribute: boolean;
 }
 
 export interface MemberSnapshot {
@@ -137,35 +139,62 @@ export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string
     return false;
 }
 
+export type SpaceWriteKind = 'create-root' | 'create-child' | 'edit' | 'move';
+
 /**
- * Structural writes: creating a child, or changing owner, retrieval, inheritance, or parent.
- * The caller must hold the owner role on the space being changed, and on the
- * destination parent when the parent changes.
+ * Which space the write is authorized against. Creating a child is authorized
+ * on the parent, because the new row has no roster yet. A move checks the
+ * space as it is now and the destination parent separately.
+ */
+export function planSpaceWrite(input: {
+    isNew: boolean;
+    previousParentId: string | null;
+    nextParentId: string | null;
+}): SpaceWriteKind {
+    if (input.isNew) {
+        return input.nextParentId ? 'create-child' : 'create-root';
+    }
+    if ((input.previousParentId ?? null) !== (input.nextParentId ?? null)) {
+        return 'move';
+    }
+    return 'edit';
+}
+
+/**
+ * Create a child: owner of the parent. Create a root: staff, and the caller is
+ * the owner they are about to be. Edit or move: owner of the space as it stands.
+ * A move also requires owner of the destination parent. Participants do not create roots.
  */
 export function authorizeSpaceWrite(input: {
+    kind: SpaceWriteKind;
     callerUserId: string | null;
-    spaceId: string;
-    nextParentId: string | null;
-    previousParentId: string | null;
-    structuralChange: boolean;
-    spaces: readonly SpaceNode[];
-    memberships: readonly MemberSnapshot[];
+    callerIsStaff: boolean;
+    nextOwnerId: string;
+    /** Reaching membership on the space being edited, before the move. Null on create. */
+    here: MemberSnapshot | null;
+    /** Reaching membership on the destination parent. */
+    onParent: MemberSnapshot | null;
 }): InviteRefusal | { ok: true } {
     if (!input.callerUserId) {
         return { ok: false, code: 'not-signed-in', message: 'Space change refused: there is no signed-in user.' };
     }
-    if (!input.structuralChange) {
+    if (input.kind === 'create-root') {
+        if (!input.callerIsStaff || input.nextOwnerId !== input.callerUserId) {
+            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may create a root, and they must own it.' };
+        }
         return { ok: true };
     }
-    const here = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.spaceId);
-    if (!here?.role.isOwnerRole) {
-        return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change its structure.' };
-    }
-    if (input.nextParentId && input.nextParentId !== input.previousParentId) {
-        const onParent = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.nextParentId);
-        if (!onParent?.role.isOwnerRole) {
-            return { ok: false, code: 'not-a-member', message: 'Space change refused: only an owner of the destination parent may move a space there.' };
+    if (input.kind === 'create-child') {
+        if (!input.onParent?.role.isOwnerRole) {
+            return { ok: false, code: 'not-a-member', message: 'Space change refused: only an owner of the parent may create a space under it.' };
         }
+        return { ok: true };
+    }
+    if (!input.here?.role.isOwnerRole) {
+        return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change it.' };
+    }
+    if (input.kind === 'move' && !input.onParent?.role.isOwnerRole) {
+        return { ok: false, code: 'not-a-member', message: 'Space change refused: only an owner of the destination parent may move a space there.' };
     }
     return { ok: true };
 }
@@ -191,6 +220,9 @@ export function authorizeItemWrite(input: {
     const next = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.nextSpaceId);
     if (!next) {
         return { ok: false, code: 'not-a-member', message: 'Item change refused: the signer does not reach this space.' };
+    }
+    if (!next.role.canContribute) {
+        return { ok: false, code: 'cannot-invite', message: 'Item change refused: this role cannot add or move material.' };
     }
     if (input.previousSpaceId && input.previousSpaceId !== input.nextSpaceId) {
         const previous = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.previousSpaceId);
@@ -222,6 +254,7 @@ export function flagExceedsGrantor(granted: RoleFlags, grantor: RoleFlags): stri
     if (granted.canPromoteBand && !grantor.canPromoteBand) return 'promote to the shared band';
     if (granted.canInvite && !grantor.canInvite) return 'invite';
     if (granted.isOwnerRole && !grantor.isOwnerRole) return 'own the space';
+    if (granted.canContribute && !grantor.canContribute) return 'add material';
     return null;
 }
 

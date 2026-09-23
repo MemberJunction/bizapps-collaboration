@@ -1,6 +1,16 @@
 <div class="workspace">
   <nav class="tree" aria-label="Spaces">
     <p class="eyebrow">Spaces</p>
+    <form class="invite" (submit)="$event.preventDefault(); sendCreate()">
+      <label>New space<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
+      <label>Type
+        <select name="new-type" [(ngModel)]="createTypeId">
+          <option value="">Choose a type</option>
+          @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
+        </select>
+      </label>
+      <button type="submit">Create</button>
+    </form>
     @if (spaces.length === 0) {
       <p class="empty">No spaces yet. A root space is one relationship. The work inside it is a sub-space.</p>
     }

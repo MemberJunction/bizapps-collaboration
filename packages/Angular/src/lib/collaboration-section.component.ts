@@ -1,9 +1,10 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import type { ResourceData } from '@memberjunction/core-entities';
 import type { Band, MemberSnapshot, RoleFlags } from '@mj-biz-apps/collaboration-core';
+import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
 
@@ -22,15 +23,18 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
       @if (denied) {
         <mj-collaboration-no-access />
       } @else {
+        @if (message) { <p class="verdict">{{ message }}</p> }
         <mj-collaboration-workspace
           [spaces]="spaces"
           [members]="members"
           [items]="items"
           [roles]="roles"
+          [types]="types"
           [viewerUserId]="viewerId"
           (invite)="onInvite($event)"
           (promote)="onPromote($event)"
-          (accept)="onAccept($event)" />
+          (accept)="onAccept($event)"
+          (create)="onCreate($event)" />
       }
     `,
 })
@@ -40,8 +44,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     members: MemberSnapshot[] = [];
     items: { id: string; spaceId: string; label: string; band: Band }[] = [];
     roles: WorkspaceRole[] = [];
+    types: { id: string; name: string }[] = [];
     viewerId: string | null = null;
     denied = false;
+    message = '';
+    private readonly changes = inject(ChangeDetectorRef);
 
     override ngOnInit(): void {
         super.ngOnInit();
@@ -94,7 +101,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             band: row.Band,
             role: emptyRole(),
         }));
-        this.roles = (roleRows.Results ?? []).map((row: RoleFlags & { ID: string; Name: string }) => ({
+        this.roles = (roleRows.Results ?? []).map((row: { ID: string; Name: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }) => ({
             id: row.ID,
             name: row.Name,
             level: row.Level,
@@ -103,6 +110,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             canPromoteBand: !!row.CanPromoteBand,
             canSeeTeamBand: !!row.CanSeeTeamBand,
             isOwnerRole: !!row.IsOwnerRole,
+            canContribute: !!row.CanContribute,
         }));
         const roleById = new Map(this.roles.map((role) => [role.id, role]));
         this.members = (memberRows.Results ?? []).map((row: { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: Band; User: string; SpaceRoleTypeID: string }) => ({
@@ -113,45 +121,76 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             band: row.Band,
             role: roleById.get(row.SpaceRoleTypeID) ?? emptyRole(),
         }));
-        this.items = (itemRows.Results ?? []).map((row: { ID: string; SpaceID: string; Band: Band; RecordID: string }) => ({
+        this.items = (itemRows.Results ?? []).map((row: { ID: string; SpaceID: string; Band: Band; RecordID: string; Entity?: string }) => ({
             id: row.ID,
             spaceId: row.SpaceID,
-            label: row.RecordID,
+            label: row.Entity ? `${row.Entity}` : row.RecordID,
             band: row.Band,
         }));
-        this.denied = this.spaces.length === 0 && this.members.length === 0;
+        this.types = (typeRows.Results ?? []).map((row: { ID: string; Name: string }) => ({ id: row.ID, name: row.Name }));
+        this.denied = false;
+        this.changes.markForCheck();
     }
 
     async onInvite(event: { spaceId: string; userId: string; roleId: string }): Promise<void> {
-        await this.saveMember(event.spaceId, event.userId, event.roleId, null);
+        await this.saveMember(event.spaceId, event.userId, event.roleId);
     }
 
     async onAccept(event: { memberUserId: string; spaceId: string }): Promise<void> {
-        await this.saveMember(event.spaceId, event.memberUserId, null, 'Active');
+        const user = this.user();
+        if (!user) return;
+        const found = await new RunView().RunView({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `SpaceID = '${event.spaceId}' AND UserID = '${event.memberUserId}' AND Status = 'Invited'`,
+            MaxRows: 1,
+        }, user);
+        const id = (found.Results?.[0] as { ID?: string } | undefined)?.ID;
+        if (!id) {
+            this.message = 'That invitation is not on this space.';
+            this.changes.markForCheck();
+            return;
+        }
+        const member = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>('MJ_BizApps_Collaboration: Space Members', user);
+        if (!(await member.Load(id))) return;
+        member.Status = 'Active';
+        await this.finish(member);
     }
 
     async onPromote(event: { itemId: string }): Promise<void> {
         const user = this.user();
         if (!user) return;
-        const md = new Metadata();
-        const item = await md.GetEntityObject('MJ_BizApps_Collaboration: Space Items', user);
+        const item = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items', user);
         if (!(await item.Load(event.itemId))) return;
-        item.Set('Band', 'Shared');
-        await item.Save();
-        await this.reload();
+        item.Band = 'Shared';
+        await this.finish(item);
     }
 
-    private async saveMember(spaceId: string, userId: string, roleId: string | null, status: 'Active' | null): Promise<void> {
+    async onCreate(event: { name: string; parentId: string | null; typeId: string }): Promise<void> {
         const user = this.user();
         if (!user) return;
-        const md = new Metadata();
-        const member = await md.GetEntityObject('MJ_BizApps_Collaboration: Space Members', user);
+        const space = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces', user);
+        space.NewRecord();
+        space.Name = event.name;
+        space.OwnerID = user.ID;
+        space.SpaceTypeID = event.typeId;
+        if (event.parentId) space.ParentID = event.parentId;
+        await this.finish(space);
+    }
+
+    private async saveMember(spaceId: string, userId: string, roleId: string | null): Promise<void> {
+        const user = this.user();
+        if (!user || !roleId) return;
+        const member = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>('MJ_BizApps_Collaboration: Space Members', user);
         member.NewRecord();
-        member.Set('SpaceID', spaceId);
-        member.Set('UserID', userId);
-        if (roleId) member.Set('SpaceRoleTypeID', roleId);
-        if (status) member.Set('Status', status);
-        await member.Save();
+        member.SpaceID = spaceId;
+        member.UserID = userId;
+        member.SpaceRoleTypeID = roleId;
+        await this.finish(member);
+    }
+
+    private async finish(record: { Save: () => Promise<boolean>; LatestResult?: { CompleteMessage?: string } }): Promise<void> {
+        const ok = await record.Save();
+        this.message = ok ? '' : (record.LatestResult?.CompleteMessage ?? 'The save was refused.');
         await this.reload();
     }
 

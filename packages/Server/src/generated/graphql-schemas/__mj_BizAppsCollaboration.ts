@@ -246,7 +246,7 @@ export class mjBizAppsCollaborationSpaceMember_ {
     @MaxLength(36)
     SpaceRoleTypeID?: string;
         
-    @Field({nullable: true, description: `Team or Shared. Which side of the space this person sits on.`}) 
+    @Field({nullable: true, description: `Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.`}) 
     @MaxLength(20)
     Band?: string;
         
@@ -471,6 +471,9 @@ export class mjBizAppsCollaborationSpaceRoleType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {nullable: true}) 
+    CanContribute?: boolean;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -517,6 +520,9 @@ export class CreatemjBizAppsCollaborationSpaceRoleTypeInput {
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    CanContribute?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -562,6 +568,9 @@ export class UpdatemjBizAppsCollaborationSpaceRoleTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanContribute?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -712,7 +721,7 @@ export class mjBizAppsCollaborationSpaceType_ {
     @MaxLength(20)
     DefaultBand?: string;
         
-    @Field({nullable: true, description: `Approve: a new member stays Invited until someone accepts them. AutoApprove: the server may create the member Active.`}) 
+    @Field({nullable: true, description: `Approve: a new member stays Invited until an owner of the space sets them Active. AutoApprove: the server creates the member Active. The invited person does not activate themselves.`}) 
     @MaxLength(20)
     InviteApproval?: string;
         

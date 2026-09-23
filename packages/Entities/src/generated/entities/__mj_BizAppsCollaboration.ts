@@ -107,7 +107,7 @@ export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
     * * Possible Values 
     *   * Shared
     *   * Team
-        * * Description: Team or Shared. Which side of the space this person sits on.`),
+        * * Description: Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.`),
     Status: z.union([z.literal('Active'), z.literal('Invited'), z.literal('Removed')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
@@ -220,6 +220,11 @@ export const mjBizAppsCollaborationSpaceRoleTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CanContribute: z.boolean().describe(`
+        * * Field Name: CanContribute
+        * * Display Name: Can Contribute
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
 });
 
 export type mjBizAppsCollaborationSpaceRoleTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceRoleTypeSchema>;
@@ -339,7 +344,7 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
     * * Possible Values 
     *   * Approve
     *   * AutoApprove
-        * * Description: Approve: a new member stays Invited until someone accepts them. AutoApprove: the server may create the member Active.`),
+        * * Description: Approve: a new member stays Invited until an owner of the space sets them Active. AutoApprove: the server creates the member Active. The invited person does not activate themselves.`),
     MemberCap: z.number().nullable().describe(`
         * * Field Name: MemberCap
         * * Display Name: Member Cap
@@ -735,7 +740,7 @@ export class mjBizAppsCollaborationSpaceMemberEntity extends BaseEntity<mjBizApp
     * * Possible Values 
     *   * Shared
     *   * Team
-    * * Description: Team or Shared. Which side of the space this person sits on.
+    * * Description: Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.
     */
     get Band(): 'Shared' | 'Team' {
         return this.Get('Band');
@@ -1018,6 +1023,19 @@ export class mjBizAppsCollaborationSpaceRoleTypeEntity extends BaseEntity<mjBizA
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: CanContribute
+    * * Display Name: Can Contribute
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get CanContribute(): boolean {
+        return this.Get('CanContribute');
+    }
+    set CanContribute(value: boolean) {
+        this.Set('CanContribute', value);
+    }
 }
 
 
@@ -1274,7 +1292,7 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     * * Possible Values 
     *   * Approve
     *   * AutoApprove
-    * * Description: Approve: a new member stays Invited until someone accepts them. AutoApprove: the server may create the member Active.
+    * * Description: Approve: a new member stays Invited until an owner of the space sets them Active. AutoApprove: the server creates the member Active. The invited person does not activate themselves.
     */
     get InviteApproval(): 'Approve' | 'AutoApprove' {
         return this.Get('InviteApproval');

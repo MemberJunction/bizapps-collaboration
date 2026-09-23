@@ -7,6 +7,7 @@ export {
     isSelfAccept,
     membershipReaches,
     parentCreatesCycle,
+    planSpaceWrite,
     promotionStamps,
     refuseInvite,
     retentionDeadline,

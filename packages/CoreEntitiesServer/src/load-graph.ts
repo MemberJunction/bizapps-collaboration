@@ -1,4 +1,4 @@
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import type { MemberSnapshot, RoleFlags, SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { parseUuid } from './uuid.js';
@@ -37,7 +37,13 @@ function toNode(row: SpaceRow): SpaceNode {
 }
 
 function runViewFor(entity: BaseEntity): RunView {
-    return RunView.FromMetadataProvider(entity.ProviderToUse as unknown as IMetadataProvider);
+    const provider = entity.ProviderToUse;
+    // ProviderBase is both the entity provider and the view provider. The interfaces
+    // are split, so this checks for the method instead of casting through unknown.
+    if (!('RunViews' in provider)) {
+        throw new Error('The entity provider cannot run views.');
+    }
+    return new RunView(provider);
 }
 
 async function one<T>(rv: RunView, entityName: string, filter: string, user: UserInfo): Promise<T[]> {
@@ -99,11 +105,11 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         ? await one<{ InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null }>(rv, TYPES, `ID = '${parseUuid(typeId)}'`, user)
         : [];
     const memberRows = (results[0].Results ?? []) as { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }[];
-    const roleRows = (results[1].Results ?? []) as { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; ID: string }[];
+    const roleRows = (results[1].Results ?? []) as { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean; ID: string }[];
     const roleIds = [...new Set(memberRows.map((row) => row.SpaceRoleTypeID).filter((id) => parseUuid(id)))];
     const roleLookup = new Map<string, RoleFlags>();
     if (roleIds.length) {
-        const loaded = await one<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean }>(
+        const loaded = await one<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }>(
             rv,
             ROLES,
             `ID IN (${roleIds.map((id) => `'${id}'`).join(',')})`,
@@ -130,7 +136,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     };
 }
 
-function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean }): RoleFlags {
+function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }): RoleFlags {
     return {
         level: role.Level,
         maxGrantableLevel: role.MaxGrantableLevel,
@@ -138,11 +144,12 @@ function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: bool
         canPromoteBand: !!role.CanPromoteBand,
         canSeeTeamBand: !!role.CanSeeTeamBand,
         isOwnerRole: !!role.IsOwnerRole,
+        canContribute: !!role.CanContribute,
     };
 }
 
 function emptyRole(): RoleFlags {
-    return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false };
+    return { level: 0, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: false };
 }
 
 export function callerUuid(user: UserInfo | null | undefined): string | null {

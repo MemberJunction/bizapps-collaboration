@@ -7,6 +7,7 @@ import {
     isSelfAccept,
     membershipReaches,
     parentCreatesCycle,
+    planSpaceWrite,
     promotionStamps,
     refuseInvite,
     retentionDeadline,
@@ -23,6 +24,7 @@ const ownerRole: RoleFlags = {
     canPromoteBand: true,
     canSeeTeamBand: true,
     isOwnerRole: true,
+    canContribute: true,
 };
 const guestRole: RoleFlags = {
     level: 10,
@@ -31,6 +33,7 @@ const guestRole: RoleFlags = {
     canPromoteBand: false,
     canSeeTeamBand: false,
     isOwnerRole: false,
+    canContribute: false,
 };
 const readerRole: RoleFlags = {
     level: 10,
@@ -39,6 +42,7 @@ const readerRole: RoleFlags = {
     canPromoteBand: false,
     canSeeTeamBand: false,
     isOwnerRole: false,
+    canContribute: false,
 };
 
 function space(partial: Partial<SpaceNode> & Pick<SpaceNode, 'id'>): SpaceNode {
@@ -274,27 +278,30 @@ describe('flag ceiling', () => {
 });
 
 describe('space writes', () => {
-    const memberships = [member({ spaceId: 'root', userId: 'ada', role: ownerRole })];
-    it('lets an owner change structure', () => {
-        assert.equal(authorizeSpaceWrite({
-            callerUserId: 'ada', spaceId: 'child', nextParentId: 'root', previousParentId: 'root',
-            structuralChange: true, spaces: tree, memberships,
-        }).ok, true);
+    const here = member({ spaceId: 'child', userId: 'ada', role: ownerRole });
+    const onRoot = member({ spaceId: 'root', userId: 'ada', role: ownerRole });
+    it('lets staff create a root they will own', () => {
+        assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: null }), 'create-root');
+        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here: null, onParent: null }).ok, true);
     });
-    it('refuses a guest changing structure', () => {
-        const decision = authorizeSpaceWrite({
-            callerUserId: 'bea', spaceId: 'child', nextParentId: 'root', previousParentId: 'root',
-            structuralChange: true, spaces: tree,
-            memberships: [member({ spaceId: 'root', userId: 'bea', role: guestRole, band: 'Shared' })],
-        });
-        assert.equal(decision.ok, false);
+    it('refuses a participant creating a root', () => {
+        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here: null, onParent: null }).ok, false);
     });
-    it('refuses a move onto a parent the caller does not own', () => {
-        const decision = authorizeSpaceWrite({
-            callerUserId: 'ada', spaceId: 'under-sealed', nextParentId: 'sealed', previousParentId: null,
-            structuralChange: true, spaces: tree, memberships,
-        });
-        assert.equal(decision.ok, false);
+    it('lets an owner of the parent create a child', () => {
+        assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: 'root' }), 'create-child');
+        assert.equal(authorizeSpaceWrite({ kind: 'create-child', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here: null, onParent: onRoot }).ok, true);
+    });
+    it('lets an owner edit in place and move under a parent they own', () => {
+        assert.equal(planSpaceWrite({ isNew: false, previousParentId: 'root', nextParentId: 'root' }), 'edit');
+        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here, onParent: null }).ok, true);
+        assert.equal(planSpaceWrite({ isNew: false, previousParentId: 'root', nextParentId: 'legal' }), 'move');
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: onRoot }).ok, true);
+    });
+    it('refuses a move under a descendant and a guest edit', () => {
+        assert.equal(parentCreatesCycle(tree, 'root', 'child'), true);
+        const guest = member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' });
+        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'bea', callerIsStaff: false, nextOwnerId: 'ada', here: guest, onParent: null }).ok, false);
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: null }).ok, false);
     });
 });
 

@@ -48,6 +48,10 @@ export class SpaceWorkspaceComponent {
     @Output() readonly invite = new EventEmitter<{ spaceId: string; userId: string; roleId: string }>();
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
     @Output() readonly accept = new EventEmitter<{ memberUserId: string; spaceId: string }>();
+    @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
+    @Input() types: { id: string; name: string }[] = [];
+    createName = '';
+    createTypeId = '';
 
     selectedId: string | null = null;
     inviteUserId = '';
@@ -94,6 +98,12 @@ export class SpaceWorkspaceComponent {
             spaces: this.spaces,
             memberships: this.members,
         });
+    }
+
+    sendCreate(): void {
+        if (!this.createName.trim() || !this.createTypeId) return;
+        this.create.emit({ name: this.createName.trim(), parentId: this.selected?.id ?? null, typeId: this.createTypeId });
+        this.createName = '';
     }
 
     sendInvite(): void {

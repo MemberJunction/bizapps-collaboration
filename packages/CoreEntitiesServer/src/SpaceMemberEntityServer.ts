@@ -1,6 +1,6 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { isSelfAccept, refuseInvite } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { parseUuid } from './uuid.js';
@@ -24,13 +24,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             return fail(result, 'UserID', 'Invite refused: the user, space, and role must be real ids.');
         }
 
-        const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
         const previous = previousStatus(this);
-        if (this.IsSaved && dirty.length === 1 && dirty[0] === 'Status' && previous
-            && isSelfAccept({ callerUserId: caller, inviteeUserId: invitee, previousStatus: previous, nextStatus: this.Status })) {
-            return result;
-        }
-
         let context;
         try {
             context = await loadWriteContext(this, user, spaceId, roleId);
@@ -58,6 +52,14 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         if (!this.IsSaved) {
             this.Status = decision.status;
         }
+        if (this.Status === 'Active' && context.approval === 'Approve') {
+            const owner = membershipReaches(context.spaces, context.memberships, caller, spaceId);
+            const seatingSelf = !this.IsSaved && caller === invitee;
+            if (!owner?.role.isOwnerRole && !seatingSelf) {
+                return fail(result, 'Status', 'Invite refused: an owner of this space has to approve the member.');
+            }
+        }
+        this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
         return result;
     }
 }

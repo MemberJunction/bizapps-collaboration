@@ -5,7 +5,7 @@ A space is a tree. The root is a relationship (a client, a committee, a cohort).
 Two rules decide what a person can see, and they are the same rules in three places: `packages/Core/src/rules.ts`, the server subclasses, and `fnCollaborationAccess` in the database.
 
 1. **Reach.** An active membership on a space reaches that space and every descendant whose `InheritsMembership` is true. A space with `InheritsMembership = 0` is sealed. A parent member does not enter it.
-2. **Band.** Shared items are visible to anyone who reaches the space. Team items are visible only when the reaching role has `CanSeeTeamBand`. An agent quotes an item only when the person asking could read it, the band allows it, and the space's `AgentRetrieval` does not hide it.
+2. **Band.** Shared items are visible to anyone who reaches the space. Team items are visible only when the reaching role has `CanSeeTeamBand`. `agentMayQuote` is the rule an agent must call before it quotes an item. Nothing in the save path calls it yet. Row-level security enforces reach and band. Agent retrieval is not enforced until a search scope is wired.
 
 The caller's own grants are the ceiling. These rules only narrow.
 
@@ -18,8 +18,8 @@ The caller's own grants are the ceiling. These rules only narrow.
 - The granted role's `Level` must be at or below the signer's `MaxGrantableLevel`.
 - The type's `MemberCap` counts every row that is not `Removed`.
 - `InviteApproval = AutoApprove` stores the new row as `Active`. Otherwise it is `Invited`.
-- The owner of a space with an empty roster may seat themselves in the owner role. That row is `Active`.
-- The invited person may set their own row from `Invited` to `Active`. That is `isSelfAccept`.
+- The owner of a space with an empty roster may seat themselves in the owner role. An owner may also grant the owner role, so a space can have more than one owner.
+- `InviteApproval = Approve` stays `Invited` until an owner sets the row `Active`. The invited person does not activate themselves. `AutoApprove` stores the new row as `Active`.
 
 The engine reads role flags. It does not compare role names.
 

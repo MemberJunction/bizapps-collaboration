@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
@@ -31,9 +31,13 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         }
         let spaces = context.spaces;
         if (previousSpace && previousSpace !== spaceId && parseUuid(previousSpace)) {
-            const previous = await loadWriteContext(this, user, previousSpace, null);
-            spaces = [...spaces, ...previous.spaces.filter((space) => !spaces.some((have) => have.id === space.id))];
-            context.memberships.push(...previous.memberships);
+            try {
+                const previous = await loadWriteContext(this, user, previousSpace, null);
+                spaces = [...spaces, ...previous.spaces.filter((space) => !spaces.some((have) => have.id === space.id))];
+                context.memberships.push(...previous.memberships);
+            } catch (error) {
+                return fail(result, error instanceof Error ? error.message : 'Item change refused: the previous space could not be read.');
+            }
         }
         const decision = authorizeItemWrite({
             callerUserId: caller,
@@ -55,6 +59,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (decision.rewriteStamp) {
             this.PromotedAt = decision.promotedAt;
             this.PromotedByUserID = decision.promotedByUserId;
+        } else {
+            const at = this.Fields.find((field) => field.Name === 'PromotedAt');
+            const by = this.Fields.find((field) => field.Name === 'PromotedByUserID');
+            if (at) this.PromotedAt = (at.OldValue as Date | null) ?? null;
+            if (by) this.PromotedByUserID = (by.OldValue as string | null) ?? null;
         }
         return result;
     }
@@ -65,18 +74,23 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
     if (!entityId || !item.RecordID) {
         return false;
     }
-    const md = new Metadata();
-    const info = md.Entities.find((entity) => entity.ID?.toLowerCase() === entityId.toLowerCase());
+    const provider = item.ProviderToUse;
+    if (!('EntityByID' in provider)) {
+        LogError('Space item target check: the provider has no EntityByID.');
+        return false;
+    }
+    const info = provider.EntityByID(entityId);
     if (!info) {
         return false;
     }
     let key: CompositeKey;
     try {
         key = CompositeKey.FromURLSegment(info, item.RecordID);
-    } catch {
+    } catch (error) {
+        LogError(`Space item target check: ${error instanceof Error ? error.message : String(error)}`);
         return false;
     }
-    const record = await md.GetEntityObject(info.Name, user);
+    const record = await new Metadata().GetEntityObject(info.Name, user);
     return record.InnerLoad(key);
 }
 
