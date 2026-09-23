@@ -73,6 +73,19 @@ function quote(value: string): string {
     return value.replace(/'/g, "''");
 }
 
+async function memberStatus(provider: SQLServerDataProvider, id: string | null, user: UserInfo): Promise<string | null> {
+    if (!id) return null;
+    const view = RunView.FromMetadataProvider(provider);
+    const result = await view.RunView<{ Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Members',
+        ExtraFilter: `ID = '${id}'`,
+        Fields: ['Status'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, user);
+    return result.Success ? result.Results?.[0]?.Status?.trim() ?? null : null;
+}
+
 async function findId(provider: SQLServerDataProvider, entityName: string, filter: string, user: UserInfo): Promise<string | null> {
     const view = RunView.FromMetadataProvider(provider);
     const result = await view.RunView<{ ID: string }>({ EntityName: entityName, ExtraFilter: filter, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, user);
@@ -259,11 +272,14 @@ export async function loadWorld(): Promise<void> {
             }
         }
         if (row.Status === 'Removed') {
-            record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, actor(space.Owner));
             const id = existing ?? await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${userId}'`, system);
-            if (!id || !(await record.Load(id))) throw new Error(`Could not reload ${row.Person} on ${row.Space} to remove them.`);
-            record.Status = 'Removed';
-            if (!(await record.Save())) throw new Error(`remove ${row.Person} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+            const current = await memberStatus(provider, id, system);
+            if (current !== 'Removed') {
+                record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, actor(space.Owner));
+                if (!id || !(await record.Load(id))) throw new Error(`Could not reload ${row.Person} on ${row.Space} to remove them.`);
+                record.Status = 'Removed';
+                if (!(await record.Save())) throw new Error(`remove ${row.Person} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+            }
         }
         seated.add(seatKey(row.Space, row.Person));
     }

@@ -116,7 +116,7 @@
               <button type="button" role="tab" class="node" [class.on]="material === 'work'" [attr.aria-selected]="material === 'work'" (click)="material = 'work'">Work</button>
             }
           </div>
-          @if (space.governancePanel || panels.governance) {
+          @if (viewerIsStaff && (space.governancePanel || panels.governance)) {
             <p class="empty">Governance waits for the Committees move onto Space.</p>
           }
           @if (material === 'library' && space.libraryPanel !== false && panels.library !== false) {
@@ -134,6 +134,8 @@
               <button type="submit">Add file</button>
             </form>
             @if (uploadMessage) { <p class="empty">{{ uploadMessage }}</p> }
+            } @else if (!canContributeHere()) {
+              <p class="empty">Your role on this space can't add files.</p>
             } @else {
               <p class="empty">Upload isn't available yet.</p>
             }
