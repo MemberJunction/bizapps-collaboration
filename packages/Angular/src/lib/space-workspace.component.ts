@@ -52,6 +52,7 @@ export class SpaceWorkspaceComponent {
     @Output() readonly create = new EventEmitter<{ name: string; parentId: string | null; typeId: string }>();
     @Input() types: { id: string; name: string }[] = [];
     @Input() viewerIsStaff = false;
+    @Input() conversations: { spaceId: string; id: string }[] = [];
     createName = '';
     createTypeId = '';
     createAtTop = false;
@@ -123,6 +124,10 @@ export class SpaceWorkspaceComponent {
     viewerCanPromote(spaceId: string): boolean {
         if (!this.viewerUserId) return false;
         return !!membershipReaches(this.spaces, this.members, this.viewerUserId, spaceId)?.role.canPromoteBand;
+    }
+
+    conversationFor(spaceId: string): string | null {
+        return this.conversations.find((row) => row.spaceId === spaceId)?.id ?? null;
     }
 
     viewerCanApprove(spaceId: string): boolean {

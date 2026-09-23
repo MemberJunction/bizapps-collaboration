@@ -14,6 +14,7 @@ export {
     refuseInvite,
     retentionDeadline,
     visibleSpaces,
+    wouldStrandLastOwner,
 } from './rules.js';
 export type {
     AgentRetrieval,

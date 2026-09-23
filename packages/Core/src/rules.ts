@@ -120,6 +120,23 @@ export function leavingWouldStrand(input: { isOwner: boolean; activeOwners: numb
     return input.isOwner && input.activeOwners <= 1;
 }
 
+/**
+ * True when this save takes the last Active owner out of ownership,
+ * whether by status, by role, or by both at once.
+ */
+export function wouldStrandLastOwner(input: {
+    currentlyActiveOwner: boolean;
+    nextIsActive: boolean;
+    nextIsOwner: boolean;
+    activeOwners: number;
+}): boolean {
+    if (!input.currentlyActiveOwner) {
+        return false;
+    }
+    const staysOwner = input.nextIsActive && input.nextIsOwner;
+    return !staysOwner && input.activeOwners <= 1;
+}
+
 /** True when setting `parentId` on `spaceId` would put the space inside its own subtree. */
 export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string, parentId: string | null): boolean {
     if (!parentId) {
@@ -143,11 +160,6 @@ export function parentCreatesCycle(spaces: readonly SpaceNode[], spaceId: string
 
 export type SpaceWriteKind = 'create-root' | 'create-child' | 'edit' | 'move';
 
-/**
- * Which space the write is authorized against. Creating a child is authorized
- * on the parent, because the new row has no roster yet. A move checks the
- * space as it is now and the destination parent separately.
- */
 /** Which chains a space write loads. `here` is the space as it stands. `destination` is the new parent. */
 export function chainsForSpaceWrite(kind: SpaceWriteKind, toRoot = false): { here: boolean; destination: boolean } {
     if (kind === 'create-root') return { here: false, destination: false };
@@ -156,6 +168,11 @@ export function chainsForSpaceWrite(kind: SpaceWriteKind, toRoot = false): { her
     return { here: true, destination: !toRoot };
 }
 
+/**
+ * Which space the write is authorized against. Creating a child is authorized
+ * on the parent, because the new row has no roster yet. A move checks the
+ * space as it is now and the destination parent separately.
+ */
 export function planSpaceWrite(input: {
     isNew: boolean;
     previousParentId: string | null;

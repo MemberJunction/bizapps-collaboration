@@ -7,6 +7,7 @@ import {
     chainsForSpaceWrite,
     isSelfRemoval,
     leavingWouldStrand,
+    wouldStrandLastOwner,
     membershipReaches,
     parentCreatesCycle,
     planSpaceWrite,
@@ -378,6 +379,9 @@ describe('item writes', () => {
         assert.equal(leavingWouldStrand({ isOwner: true, activeOwners: 1 }), true);
         assert.equal(leavingWouldStrand({ isOwner: true, activeOwners: 2 }), false);
         assert.equal(leavingWouldStrand({ isOwner: false, activeOwners: 1 }), false);
+        assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: true, nextIsOwner: false, activeOwners: 1 }), true);
+        assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: false, nextIsOwner: true, activeOwners: 1 }), true);
+        assert.equal(wouldStrandLastOwner({ currentlyActiveOwner: true, nextIsActive: false, nextIsOwner: false, activeOwners: 2 }), false);
     });
     it('requires reach on both spaces for a move', () => {
         const decision = authorizeItemWrite({ ...base, previousSpaceId: 'sealed', nextSpaceId: 'child', previousBand: 'Team', nextBand: 'Team' });

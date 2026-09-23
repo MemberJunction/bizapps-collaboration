@@ -30,6 +30,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [items]="items"
           [roles]="roles"
           [types]="types"
+          [conversations]="conversations"
           [viewerUserId]="viewerId"
           [viewerIsStaff]="viewerIsStaff"
           (invite)="onInvite($event)"
@@ -46,6 +47,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     items: { id: string; spaceId: string; label: string; band: Band }[] = [];
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
+    conversations: { spaceId: string; id: string }[] = [];
     viewerId: string | null = null;
     viewerIsStaff = false;
     denied = false;
@@ -132,7 +134,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         const md = new Metadata();
         const lookups: EntityRecordNameInput[] = [];
         for (const row of itemSource) {
-            const info = md.Entities.find((entity) => entity.Name === row.Entity || entity.ID === row.EntityID);
+            const info = row.EntityID ? md.EntityByID(row.EntityID) : undefined;
             if (!info || !row.RecordID) continue;
             const input = new EntityRecordNameInput();
             input.EntityName = info.Name;
@@ -147,6 +149,14 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             label: nameByKey.get(`${row.Entity}|${row.RecordID}`) || row.RecordID,
             band: row.Band,
         }));
+        const linked = await new RunView().RunView({
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB'`,
+            MaxRows: 500,
+        }, user);
+        this.conversations = ((linked.Results ?? []) as { ID: string; LinkedRecordID: string }[])
+            .filter((row) => row.LinkedRecordID)
+            .map((row) => ({ spaceId: row.LinkedRecordID, id: row.ID }));
         this.types = (typeRows.Results ?? []).map((row: { ID: string; Name: string }) => ({ id: row.ID, name: row.Name }));
         this.denied = false;
         this.changes.markForCheck();

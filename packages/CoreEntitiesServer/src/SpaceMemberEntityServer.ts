@@ -1,6 +1,6 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { isSelfRemoval, leavingWouldStrand, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
+import { isSelfRemoval, membershipReaches, refuseInvite, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { parseUuid } from './uuid.js';
@@ -29,14 +29,6 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             if (dirty.includes('SpaceID') || dirty.includes('UserID')) {
                 return fail(result, 'SpaceID', 'A membership stays on the space and the person it was created for.');
             }
-            if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
-                const context = await loadWriteContext(this, user, spaceId, roleId);
-                const mine = context.memberships.find((row) => row.userId.toLowerCase() === caller.toLowerCase() && row.spaceId.toLowerCase() === spaceId.toLowerCase());
-                if (leavingWouldStrand({ isOwner: !!mine?.role.isOwnerRole, activeOwners: context.ownerCount })) {
-                    return fail(result, 'Status', 'You are the last owner of this space. Seat another owner before you leave.');
-                }
-                return result;
-            }
         }
         const previous = previousStatus(this);
         let context;
@@ -44,6 +36,21 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             context = await loadWriteContext(this, user, spaceId, roleId);
         } catch (error) {
             return fail(result, 'SpaceRoleTypeID', error instanceof Error ? error.message : 'Invite refused: the roster could not be read completely.');
+        }
+        if (this.IsSaved) {
+            const mine = context.memberships.find((row) => row.userId.toLowerCase() === caller.toLowerCase() && row.spaceId.toLowerCase() === spaceId.toLowerCase());
+            if (wouldStrandLastOwner({
+                currentlyActiveOwner: mine?.status === 'Active' && !!mine.role.isOwnerRole,
+                nextIsActive: this.Status === 'Active',
+                nextIsOwner: !!context.role?.isOwnerRole,
+                activeOwners: context.ownerCount,
+            })) {
+                return fail(result, 'Status', 'You are the last owner of this space. Seat another owner before you leave.');
+            }
+            const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
+            if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
+                return result;
+            }
         }
         if (!context.role) {
             return fail(result, 'SpaceRoleTypeID', 'Invite refused: that role does not exist.');

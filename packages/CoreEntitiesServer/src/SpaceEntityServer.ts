@@ -1,7 +1,7 @@
 import { BaseEntity, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { authorizeSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
+import { authorizeSpaceWrite, chainsForSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -31,14 +31,16 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         const previousParent = (this.Fields.find((field) => field.Name === 'ParentID')?.OldValue as string | null | undefined) ?? null;
         const kind = planSpaceWrite({ isNew: !this.IsSaved, previousParentId: previousParent, nextParentId: parentId });
+        const toRoot = kind === 'move' && !parentId;
+        const chains = chainsForSpaceWrite(kind, toRoot);
         const hereId = this.IsSaved ? this.ID : null;
         let hereContext: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
         let destination: Awaited<ReturnType<typeof loadWriteContext>> | null = null;
         try {
-            if (hereId) {
+            if (chains.here && hereId) {
                 hereContext = await loadWriteContext(this, user, hereId, null);
             }
-            if (parentId) {
+            if (chains.destination && parentId) {
                 destination = await loadWriteContext(this, user, parentId, null);
             }
         } catch (error) {
@@ -51,7 +53,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             callerUserId: caller,
             callerIsStaff: isStaff(user),
             nextOwnerId: this.OwnerID,
-            toRoot: kind === 'move' && !parentId,
+            toRoot,
             here,
             onParent,
         });
@@ -122,7 +124,7 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     if ((existing.Results?.length ?? 0) > 0) {
         return;
     }
-    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
     conversation.NewRecord();
     conversation.UserID = space.OwnerID;
     conversation.Name = space.Name;
