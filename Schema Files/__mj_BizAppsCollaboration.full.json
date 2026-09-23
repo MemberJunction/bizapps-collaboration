@@ -2,6 +2,140 @@
         "schemaName": "\b__mj_BizAppsCollaboration\b", 
         "entities": [
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bItem\b \bUses\b",
+            "Description": "\bA\b \brecord\b \bthat\b \ba\b \bmember\b \bopened\b, \buploaded\b, \bor\b \bpromoted\b \ban\b \bitem\b.",
+            "BaseView": "\bvwItemUses\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bItemID\b", 
+                    "Description": "\bThe\b \bspace\b \bitem\b \bthat\b \bwas\b \bused\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bUserID\b", 
+                    "Description": "\bThe\b \bmember\b \bwho\b \bopened\b, \buploaded\b, \bor\b \bpromoted\b \bthe\b \bitem\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bUsers\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bUsedAt\b", 
+                    "Description": "\bWhen\b \bthe\b \buse\b \bhappened\b.",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bKind\b", 
+                    "Description": "\bopen\b, \bupload\b, \bor\b \bpromote\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthe\b \buse\b \bhappened\b \bin\b. \bRequired\b \bso\b \bthe\b \bread\b \bfilter\b \bcan\b \bkeep\b \bthe\b \brow\b \binside\b \bspaces\b \bthe\b \bcaller\b \breaches\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bUser\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                }        
+            ]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bShare\b \bNotices\b",
+            "Description": "\bA\b \bnotice\b \bthat\b \ban\b \bitem\b \bin\b \bthis\b \bspace\b \bwas\b \bshared\b \bwith\b \ba\b \bmember\b.",
+            "BaseView": "\bvwShareNotices\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthe\b \bnotice\b \bbelongs\b \bto\b. \bThe\b \bread\b \bfilter\b \bkeeps\b \ba\b \bcaller\b \binside\b \bspaces\b \bthey\b \breach\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bItemID\b", 
+                    "Description": "\bThe\b \bspace\b \bitem\b \bthat\b \bwas\b \bshared\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bRecipientUserID\b", 
+                    "Description": "\bThe\b \bmember\b \bthe\b \bnotice\b \bis\b \bfor\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bUsers\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bRecipientUser\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                }        
+            ]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
             "Description": "\bAn\b \bitem\b \bin\b \bexactly\b \bone\b \bspace\b: \bEntityID\b + \bRecordID\b, \bplus\b \bTeam\b \bor\b \bShared\b. \bUnique\b \bon\b (\bEntityID\b, \bRecordID\b) \bso\b \ban\b \bitem\b \bcannot\b \bhave\b \btwo\b \bparents\b.",
             "BaseView": "\bvwSpaceItems\b", 
@@ -67,6 +201,12 @@
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bFolder\b", 
+                    "Description": "\bFolder\b \blabel\b \binside\b \bthe\b \bspace\b. \bNull\b \bmeans\b \bUnfiled\b. \bCollections\b \bcannot\b \bsay\b \beveryone\b \bin\b \bthe\b \bspace\b, \bso\b \bthe\b \bfolder\b \blives\b \bon\b \bthe\b \bitem\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
                     "Name": "\bSpace\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
@@ -123,7 +263,7 @@
                 },         
                 {
                     "Name": "\bBand\b", 
-                    "Description": "\bTeam\b \bor\b \bShared\b. \bWhich\b \bside\b \bof\b \bthe\b \bspace\b \bthis\b \bperson\b \bsits\b \bon\b.",  
+                    "Description": "\bTeam\b \bor\b \bShared\b. \bSet\b \bby\b \bthe\b \bserver\b \bfrom\b \bthe\b \brole\b: \bCanSeeTeamBand\b \bseats\b \bthe\b \bperson\b \bon\b \bTeam\b, \botherwise\b \bShared\b. \bThe\b \bfilter\b \breads\b \bthe\b \brole\b, \bnot\b \bthis\b \bcolumn\b.",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": false 
                 },         
@@ -253,6 +393,12 @@
                     "Description": "",  
                     "Type": "\bdatetimeoffset\b",
                     "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bCanContribute\b", 
+                    "Description": "",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
                 }        
             ]
         },
@@ -347,7 +493,7 @@
                 },         
                 {
                     "Name": "\bInviteApproval\b", 
-                    "Description": "\bApprove\b: \ba\b \bnew\b \bmember\b \bstays\b \bInvited\b \buntil\b \bsomeone\b \baccepts\b \bthem\b. \bAutoApprove\b: \bthe\b \bserver\b \bmay\b \bcreate\b \bthe\b \bmember\b \bActive\b.",  
+                    "Description": "\bApprove\b: \ba\b \bnew\b \bmember\b \bstays\b \bInvited\b \buntil\b \ban\b \bowner\b \bof\b \bthe\b \bspace\b \bsets\b \bthem\b \bActive\b. \bAutoApprove\b: \bthe\b \bserver\b \bcreates\b \bthe\b \bmember\b \bActive\b. \bThe\b \binvited\b \bperson\b \bdoes\b \bnot\b \bactivate\b \bthemselves\b.",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": false 
                 },         

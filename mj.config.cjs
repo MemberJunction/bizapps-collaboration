@@ -44,6 +44,10 @@ module.exports = {
   includeSchemas: ['__mj_BizAppsCollaboration'],
   excludeSchemas: ['sys', 'staging', 'dbo', '__mj'],
 
+  advancedGeneration: {
+    enableAdvancedGeneration: false,
+  },
+
   SQLOutput: {
     enabled: true,
     folderPath: './migrations/codegen/',

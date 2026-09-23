@@ -63,7 +63,9 @@ IF EXISTS (
           OR (p.RoleID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AND e.Name IN (
               N'MJ_BizApps_Collaboration: Spaces',
               N'MJ_BizApps_Collaboration: Space Members',
-              N'MJ_BizApps_Collaboration: Space Items'))
+              N'MJ_BizApps_Collaboration: Space Items',
+              N'MJ_BizApps_Collaboration: Share Notices',
+              N'MJ_BizApps_Collaboration: Item Uses'))
       )
 )
     THROW 50000, 'A readable participant or UI row has no filter.', 1;
@@ -126,6 +128,40 @@ WHERE p.RoleID = @Participant AND e.Name = N'MJ: Conversation Details';
 SET @countSql = N'SELECT @out = COUNT(*) FROM __mj.vwConversationDetails WHERE ID = @id AND ' + @pred;
 EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @Detail, @n OUTPUT;
 IF @n <> 1 THROW 50000, 'Conversation details filter missed the bound detail.', 1;
+
+DECLARE @Item uniqueidentifier = (
+    SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID = @Ours AND Band = N'Shared'
+);
+INSERT INTO __mj_BizAppsCollaboration.ShareNotice (SpaceID, ItemID, RecipientUserID)
+VALUES (@Ours, @Item, @User), (@Sibling, @Item, @Other);
+INSERT INTO __mj_BizAppsCollaboration.ItemUse (ItemID, UserID, UsedAt, Kind, SpaceID)
+VALUES
+    (@Item, @User, SYSUTCDATETIME(), N'open', @Ours),
+    (@Item, @Other, SYSUTCDATETIME(), N'open', @Ours);
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Share Notices';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @out int OUTPUT', @Ours, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Notices filter did not return the notice in reach.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @sibling AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@sibling uniqueidentifier, @out int OUTPUT', @Sibling, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notices filter returned the sibling notice.', 1;
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Item Uses';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE UserID = @user AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@user uniqueidentifier, @out int OUTPUT', @User, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Item uses filter did not return the caller''s use.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE UserID = @other AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@other uniqueidentifier, @out int OUTPUT', @Other, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Item uses filter returned someone else''s use.', 1;
 
 DECLARE @Filter nvarchar(max), @Name nvarchar(255), @Schema sysname, @View sysname, @sql nvarchar(max);
 DECLARE filters CURSOR LOCAL FAST_FORWARD FOR

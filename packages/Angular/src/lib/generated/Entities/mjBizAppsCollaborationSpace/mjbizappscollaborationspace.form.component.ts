@@ -19,7 +19,9 @@ export class mjBizAppsCollaborationSpaceFormComponent extends BaseFormComponent 
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJBizAppsCollaborationSpaceItems', sectionName: 'Space Items', isExpanded: false },
             { sectionKey: 'mJBizAppsCollaborationSpaces', sectionName: 'Spaces', isExpanded: false },
-            { sectionKey: 'mJBizAppsCollaborationSpaceMembers', sectionName: 'Space Members', isExpanded: false }
+            { sectionKey: 'mJBizAppsCollaborationSpaceMembers', sectionName: 'Space Members', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationItemUses', sectionName: 'Item Uses', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationShareNotices', sectionName: 'Share Notices', isExpanded: false }
         ]);
     }
 }

@@ -5,7 +5,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
 import type { Band, MemberSnapshot, RoleFlags } from '@mj-biz-apps/collaboration-core';
-import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
 
@@ -49,7 +49,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
 export class CollaborationSectionResource extends BaseResourceComponent {
     spaces: WorkspaceSpace[] = [];
     members: MemberSnapshot[] = [];
-    items: { id: string; spaceId: string; label: string; band: Band }[] = [];
+    items: { id: string; spaceId: string; label: string; band: Band; kind: 'file' | 'task' | 'conversation'; folder: string | null }[] = [];
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
     conversations: { spaceId: string; id: string }[] = [];
@@ -148,7 +148,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             band: row.Band,
             role: roleById.get(row.SpaceRoleTypeID) ?? emptyRole(),
         }));
-        const itemSource = (itemRows.Results ?? []) as { ID: string; SpaceID: string; Band: Band; RecordID: string; Entity?: string; EntityID?: string }[];
+        const itemSource = (itemRows.Results ?? []) as (Pick<mjBizAppsCollaborationSpaceItemEntityType, 'ID' | 'SpaceID' | 'Band' | 'RecordID' | 'Folder'> & { Entity?: string; EntityID?: string })[];
         const md = new Metadata();
         const lookups: EntityRecordNameInput[] = [];
         for (const row of itemSource) {
@@ -167,7 +167,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             label: nameByKey.get(`${row.Entity}|${row.RecordID}`) || row.RecordID,
             band: row.Band,
             kind: row.Entity === 'MJ_BizApps_Tasks: Tasks' ? 'task' as const : row.Entity === 'MJ: Conversations' ? 'conversation' as const : 'file' as const,
-            folder: (row as { Folder?: string | null }).Folder ?? null,
+            folder: row.Folder,
         }));
         const linked = await new RunView().RunView({
             EntityName: 'MJ: Conversations',

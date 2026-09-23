@@ -2,10 +2,22 @@
         "schemaName": "\b__mj_BizAppsCollaboration\b", 
         "entities": [
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bItem\b \bUses\b",
+            "Description": "\bA\b \brecord\b \bthat\b \ba\b \bmember\b \bopened\b, \buploaded\b, \bor\b \bpromoted\b \ban\b \bitem\b.",
+            "BaseView": "\bvwItemUses\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bUserID\b","\bUsedAt\b","\bKind\b","\bSpaceID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bUser\b","\bSpace\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bShare\b \bNotices\b",
+            "Description": "\bA\b \bnotice\b \bthat\b \ban\b \bitem\b \bin\b \bthis\b \bspace\b \bwas\b \bshared\b \bwith\b \ba\b \bmember\b.",
+            "BaseView": "\bvwShareNotices\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bItemID\b","\bRecipientUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bRecipientUser\b"]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
             "Description": "\bAn\b \bitem\b \bin\b \bexactly\b \bone\b \bspace\b: \bEntityID\b + \bRecordID\b, \bplus\b \bTeam\b \bor\b \bShared\b. \bUnique\b \bon\b (\bEntityID\b, \bRecordID\b) \bso\b \ban\b \bitem\b \bcannot\b \bhave\b \btwo\b \bparents\b.",
             "BaseView": "\bvwSpaceItems\b", 
-            "Fields": ["\bID\b","\bSpaceID\b","\bEntityID\b","\bRecordID\b","\bBand\b","\bPromotedAt\b","\bPromotedByUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bEntity\b","\bPromotedByUser\b"]
+            "Fields": ["\bID\b","\bSpaceID\b","\bEntityID\b","\bRecordID\b","\bBand\b","\bPromotedAt\b","\bPromotedByUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bFolder\b","\bSpace\b","\bEntity\b","\bPromotedByUser\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMembers\b",
@@ -17,7 +29,7 @@
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
             "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
             "BaseView": "\bvwSpaceRoleTypes\b", 
-            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bLevel\b","\bMaxGrantableLevel\b","\bCanInvite\b","\bCanPromoteBand\b","\bCanSeeTeamBand\b","\bIsOwnerRole\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bLevel\b","\bMaxGrantableLevel\b","\bCanInvite\b","\bCanPromoteBand\b","\bCanSeeTeamBand\b","\bIsOwnerRole\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCanContribute\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",

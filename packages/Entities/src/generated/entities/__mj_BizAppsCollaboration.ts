@@ -5,6 +5,111 @@ import { z } from "zod";
      
  
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Item Uses
+ */
+export const mjBizAppsCollaborationItemUseSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ItemID: z.string().describe(`
+        * * Field Name: ItemID
+        * * Display Name: Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    UsedAt: z.date().describe(`
+        * * Field Name: UsedAt
+        * * Display Name: Used At
+        * * SQL Data Type: datetimeoffset`),
+    Kind: z.union([z.literal('open'), z.literal('promote'), z.literal('upload')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * open
+    *   * promote
+    *   * upload`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationItemUseEntityType = z.infer<typeof mjBizAppsCollaborationItemUseSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Share Notices
+ */
+export const mjBizAppsCollaborationShareNoticeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    ItemID: z.string().describe(`
+        * * Field Name: ItemID
+        * * Display Name: Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)`),
+    RecipientUserID: z.string().describe(`
+        * * Field Name: RecipientUserID
+        * * Display Name: Recipient User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    RecipientUser: z.string().describe(`
+        * * Field Name: RecipientUser
+        * * Display Name: Recipient User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type mjBizAppsCollaborationShareNoticeEntityType = z.infer<typeof mjBizAppsCollaborationShareNoticeSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Items
  */
 export const mjBizAppsCollaborationSpaceItemSchema = z.object({
@@ -59,6 +164,11 @@ export const mjBizAppsCollaborationSpaceItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Folder: z.string().nullable().describe(`
+        * * Field Name: Folder
+        * * Display Name: Folder
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Folder label inside the space. Null means Unfiled. Collections cannot say everyone in the space, so the folder lives on the item.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -475,6 +585,277 @@ export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsColl
  
 
 /**
+ * MJ_BizApps_Collaboration: Item Uses - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: ItemUse
+ * * Base View: vwItemUses
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Item Uses')
+export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCollaborationItemUseEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Item Uses record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Item Uses record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationItemUseEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ItemID
+    * * Display Name: Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+    */
+    get ItemID(): string {
+        return this.Get('ItemID');
+    }
+    set ItemID(value: string) {
+        this.Set('ItemID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: UsedAt
+    * * Display Name: Used At
+    * * SQL Data Type: datetimeoffset
+    */
+    get UsedAt(): Date {
+        return this.Get('UsedAt');
+    }
+    set UsedAt(value: Date) {
+        this.Set('UsedAt', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * open
+    *   * promote
+    *   * upload
+    */
+    get Kind(): 'open' | 'promote' | 'upload' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'open' | 'promote' | 'upload') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string {
+        return this.Get('Space');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Share Notices - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: ShareNotice
+ * * Base View: vwShareNotices
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Share Notices')
+export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizAppsCollaborationShareNoticeEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Share Notices record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Share Notices record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationShareNoticeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: ItemID
+    * * Display Name: Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+    */
+    get ItemID(): string {
+        return this.Get('ItemID');
+    }
+    set ItemID(value: string) {
+        this.Set('ItemID', value);
+    }
+
+    /**
+    * * Field Name: RecipientUserID
+    * * Display Name: Recipient User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get RecipientUserID(): string {
+        return this.Get('RecipientUserID');
+    }
+    set RecipientUserID(value: string) {
+        this.Set('RecipientUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string {
+        return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: RecipientUser
+    * * Display Name: Recipient User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RecipientUser(): string {
+        return this.Get('RecipientUser');
+    }
+}
+
+
+/**
  * MJ_BizApps_Collaboration: Space Items - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpaceItem
@@ -619,6 +1000,19 @@ export class mjBizAppsCollaborationSpaceItemEntity extends BaseEntity<mjBizAppsC
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Folder
+    * * Display Name: Folder
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Folder label inside the space. Null means Unfiled. Collections cannot say everyone in the space, so the folder lives on the item.
+    */
+    get Folder(): string | null {
+        return this.Get('Folder');
+    }
+    set Folder(value: string | null) {
+        this.Set('Folder', value);
     }
 
     /**

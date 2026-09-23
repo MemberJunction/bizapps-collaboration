@@ -34,7 +34,7 @@ A file, a conversation, or a task is an item. This app does not copy those table
 `migrations/V202609230010__v0.1.x__Access.sql` creates:
 
 - `fnCollaborationAccess(@UserID)`, the SQL form of the reach walk, plus whether that reach may see the team band.
-- Five row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on any role a person holds exempts them from row-level security.
+- Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on any role a person holds exempts them from row-level security. Share notices are readable inside spaces the caller reaches. Item uses are the caller's own rows, inside those spaces.
 - A `ResourceType` named `Space`, so a magic link of kind `resource-share` can name a space.
 
 The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can read that one space and its Shared items.
