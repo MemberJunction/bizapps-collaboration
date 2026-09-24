@@ -6,9 +6,10 @@ export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNot
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
-export { createSpaceTask } from './attach-root-task.js';
+export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
 export { fileRootTask } from './file-root-task.js';
 export { LoadTaskAttributionEntityServer } from './task-attribution.js';
+export { LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

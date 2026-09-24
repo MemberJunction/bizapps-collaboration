@@ -1,18 +1,19 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
+import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { mayFileRootTask, type Band } from '@mj-biz-apps/collaboration-core';
-import { fileRootTask } from './file-root-task.js';
+import { deleteActivitiesThenTask, fileRootTask } from './file-root-task.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 import { callerPersonId } from './task-attribution.js';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
+const ACTIVITIES = 'MJ_BizApps_Tasks: Task Activities';
 const LINKS = 'MJ_BizApps_Tasks: Task Links';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const TYPES = 'MJ_BizApps_Tasks: Task Types';
-/** Chosen for Collaboration. Not "whichever active type sorts first." */
-const ROOT_TASK_TYPE = 'General';
+/** Seeded code. The display name can be renamed. */
+const ROOT_TASK_TYPE_CODE = 'GENERAL';
 
 /**
  * Creates a root task and files it in one space. The task and the TaskLink
@@ -27,7 +28,7 @@ export async function createSpaceTask(
     const spaces = provider.EntityByName(SPACES);
     if (!tasks || !spaces) return { ok: false, message: 'Task filing refused: the task or space entity is not installed.' };
     const typeId = input.typeId ?? await collaborationTaskType(provider, user);
-    if (!typeId) return { ok: false, message: `Task filing refused: the ${ROOT_TASK_TYPE} task type is not installed.` };
+    if (!typeId) return { ok: false, message: 'Task filing refused: the General task type is not installed.' };
     const probe = await provider.GetEntityObject<SpaceItemEntityServer>(ITEMS, user);
     let context;
     try {
@@ -87,19 +88,41 @@ export async function createSpaceTask(
             if (!(await item.Load(itemId))) return false;
             return item.Delete();
         },
-        deleteTask: async (actor, taskId) => {
+        deleteTask: (actor, taskId) => removeUnfiledTask(provider, actor, taskId),
+    });
+}
+
+/** Deletes the task's activities, then the task. Both run as the given user. */
+export async function removeUnfiledTask(provider: IMetadataProvider, actor: UserInfo, taskId: string): Promise<boolean> {
+    const view = RunView.FromMetadataProvider(provider);
+    const rows = await view.RunView<{ ID: string }>({
+        EntityName: ACTIVITIES,
+        ExtraFilter: `TaskID = '${taskId.replace(/'/g, "''")}'`,
+        Fields: ['ID'],
+        MaxRows: 200,
+        ResultType: 'simple',
+    }, actor);
+    if (!rows.Success || (rows.Results?.length ?? 0) >= 200) return false;
+    return deleteActivitiesThenTask(
+        (rows.Results ?? []).map((row) => row.ID),
+        async (activityId) => {
+            const activity = await provider.GetEntityObject<mjBizAppsTasksTaskActivityEntity>(ACTIVITIES, actor);
+            if (!(await activity.Load(activityId))) return false;
+            return activity.Delete();
+        },
+        async () => {
             const task = await provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
             if (!(await task.Load(taskId))) return false;
             return task.Delete();
         },
-    });
+    );
 }
 
 async function collaborationTaskType(provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
     const view = RunView.FromMetadataProvider(provider);
     const rows = await view.RunView<{ ID: string }>({
         EntityName: TYPES,
-        ExtraFilter: `Name = '${ROOT_TASK_TYPE}' AND IsActive = 1`,
+        ExtraFilter: `Code = '${ROOT_TASK_TYPE_CODE}' AND IsActive = 1`,
         Fields: ['ID'],
         MaxRows: 1,
         ResultType: 'simple',

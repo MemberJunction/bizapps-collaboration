@@ -12,6 +12,7 @@ import {
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
+    LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
@@ -36,4 +37,5 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceItemEntityServer();
     LoadSpaceMemberEntityServer();
     LoadTaskAttributionEntityServer();
+    LoadCollaborationTaskEntityServer();
 }

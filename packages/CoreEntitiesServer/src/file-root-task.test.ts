@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { UserInfo } from '@memberjunction/core';
-import { fileRootTask } from '../dist/file-root-task.js';
+import { deleteActivitiesThenTask, fileRootTask } from '../dist/file-root-task.js';
 
 const user = { ID: 'user' } as UserInfo;
 const system = { ID: 'system' } as UserInfo;
@@ -82,5 +82,34 @@ describe('fileRootTask', () => {
         });
         assert.equal(outcome.ok, false);
         assert.match(outcome.ok ? '' : outcome.message, /could not be removed/);
+    });
+
+    it('deletes the activity rows before the task, and leaves the task when an activity stays', async () => {
+        const order: string[] = [];
+        const removed = await deleteActivitiesThenTask(
+            ['activity-1'],
+            async (activityId) => {
+                order.push(activityId);
+                return true;
+            },
+            async () => {
+                order.push('task');
+                return true;
+            },
+        );
+        assert.equal(removed, true);
+        assert.deepEqual(order, ['activity-1', 'task']);
+
+        const blocked: string[] = [];
+        const kept = await deleteActivitiesThenTask(
+            ['activity-1'],
+            async () => false,
+            async () => {
+                blocked.push('task');
+                return true;
+            },
+        );
+        assert.equal(kept, false);
+        assert.deepEqual(blocked, []);
     });
 });

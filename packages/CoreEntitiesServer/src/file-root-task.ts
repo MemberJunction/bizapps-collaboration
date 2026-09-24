@@ -49,3 +49,19 @@ export async function fileRootTask(
             : 'Task filing refused: the task link could not be saved. The space item was removed, and the task could not be removed.',
     };
 }
+
+/**
+ * A new task's save writes a Created activity. That row references the task
+ * with no cascade, so the activity rows have to go first or the task delete
+ * fails and the unfiled task is left behind.
+ */
+export async function deleteActivitiesThenTask(
+    activityIds: readonly string[],
+    deleteActivity: (activityId: string) => Promise<boolean>,
+    deleteTask: () => Promise<boolean>,
+): Promise<boolean> {
+    for (const activityId of activityIds) {
+        if (!(await deleteActivity(activityId))) return false;
+    }
+    return deleteTask();
+}
