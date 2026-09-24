@@ -3,6 +3,11 @@
   "filePattern": "**/.*.json",
   "pull": {
     "filter": "TypeID IN (SELECT ID FROM __mj.TestType WHERE Name = 'Integration Test') AND Name LIKE 'COL-%'",
-    "lookupFields": { "TypeID": { "entity": "MJ: Test Types", "field": "Name" } }
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    }
   }
 }

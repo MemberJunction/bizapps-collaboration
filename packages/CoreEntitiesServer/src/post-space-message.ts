@@ -2,22 +2,34 @@ import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } 
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
+import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const DETAILS = 'MJ: Conversation Details';
 const MESSAGE_CAP = 4000;
 
+export interface PostSpaceMessageInput {
+    spaceId: string;
+    text: string;
+    executeAgent?: boolean;
+}
+
+export type PostSpaceMessageResult =
+    | { ok: true; detailId: string; assistantDetailId?: string; quotedCount?: number }
+    | { ok: false; message: string };
+
 /**
- * A human message in a space conversation. The system user owns the room, so
- * MJ's own write gate accepts the save, and nothing is routed to an agent.
- * The message names the person who sent it.
+ * A message in a space conversation.
+ * The system user owns the room, so MJ's own write gate accepts the save.
+ * If executeAgent is true, the Collaboration Space Agent is invoked server-side
+ * after saving the human message, querying only items allowed by agentMayQuote.
  */
 export async function postSpaceMessage(
     provider: IMetadataProvider,
     user: UserInfo,
-    input: { spaceId: string; text: string },
-): Promise<{ ok: true; detailId: string } | { ok: false; message: string }> {
+    input: PostSpaceMessageInput,
+): Promise<PostSpaceMessageResult> {
     const spaceId = parseUuid(input.spaceId);
     const callerId = parseUuid(user?.ID);
     const text = input.text.trim();
@@ -73,5 +85,96 @@ export async function postSpaceMessage(
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
+
+    if (input.executeAgent) {
+        const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
+        let agentMessage: string;
+        if (retrieval.quotedItems.length === 0) {
+            agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
+        } else {
+            const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
+            agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
+        }
+
+        const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
+        assistantDetail.NewRecord();
+        assistantDetail.ConversationID = conversationId;
+        assistantDetail.UserID = system.ID;
+        assistantDetail.Role = 'AI';
+        assistantDetail.Message = agentMessage;
+        assistantDetail.Status = 'Complete';
+        assistantDetail.HiddenToUser = false;
+        assistantDetail.IsPinned = false;
+        assistantDetail.OriginalMessageChanged = false;
+
+        if (await assistantDetail.Save() && assistantDetail.ID) {
+            return {
+                ok: true,
+                detailId: detail.ID,
+                assistantDetailId: assistantDetail.ID,
+                quotedCount: retrieval.quotedItems.length,
+            };
+        }
+    }
+
     return { ok: true, detailId: detail.ID };
+}
+
+/**
+ * Runs the Collaboration Space Agent in the room, quoting strictly the items
+ * permitted by agentMayQuote for the asking user.
+ */
+export async function executeRoomAgent(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    input: { spaceId: string; userMessage?: string },
+): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
+    const spaceId = parseUuid(input.spaceId);
+    if (!spaceId) return { ok: false, message: 'Invalid space ID' };
+
+    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
+    let agentMessage: string;
+    if (retrieval.quotedItems.length === 0) {
+        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
+    } else {
+        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
+        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
+    }
+
+    const probe = await provider.GetEntityObject<BaseEntity>('MJ_BizApps_Collaboration: Spaces', user);
+    const system = await requireSystemUser(probe);
+    const view = RunView.FromMetadataProvider(provider);
+
+    const conversation = await view.RunView<{ ID: string }>({
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    if (!conversation.Success) return { ok: false, message: conversation.ErrorMessage || 'The conversation could not be read.' };
+    const conversationId = parseUuid(conversation.Results?.[0]?.ID);
+    if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
+
+    const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
+    assistantDetail.NewRecord();
+    assistantDetail.ConversationID = conversationId;
+    assistantDetail.UserID = system.ID;
+    assistantDetail.Role = 'AI';
+    assistantDetail.Message = agentMessage;
+    assistantDetail.Status = 'Complete';
+    assistantDetail.HiddenToUser = false;
+    assistantDetail.IsPinned = false;
+    assistantDetail.OriginalMessageChanged = false;
+
+    if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
+        return { ok: false, message: 'Failed to record assistant message' };
+    }
+
+    return {
+        ok: true,
+        detailId: assistantDetail.ID,
+        message: agentMessage,
+        quotedItems: retrieval.quotedItems,
+    };
 }

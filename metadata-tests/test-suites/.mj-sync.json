@@ -1,5 +1,7 @@
 {
   "entity": "MJ: Test Suites",
   "filePattern": "**/.*.json",
-  "pull": { "filter": "Name LIKE 'BizApps Collaboration%'" }
+  "pull": {
+    "filter": "Name LIKE 'BizApps Collaboration%'"
+  }
 }

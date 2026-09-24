@@ -11,6 +11,7 @@ import '../checks/room.checks.js';
 import '../checks/write-gates.checks.js';
 import '../checks/row-filters.checks.js';
 import '../checks/library.checks.js';
+import '../checks/agent.checks.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -24,6 +25,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'write-gates': 5,
     'row-filters': 4,
     'library': 4,
+    'agent': 6,
 };
 
 const FRAMEWORK_BUNDLES = new Set(['self-test']);

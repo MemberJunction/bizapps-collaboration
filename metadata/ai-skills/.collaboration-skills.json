@@ -1,0 +1,58 @@
+[
+  {
+    "primaryKey": {
+      "ID": "E5000002-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Name": "Ask",
+      "Description": "Answers questions using space knowledge and materials within the caller's reach.",
+      "Instructions": "Answer user questions using knowledge, items, and files available in the space. Never disclose or quote items from the Team band to participants who do not have access to Team items. Maintain all space boundary restrictions.",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Collaboration",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E5000002-0000-4000-8000-000000000002"
+    },
+    "fields": {
+      "Name": "Promote",
+      "Description": "Promotes space library items between Team and Shared bands within space governance.",
+      "Instructions": "Evaluate and promote space items and library documents between Team and Shared bands in accordance with space governance policies and user roles.",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Collaboration",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E5000002-0000-4000-8000-000000000003"
+    },
+    "fields": {
+      "Name": "Summarize",
+      "Description": "Summarizes space activities, conversations, and documents.",
+      "Instructions": "Summarize space conversations, deliverables, tasks, and document activity for members of the space.",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Collaboration",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E5000002-0000-4000-8000-000000000004"
+    },
+    "fields": {
+      "Name": "Find & act",
+      "Description": "Finds tasks and resources in the space and coordinates actions.",
+      "Instructions": "Find tasks, files, and resources in the space and coordinate project actions for space members.",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Collaboration",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    }
+  }
+]

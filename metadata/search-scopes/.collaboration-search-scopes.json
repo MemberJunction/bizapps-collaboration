@@ -1,0 +1,42 @@
+[
+  {
+    "primaryKey": {
+      "ID": "E5000003-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Name": "Collaboration Space Scope",
+      "Description": "Search scope restricting queries to materials within a collaboration space.",
+      "Icon": "fa-solid fa-folder-tree",
+      "Status": "Active",
+      "IsGlobal": false,
+      "IsDefault": false,
+      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid\",\"required\":true}],\"strictValidation\":true}"
+    },
+    "relatedEntities": {
+      "MJ: Search Scope Entities": [
+        {
+          "primaryKey": {
+            "ID": "E5000004-0000-4000-8000-000000000001"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
+            "ExtraFilter": "SpaceID = '{{SpaceID}}'",
+            "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "E5000004-0000-4000-8000-000000000002"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
+            "ExtraFilter": "ID IN (SELECT RecordID FROM vwSpaceItems WHERE SpaceID = '{{SpaceID}}' AND Entity = 'MJ_BizApps_Tasks: Tasks')",
+            "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
+        }
+      ]
+    }
+  }
+]

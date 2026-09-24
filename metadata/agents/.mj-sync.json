@@ -1,0 +1,46 @@
+{
+  "entity": "MJ: AI Agents",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+    "Status": "Active",
+    "AcceptsSkills": "Limited",
+    "SkillActivationMode": "Auto"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".collaboration-agent.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'Collaboration Space Agent'",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      },
+      "CategoryID": {
+        "entity": "MJ: AI Agent Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": {
+        "entity": "MJ: AI Agent Skills",
+        "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Search Scopes": {
+        "entity": "MJ: AI Agent Search Scopes",
+        "foreignKey": "AgentID"
+      }
+    }
+  }
+}

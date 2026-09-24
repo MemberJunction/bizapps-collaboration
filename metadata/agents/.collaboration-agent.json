@@ -1,0 +1,78 @@
+[
+  {
+    "primaryKey": {
+      "ID": "E5000001-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Name": "Collaboration Space Agent",
+      "Description": "Dedicated agent for collaboration spaces, answering questions, promoting materials, summarizing activity, and acting on tasks.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Status": "Active",
+      "AcceptsSkills": "Limited",
+      "SkillActivationMode": "Auto",
+      "ExecutionOrder": 10,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-users-viewfinder"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Skills": [
+        {
+          "primaryKey": {
+            "ID": "E5000005-0000-4000-8000-000000000001"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "E5000002-0000-4000-8000-000000000001",
+            "Status": "Active"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "E5000005-0000-4000-8000-000000000002"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "E5000002-0000-4000-8000-000000000002",
+            "Status": "Active"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "E5000005-0000-4000-8000-000000000003"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "E5000002-0000-4000-8000-000000000003",
+            "Status": "Active"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "E5000005-0000-4000-8000-000000000004"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "E5000002-0000-4000-8000-000000000004",
+            "Status": "Active"
+          }
+        }
+      ],
+      "MJ: AI Agent Search Scopes": [
+        {
+          "primaryKey": {
+            "ID": "E5000006-0000-4000-8000-000000000001"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SearchScopeID": "E5000003-0000-4000-8000-000000000001",
+            "Phase": "Both",
+            "Status": "Active"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -24,6 +24,7 @@ const ALL_BUNDLES = [
     'write-gates',
     'row-filters',
     'library',
+    'agent',
 ];
 
 const args = process.argv.slice(2);

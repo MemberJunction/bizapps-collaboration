@@ -15,7 +15,11 @@
     "space-role-types",
     "row-level-security-filters",
     "entities",
-    "entity-permissions"
+    "entity-permissions",
+    "entity-field-permissions",
+    "ai-skills",
+    "search-scopes",
+    "agents"
   ],
   "emitSyncNotes": false,
   "sqlLogging": {

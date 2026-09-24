@@ -86,6 +86,17 @@
           "primaryKey": {
             "ID": "71A0B001-C000-4000-8000-000000000007"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-07 - Collaboration Space Agent and Retrieval",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000008"
+          }
         }
       ]
     }

@@ -22,3 +22,10 @@ export const USER_NOTIFICATION_ENTITY = 'MJ: User Notifications';
 export const ENTITY_FIELD_PERMISSION_ENTITY = 'MJ: Entity Field Permissions';
 export const ENTITY_FIELD_ENTITY = 'MJ: Entity Fields';
 export const ENTITY_ENTITY = 'MJ: Entities';
+export const SEARCH_SCOPE_ENTITY = 'MJ: Search Scopes';
+export const SEARCH_SCOPE_ENTITY_ENTITY = 'MJ: Search Scope Entities';
+export const AI_AGENT_ENTITY = 'MJ: AI Agents';
+export const AI_AGENT_SKILL_ENTITY = 'MJ: AI Agent Skills';
+export const AI_AGENT_SEARCH_SCOPE_ENTITY = 'MJ: AI Agent Search Scopes';
+export const AI_SKILL_ENTITY = 'MJ: AI Skills';
+
