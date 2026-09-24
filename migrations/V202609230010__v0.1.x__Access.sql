@@ -120,14 +120,8 @@ IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[Role] WHERE ID = 'AAF434FD-EF58-4857
     );
 GO
 
-IF NOT EXISTS (
-    SELECT 1 FROM [${mjSchema}].[ApplicationRole]
-    WHERE ApplicationID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198'
-      AND RoleID = 'AAF434FD-EF58-4857-854E-2607ACAF763B'
-)
-    INSERT INTO [${mjSchema}].[ApplicationRole] (ApplicationID, RoleID, CanAccess, CanAdmin)
-    VALUES ('94F5906B-38AB-4A9F-BFCA-3D395BBBC198', 'AAF434FD-EF58-4857-854E-2607ACAF763B', 1, 0);
-GO
+-- Space Participant's application role lives in metadata/application-roles.
+-- No other migration names that row.
 
 -- Entity permissions. Create and update are on, so an invited admin can write.
 -- The server subclasses are the write gate. Read carries the filter.
@@ -156,13 +150,5 @@ IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[EntityPermission] WHERE ID = '9A0B1C
     VALUES ('9A0B1C2D-3E4F-4506-8A7B-1C2D3E4F5061', 'FB6F4556-8DD1-4B41-908F-D1F6ECAFA20E', 'AAF434FD-EF58-4857-854E-2607ACAF763B', 0, 1, 0, 0, '8F228922-83F0-4E92-821C-F1E00BE3192A', N'Allow');
 GO
 
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[ResourceType] WHERE ID = '33642155-617E-4825-A2CC-F071A60F3739')
-    INSERT INTO [${mjSchema}].[ResourceType] (ID, Name, DisplayName, Description, EntityID)
-    VALUES (
-        '33642155-617E-4825-A2CC-F071A60F3739',
-        N'Space',
-        N'Space',
-        N'A Collaboration space. Resource permissions and magic-link resource shares name this type.',
-        '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB'
-    );
-GO
+-- The Space resource type lives in metadata/resource-types.
+-- No other migration names that row.
