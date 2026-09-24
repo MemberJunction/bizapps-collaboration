@@ -2,6 +2,7 @@ import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErro
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -76,6 +77,10 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!readable) {
             return fail(result, 'Item change refused: the signer cannot read the record this item points at.');
         }
+        const parented = await filedTaskHasParent(this, user);
+        if (parented) {
+            return fail(result, 'Item change refused: a subtask cannot be filed as a space root.');
+        }
         this.Band = decision.band;
         if (decision.rewriteStamp) {
             this.PromotedAt = decision.promotedAt;
@@ -122,6 +127,19 @@ function canonicalRecordId(item: SpaceItemEntityServer): string | null {
         LogError(`Space item record id: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
+}
+
+async function filedTaskHasParent(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {
+    const provider = asMetadata(item.ProviderToUse);
+    const tasks = provider?.EntityByName('MJ_BizApps_Tasks: Tasks');
+    const entityId = parseUuid(item.EntityID);
+    if (!provider || !tasks || !entityId || entityId.toLowerCase() !== tasks.ID.toLowerCase()) return false;
+    const raw = item.RecordID ?? '';
+    const taskId = raw.toLowerCase().startsWith('id|') ? raw.slice(3) : raw;
+    if (!taskId) return false;
+    const task = await provider.GetEntityObject<mjBizAppsTasksTaskEntity>(tasks.Name, user);
+    if (!(await task.Load(taskId))) return false;
+    return !!task.ParentID;
 }
 
 async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {

@@ -8,7 +8,7 @@
     "@memberjunction/ng-shared-generic": "6.1.3"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/IntegrationTests/local-directory-storage.test.ts",
+    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/IntegrationTests/local-directory-storage.test.ts",
     "build": "pnpm --filter \"./packages/*\" run build"
   }
 }
