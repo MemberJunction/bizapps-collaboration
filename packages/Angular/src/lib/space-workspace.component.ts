@@ -86,6 +86,7 @@ export class SpaceWorkspaceComponent {
     taskBand: Band = 'Shared';
     subtaskName = '';
     selectedTaskId: string | null = null;
+    selectedTaskName = '';
     workView: 'list' | 'board' | 'gantt' = 'list';
 
     selectedId: string | null = null;
@@ -108,6 +109,7 @@ export class SpaceWorkspaceComponent {
     select(id: string): void {
         this.selectedId = id;
         this.selectedTaskId = null;
+        this.selectedTaskName = '';
         this.ensurePane();
     }
 
@@ -233,11 +235,16 @@ export class SpaceWorkspaceComponent {
     showBoard(): void { this.workView = 'board'; }
     showGantt(): void { this.workView = 'gantt'; }
 
-    chooseTask(task: { ID: string }): void {
+    chooseTask(task: { ID: string; Name?: string }): void {
         this.selectedTaskId = task.ID;
+        this.selectedTaskName = task.Name ?? this.selectedTaskName;
     }
 
+    /** Closing the drawer leaves the task selected, so Add subtask still names it. */
+    keepSelectedTask(): void {}
+
     openTask(taskId: string): void {
+        if (this.selectedTaskId !== taskId) this.selectedTaskName = '';
         this.selectedTaskId = taskId;
         this.workView = 'list';
         this.changes.detectChanges();
@@ -248,6 +255,9 @@ export class SpaceWorkspaceComponent {
         const name = this.subtaskName.trim();
         if (!this.selectedTaskId || !name || !this.canContributeHere()) return;
         this.fileSubtask.emit({ parentId: this.selectedTaskId, name });
+    }
+
+    finishSubtask(): void {
         this.subtaskName = '';
     }
 

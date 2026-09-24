@@ -49,12 +49,14 @@ export async function seedWorldPlan(input: {
 }
 
 async function whenAllowed(provider: IMetadataProvider, preferred: UserInfo, entityName: string, write: (actor: UserInfo) => Promise<void>): Promise<void> {
-    const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(entityName, preferred);
-    if (probe.EntityInfo.GetUserPermisions(preferred).CanCreate) {
+    const entity = provider.EntityByName(entityName);
+    if (!entity) throw new Error(`${entityName} is not installed.`);
+    if (entity.GetUserPermisions(preferred).CanCreate) {
         await write(preferred);
         return;
     }
     LogError(`86: ${preferred.Name || preferred.ID} cannot create ${entityName} until bizapps-tasks grants the UI role create and update. Saving as the system user.`);
+    const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, preferred);
     await write(await requireSystemUser(probe));
 }
 

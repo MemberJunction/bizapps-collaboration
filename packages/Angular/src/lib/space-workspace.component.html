@@ -180,7 +180,7 @@
             </form>
             @if (selectedTaskId) {
               <form class="invite" (submit)="$event.preventDefault(); sendSubtask()">
-                <label>Subtask<input name="subtask-name" [(ngModel)]="subtaskName" placeholder="Name" /></label>
+                <label>{{ selectedTaskName ? 'Subtask of ' + selectedTaskName : 'Subtask' }}<input name="subtask-name" [(ngModel)]="subtaskName" placeholder="Name" /></label>
                 <button type="submit">Add subtask</button>
               </form>
             }
@@ -194,7 +194,7 @@
           </div>
           @for (scope of [taskScope(space.id)]; track scope) {
             @if (workView === 'list') {
-              <bizapps-task-panel [ExtraFilter]="scope" [AssigneeScope]="assigneeScope(space.id)" [PersonID]="viewerPersonId" [ShowCreateButton]="false" [ShowQuickAdd]="false" (AfterTaskSelected)="chooseTask($event)" />
+              <bizapps-task-panel [ExtraFilter]="scope" [AssigneeScope]="assigneeScope(space.id)" [PersonID]="viewerPersonId" [ShowCreateButton]="false" [ShowQuickAdd]="false" (AfterTaskSelected)="chooseTask($event)" (AfterPanelClosed)="keepSelectedTask()" />
             } @else if (workView === 'board') {
               <bizapps-task-kanban [ExtraFilter]="scope" [ReadOnly]="!canContributeHere()" (TaskClicked)="openTask($event)" />
             } @else {
