@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityRecordNameInput, LogError, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
@@ -105,7 +105,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             MaxRows: 1,
             ResultType: 'simple',
         }, user);
-        return rows.Success ? rows.Results?.[0]?.ID ?? null : null;
+        if (!rows.Success) {
+            LogError(`Person lookup failed for user ${id}: ${rows.ErrorMessage ?? 'the People read failed'}`);
+            return null;
+        }
+        return rows.Results?.[0]?.ID ?? null;
     }
 
     private user(): UserInfo | undefined {
@@ -331,11 +335,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         }
         const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
         task.NewRecord();
-        task.Set('Name', event.name.trim());
-        task.Set('ParentID', event.parentId);
-        task.Set('TypeID', parent.Get('TypeID'));
-        task.Set('Status', 'Open');
-        task.Set('Priority', parent.Get('Priority') || 'Medium');
+        task.Name = event.name.trim();
+        task.ParentID = event.parentId;
+        task.TypeID = parent.TypeID;
+        task.Status = 'Open';
+        task.Priority = parent.Priority;
         const saved = await task.Save();
         this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
         if (saved) this.workspace?.refreshWork();
