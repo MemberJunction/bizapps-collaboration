@@ -11,6 +11,7 @@
       "EntityIDMin": 10100001,
       "EntityIDMax": 10199999,
       "EntityNamePrefix": "MJ_BizApps_Collaboration: ",
+      "Comments": null,
       "Description": "MemberJunction: BizApps Collaboration. Spaces are the permission and retrieval boundary. Conversations, tasks, and files compose in through SpaceItem."
     }
   }

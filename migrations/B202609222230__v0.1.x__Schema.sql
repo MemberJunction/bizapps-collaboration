@@ -1,12 +1,9 @@
 -- =============================================================================
---  BizApps Collaboration — schema creation and CodeGen schema registration.
+--  BizApps Collaboration — create the schema.
 --
 --  Own transaction (skyway wraps each file). The sibling V file is the table
---  set. This row is what CodeGen reads for entity name prefixes and must not
---  be regenerated away.
---
---  Entity IDs sit in a dedicated band so this app does not share 1–1000000
---  with other BizApps installed in the same database.
+--  set. SchemaInfo, including the name prefix and the entity id band, lives
+--  in metadata/schema-info and is applied with mj sync push.
 --
 --  Spec: plans/plan.md §4
 -- =============================================================================
