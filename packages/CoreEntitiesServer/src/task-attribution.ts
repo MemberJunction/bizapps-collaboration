@@ -5,25 +5,36 @@ import { requireSystemUser } from './load-graph.js';
 import { asMetadata } from './uuid.js';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
+const PARTICIPANT = 'space participant';
 
 /**
- * Comments, decisions, and assignments record the caller's own person.
- * A comment can be changed only by its author. Participants have no way
- * to write these rows as someone else.
+ * These gates run for every save of the entity, at priority 2, so they sit
+ * above bizapps-tasks' generated classes. A later tasks subclass at the same
+ * priority or lower would be shadowed. The checks apply only when the caller
+ * holds Space Participant. Everyone else keeps bizapps-tasks' own rules.
+ * Stamping happens on create only.
  */
+function isParticipant(user: UserInfo): boolean {
+    return (user.UserRoles ?? []).some((role) => (role.Role ?? '').trim().toLowerCase() === PARTICIPANT);
+}
+
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Comments', 2)
 export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        if (!user) return refuse(result, 'Comment refused: there is no signed-in user.');
-        const personId = await personFor(this, user);
-        if (!personId) return refuse(result, 'Comment refused: the signer has no person record.');
+        if (!user || !isParticipant(user)) return result;
+        const personId = await callerPersonId(this, user);
+        if (!this.IsSaved) {
+            if (!personId) return refuse(result, 'Comment refused: the signer has no person record.');
+            this.PersonID = personId;
+            return result;
+        }
         const previous = this.Fields.find((field) => field.Name === 'PersonID')?.OldValue as string | null | undefined;
-        if (this.IsSaved && previous && previous.toLowerCase() !== personId.toLowerCase()) {
+        if (!personId || (previous && previous.toLowerCase() !== personId.toLowerCase())) {
             return refuse(result, 'Comment refused: only the author can change it.');
         }
-        this.PersonID = personId;
+        if (previous) this.PersonID = previous;
         return result;
     }
 }
@@ -33,8 +44,8 @@ export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        if (!user) return refuse(result, 'Decision refused: there is no signed-in user.');
-        const personId = await personFor(this, user);
+        if (!user || !isParticipant(user) || this.IsSaved) return result;
+        const personId = await callerPersonId(this, user);
         if (!personId) return refuse(result, 'Decision refused: the signer has no person record.');
         this.DecidedByPersonID = personId;
         return result;
@@ -46,15 +57,15 @@ export class TaskAssignmentEntityServer extends mjBizAppsTasksTaskAssignmentEnti
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        if (!user) return refuse(result, 'Assignment refused: there is no signed-in user.');
-        const personId = await personFor(this, user);
+        if (!user || !isParticipant(user) || this.IsSaved) return result;
+        const personId = await callerPersonId(this, user);
         if (!personId) return refuse(result, 'Assignment refused: the signer has no person record.');
         this.AssignedByPersonID = personId;
         return result;
     }
 }
 
-async function personFor(entity: BaseEntity, user: UserInfo): Promise<string | null> {
+export async function callerPersonId(entity: BaseEntity, user: UserInfo): Promise<string | null> {
     try {
         const system = await requireSystemUser(entity);
         const provider = asMetadata(entity.ProviderToUse);

@@ -11,6 +11,8 @@ export interface FileRootTaskSteps {
     writeLink: (system: UserInfo, taskId: string) => Promise<boolean>;
     /** The system user removes the item when the link does not save. */
     undoItem: (system: UserInfo, itemId: string) => Promise<boolean>;
+    /** The system user removes the task when it never gets a link. */
+    deleteTask: (system: UserInfo, taskId: string) => Promise<boolean>;
 }
 
 /**
@@ -28,15 +30,22 @@ export async function fileRootTask(
     const created = await steps.createTask(system);
     if (!created.ok) return created;
     const filed = await steps.fileItem(user, created.taskId, decision.band);
-    if (!filed.ok) return filed;
+    if (!filed.ok) {
+        const removed = await steps.deleteTask(system, created.taskId);
+        return { ok: false, message: removed ? filed.message : `${filed.message} The unfiled task could not be removed.` };
+    }
     if (await steps.writeLink(system, created.taskId)) {
         return { ok: true, taskId: created.taskId, itemId: filed.itemId, band: decision.band };
     }
     const undone = await steps.undoItem(system, filed.itemId);
+    if (!undone) {
+        return { ok: false, message: 'Task filing refused: the task link could not be saved, and the space item could not be removed.' };
+    }
+    const removed = await steps.deleteTask(system, created.taskId);
     return {
         ok: false,
-        message: undone
-            ? 'Task filing refused: the task link could not be saved. The space item was removed.'
-            : 'Task filing refused: the task link could not be saved, and the space item could not be removed.',
+        message: removed
+            ? 'Task filing refused: the task link could not be saved. The space item and the task were removed.'
+            : 'Task filing refused: the task link could not be saved. The space item was removed, and the task could not be removed.',
     };
 }

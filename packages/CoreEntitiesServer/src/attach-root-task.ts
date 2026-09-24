@@ -1,31 +1,33 @@
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { mayFileRootTask, type Band } from '@mj-biz-apps/collaboration-core';
 import { fileRootTask } from './file-root-task.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+import { callerPersonId } from './task-attribution.js';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
 const LINKS = 'MJ_BizApps_Tasks: Task Links';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const TYPES = 'MJ_BizApps_Tasks: Task Types';
+/** Chosen for Collaboration. Not "whichever active type sorts first." */
+const ROOT_TASK_TYPE = 'General';
 
 /**
- * Creates a root task and files it in the space. The task and the TaskLink
+ * Creates a root task and files it in one space. The task and the TaskLink
  * are written as the system user. The space item is the caller's.
  */
-export async function attachRootTask(
+export async function createSpaceTask(
     provider: IMetadataProvider,
     user: UserInfo,
     input: { spaceId: string; name: string; band: Band; typeId?: string },
 ): Promise<{ ok: true; taskId: string; itemId: string; band: Band } | { ok: false; message: string }> {
-    const metadata = provider as unknown as Metadata;
-    const tasks = metadata.EntityByName?.(TASKS);
-    const spaces = metadata.EntityByName?.(SPACES);
+    const tasks = provider.EntityByName(TASKS);
+    const spaces = provider.EntityByName(SPACES);
     if (!tasks || !spaces) return { ok: false, message: 'Task filing refused: the task or space entity is not installed.' };
-    const typeId = input.typeId ?? await defaultTaskType(provider, user);
-    if (!typeId) return { ok: false, message: 'Task filing refused: there is no task type.' };
+    const typeId = input.typeId ?? await collaborationTaskType(provider, user);
+    if (!typeId) return { ok: false, message: `Task filing refused: the ${ROOT_TASK_TYPE} task type is not installed.` };
     const probe = await provider.GetEntityObject<SpaceItemEntityServer>(ITEMS, user);
     let context;
     try {
@@ -34,6 +36,7 @@ export async function attachRootTask(
         return { ok: false, message: error instanceof Error ? error.message : 'Task filing refused: the space could not be read.' };
     }
     const system = await requireSystemUser(probe);
+    const authorId = await callerPersonId(probe, user);
     return fileRootTask(user, system, {
         gate: async () => mayFileRootTask({
             callerUserId: user.ID,
@@ -50,6 +53,8 @@ export async function attachRootTask(
             task.TypeID = typeId;
             task.Status = 'Open';
             task.Priority = 'Medium';
+            task.ParentID = null;
+            if (authorId) task.CreatedByPersonID = authorId;
             if (!(await task.Save()) || !task.ID) {
                 return { ok: false, message: task.LatestResult?.CompleteMessage ?? 'Task filing refused: the task could not be saved.' };
             }
@@ -82,17 +87,20 @@ export async function attachRootTask(
             if (!(await item.Load(itemId))) return false;
             return item.Delete();
         },
+        deleteTask: async (actor, taskId) => {
+            const task = await provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
+            if (!(await task.Load(taskId))) return false;
+            return task.Delete();
+        },
     });
 }
 
-async function defaultTaskType(provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
-    const { RunView } = await import('@memberjunction/core');
+async function collaborationTaskType(provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
     const view = RunView.FromMetadataProvider(provider);
     const rows = await view.RunView<{ ID: string }>({
         EntityName: TYPES,
-        ExtraFilter: `IsActive = 1`,
+        ExtraFilter: `Name = '${ROOT_TASK_TYPE}' AND IsActive = 1`,
         Fields: ['ID'],
-        OrderBy: 'Name',
         MaxRows: 1,
         ResultType: 'simple',
     }, user);

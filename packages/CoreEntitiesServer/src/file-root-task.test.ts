@@ -24,12 +24,33 @@ describe('fileRootTask', () => {
                 return true;
             },
             undoItem: async () => false,
+            deleteTask: async () => {
+                actors.push('delete');
+                return true;
+            },
         });
         assert.deepEqual(outcome, { ok: true, taskId: 'task-1', itemId: 'item-1', band: 'Shared' });
         assert.deepEqual(actors, ['create:system', 'file:user:task-1:Shared', 'link:system:task-1']);
     });
 
-    it('removes the item with the system user when the link does not save', async () => {
+    it('removes the unfiled task when the item does not save', async () => {
+        let deleted = '';
+        const outcome = await fileRootTask(user, system, {
+            gate: async () => ({ ok: true, band: 'Team' }),
+            createTask: async () => ({ ok: true, taskId: 'task-1' }),
+            fileItem: async () => ({ ok: false, message: 'The space item could not be saved.' }),
+            writeLink: async () => true,
+            undoItem: async () => false,
+            deleteTask: async (actor, taskId) => {
+                deleted = `${actor.ID}:${taskId}`;
+                return true;
+            },
+        });
+        assert.equal(outcome.ok, false);
+        assert.equal(deleted, 'system:task-1');
+    });
+
+    it('removes the item and the task with the system user when the link does not save', async () => {
         let undone = '';
         const outcome = await fileRootTask(user, system, {
             gate: async () => ({ ok: true, band: 'Team' }),
@@ -40,10 +61,14 @@ describe('fileRootTask', () => {
                 undone = `${actor.ID}:${itemId}`;
                 return true;
             },
+            deleteTask: async (actor, taskId) => {
+                undone += `:${actor.ID}:${taskId}`;
+                return true;
+            },
         });
         assert.equal(outcome.ok, false);
-        assert.match(outcome.ok ? '' : outcome.message, /space item was removed/);
-        assert.equal(undone, 'system:item-1');
+        assert.match(outcome.ok ? '' : outcome.message, /space item and the task were removed/);
+        assert.equal(undone, 'system:item-1:system:task-1');
     });
 
     it('says so when the item cannot be removed', async () => {
@@ -53,6 +78,7 @@ describe('fileRootTask', () => {
             fileItem: async () => ({ ok: true, itemId: 'item-1' }),
             writeLink: async () => false,
             undoItem: async () => false,
+            deleteTask: async () => true,
         });
         assert.equal(outcome.ok, false);
         assert.match(outcome.ok ? '' : outcome.message, /could not be removed/);

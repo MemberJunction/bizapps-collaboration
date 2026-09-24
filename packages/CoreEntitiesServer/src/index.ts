@@ -6,7 +6,7 @@ export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNot
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
-export { attachRootTask } from './attach-root-task.js';
+export { createSpaceTask } from './attach-root-task.js';
 export { fileRootTask } from './file-root-task.js';
 export { LoadTaskAttributionEntityServer } from './task-attribution.js';
 export { decideUploadBand } from './decide-upload.js';
