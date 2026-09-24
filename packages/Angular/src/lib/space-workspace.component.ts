@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { FormsModule } from '@angular/forms';
@@ -49,7 +49,7 @@ export interface WorkspaceRole extends RoleFlags {
     templateUrl: './space-workspace.component.html',
     styleUrl: './space-workspace.component.css',
 })
-export class SpaceWorkspaceComponent {
+export class SpaceWorkspaceComponent implements OnChanges {
     constructor(private readonly changes: ChangeDetectorRef) {}
 
     @ViewChild(TaskPanelComponent) taskPanel?: TaskPanelComponent;
@@ -108,6 +108,12 @@ export class SpaceWorkspaceComponent {
     selectedId: string | null = null;
     linkEmail = '';
     linkRoleId = '';
+
+    ngOnChanges(changes: SimpleChanges): void {
+        if (!changes['spaces']) return;
+        const pinned = this.spaces.some((space) => space.id === this.selectedId);
+        if (!pinned) this.selectedId = this.roots[0]?.id ?? null;
+    }
 
     get selected(): WorkspaceSpace | null {
         const id = this.selectedId ?? this.roots[0]?.id ?? null;

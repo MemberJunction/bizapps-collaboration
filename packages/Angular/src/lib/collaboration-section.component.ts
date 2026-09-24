@@ -122,7 +122,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         }
         const rv = new RunView();
         const [spaceRows, memberRows, itemRows, roleRows, typeRows] = await rv.RunViews([
-            { EntityName: 'MJ_BizApps_Collaboration: Spaces', MaxRows: 500 },
+            { EntityName: 'MJ_BizApps_Collaboration: Spaces', OrderBy: 'Name', MaxRows: 500 },
             { EntityName: 'MJ_BizApps_Collaboration: Space Members', MaxRows: 2000 },
             { EntityName: 'MJ_BizApps_Collaboration: Space Items', MaxRows: 2000 },
             { EntityName: 'MJ_BizApps_Collaboration: Space Role Types', ExtraFilter: 'IsActive = 1', MaxRows: 50 },
@@ -148,7 +148,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             libraryPanel: types.get(row.SpaceTypeID)?.LibraryPanel !== false,
             workPanel: !!types.get(row.SpaceTypeID)?.WorkPanel,
             governancePanel: !!types.get(row.SpaceTypeID)?.GovernancePanel,
-        }));
+        })).sort((left, right) => left.name.localeCompare(right.name));
         this.members = (memberRows.Results ?? []).map((row: { SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: Band; User: string; SpaceRoleTypeID: string }) => ({
             spaceId: row.SpaceID,
             userId: row.UserID,
@@ -417,7 +417,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         space.OwnerID = user.ID;
         space.SpaceTypeID = event.typeId;
         if (event.parentId) space.ParentID = event.parentId;
-        await this.finish(space);
+        const ok = await space.Save();
+        this.message = ok ? '' : (space.LatestResult?.CompleteMessage ?? 'The save was refused.');
+        await this.reload();
+        if (ok && space.ID) this.workspace?.select(space.ID);
+        this.changes.markForCheck();
     }
 
     private async saveMember(spaceId: string, userId: string, roleId: string | null): Promise<void> {
