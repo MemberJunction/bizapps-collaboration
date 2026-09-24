@@ -120,12 +120,7 @@ export class SpaceWorkspaceComponent implements OnChanges {
         }
         if (this.selectedId) {
             this.selectedId = null;
-            this.talkDraft = '';
-            this.talkMessages = [];
-            this.talkOldest = null;
-            this.talkHasEarlier = false;
-            this.talkError = '';
-            this.talkSaving = false;
+            this.clearRoom();
             return;
         }
         this.selectedId = next;
@@ -147,17 +142,7 @@ export class SpaceWorkspaceComponent implements OnChanges {
     select(id: string): void {
         if (this.selected?.id === id) return;
         this.selectedId = id;
-        this.selectedTaskId = null;
-        this.selectedTaskName = '';
-        this.folderChoice = '';
-        this.uploadFolder = '';
-        this.talkDraft = '';
-        this.talkMessages = [];
-        this.talkOldest = null;
-        this.talkHasEarlier = false;
-        this.talkError = '';
-        this.talkSaving = false;
-        this.pane = 'overview';
+        this.clearRoom();
         this.ensurePane();
     }
 
@@ -172,6 +157,20 @@ export class SpaceWorkspaceComponent implements OnChanges {
     showTalk(): void {
         this.pane = 'talk';
         void this.loadTalk();
+    }
+
+    private clearRoom(): void {
+        this.selectedTaskId = null;
+        this.selectedTaskName = '';
+        this.folderChoice = '';
+        this.uploadFolder = '';
+        this.talkDraft = '';
+        this.talkMessages = [];
+        this.talkOldest = null;
+        this.talkHasEarlier = false;
+        this.talkError = '';
+        this.talkSaving = false;
+        this.pane = 'overview';
     }
 
     private ensurePane(): void {
