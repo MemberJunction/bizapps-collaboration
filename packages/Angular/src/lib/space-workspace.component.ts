@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
@@ -45,11 +45,17 @@ export interface WorkspaceRole extends RoleFlags {
     styleUrl: './space-workspace.component.css',
 })
 export class SpaceWorkspaceComponent {
+    constructor(private readonly changes: ChangeDetectorRef) {}
+
+    @ViewChild(TaskPanelComponent) taskPanel?: TaskPanelComponent;
+    @ViewChild(TaskKanbanComponent) taskBoard?: TaskKanbanComponent;
+    @ViewChild(TaskGanttComponent) taskGantt?: TaskGanttComponent;
     @Input() spaces: WorkspaceSpace[] = [];
     @Input() members: (MemberSnapshot & { displayName?: string })[] = [];
     @Input() items: { id: string; spaceId: string; label: string; band: Band; kind?: 'file' | 'task' | 'conversation'; folder?: string | null; recordId?: string | null }[] = [];
     @Input() roles: WorkspaceRole[] = [];
     @Input() viewerUserId: string | null = null;
+    @Input() viewerPersonId: string | null = null;
     @Input() approval: 'Approve' | 'AutoApprove' = 'Approve';
     @Input() memberCap: number | null = null;
 
@@ -59,6 +65,7 @@ export class SpaceWorkspaceComponent {
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
     @Output() readonly fileTask = new EventEmitter<{ spaceId: string; name: string; band: Band }>();
+    @Output() readonly fileSubtask = new EventEmitter<{ parentId: string; name: string }>();
     pane: 'people' | 'library' | 'work' = 'people';
     uploadEnabled = true;
     uploadFolder = '';
@@ -77,6 +84,8 @@ export class SpaceWorkspaceComponent {
     createAtTop = false;
     taskName = '';
     taskBand: Band = 'Shared';
+    subtaskName = '';
+    selectedTaskId: string | null = null;
     workView: 'list' | 'board' | 'gantt' = 'list';
 
     selectedId: string | null = null;
@@ -98,6 +107,7 @@ export class SpaceWorkspaceComponent {
 
     select(id: string): void {
         this.selectedId = id;
+        this.selectedTaskId = null;
         this.ensurePane();
     }
 
@@ -204,7 +214,7 @@ export class SpaceWorkspaceComponent {
         const ids = this.itemsHere(spaceId, 'task').map((item) => sqlUuid(item.recordId)).filter((id): id is string => !!id);
         if (!ids.length) return '1 = 0';
         const list = ids.map((id) => `'${id}'`).join(', ');
-        return `ID IN (${list}) OR RootParentID IN (${list})`;
+        return `(ID IN (${list}) OR RootParentID IN (${list}))`;
     }
 
     assigneeScope(spaceId: string): string {
@@ -222,6 +232,30 @@ export class SpaceWorkspaceComponent {
     showList(): void { this.workView = 'list'; }
     showBoard(): void { this.workView = 'board'; }
     showGantt(): void { this.workView = 'gantt'; }
+
+    chooseTask(task: { ID: string }): void {
+        this.selectedTaskId = task.ID;
+    }
+
+    openTask(taskId: string): void {
+        this.selectedTaskId = taskId;
+        this.workView = 'list';
+        this.changes.detectChanges();
+        this.taskPanel?.OpenDetail(taskId);
+    }
+
+    sendSubtask(): void {
+        const name = this.subtaskName.trim();
+        if (!this.selectedTaskId || !name || !this.canContributeHere()) return;
+        this.fileSubtask.emit({ parentId: this.selectedTaskId, name });
+        this.subtaskName = '';
+    }
+
+    refreshWork(): void {
+        this.taskPanel?.Refresh();
+        this.taskBoard?.Refresh();
+        this.taskGantt?.Refresh();
+    }
 
     sendCreate(): void {
         if (!this.createName.trim() || !this.createTypeId) return;

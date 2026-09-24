@@ -31,6 +31,10 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                 const system = await requireSystemUser(this);
                 const place = await filedTask(provider, system, this.ID);
                 if (place?.root) return refuse(result, 'ParentID', 'Task refused: a filed root task cannot take a parent.');
+                const parent = await filedTask(provider, system, this.ParentID);
+                if ((place?.spaceId ?? null) !== (parent?.spaceId ?? null)) {
+                    return refuse(result, 'ParentID', 'Task refused: a task stays in the space it was filed in.');
+                }
             } catch (error) {
                 LogError(`Filed root check for task ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
                 return refuse(result, 'ParentID', 'Task refused: the space could not be read.');

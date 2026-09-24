@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, ViewChild } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey, EntityRecordNameInput, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -6,6 +6,7 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
 import { lockoutMessage, openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
 
@@ -39,6 +40,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [canOpenChat]="canOpenChat"
           (openConversation)="openConversation($event)"
           [viewerUserId]="viewerId"
+          [viewerPersonId]="viewerPersonId"
           [viewerIsStaff]="viewerIsStaff"
           (invite)="onInvite($event)"
           (mintLink)="onMintLink($event)"
@@ -47,15 +49,17 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           (create)="onCreate($event)"
           (upload)="onUpload($event)"
           (fileTask)="onFileTask($event)"
+          (fileSubtask)="onFileSubtask($event)"
           (openItem)="onOpenItem($event)" />
       }
     `,
 })
 @RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')
 export class CollaborationSectionResource extends BaseResourceComponent {
+    @ViewChild(SpaceWorkspaceComponent) workspace?: SpaceWorkspaceComponent;
     spaces: WorkspaceSpace[] = [];
     members: MemberSnapshot[] = [];
-    items: { id: string; spaceId: string; label: string; band: Band; kind: 'file' | 'task' | 'conversation'; folder: string | null }[] = [];
+    items: { id: string; spaceId: string; label: string; band: Band; kind: 'file' | 'task' | 'conversation'; folder: string | null; recordId: string | null }[] = [];
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
     conversations: { spaceId: string; id: string }[] = [];
@@ -69,6 +73,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         this.navigationService.OpenNavItemByName('Conversations', { conversationId: id }, chat.ID);
     }
     viewerId: string | null = null;
+    viewerPersonId: string | null = null;
     viewerIsStaff = false;
     denied = false;
     lockout = lockoutMessage([]);
@@ -90,6 +95,19 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         return provider.ExecuteGQL.bind(provider);
     }
 
+    private async personFor(user: UserInfo): Promise<string | null> {
+        const id = (user.ID ?? '').replace(/[{}]/g, '');
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+        const rows = await new RunView().RunView<{ ID: string }>({
+            EntityName: 'MJ_BizApps_Common: People',
+            ExtraFilter: `LinkedUserID = '${id}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, user);
+        return rows.Success ? rows.Results?.[0]?.ID ?? null : null;
+    }
+
     private user(): UserInfo | undefined {
         const current = new Metadata().CurrentUser;
         return current ?? undefined;
@@ -98,6 +116,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     private async reload(): Promise<void> {
         const user = this.user();
         this.viewerId = user?.ID ?? null;
+        this.viewerPersonId = user ? await this.personFor(user) : null;
         this.viewerIsStaff = (user?.UserRoles ?? []).some((role) => role.Role === 'UI' || role.Role === 'Developer' || role.Role === 'Integration');
         if (!user) {
             this.denied = true;
@@ -298,6 +317,28 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The task was refused.';
         }
+        this.changes.markForCheck();
+    }
+
+    async onFileSubtask(event: { parentId: string; name: string }): Promise<void> {
+        const user = this.user();
+        if (!user) return;
+        const parent = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
+        if (!(await parent.Load(event.parentId))) {
+            this.message = 'That task could not be read.';
+            this.changes.markForCheck();
+            return;
+        }
+        const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
+        task.NewRecord();
+        task.Set('Name', event.name.trim());
+        task.Set('ParentID', event.parentId);
+        task.Set('TypeID', parent.Get('TypeID'));
+        task.Set('Status', 'Open');
+        task.Set('Priority', parent.Get('Priority') || 'Medium');
+        const saved = await task.Save();
+        this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
+        if (saved) this.workspace?.refreshWork();
         this.changes.markForCheck();
     }
 

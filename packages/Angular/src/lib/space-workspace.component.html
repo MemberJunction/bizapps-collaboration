@@ -178,6 +178,12 @@
               }
               <button type="submit">File task</button>
             </form>
+            @if (selectedTaskId) {
+              <form class="invite" (submit)="$event.preventDefault(); sendSubtask()">
+                <label>Subtask<input name="subtask-name" [(ngModel)]="subtaskName" placeholder="Name" /></label>
+                <button type="submit">Add subtask</button>
+              </form>
+            }
           }
           <div class="tabs">
             <div class="tablist" role="tablist" aria-label="Work">
@@ -186,12 +192,14 @@
               <button type="button" role="tab" [class.on]="workView === 'gantt'" [attr.aria-selected]="workView === 'gantt'" (click)="showGantt()">Gantt</button>
             </div>
           </div>
-          @if (workView === 'list') {
-            <bizapps-task-panel [ExtraFilter]="taskScope(space.id)" [AssigneeScope]="assigneeScope(space.id)" [ShowCreateButton]="false" [ShowQuickAdd]="false" />
-          } @else if (workView === 'board') {
-            <bizapps-task-kanban [ExtraFilter]="taskScope(space.id)" />
-          } @else {
-            <bizapps-task-gantt [ExtraFilter]="taskScope(space.id)" [Height]="'28rem'" />
+          @for (scope of [taskScope(space.id)]; track scope) {
+            @if (workView === 'list') {
+              <bizapps-task-panel [ExtraFilter]="scope" [AssigneeScope]="assigneeScope(space.id)" [PersonID]="viewerPersonId" [ShowCreateButton]="false" [ShowQuickAdd]="false" (AfterTaskSelected)="chooseTask($event)" />
+            } @else if (workView === 'board') {
+              <bizapps-task-kanban [ExtraFilter]="scope" [ReadOnly]="!canContributeHere()" (TaskClicked)="openTask($event)" />
+            } @else {
+              <bizapps-task-gantt [ExtraFilter]="scope" [Height]="'28rem'" (TaskClicked)="openTask($event)" />
+            }
           }
         </section>
         }
