@@ -31,11 +31,6 @@
       <header>
         <p class="eyebrow">{{ space.vocabulary }}</p>
         <h1>{{ space.name }}</h1>
-        @if (canOpenChat) {
-          @if (conversationFor(space.id); as conversationId) {
-            <p><button type="button" class="text" (click)="openConversation.emit(conversationId)">Open the space conversation</button></p>
-          }
-        }
         <p class="meta">
           @if (space.closedAt) {
             <span class="pill">Closed</span>
@@ -47,9 +42,24 @@
           }
           <span class="pill">Agent {{ space.agentRetrieval }}</span>
         </p>
+        <div class="tabs" role="tablist" aria-label="Space">
+          <button type="button" role="tab" [class.on]="pane === 'people'" [attr.aria-selected]="pane === 'people'" (click)="showPeople()">People</button>
+          @if (libraryOn(space)) {
+            <button type="button" role="tab" [class.on]="pane === 'library'" [attr.aria-selected]="pane === 'library'" (click)="showLibrary()">Library</button>
+          }
+          @if (workOn(space)) {
+            <button type="button" role="tab" [class.on]="pane === 'work'" [attr.aria-selected]="pane === 'work'" (click)="showWork()">Work</button>
+          }
+          @if (canOpenChat) {
+            @if (conversationFor(space.id); as conversationId) {
+              <button type="button" (click)="openConversation.emit(conversationId)">Conversation</button>
+            }
+          }
+        </div>
       </header>
 
-      <div class="columns">
+      <div class="panel">
+        @if (pane === 'people') {
         <section aria-labelledby="roster-heading">
           <h2 id="roster-heading">People</h2>
           <ul class="roster">
@@ -105,21 +115,9 @@
           </form>
           }
         </section>
-
+        } @else if (pane === 'library' && libraryOn(space)) {
         <section aria-labelledby="items-heading">
-          <h2 id="items-heading">Material</h2>
-          <div class="tabs" role="tablist">
-            @if (space.libraryPanel !== false && panels.library !== false) {
-              <button type="button" role="tab" class="node" [class.on]="material === 'library'" [attr.aria-selected]="material === 'library'" (click)="material = 'library'">Library</button>
-            }
-            @if (space.workPanel !== false && panels.work) {
-              <button type="button" role="tab" class="node" [class.on]="material === 'work'" [attr.aria-selected]="material === 'work'" (click)="material = 'work'">Work</button>
-            }
-          </div>
-          @if (viewerIsStaff && (space.governancePanel || panels.governance)) {
-            <p class="empty">Governance waits for the Committees move onto Space.</p>
-          }
-          @if (material === 'library' && space.libraryPanel !== false && panels.library !== false) {
+          <h2 id="items-heading">Library</h2>
             @if (uploadEnabled && canContributeHere()) {
             <form class="invite" (submit)="$event.preventDefault(); sendUpload()">
               <label>Upload<input name="upload" type="file" (change)="chooseFile($event)" /></label>
@@ -157,7 +155,13 @@
             } @empty {
               <p class="empty">No files in this space yet. An upload becomes one item, in one folder.</p>
             }
-          } @else {
+        </section>
+        } @else {
+        <section aria-labelledby="work-heading">
+          <h2 id="work-heading">Work</h2>
+          @if (viewerIsStaff && (space.governancePanel || panels.governance)) {
+            <p class="empty">Governance waits for the Committees move onto Space.</p>
+          }
             <ul class="items">
               @for (item of itemsHere(space.id, 'task'); track item.id) {
                 <li>
@@ -168,8 +172,8 @@
                 <li class="empty">Tasks in this space show up here. They stay BizApps Tasks records. This list is the projection.</li>
               }
             </ul>
-          }
         </section>
+        }
       </div>
     } @else {
       <p class="empty">Select a space.</p>

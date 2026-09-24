@@ -57,7 +57,7 @@ export class SpaceWorkspaceComponent {
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
-    material: 'library' | 'work' = 'library';
+    pane: 'people' | 'library' | 'work' = 'people';
     uploadEnabled = true;
     uploadFolder = '';
     uploadMessage = '';
@@ -93,9 +93,34 @@ export class SpaceWorkspaceComponent {
 
     select(id: string): void {
         this.selectedId = id;
-        const space = this.spaces.find((item) => item.id === id);
-        if (space?.libraryPanel === false) this.material = 'work';
-        if (space?.workPanel === false) this.material = 'library';
+        this.ensurePane();
+    }
+
+    showPeople(): void {
+        this.pane = 'people';
+    }
+
+    showLibrary(): void {
+        this.pane = 'library';
+    }
+
+    showWork(): void {
+        this.pane = 'work';
+    }
+
+    private ensurePane(): void {
+        const space = this.selected;
+        if (!space) return;
+        if (this.pane === 'library' && !this.libraryOn(space)) this.pane = 'people';
+        if (this.pane === 'work' && !this.workOn(space)) this.pane = 'people';
+    }
+
+    libraryOn(space: WorkspaceSpace): boolean {
+        return space.libraryPanel !== false && this.panels.library !== false;
+    }
+
+    workOn(space: WorkspaceSpace): boolean {
+        return space.workPanel !== false && !!this.panels.work;
     }
 
     membersHere(spaceId: string): (MemberSnapshot & { displayName?: string })[] {

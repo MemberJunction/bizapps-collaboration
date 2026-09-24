@@ -20,6 +20,10 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
     standalone: true,
     imports: [SpaceWorkspaceComponent, NoAccessComponent],
     changeDetection: ChangeDetectionStrategy.OnPush,
+    styles: [`
+      :host { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+      mj-collaboration-workspace { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    `],
     template: `
       @if (denied) {
         <mj-collaboration-no-access [detail]="lockout" />

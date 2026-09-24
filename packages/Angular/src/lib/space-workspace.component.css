@@ -1,5 +1,9 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   color: var(--mj-text-primary, inherit);
   background: var(--mj-bg-surface, transparent);
   font: inherit;
@@ -7,17 +11,36 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(14rem, 22rem) 1fr;
-  min-height: 100%;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--mj-border-default, transparent);
 }
 
 .tree, .main {
+  min-height: 0;
   padding: 1.25rem 1.5rem 2rem;
 }
 
 .tree {
+  overflow: auto;
   border-right: 1px solid var(--mj-border-default, transparent);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header { flex: 0 0 auto; }
+
+.panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .eyebrow {
@@ -126,9 +149,25 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .text { padding: 0; border: 0; text-decoration: underline; }
 
-.tabs { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0;
+}
+
+.tabs button {
+  border: 1px solid var(--mj-border-default, transparent);
+  padding: 0.4rem 0.85rem;
+  background: var(--mj-bg-surface, transparent);
+}
+
+.tabs button.on {
+  border-color: var(--mj-brand-primary, currentColor);
+  background: var(--mj-bg-surface-active, transparent);
+}
 
 @media (max-width: 800px) {
-  .workspace, .columns { grid-template-columns: 1fr; }
+  .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(10rem, 34%) minmax(0, 1fr); }
   .tree { border-right: 0; border-bottom: 1px solid var(--mj-border-default, transparent); }
 }
