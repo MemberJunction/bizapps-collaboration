@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
     agentMayQuote,
     authorizeItemWrite,
+    mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,
     isSelfRemoval,
@@ -492,6 +493,45 @@ describe('space writes', () => {
         const guest = member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' });
         assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'bea', callerIsStaff: false, nextOwnerId: 'ada', here: guest, onParent: null }).ok, false);
         assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: null }).ok, false);
+    });
+});
+
+describe('filing a root task', () => {
+    const now = new Date('2026-09-22T00:00:00Z');
+    it('refuses a guest', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'bea',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, false);
+    });
+    it('files a client member on Shared when they ask for Team', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'bea',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'child', userId: 'bea', role: { ...guestRole, canContribute: true }, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, true);
+        if (decision.ok) assert.equal(decision.band, 'Shared');
+    });
+    it('keeps Team when the caller can see it', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'ada',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'root', userId: 'ada', role: ownerRole })],
+        });
+        assert.equal(decision.ok, true);
+        if (decision.ok) assert.equal(decision.band, 'Team');
     });
 });
 

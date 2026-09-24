@@ -6,6 +6,7 @@ export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNot
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
+export { attachRootTask } from './attach-root-task.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

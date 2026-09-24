@@ -1,6 +1,7 @@
 export {
     agentMayQuote,
     authorizeItemWrite,
+    mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,
     flagExceedsGrantor,

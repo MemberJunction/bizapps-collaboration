@@ -318,6 +318,31 @@ export function authorizeSpaceWrite(input: {
 }
 
 /**
+ * Filing a task as the root item of a space. The same rules as a new file:
+ * the caller must be able to add material, and a caller who cannot see Team
+ * lands the item on Shared.
+ */
+export function mayFileRootTask(input: {
+    callerUserId: string | null;
+    spaceId: string;
+    requestedBand: Band;
+    now: Date;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): PromotionDecision | InviteRefusal {
+    return authorizeItemWrite({
+        callerUserId: input.callerUserId,
+        previousSpaceId: null,
+        nextSpaceId: input.spaceId,
+        previousBand: null,
+        nextBand: input.requestedBand,
+        now: input.now,
+        spaces: input.spaces,
+        memberships: input.memberships,
+    });
+}
+
+/**
  * Placing, moving, or demoting an item. The caller must reach every space
  * involved. Leaving the shared band, or entering it, requires CanPromoteBand.
  * A shared item that stays shared does not rewrite the promotion stamp.
