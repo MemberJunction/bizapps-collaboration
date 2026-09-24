@@ -42,14 +42,16 @@
           }
           <span class="pill">Agent {{ space.agentRetrieval }}</span>
         </p>
-        <div class="tabs" role="tablist" aria-label="Space">
-          <button type="button" role="tab" [class.on]="pane === 'people'" [attr.aria-selected]="pane === 'people'" (click)="showPeople()">People</button>
-          @if (libraryOn(space)) {
-            <button type="button" role="tab" [class.on]="pane === 'library'" [attr.aria-selected]="pane === 'library'" (click)="showLibrary()">Library</button>
-          }
-          @if (workOn(space)) {
-            <button type="button" role="tab" [class.on]="pane === 'work'" [attr.aria-selected]="pane === 'work'" (click)="showWork()">Work</button>
-          }
+        <div class="tabs">
+          <div class="tablist" role="tablist" aria-label="Space">
+            <button type="button" role="tab" [class.on]="pane === 'people'" [attr.aria-selected]="pane === 'people'" (click)="showPeople()">People</button>
+            @if (libraryOn(space)) {
+              <button type="button" role="tab" [class.on]="pane === 'library'" [attr.aria-selected]="pane === 'library'" (click)="showLibrary()">Library</button>
+            }
+            @if (workOn(space)) {
+              <button type="button" role="tab" [class.on]="pane === 'work'" [attr.aria-selected]="pane === 'work'" (click)="showWork()">Work</button>
+            }
+          </div>
           @if (canOpenChat) {
             @if (conversationFor(space.id); as conversationId) {
               <button type="button" (click)="openConversation.emit(conversationId)">Conversation</button>

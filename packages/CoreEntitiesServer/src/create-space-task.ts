@@ -5,6 +5,7 @@ import { deleteActivitiesThenTask, fileRootTask } from './file-root-task.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 import { callerPersonId } from './task-attribution.js';
+import { parseUuid } from './uuid.js';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
@@ -94,10 +95,12 @@ export async function createSpaceTask(
 
 /** Deletes the task's activities, then the task. Both run as the given user. */
 export async function removeUnfiledTask(provider: IMetadataProvider, actor: UserInfo, taskId: string): Promise<boolean> {
+    const id = parseUuid(taskId);
+    if (!id) return false;
     const view = RunView.FromMetadataProvider(provider);
     const rows = await view.RunView<{ ID: string }>({
         EntityName: ACTIVITIES,
-        ExtraFilter: `TaskID = '${taskId.replace(/'/g, "''")}'`,
+        ExtraFilter: `TaskID = '${id}'`,
         Fields: ['ID'],
         MaxRows: 200,
         ResultType: 'simple',
@@ -106,13 +109,15 @@ export async function removeUnfiledTask(provider: IMetadataProvider, actor: User
     return deleteActivitiesThenTask(
         (rows.Results ?? []).map((row) => row.ID),
         async (activityId) => {
+            const activityKey = parseUuid(activityId);
+            if (!activityKey) return false;
             const activity = await provider.GetEntityObject<mjBizAppsTasksTaskActivityEntity>(ACTIVITIES, actor);
-            if (!(await activity.Load(activityId))) return false;
+            if (!(await activity.Load(activityKey))) return false;
             return activity.Delete();
         },
         async () => {
             const task = await provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
-            if (!(await task.Load(taskId))) return false;
+            if (!(await task.Load(id))) return false;
             return task.Delete();
         },
     );
