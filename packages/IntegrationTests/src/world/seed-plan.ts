@@ -49,15 +49,13 @@ export async function seedWorldPlan(input: {
 }
 
 async function whenAllowed(provider: IMetadataProvider, preferred: UserInfo, entityName: string, write: (actor: UserInfo) => Promise<void>): Promise<void> {
-    try {
+    const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(entityName, preferred);
+    if (probe.EntityInfo.GetUserPermisions(preferred).CanCreate) {
         await write(preferred);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!/permission/i.test(message)) throw error;
-        LogError(`86: ${preferred.Name || preferred.ID} cannot create ${entityName} until bizapps-tasks grants the UI role create and update. Saving as the system user.`);
-        const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, preferred);
-        await write(await requireSystemUser(probe));
+        return;
     }
+    LogError(`86: ${preferred.Name || preferred.ID} cannot create ${entityName} until bizapps-tasks grants the UI role create and update. Saving as the system user.`);
+    await write(await requireSystemUser(probe));
 }
 
 async function filedRoot(provider: IMetadataProvider, actor: UserInfo, spaceId: string, name: string, band: 'Shared' | 'Team'): Promise<string> {
