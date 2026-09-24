@@ -314,7 +314,14 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 
 ## Upgrading
 
-After a MemberJunction upgrade that adds core entities, re-apply the participant shell grant so every `__mj` entity has a Space Participant read row. The statement is the `INSERT … SELECT` at the bottom of `migrations/V202609230110__v0.1.x__Contribute_Shell_And_Nav.sql`. `NOT EXISTS` makes it safe to run again. `scripts/persona-check.sql` asserts that every core entity has that row, and that every participant filter executes.
+Space Participant read grants with `(1 = 0)` are defined explicitly for the core entities required by active UI engines and the shell. To regenerate or update these permissions:
+
+```bash
+node scripts/generate-core-permissions.mjs
+npx mj sync push --dir metadata
+```
+
+This writes `metadata/entity-permissions/.core-entity-permissions.json` and pushes the updated grants. `scripts/persona-check.sql` asserts that every readable participant filter executes cleanly.
 
 ## License
 

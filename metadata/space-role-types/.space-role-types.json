@@ -1,0 +1,104 @@
+[
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Code": "owner",
+      "Name": "Owner",
+      "Level": 40,
+      "MaxGrantableLevel": 40,
+      "CanInvite": true,
+      "CanPromoteBand": true,
+      "CanSeeTeamBand": true,
+      "IsOwnerRole": true,
+      "CanContribute": true,
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000002"
+    },
+    "fields": {
+      "Code": "admin",
+      "Name": "Admin",
+      "Level": 30,
+      "MaxGrantableLevel": 20,
+      "CanInvite": true,
+      "CanPromoteBand": true,
+      "CanSeeTeamBand": true,
+      "IsOwnerRole": false,
+      "CanContribute": true,
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000003"
+    },
+    "fields": {
+      "Code": "member",
+      "Name": "Member",
+      "Level": 20,
+      "MaxGrantableLevel": 10,
+      "CanInvite": true,
+      "CanPromoteBand": false,
+      "CanSeeTeamBand": true,
+      "IsOwnerRole": false,
+      "CanContribute": true,
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000004"
+    },
+    "fields": {
+      "Code": "guest",
+      "Name": "Guest",
+      "Level": 10,
+      "MaxGrantableLevel": 0,
+      "CanInvite": false,
+      "CanPromoteBand": false,
+      "CanSeeTeamBand": false,
+      "IsOwnerRole": false,
+      "CanContribute": false,
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000005"
+    },
+    "fields": {
+      "Code": "client-admin",
+      "Name": "Client admin",
+      "Level": 20,
+      "MaxGrantableLevel": 10,
+      "CanInvite": true,
+      "CanPromoteBand": false,
+      "CanSeeTeamBand": false,
+      "IsOwnerRole": false,
+      "CanContribute": true,
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B2000001-0000-4000-8000-000000000006"
+    },
+    "fields": {
+      "Code": "client-member",
+      "Name": "Client member",
+      "Level": 10,
+      "MaxGrantableLevel": 0,
+      "CanInvite": false,
+      "CanPromoteBand": false,
+      "CanSeeTeamBand": false,
+      "IsOwnerRole": false,
+      "CanContribute": true,
+      "IsActive": true
+    }
+  }
+]

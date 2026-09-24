@@ -168,11 +168,11 @@ FROM __mj.RowLevelSecurityFilter f
 INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
 INNER JOIN __mj.Entity e ON e.ID = p.EntityID
 WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Item Uses';
-SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE UserID = @user AND ' + @pred;
-EXEC sys.sp_executesql @countSql, N'@user uniqueidentifier, @out int OUTPUT', @User, @n OUTPUT;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE SpaceID = @ours AND UserID = @user AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @user uniqueidentifier, @out int OUTPUT', @Ours, @User, @n OUTPUT;
 IF @n <> 1 THROW 50000, 'Item uses filter did not return the caller''s use.', 1;
-SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE UserID = @other AND ' + @pred;
-EXEC sys.sp_executesql @countSql, N'@other uniqueidentifier, @out int OUTPUT', @Other, @n OUTPUT;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE SpaceID = @ours AND UserID = @other AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @other uniqueidentifier, @out int OUTPUT', @Ours, @Other, @n OUTPUT;
 IF @n <> 0 THROW 50000, 'Item uses filter returned someone else''s use.', 1;
 
 DECLARE @Filter nvarchar(max), @Name nvarchar(255), @Schema sysname, @View sysname, @sql nvarchar(max);

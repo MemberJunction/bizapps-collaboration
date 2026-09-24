@@ -1,0 +1,65 @@
+[
+  {
+    "primaryKey": {
+      "ID": "A1000001-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Code": "workspace",
+      "Name": "Workspace",
+      "Vocabulary": "workspace",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "GovernancePanel": false,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A1000001-0000-4000-8000-000000000002"
+    },
+    "fields": {
+      "Code": "committee",
+      "Name": "Committee",
+      "Vocabulary": "committee",
+      "Discoverability": "Listed",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "GovernancePanel": true,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A1000001-0000-4000-8000-000000000003"
+    },
+    "fields": {
+      "Code": "cohort",
+      "Name": "Cohort",
+      "Vocabulary": "cohort",
+      "Discoverability": "Listed",
+      "JoinMode": "RequestToJoin",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "GovernancePanel": false,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultBand": "Shared",
+      "InviteApproval": "Approve",
+      "IsActive": true
+    }
+  }
+]

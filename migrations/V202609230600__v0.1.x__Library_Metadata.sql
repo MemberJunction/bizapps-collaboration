@@ -1,5 +1,10 @@
+-- =============================================================================
 -- ItemUse records which space the use happened in.
--- Descriptions and read filters for the library tables. The filters are never NULL.
+--
+-- Folder description for SpaceItem.
+-- Row-level security filters for share notices and item uses live under metadata/
+-- and are applied with mj sync push.
+-- =============================================================================
 
 IF COL_LENGTH('${flyway:defaultSchema}.ItemUse', 'SpaceID') IS NULL
     ALTER TABLE [${flyway:defaultSchema}].[ItemUse] ADD SpaceID UNIQUEIDENTIFIER NULL;
@@ -29,14 +34,4 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'SpaceItem',
     @level2type = N'COLUMN', @level2name = N'Folder';
-GO
-
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000008')
-    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
-    VALUES ('C0FFEE00-0000-4000-8000-000000000008', N'Collaboration: Notices For The Caller', N'Share notices addressed to the caller, in spaces they reach.', N'(RecipientUserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [${flyway:defaultSchema}].[fnCollaborationAccess](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))))');
-GO
-
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000009')
-    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
-    VALUES ('C0FFEE00-0000-4000-8000-000000000009', N'Collaboration: Own Item Uses', N'The caller''s own item uses, in spaces they reach.', N'(UserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [${flyway:defaultSchema}].[fnCollaborationAccess](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))))');
 GO

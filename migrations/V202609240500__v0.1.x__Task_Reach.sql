@@ -1,7 +1,13 @@
+-- =============================================================================
+-- Task reach functions: fnCollaborationAccess and fnCollaborationTasks.
+--
 -- A write filter can name only real columns. RootParentID is virtual, so the
 -- tree walk lives in fnCollaborationTasks, over the base Task table.
--- CanContribute is carried from the nearest seat. A write is allowed only
--- when that seat, on the task's own space, can add material and see the band.
+-- CanContribute is carried from the nearest seat.
+--
+-- Row-level security filters and task entity permissions live under metadata/
+-- and are applied with mj sync push.
+-- =============================================================================
 
 DROP FUNCTION IF EXISTS [${flyway:defaultSchema}].[fnCollaborationAccess];
 GO
@@ -122,87 +128,4 @@ END;';
 
 DROP FUNCTION IF EXISTS [${flyway:defaultSchema}].[fnCollaborationTasks];
 EXEC sp_executesql @sql;
-GO
-
-DECLARE @Reach nvarchar(max) = N'[${flyway:defaultSchema}].[fnCollaborationTasks](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))';
-DECLARE @Read nvarchar(max) = N'(ID IN (SELECT TaskID FROM ' + @Reach + N'))';
-DECLARE @Create nvarchar(max) = N'(ParentID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1))';
-DECLARE @Update nvarchar(max) = N'(ID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1) AND (ID IN (SELECT TaskID FROM ' + @Reach + N' WHERE IsRoot = 1) OR ParentID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1)))';
-DECLARE @ChildRead nvarchar(max) = N'(TaskID IN (SELECT TaskID FROM ' + @Reach + N'))';
-DECLARE @ChildWrite nvarchar(max) = N'(TaskID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1))';
-DECLARE @DepRead nvarchar(max) = N'(TaskID IN (SELECT TaskID FROM ' + @Reach + N') AND DependsOnTaskID IN (SELECT TaskID FROM ' + @Reach + N'))';
-DECLARE @DepWrite nvarchar(max) = N'(TaskID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1) AND DependsOnTaskID IN (SELECT TaskID FROM ' + @Reach + N' WHERE CanWrite = 1))';
-
-DECLARE @PersonSchema sysname;
-DECLARE @PersonTable sysname;
-SELECT @PersonSchema = SchemaName, @PersonTable = BaseTable FROM [${mjSchema}].[Entity] WHERE Name = N'MJ_BizApps_Common: People';
-DECLARE @Author nvarchar(max) = N'(PersonID IN (SELECT ID FROM ' + QUOTENAME(@PersonSchema) + N'.' + QUOTENAME(@PersonTable) + N' WHERE LinkedUserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER)))';
-DECLARE @CommentUpdate nvarchar(max) = N'(' + @ChildWrite + N' AND ' + @Author + N')';
-
-UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET Description = N'Tasks filed in a space the caller reaches, and the tasks under them.', FilterText = @Read WHERE ID = 'C0FFEE00-0000-4000-8000-000000000012';
-UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET Description = N'Rows whose task is one the caller can see.', FilterText = @ChildRead WHERE ID = 'C0FFEE00-0000-4000-8000-000000000013';
-UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET Name = N'Collaboration: Subtasks Under A Writable Parent', Description = N'A subtask whose parent the caller can write. Roots are filed by the server.', FilterText = @Create WHERE ID = 'C0FFEE00-0000-4000-8000-000000000014';
-UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET Name = N'Collaboration: Tasks The Caller May Change', Description = N'A task the caller can write. A filed root may keep a parent the caller cannot write.', FilterText = @Update WHERE ID = 'C0FFEE00-0000-4000-8000-000000000016';
-UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET Description = N'A row of a task the caller can write.', FilterText = @ChildWrite WHERE ID = 'C0FFEE00-0000-4000-8000-000000000017';
-
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000018')
-    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
-    VALUES ('C0FFEE00-0000-4000-8000-000000000018', N'Collaboration: Task Dependencies In Reach', N'Both ends of the dependency are tasks the caller can see.', @DepRead);
-ELSE
-    UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET FilterText = @DepRead WHERE ID = 'C0FFEE00-0000-4000-8000-000000000018';
-
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000019')
-    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
-    VALUES ('C0FFEE00-0000-4000-8000-000000000019', N'Collaboration: Task Dependencies A Contributor May Change', N'Both ends are tasks the caller can write.', @DepWrite);
-ELSE
-    UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET FilterText = @DepWrite WHERE ID = 'C0FFEE00-0000-4000-8000-000000000019';
-
-IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000020')
-    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
-    VALUES ('C0FFEE00-0000-4000-8000-000000000020', N'Collaboration: Task Comments The Author May Change', N'The caller wrote the comment, on a task they can write.', @CommentUpdate);
-ELSE
-    UPDATE [${mjSchema}].[RowLevelSecurityFilter] SET FilterText = @CommentUpdate WHERE ID = 'C0FFEE00-0000-4000-8000-000000000020';
-GO
-
-DECLARE @Participant uniqueidentifier = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
-
-UPDATE p
-SET p.ReadRLSFilterID = 'C0FFEE00-0000-4000-8000-000000000018',
-    p.CreateRLSFilterID = 'C0FFEE00-0000-4000-8000-000000000019',
-    p.UpdateRLSFilterID = 'C0FFEE00-0000-4000-8000-000000000019',
-    p.DeleteRLSFilterID = 'C0FFEE00-0000-4000-8000-000000000019',
-    p.CanDelete = 1
-FROM [${mjSchema}].[EntityPermission] AS p
-INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = p.EntityID
-WHERE e.Name = N'MJ_BizApps_Tasks: Task Dependencies'
-  AND p.RoleID = @Participant;
-
-UPDATE p
-SET p.UpdateRLSFilterID = 'C0FFEE00-0000-4000-8000-000000000020'
-FROM [${mjSchema}].[EntityPermission] AS p
-INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = p.EntityID
-WHERE e.Name = N'MJ_BizApps_Tasks: Task Comments'
-  AND p.RoleID = @Participant;
-
-UPDATE p
-SET p.CanDelete = 1,
-    p.DeleteRLSFilterID = p.UpdateRLSFilterID
-FROM [${mjSchema}].[EntityPermission] AS p
-INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = p.EntityID
-WHERE p.RoleID = @Participant
-  AND e.Name IN (N'MJ_BizApps_Tasks: Task Assignments', N'MJ_BizApps_Tasks: Task Tag Links')
-  AND p.UpdateRLSFilterID IS NOT NULL;
-
-IF EXISTS (
-    SELECT 1
-    FROM [${mjSchema}].[EntityPermission] AS p
-    INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = p.EntityID
-    WHERE p.RoleID = @Participant
-      AND e.Name LIKE N'MJ_BizApps_Tasks:%'
-      AND ((p.CanRead = 1 AND p.ReadRLSFilterID IS NULL)
-        OR (p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
-        OR (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
-        OR (p.CanDelete = 1 AND p.DeleteRLSFilterID IS NULL))
-)
-    THROW 50000, 'A Space Participant task grant is missing its filter.', 1;
 GO
