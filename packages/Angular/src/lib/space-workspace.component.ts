@@ -1,7 +1,9 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { LogError, RunView } from '@memberjunction/core';
+import { LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { FormsModule } from '@angular/forms';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
     flagExceedsGrantor,
@@ -41,7 +43,7 @@ export interface WorkspaceRole extends RoleFlags {
 @Component({
     selector: 'mj-collaboration-workspace',
     standalone: true,
-    imports: [FormsModule, NgTemplateOutlet, TaskPanelComponent, TaskKanbanComponent, TaskGanttComponent],
+    imports: [FormsModule, NgTemplateOutlet, ConversationsModule, TaskPanelComponent, TaskKanbanComponent, TaskGanttComponent],
     templateUrl: './space-workspace.component.html',
     styleUrl: './space-workspace.component.css',
 })
@@ -67,7 +69,10 @@ export class SpaceWorkspaceComponent {
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
     @Output() readonly fileTask = new EventEmitter<{ spaceId: string; name: string; band: Band }>();
     @Output() readonly fileSubtask = new EventEmitter<{ parentId: string; name: string }>();
-    pane: 'people' | 'library' | 'work' = 'people';
+    pane: 'overview' | 'people' | 'library' | 'work' | 'talk' = 'overview';
+    spaceQuery = '';
+    createOpen = false;
+    folderChoice = '';
     uploadEnabled = true;
     uploadFolder = '';
     uploadMessage = '';
@@ -78,8 +83,8 @@ export class SpaceWorkspaceComponent {
     @Input() viewerIsStaff = false;
     @Input() conversations: { spaceId: string; id: string }[] = [];
     @Input() panels: { messaging?: boolean; library?: boolean; work?: boolean; governance?: boolean } = { messaging: true, library: true, work: true, governance: false };
-    @Input() canOpenChat = false;
-    @Output() readonly openConversation = new EventEmitter<string>();
+    @Input() currentUser: UserInfo | null = null;
+    @Input() environmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
     createName = '';
     createTypeId = '';
     createAtTop = false;
@@ -112,26 +117,68 @@ export class SpaceWorkspaceComponent {
         this.selectedId = id;
         this.selectedTaskId = null;
         this.selectedTaskName = '';
+        this.folderChoice = '';
+        this.pane = 'overview';
         this.ensurePane();
     }
 
-    showPeople(): void {
-        this.pane = 'people';
-    }
-
-    showLibrary(): void {
-        this.pane = 'library';
-    }
-
-    showWork(): void {
-        this.pane = 'work';
-    }
+    showOverview(): void { this.pane = 'overview'; }
+    showPeople(): void { this.pane = 'people'; }
+    showLibrary(): void { this.pane = 'library'; }
+    showWork(): void { this.pane = 'work'; }
+    showTalk(): void { this.pane = 'talk'; }
 
     private ensurePane(): void {
         const space = this.selected;
         if (!space) return;
-        if (this.pane === 'library' && !this.libraryOn(space)) this.pane = 'people';
-        if (this.pane === 'work' && !this.workOn(space)) this.pane = 'people';
+        if (this.pane === 'library' && !this.libraryOn(space)) this.pane = 'overview';
+        if (this.pane === 'work' && !this.workOn(space)) this.pane = 'overview';
+    }
+
+    showNode(space: WorkspaceSpace): boolean {
+        const query = this.spaceQuery.trim().toLowerCase();
+        if (!query) return true;
+        if (space.name.toLowerCase().includes(query)) return true;
+        if (this.children(space.id).some((child) => this.showNode(child))) return true;
+        let parent = space.parentId;
+        const seen = new Set<string>();
+        while (parent && !seen.has(parent)) {
+            seen.add(parent);
+            const ancestor = this.spaces.find((item) => item.id === parent);
+            if (!ancestor) break;
+            if (ancestor.name.toLowerCase().includes(query)) return true;
+            parent = ancestor.parentId ?? null;
+        }
+        return false;
+    }
+
+    initials(name: string): string {
+        const parts = name.trim().split(/\s+/).slice(0, 2);
+        const letters = parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
+        return letters || '?';
+    }
+
+    avatarClass(name: string): string {
+        const total = [...name].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+        return `av-${total % 4}`;
+    }
+
+    activeFolder(spaceId: string): string | null {
+        const folders = this.foldersHere(spaceId);
+        if (this.folderChoice && folders.includes(this.folderChoice)) return this.folderChoice;
+        return folders[0] ?? null;
+    }
+
+    chooseFolder(name: string): void {
+        this.folderChoice = name;
+    }
+
+    filesIn(spaceId: string, folder: string) {
+        return this.itemsHere(spaceId, 'file').filter((item) => folder === 'Unfiled' ? !item.folder : item.folder === folder);
+    }
+
+    parentOf(space: WorkspaceSpace): WorkspaceSpace | null {
+        return this.spaces.find((item) => item.id === space.parentId) ?? null;
     }
 
     libraryOn(space: WorkspaceSpace): boolean {
@@ -298,6 +345,7 @@ export class SpaceWorkspaceComponent {
         const parentId = !this.ownsSelected() || this.createAtTop || !this.selected ? null : this.selected.id;
         this.create.emit({ name: this.createName.trim(), parentId, typeId: this.createTypeId });
         this.createName = '';
+        this.createOpen = false;
     }
 
     sendMint(): void {

@@ -2,8 +2,8 @@ import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, ViewChil
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey, EntityRecordNameInput, LogError, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { ResourceData } from '@memberjunction/core-entities';
+import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { lockoutMessage, openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
@@ -37,8 +37,8 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           [roles]="roles"
           [types]="types"
           [conversations]="conversations"
-          [canOpenChat]="canOpenChat"
-          (openConversation)="openConversation($event)"
+          [currentUser]="viewer"
+          [environmentId]="environmentId"
           [viewerUserId]="viewerId"
           [viewerPersonId]="viewerPersonId"
           [viewerIsStaff]="viewerIsStaff"
@@ -63,15 +63,8 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     roles: WorkspaceRole[] = [];
     types: { id: string; name: string }[] = [];
     conversations: { spaceId: string; id: string }[] = [];
-    get canOpenChat(): boolean {
-        return !!this.apps.GetAppByName('Chat');
-    }
-
-    openConversation(id: string): void {
-        const chat = this.apps.GetAppByName('Chat');
-        if (!chat) return;
-        this.navigationService.OpenNavItemByName('Conversations', { conversationId: id }, chat.ID);
-    }
+    viewer: UserInfo | null = null;
+    readonly environmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
     viewerId: string | null = null;
     viewerPersonId: string | null = null;
     viewerIsStaff = false;
@@ -79,8 +72,6 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     lockout = lockoutMessage([]);
     message = '';
     private readonly changes = inject(ChangeDetectorRef);
-    private readonly apps = inject(ApplicationManager);
-
     override ngOnInit(): void {
         super.ngOnInit();
         void this.reload().finally(() => {
@@ -119,6 +110,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
 
     private async reload(): Promise<void> {
         const user = this.user();
+        this.viewer = user ?? null;
         this.viewerId = user?.ID ?? null;
         this.viewerPersonId = user ? await this.personFor(user) : null;
         this.viewerIsStaff = (user?.UserRoles ?? []).some((role) => role.Role === 'UI' || role.Role === 'Developer' || role.Role === 'Integration');

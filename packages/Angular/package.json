@@ -24,6 +24,7 @@
     "@memberjunction/ng-entity-viewer": "^6.1.2",
     "@memberjunction/ng-link-directives": "^6.1.2",
     "@memberjunction/ng-base-application": "^6.1.2",
+    "@memberjunction/ng-conversations": "^6.1.2",
     "@memberjunction/ng-shared": "^6.1.2",
     "@mj-biz-apps/tasks-entities": "^1.5.0",
     "@mj-biz-apps/tasks-ng": "^1.5.0"
@@ -41,6 +42,7 @@
     "@memberjunction/ng-base-forms": "6.1.3",
     "@memberjunction/ng-entity-viewer": "6.1.3",
     "@memberjunction/ng-link-directives": "6.1.3",
+    "@memberjunction/ng-conversations": "6.1.3",
     "@memberjunction/ng-shared": "6.1.3",
     "@mj-biz-apps/tasks-entities": "1.5.0",
     "@mj-biz-apps/tasks-ng": "1.5.0",
