@@ -38,7 +38,7 @@
         <label class="space-picker">Space
           <select [ngModel]="space.id" (ngModelChange)="select($event)">
             @for (option of spaces; track option.id) {
-              @if (showNode(option)) { <option [value]="option.id">{{ option.name }}</option> }
+              @if (showNode(option)) { <option [value]="option.id">{{ spaceOption(option) }}</option> }
             }
           </select>
         </label>
@@ -206,7 +206,7 @@
               @if (uploadEnabled && canContributeHere()) {
                 <form class="drop" (submit)="$event.preventDefault(); sendUpload()">
                   <div>
-                    <strong>Add a file{{ activeFolder(space.id) ? ' to ' + activeFolder(space.id) : '' }}</strong>
+                    <strong>Add a file to {{ uploadHeading() }}</strong>
                     <span class="muted">Shared is what the room can open. Team stays with staff.</span>
                   </div>
                   <label class="file-pick">File<input name="upload" type="file" (change)="chooseFile($event)" /></label>
@@ -296,6 +296,13 @@
           @if (conversationFor(space.id)) {
             @if (currentUser) {
               <div class="chat-host">
+                <div class="card-h">
+                  <p class="muted">Everyone seated in this space reads this, clients included.</p>
+                  <button type="button" class="linkish" (click)="loadTalk()">Refresh</button>
+                </div>
+                @if (talkHasEarlier) {
+                  <button type="button" class="btn" (click)="loadTalk(true)">Earlier messages</button>
+                }
                 <mj-conversation-message-list
                   [messages]="talkMessages"
                   [currentUser]="currentUser"
@@ -308,8 +315,8 @@
                 @if (talkError) { <p class="verdict no">{{ talkError }}</p> }
                 @if (canContributeHere() && !space.closedAt) {
                   <form class="composer" (submit)="$event.preventDefault(); sendTalk()">
-                    <label class="grow">Message<input name="talk" [(ngModel)]="talkDraft" placeholder="Write to the room" /></label>
-                    <button class="btn primary" type="submit" [disabled]="!talkDraft.trim()">Send</button>
+                    <label class="grow">Message<input name="talk" [(ngModel)]="talkDraft" maxlength="4000" placeholder="Write to the room" /></label>
+                    <button class="btn primary" type="submit" [disabled]="talkSaving || !talkDraft.trim()">Send</button>
                   </form>
                 } @else if (space.closedAt) {
                   <p class="muted">A closed space keeps the messages and does not take a new one.</p>
@@ -332,7 +339,7 @@
 </div>
 
 <mj-dialog [Visible]="createOpen" Title="New space" Size="sm" (Close)="createOpen = false">
-  <form (submit)="$event.preventDefault(); sendCreate()">
+  <form id="new-space-form" (submit)="$event.preventDefault(); sendCreate()">
     <p class="muted">A root space is one relationship. The work inside it is a sub-space.</p>
     <label>Name<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
     <label>Type
@@ -344,11 +351,11 @@
     @if (viewerIsStaff && ownsSelected()) {
       <label class="check"><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
     }
-    <mj-dialog-actions>
-      <button class="btn primary" type="submit">Create space</button>
-      <button class="btn" type="button" (click)="createOpen = false">Cancel</button>
-    </mj-dialog-actions>
   </form>
+  <mj-dialog-actions>
+    <button class="btn primary" type="submit" form="new-space-form">Create space</button>
+    <button class="btn" type="button" (click)="createOpen = false">Cancel</button>
+  </mj-dialog-actions>
 </mj-dialog>
 
 <ng-template #node let-space>

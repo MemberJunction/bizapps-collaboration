@@ -330,10 +330,11 @@ export class CollaborationSectionResource extends BaseResourceComponent {
                 PostSpaceMessage(input: $input) { Success DetailID ErrorMessage }
             }`, { input: { SpaceID: event.spaceId, Text: event.text } });
             const payload = result?.PostSpaceMessage as { Success?: boolean; ErrorMessage?: string } | undefined;
-            workspace.talkError = payload?.Success ? '' : (payload?.ErrorMessage || 'The message was refused.');
-            if (payload?.Success) await workspace.loadTalk();
+            const saved = !!payload?.Success;
+            workspace.finishTalk(saved, saved ? '' : (payload?.ErrorMessage || 'The message was refused.'));
+            if (saved) await workspace.loadTalk();
         } catch (error) {
-            workspace.talkError = error instanceof Error ? error.message : 'The message was refused.';
+            workspace.finishTalk(false, error instanceof Error ? error.message : 'The message was refused.');
         }
         this.changes.markForCheck();
     }

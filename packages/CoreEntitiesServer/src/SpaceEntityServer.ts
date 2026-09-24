@@ -116,6 +116,7 @@ function fail(result: ValidationResult, field: string, message: string): Validat
 }
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
+const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 async function ensureConversation(space: SpaceEntityServer, user: NonNullable<SpaceEntityServer['ContextCurrentUser']>): Promise<void> {
     const metadata = asMetadata(space.ProviderToUse);
@@ -124,24 +125,39 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         return;
     }
     const system = await requireSystemUser(space);
-    const existing = await new RunView(space.RunViewProviderToUse).RunView({
+    const existing = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string }>({
         EntityName: 'MJ: Conversations',
         ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${space.ID}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
         MaxRows: 1,
     }, system);
     if (!existing.Success) {
         LogError(`Space conversation was not bound: ${existing.ErrorMessage ?? 'the lookup failed'}`);
         return;
     }
-    if ((existing.Results?.length ?? 0) > 0) {
-        return;
-    }
+    const found = existing.Results?.[0]?.ID;
     const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
-    conversation.NewRecord();
-    conversation.UserID = space.OwnerID;
+    if (found) {
+        if (!(await conversation.Load(found))) {
+            LogError(`Space conversation was not bound: ${found} could not be read.`);
+            return;
+        }
+    } else {
+        conversation.NewRecord();
+        conversation.LinkedEntityID = SPACES_ENTITY_ID;
+        conversation.LinkedRecordID = space.ID;
+    }
+    const alreadyBound = !!found
+        && conversation.UserID?.toLowerCase() === system.ID.toLowerCase()
+        && conversation.ApplicationScope === 'Application'
+        && conversation.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()
+        && conversation.Name === space.Name;
+    if (alreadyBound) return;
+    conversation.UserID = system.ID;
     conversation.Name = space.Name;
-    conversation.LinkedEntityID = SPACES_ENTITY_ID;
-    conversation.LinkedRecordID = space.ID;
+    conversation.ApplicationScope = 'Application';
+    conversation.ApplicationID = COLLABORATION_APP_ID;
     const saved = await conversation.Save();
     if (!saved) {
         LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);

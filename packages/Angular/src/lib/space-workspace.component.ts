@@ -78,6 +78,9 @@ export class SpaceWorkspaceComponent {
     folderChoice = '';
     talkDraft = '';
     talkError = '';
+    talkSaving = false;
+    talkHasEarlier = false;
+    talkOldest: number | null = null;
     talkMessages: MJConversationDetailEntity[] = [];
     uploadEnabled = true;
     uploadFolder = '';
@@ -124,6 +127,7 @@ export class SpaceWorkspaceComponent {
         this.selectedTaskId = null;
         this.selectedTaskName = '';
         this.folderChoice = '';
+        this.uploadFolder = '';
         this.pane = 'overview';
         this.ensurePane();
     }
@@ -184,42 +188,67 @@ export class SpaceWorkspaceComponent {
 
     chooseFolder(name: string): void {
         this.folderChoice = name;
-        if (name !== 'Unfiled') this.uploadFolder = name;
+        this.uploadFolder = name === 'Unfiled' ? '' : name;
+    }
+
+    uploadHeading(): string {
+        return this.uploadFolder.trim() || 'Unfiled';
+    }
+
+    spaceOption(space: WorkspaceSpace): string {
+        const parent = this.parentOf(space);
+        return parent ? `${parent.name} / ${space.name}` : space.name;
     }
 
     agentWords(value: string): string {
         if (value === 'Included') return 'Agents can use this room';
         if (value === 'ExcludedEntirely') return 'Agents skip this room';
-        return 'Agents stay in the parent';
+        return 'Agents asked higher up skip this room';
     }
 
-    async loadTalk(): Promise<void> {
+    async loadTalk(earlier = false): Promise<void> {
         const space = this.selected;
         const conversationId = space ? this.conversationFor(space.id) : null;
         if (!space || !conversationId || !this.currentUser) {
             this.talkMessages = [];
+            this.talkHasEarlier = false;
             this.changes.markForCheck();
             return;
         }
+        const older = earlier && this.talkOldest != null ? ` AND Sequence < ${this.talkOldest}` : '';
         const rows = await new RunView().RunView<MJConversationDetailEntity>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID = '${conversationId}'`,
-            OrderBy: 'Sequence',
+            ExtraFilter: `ConversationID = '${conversationId}'${older}`,
+            OrderBy: 'Sequence DESC',
             ResultType: 'entity_object',
             MaxRows: 200,
         }, this.currentUser);
-        this.talkMessages = rows.Success ? (rows.Results ?? []) : [];
-        if (!rows.Success) this.talkError = rows.ErrorMessage || 'The conversation could not be read.';
+        if (!rows.Success) {
+            this.talkError = rows.ErrorMessage || 'The conversation could not be read.';
+            this.changes.markForCheck();
+            return;
+        }
+        const page = [...(rows.Results ?? [])].reverse();
+        this.talkMessages = earlier ? [...page, ...this.talkMessages] : page;
+        this.talkHasEarlier = (rows.Results?.length ?? 0) === 200;
+        this.talkOldest = this.talkMessages[0]?.Sequence ?? null;
         this.changes.markForCheck();
     }
 
     sendTalk(): void {
         const space = this.selected;
         const text = this.talkDraft.trim();
-        if (!space || !text || !this.canContributeHere() || space.closedAt) return;
+        if (this.talkSaving || !space || !text || !this.canContributeHere() || space.closedAt) return;
+        this.talkSaving = true;
         this.talkError = '';
         this.postMessage.emit({ spaceId: space.id, text });
-        this.talkDraft = '';
+    }
+
+    finishTalk(saved: boolean, error = ''): void {
+        this.talkSaving = false;
+        if (saved) this.talkDraft = '';
+        else this.talkError = error || 'The message was refused.';
+        this.changes.markForCheck();
     }
 
     filesIn(spaceId: string, folder: string) {
