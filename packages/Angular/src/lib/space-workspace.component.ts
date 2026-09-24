@@ -1,5 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { RunView } from '@memberjunction/core';
 import { FormsModule } from '@angular/forms';
 import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
@@ -85,6 +86,7 @@ export class SpaceWorkspaceComponent {
     taskName = '';
     taskBand: Band = 'Shared';
     subtaskName = '';
+    subtaskSaving = false;
     selectedTaskId: string | null = null;
     selectedTaskName = '';
     workView: 'list' | 'board' | 'gantt' = 'list';
@@ -240,12 +242,9 @@ export class SpaceWorkspaceComponent {
         this.selectedTaskName = task.Name ?? this.selectedTaskName;
     }
 
-    /** Closing the drawer leaves the task selected, so Add subtask still names it. */
-    keepSelectedTask(): void {}
-
-    openTask(taskId: string): void {
-        if (this.selectedTaskId !== taskId) this.selectedTaskName = '';
+    async openTask(taskId: string): Promise<void> {
         this.selectedTaskId = taskId;
+        this.selectedTaskName = await this.lookupTaskName(taskId);
         this.workView = 'list';
         this.changes.detectChanges();
         this.taskPanel?.OpenDetail(taskId);
@@ -253,12 +252,27 @@ export class SpaceWorkspaceComponent {
 
     sendSubtask(): void {
         const name = this.subtaskName.trim();
-        if (!this.selectedTaskId || !name || !this.canContributeHere()) return;
+        if (this.subtaskSaving || !this.selectedTaskId || !name || !this.canContributeHere()) return;
+        this.subtaskSaving = true;
         this.fileSubtask.emit({ parentId: this.selectedTaskId, name });
     }
 
-    finishSubtask(): void {
-        this.subtaskName = '';
+    finishSubtask(saved: boolean): void {
+        this.subtaskSaving = false;
+        if (saved) this.subtaskName = '';
+    }
+
+    private async lookupTaskName(taskId: string): Promise<string> {
+        const id = sqlUuid(taskId);
+        if (!id) return '';
+        const rows = await new RunView().RunView<{ Name: string }>({
+            EntityName: 'MJ_BizApps_Tasks: Tasks',
+            ExtraFilter: `ID = '${id}'`,
+            Fields: ['Name'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        });
+        return rows.Success ? rows.Results?.[0]?.Name ?? '' : '';
     }
 
     refreshWork(): void {

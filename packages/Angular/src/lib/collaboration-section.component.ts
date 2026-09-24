@@ -342,10 +342,8 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         task.Priority = parent.Priority;
         const saved = await task.Save();
         this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
-        if (saved) {
-            this.workspace?.finishSubtask();
-            this.workspace?.refreshWork();
-        }
+        this.workspace?.finishSubtask(saved);
+        if (saved) this.workspace?.refreshWork();
         this.changes.markForCheck();
     }
 

@@ -1,5 +1,5 @@
-import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, LogError, LogStatus, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { TaskEntityServer } from '@mj-biz-apps/tasks-entities-server';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -62,4 +62,7 @@ function refuse(result: ValidationResult, field: string, message: string): Valid
 
 export function LoadCollaborationTaskEntityServer(): void {
     void CollaborationTaskEntityServer;
+    const matches = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseEntity, 'MJ_BizApps_Tasks: Tasks');
+    const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseEntity, 'MJ_BizApps_Tasks: Tasks');
+    LogStatus(`Tasks class: ${(winner?.SubClass as { name?: string } | undefined)?.name ?? 'none'} at ${winner?.Priority ?? 'none'}; registered ${matches.map((row) => `${(row.SubClass as { name?: string }).name}@${row.Priority}`).join(', ')}`);
 }
