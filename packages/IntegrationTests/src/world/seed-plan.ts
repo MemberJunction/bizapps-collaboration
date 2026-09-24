@@ -3,14 +3,14 @@
  * Ada files the roots. Bea, a client member, adds the subtask, the assignment
  * and a comment. The read-back tries the three moves the gate refuses.
  */
-import { Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     mjBizAppsTasksTaskAssignmentEntity,
     mjBizAppsTasksTaskCommentEntity,
     mjBizAppsTasksTaskDependencyEntity,
     mjBizAppsTasksTaskEntity,
 } from '@mj-biz-apps/tasks-entities';
-import { createSpaceTask, LoadCollaborationTaskEntityServer, LoadTaskAttributionEntityServer } from '@mj-biz-apps/collaboration-core-entities-server';
+import { createSpaceTask, LoadCollaborationTaskEntityServer, LoadTaskAttributionEntityServer, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
 const COMMENTS = 'MJ_BizApps_Tasks: Task Comments';
@@ -33,11 +33,12 @@ export async function seedWorldPlan(input: {
     const prep = await filedRoot(input.provider, ada, discovery, 'Internal prep', 'Team');
     const audit = await filedRoot(input.provider, ada, committee, 'Audit plan', 'Shared');
     const visit = await subtask(input.provider, bea, plan, 'Site visit');
-    await assign(input.provider, ada, plan, await personId(input.provider, ada, ada.ID));
+    const adaPerson = await personId(input.provider, ada, ada.ID);
+    await whenAllowed(input.provider, ada, ASSIGNMENTS, (actor) => assign(input.provider, actor, plan, adaPerson));
     await assign(input.provider, bea, visit, await personId(input.provider, bea, bea.ID));
     await depend(input.provider, bea, visit, plan);
     await comment(input.provider, bea, visit, 'The site visit is on the plan.', await personId(input.provider, bea, bea.ID));
-    await comment(input.provider, ada, plan, 'Staff note on the plan.', await personId(input.provider, ada, ada.ID));
+    await whenAllowed(input.provider, ada, COMMENTS, (actor) => comment(input.provider, actor, plan, 'Staff note on the plan.', adaPerson));
     await expectRefusal(input.provider, bea, visit, null, 'stays in the space');
     await expectRefusal(input.provider, bea, visit, audit, 'stays in the space');
     await expectRefusal(input.provider, bea, visit, prep, 'promote rights');
@@ -45,6 +46,18 @@ export async function seedWorldPlan(input: {
     const visible = await taskIds(input.provider, bea, `(ID IN ('${plan}', '${visit}', '${audit}', '${prep}'))`);
     if (!visible.has(plan.toLowerCase()) || !visible.has(visit.toLowerCase())) throw new Error('Bea cannot see the Discovery plan.');
     if (visible.has(audit.toLowerCase()) || visible.has(prep.toLowerCase())) throw new Error('Bea can see a task outside Discovery Shared.');
+}
+
+async function whenAllowed(provider: IMetadataProvider, preferred: UserInfo, entityName: string, write: (actor: UserInfo) => Promise<void>): Promise<void> {
+    try {
+        await write(preferred);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/permission/i.test(message)) throw error;
+        LogError(`86: ${preferred.Name || preferred.ID} cannot create ${entityName} until bizapps-tasks grants the UI role create and update. Saving as the system user.`);
+        const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, preferred);
+        await write(await requireSystemUser(probe));
+    }
 }
 
 async function filedRoot(provider: IMetadataProvider, actor: UserInfo, spaceId: string, name: string, band: 'Shared' | 'Team'): Promise<string> {
