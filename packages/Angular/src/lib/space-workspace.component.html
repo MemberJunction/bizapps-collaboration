@@ -161,19 +161,38 @@
         } @else {
         <section aria-labelledby="work-heading">
           <h2 id="work-heading">Work</h2>
+          <p class="empty">A comment on a Shared task is visible to everyone who can see the task.</p>
           @if (viewerIsStaff && (space.governancePanel || panels.governance)) {
             <p class="empty">Governance waits for the Committees move onto Space.</p>
           }
-            <ul class="items">
-              @for (item of itemsHere(space.id, 'task'); track item.id) {
-                <li>
-                  <span>{{ item.label }}</span>
-                  <span class="pill" [class.team]="item.band === 'Team'">{{ item.band }}</span>
-                </li>
-              } @empty {
-                <li class="empty">Tasks in this space show up here. They stay BizApps Tasks records. This list is the projection.</li>
+          @if (canContributeHere()) {
+            <form class="invite" (submit)="$event.preventDefault(); sendTask()">
+              <label>New task<input name="task-name" [(ngModel)]="taskName" placeholder="Name" /></label>
+              @if (seesTeam(space.id)) {
+                <label>Band
+                  <select name="task-band" [(ngModel)]="taskBand">
+                    <option value="Shared">Shared</option>
+                    <option value="Team">Team</option>
+                  </select>
+                </label>
               }
-            </ul>
+              <button type="submit">File task</button>
+            </form>
+          }
+          <div class="tabs">
+            <div class="tablist" role="tablist" aria-label="Work">
+              <button type="button" role="tab" [class.on]="workView === 'list'" [attr.aria-selected]="workView === 'list'" (click)="showList()">List</button>
+              <button type="button" role="tab" [class.on]="workView === 'board'" [attr.aria-selected]="workView === 'board'" (click)="showBoard()">Board</button>
+              <button type="button" role="tab" [class.on]="workView === 'gantt'" [attr.aria-selected]="workView === 'gantt'" (click)="showGantt()">Gantt</button>
+            </div>
+          </div>
+          @if (workView === 'list') {
+            <bizapps-task-panel [ExtraFilter]="taskScope(space.id)" [AssigneeScope]="assigneeScope(space.id)" [ShowCreateButton]="false" [ShowQuickAdd]="false" />
+          } @else if (workView === 'board') {
+            <bizapps-task-kanban [ExtraFilter]="taskScope(space.id)" />
+          } @else {
+            <bizapps-task-gantt [ExtraFilter]="taskScope(space.id)" [Height]="'28rem'" />
+          }
         </section>
         }
       </div>

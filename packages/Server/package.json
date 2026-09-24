@@ -14,7 +14,7 @@
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0",
-    "class-validator": "0.14.2"
+    "class-validator": "^0.14.3"
   },
   "peerDependencies": {
     "@memberjunction/communication-engine": "^6.1.2",

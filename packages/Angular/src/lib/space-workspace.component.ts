@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
     flagExceedsGrantor,
     membershipReaches,
@@ -39,14 +40,14 @@ export interface WorkspaceRole extends RoleFlags {
 @Component({
     selector: 'mj-collaboration-workspace',
     standalone: true,
-    imports: [FormsModule, NgTemplateOutlet],
+    imports: [FormsModule, NgTemplateOutlet, TaskPanelComponent, TaskKanbanComponent, TaskGanttComponent],
     templateUrl: './space-workspace.component.html',
     styleUrl: './space-workspace.component.css',
 })
 export class SpaceWorkspaceComponent {
     @Input() spaces: WorkspaceSpace[] = [];
     @Input() members: (MemberSnapshot & { displayName?: string })[] = [];
-    @Input() items: { id: string; spaceId: string; label: string; band: Band; kind?: 'file' | 'task' | 'conversation'; folder?: string | null }[] = [];
+    @Input() items: { id: string; spaceId: string; label: string; band: Band; kind?: 'file' | 'task' | 'conversation'; folder?: string | null; recordId?: string | null }[] = [];
     @Input() roles: WorkspaceRole[] = [];
     @Input() viewerUserId: string | null = null;
     @Input() approval: 'Approve' | 'AutoApprove' = 'Approve';
@@ -57,6 +58,7 @@ export class SpaceWorkspaceComponent {
     @Output() readonly promote = new EventEmitter<{ itemId: string }>();
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
+    @Output() readonly fileTask = new EventEmitter<{ spaceId: string; name: string; band: Band }>();
     pane: 'people' | 'library' | 'work' = 'people';
     uploadEnabled = true;
     uploadFolder = '';
@@ -73,6 +75,9 @@ export class SpaceWorkspaceComponent {
     createName = '';
     createTypeId = '';
     createAtTop = false;
+    taskName = '';
+    taskBand: Band = 'Shared';
+    workView: 'list' | 'board' | 'gantt' = 'list';
 
     selectedId: string | null = null;
     linkEmail = '';
@@ -186,6 +191,38 @@ export class SpaceWorkspaceComponent {
         });
     }
 
+    sendTask(): void {
+        const space = this.selected;
+        const name = this.taskName.trim();
+        if (!space || !name || !this.canContributeHere()) return;
+        const band = this.reach(space.id)?.role.canSeeTeamBand ? this.taskBand : 'Shared';
+        this.fileTask.emit({ spaceId: space.id, name, band });
+        this.taskName = '';
+    }
+
+    taskScope(spaceId: string): string {
+        const ids = this.itemsHere(spaceId, 'task').map((item) => sqlUuid(item.recordId)).filter((id): id is string => !!id);
+        if (!ids.length) return '1 = 0';
+        const list = ids.map((id) => `'${id}'`).join(', ');
+        return `ID IN (${list}) OR RootParentID IN (${list})`;
+    }
+
+    assigneeScope(spaceId: string): string {
+        const ids = new Set<string>();
+        for (const member of this.members) {
+            if (member.status === 'Removed' || member.status === 'Invited') continue;
+            if (!membershipReaches(this.spaces, this.members, member.userId, spaceId)) continue;
+            const id = sqlUuid(member.userId);
+            if (id) ids.add(id);
+        }
+        if (!ids.size) return '1 = 0';
+        return `LinkedUserID IN (${[...ids].map((id) => `'${id}'`).join(', ')})`;
+    }
+
+    showList(): void { this.workView = 'list'; }
+    showBoard(): void { this.workView = 'board'; }
+    showGantt(): void { this.workView = 'gantt'; }
+
     sendCreate(): void {
         if (!this.createName.trim() || !this.createTypeId) return;
         const parentId = !this.ownsSelected() || this.createAtTop || !this.selected ? null : this.selected.id;
@@ -215,6 +252,10 @@ export class SpaceWorkspaceComponent {
 
     canContributeHere(): boolean {
         return !!this.reach(this.selected?.id)?.role.canContribute;
+    }
+
+    seesTeam(spaceId: string): boolean {
+        return !!this.reach(spaceId)?.role?.canSeeTeamBand;
     }
 
     ancestorGroups(space: WorkspaceSpace): { id: string; name: string; members: (MemberSnapshot & { displayName?: string })[] }[] {
@@ -262,6 +303,13 @@ export class SpaceWorkspaceComponent {
         }
         return depth;
     }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function sqlUuid(value: string | null | undefined): string | null {
+    const id = (value ?? '').replace(/^ID\|/i, '');
+    return UUID.test(id) ? id : null;
 }
 
 function encodeBase64(bytes: Uint8Array): string {

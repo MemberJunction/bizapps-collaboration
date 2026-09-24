@@ -26,6 +26,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'generated/generated.{js,ts}'),
     resolve(here, 'upload-space-file.resolver.{js,ts}'),
     resolve(here, 'mint-space-link.resolver.{js,ts}'),
+    resolve(here, 'create-space-task.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';

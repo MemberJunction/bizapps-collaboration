@@ -18,6 +18,7 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
         const user = this.ContextCurrentUser;
         if (!user) return result;
         if (!this.IsSaved && isSpaceParticipant(user)) {
+            if (!this.ParentID) return refuse(result, 'ParentID', 'Task refused: a root task is filed from the space.');
             const personId = await callerPersonId(this, user);
             if (!personId) return refuse(result, 'CreatedByPersonID', 'Task refused: the signer has no person record.');
             this.CreatedByPersonID = personId;

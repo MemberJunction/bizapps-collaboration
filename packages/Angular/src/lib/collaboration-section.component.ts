@@ -46,6 +46,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           (promote)="onPromote($event)"
           (create)="onCreate($event)"
           (upload)="onUpload($event)"
+          (fileTask)="onFileTask($event)"
           (openItem)="onOpenItem($event)" />
       }
     `,
@@ -180,6 +181,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             band: row.Band,
             kind: row.Entity === 'MJ_BizApps_Tasks: Tasks' ? 'task' as const : row.Entity === 'MJ: Conversations' ? 'conversation' as const : 'file' as const,
             folder: row.Folder,
+            recordId: row.RecordID,
         }));
         const linked = await new RunView().RunView({
             EntityName: 'MJ: Conversations',
@@ -275,6 +277,26 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             if (payload?.Success) await this.reload();
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The upload was refused.';
+        }
+        this.changes.markForCheck();
+    }
+
+    async onFileTask(event: { spaceId: string; name: string; band: 'Team' | 'Shared' }): Promise<void> {
+        const gql = this.gql();
+        if (!gql) {
+            this.message = 'A task needs the API connection.';
+            this.changes.markForCheck();
+            return;
+        }
+        try {
+            const result = await gql(`mutation CreateSpaceTask($input: CreateSpaceTaskInput!) {
+                CreateSpaceTask(input: $input) { Success TaskID ErrorMessage }
+            }`, { input: { SpaceID: event.spaceId, Name: event.name, Band: event.band } });
+            const payload = result?.CreateSpaceTask as { Success?: boolean; ErrorMessage?: string } | undefined;
+            this.message = payload?.Success ? '' : (payload?.ErrorMessage || 'The task was refused.');
+            if (payload?.Success) await this.reload();
+        } catch (error) {
+            this.message = error instanceof Error ? error.message : 'The task was refused.';
         }
         this.changes.markForCheck();
     }
