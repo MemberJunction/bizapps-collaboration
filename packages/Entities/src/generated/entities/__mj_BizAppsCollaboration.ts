@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -17,16 +17,19 @@ export const mjBizAppsCollaborationItemUseSchema = z.object({
         * * Field Name: ItemID
         * * Display Name: Item ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+        * * Description: The space item that was used.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The member who opened, uploaded, or promoted the item.`),
     UsedAt: z.date().describe(`
         * * Field Name: UsedAt
         * * Display Name: Used At
-        * * SQL Data Type: datetimeoffset`),
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the use happened.`),
     Kind: z.union([z.literal('open'), z.literal('promote'), z.literal('upload')]).describe(`
         * * Field Name: Kind
         * * Display Name: Kind
@@ -35,12 +38,14 @@ export const mjBizAppsCollaborationItemUseSchema = z.object({
     * * Possible Values 
     *   * open
     *   * promote
-    *   * upload`),
+    *   * upload
+        * * Description: open, upload, or promote.`),
     SpaceID: z.string().describe(`
         * * Field Name: SpaceID
         * * Display Name: Space ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space the use happened in. Required so the read filter can keep the row inside spaces the caller reaches.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -76,17 +81,20 @@ export const mjBizAppsCollaborationShareNoticeSchema = z.object({
         * * Field Name: SpaceID
         * * Display Name: Space ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space the notice belongs to. The read filter keeps a caller inside spaces they reach.`),
     ItemID: z.string().describe(`
         * * Field Name: ItemID
         * * Display Name: Item ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+        * * Description: The space item that was shared.`),
     RecipientUserID: z.string().describe(`
         * * Field Name: RecipientUserID
         * * Display Name: Recipient User ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The member the notice is for.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -334,7 +342,8 @@ export const mjBizAppsCollaborationSpaceRoleTypeSchema = z.object({
         * * Field Name: CanContribute
         * * Display Name: Can Contribute
         * * SQL Data Type: bit
-        * * Default Value: 0`),
+        * * Default Value: 0
+        * * Description: 1 if the role may contribute content (create, update, or post items, tasks, and messages); 0 for read-only roles.`),
 });
 
 export type mjBizAppsCollaborationSpaceRoleTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceRoleTypeSchema>;
@@ -480,6 +489,12 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAllowParentAssignees: z.boolean().describe(`
+        * * Field Name: DefaultAllowParentAssignees
+        * * Display Name: Default Allow Parent Assignees
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Default AllowParentAssignees setting for new spaces of this type.`),
 });
 
 export type mjBizAppsCollaborationSpaceTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeSchema>;
@@ -503,7 +518,7 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
-        * * Description: Parent space. Null on the perpetual root. Self-reference is the hierarchy key CodeGen marks IsHierarchy.`),
+        * * Description: Parent space. Null on a root. It does not carry the IsHierarchy flag, so CodeGen emits no path columns.`),
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
@@ -566,6 +581,12 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AllowParentAssignees: z.boolean().describe(`
+        * * Field Name: AllowParentAssignees
+        * * Display Name: Allow Parent Assignees
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: 1 if participants in this space may assign people seated on ancestor spaces whose membership reaches this space; 0 to restrict assignment to seats in this space or below. Only staff may change this switch.`),
     SpaceType: z.string().describe(`
         * * Field Name: SpaceType
         * * Display Name: Space Type
@@ -578,6 +599,10 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Field Name: Owner
         * * Display Name: Owner
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceSchema>;
@@ -589,6 +614,7 @@ export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsColl
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: ItemUse
  * * Base View: vwItemUses
+ * * @description A record that a member opened, uploaded, or promoted an item.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -631,6 +657,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
     * * Display Name: Item ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+    * * Description: The space item that was used.
     */
     get ItemID(): string {
         return this.Get('ItemID');
@@ -644,6 +671,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
     * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The member who opened, uploaded, or promoted the item.
     */
     get UserID(): string {
         return this.Get('UserID');
@@ -656,6 +684,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
     * * Field Name: UsedAt
     * * Display Name: Used At
     * * SQL Data Type: datetimeoffset
+    * * Description: When the use happened.
     */
     get UsedAt(): Date {
         return this.Get('UsedAt');
@@ -673,6 +702,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
     *   * open
     *   * promote
     *   * upload
+    * * Description: open, upload, or promote.
     */
     get Kind(): 'open' | 'promote' | 'upload' {
         return this.Get('Kind');
@@ -686,6 +716,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
     * * Display Name: Space ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space the use happened in. Required so the read filter can keep the row inside spaces the caller reaches.
     */
     get SpaceID(): string {
         return this.Get('SpaceID');
@@ -739,6 +770,7 @@ export class mjBizAppsCollaborationItemUseEntity extends BaseEntity<mjBizAppsCol
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: ShareNotice
  * * Base View: vwShareNotices
+ * * @description A notice that an item in this space was shared with a member.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -781,6 +813,7 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
     * * Display Name: Space ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space the notice belongs to. The read filter keeps a caller inside spaces they reach.
     */
     get SpaceID(): string {
         return this.Get('SpaceID');
@@ -794,6 +827,7 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
     * * Display Name: Item ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Items (vwSpaceItems.ID)
+    * * Description: The space item that was shared.
     */
     get ItemID(): string {
         return this.Get('ItemID');
@@ -807,6 +841,7 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
     * * Display Name: Recipient User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The member the notice is for.
     */
     get RecipientUserID(): string {
         return this.Get('RecipientUserID');
@@ -1423,6 +1458,7 @@ export class mjBizAppsCollaborationSpaceRoleTypeEntity extends BaseEntity<mjBizA
     * * Display Name: Can Contribute
     * * SQL Data Type: bit
     * * Default Value: 0
+    * * Description: 1 if the role may contribute content (create, update, or post items, tasks, and messages); 0 for read-only roles.
     */
     get CanContribute(): boolean {
         return this.Get('CanContribute');
@@ -1753,6 +1789,20 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DefaultAllowParentAssignees
+    * * Display Name: Default Allow Parent Assignees
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Default AllowParentAssignees setting for new spaces of this type.
+    */
+    get DefaultAllowParentAssignees(): boolean {
+        return this.Get('DefaultAllowParentAssignees');
+    }
+    set DefaultAllowParentAssignees(value: boolean) {
+        this.Set('DefaultAllowParentAssignees', value);
+    }
 }
 
 
@@ -1817,7 +1867,7 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
-    * * Description: Parent space. Null on the perpetual root. Self-reference is the hierarchy key CodeGen marks IsHierarchy.
+    * * Description: Parent space. Null on a root. It does not carry the IsHierarchy flag, so CodeGen emits no path columns.
     */
     get ParentID(): string | null {
         return this.Get('ParentID');
@@ -1963,6 +2013,20 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
 
     /**
+    * * Field Name: AllowParentAssignees
+    * * Display Name: Allow Parent Assignees
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: 1 if participants in this space may assign people seated on ancestor spaces whose membership reaches this space; 0 to restrict assignment to seats in this space or below. Only staff may change this switch.
+    */
+    get AllowParentAssignees(): boolean {
+        return this.Get('AllowParentAssignees');
+    }
+    set AllowParentAssignees(value: boolean) {
+        this.Set('AllowParentAssignees', value);
+    }
+
+    /**
     * * Field Name: SpaceType
     * * Display Name: Space Type
     * * SQL Data Type: nvarchar(200)
@@ -1987,5 +2051,14 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     */
     get Owner(): string {
         return this.Get('Owner');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }

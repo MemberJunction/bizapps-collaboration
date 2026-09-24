@@ -26,6 +26,7 @@ interface SpaceRow {
     OwnerID: string;
     AgentRetrieval: SpaceNode['agentRetrieval'];
     SpaceTypeID: string;
+    AllowParentAssignees?: boolean;
 }
 
 function toNode(row: SpaceRow): SpaceNode {
@@ -35,6 +36,7 @@ function toNode(row: SpaceRow): SpaceNode {
         inheritsMembership: !!row.InheritsMembership,
         ownerId: parseUuid(row.OwnerID) ?? row.OwnerID,
         agentRetrieval: row.AgentRetrieval,
+        allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
     };
 }
 

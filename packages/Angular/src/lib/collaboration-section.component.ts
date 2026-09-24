@@ -134,13 +134,14 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         const types = new Map((typeRows.Results ?? []).map((row: { ID: string; Vocabulary: string; InviteApproval: 'Approve' | 'AutoApprove'; MemberCap: number | null; LibraryPanel?: boolean; WorkPanel?: boolean; GovernancePanel?: boolean }) => [row.ID, row]));
-        this.spaces = (spaceRows.Results ?? []).map((row: { ID: string; Name: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: WorkspaceSpace['agentRetrieval']; SpaceTypeID: string; ClosedAt: string | null }) => ({
+        this.spaces = (spaceRows.Results ?? []).map((row: { ID: string; Name: string; ParentID: string | null; InheritsMembership: boolean; OwnerID: string; AgentRetrieval: WorkspaceSpace['agentRetrieval']; SpaceTypeID: string; ClosedAt: string | null; AllowParentAssignees?: boolean }) => ({
             id: row.ID,
             name: row.Name,
             parentId: row.ParentID,
             inheritsMembership: !!row.InheritsMembership,
             ownerId: row.OwnerID,
             agentRetrieval: row.AgentRetrieval,
+            allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
             vocabulary: types.get(row.SpaceTypeID)?.Vocabulary ?? 'space',
             closedAt: row.ClosedAt,
             approval: types.get(row.SpaceTypeID)?.InviteApproval ?? 'Approve',

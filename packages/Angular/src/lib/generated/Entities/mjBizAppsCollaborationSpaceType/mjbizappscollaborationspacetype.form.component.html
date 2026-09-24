@@ -169,6 +169,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultAllowParentAssignees"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -192,9 +200,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Spaces','SpaceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Spaces','SpaceTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Spaces')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaces')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaces', $event.totalRowCount)"
                 >

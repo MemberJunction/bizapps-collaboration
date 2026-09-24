@@ -376,10 +376,16 @@ export class SpaceWorkspaceComponent implements OnChanges {
     }
 
     assigneeScope(spaceId: string): string {
+        const space = this.spaces.find((s) => s.id === spaceId);
+        const allowParent = space?.allowParentAssignees ?? true;
         const ids = new Set<string>();
         for (const member of this.members) {
             if (member.status === 'Removed' || member.status === 'Invited') continue;
-            if (!membershipReaches(this.spaces, this.members, member.userId, spaceId)) continue;
+            const reach = membershipReaches(this.spaces, this.members, member.userId, spaceId);
+            if (!reach) continue;
+            if (!allowParent && !this.viewerIsStaff && reach.spaceId.toLowerCase() !== spaceId.toLowerCase()) {
+                continue;
+            }
             const id = sqlUuid(member.userId);
             if (id) ids.add(id);
         }

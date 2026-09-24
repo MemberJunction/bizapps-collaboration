@@ -222,4 +222,47 @@ END
 CLOSE filters;
 DEALLOCATE filters;
 
+-- Field-level security check: Space Participant must read only ID, name, email, and link fields on People.
+-- Any new column added to People without an explicit Deny for Space Participant will fail this check.
+IF OBJECT_ID('__mj.EntityFieldPermission', 'U') IS NOT NULL
+BEGIN
+    DECLARE @UnexpectedReadableFields int = (
+        SELECT COUNT(*)
+        FROM __mj.vwEntityFields ef
+        JOIN __mj.Entity e ON ef.EntityID = e.ID
+        LEFT JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+        WHERE e.Name = N'MJ_BizApps_Common: People'
+          AND ef.Name NOT IN (
+              N'ID', N'FirstName', N'LastName', N'MiddleName', N'Prefix', N'Suffix',
+              N'PreferredName', N'DisplayName', N'Email', N'PrimaryEmail',
+              N'LinkedUserID', N'LinkedUser', N'__mj_CreatedAt', N'__mj_UpdatedAt'
+          )
+          AND (
+              efp.ReadAccess = N'Allow' OR ISNULL(efp.ReadAccess, N'') <> N'Deny'
+          )
+    );
+    IF @UnexpectedReadableFields > 0
+        THROW 50000, 'Space Participant has access to unapproved fields on MJ_BizApps_Common: People.', 1;
+
+    DECLARE @MissingAllowedFields int = (
+        SELECT COUNT(*)
+        FROM (VALUES
+            (N'FirstName'), (N'LastName'), (N'MiddleName'), (N'Prefix'), (N'Suffix'),
+            (N'PreferredName'), (N'DisplayName'), (N'Email'), (N'PrimaryEmail'),
+            (N'LinkedUserID'), (N'LinkedUser')
+        ) AS a(Name)
+        LEFT JOIN (
+            SELECT ef.Name, efp.ReadAccess
+            FROM __mj.vwEntityFields ef
+            JOIN __mj.Entity e ON ef.EntityID = e.ID
+            JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+            WHERE e.Name = N'MJ_BizApps_Common: People'
+        ) AS p ON p.Name = a.Name AND p.ReadAccess = N'Allow'
+        WHERE p.Name IS NULL
+    );
+    IF @MissingAllowedFields > 0
+        THROW 50000, 'Space Participant is missing required Allow on allowed People fields.', 1;
+END
+
 ROLLBACK TRAN;
+

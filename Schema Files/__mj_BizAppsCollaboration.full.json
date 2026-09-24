@@ -396,7 +396,7 @@
                 },         
                 {
                     "Name": "\bCanContribute\b", 
-                    "Description": "",  
+                    "Description": "\b1\b \bif\b \bthe\b \brole\b \bmay\b \bcontribute\b \bcontent\b (\bcreate\b, \bupdate\b, \bor\b \bpost\b \bitems\b, \btasks\b, \band\b \bmessages\b); \b0\b \bfor\b \bread\b-\bonly\b \broles\b.",  
                     "Type": "\bbit\b",
                     "AllowsNull": false 
                 }        
@@ -526,6 +526,12 @@
                     "Description": "",  
                     "Type": "\bdatetimeoffset\b",
                     "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bDefaultAllowParentAssignees\b", 
+                    "Description": "\bDefault\b \bAllowParentAssignees\b \bsetting\b \bfor\b \bnew\b \bspaces\b \bof\b \bthis\b \btype\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
                 }        
             ]
         },
@@ -550,7 +556,7 @@
                 },         
                 {
                     "Name": "\bParentID\b", 
-                    "Description": "\bParent\b \bspace\b. \bNull\b \bon\b \bthe\b \bperpetual\b \broot\b. \bSelf\b-\breference\b \bis\b \bthe\b \bhierarchy\b \bkey\b \bCodeGen\b \bmarks\b \bIsHierarchy\b.",  
+                    "Description": "\bParent\b \bspace\b. \bNull\b \bon\b \ba\b \broot\b. \bIt\b \bdoes\b \bnot\b \bcarry\b \bthe\b \bIsHierarchy\b \bflag\b, \bso\b \bCodeGen\b \bemits\b \bno\b \bpath\b \bcolumns\b.",  
                     "Type": "\buniqueidentifier\b",
                 "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
                 "RelatedEntityFieldName": "\bID\b",
@@ -619,6 +625,12 @@
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bAllowParentAssignees\b", 
+                    "Description": "\b1\b \bif\b \bparticipants\b \bin\b \bthis\b \bspace\b \bmay\b \bassign\b \bpeople\b \bseated\b \bon\b \bancestor\b \bspaces\b \bwhose\b \bmembership\b \breaches\b \bthis\b \bspace\b; \b0\b \bto\b \brestrict\b \bassignment\b \bto\b \bseats\b \bin\b \bthis\b \bspace\b \bor\b \bbelow\b. \bOnly\b \bstaff\b \bmay\b \bchange\b \bthis\b \bswitch\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
                     "Name": "\bSpaceType\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
@@ -635,6 +647,12 @@
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bRootParentID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": true 
                 }        
             ]
         }

@@ -152,9 +152,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Members','SpaceRoleTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Members','SpaceRoleTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Members')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceMembers')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceMembers', $event.totalRowCount)"
                 >

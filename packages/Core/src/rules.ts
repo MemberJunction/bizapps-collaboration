@@ -38,6 +38,7 @@ export interface SpaceNode {
     inheritsMembership: boolean;
     ownerId: string;
     agentRetrieval: AgentRetrieval;
+    allowParentAssignees?: boolean;
 }
 
 export interface InviteRefusal {
@@ -340,6 +341,33 @@ export function mayFileRootTask(input: {
         spaces: input.spaces,
         memberships: input.memberships,
     });
+}
+
+/**
+ * Authorize task assignment to a member whose seat is known.
+ *
+ * When the filed task's space has `allowParentAssignees` off and the caller is
+ * not staff, participants may only assign people seated in their space or below.
+ * An ancestor seat reaches the space through inheritance, but the switch
+ * restricts assignment to local seats.
+ * A Team task can never be given to someone who cannot see Team.
+ */
+export function authorizeTaskAssignment(input: {
+    callerIsStaff: boolean;
+    taskSpaceId: string;
+    assigneeSeatSpaceId: string;
+    allowParentAssignees: boolean;
+    taskBand: Band;
+    assigneeRole: RoleFlags;
+}): { ok: true } | { ok: false; message: string } {
+    if (input.taskBand === 'Team' && !input.assigneeRole.canSeeTeamBand) {
+        return { ok: false, message: 'Assignment refused: a Team task cannot be given to someone who cannot see Team.' };
+    }
+    const isAncestorSeat = idKey(input.assigneeSeatSpaceId) !== idKey(input.taskSpaceId);
+    if (isAncestorSeat && !input.allowParentAssignees && !input.callerIsStaff) {
+        return { ok: false, message: 'Assignment refused: participants may not assign people seated above this space.' };
+    }
+    return { ok: true };
 }
 
 /**

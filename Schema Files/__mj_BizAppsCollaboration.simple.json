@@ -35,13 +35,13 @@
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
             "Description": "\bKind\b \bof\b \bspace\b: \bvocabulary\b, \bwhich\b \bpanels\b \bare\b \bon\b, \bretention\b \band\b \bagent\b \bdefaults\b, \band\b \bhow\b \boutsiders\b \bjoin\b. \bBehavior\b \blives\b \bin\b \bthese\b \bcolumns\b, \bnot\b \bin\b \bcode\b \bbranched\b \bon\b \bthe\b \bname\b.",
             "BaseView": "\bvwSpaceTypes\b", 
-            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bVocabulary\b","\bDiscoverability\b","\bJoinMode\b","\bMessagingPanel\b","\bLibraryPanel\b","\bWorkPanel\b","\bGovernancePanel\b","\bDefaultRetention\b","\bDefaultAgentRetrieval\b","\bDefaultBand\b","\bInviteApproval\b","\bMemberCap\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bVocabulary\b","\bDiscoverability\b","\bJoinMode\b","\bMessagingPanel\b","\bLibraryPanel\b","\bWorkPanel\b","\bGovernancePanel\b","\bDefaultRetention\b","\bDefaultAgentRetrieval\b","\bDefaultBand\b","\bInviteApproval\b","\bMemberCap\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bDefaultAllowParentAssignees\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
             "Description": "\bThe\b \bcontainer\b. \bPermission\b \bboundary\b \band\b \bagent\b \bretrieval\b \bboundary\b, \bas\b \ba\b \btree\b: \bone\b \broot\b \bper\b \brelationship\b, \bsub\b-\bspaces\b \bfor\b \bthe\b \bwork\b \binside\b \bit\b.",
             "BaseView": "\bvwSpaces\b", 
-            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bRetention\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceType\b","\bParent\b","\bOwner\b"]
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bRetention\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bSpaceType\b","\bParent\b","\bOwner\b","\bRootParentID\b"]
         }
         ]
     }

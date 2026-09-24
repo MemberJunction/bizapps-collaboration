@@ -7,7 +7,7 @@
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 *
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, InputType, Mutation,
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
             GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
@@ -23,30 +23,30 @@ import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeE
 //****************************************************************************
 // ENTITY CLASS for MJ_BizApps_Collaboration: Item Uses
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `A record that a member opened, uploaded, or promoted an item.` })
 export class mjBizAppsCollaborationItemUse_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The space item that was used.`}) 
     @MaxLength(36)
-    ItemID?: string;
+    ItemID: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The member who opened, uploaded, or promoted the item.`}) 
     @MaxLength(36)
-    UserID?: string;
+    UserID: string;
         
-    @Field({nullable: true}) 
-    UsedAt?: Date;
+    @Field({description: `When the use happened.`}) 
+    UsedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field({description: `open, upload, or promote.`}) 
     @MaxLength(20)
-    Kind?: string;
+    Kind: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The space the use happened in. Required so the read filter can keep the row inside spaces the caller reaches.`}) 
     @MaxLength(36)
-    SpaceID?: string;
+    SpaceID: string;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -54,16 +54,13 @@ export class mjBizAppsCollaborationItemUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    User?: string;
+    User: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Space?: string;
-        
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
+    Space: string;
         
 }
 
@@ -214,23 +211,23 @@ export class mjBizAppsCollaborationItemUseResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ_BizApps_Collaboration: Share Notices
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `A notice that an item in this space was shared with a member.` })
 export class mjBizAppsCollaborationShareNotice_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The space the notice belongs to. The read filter keeps a caller inside spaces they reach.`}) 
     @MaxLength(36)
-    SpaceID?: string;
+    SpaceID: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The space item that was shared.`}) 
     @MaxLength(36)
-    ItemID?: string;
+    ItemID: string;
         
-    @Field({nullable: true}) 
+    @Field({description: `The member the notice is for.`}) 
     @MaxLength(36)
-    RecipientUserID?: string;
+    RecipientUserID: string;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -238,16 +235,13 @@ export class mjBizAppsCollaborationShareNotice_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Space?: string;
+    Space: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    RecipientUser?: string;
-        
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
+    RecipientUser: string;
         
 }
 
@@ -392,21 +386,21 @@ export class mjBizAppsCollaborationSpaceItem_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(36)
-    SpaceID?: string;
+    SpaceID: string;
         
-    @Field({nullable: true, description: `The entity the item points at. Same polymorphic pair TaskLink uses.`}) 
+    @Field({description: `The entity the item points at. Same polymorphic pair TaskLink uses.`}) 
     @MaxLength(36)
-    EntityID?: string;
+    EntityID: string;
         
-    @Field({nullable: true, description: `Primary key of the pointed-at record, as text, matching TaskLink.RecordID.`}) 
+    @Field({description: `Primary key of the pointed-at record, as text, matching TaskLink.RecordID.`}) 
     @MaxLength(450)
-    RecordID?: string;
+    RecordID: string;
         
-    @Field({nullable: true, description: `Team (working material, not in the client-facing agent scope) or Shared (promoted, with an actor and a timestamp).`}) 
+    @Field({description: `Team (working material, not in the client-facing agent scope) or Shared (promoted, with an actor and a timestamp).`}) 
     @MaxLength(20)
-    Band?: string;
+    Band: string;
         
     @Field({nullable: true, description: `When a Shared item was promoted. Null on Team items.`}) 
     PromotedAt?: Date;
@@ -425,21 +419,24 @@ export class mjBizAppsCollaborationSpaceItem_ {
     @MaxLength(200)
     Folder?: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Space?: string;
+    Space: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(255)
-    Entity?: string;
+    Entity: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
     PromotedByUser?: string;
         
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
-        
+    @Field(() => [mjBizAppsCollaborationItemUse_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses_ItemIDArray: mjBizAppsCollaborationItemUse_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses
+    
+    @Field(() => [mjBizAppsCollaborationShareNotice_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices_ItemIDArray: mjBizAppsCollaborationShareNotice_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices
+    
 }
 
 //****************************************************************************
@@ -569,6 +566,26 @@ export class mjBizAppsCollaborationSpaceItemResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [mjBizAppsCollaborationItemUse_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses_ItemIDArray(@Root() mjbizappscollaborationspaceitem_: mjBizAppsCollaborationSpaceItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Item Uses', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwItemUses')} WHERE ${provider.QuoteIdentifier('ItemID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Item Uses', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspaceitem_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Item Uses', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [mjBizAppsCollaborationShareNotice_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices_ItemIDArray(@Root() mjbizappscollaborationspaceitem_: mjBizAppsCollaborationSpaceItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Share Notices', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwShareNotices')} WHERE ${provider.QuoteIdentifier('ItemID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Share Notices', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspaceitem_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Share Notices', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => mjBizAppsCollaborationSpaceItem_)
     async CreatemjBizAppsCollaborationSpaceItem(
         @Arg('input', () => CreatemjBizAppsCollaborationSpaceItemInput) input: CreatemjBizAppsCollaborationSpaceItemInput,
@@ -607,25 +624,25 @@ export class mjBizAppsCollaborationSpaceMember_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(36)
-    SpaceID?: string;
+    SpaceID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(36)
-    UserID?: string;
+    UserID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(36)
-    SpaceRoleTypeID?: string;
+    SpaceRoleTypeID: string;
         
-    @Field({nullable: true, description: `Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.`}) 
+    @Field({description: `Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.`}) 
     @MaxLength(20)
-    Band?: string;
+    Band: string;
         
-    @Field({nullable: true, description: `Invited, Active, or Removed. New rows start Invited unless the type auto-approves.`}) 
+    @Field({description: `Invited, Active, or Removed. New rows start Invited unless the type auto-approves.`}) 
     @MaxLength(20)
-    Status?: string;
+    Status: string;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -633,20 +650,17 @@ export class mjBizAppsCollaborationSpaceMember_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Space?: string;
+    Space: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    User?: string;
+    User: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    SpaceRoleType?: string;
-        
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
+    SpaceRoleType: string;
         
 }
 
@@ -803,40 +817,40 @@ export class mjBizAppsCollaborationSpaceRoleType_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(40)
-    Code?: string;
+    Code: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(200)
-    Name?: string;
+    Name: string;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field(() => Int, {nullable: true, description: `This role's own authority. A grant must be of a role whose Level is <= the grantor's MaxGrantableLevel.`}) 
-    Level?: number;
+    @Field(() => Int, {description: `This role's own authority. A grant must be of a role whose Level is <= the grantor's MaxGrantableLevel.`}) 
+    Level: number;
         
-    @Field(() => Int, {nullable: true, description: `Highest Level this role may grant. Always <= Level.`}) 
-    MaxGrantableLevel?: number;
+    @Field(() => Int, {description: `Highest Level this role may grant. Always <= Level.`}) 
+    MaxGrantableLevel: number;
         
-    @Field(() => Boolean, {nullable: true, description: `Holder may invite members into a space they belong to, inside their own subtree, at or below MaxGrantableLevel.`}) 
-    CanInvite?: boolean;
+    @Field(() => Boolean, {description: `Holder may invite members into a space they belong to, inside their own subtree, at or below MaxGrantableLevel.`}) 
+    CanInvite: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `Holder may move an item from Team to Shared.`}) 
-    CanPromoteBand?: boolean;
+    @Field(() => Boolean, {description: `Holder may move an item from Team to Shared.`}) 
+    CanPromoteBand: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `Holder may read Team-band items. Shared-band items do not need this flag.`}) 
-    CanSeeTeamBand?: boolean;
+    @Field(() => Boolean, {description: `Holder may read Team-band items. Shared-band items do not need this flag.`}) 
+    CanSeeTeamBand: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `The role that defines ownership of a space. The engine reads the flag, not the name.`}) 
-    IsOwnerRole?: boolean;
+    @Field(() => Boolean, {description: `The role that defines ownership of a space. The engine reads the flag, not the name.`}) 
+    IsOwnerRole: boolean;
         
-    @Field(() => Int, {nullable: true}) 
-    DisplayRank?: number;
+    @Field(() => Int) 
+    DisplayRank: number;
         
-    @Field(() => Boolean, {nullable: true}) 
-    IsActive?: boolean;
+    @Field(() => Boolean) 
+    IsActive: boolean;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -844,12 +858,12 @@ export class mjBizAppsCollaborationSpaceRoleType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean, {nullable: true}) 
-    CanContribute?: boolean;
+    @Field(() => Boolean, {description: `1 if the role may contribute content (create, update, or post items, tasks, and messages); 0 for read-only roles.`}) 
+    CanContribute: boolean;
         
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
-        
+    @Field(() => [mjBizAppsCollaborationSpaceMember_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers_SpaceRoleTypeIDArray: mjBizAppsCollaborationSpaceMember_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers
+    
 }
 
 //****************************************************************************
@@ -1009,6 +1023,16 @@ export class mjBizAppsCollaborationSpaceRoleTypeResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [mjBizAppsCollaborationSpaceMember_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers_SpaceRoleTypeIDArray(@Root() mjbizappscollaborationspaceroletype_: mjBizAppsCollaborationSpaceRoleType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Members', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceMembers')} WHERE ${provider.QuoteIdentifier('SpaceRoleTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Members', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspaceroletype_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Members', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => mjBizAppsCollaborationSpaceRoleType_)
     async CreatemjBizAppsCollaborationSpaceRoleType(
         @Arg('input', () => CreatemjBizAppsCollaborationSpaceRoleTypeInput) input: CreatemjBizAppsCollaborationSpaceRoleTypeInput,
@@ -1047,65 +1071,65 @@ export class mjBizAppsCollaborationSpaceType_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: `Stable metadata key. The engine does not branch on it.`}) 
+    @Field({description: `Stable metadata key. The engine does not branch on it.`}) 
     @MaxLength(40)
-    Code?: string;
+    Code: string;
         
-    @Field({nullable: true, description: `Display name of the type.`}) 
+    @Field({description: `Display name of the type.`}) 
     @MaxLength(200)
-    Name?: string;
+    Name: string;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true, description: `Human noun for spaces of this type (workspace, committee, cohort, community). Open set.`}) 
+    @Field({description: `Human noun for spaces of this type (workspace, committee, cohort, community). Open set.`}) 
     @MaxLength(50)
-    Vocabulary?: string;
+    Vocabulary: string;
         
-    @Field({nullable: true, description: `Hidden, Listed, or Open. Modelled now; the community surface that uses Listed and Open is a later release.`}) 
+    @Field({description: `Hidden, Listed, or Open. Modelled now; the community surface that uses Listed and Open is a later release.`}) 
     @MaxLength(20)
-    Discoverability?: string;
+    Discoverability: string;
         
-    @Field({nullable: true, description: `InviteOnly, RequestToJoin, or SelfServe.`}) 
+    @Field({description: `InviteOnly, RequestToJoin, or SelfServe.`}) 
     @MaxLength(20)
-    JoinMode?: string;
+    JoinMode: string;
         
-    @Field(() => Boolean, {nullable: true, description: `Conversation panel is on for spaces of this type.`}) 
-    MessagingPanel?: boolean;
+    @Field(() => Boolean, {description: `Conversation panel is on for spaces of this type.`}) 
+    MessagingPanel: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `File library panel is on.`}) 
-    LibraryPanel?: boolean;
+    @Field(() => Boolean, {description: `File library panel is on.`}) 
+    LibraryPanel: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `Task / work panel is on.`}) 
-    WorkPanel?: boolean;
+    @Field(() => Boolean, {description: `Task / work panel is on.`}) 
+    WorkPanel: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `Governance panel is on. Committees still owns motions and ballots; this only says the panel is part of the type.`}) 
-    GovernancePanel?: boolean;
+    @Field(() => Boolean, {description: `Governance panel is on. Committees still owns motions and ballots; this only says the panel is part of the type.`}) 
+    GovernancePanel: boolean;
         
-    @Field({nullable: true, description: `Month, Year, or Indefinite. Used when the space itself has no Retention.`}) 
+    @Field({description: `Month, Year, or Indefinite. Used when the space itself has no Retention.`}) 
     @MaxLength(20)
-    DefaultRetention?: string;
+    DefaultRetention: string;
         
-    @Field({nullable: true, description: `Default AgentRetrieval for a new space of this type.`}) 
+    @Field({description: `Default AgentRetrieval for a new space of this type.`}) 
     @MaxLength(30)
-    DefaultAgentRetrieval?: string;
+    DefaultAgentRetrieval: string;
         
-    @Field({nullable: true, description: `Default Team or Shared band for a new item in a space of this type.`}) 
+    @Field({description: `Default Team or Shared band for a new item in a space of this type.`}) 
     @MaxLength(20)
-    DefaultBand?: string;
+    DefaultBand: string;
         
-    @Field({nullable: true, description: `Approve: a new member stays Invited until an owner of the space sets them Active. AutoApprove: the server creates the member Active. The invited person does not activate themselves.`}) 
+    @Field({description: `Approve: a new member stays Invited until an owner of the space sets them Active. AutoApprove: the server creates the member Active. The invited person does not activate themselves.`}) 
     @MaxLength(20)
-    InviteApproval?: string;
+    InviteApproval: string;
         
     @Field(() => Int, {nullable: true, description: `Maximum members in one space of this type. Null means no cap.`}) 
     MemberCap?: number;
         
-    @Field(() => Int, {nullable: true}) 
-    DisplayRank?: number;
+    @Field(() => Int) 
+    DisplayRank: number;
         
-    @Field(() => Boolean, {nullable: true}) 
-    IsActive?: boolean;
+    @Field(() => Boolean) 
+    IsActive: boolean;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -1113,9 +1137,12 @@ export class mjBizAppsCollaborationSpaceType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
+    @Field(() => Boolean, {description: `Default AllowParentAssignees setting for new spaces of this type.`}) 
+    DefaultAllowParentAssignees: boolean;
         
+    @Field(() => [mjBizAppsCollaborationSpace_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces_SpaceTypeIDArray: mjBizAppsCollaborationSpace_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces
+    
 }
 
 //****************************************************************************
@@ -1176,6 +1203,9 @@ export class CreatemjBizAppsCollaborationSpaceTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultAllowParentAssignees?: boolean;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -1241,6 +1271,9 @@ export class UpdatemjBizAppsCollaborationSpaceTypeInput {
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    DefaultAllowParentAssignees?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 
@@ -1305,6 +1338,16 @@ export class mjBizAppsCollaborationSpaceTypeResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [mjBizAppsCollaborationSpace_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces_SpaceTypeIDArray(@Root() mjbizappscollaborationspacetype_: mjBizAppsCollaborationSpaceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Spaces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaces')} WHERE ${provider.QuoteIdentifier('SpaceTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Spaces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspacetype_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Spaces', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => mjBizAppsCollaborationSpaceType_)
     async CreatemjBizAppsCollaborationSpaceType(
         @Arg('input', () => CreatemjBizAppsCollaborationSpaceTypeInput) input: CreatemjBizAppsCollaborationSpaceTypeInput,
@@ -1343,31 +1386,31 @@ export class mjBizAppsCollaborationSpace_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(36)
-    SpaceTypeID?: string;
+    SpaceTypeID: string;
         
-    @Field({nullable: true, description: `Parent space. Null on the perpetual root. Self-reference is the hierarchy key CodeGen marks IsHierarchy.`}) 
+    @Field({nullable: true, description: `Parent space. Null on a root. It does not carry the IsHierarchy flag, so CodeGen emits no path columns.`}) 
     @MaxLength(36)
     ParentID?: string;
         
-    @Field({nullable: true, description: `Designated name of the space.`}) 
+    @Field({description: `Designated name of the space.`}) 
     @MaxLength(200)
-    Name?: string;
+    Name: string;
         
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true, description: `MJ user who owns the space.`}) 
+    @Field({description: `MJ user who owns the space.`}) 
     @MaxLength(36)
-    OwnerID?: string;
+    OwnerID: string;
         
-    @Field(() => Boolean, {nullable: true, description: `1: members of this space are members of its descendants. 0: this sub-space keeps its own roster.`}) 
-    InheritsMembership?: boolean;
+    @Field(() => Boolean, {description: `1: members of this space are members of its descendants. 0: this sub-space keeps its own roster.`}) 
+    InheritsMembership: boolean;
         
-    @Field({nullable: true, description: `Included, ExcludedFromParentScope, or ExcludedEntirely. A human may read a space that no agent may quote.`}) 
+    @Field({description: `Included, ExcludedFromParentScope, or ExcludedEntirely. A human may read a space that no agent may quote.`}) 
     @MaxLength(30)
-    AgentRetrieval?: string;
+    AgentRetrieval: string;
         
     @Field({nullable: true, description: `When this space (usually a sub-space) started. The root outlives its children.`}) 
     StartedAt?: Date;
@@ -1385,21 +1428,40 @@ export class mjBizAppsCollaborationSpace_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field(() => Boolean, {description: `1 if participants in this space may assign people seated on ancestor spaces whose membership reaches this space; 0 to restrict assignment to seats in this space or below. Only staff may change this switch.`}) 
+    AllowParentAssignees: boolean;
+        
+    @Field() 
     @MaxLength(200)
-    SpaceType?: string;
+    SpaceType: string;
         
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    Owner?: string;
+    Owner: string;
         
-    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
-    ReadableFields___?: string[];
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
         
+    @Field(() => [mjBizAppsCollaborationSpaceItem_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceItems_SpaceIDArray: mjBizAppsCollaborationSpaceItem_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceItems
+    
+    @Field(() => [mjBizAppsCollaborationSpace_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces_ParentIDArray: mjBizAppsCollaborationSpace_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces
+    
+    @Field(() => [mjBizAppsCollaborationSpaceMember_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers_SpaceIDArray: mjBizAppsCollaborationSpaceMember_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers
+    
+    @Field(() => [mjBizAppsCollaborationItemUse_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses_SpaceIDArray: mjBizAppsCollaborationItemUse_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses
+    
+    @Field(() => [mjBizAppsCollaborationShareNotice_])
+    mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices_SpaceIDArray: mjBizAppsCollaborationShareNotice_[]; // Link to mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices
+    
 }
 
 //****************************************************************************
@@ -1439,6 +1501,9 @@ export class CreatemjBizAppsCollaborationSpaceInput {
 
     @Field({ nullable: true })
     Retention: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowParentAssignees?: boolean;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -1482,6 +1547,9 @@ export class UpdatemjBizAppsCollaborationSpaceInput {
 
     @Field({ nullable: true })
     Retention?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowParentAssignees?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1547,6 +1615,56 @@ export class mjBizAppsCollaborationSpaceResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [mjBizAppsCollaborationSpaceItem_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceItems_SpaceIDArray(@Root() mjbizappscollaborationspace_: mjBizAppsCollaborationSpace_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Items', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceItems')} WHERE ${provider.QuoteIdentifier('SpaceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Items', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspace_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [mjBizAppsCollaborationSpace_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_Spaces_ParentIDArray(@Root() mjbizappscollaborationspace_: mjBizAppsCollaborationSpace_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Spaces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaces')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Spaces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspace_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Spaces', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [mjBizAppsCollaborationSpaceMember_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_SpaceMembers_SpaceIDArray(@Root() mjbizappscollaborationspace_: mjBizAppsCollaborationSpace_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Members', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceMembers')} WHERE ${provider.QuoteIdentifier('SpaceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Members', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspace_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Members', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [mjBizAppsCollaborationItemUse_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_ItemUses_SpaceIDArray(@Root() mjbizappscollaborationspace_: mjBizAppsCollaborationSpace_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Item Uses', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwItemUses')} WHERE ${provider.QuoteIdentifier('SpaceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Item Uses', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspace_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Item Uses', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [mjBizAppsCollaborationShareNotice_])
+    async mjBizAppsCollaborationMJ_BizApps_Collaboration_ShareNotices_SpaceIDArray(@Root() mjbizappscollaborationspace_: mjBizAppsCollaborationSpace_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Share Notices', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwShareNotices')} WHERE ${provider.QuoteIdentifier('SpaceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Share Notices', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjbizappscollaborationspace_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Share Notices', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => mjBizAppsCollaborationSpace_)
     async CreatemjBizAppsCollaborationSpace(
         @Arg('input', () => CreatemjBizAppsCollaborationSpaceInput) input: CreatemjBizAppsCollaborationSpaceInput,

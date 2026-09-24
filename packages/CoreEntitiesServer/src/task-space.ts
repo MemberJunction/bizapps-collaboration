@@ -1,5 +1,5 @@
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeTaskAssignment, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
 import { loadMemberReach, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -21,7 +21,7 @@ export function relevantFieldsChanged(record: { IsSaved: boolean; Fields: Readon
  * view is the root, and that root's space item is the filing. A task with no
  * parent is its own root.
  */
-export async function filedTask(provider: IMetadataProvider, reader: UserInfo, taskId: string): Promise<{ spaceId: string; band: Band; root: boolean } | null> {
+export async function filedTask(provider: IMetadataProvider, reader: UserInfo, taskId: string): Promise<{ spaceId: string; band: Band; root: boolean; allowParentAssignees: boolean } | null> {
     const id = parseUuid(taskId);
     if (!id) return null;
     const view = RunView.FromMetadataProvider(provider);
@@ -39,7 +39,15 @@ export async function filedTask(provider: IMetadataProvider, reader: UserInfo, t
     if (!rootId) return null;
     const item = await spaceItemFor(provider, reader, rootId);
     if (!item) return null;
-    return { spaceId: item.spaceId, band: item.band, root: rootId === id };
+    const spaceRows = await view.RunView<{ AllowParentAssignees: boolean }>({
+        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+        ExtraFilter: `ID = '${item.spaceId}'`,
+        Fields: ['AllowParentAssignees'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, reader);
+    const allowParentAssignees = spaceRows.Results?.[0]?.AllowParentAssignees !== undefined ? !!spaceRows.Results[0].AllowParentAssignees : true;
+    return { spaceId: item.spaceId, band: item.band, root: rootId === id, allowParentAssignees };
 }
 
 export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignmentEntity): Promise<string | null> {
@@ -55,7 +63,16 @@ export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignme
         if (!assigneeUserId) return 'Assignment refused: the assignee is not a person in this space.';
         const reach = await loadMemberReach(assignment, system, assigneeUserId, place.spaceId);
         if (!reach) return 'Assignment refused: the assignee does not hold a seat in this space.';
-        if (place.band === 'Team' && !reach.role.canSeeTeamBand) return 'Assignment refused: a Team task cannot be given to someone who cannot see Team.';
+        const isStaffUser = (user.UserRoles ?? []).some((role) => role.Role && (role.Role === 'UI' || role.Role === 'Developer' || role.Role === 'Integration'));
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: isStaffUser,
+            taskSpaceId: place.spaceId,
+            assigneeSeatSpaceId: reach.spaceId,
+            allowParentAssignees: place.allowParentAssignees,
+            taskBand: place.band,
+            assigneeRole: reach.role,
+        });
+        if (!decision.ok) return decision.message;
         return null;
     } catch (error) {
         LogError(`Assignment seat check for task ${assignment.TaskID}: ${error instanceof Error ? error.message : String(error)}`);

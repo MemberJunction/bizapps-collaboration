@@ -116,6 +116,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowParentAssignees"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RootParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -139,9 +155,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Items','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Items','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Items')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceItems')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceItems', $event.totalRowCount)"
                 >
@@ -164,9 +180,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Spaces','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Spaces','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Spaces')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaces')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaces', $event.totalRowCount)"
                 >
@@ -189,9 +205,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Members','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Members','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Members')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceMembers')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceMembers', $event.totalRowCount)"
                 >
@@ -214,9 +230,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Item Uses','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Item Uses','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Item Uses')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationItemUses')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationItemUses', $event.totalRowCount)"
                 >
@@ -239,9 +255,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Share Notices','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Share Notices','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Share Notices')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationShareNotices')"
-                [ShowToolbar]="true"
+                [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationShareNotices', $event.totalRowCount)"
                 >

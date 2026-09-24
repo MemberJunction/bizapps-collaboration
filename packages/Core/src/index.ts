@@ -1,6 +1,7 @@
 export {
     agentMayQuote,
     authorizeItemWrite,
+    authorizeTaskAssignment,
     mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,

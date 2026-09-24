@@ -17,91 +17,22 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 // Import Generated Components
 import { mjBizAppsCollaborationItemUseFormComponent } from "./Entities/mjBizAppsCollaborationItemUse/mjbizappscollaborationitemuse.form.component";
 import { mjBizAppsCollaborationShareNoticeFormComponent } from "./Entities/mjBizAppsCollaborationShareNotice/mjbizappscollaborationsharenotice.form.component";
-import { mjBizAppsCollaborationSpaceFormComponent } from "./Entities/mjBizAppsCollaborationSpace/mjbizappscollaborationspace.form.component";
 import { mjBizAppsCollaborationSpaceItemFormComponent } from "./Entities/mjBizAppsCollaborationSpaceItem/mjbizappscollaborationspaceitem.form.component";
 import { mjBizAppsCollaborationSpaceMemberFormComponent } from "./Entities/mjBizAppsCollaborationSpaceMember/mjbizappscollaborationspacemember.form.component";
 import { mjBizAppsCollaborationSpaceRoleTypeFormComponent } from "./Entities/mjBizAppsCollaborationSpaceRoleType/mjbizappscollaborationspaceroletype.form.component";
 import { mjBizAppsCollaborationSpaceTypeFormComponent } from "./Entities/mjBizAppsCollaborationSpaceType/mjbizappscollaborationspacetype.form.component";
+import { mjBizAppsCollaborationSpaceFormComponent } from "./Entities/mjBizAppsCollaborationSpace/mjbizappscollaborationspace.form.component";
    
 
 @NgModule({
 declarations: [
     mjBizAppsCollaborationItemUseFormComponent,
-    mjBizAppsCollaborationSpaceFormComponent
-],
-imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_3 { }
-    
-
-
-@NgModule({
-declarations: [
-    mjBizAppsCollaborationSpaceMemberFormComponent
-],
-imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_9 { }
-    
-
-
-@NgModule({
-declarations: [
-    mjBizAppsCollaborationSpaceItemFormComponent
-],
-imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_14 { }
-    
-
-
-@NgModule({
-declarations: [
-    mjBizAppsCollaborationShareNoticeFormComponent
-],
-imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_16 { }
-    
-
-
-@NgModule({
-declarations: [
+    mjBizAppsCollaborationShareNoticeFormComponent,
+    mjBizAppsCollaborationSpaceItemFormComponent,
+    mjBizAppsCollaborationSpaceMemberFormComponent,
     mjBizAppsCollaborationSpaceRoleTypeFormComponent,
-    mjBizAppsCollaborationSpaceTypeFormComponent
-],
+    mjBizAppsCollaborationSpaceTypeFormComponent,
+    mjBizAppsCollaborationSpaceFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -112,7 +43,7 @@ imports: [
 exports: [
 ]
 })
-export class GeneratedForms_SubModule_19 { }
+export class GeneratedForms_SubModule_0 { }
     
 
 
@@ -120,11 +51,7 @@ export class GeneratedForms_SubModule_19 { }
 declarations: [
 ],
 imports: [
-    GeneratedForms_SubModule_3,
-    GeneratedForms_SubModule_9,
-    GeneratedForms_SubModule_14,
-    GeneratedForms_SubModule_16,
-    GeneratedForms_SubModule_19
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }

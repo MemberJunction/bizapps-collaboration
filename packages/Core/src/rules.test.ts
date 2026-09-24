@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
     agentMayQuote,
     authorizeItemWrite,
+    authorizeTaskAssignment,
     mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,
@@ -684,3 +685,75 @@ describe('retentionDeadline', () => {
         assert.equal(retentionDeadline(start, 'Year')?.toISOString(), '2027-01-31T00:00:00.000Z');
     });
 });
+
+describe('authorizeTaskAssignment', () => {
+    const teamMemberRole: RoleFlags = { ...guestRole, canSeeTeamBand: true, canContribute: true };
+    const sharedOnlyRole: RoleFlags = { ...guestRole, canSeeTeamBand: false, canContribute: true };
+
+    it('allows a participant to assign an ancestor member when AllowParentAssignees is on', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: true,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('refuses a participant assigning an ancestor member when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.message, 'Assignment refused: participants may not assign people seated above this space.');
+        }
+    });
+
+    it('allows a participant to assign someone seated in the same space even when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'discovery',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('allows staff to assign an ancestor member even when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: true,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('refuses assignment of a Team task to someone who cannot see Team', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: true,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'discovery',
+            allowParentAssignees: true,
+            taskBand: 'Team',
+            assigneeRole: sharedOnlyRole,
+        });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.message, 'Assignment refused: a Team task cannot be given to someone who cannot see Team.');
+        }
+    });
+});
+

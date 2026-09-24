@@ -25,6 +25,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (this.IsSaved && dirty.length === 0) {
             return result;
         }
+        const allowParentChanged = this.Fields.some((field) => field.Name === 'AllowParentAssignees' && field.Dirty);
+        if (allowParentChanged && !isStaff(user)) {
+            return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+        }
         const spaceId = this.ID ? parseUuid(this.ID) : null;
         if (this.ID && !spaceId) {
             return fail(result, 'ID', 'Space change refused: the space id is not valid.');

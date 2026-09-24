@@ -15,6 +15,7 @@
       "GovernancePanel": false,
       "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
       "InviteApproval": "Approve",
       "IsActive": true
@@ -36,6 +37,7 @@
       "GovernancePanel": true,
       "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
       "InviteApproval": "Approve",
       "IsActive": true
@@ -57,6 +59,7 @@
       "GovernancePanel": false,
       "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
       "DefaultBand": "Shared",
       "InviteApproval": "Approve",
       "IsActive": true

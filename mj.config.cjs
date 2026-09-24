@@ -48,6 +48,10 @@ module.exports = {
     enableAdvancedGeneration: false,
   },
 
+  fileEmit: {
+    perSchema: true,
+  },
+
   SQLOutput: {
     enabled: true,
     folderPath: './migrations/codegen/',
