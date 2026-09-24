@@ -1,0 +1,23 @@
+[
+  {
+    "_comments": [
+      "The Sharing Center asks this domain by class name. CollaborationSpacePermissionProvider answers from the roster."
+    ],
+    "primaryKey": {
+      "ID": "F1000001-0000-4000-8000-000000000001"
+    },
+    "fields": {
+      "Name": "Collaboration Spaces",
+      "Description": "Who reaches a space. Read follows an active membership. Update and Share follow the owner role.",
+      "ProviderClassName": "CollaborationSpacePermissionProvider",
+      "SupportedGranteeTypes": "User",
+      "SupportedActions": "Read,Update,Share",
+      "SupportsDeny": 0,
+      "SupportsExpiration": 0,
+      "SupportsHierarchyInheritance": 1,
+      "IsActive": 1,
+      "DisplayOrder": 40,
+      "Icon": "fa-solid fa-people-group"
+    }
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "roles",
+    "applications",
+    "user-notification-types",
+    "permission-domains",
+    "row-level-security-filters",
+    "entities",
+    "entity-permissions"
+  ],
+  "emitSyncNotes": false
+}
