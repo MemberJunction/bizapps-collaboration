@@ -242,11 +242,14 @@ export class SpaceWorkspaceComponent {
         this.selectedTaskName = task.Name ?? this.selectedTaskName;
     }
 
-    async openTask(taskId: string): Promise<void> {
+    async openTask(task: string | { ID: string; Name?: string }): Promise<void> {
+        const taskId = typeof task === 'string' ? task : task.ID;
+        const hinted = typeof task === 'string' ? '' : (task.Name ?? '');
         this.selectedTaskId = taskId;
+        if (hinted) this.selectedTaskName = hinted;
         const name = await this.lookupTaskName(taskId);
         if (this.selectedTaskId !== taskId) return;
-        this.selectedTaskName = name;
+        if (name) this.selectedTaskName = name;
         this.workView = 'list';
         this.changes.detectChanges();
         this.taskPanel?.OpenDetail(taskId);
