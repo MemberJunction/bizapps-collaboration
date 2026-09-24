@@ -430,29 +430,5 @@
       "UpdateAccess": "Deny",
       "CreateAccess": "Deny"
     }
-  },
-  {
-    "primaryKey": {
-      "ID": "B5571A66-0A7B-4AF9-8E08-5E66A153E436"
-    },
-    "fields": {
-      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=__mj_Latitude&Entity=MJ_BizApps_Common: People",
-      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
-      "ReadAccess": "Deny",
-      "UpdateAccess": "Deny",
-      "CreateAccess": "Deny"
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "17FE44E9-BB16-4DEA-A73D-FDF4F8A6DF98"
-    },
-    "fields": {
-      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=__mj_Longitude&Entity=MJ_BizApps_Common: People",
-      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
-      "ReadAccess": "Deny",
-      "UpdateAccess": "Deny",
-      "CreateAccess": "Deny"
-    }
   }
 ]

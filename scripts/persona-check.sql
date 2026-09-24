@@ -232,10 +232,11 @@ BEGIN
         JOIN __mj.Entity e ON ef.EntityID = e.ID
         LEFT JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
         WHERE e.Name = N'MJ_BizApps_Common: People'
+          AND ef.Name NOT LIKE N'__mj_%'
           AND ef.Name NOT IN (
               N'ID', N'FirstName', N'LastName', N'MiddleName', N'Prefix', N'Suffix',
               N'PreferredName', N'DisplayName', N'Email', N'PrimaryEmail',
-              N'LinkedUserID', N'LinkedUser', N'__mj_CreatedAt', N'__mj_UpdatedAt'
+              N'LinkedUserID', N'LinkedUser'
           )
           AND (
               efp.ReadAccess = N'Allow' OR ISNULL(efp.ReadAccess, N'') <> N'Deny'
