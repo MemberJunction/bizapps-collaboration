@@ -1,0 +1,66 @@
+[
+  {
+    "primaryKey": { "ID": "58B6738B-13FA-4DE7-9F89-DF300C916C27" },
+    "fields": {
+      "Name": "Collaboration: Visible Spaces",
+      "Description": "A space the caller owns, a space their active membership reaches, or the one space a magic-link scope names.",
+      "FilterText": "(OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR CAST(ID AS NVARCHAR(450)) = '{{ScopeResourceID}}')"
+    }
+  },
+  {
+    "primaryKey": { "ID": "7D2320C1-4106-434B-A789-15E34C3B0F15" },
+    "fields": {
+      "Name": "Collaboration: Visible Members",
+      "Description": "The caller's own roster rows, including Invited, and the rosters of spaces their active membership reaches.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": { "ID": "03CB9211-930A-4964-950F-A542F8971217" },
+    "fields": {
+      "Name": "Collaboration: Visible Items",
+      "Description": "Shared items in a visible space, team items only when the reaching role has CanSeeTeamBand, and shared items in the one space a magic link names.",
+      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
+    }
+  },
+  {
+    "primaryKey": { "ID": "1BFCFDB6-EC62-49A8-801F-651902327D71" },
+    "fields": {
+      "Name": "Collaboration: Active Space Types",
+      "Description": "Space types are vocabulary, not content. Active types are readable. The filter is present so the role is not exempt from row-level security.",
+      "FilterText": "(IsActive = 1)"
+    }
+  },
+  {
+    "primaryKey": { "ID": "8F228922-83F0-4E92-821C-F1E00BE3192A" },
+    "fields": {
+      "Name": "Collaboration: Active Space Roles",
+      "Description": "Role types are the flags the engine reads. Active roles are readable. The filter is present so the role is not exempt from row-level security.",
+      "FilterText": "(IsActive = 1)"
+    }
+  },
+  {
+    "primaryKey": { "ID": "C0FFEE00-0000-4000-8000-000000000008" },
+    "fields": {
+      "Name": "Collaboration: Notices In Reach",
+      "Description": "Share notices for spaces the caller reaches.",
+      "FilterText": "(SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": { "ID": "C0FFEE00-0000-4000-8000-000000000009" },
+    "fields": {
+      "Name": "Collaboration: Own Item Uses",
+      "Description": "The caller's own item uses, in spaces they reach.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": { "ID": "C0FFEE00-0000-4000-8000-000000000021" },
+    "fields": {
+      "Name": "Collaboration: People In Reach",
+      "Description": "The caller's own person, and people linked to a user with an active seat on a space the caller reaches.",
+      "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  }
+]

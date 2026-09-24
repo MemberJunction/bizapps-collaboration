@@ -6,8 +6,10 @@
   "directoryOrder": [
     "roles",
     "applications",
+    "application-roles",
     "user-notification-types",
     "permission-domains",
+    "resource-types",
     "row-level-security-filters",
     "entities",
     "entity-permissions"

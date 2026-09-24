@@ -1,0 +1,64 @@
+[
+  {
+    "primaryKey": { "ID": "E3EE031B-0B0C-4935-BF6C-DE22281BD14D" },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1, "CanRead": 1, "CanUpdate": 1, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Spaces"
+    }
+  },
+  {
+    "primaryKey": { "ID": "5D227F12-5D91-4BDB-843F-EBF6FE30F388" },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1, "CanRead": 1, "CanUpdate": 1, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Members"
+    }
+  },
+  {
+    "primaryKey": { "ID": "F08EA474-6842-40A0-895F-5DCBAFFA9208" },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1, "CanRead": 1, "CanUpdate": 1, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Items"
+    }
+  },
+  {
+    "primaryKey": { "ID": "6F1C9E2A-4B7D-4F3A-8C91-0D5E7A2B4C18" },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0, "CanRead": 1, "CanUpdate": 0, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Active Space Types"
+    }
+  },
+  {
+    "primaryKey": { "ID": "9A0B1C2D-3E4F-4506-8A7B-1C2D3E4F5061" },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Role Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0, "CanRead": 1, "CanUpdate": 0, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Active Space Roles"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Common: People&RoleID=@lookup:MJ: Roles.Name=Space Participant"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0, "CanRead": 1, "CanUpdate": 0, "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: People In Reach"
+    }
+  }
+]

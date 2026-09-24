@@ -1,0 +1,11 @@
+[
+  {
+    "primaryKey": { "ID": "33642155-617E-4825-A2CC-F071A60F3739" },
+    "fields": {
+      "Name": "Space",
+      "DisplayName": "Space",
+      "Description": "A Collaboration space. Resource permissions and magic-link resource shares name this type.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"
+    }
+  }
+]

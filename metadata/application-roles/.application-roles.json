@@ -1,0 +1,13 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Application Roles.ApplicationID=94F5906B-38AB-4A9F-BFCA-3D395BBBC198&RoleID=AAF434FD-EF58-4857-854E-2607ACAF763B"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "AAF434FD-EF58-4857-854E-2607ACAF763B",
+      "CanAccess": 1,
+      "CanAdmin": 0
+    }
+  }
+]
