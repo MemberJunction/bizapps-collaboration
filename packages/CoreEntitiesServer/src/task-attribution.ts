@@ -1,5 +1,5 @@
-import { BaseEntity, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage } from './task-space.js';
@@ -10,8 +10,9 @@ const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 
 /**
  * These gates run for every save of the entity, at priority 2, so they sit
- * above bizapps-tasks' generated classes. A later tasks subclass at the same
- * priority or lower would be shadowed. The checks apply only when the caller
+ * above bizapps-tasks' generated classes. A later subclass registered with no
+ * priority gets the highest existing priority plus one, so it would win.
+ * The checks apply only when the caller
  * holds Space Participant, matched by role id. Everyone else keeps
  * bizapps-tasks' own rules. Stamping happens on create only.
  */
@@ -22,6 +23,7 @@ export function isSpaceParticipant(user: UserInfo): boolean {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Comments', 2)
 export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
+        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user || !isSpaceParticipant(user)) return result;
@@ -43,6 +45,7 @@ export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Decisions', 2)
 export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
+        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user || !isSpaceParticipant(user) || this.IsSaved) return result;
@@ -56,6 +59,7 @@ export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Assignments', 2)
 export class TaskAssignmentEntityServer extends mjBizAppsTasksTaskAssignmentEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
+        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (user && isSpaceParticipant(user) && !this.IsSaved) {
@@ -93,6 +97,34 @@ function refuse(result: ValidationResult, message: string): ValidationResult {
     result.Success = false;
     result.Errors.push(new ValidationErrorInfo('PersonID', message, null, ValidationErrorType.Failure));
     return result;
+}
+
+const WATCHED = [
+    ['MJ_BizApps_Tasks: Tasks', 'CollaborationTaskEntityServer'],
+    ['MJ_BizApps_Tasks: Task Comments', 'TaskCommentEntityServer'],
+    ['MJ_BizApps_Tasks: Task Decisions', 'TaskDecisionEntityServer'],
+    ['MJ_BizApps_Tasks: Task Assignments', 'TaskAssignmentEntityServer'],
+] as const;
+
+export function reportCollaborationClasses(when: 'startup' | 'request'): void {
+    for (const [key, expected] of WATCHED) {
+        const matches = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseEntity, key);
+        const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseEntity, key);
+        const name = (winner?.SubClass as { name?: string } | undefined)?.name ?? 'none';
+        const line = `${key}: ${name} at ${winner?.Priority ?? 'none'}; registered ${matches.map((row) => `${(row.SubClass as { name?: string }).name}@${row.Priority}`).join(', ')}`;
+        if (name === expected) {
+            if (when === 'startup') LogStatus(line);
+        } else {
+            LogError(`Collaboration lost the gate at ${when}. ${line}`);
+        }
+    }
+}
+
+let noted = false;
+export function noteCollaborationRequest(): void {
+    if (noted) return;
+    noted = true;
+    reportCollaborationClasses('request');
 }
 
 export function LoadTaskAttributionEntityServer(): void {

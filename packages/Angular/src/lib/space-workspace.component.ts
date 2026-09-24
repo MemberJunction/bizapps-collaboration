@@ -1,6 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { FormsModule } from '@angular/forms';
 import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
@@ -244,7 +244,9 @@ export class SpaceWorkspaceComponent {
 
     async openTask(taskId: string): Promise<void> {
         this.selectedTaskId = taskId;
-        this.selectedTaskName = await this.lookupTaskName(taskId);
+        const name = await this.lookupTaskName(taskId);
+        if (this.selectedTaskId !== taskId) return;
+        this.selectedTaskName = name;
         this.workView = 'list';
         this.changes.detectChanges();
         this.taskPanel?.OpenDetail(taskId);
@@ -272,7 +274,11 @@ export class SpaceWorkspaceComponent {
             MaxRows: 1,
             ResultType: 'simple',
         });
-        return rows.Success ? rows.Results?.[0]?.Name ?? '' : '';
+        if (!rows.Success) {
+            LogError(`Task name read failed for ${id}: ${rows.ErrorMessage ?? 'the task could not be read'}`);
+            return '';
+        }
+        return rows.Results?.[0]?.Name ?? '';
     }
 
     refreshWork(): void {

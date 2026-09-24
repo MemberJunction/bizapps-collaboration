@@ -325,26 +325,34 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onFileSubtask(event: { parentId: string; name: string }): Promise<void> {
-        const user = this.user();
-        if (!user) return;
-        const parent = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
-        if (!(await parent.Load(event.parentId))) {
-            this.message = 'That task could not be read.';
+        let saved = false;
+        try {
+            const user = this.user();
+            if (!user) {
+                this.message = 'A subtask needs the signed-in user.';
+                return;
+            }
+            const parent = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
+            if (!(await parent.Load(event.parentId))) {
+                this.message = 'That task could not be read.';
+                return;
+            }
+            const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
+            task.NewRecord();
+            task.Name = event.name.trim();
+            task.ParentID = event.parentId;
+            task.TypeID = parent.TypeID;
+            task.Status = 'Open';
+            task.Priority = parent.Priority;
+            saved = await task.Save();
+            this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
+            if (saved) this.workspace?.refreshWork();
+        } catch (error) {
+            this.message = error instanceof Error ? error.message : 'The subtask was refused.';
+        } finally {
+            this.workspace?.finishSubtask(saved);
             this.changes.markForCheck();
-            return;
         }
-        const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>('MJ_BizApps_Tasks: Tasks', user);
-        task.NewRecord();
-        task.Name = event.name.trim();
-        task.ParentID = event.parentId;
-        task.TypeID = parent.TypeID;
-        task.Status = 'Open';
-        task.Priority = parent.Priority;
-        const saved = await task.Save();
-        this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
-        this.workspace?.finishSubtask(saved);
-        if (saved) this.workspace?.refreshWork();
-        this.changes.markForCheck();
     }
 
     async onOpenItem(event: { itemId: string }): Promise<void> {
