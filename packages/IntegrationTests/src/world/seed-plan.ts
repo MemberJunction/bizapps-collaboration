@@ -10,7 +10,7 @@ import {
     mjBizAppsTasksTaskDependencyEntity,
     mjBizAppsTasksTaskEntity,
 } from '@mj-biz-apps/tasks-entities';
-import { createSpaceTask, LoadCollaborationTaskEntityServer, LoadTaskAttributionEntityServer, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { createSpaceTask, LoadCollaborationTaskEntityServer, LoadTaskAttributionEntityServer } from '@mj-biz-apps/collaboration-core-entities-server';
 
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
 const COMMENTS = 'MJ_BizApps_Tasks: Task Comments';
@@ -33,13 +33,11 @@ export async function seedWorldPlan(input: {
     const prep = await filedRoot(input.provider, ada, discovery, 'Internal prep', 'Team');
     const audit = await filedRoot(input.provider, ada, committee, 'Audit plan', 'Shared');
     const visit = await subtask(input.provider, bea, plan, 'Site visit');
-    const probe = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, ada);
-    const system = await requireSystemUser(probe);
-    await assign(input.provider, system, plan, await personId(input.provider, system, ada.ID));
+    await assign(input.provider, ada, plan, await personId(input.provider, ada, ada.ID));
     await assign(input.provider, bea, visit, await personId(input.provider, bea, bea.ID));
     await depend(input.provider, bea, visit, plan);
     await comment(input.provider, bea, visit, 'The site visit is on the plan.', await personId(input.provider, bea, bea.ID));
-    await comment(input.provider, system, plan, 'Staff note on the plan.', await personId(input.provider, system, ada.ID));
+    await comment(input.provider, ada, plan, 'Staff note on the plan.', await personId(input.provider, ada, ada.ID));
     await expectRefusal(input.provider, bea, visit, null, 'stays in the space');
     await expectRefusal(input.provider, bea, visit, audit, 'stays in the space');
     await expectRefusal(input.provider, bea, visit, prep, 'promote rights');
@@ -50,15 +48,43 @@ export async function seedWorldPlan(input: {
 }
 
 async function filedRoot(provider: IMetadataProvider, actor: UserInfo, spaceId: string, name: string, band: 'Shared' | 'Team'): Promise<string> {
-    const existing = await findTask(provider, actor, name);
+    const existing = await findFiledTask(provider, actor, spaceId, name);
     if (existing) return existing;
     const created = await createSpaceTask(provider, actor, { spaceId, name, band });
     if (!created.ok) throw new Error(created.message);
     return created.taskId;
 }
 
+async function findFiledTask(provider: IMetadataProvider, actor: UserInfo, spaceId: string, name: string): Promise<string | null> {
+    const tasks = provider.EntityByName(TASKS);
+    if (!tasks?.ID) throw new Error('Tasks is not installed.');
+    const view = RunView.FromMetadataProvider(provider);
+    const items = await view.RunView<{ RecordID: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Items',
+        ExtraFilter: `SpaceID = '${spaceId}' AND EntityID = '${tasks.ID}'`,
+        Fields: ['RecordID'],
+        MaxRows: 200,
+        ResultType: 'simple',
+    }, actor);
+    if (!items.Success) throw new Error(items.ErrorMessage ?? 'Could not read the space items.');
+    if ((items.Results?.length ?? 0) >= 200) throw new Error('Refusing the plan: the space has a full page of task items.');
+    const ids = (items.Results ?? []).map((row) => {
+        const raw = (row.RecordID ?? '').replace(/^ID\|/i, '');
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw) ? raw : null;
+    }).filter((id): id is string => !!id);
+    if (!ids.length) return null;
+    const rows = await view.RunView<{ ID: string }>({
+        EntityName: TASKS,
+        ExtraFilter: `ID IN (${ids.map((id) => `'${id}'`).join(', ')}) AND Name = N'${name.replace(/'/g, "''")}'`,
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, actor);
+    if (!rows.Success) throw new Error(rows.ErrorMessage ?? `Could not read ${name}.`);
+    return rows.Results?.[0]?.ID ?? null;
+}
+
 async function subtask(provider: IMetadataProvider, actor: UserInfo, parentId: string, name: string): Promise<string> {
-    const existing = await findTask(provider, actor, name);
+    const existing = await findChild(provider, actor, parentId, name);
     if (existing) return existing;
     const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
     const parent = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
@@ -156,11 +182,11 @@ async function personId(provider: IMetadataProvider, actor: UserInfo, userId: st
     return id;
 }
 
-async function findTask(provider: IMetadataProvider, actor: UserInfo, name: string): Promise<string | null> {
+async function findChild(provider: IMetadataProvider, actor: UserInfo, parentId: string, name: string): Promise<string | null> {
     const view = RunView.FromMetadataProvider(provider);
     const rows = await view.RunView<{ ID: string }>({
         EntityName: TASKS,
-        ExtraFilter: `Name = N'${name.replace(/'/g, "''")}'`,
+        ExtraFilter: `ParentID = '${parentId}' AND Name = N'${name.replace(/'/g, "''")}'`,
         MaxRows: 1,
         ResultType: 'simple',
     }, actor);

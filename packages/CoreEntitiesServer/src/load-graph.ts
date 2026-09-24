@@ -1,6 +1,6 @@
 import { RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
-import type { MemberSnapshot, RoleFlags, SpaceNode } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, type MemberSnapshot, type RoleFlags, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
@@ -163,6 +163,46 @@ function flags(role: { Level: number; MaxGrantableLevel: number; CanInvite: bool
         isOwnerRole: !!role.IsOwnerRole,
         canContribute: !!role.CanContribute,
     };
+}
+
+/**
+ * The seat that governs `spaceId` for `memberUserId`. `reader` is who the
+ * query runs as, and is not the member. A full page is refused rather than
+ * treated as the whole roster.
+ */
+export async function loadMemberReach(entity: BaseEntity, reader: UserInfo, memberUserId: string, spaceId: string): Promise<MemberSnapshot | null> {
+    const member = parseUuid(memberUserId);
+    const space = parseUuid(spaceId);
+    if (!member || !space) return null;
+    const rv = runViewFor(entity);
+    const memberRows = await one<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>(
+        rv,
+        MEMBERS,
+        `UserID = '${member}' AND Status = 'Active'`,
+        reader,
+    );
+    const roleIds = [...new Set(memberRows.map((row) => parseUuid(row.SpaceRoleTypeID)).filter((id): id is string => !!id))];
+    const roleRows = roleIds.length
+        ? await one<{ ID: string; Level: number; MaxGrantableLevel: number; CanInvite: boolean; CanPromoteBand: boolean; CanSeeTeamBand: boolean; IsOwnerRole: boolean; CanContribute?: boolean }>(
+            rv,
+            ROLES,
+            `ID IN (${roleIds.map((id) => `'${id}'`).join(',')})`,
+            reader,
+        )
+        : [];
+    const roleLookup = new Map<string, RoleFlags>();
+    for (const role of roleRows) {
+        const id = parseUuid(role.ID);
+        if (id) roleLookup.set(id, flags(role));
+    }
+    const walked = await chain(rv, space, reader);
+    return membershipReaches(walked.nodes, memberRows.map((row) => ({
+        spaceId: parseUuid(row.SpaceID) ?? row.SpaceID,
+        userId: parseUuid(row.UserID) ?? row.UserID,
+        status: row.Status,
+        band: row.Band,
+        role: roleLookup.get(parseUuid(row.SpaceRoleTypeID) ?? '') ?? emptyRole(),
+    })), member, space);
 }
 
 export async function requireSystemUser(entity: BaseEntity): Promise<UserInfo> {

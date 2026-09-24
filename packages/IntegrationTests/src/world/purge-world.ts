@@ -69,10 +69,13 @@ export async function purgeWorld(): Promise<void> {
             FROM __mj_BizAppsCollaboration.SpaceItem
             WHERE SpaceID IN (${spaceIds}) AND RecordID LIKE 'ID|%';
 
+            DECLARE @Tasks uniqueidentifier;
+            SELECT @Tasks = ID FROM [${core}].[Entity] WHERE Name = N'MJ_BizApps_Tasks: Tasks';
+
             SELECT TRY_CAST(CASE WHEN i.RecordID LIKE N'ID|%' THEN SUBSTRING(i.RecordID, 4, 36) ELSE i.RecordID END AS uniqueidentifier) AS TaskID
             INTO #roots
             FROM __mj_BizAppsCollaboration.SpaceItem AS i
-            WHERE i.SpaceID IN (${spaceIds});
+            WHERE i.SpaceID IN (${spaceIds}) AND i.EntityID = @Tasks;
 
             CREATE TABLE #tasks (ID uniqueidentifier PRIMARY KEY);
             IF OBJECT_ID('__mj_BizAppsTasks.Task') IS NOT NULL
@@ -104,6 +107,8 @@ export async function purgeWorld(): Promise<void> {
                     DELETE FROM __mj_BizAppsTasks.TaskLink WHERE TaskID IN (SELECT ID FROM #tasks);
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskTagLink') IS NOT NULL
                     DELETE FROM __mj_BizAppsTasks.TaskTagLink WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskNotificationLog') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskNotificationLog WHERE TaskID IN (SELECT ID FROM #tasks);
                 DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks);
             END
 
