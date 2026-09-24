@@ -128,6 +128,12 @@ export class SpaceWorkspaceComponent {
         this.selectedTaskName = '';
         this.folderChoice = '';
         this.uploadFolder = '';
+        this.talkDraft = '';
+        this.talkMessages = [];
+        this.talkOldest = null;
+        this.talkHasEarlier = false;
+        this.talkError = '';
+        this.talkSaving = false;
         this.pane = 'overview';
         this.ensurePane();
     }
@@ -223,6 +229,7 @@ export class SpaceWorkspaceComponent {
             ResultType: 'entity_object',
             MaxRows: 200,
         }, this.currentUser);
+        if (this.conversationFor(this.selected?.id ?? '') !== conversationId) return;
         if (!rows.Success) {
             this.talkError = rows.ErrorMessage || 'The conversation could not be read.';
             this.changes.markForCheck();
@@ -244,7 +251,8 @@ export class SpaceWorkspaceComponent {
         this.postMessage.emit({ spaceId: space.id, text });
     }
 
-    finishTalk(saved: boolean, error = ''): void {
+    finishTalk(spaceId: string, saved: boolean, error = ''): void {
+        if (this.selected?.id !== spaceId) return;
         this.talkSaving = false;
         if (saved) this.talkDraft = '';
         else this.talkError = error || 'The message was refused.';
@@ -296,16 +304,14 @@ export class SpaceWorkspaceComponent {
         }
         this.uploadMessage = '';
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const openFolder = this.activeFolder(space.id);
         this.upload.emit({
             spaceId: space.id,
             name: file.name,
-            folder: this.uploadFolder.trim() || (openFolder && openFolder !== 'Unfiled' ? openFolder : null),
+            folder: this.uploadFolder.trim() || null,
             mimeType: file.type || 'application/octet-stream',
             base64: encodeBase64(bytes),
         });
         this.chosenFile = null;
-        this.uploadFolder = '';
     }
 
     grantableRoles(): WorkspaceRole[] {

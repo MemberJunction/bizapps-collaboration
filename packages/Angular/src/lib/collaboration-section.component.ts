@@ -318,25 +318,28 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onPostMessage(event: { spaceId: string; text: string }): Promise<void> {
-        const gql = this.gql();
         const workspace = this.workspace;
-        if (!gql || !workspace) {
-            this.message = 'A message needs the API connection.';
-            this.changes.markForCheck();
-            return;
-        }
+        let saved = false;
+        let error = '';
         try {
+            const gql = this.gql();
+            if (!gql || !workspace) {
+                error = 'A message needs the API connection.';
+                return;
+            }
             const result = await gql(`mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
                 PostSpaceMessage(input: $input) { Success DetailID ErrorMessage }
             }`, { input: { SpaceID: event.spaceId, Text: event.text } });
             const payload = result?.PostSpaceMessage as { Success?: boolean; ErrorMessage?: string } | undefined;
-            const saved = !!payload?.Success;
-            workspace.finishTalk(saved, saved ? '' : (payload?.ErrorMessage || 'The message was refused.'));
+            saved = !!payload?.Success;
+            if (!saved) error = payload?.ErrorMessage || 'The message was refused.';
             if (saved) await workspace.loadTalk();
-        } catch (error) {
-            workspace.finishTalk(false, error instanceof Error ? error.message : 'The message was refused.');
+        } catch (caught) {
+            error = caught instanceof Error ? caught.message : 'The message was refused.';
+        } finally {
+            workspace?.finishTalk(event.spaceId, saved, saved ? '' : error);
+            this.changes.markForCheck();
         }
-        this.changes.markForCheck();
     }
 
     async onFileSubtask(event: { parentId: string; name: string }): Promise<void> {
