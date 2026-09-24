@@ -1,5 +1,5 @@
-import { BaseEntity, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
-import { MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { MJEventType, MJGlobal, RegisterClass, type MJEvent } from '@memberjunction/global';
 import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage } from './task-space.js';
@@ -129,10 +129,10 @@ export function watchCollaborationClasses(): void {
     const store = MJGlobal.Instance.GetGlobalObjectStore() as Record<string, unknown>;
     const key = '___BizAppsCollaboration___ClassWatch___';
     if (store[key]) return;
-    store[key] = MJGlobal.Instance.GetEventListener(true).subscribe((event: { event?: unknown; eventCode?: unknown; args?: { type?: string } }) => {
-        if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode && event.args?.type === 'save') {
-            noteCollaborationRequest();
-        }
+    store[key] = MJGlobal.Instance.GetEventListener(true).subscribe((event: MJEvent) => {
+        if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return;
+        const entityEvent = event.args as BaseEntityEvent;
+        if (entityEvent?.type === 'save') noteCollaborationRequest();
     });
 }
 
