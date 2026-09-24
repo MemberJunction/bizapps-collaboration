@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { TaskEntityServer } from '@mj-biz-apps/tasks-entities-server';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
-import { callerPersonId, isSpaceParticipant, noteCollaborationRequest, reportCollaborationClasses } from './task-attribution.js';
+import { callerPersonId, isSpaceParticipant, reportCollaborationClasses, watchCollaborationClasses } from './task-attribution.js';
 import { filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
 
@@ -15,7 +15,6 @@ import { asMetadata } from './uuid.js';
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Tasks', 100)
 export class CollaborationTaskEntityServer extends TaskEntityServer {
     public override async ValidateAsync(): Promise<ValidationResult> {
-        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user) return result;
@@ -64,4 +63,5 @@ function refuse(result: ValidationResult, field: string, message: string): Valid
 export function LoadCollaborationTaskEntityServer(): void {
     void CollaborationTaskEntityServer;
     reportCollaborationClasses('startup');
+    watchCollaborationClasses();
 }

@@ -1,5 +1,5 @@
 import { BaseEntity, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage } from './task-space.js';
@@ -23,7 +23,6 @@ export function isSpaceParticipant(user: UserInfo): boolean {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Comments', 2)
 export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
-        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user || !isSpaceParticipant(user)) return result;
@@ -45,7 +44,6 @@ export class TaskCommentEntityServer extends mjBizAppsTasksTaskCommentEntity {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Decisions', 2)
 export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
-        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user || !isSpaceParticipant(user) || this.IsSaved) return result;
@@ -59,7 +57,6 @@ export class TaskDecisionEntityServer extends mjBizAppsTasksTaskDecisionEntity {
 @RegisterClass(BaseEntity, 'MJ_BizApps_Tasks: Task Assignments', 2)
 export class TaskAssignmentEntityServer extends mjBizAppsTasksTaskAssignmentEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
-        noteCollaborationRequest();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (user && isSpaceParticipant(user) && !this.IsSaved) {
@@ -121,10 +118,22 @@ export function reportCollaborationClasses(when: 'startup' | 'request'): void {
 }
 
 let noted = false;
-export function noteCollaborationRequest(): void {
+function noteCollaborationRequest(): void {
     if (noted) return;
     noted = true;
     reportCollaborationClasses('request');
+}
+
+/** The first entity save, not our own ValidateAsync, so a lost class still gets checked. */
+export function watchCollaborationClasses(): void {
+    const store = MJGlobal.Instance.GetGlobalObjectStore() as Record<string, unknown>;
+    const key = '___BizAppsCollaboration___ClassWatch___';
+    if (store[key]) return;
+    store[key] = MJGlobal.Instance.GetEventListener(true).subscribe((event: { event?: unknown; eventCode?: unknown; args?: { type?: string } }) => {
+        if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode && event.args?.type === 'save') {
+            noteCollaborationRequest();
+        }
+    });
 }
 
 export function LoadTaskAttributionEntityServer(): void {

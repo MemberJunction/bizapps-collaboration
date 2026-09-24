@@ -348,7 +348,9 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             this.message = saved ? '' : (task.LatestResult?.CompleteMessage || 'The subtask was refused.');
             if (saved) this.workspace?.refreshWork();
         } catch (error) {
-            this.message = error instanceof Error ? error.message : 'The subtask was refused.';
+            const message = error instanceof Error ? error.message : 'The subtask was refused.';
+            LogError(`Subtask save failed for parent ${event.parentId}: ${message}`);
+            this.message = message;
         } finally {
             this.workspace?.finishSubtask(saved);
             this.changes.markForCheck();
