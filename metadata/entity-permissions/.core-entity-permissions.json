@@ -1,26 +1,6 @@
 [
   {
     "primaryKey": {
-      "ID": "096DCC4A-1CAE-4826-8879-5FCE5CA34BAA"
-    },
-    "fields": {
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notifications",
-      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
-      "Type": "Allow",
-      "CanCreate": 0,
-      "CanRead": 1,
-      "CanUpdate": 1,
-      "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child",
-      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child"
-    },
-    "sync": {
-      "lastModified": "2026-09-24T21:36:03.889Z",
-      "checksum": "a849971634726a479e1bde316f8a4840c9a12c57db2fd9da72475301d9d9de17"
-    }
-  },
-  {
-    "primaryKey": {
       "ID": "5F03FB6D-3592-48BE-8ED7-CCDFC7741B98"
     },
     "fields": {
@@ -212,10 +192,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
-    },
-    "sync": {
-      "lastModified": "2026-09-24T21:36:03.912Z",
-      "checksum": "d95a794577fec66a6cdbc3e3a6ce971d4d66870d882ce31a9ffd7d08ccb15573"
     }
   },
   {

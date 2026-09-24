@@ -186,6 +186,22 @@
   },
   {
     "primaryKey": {
+      "ID": "096DCC4A-1CAE-4826-8879-5FCE5CA34BAA"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notifications",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child"
+    }
+  },
+  {
+    "primaryKey": {
       "ID": "56DEE501-0000-4000-8000-000000000014"
     },
     "fields": {
