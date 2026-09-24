@@ -123,7 +123,7 @@ export class SpaceWorkspaceComponent {
     }
 
     select(id: string): void {
-        if (this.selectedId === id) return;
+        if (this.selected?.id === id) return;
         this.selectedId = id;
         this.selectedTaskId = null;
         this.selectedTaskName = '';
