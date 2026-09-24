@@ -13,6 +13,7 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
     LoadCollaborationTaskEntityServer,
+    LoadSpaceConversationDetailServer,
     LoadTaskAttributionEntityServer,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
@@ -27,6 +28,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'upload-space-file.resolver.{js,ts}'),
     resolve(here, 'mint-space-link.resolver.{js,ts}'),
     resolve(here, 'create-space-task.resolver.{js,ts}'),
+    resolve(here, 'post-space-message.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';
@@ -39,4 +41,5 @@ export function LoadBizAppsCollaborationServer(): void {
     LoadSpaceMemberEntityServer();
     LoadTaskAttributionEntityServer();
     LoadCollaborationTaskEntityServer();
+    LoadSpaceConversationDetailServer();
 }

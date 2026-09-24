@@ -34,6 +34,18 @@
 
   <section class="main">
     @if (selected; as space) {
+      <div class="narrow-tools">
+        <label class="space-picker">Space
+          <select [ngModel]="space.id" (ngModelChange)="select($event)">
+            @for (option of spaces; track option.id) {
+              @if (showNode(option)) { <option [value]="option.id">{{ option.name }}</option> }
+            }
+          </select>
+        </label>
+        @if (canCreateHere()) {
+          <button type="button" class="btn narrow-create" (click)="createOpen = true">New space</button>
+        }
+      </div>
       <p class="crumb">
         @if (parentOf(space); as parent) {
           {{ parent.name }} /
@@ -53,14 +65,14 @@
             @if (!space.inheritsMembership) {
               <span class="chip">Sealed roster</span>
             }
-            <span class="chip">Agent {{ space.agentRetrieval }}</span>
+            <span class="chip">{{ agentWords(space.agentRetrieval) }}</span>
           </div>
         </div>
         <div class="who-stack" [attr.aria-label]="membersHere(space.id).length + ' people'">
           @for (member of membersHere(space.id).slice(0, 5); track member.userId) {
             <span [class]="'av ' + avatarClass(member.displayName || member.userId)">{{ initials(member.displayName || 'Member') }}</span>
           }
-          <span class="count">{{ membersHere(space.id).length }} {{ membersHere(space.id).length === 1 ? 'person' : 'people' }}</span>
+          <span class="count">{{ membersHere(space.id).length }} seated here</span>
         </div>
       </header>
       <div class="tabs" role="tablist" aria-label="Space">
@@ -99,14 +111,14 @@
                 <div class="card-h"><h2>Conversation</h2><button type="button" class="linkish" (click)="showTalk()">Open</button></div>
                 <div class="card-b">
                   @if (conversationFor(space.id)) {
-                    <p class="muted">The room's conversation stays here. It does not leave for the Chat app.</p>
+                    <p class="muted">People write here. No agent answers in this room yet.</p>
                   } @else {
                     <p class="muted">This space does not have a conversation yet.</p>
                   }
                 </div>
               </article>
               <article class="card">
-                <div class="card-h"><h2>Just shared</h2>@if (libraryOn(space)) { <button type="button" class="linkish" (click)="showLibrary()">Library</button> }</div>
+                <div class="card-h"><h2>Files</h2>@if (libraryOn(space)) { <button type="button" class="linkish" (click)="showLibrary()">Library</button> }</div>
                 <div class="card-b">
                   @for (item of itemsHere(space.id, 'file').slice(0, 4); track item.id) {
                     <button type="button" class="file-line" (click)="openItem.emit({ itemId: item.id })">
@@ -281,19 +293,29 @@
             </div>
           </article>
         } @else if (pane === 'talk') {
-          @if (conversationFor(space.id); as conversationId) {
+          @if (conversationFor(space.id)) {
             @if (currentUser) {
               <div class="chat-host">
-                <mj-conversation-chat-area
-                  [environmentId]="environmentId"
+                <mj-conversation-message-list
+                  [messages]="talkMessages"
                   [currentUser]="currentUser"
-                  [conversationId]="conversationId"
-                  [overlayMode]="false"
-                  [allowRealtime]="false"
-                  [showExportButton]="false"
-                  [showShareButton]="false"
-                  [showAgentPicker]="false"
-                  [showSidebarToggle]="false" />
+                  [showAgentRunDetails]="false"
+                  [showMessageRating]="false"
+                  [showReactions]="false"
+                  [allowPinning]="false"
+                  [allowMessageEdit]="false"
+                  [allowMessageDelete]="false" />
+                @if (talkError) { <p class="verdict no">{{ talkError }}</p> }
+                @if (canContributeHere() && !space.closedAt) {
+                  <form class="composer" (submit)="$event.preventDefault(); sendTalk()">
+                    <label class="grow">Message<input name="talk" [(ngModel)]="talkDraft" placeholder="Write to the room" /></label>
+                    <button class="btn primary" type="submit" [disabled]="!talkDraft.trim()">Send</button>
+                  </form>
+                } @else if (space.closedAt) {
+                  <p class="muted">A closed space keeps the messages and does not take a new one.</p>
+                } @else {
+                  <p class="muted">Your role on this space can read the room and cannot post.</p>
+                }
               </div>
             } @else {
               <p class="muted">Sign in to open this conversation.</p>
@@ -309,29 +331,25 @@
   </section>
 </div>
 
-@if (createOpen) {
-  <div class="sheet-back" (click)="createOpen = false">
-    <form class="sheet" (click)="$event.stopPropagation()" (submit)="$event.preventDefault(); sendCreate()">
-      <p class="kicker">New space</p>
-      <h2>Start a room</h2>
-      <p class="muted">A root space is one relationship. The work inside it is a sub-space.</p>
-      <label>Name<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
-      <label>Type
-        <select name="new-type" [(ngModel)]="createTypeId">
-          <option value="">Choose a type</option>
-          @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
-        </select>
-      </label>
-      @if (viewerIsStaff && ownsSelected()) {
-        <label class="check"><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
-      }
-      <div class="actions">
-        <button class="btn" type="button" (click)="createOpen = false">Cancel</button>
-        <button class="btn primary" type="submit">Create space</button>
-      </div>
-    </form>
-  </div>
-}
+<mj-dialog [Visible]="createOpen" Title="New space" Size="sm" (Close)="createOpen = false">
+  <form (submit)="$event.preventDefault(); sendCreate()">
+    <p class="muted">A root space is one relationship. The work inside it is a sub-space.</p>
+    <label>Name<input name="new-space" [(ngModel)]="createName" placeholder="Name" /></label>
+    <label>Type
+      <select name="new-type" [(ngModel)]="createTypeId">
+        <option value="">Choose a type</option>
+        @for (type of types; track type.id) { <option [value]="type.id">{{ type.name }}</option> }
+      </select>
+    </label>
+    @if (viewerIsStaff && ownsSelected()) {
+      <label class="check"><input type="checkbox" name="top" [(ngModel)]="createAtTop" /> Top-level space</label>
+    }
+    <mj-dialog-actions>
+      <button class="btn primary" type="submit">Create space</button>
+      <button class="btn" type="button" (click)="createOpen = false">Cancel</button>
+    </mj-dialog-actions>
+  </form>
+</mj-dialog>
 
 <ng-template #node let-space>
   <li>

@@ -49,6 +49,7 @@ import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from
           (create)="onCreate($event)"
           (upload)="onUpload($event)"
           (fileTask)="onFileTask($event)"
+          (postMessage)="onPostMessage($event)"
           (fileSubtask)="onFileSubtask($event)"
           (openItem)="onOpenItem($event)" />
       }
@@ -312,6 +313,27 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             if (payload?.Success) await this.reload();
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The task was refused.';
+        }
+        this.changes.markForCheck();
+    }
+
+    async onPostMessage(event: { spaceId: string; text: string }): Promise<void> {
+        const gql = this.gql();
+        const workspace = this.workspace;
+        if (!gql || !workspace) {
+            this.message = 'A message needs the API connection.';
+            this.changes.markForCheck();
+            return;
+        }
+        try {
+            const result = await gql(`mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
+                PostSpaceMessage(input: $input) { Success DetailID ErrorMessage }
+            }`, { input: { SpaceID: event.spaceId, Text: event.text } });
+            const payload = result?.PostSpaceMessage as { Success?: boolean; ErrorMessage?: string } | undefined;
+            workspace.talkError = payload?.Success ? '' : (payload?.ErrorMessage || 'The message was refused.');
+            if (payload?.Success) await workspace.loadTalk();
+        } catch (error) {
+            workspace.talkError = error instanceof Error ? error.message : 'The message was refused.';
         }
         this.changes.markForCheck();
     }

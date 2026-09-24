@@ -7,6 +7,7 @@ export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
+export { LoadSpaceConversationDetailServer, postSpaceMessage } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
 export { LoadTaskAttributionEntityServer } from './task-attribution.js';
 export { LoadCollaborationTaskEntityServer } from './task-entity-server.js';

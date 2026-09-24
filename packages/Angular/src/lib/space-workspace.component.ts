@@ -3,7 +3,9 @@ import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild } 
 import { LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { FormsModule } from '@angular/forms';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
+import { MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { TaskGanttComponent, TaskKanbanComponent, TaskPanelComponent } from '@mj-biz-apps/tasks-ng';
 import {
     flagExceedsGrantor,
@@ -43,7 +45,7 @@ export interface WorkspaceRole extends RoleFlags {
 @Component({
     selector: 'mj-collaboration-workspace',
     standalone: true,
-    imports: [FormsModule, NgTemplateOutlet, ConversationsModule, TaskPanelComponent, TaskKanbanComponent, TaskGanttComponent],
+    imports: [FormsModule, NgTemplateOutlet, ConversationsModule, MJDialogComponent, MJDialogActionsComponent, TaskPanelComponent, TaskKanbanComponent, TaskGanttComponent],
     templateUrl: './space-workspace.component.html',
     styleUrl: './space-workspace.component.css',
 })
@@ -68,11 +70,15 @@ export class SpaceWorkspaceComponent {
     @Output() readonly upload = new EventEmitter<{ spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }>();
     @Output() readonly openItem = new EventEmitter<{ itemId: string }>();
     @Output() readonly fileTask = new EventEmitter<{ spaceId: string; name: string; band: Band }>();
+    @Output() readonly postMessage = new EventEmitter<{ spaceId: string; text: string }>();
     @Output() readonly fileSubtask = new EventEmitter<{ parentId: string; name: string }>();
     pane: 'overview' | 'people' | 'library' | 'work' | 'talk' = 'overview';
     spaceQuery = '';
     createOpen = false;
     folderChoice = '';
+    talkDraft = '';
+    talkError = '';
+    talkMessages: MJConversationDetailEntity[] = [];
     uploadEnabled = true;
     uploadFolder = '';
     uploadMessage = '';
@@ -124,9 +130,16 @@ export class SpaceWorkspaceComponent {
 
     showOverview(): void { this.pane = 'overview'; }
     showPeople(): void { this.pane = 'people'; }
-    showLibrary(): void { this.pane = 'library'; }
+    showLibrary(): void {
+        this.pane = 'library';
+        const folder = this.selected ? this.activeFolder(this.selected.id) : null;
+        if (folder && folder !== 'Unfiled' && !this.uploadFolder.trim()) this.uploadFolder = folder;
+    }
     showWork(): void { this.pane = 'work'; }
-    showTalk(): void { this.pane = 'talk'; }
+    showTalk(): void {
+        this.pane = 'talk';
+        void this.loadTalk();
+    }
 
     private ensurePane(): void {
         const space = this.selected;
@@ -171,6 +184,42 @@ export class SpaceWorkspaceComponent {
 
     chooseFolder(name: string): void {
         this.folderChoice = name;
+        if (name !== 'Unfiled') this.uploadFolder = name;
+    }
+
+    agentWords(value: string): string {
+        if (value === 'Included') return 'Agents can use this room';
+        if (value === 'ExcludedEntirely') return 'Agents skip this room';
+        return 'Agents stay in the parent';
+    }
+
+    async loadTalk(): Promise<void> {
+        const space = this.selected;
+        const conversationId = space ? this.conversationFor(space.id) : null;
+        if (!space || !conversationId || !this.currentUser) {
+            this.talkMessages = [];
+            this.changes.markForCheck();
+            return;
+        }
+        const rows = await new RunView().RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID = '${conversationId}'`,
+            OrderBy: 'Sequence',
+            ResultType: 'entity_object',
+            MaxRows: 200,
+        }, this.currentUser);
+        this.talkMessages = rows.Success ? (rows.Results ?? []) : [];
+        if (!rows.Success) this.talkError = rows.ErrorMessage || 'The conversation could not be read.';
+        this.changes.markForCheck();
+    }
+
+    sendTalk(): void {
+        const space = this.selected;
+        const text = this.talkDraft.trim();
+        if (!space || !text || !this.canContributeHere() || space.closedAt) return;
+        this.talkError = '';
+        this.postMessage.emit({ spaceId: space.id, text });
+        this.talkDraft = '';
     }
 
     filesIn(spaceId: string, folder: string) {
@@ -218,10 +267,11 @@ export class SpaceWorkspaceComponent {
         }
         this.uploadMessage = '';
         const bytes = new Uint8Array(await file.arrayBuffer());
+        const openFolder = this.activeFolder(space.id);
         this.upload.emit({
             spaceId: space.id,
             name: file.name,
-            folder: this.uploadFolder.trim() || null,
+            folder: this.uploadFolder.trim() || (openFolder && openFolder !== 'Unfiled' ? openFolder : null),
             mimeType: file.type || 'application/octet-stream',
             base64: encodeBase64(bytes),
         });
