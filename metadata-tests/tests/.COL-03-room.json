@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-03 - Room Isolation",
+    "Description": "Prove the room: owner chat isolation, Pat/Remy exclusion, staff space isolation, and PostSpaceMessage write gates.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Owner chat list excludes room, direct chat to room is refused, Pat and Remy get nothing, PostSpaceMessage validates roles and limits."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "room"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D1111000-0000-4000-8000-000000000004"
+  }
+}

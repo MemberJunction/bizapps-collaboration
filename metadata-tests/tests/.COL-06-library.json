@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-06 - Library and Files",
+    "Description": "Verify library and file handling: upload size cap, mime rewrite, rollback on failure, and seeded library items.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Size cap and non-empty checks pass; unsafe mime types rewritten to text/plain; rollback clears orphaned file."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "library"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D1111000-0000-4000-8000-000000000007"
+  }
+}

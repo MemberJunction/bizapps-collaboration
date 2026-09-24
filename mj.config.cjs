@@ -17,6 +17,10 @@ module.exports = {
 
   entityPackageName: '@mj-biz-apps/collaboration-entities',
 
+  testing: {
+    checkModules: ['@mj-biz-apps/collaboration-integration-tests'],
+  },
+
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
     {

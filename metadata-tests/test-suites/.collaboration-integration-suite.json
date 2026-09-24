@@ -1,0 +1,93 @@
+[
+  {
+    "fields": {
+      "Name": "BizApps Collaboration Integration",
+      "Description": "Every integration bundle for BizApps Collaboration. Evaluates sample world setup, People FLS, Parent Assignees, Room isolation, Write Gates, Row Filters, and Library/File handling.",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8A1244EE-11B3-4A55-9430-891012359999"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-00 - Collab World",
+            "Sequence": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000001"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-01 - People FLS",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000002"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-02 - Parent Assignees",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000003"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-03 - Room Isolation",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000004"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-04 - Write Gates",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000005"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-05 - Row Filters",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000006"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=COL-06 - Library and Files",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "71A0B001-C000-4000-8000-000000000007"
+          }
+        }
+      ]
+    }
+  }
+]
