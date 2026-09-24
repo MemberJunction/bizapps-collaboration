@@ -43,6 +43,7 @@ import sql from 'mssql';
 import { readCsv } from './csv.js';
 import { sqlUuid } from './ids.js';
 import { seedWorldFiles, worldStorageRoot } from './seed-files.js';
+import { seedWorldPlan } from './seed-plan.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -305,6 +306,16 @@ export async function loadWorld(): Promise<void> {
         }
     }
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
+
+    await seedWorldPlan({
+        provider,
+        actor,
+        spaceId: (key) => {
+            const id = spaceIds.get(key);
+            if (!id) throw new Error(`Unknown space ${key}.`);
+            return id;
+        },
+    });
 
     await seedWorldFiles({
         provider,

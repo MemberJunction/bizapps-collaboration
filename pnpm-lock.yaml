@@ -182,6 +182,9 @@ importers:
       '@mj-biz-apps/common-entities':
         specifier: 5.45.0
         version: 5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
+      '@mj-biz-apps/tasks-entities':
+        specifier: 1.5.0
+        version: 1.5.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       mssql:
         specifier: 12.7.0
         version: 12.7.0

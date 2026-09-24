@@ -69,6 +69,44 @@ export async function purgeWorld(): Promise<void> {
             FROM __mj_BizAppsCollaboration.SpaceItem
             WHERE SpaceID IN (${spaceIds}) AND RecordID LIKE 'ID|%';
 
+            SELECT TRY_CAST(CASE WHEN i.RecordID LIKE N'ID|%' THEN SUBSTRING(i.RecordID, 4, 36) ELSE i.RecordID END AS uniqueidentifier) AS TaskID
+            INTO #roots
+            FROM __mj_BizAppsCollaboration.SpaceItem AS i
+            WHERE i.SpaceID IN (${spaceIds});
+
+            CREATE TABLE #tasks (ID uniqueidentifier PRIMARY KEY);
+            IF OBJECT_ID('__mj_BizAppsTasks.Task') IS NOT NULL
+            BEGIN
+                INSERT INTO #tasks (ID)
+                SELECT roots.TaskID FROM #roots AS roots
+                WHERE roots.TaskID IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = roots.TaskID);
+                DECLARE @added int = 1;
+                WHILE @added > 0
+                BEGIN
+                    INSERT INTO #tasks (ID)
+                    SELECT t.ID FROM __mj_BizAppsTasks.Task AS t
+                    WHERE t.ParentID IN (SELECT ID FROM #tasks)
+                      AND NOT EXISTS (SELECT 1 FROM #tasks AS known WHERE known.ID = t.ID);
+                    SET @added = @@ROWCOUNT;
+                END
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskActivity') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskActivity WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskComment') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskComment WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskAssignment') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskAssignment WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskDecision') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskDecision WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskDependency') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskDependency WHERE TaskID IN (SELECT ID FROM #tasks) OR DependsOnTaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskLink') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskLink WHERE TaskID IN (SELECT ID FROM #tasks);
+                IF OBJECT_ID('__mj_BizAppsTasks.TaskTagLink') IS NOT NULL
+                    DELETE FROM __mj_BizAppsTasks.TaskTagLink WHERE TaskID IN (SELECT ID FROM #tasks);
+                DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks);
+            END
+
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});

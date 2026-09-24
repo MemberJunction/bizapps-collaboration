@@ -46,7 +46,7 @@ node --env-file=.env packages/IntegrationTests/dist/world/purge-world.js
 node --env-file=.env packages/IntegrationTests/dist/world/load-world.js
 ```
 
-The database in that env file must already have the Collaboration migrations and bizapps-common, because the loader creates a Person for every persona and throws if `MJ_BizApps_Common: People` is missing. Each Person stores `LinkedUserID`.
+The database in that env file must already have the Collaboration migrations and bizapps-common, because the loader creates a Person for every persona and throws if `MJ_BizApps_Common: People` is missing. Each Person stores `LinkedUserID`. Discovery also gets a small plan: a Shared root, a Team root, a subtask, a dependency, assignments for Ada and Bea, and a comment from each. The committee gets a Shared root used to prove a cross-space move is refused. A purge deletes the plan's activities, comments, assignments and tasks before it deletes People.
 
 The system user writes the users, their MemberJunction roles, the People, and the world-owned space type. Each root is created by its owner, that owner is seated, then children are created. Pat's Invited seat is saved by Sam. Remy's seat is created and then removed by Ada in the same run. Ada is not given a seat on Discovery. The load reads the database back and throws if a space, seat, status, band, or MemberJunction role disagrees with the catalog. Each persona must have exactly the one role named in the catalog.
 
