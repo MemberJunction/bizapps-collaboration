@@ -112,7 +112,23 @@ export class SpaceWorkspaceComponent implements OnChanges {
     ngOnChanges(changes: SimpleChanges): void {
         if (!changes['spaces']) return;
         const pinned = this.spaces.some((space) => space.id === this.selectedId);
-        if (!pinned) this.selectedId = this.roots[0]?.id ?? null;
+        if (pinned) return;
+        const next = this.roots[0]?.id ?? null;
+        if (this.selectedId && next) {
+            this.select(next);
+            return;
+        }
+        if (this.selectedId) {
+            this.selectedId = null;
+            this.talkDraft = '';
+            this.talkMessages = [];
+            this.talkOldest = null;
+            this.talkHasEarlier = false;
+            this.talkError = '';
+            this.talkSaving = false;
+            return;
+        }
+        this.selectedId = next;
     }
 
     get selected(): WorkspaceSpace | null {
