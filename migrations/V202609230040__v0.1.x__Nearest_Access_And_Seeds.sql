@@ -14,12 +14,6 @@
 -- inventory is that host's core entity set.
 -- =============================================================================
 
-UPDATE [${mjSchema}].[EntityField]
-SET [Configuration] = NULL
-WHERE [ID] = '5948F19F-70AA-49F4-BB6B-1FB059507477'
-  AND [Name] = N'ParentID';
-GO
-
 CREATE OR ALTER FUNCTION [${flyway:defaultSchema}].[fnCollaborationAccess](@UserID UNIQUEIDENTIFIER)
 RETURNS @Access TABLE (
     SpaceID UNIQUEIDENTIFIER NOT NULL,

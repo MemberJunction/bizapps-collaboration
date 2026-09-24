@@ -1,0 +1,17 @@
+[
+  {
+    "_comments": [
+      "Matched by schema name. CodeGen creates a row with its own id when this one is missing, and a fixed id here would miss that row."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Schema Info.SchemaName=__mj_BizAppsCollaboration"
+    },
+    "fields": {
+      "SchemaName": "__mj_BizAppsCollaboration",
+      "EntityIDMin": 10100001,
+      "EntityIDMax": 10199999,
+      "EntityNamePrefix": "MJ_BizApps_Collaboration: ",
+      "Description": "MemberJunction: BizApps Collaboration. Spaces are the permission and retrieval boundary. Conversations, tasks, and files compose in through SpaceItem."
+    }
+  }
+]

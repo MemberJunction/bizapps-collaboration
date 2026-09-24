@@ -15,25 +15,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '__mj_BizAppsCollaboration
     EXEC('CREATE SCHEMA __mj_BizAppsCollaboration');
 GO
 
--- Prefix here MUST match mj.config.cjs NameRulesBySchema once that file exists.
--- The trailing space after the colon is part of the prefix.
-IF NOT EXISTS (SELECT 1 FROM __mj.SchemaInfo WHERE SchemaName = '__mj_BizAppsCollaboration')
-INSERT INTO __mj.SchemaInfo
-(
-  ID,
-  SchemaName,
-  EntityIDMin, EntityIDMax,
-  Comments,
-  Description,
-  EntityNamePrefix, EntityNameSuffix
-)
-VALUES
-(
-  'f7b56b24-8ea7-46e2-9ede-1b9fee78f6c3',
-  '__mj_BizAppsCollaboration',
-  10100001, 10199999,
-  NULL,
-  'MemberJunction: BizApps Collaboration — Spaces, the permission and retrieval boundary',
-  'MJ_BizApps_Collaboration: ', NULL
-);
-GO
+-- SchemaInfo lives in metadata/schema-info, matched by SchemaName.
+-- CodeGen creates a row with its own id when the row is missing, so this
+-- file does not insert one.

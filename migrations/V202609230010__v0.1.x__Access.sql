@@ -1,9 +1,8 @@
 -- =============================================================================
 -- Collaboration access.
 --
---   * ParentID is a hierarchy (EntityField.Configuration). The view columns
---     and traversal functions are emitted by the next CodeGen run.
---   * fnCollaborationAccess is the membership walk: active rows, then children
+--   * ParentID does not carry the IsHierarchy flag, so CodeGen emits no path
+--     columns. fnCollaborationAccess is the membership walk: active rows, then children
 --     that inherit. A sealed space (InheritsMembership = 0) stops the walk.
 --     The same walk is membershipReaches() in packages/Core.
 --   * One role, Space Participant, with a filter on every collaboration entity.
@@ -12,12 +11,6 @@
 --   * The owner of a space can read it before the first roster row exists,
 --     which is what lets them seat themselves.
 -- =============================================================================
-
-UPDATE [${mjSchema}].[EntityField]
-SET [Configuration] = N'{"Hierarchy":{"IsHierarchy":true}}'
-WHERE [ID] = '5948F19F-70AA-49F4-BB6B-1FB059507477'
-  AND [Name] = N'ParentID';
-GO
 
 CREATE FUNCTION [${flyway:defaultSchema}].[fnCollaborationAccess](@UserID UNIQUEIDENTIFIER)
 RETURNS @Access TABLE (
