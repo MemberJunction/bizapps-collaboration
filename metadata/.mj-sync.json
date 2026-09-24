@@ -14,5 +14,10 @@
     "entities",
     "entity-permissions"
   ],
-  "emitSyncNotes": false
+  "emitSyncNotes": false,
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": true
+  }
 }

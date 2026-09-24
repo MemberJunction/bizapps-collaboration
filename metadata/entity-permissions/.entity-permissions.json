@@ -51,7 +51,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Common: People&RoleID=@lookup:MJ: Roles.Name=Space Participant"
+      "ID": "BF8B95FC-D3F9-4F6D-9AC9-654994803CF1"
     },
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",

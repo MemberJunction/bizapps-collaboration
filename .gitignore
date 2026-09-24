@@ -1,5 +1,6 @@
 SQL Scripts/
 migrations/codegen/
+metadata/sql_logging/
 codegen.output.log
 node_modules/
 dist/

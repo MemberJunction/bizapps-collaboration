@@ -3,7 +3,7 @@
     "primaryKey": { "ID": "58B6738B-13FA-4DE7-9F89-DF300C916C27" },
     "fields": {
       "Name": "Collaboration: Visible Spaces",
-      "Description": "A space the caller owns, a space their active membership reaches, or the one space a magic-link scope names.",
+      "Description": "A space the caller owns, a space their active membership reaches, or the one space a magic-link scope names. Parenthesised so it ANDs onto any other filter the caller holds. TRY_CAST so a missing user id matches nothing instead of raising a conversion error.",
       "FilterText": "(OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR CAST(ID AS NVARCHAR(450)) = '{{ScopeResourceID}}')"
     }
   },
@@ -11,8 +11,8 @@
     "primaryKey": { "ID": "7D2320C1-4106-434B-A789-15E34C3B0F15" },
     "fields": {
       "Name": "Collaboration: Visible Members",
-      "Description": "The caller's own roster rows, including Invited, and the rosters of spaces their active membership reaches.",
-      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+      "Description": "The caller's own roster rows, active seats on spaces they reach, and invited or removed seats where their reaching role can invite.",
+      "FilterText": "((Status = N'Active' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR (Status IN (N'Invited', N'Removed') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanInvite = 1)))"
     }
   },
   {
@@ -42,9 +42,9 @@
   {
     "primaryKey": { "ID": "C0FFEE00-0000-4000-8000-000000000008" },
     "fields": {
-      "Name": "Collaboration: Notices In Reach",
-      "Description": "Share notices for spaces the caller reaches.",
-      "FilterText": "(SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+      "Name": "Collaboration: Notices For The Caller",
+      "Description": "Share notices addressed to the caller, in spaces they reach.",
+      "FilterText": "(RecipientUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     }
   },
   {

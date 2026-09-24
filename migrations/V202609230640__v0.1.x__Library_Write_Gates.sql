@@ -4,12 +4,8 @@
 -- rest of the gate: the item is in the space, the recipient is in the share,
 -- and an item use is recorded as the caller.
 
-UPDATE [${mjSchema}].[RowLevelSecurityFilter]
-SET Name = N'Collaboration: Notices For The Caller',
-    Description = N'Share notices addressed to the caller, in spaces they reach.',
-    FilterText = N'(RecipientUserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [${flyway:defaultSchema}].[fnCollaborationAccess](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))))'
-WHERE ID = 'C0FFEE00-0000-4000-8000-000000000008';
-GO
+-- Notices For The Caller is created with its final text in Library_Metadata
+-- and in metadata/row-level-security-filters.
 
 IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000010')
     INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)

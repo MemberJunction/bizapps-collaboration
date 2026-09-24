@@ -31,5 +31,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'Folder';
 GO
 
--- Share-notice and item-use filters live in metadata/row-level-security-filters.
+IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000008')
+    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
+    VALUES ('C0FFEE00-0000-4000-8000-000000000008', N'Collaboration: Notices For The Caller', N'Share notices addressed to the caller, in spaces they reach.', N'(RecipientUserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [${flyway:defaultSchema}].[fnCollaborationAccess](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))))');
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[RowLevelSecurityFilter] WHERE ID = 'C0FFEE00-0000-4000-8000-000000000009')
+    INSERT INTO [${mjSchema}].[RowLevelSecurityFilter] (ID, Name, Description, FilterText)
+    VALUES ('C0FFEE00-0000-4000-8000-000000000009', N'Collaboration: Own Item Uses', N'The caller''s own item uses, in spaces they reach.', N'(UserID = TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [${flyway:defaultSchema}].[fnCollaborationAccess](TRY_CAST(''{{UserID}}'' AS UNIQUEIDENTIFIER))))');
 GO
