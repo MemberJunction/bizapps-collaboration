@@ -1,4 +1,4 @@
--- Rolled-back check for one participant. Run against a database that has the Collaboration migrations.
+-- Rolled-back check for one participant. Run against a database that has the Collaboration migrations and metadata push.
 -- It inserts fixtures, asserts what that person can see, and rolls the transaction back.
 SET XACT_ABORT ON;
 BEGIN TRAN;
@@ -75,6 +75,28 @@ IF EXISTS (
       )
 )
     THROW 50000, 'A readable participant or UI row has no filter.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM __mj.EntityPermission p
+    INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE (
+        (p.RoleID = @Participant AND e.Name NOT IN (
+            N'MJ_BizApps_Collaboration: Spaces',
+            N'MJ_BizApps_Collaboration: Space Members',
+            N'MJ_BizApps_Collaboration: Space Items'
+        ) AND (
+            (p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
+            OR (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
+            OR (p.CanDelete = 1 AND p.DeleteRLSFilterID IS NULL)
+        ))
+        OR (p.RoleID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AND e.Name IN (
+            N'MJ_BizApps_Collaboration: Share Notices',
+            N'MJ_BizApps_Collaboration: Item Uses'
+        ) AND p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
+    )
+)
+    THROW 50000, 'A participant or UI write operation is enabled without an RLS filter.', 1;
 
 DECLARE @uid nvarchar(36) = CONVERT(nvarchar(36), @User);
 DECLARE @n int;

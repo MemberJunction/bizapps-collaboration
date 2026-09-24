@@ -1,6 +1,0 @@
--- =============================================================================
--- Library write gates.
---
--- Row-level security filters for share notices and create filters for Share
--- Notices and Item Uses live under metadata/ and are applied with mj sync push.
--- =============================================================================

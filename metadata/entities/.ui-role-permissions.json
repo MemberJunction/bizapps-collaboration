@@ -1,7 +1,8 @@
 [
   {
     "_comments": [
-      "UI role permissions for Collaboration entities, matching the row-level security boundaries."
+      "UI role permissions for Collaboration entities, matching the row-level security boundaries.",
+      "RELEASE SEED NOTE FOR BUILD ENGINEER: The UI entity permission rows for Collaboration entities (Spaces, Space Members, Space Items, Share Notices, Item Uses) are initially created by CodeGen on each host without fixed IDs. When generating the release Metadata_Sync SQL, ensure updates to these permissions are keyed by EntityID and RoleID (matching UI role) rather than capture-database permission IDs, so that CodeGen's default unfiltered UI permissions are properly updated with these RLS filters on every target host (following the bizapps-forms pattern)."
     ],
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"

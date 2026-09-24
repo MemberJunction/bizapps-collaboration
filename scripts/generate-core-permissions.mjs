@@ -41,6 +41,7 @@ export const CORE_ENTITIES_FOR_PARTICIPANT = [
   'MJ: Dashboards',
   'MJ: Dashboard Part Types',
   'MJ: Dashboard User Preferences',
+  'MJ: Dashboard User States',
   'MJ: Dashboard Categories',
   'MJ: Dashboard Permissions',
   'MJ: Dashboard Category Permissions',
@@ -61,21 +62,43 @@ function nameToUuid(name) {
 
 console.log(`Generating Space Participant read grants for ${CORE_ENTITIES_FOR_PARTICIPANT.length} core entities...`);
 
-const records = CORE_ENTITIES_FOR_PARTICIPANT.map(name => ({
-  primaryKey: {
-    ID: nameToUuid(name)
-  },
-  fields: {
-    EntityID: `@lookup:MJ: Entities.Name=${name}`,
-    RoleID: '@lookup:MJ: Roles.Name=Space Participant',
-    Type: 'Allow',
-    CanCreate: 0,
-    CanRead: 1,
-    CanUpdate: 0,
-    CanDelete: 0,
-    ReadRLSFilterID: '@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty'
+const records = CORE_ENTITIES_FOR_PARTICIPANT.map(name => {
+  if (name === 'MJ: User Notifications') {
+    // In-app share notifications: caller is recipient and can mark read
+    return {
+      primaryKey: {
+        ID: nameToUuid(name)
+      },
+      fields: {
+        EntityID: `@lookup:MJ: Entities.Name=${name}`,
+        RoleID: '@lookup:MJ: Roles.Name=Space Participant',
+        Type: 'Allow',
+        CanCreate: 0,
+        CanRead: 1,
+        CanUpdate: 1,
+        CanDelete: 0,
+        ReadRLSFilterID: '@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child',
+        UpdateRLSFilterID: '@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own User Child'
+      }
+    };
   }
-}));
+
+  return {
+    primaryKey: {
+      ID: nameToUuid(name)
+    },
+    fields: {
+      EntityID: `@lookup:MJ: Entities.Name=${name}`,
+      RoleID: '@lookup:MJ: Roles.Name=Space Participant',
+      Type: 'Allow',
+      CanCreate: 0,
+      CanRead: 1,
+      CanUpdate: 0,
+      CanDelete: 0,
+      ReadRLSFilterID: '@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty'
+    }
+  };
+});
 
 writeFileSync(outputFile, JSON.stringify(records, null, 2) + '\n', 'utf8');
 console.log(`Wrote ${records.length} entity permissions to ${outputFile}`);

@@ -3,7 +3,9 @@
     "_comments": [
       "Invited into a space. Not the UI role. Row-level security on this role is the boundary."
     ],
-    "primaryKey": { "ID": "AAF434FD-EF58-4857-854E-2607ACAF763B" },
+    "primaryKey": {
+      "ID": "AAF434FD-EF58-4857-854E-2607ACAF763B"
+    },
     "fields": {
       "Name": "Space Participant",
       "Description": "A person invited into a space. Not the UI role. Row-level security on this role is the boundary.",

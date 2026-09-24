@@ -1,6 +1,8 @@
 [
   {
-    "primaryKey": { "ID": "33642155-617E-4825-A2CC-F071A60F3739" },
+    "primaryKey": {
+      "ID": "33642155-617E-4825-A2CC-F071A60F3739"
+    },
     "fields": {
       "Name": "Space",
       "DisplayName": "Space",

@@ -1,6 +1,0 @@
--- =============================================================================
--- Task root parent and tag link delete grants.
---
--- Row-level security filter for tasks and Space Participant delete permissions
--- on Task Tag Links live under metadata/ and are applied with mj sync push.
--- =============================================================================

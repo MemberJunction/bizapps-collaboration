@@ -314,7 +314,9 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 
 ## Upgrading
 
-Space Participant read grants with `(1 = 0)` are defined explicitly for the core entities required by active UI engines and the shell. To regenerate or update these permissions:
+Space Participant read grants with `(1 = 0)` are defined explicitly for the core entities required by active UI engines and the shell. This list is re-derived on every MJ upgrade, because engine configs change between versions (for example, DashboardEngine loading an 8th entity). Target hosts receive this configuration through the release seed rather than `mj sync push`.
+
+To regenerate or update these permissions during development:
 
 ```bash
 node scripts/generate-core-permissions.mjs

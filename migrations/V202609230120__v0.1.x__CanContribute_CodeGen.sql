@@ -44,7 +44,7 @@ EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sy
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = 'FB6F4556-8DD1-4B41-908F-D1F6ECAFA20E'),
             'CanContribute',
             'Can Contribute',
-            NULL,
+            '1 if the role may contribute content (create, update, or post items, tasks, and messages); 0 for read-only roles.',
             'bit',
             1,
             1,

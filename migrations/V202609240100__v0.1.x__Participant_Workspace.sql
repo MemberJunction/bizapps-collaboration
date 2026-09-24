@@ -1,8 +1,0 @@
--- =============================================================================
--- Space Participant workspace grants.
---
--- Row-level security filter for workspace items and Space Participant grants on
--- Workspaces, Workspace Items, User Settings, User Favorites, User Record Logs,
--- and User Notification Preferences live under metadata/ and are applied with
--- mj sync push.
--- =============================================================================

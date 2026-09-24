@@ -1,5 +1,5 @@
 -- Pending invites are visible to the invited person and to roles that can invite.
--- A Removed seat stays visible only to that person. fnCollaborationAccess gains
+-- A Removed seat stays visible to that person and to a member whose seat can invite. fnCollaborationAccess gains
 -- CanInvite from the nearest seat, the same way it already carries CanSeeTeam.
 
 DROP FUNCTION IF EXISTS [${flyway:defaultSchema}].[fnCollaborationAccess];
@@ -51,4 +51,4 @@ BEGIN
 END;
 GO
 
--- Visible Members' final text is in Access and in metadata/row-level-security-filters.
+-- Visible Members' final text is in metadata/row-level-security-filters.

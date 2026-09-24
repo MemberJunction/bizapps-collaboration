@@ -1,7 +1,0 @@
--- =============================================================================
--- Files canonical RecordID filter and conversation writes.
---
--- Row-level security filter for files (canonical ID|<guid> format) and Space
--- Participant permissions on conversations live under metadata/ and are applied
--- with mj sync push.
--- =============================================================================

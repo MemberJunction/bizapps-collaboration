@@ -1,6 +1,0 @@
--- =============================================================================
--- Task grants for Space Participant.
---
--- Row-level security filters for tasks and Space Participant grants on Tasks
--- entities live under metadata/ and are applied with mj sync push.
--- =============================================================================

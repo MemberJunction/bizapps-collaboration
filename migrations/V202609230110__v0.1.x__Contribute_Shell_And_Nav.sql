@@ -11,6 +11,13 @@ IF COL_LENGTH('${flyway:defaultSchema}.SpaceRoleType', 'CanContribute') IS NULL
         ADD CanContribute BIT NOT NULL CONSTRAINT DF_SpaceRoleType_CanContribute DEFAULT (0);
 GO
 
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'1 if the role may contribute content (create, update, or post items, tasks, and messages); 0 for read-only roles.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = N'SpaceRoleType',
+    @level2type = N'COLUMN', @level2name = N'CanContribute';
+GO
+
 EXEC sp_updateextendedproperty @name = N'MS_Description',
     @value = N'Team or Shared. Set by the server from the role: CanSeeTeamBand seats the person on Team, otherwise Shared. The filter reads the role, not this column.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',

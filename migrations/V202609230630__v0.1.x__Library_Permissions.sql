@@ -1,6 +1,0 @@
--- =============================================================================
--- Library permissions.
---
--- Entity permissions for Share Notices and Item Uses (Space Participant and UI)
--- live under metadata/ and are applied with mj sync push.
--- =============================================================================
