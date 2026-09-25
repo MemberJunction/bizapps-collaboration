@@ -9,6 +9,8 @@ const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
+const createdDetailIds: string[] = [];
+
 const checks: NamedCheck[] = [
     {
         Id: 'room.RM1',
@@ -35,6 +37,11 @@ const checks: NamedCheck[] = [
             Assert(room.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase(), 'ApplicationID is Collaboration App');
             Assert(room.LinkedEntityID?.toLowerCase() === SPACES_ENTITY_ID.toLowerCase(), 'LinkedEntityID is Spaces');
             Assert(room.LinkedRecordID?.toLowerCase() === DISCOVERY_SPACE_ID.toLowerCase(), 'LinkedRecordID is Discovery Space');
+
+            // Assert UserID is bound to the system user (not regular user)
+            const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
+            Assert(systemUsers.length === 1, 'System user found in MJ: Users');
+            Assert(room.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Room conversation must be bound to system user, saw: ${room.UserID}`);
         },
     },
     {
@@ -54,20 +61,29 @@ const checks: NamedCheck[] = [
             Assert(roomConvs.length === 1, 'Room conversation found');
             const roomId = roomConvs[0].ID;
 
-            // In MemberJunction regular chat, a user's conversations are personal (ApplicationScope = 'User' or LinkedEntityID IS NULL)
-            // and owned by that user (UserID = caller.ID).
             const view = View(ctx);
-            const userChatList = await view.RunView<{ ID: string }>({
+
+            // Check default chat list filter (Global / Both scopes)
+            const defaultChat = await view.RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
-                ExtraFilter: `(ApplicationScope = 'User' OR ApplicationScope IS NULL OR LinkedEntityID IS NULL)`,
+                ExtraFilter: `UserID = '${ada.ID}' AND (IsArchived IS NULL OR IsArchived = 0) AND ApplicationScope IN ('Global', 'Both')`,
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, ada);
+            Assert(defaultChat.Success, `Default chat view failed: ${defaultChat.ErrorMessage ?? ''}`);
+            const foundDefault = (defaultChat.Results ?? []).some((c) => c.ID.toLowerCase() === roomId.toLowerCase());
+            Assert(!foundDefault, "Owner's default chat list MUST NOT contain the space room conversation");
 
-            if (userChatList.Success && userChatList.Results) {
-                const found = userChatList.Results.some((c) => c.ID.toLowerCase() === roomId.toLowerCase());
-                Assert(!found, "Owner's regular chat list MUST NOT contain the space room conversation");
-            }
+            // Check chat list when includeApplicationScoped is toggled on (drops scope clause, still filters by UserID)
+            const appChat = await view.RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `UserID = '${ada.ID}' AND (IsArchived IS NULL OR IsArchived = 0)`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, ada);
+            Assert(appChat.Success, `App-inclusive chat view failed: ${appChat.ErrorMessage ?? ''}`);
+            const foundApp = (appChat.Results ?? []).some((c) => c.ID.toLowerCase() === roomId.toLowerCase());
+            Assert(!foundApp, "Owner's chat list with app scope included MUST NOT contain the room conversation (it is system-owned)");
         },
     },
     {
@@ -130,9 +146,10 @@ const checks: NamedCheck[] = [
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, pat);
+            Assert(patRes.Success, `Pat RunView failed unexpectedly: ${patRes.ErrorMessage ?? ''}`);
             Assert(
-                !patRes.Success || (patRes.Results?.length ?? 0) === 0,
-                'Pat (Invited) MUST NOT be able to view Discovery room conversation',
+                (patRes.Results?.length ?? 0) === 0,
+                `Pat (Invited) MUST NOT be able to view Discovery room conversation, got ${patRes.Results?.length ?? 0} rows`,
             );
 
             // Remy queries the room conversation
@@ -142,9 +159,10 @@ const checks: NamedCheck[] = [
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, remy);
+            Assert(remyRes.Success, `Remy RunView failed unexpectedly: ${remyRes.ErrorMessage ?? ''}`);
             Assert(
-                !remyRes.Success || (remyRes.Results?.length ?? 0) === 0,
-                'Remy (Removed) MUST NOT be able to view Discovery room conversation',
+                (remyRes.Results?.length ?? 0) === 0,
+                `Remy (Removed) MUST NOT be able to view Discovery room conversation, got ${remyRes.Results?.length ?? 0} rows`,
             );
         },
     },
@@ -164,6 +182,9 @@ const checks: NamedCheck[] = [
                 throw new Error(`PostSpaceMessage by Bea failed: ${result.message}`);
             }
             Assert(!!result.detailId, 'PostSpaceMessage returned a detailId');
+            if (result.detailId) {
+                createdDetailIds.push(result.detailId);
+            }
 
             // Verify message exists in conversation details
             const details = await FindRows<{ ID: string; Message: string; UserID: string }>(
@@ -222,5 +243,20 @@ const checks: NamedCheck[] = [
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
     Setup: async () => {},
-    Teardown: async () => {},
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        // Clean up messages created in RM5
+        while (createdDetailIds.length > 0) {
+            const id = createdDetailIds.pop();
+            if (id) {
+                try {
+                    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                    if (await detail.Load(id)) {
+                        await detail.Delete();
+                    }
+                } catch {
+                    // Best effort cleanup
+                }
+            }
+        }
+    },
 });

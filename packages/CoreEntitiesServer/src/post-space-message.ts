@@ -8,6 +8,7 @@ import { parseUuid } from './uuid.js';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const DETAILS = 'MJ: Conversation Details';
 const MESSAGE_CAP = 4000;
+export const COLLABORATION_SPACE_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 
 export interface PostSpaceMessageInput {
     spaceId: string;
@@ -100,6 +101,7 @@ export async function postSpaceMessage(
         assistantDetail.NewRecord();
         assistantDetail.ConversationID = conversationId;
         assistantDetail.UserID = system.ID;
+        assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
         assistantDetail.Role = 'AI';
         assistantDetail.Message = agentMessage;
         assistantDetail.Status = 'Complete';
@@ -107,14 +109,18 @@ export async function postSpaceMessage(
         assistantDetail.IsPinned = false;
         assistantDetail.OriginalMessageChanged = false;
 
-        if (await assistantDetail.Save() && assistantDetail.ID) {
-            return {
-                ok: true,
-                detailId: detail.ID,
-                assistantDetailId: assistantDetail.ID,
-                quotedCount: retrieval.quotedItems.length,
-            };
+        if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
+            const message = assistantDetail.LatestResult?.CompleteMessage || 'The assistant message was refused.';
+            LogError(`Space assistant message failed for space ${spaceId}: ${message}`);
+            return { ok: false, message };
         }
+
+        return {
+            ok: true,
+            detailId: detail.ID,
+            assistantDetailId: assistantDetail.ID,
+            quotedCount: retrieval.quotedItems.length,
+        };
     }
 
     return { ok: true, detailId: detail.ID };
@@ -130,20 +136,30 @@ export async function executeRoomAgent(
     input: { spaceId: string; userMessage?: string },
 ): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
     const spaceId = parseUuid(input.spaceId);
-    if (!spaceId) return { ok: false, message: 'Invalid space ID' };
-
-    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-    let agentMessage: string;
-    if (retrieval.quotedItems.length === 0) {
-        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
-    } else {
-        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
-        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
-    }
+    const callerId = parseUuid(user?.ID);
+    if (!spaceId || !callerId) return { ok: false, message: 'Invalid space ID or user' };
 
     const probe = await provider.GetEntityObject<BaseEntity>('MJ_BizApps_Collaboration: Spaces', user);
+    let context;
+    try {
+        context = await loadWriteContext(probe, user, spaceId, null);
+    } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : 'The space could not be read.' };
+    }
+    const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
+    if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot invoke the agent.' };
+
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
+    const space = await view.RunView<{ ClosedAt: string | null }>({
+        EntityName: 'MJ_BizApps_Collaboration: Spaces',
+        ExtraFilter: `ID = '${spaceId}'`,
+        Fields: ['ClosedAt'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
+    if (space.Results?.[0]?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
 
     const conversation = await view.RunView<{ ID: string }>({
         EntityName: 'MJ: Conversations',
@@ -156,10 +172,20 @@ export async function executeRoomAgent(
     const conversationId = parseUuid(conversation.Results?.[0]?.ID);
     if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
 
+    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
+    let agentMessage: string;
+    if (retrieval.quotedItems.length === 0) {
+        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
+    } else {
+        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
+        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
+    }
+
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
     assistantDetail.ConversationID = conversationId;
     assistantDetail.UserID = system.ID;
+    assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
     assistantDetail.Role = 'AI';
     assistantDetail.Message = agentMessage;
     assistantDetail.Status = 'Complete';
@@ -168,7 +194,9 @@ export async function executeRoomAgent(
     assistantDetail.OriginalMessageChanged = false;
 
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
-        return { ok: false, message: 'Failed to record assistant message' };
+        const message = assistantDetail.LatestResult?.CompleteMessage || 'Failed to record assistant message';
+        LogError(`executeRoomAgent failed for space ${spaceId}: ${message}`);
+        return { ok: false, message };
     }
 
     return {

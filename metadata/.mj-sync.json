@@ -17,6 +17,9 @@
     "entities",
     "entity-permissions",
     "entity-field-permissions",
+    "queries",
+    "templates",
+    "prompts",
     "ai-skills",
     "search-scopes",
     "agents"

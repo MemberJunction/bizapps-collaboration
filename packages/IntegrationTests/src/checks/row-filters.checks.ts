@@ -43,8 +43,22 @@ const checks: NamedCheck[] = [
             }, bea);
 
             Assert(items.Success, `Bea RunView Space Items failed: ${items.ErrorMessage ?? 'unknown'}`);
+            Assert(Array.isArray(items.Results) && items.Results.length > 0, 'Bea must see at least one Shared item in Discovery');
             for (const item of items.Results ?? []) {
                 Assert(item.Band === 'Shared', `Bea saw non-Shared item with band '${item.Band}'`);
+            }
+
+            // Find Team items in Discovery space and assert Bea cannot see any of them by ID
+            const teamItems = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Band = 'Team'`,
+                ['ID'],
+            );
+            Assert(teamItems.length > 0, 'At least one Team item exists in Discovery space');
+            const beaVisibleItemIds = new Set((items.Results ?? []).map((i) => i.ID.toLowerCase()));
+            for (const teamItem of teamItems) {
+                Assert(!beaVisibleItemIds.has(teamItem.ID.toLowerCase()), `Team item ${teamItem.ID} MUST NOT be visible to Bea`);
             }
         },
     },

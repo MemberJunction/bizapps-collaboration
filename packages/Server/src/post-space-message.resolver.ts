@@ -9,6 +9,9 @@ export class PostSpaceMessageInput {
 
     @Field()
     Text: string;
+
+    @Field({ nullable: true })
+    ExecuteAgent?: boolean;
 }
 
 @ObjectType()
@@ -20,12 +23,16 @@ export class PostSpaceMessagePayload {
     DetailID?: string;
 
     @Field({ nullable: true })
+    AssistantDetailID?: string;
+
+    @Field({ nullable: true })
     ErrorMessage?: string;
 }
 
 /**
  * Adds a human message to the space's conversation. The row is written as
- * the system user and names the caller. Nothing is sent to an agent.
+ * the system user and names the caller. If ExecuteAgent is true, invokes the
+ * Collaboration Space Agent server-side.
  */
 @Resolver()
 export class PostSpaceMessageResolver extends ResolverBase {
@@ -38,9 +45,17 @@ export class PostSpaceMessageResolver extends ResolverBase {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'The message needs a signed-in person.' };
         try {
-            const result = await postSpaceMessage(provider, user, { spaceId: input.SpaceID, text: input.Text ?? '' });
+            const result = await postSpaceMessage(provider, user, {
+                spaceId: input.SpaceID,
+                text: input.Text ?? '',
+                executeAgent: input.ExecuteAgent,
+            });
             if (result.ok === false) return { Success: false, ErrorMessage: result.message };
-            return { Success: true, DetailID: result.detailId };
+            return {
+                Success: true,
+                DetailID: result.detailId,
+                AssistantDetailID: result.assistantDetailId,
+            };
         } catch (error) {
             LogError(`PostSpaceMessage failed for space ${input.SpaceID} and user ${user.ID}: ${error instanceof Error ? error.message : String(error)}`);
             return { Success: false, ErrorMessage: 'The message was refused.' };

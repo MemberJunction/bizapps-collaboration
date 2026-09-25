@@ -40,6 +40,14 @@
       "MJ: AI Agent Search Scopes": {
         "entity": "MJ: AI Agent Search Scopes",
         "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Prompts": {
+        "entity": "MJ: AI Agent Prompts",
+        "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Permissions": {
+        "entity": "MJ: AI Agent Permissions",
+        "foreignKey": "AgentID"
       }
     }
   }

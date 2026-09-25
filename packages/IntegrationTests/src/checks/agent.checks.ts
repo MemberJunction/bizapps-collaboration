@@ -1,7 +1,11 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { SearchEngine } from '@memberjunction/search-engine';
 import { resolveSpaceAgentRetrieval, postSpaceMessage } from '@mj-biz-apps/collaboration-core-entities-server';
+import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import {
     AI_AGENT_ENTITY,
+    AI_AGENT_PERMISSION_ENTITY,
+    AI_AGENT_PROMPT_ENTITY,
     AI_AGENT_SEARCH_SCOPE_ENTITY,
     AI_AGENT_SKILL_ENTITY,
     AI_SKILL_ENTITY,
@@ -11,14 +15,17 @@ import {
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 
-const AGENT_ID = 'E5000001-0000-4000-8000-000000000001';
-const SEARCH_SCOPE_ID = 'E5000003-0000-4000-8000-000000000001';
+const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
+const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
+const PROMPT_ID = 'F8DE6158-9A74-4C23-8B39-44F4C68B6E32';
+const EXPANSION_QUERY_ID = 'FA742FD3-00D4-461F-A356-0265D72C39F4';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 
-const EXPECTED_SKILL_NAMES = ['Ask', 'Promote', 'Summarize', 'Find & act'];
+const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
+const createdDetailIds: string[] = [];
 
 const checks: NamedCheck[] = [
     {
@@ -26,7 +33,7 @@ const checks: NamedCheck[] = [
         Name: 'AG1 — Collaboration Space Agent, skills, and Search Scope metadata contract',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            // 1. Verify Search Scope and its restricting SpaceID dimension
+            // 1. Verify Search Scope and its restricting SpaceID dimension with expansion query
             const scopes = await FindRows<{ ID: string; Name: string; SearchContextConfig: string }>(
                 ctx,
                 SEARCH_SCOPE_ENTITY,
@@ -42,7 +49,9 @@ const checks: NamedCheck[] = [
             Assert(!!spaceDimension, 'SearchContextConfig declares SpaceID dimension');
             Assert(spaceDimension.restricts === true, 'SpaceID dimension restricts: true');
             Assert(spaceDimension.trust === 'ServerDerived', 'SpaceID dimension trust: ServerDerived');
-            Assert(spaceDimension.valueType === 'uuid', 'SpaceID dimension valueType: uuid');
+            Assert(spaceDimension.valueType === 'uuid[]', 'SpaceID dimension valueType: uuid[]');
+            Assert(spaceDimension.valueDomain === 'set', 'SpaceID dimension valueDomain: set');
+            Assert(spaceDimension.expansionQueryID?.toLowerCase() === EXPANSION_QUERY_ID.toLowerCase(), 'SpaceID dimension references expansion query');
             Assert(spaceDimension.required === true, 'SpaceID dimension required: true');
 
             // 2. Verify Search Scope Entities and RequiredMetadataKeys
@@ -54,31 +63,32 @@ const checks: NamedCheck[] = [
             );
             Assert(scopeEntities.length === 2, 'Search Scope has 2 entity lanes (Space Items and Tasks)');
             for (const lane of scopeEntities) {
-                Assert(lane.ExtraFilter.includes("SpaceID = '{{SpaceID}}'"), 'ExtraFilter binds SpaceID template');
+                Assert(lane.ExtraFilter.includes('context.SecondaryScopes.SpaceID'), 'ExtraFilter binds context.SecondaryScopes.SpaceID template');
                 const reqKeys = JSON.parse(lane.RequiredMetadataKeys ?? '[]');
                 Assert(Array.isArray(reqKeys) && reqKeys.includes('SpaceID'), 'Lane declares SpaceID in RequiredMetadataKeys');
             }
 
             // 3. Verify Collaboration Space Agent
-            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string }>(
+            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean }>(
                 ctx,
                 AI_AGENT_ENTITY,
                 `ID = '${AGENT_ID}'`,
-                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode'],
+                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction'],
             );
             Assert(agents.length === 1, 'Collaboration Space Agent exists');
             Assert(agents[0].Name === 'Collaboration Space Agent', 'Agent name matches');
             Assert(agents[0].AcceptsSkills === 'Limited', 'Agent AcceptsSkills is Limited');
             Assert(agents[0].SkillActivationMode === 'Auto', 'Agent SkillActivationMode is Auto');
+            Assert(agents[0].ExposeAsAction === false, 'Agent ExposeAsAction is false (isolated from global chat area)');
 
-            // 4. Verify 4 assigned skills
+            // 4. Verify 3 assigned skills (Ask is prompt, not skill)
             const assignedSkills = await FindRows<{ ID: string; SkillID: string }>(
                 ctx,
                 AI_AGENT_SKILL_ENTITY,
                 `AgentID = '${AGENT_ID}'`,
                 ['ID', 'SkillID'],
             );
-            Assert(assignedSkills.length === 4, 'Agent has 4 skills assigned');
+            Assert(assignedSkills.length === 3, 'Agent has 3 skills assigned (Promote, Summarize, Find & act)');
 
             const skillIds = assignedSkills.map((s) => `'${s.SkillID}'`).join(',');
             const skills = await FindRows<{ ID: string; Name: string; Instructions: string }>(
@@ -88,13 +98,36 @@ const checks: NamedCheck[] = [
                 ['ID', 'Name', 'Instructions'],
             );
             const foundSkillNames = skills.map((s) => s.Name).sort();
-            const expectedSorted = [...EXPECTED_SKILL_NAMES].sort();
-            Assert(JSON.stringify(foundSkillNames) === JSON.stringify(expectedSorted), 'All 4 collaboration skills assigned to agent');
+            Assert(JSON.stringify(foundSkillNames) === JSON.stringify(EXPECTED_SKILL_NAMES), 'Expected 3 collaboration skills assigned to agent');
             for (const skill of skills) {
                 Assert(!!skill.Instructions && skill.Instructions.length > 0, `Skill ${skill.Name} has instructions`);
             }
 
-            // 5. Verify Search Scope link
+            // 5. Verify Prompt link
+            const agentPrompts = await FindRows<{ ID: string; PromptID: string; Status: string }>(
+                ctx,
+                AI_AGENT_PROMPT_ENTITY,
+                `AgentID = '${AGENT_ID}'`,
+                ['ID', 'PromptID', 'Status'],
+            );
+            Assert(agentPrompts.length === 1, 'Agent has 1 linked prompt');
+            Assert(agentPrompts[0].PromptID.toLowerCase() === PROMPT_ID.toLowerCase(), 'Linked to Collaboration Space Agent - Ask prompt');
+            Assert(agentPrompts[0].Status === 'Active', 'Agent prompt is Active');
+
+            // 6. Verify Permissions (restricted to Integration and Developer, closing it from standard UI users)
+            const agentPermissions = await FindRows<{ ID: string; CanRun: boolean; CanView: boolean }>(
+                ctx,
+                AI_AGENT_PERMISSION_ENTITY,
+                `AgentID = '${AGENT_ID}'`,
+                ['ID', 'CanRun', 'CanView'],
+            );
+            Assert(agentPermissions.length === 2, 'Agent has 2 permission records (Integration and Developer)');
+            for (const perm of agentPermissions) {
+                Assert(perm.CanRun === true, 'Permission CanRun is true');
+                Assert(perm.CanView === false, 'Permission CanView is false');
+            }
+
+            // 7. Verify Search Scope link
             const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string }>(
                 ctx,
                 AI_AGENT_SEARCH_SCOPE_ENTITY,
@@ -103,6 +136,23 @@ const checks: NamedCheck[] = [
             );
             Assert(agentScopes.length === 1, 'Agent is linked to 1 Search Scope');
             Assert(agentScopes[0].SearchScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Linked to Collaboration Space Scope');
+
+            // 8. Verify SearchEngine.ExplainScope
+            const bea = await GetPersonaUser(ctx, 'bea');
+            await SearchEngine.Instance.Config({}, bea);
+            const explanations = await SearchEngine.Instance.ExplainScope(
+                {
+                    ScopeIDs: [SEARCH_SCOPE_ID],
+                    SearchContext: {
+                        PrimaryScopeRecordID: DISCOVERY_SPACE_ID,
+                    },
+                    AIAgentID: AGENT_ID,
+                },
+                bea,
+            );
+            Assert(explanations.length === 1, 'ExplainScope returned 1 explanation');
+            Assert(explanations[0].ScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Scope explanation matches ScopeID');
+            Assert(explanations[0].Lanes.length === 2, 'ExplainScope reports 2 lanes');
         },
     },
     {
@@ -208,20 +258,25 @@ const checks: NamedCheck[] = [
 
             Assert(result.ok === true, 'postSpaceMessage with executeAgent succeeds');
             if (!result.ok) throw new Error(result.message);
+            Assert(!!result.detailId, 'Human conversation detail was created');
             Assert(!!result.assistantDetailId, 'Assistant conversation detail was created');
+            createdDetailIds.push(result.detailId);
+            if (result.assistantDetailId) createdDetailIds.push(result.assistantDetailId);
+
             Assert(result.quotedCount !== undefined && result.quotedCount > 0, 'Agent quoted at least 1 shared item');
 
             // Verify the assistant detail in the database
-            const details = await FindRows<{ ID: string; Role: string; Message: string; HiddenToUser: boolean }>(
+            const details = await FindRows<{ ID: string; Role: string; Message: string; HiddenToUser: boolean; AgentID?: string }>(
                 ctx,
                 CONVERSATION_DETAIL_ENTITY,
                 `ID = '${result.assistantDetailId}'`,
-                ['ID', 'Role', 'Message', 'HiddenToUser'],
+                ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentID'],
             );
 
             Assert(details.length === 1, 'Assistant conversation detail found');
             Assert(details[0].Role === 'AI', 'Detail Role is AI');
             Assert(details[0].HiddenToUser === false, 'Detail is visible to user');
+            Assert(details[0].AgentID?.toLowerCase() === AGENT_ID.toLowerCase(), 'Assistant detail has AgentID set');
             Assert(details[0].Message.includes('site-photo.png'), 'Assistant response quotes site-photo.png');
             Assert(!details[0].Message.includes('discovery-brief.pdf'), 'Assistant response never mentions discovery-brief.pdf');
         },
@@ -231,6 +286,19 @@ const checks: NamedCheck[] = [
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
     Setup: async () => {},
-    Teardown: async () => {},
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        while (createdDetailIds.length > 0) {
+            const id = createdDetailIds.pop();
+            if (id) {
+                try {
+                    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                    if (await detail.Load(id)) {
+                        await detail.Delete();
+                    }
+                } catch {
+                    // Best effort cleanup
+                }
+            }
+        }
+    },
 });
-

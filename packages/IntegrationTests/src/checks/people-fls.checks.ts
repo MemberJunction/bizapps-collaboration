@@ -50,14 +50,18 @@ const checks: NamedCheck[] = [
             // Under MemberJunction FLS: querying denied fields either fails the RunView with a permission error
             // or redacts the restricted values (returns null/undefined).
             if (res.Success) {
+                Assert(Array.isArray(res.Results) && res.Results.length > 0, 'People rows returned under FLS query');
                 for (const row of res.Results ?? []) {
                     Assert(row.Phone == null || row.Phone === '', `Phone leaked: ${row.Phone}`);
                     Assert(row.DateOfBirth == null, `DateOfBirth leaked: ${row.DateOfBirth}`);
                     Assert(row.Gender == null, `Gender leaked: ${row.Gender}`);
                 }
             } else {
-                // Denied at query parse/validate time
-                Assert(!res.Success, 'RunView failed as expected on denied fields');
+                const err = (res.ErrorMessage ?? '').toLowerCase();
+                Assert(
+                    err.includes('permission') || err.includes('denied') || err.includes('security') || err.includes('access'),
+                    `Expected security/permission error message for restricted fields query, got: ${res.ErrorMessage}`,
+                );
             }
         },
     },
@@ -66,10 +70,14 @@ const checks: NamedCheck[] = [
         Name: 'FLS3 — exact column audit: Space Participant readable People fields are strictly ID, name, email, and link fields',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            // Find Entity ID for People
-            const entities = await FindRows<{ ID: string }>(ctx, ENTITY_ENTITY, `Name = '${PERSON_ENTITY}'`, ['ID']);
-            Assert(entities.length === 1, `Entity ${PERSON_ENTITY} found`);
-            const peopleEntityId = entities[0].ID;
+            // Find Entity ID and check EnableFieldLevelSecurity on People
+            const peopleEntityInfo = ctx.Provider.EntityByName(PERSON_ENTITY);
+            Assert(!!peopleEntityInfo, `Entity ${PERSON_ENTITY} found in metadata`);
+            Assert(
+                peopleEntityInfo!.EnableFieldLevelSecurity === true,
+                `MJ_BizApps_Common: People MUST have EnableFieldLevelSecurity enabled, saw ${peopleEntityInfo!.EnableFieldLevelSecurity}`,
+            );
+            const peopleEntityId = peopleEntityInfo!.ID;
 
             // Find Space Participant role ID
             const roles = await FindRows<{ ID: string }>(ctx, 'MJ: Roles', "Name = 'Space Participant'", ['ID']);
@@ -77,14 +85,14 @@ const checks: NamedCheck[] = [
             const participantRoleId = roles[0].ID;
 
             // Find all Entity Fields for People
-            const peopleFields = await FindRows<{ ID: string; Name: string }>(
+            const peopleFields = await FindRows<{ ID: string; Name: string; IsPrimaryKey: boolean }>(
                 ctx,
                 ENTITY_FIELD_ENTITY,
                 `EntityID = '${peopleEntityId}'`,
-                ['ID', 'Name'],
+                ['ID', 'Name', 'IsPrimaryKey'],
             );
             Assert(peopleFields.length > 0, 'People entity has fields');
-            const fieldMap = new Map(peopleFields.map((f) => [f.ID.toLowerCase(), f.Name]));
+            const fieldMap = new Map(peopleFields.map((f) => [f.ID.toLowerCase(), f]));
 
             // Query Entity Field Permissions for Space Participant
             const perms = await FindRows<{ EntityFieldID: string; ReadAccess: string }>(
@@ -96,18 +104,35 @@ const checks: NamedCheck[] = [
             const peoplePerms = perms.filter((p) => fieldMap.has(p.EntityFieldID.toLowerCase()));
             Assert(peoplePerms.length > 0, 'Field permissions exist for Space Participant on People');
 
-            for (const p of peoplePerms) {
-                const fieldName = fieldMap.get(p.EntityFieldID.toLowerCase())!;
-                const lower = fieldName.toLowerCase();
-                if (p.ReadAccess === 'Allow') {
+            const permMap = new Map(peoplePerms.map((p) => [p.EntityFieldID.toLowerCase(), p.ReadAccess]));
+
+            // Compute effective readability for every field on People
+            for (const [fieldId, fieldInfo] of fieldMap) {
+                const name = fieldInfo.Name;
+                const lower = name.toLowerCase();
+
+                // Skip __mj_ internal system columns (e.g. __mj_CreatedAt)
+                if (lower.startsWith('__mj_')) continue;
+
+                const readAccess = permMap.get(fieldId);
+                if (readAccess) {
+                    Assert(
+                        readAccess === 'Allow' || readAccess === 'Deny' || readAccess === 'No Access',
+                        `Field ${name} has invalid ReadAccess '${readAccess}' — must be Allow, Deny, or No Access`,
+                    );
+                }
+
+                const isEffectivelyReadable = fieldInfo.IsPrimaryKey || readAccess === 'Allow';
+
+                if (isEffectivelyReadable) {
                     Assert(
                         ALLOWED_PEOPLE_FIELDS.has(lower),
-                        `Field ${fieldName} has ReadAccess=Allow for Space Participant, but is NOT in allowed list`,
+                        `Field '${name}' is readable for Space Participant, but is NOT in allowed list`,
                     );
                 } else {
                     Assert(
-                        p.ReadAccess === 'Deny' || p.ReadAccess === 'None',
-                        `Field ${fieldName} should be Deny or None, saw ${p.ReadAccess}`,
+                        !ALLOWED_PEOPLE_FIELDS.has(lower),
+                        `Field '${name}' is in allowed list but is NOT readable for Space Participant`,
                     );
                 }
             }
@@ -121,13 +146,17 @@ const checks: NamedCheck[] = [
             const bea = await GetPersonaUser(ctx, 'bea');
             Assert(!!bea, 'Bea persona resolved');
 
-            // Participant holds only Space Participant role. Core startup engines (AIEngineBase, PermissionEngine,
-            // QueryEngine, RemoteOperationEngineBase) are ungranted and report permission-constrained.
-            const aiConstrained = AIEngineBase.Instance?.IsPermissionConstrained;
-            Assert(
-                aiConstrained === true || aiConstrained === false,
-                'AIEngineBase exposes IsPermissionConstrained flag without throwing',
-            );
+            // Participant holds only Space Participant role.
+            // When core startup engines are ungranted or restricted, they must safely expose
+            // their IsPermissionConstrained state without throwing unhandled exceptions.
+            const aiEngine = AIEngineBase.Instance;
+            if (aiEngine) {
+                const constrained = aiEngine.IsPermissionConstrained;
+                Assert(
+                    typeof constrained === 'boolean',
+                    `AIEngineBase.IsPermissionConstrained should be a boolean, saw: ${typeof constrained}`,
+                );
+            }
         },
     },
 ];

@@ -6,18 +6,19 @@ import {
     mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
     SPACE_ENTITY,
     SPACE_MEMBER_ENTITY,
     SPACE_ITEM_ENTITY,
     SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
+    TASK_ENTITY,
 } from '../entity-names.js';
-import { FindRows, GetPersonaUser, RequireSave } from '../wire.js';
+import { FindRows, GetPersonaUser } from '../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
-const FIELD_NOTES_SPACE_ID = 'C1000001-0000-4000-8000-000000000011';
 
 const checks: NamedCheck[] = [
     {
@@ -36,19 +37,25 @@ const checks: NamedCheck[] = [
             rootAttempt.SpaceTypeID = 'A1000001-0000-4000-8000-000000000001'; // workspace type
             rootAttempt.ParentID = null;
 
-            const valRoot = await rootAttempt.ValidateAsync();
-            Assert(!valRoot.Success, 'Participant creating root space must be refused');
+            const savedRoot = await rootAttempt.Save();
+            Assert(!savedRoot, 'Participant creating root space must be refused');
+            const rootReason = rootAttempt.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                rootReason.includes('Space change refused: only a staff user may create a root, and they must own it.'),
+                `Expected root space refusal message, got: ${rootReason}`,
+            );
 
             // 2. Cycle detection: moving Northwind under Discovery (its own child)
             const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             Assert(await space.Load(NORTHWIND_SPACE_ID), 'Load Northwind space');
             space.ParentID = DISCOVERY_SPACE_ID;
 
-            const valCycle = await space.ValidateAsync();
-            Assert(!valCycle.Success, 'Moving space under its own descendant must fail validation');
+            const savedCycle = await space.Save();
+            Assert(!savedCycle, 'Moving space under its own descendant must fail save');
+            const cycleReason = space.LatestResult?.CompleteMessage ?? '';
             Assert(
-                valCycle.Errors.some((e) => e.Message.includes('would put the space inside its own subtree')),
-                `Expected cycle message, got: ${valCycle.Errors.map((e) => e.Message).join('; ')}`,
+                cycleReason.includes('would put the space inside its own subtree'),
+                `Expected cycle message, got: ${cycleReason}`,
             );
         },
     },
@@ -73,21 +80,23 @@ const checks: NamedCheck[] = [
 
             // Attempt to change SpaceID on saved membership
             member.SpaceID = DISCOVERY_SPACE_ID;
-            const valSpace = await member.ValidateAsync();
-            Assert(!valSpace.Success, 'Changing SpaceID on saved membership must fail');
+            const savedSpace = await member.Save();
+            Assert(!savedSpace, 'Changing SpaceID on saved membership must fail');
+            const spaceReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(
-                valSpace.Errors.some((e) => e.Message.includes('stays on the space and the person')),
-                `Expected immutable seat message, got: ${valSpace.Errors.map((e) => e.Message).join('; ')}`,
+                spaceReason.includes('stays on the space and the person'),
+                `Expected immutable seat message, got: ${spaceReason}`,
             );
 
             // Reload and attempt to remove last owner
             await member.Load(seats[0].ID);
             member.Status = 'Removed';
-            const valStrand = await member.ValidateAsync();
-            Assert(!valStrand.Success, 'Removing last active owner must fail validation');
+            const savedStrand = await member.Save();
+            Assert(!savedStrand, 'Removing last active owner must fail save');
+            const strandReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(
-                valStrand.Errors.some((e) => e.Message.includes('last owner of this space')),
-                `Expected last owner message, got: ${valStrand.Errors.map((e) => e.Message).join('; ')}`,
+                strandReason.includes('last owner of this space'),
+                `Expected last owner message, got: ${strandReason}`,
             );
         },
     },
@@ -96,16 +105,54 @@ const checks: NamedCheck[] = [
         Name: 'WG3 — item write gates: valid space/signer, subtask cannot be filed as space root',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const bea = await GetPersonaUser(ctx, 'bea');
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const harper = await GetPersonaUser(ctx, 'harper'); // in Harbor, not Discovery
 
-            // Attempt to file an item without valid SpaceID
-            const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, bea);
-            item.NewRecord();
-            item.SpaceID = '00000000-0000-0000-0000-000000000000';
-            item.Band = 'Shared';
+            const taskEntity = ctx.Provider.EntityByName(TASK_ENTITY);
+            Assert(!!taskEntity, 'Task entity found');
+            if (!taskEntity) throw new Error('Task entity found');
 
-            const val = await item.ValidateAsync();
-            Assert(!val.Success, 'Invalid SpaceID must fail item validation');
+            // 1. Find a subtask in Discovery
+            const subtaskRows = await FindRows<{ ID: string; ParentID: string }>(
+                ctx,
+                TASK_ENTITY,
+                `ParentID IS NOT NULL`,
+                ['ID', 'ParentID'],
+            );
+            Assert(subtaskRows.length > 0, 'Subtask found');
+            const subtaskId = subtaskRows[0].ID;
+
+            // Attempt to file this subtask directly as a SpaceItem
+            const subtaskItem = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ada);
+            subtaskItem.NewRecord();
+            subtaskItem.SpaceID = DISCOVERY_SPACE_ID;
+            subtaskItem.EntityID = taskEntity.ID;
+            subtaskItem.RecordID = `ID|${subtaskId}`;
+            subtaskItem.Band = 'Shared';
+
+            const savedSubtask = await subtaskItem.Save();
+            Assert(!savedSubtask, 'Filing subtask as space item must fail save');
+            const subtaskReason = subtaskItem.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                subtaskReason.includes('Item change refused: a subtask cannot be filed as a space root.'),
+                `Expected subtask space root refusal, got: ${subtaskReason}`,
+            );
+
+            // 2. Signer outside space (Harper) attempting to place item in Discovery
+            const harperItem = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, harper);
+            harperItem.NewRecord();
+            harperItem.SpaceID = DISCOVERY_SPACE_ID;
+            harperItem.EntityID = taskEntity.ID;
+            harperItem.RecordID = `ID|${subtaskRows[0].ParentID}`;
+            harperItem.Band = 'Shared';
+
+            const savedHarper = await harperItem.Save();
+            Assert(!savedHarper, 'Harper saving item in Discovery must fail save');
+            const harperReason = harperItem.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                harperReason.includes('Item change refused: the signer does not reach this space.'),
+                `Expected signer does not reach space refusal, got: ${harperReason}`,
+            );
         },
     },
     {
@@ -133,8 +180,13 @@ const checks: NamedCheck[] = [
             notice.ItemID = itemId;
             notice.RecipientUserID = harper.ID;
 
-            const val = await notice.ValidateAsync();
-            Assert(!val.Success, 'Share notice to user not in space roster must fail validation');
+            const saved = await notice.Save();
+            Assert(!saved, 'Share notice to user not in space roster must fail save');
+            const reason = notice.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                reason.includes('That person is not a recipient for this share.'),
+                `Expected recipient refusal message, got: ${reason}`,
+            );
         },
     },
     {
@@ -159,8 +211,13 @@ const checks: NamedCheck[] = [
             use.UserID = harper.ID;
             use.Kind = 'open';
 
-            const val = await use.ValidateAsync();
-            Assert(!val.Success, 'Item use by caller outside space must fail validation');
+            const saved = await use.Save();
+            Assert(!saved, 'Item use by caller outside space must fail save');
+            const reason = use.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                reason.includes('The caller does not reach this space.'),
+                `Expected item use outside space refusal, got: ${reason}`,
+            );
         },
     },
 ];
@@ -170,3 +227,4 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('write-gates', {
     Setup: async () => {},
     Teardown: async () => {},
 });
+

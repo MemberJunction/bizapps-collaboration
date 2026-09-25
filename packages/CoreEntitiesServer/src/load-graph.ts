@@ -228,3 +228,10 @@ function emptyRole(): RoleFlags {
 export function callerUuid(user: UserInfo | null | undefined): string | null {
     return parseUuid(user?.ID);
 }
+
+export const STAFF_ROLES = new Set(['UI', 'Developer', 'Integration']);
+
+export function isStaffUser(user: { UserRoles?: { Role?: string }[] } | null | undefined): boolean {
+    if (!user?.UserRoles) return false;
+    return user.UserRoles.some((role) => !!role.Role && STAFF_ROLES.has(role.Role));
+}

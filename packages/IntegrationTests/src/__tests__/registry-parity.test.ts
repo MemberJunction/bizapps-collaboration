@@ -20,7 +20,7 @@ const registry = IntegrationCheckRegistry.Instance;
 export const EXPECTED_BUNDLES: Record<string, number> = {
     'collab-world': 3,
     'people-fls': 4,
-    'parent-assignees': 4,
+    'parent-assignees': 5,
     'room': 6,
     'write-gates': 5,
     'row-filters': 4,

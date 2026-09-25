@@ -1,14 +1,15 @@
 import { CompositeKey, RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration/registry';
 import { Assert } from '@memberjunction/testing-integration/registry';
 import { USER_ENTITY, USER_ROLE_ENTITY } from './entity-names.js';
 
 export function Quote(value: string): string {
-    return value.replace(/'/g, "''");
+    return EscapeSQLString(value);
 }
 
 export function SameID(left: string | null | undefined, right: string | null | undefined): boolean {
-    return (left ?? '').toLowerCase() === (right ?? '').toLowerCase();
+    return UUIDsEqual(left ?? '', right ?? '');
 }
 
 export function View(ctx: IntegrationCheckContext): RunView {
@@ -74,16 +75,14 @@ export async function GetPersonaUser(ctx: IntegrationCheckContext, keyOrEmail: s
     const email = (personaEmailMap[keyOrEmail.toLowerCase()] ?? keyOrEmail).toLowerCase();
     if (personaCache.has(email)) return personaCache.get(email)!;
 
-    // Check generic-database-provider UserCache if available
-    try {
-        const { UserCache } = await import('@memberjunction/generic-database-provider');
-        const found = UserCache.Users?.find((u) => u.Email?.toLowerCase() === email);
+    // Check UserCache provided on context if available
+    const ctxWithCache = ctx as { UserCache?: { Users?: UserInfo[] } };
+    if (ctxWithCache.UserCache?.Users) {
+        const found = ctxWithCache.UserCache.Users.find((u) => u.Email?.toLowerCase() === email);
         if (found) {
             personaCache.set(email, found);
             return found;
         }
-    } catch {
-        // client context or UserCache not initialized
     }
 
     // Resolve over provider

@@ -3,7 +3,7 @@ import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeSpaceWrite, chainsForSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -25,9 +25,56 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (this.IsSaved && dirty.length === 0) {
             return result;
         }
+
         const allowParentChanged = this.Fields.some((field) => field.Name === 'AllowParentAssignees' && field.Dirty);
-        if (allowParentChanged && !isStaff(user)) {
+        if (allowParentChanged && !isStaffUser(user)) {
             return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+        }
+        const agentRetrievalChanged = this.Fields.some((field) => field.Name === 'AgentRetrieval' && field.Dirty);
+        if (agentRetrievalChanged && !isStaffUser(user)) {
+            return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+        }
+
+        if (!this.IsSaved && this.SpaceTypeID) {
+            const typeId = parseUuid(this.SpaceTypeID);
+            if (typeId) {
+                try {
+                    const rv = new RunView(this.RunViewProviderToUse);
+                    const typeRows = await rv.RunView<{ DefaultAllowParentAssignees: boolean; DefaultAgentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Types',
+                        ExtraFilter: `ID = '${typeId}'`,
+                        Fields: ['DefaultAllowParentAssignees', 'DefaultAgentRetrieval'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                    }, user);
+                    if (typeRows.Success && typeRows.Results?.[0]) {
+                        const spaceType = typeRows.Results[0];
+                        const defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
+                        const defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
+
+                        const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
+                        const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
+
+                        if (!allowDirty) {
+                            this.AllowParentAssignees = defaultAllow;
+                        }
+                        if (!agentDirty) {
+                            this.AgentRetrieval = defaultAgent;
+                        }
+
+                        if (!isStaffUser(user)) {
+                            if (this.AllowParentAssignees !== defaultAllow) {
+                                return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+                            }
+                            if (this.AgentRetrieval !== defaultAgent) {
+                                return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+                            }
+                        }
+                    }
+                } catch {
+                    // Pass through on lookup error
+                }
+            }
         }
         const spaceId = this.ID ? parseUuid(this.ID) : null;
         if (this.ID && !spaceId) {
@@ -67,7 +114,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const decision = authorizeSpaceWrite({
             kind,
             callerUserId: caller,
-            callerIsStaff: isStaff(user),
+            callerIsStaff: isStaffUser(user),
             nextOwnerId: ownerId,
             toRoot,
             here,
@@ -105,12 +152,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         return ok;
     }
-}
-
-const STAFF = new Set(['UI', 'Developer', 'Integration']);
-
-function isStaff(user: { UserRoles?: { Role?: string }[] }): boolean {
-    return (user.UserRoles ?? []).some((role) => !!role.Role && STAFF.has(role.Role));
 }
 
 function fail(result: ValidationResult, field: string, message: string): ValidationResult {

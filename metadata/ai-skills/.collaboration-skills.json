@@ -1,21 +1,7 @@
 [
   {
     "primaryKey": {
-      "ID": "E5000002-0000-4000-8000-000000000001"
-    },
-    "fields": {
-      "Name": "Ask",
-      "Description": "Answers questions using space knowledge and materials within the caller's reach.",
-      "Instructions": "Answer user questions using knowledge, items, and files available in the space. Never disclose or quote items from the Team band to participants who do not have access to Team items. Maintain all space boundary restrictions.",
-      "Status": "Active",
-      "ActivationMode": "Auto",
-      "Category": "Collaboration",
-      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "E5000002-0000-4000-8000-000000000002"
+      "ID": "2FDE0484-FFEC-4789-98C1-AB4FEC3A2D94"
     },
     "fields": {
       "Name": "Promote",
@@ -29,7 +15,7 @@
   },
   {
     "primaryKey": {
-      "ID": "E5000002-0000-4000-8000-000000000003"
+      "ID": "76B26C41-8113-491A-9BBB-2008E1CAEE4B"
     },
     "fields": {
       "Name": "Summarize",
@@ -43,7 +29,7 @@
   },
   {
     "primaryKey": {
-      "ID": "E5000002-0000-4000-8000-000000000004"
+      "ID": "574722E4-961A-4A14-A38F-0DD300F0D53B"
     },
     "fields": {
       "Name": "Find & act",

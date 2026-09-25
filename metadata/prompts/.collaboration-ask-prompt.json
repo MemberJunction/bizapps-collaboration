@@ -1,0 +1,21 @@
+[
+  {
+    "primaryKey": {
+      "ID": "F8DE6158-9A74-4C23-8B39-44F4C68B6E32"
+    },
+    "fields": {
+      "Name": "Collaboration Space Agent - Ask",
+      "Description": "Primary Ask prompt for Collaboration Space Agent",
+      "TemplateID": "A61788A9-9524-4BE7-B5F5-3FB8DEAA7081",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Conversations",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "ResponseFormat": "Any",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    }
+  }
+]

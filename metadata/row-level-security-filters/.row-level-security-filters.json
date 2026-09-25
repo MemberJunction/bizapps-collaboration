@@ -16,7 +16,7 @@
     "fields": {
       "Name": "Collaboration: Visible Members",
       "Description": "The caller's own roster rows, active seats on spaces they reach, and invited or removed seats where their reaching role can invite.",
-      "FilterText": "((Status = N'Active' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR (Status IN (N'Invited', N'Removed') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanInvite = 1)))"
+      "FilterText": "((Status = N'Active' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR (Status IN (N'Invited', N'Removed') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanInvite = 1)) OR ID IN (SELECT MemberID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     }
   },
   {
@@ -256,7 +256,7 @@
     "fields": {
       "Name": "Collaboration: People In Reach",
       "Description": "The caller's own person, and people linked to a user with an active seat on a space the caller reaches.",
-      "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+      "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR LinkedUserID IN (SELECT UserID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     }
   }
 ]

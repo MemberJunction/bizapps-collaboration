@@ -1,7 +1,7 @@
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { authorizeTaskAssignment, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
-import { loadMemberReach, requireSystemUser } from './load-graph.js';
+import { isStaffUser, loadMemberReach, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
@@ -46,7 +46,10 @@ export async function filedTask(provider: IMetadataProvider, reader: UserInfo, t
         MaxRows: 1,
         ResultType: 'simple',
     }, reader);
-    const allowParentAssignees = spaceRows.Results?.[0]?.AllowParentAssignees !== undefined ? !!spaceRows.Results[0].AllowParentAssignees : true;
+    if (!spaceRows.Success) throw new Error(spaceRows.ErrorMessage ?? 'Could not read space settings.');
+    const spaceRow = spaceRows.Results?.[0];
+    if (!spaceRow) throw new Error(`Space ${item.spaceId} not found.`);
+    const allowParentAssignees = spaceRow.AllowParentAssignees !== undefined ? !!spaceRow.AllowParentAssignees : true;
     return { spaceId: item.spaceId, band: item.band, root: rootId === id, allowParentAssignees };
 }
 
@@ -63,9 +66,8 @@ export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignme
         if (!assigneeUserId) return 'Assignment refused: the assignee is not a person in this space.';
         const reach = await loadMemberReach(assignment, system, assigneeUserId, place.spaceId);
         if (!reach) return 'Assignment refused: the assignee does not hold a seat in this space.';
-        const isStaffUser = (user.UserRoles ?? []).some((role) => role.Role && (role.Role === 'UI' || role.Role === 'Developer' || role.Role === 'Integration'));
         const decision = authorizeTaskAssignment({
-            callerIsStaff: isStaffUser,
+            callerIsStaff: isStaffUser(user),
             taskSpaceId: place.spaceId,
             assigneeSeatSpaceId: reach.spaceId,
             allowParentAssignees: place.allowParentAssignees,

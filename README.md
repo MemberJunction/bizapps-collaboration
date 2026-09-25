@@ -174,6 +174,8 @@ The host shells are MemberJunction's own `MJAPI` and `MJExplorer`. A BizApps rep
 
 Email invites need magic links turned on. In the host config, `magicLink.enabled` is true and `Space Participant` is listed in `magicLink.grantableRoleNames`. Leave `restrictedRoleName` as the host's own default so other apps are unchanged. Set `magicLink.communicationProvider` and `magicLink.fromAddress` to email the sign-in link. Without a channel, the raw URL is returned only to an Owner-type user or a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL.
 
+> **Field-level security note on `Space Participant`:** The role carries `Deny` permissions on sensitive `People` fields (phone, birth date, gender, address). In MemberJunction, `Deny` is host-wide: anyone holding `Space Participant` loses access to those fields in every app on the host. `mint-space-link.ts` never grants `Space Participant` to staff users, so in practice this affects only external clients.
+
 ### Packages this repo will grow
 
 The set matches the other BizApps Open Apps. These packages are in the repository.

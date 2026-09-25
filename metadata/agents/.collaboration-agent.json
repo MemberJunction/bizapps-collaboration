@@ -1,7 +1,7 @@
 [
   {
     "primaryKey": {
-      "ID": "E5000001-0000-4000-8000-000000000001"
+      "ID": "9E6D761A-197A-40AF-995B-3D3DD9BD7B9E"
     },
     "fields": {
       "Name": "Collaboration Space Agent",
@@ -14,48 +14,53 @@
       "ExecutionOrder": 10,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "Never",
-      "ExposeAsAction": true,
+      "ExposeAsAction": false,
       "IconClass": "fa-solid fa-users-viewfinder"
     },
     "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "primaryKey": {
+            "ID": "E2325F37-3AC2-4467-93C0-36C38A8FE499"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "F8DE6158-9A74-4C23-8B39-44F4C68B6E32",
+            "Purpose": "System",
+            "ExecutionOrder": 0,
+            "Status": "Active",
+            "ContextBehavior": "Complete"
+          }
+        }
+      ],
       "MJ: AI Agent Skills": [
         {
           "primaryKey": {
-            "ID": "E5000005-0000-4000-8000-000000000001"
+            "ID": "27BCF930-83BB-4F07-87AD-A2DAFCF8FBA0"
           },
           "fields": {
             "AgentID": "@parent:ID",
-            "SkillID": "E5000002-0000-4000-8000-000000000001",
+            "SkillID": "2FDE0484-FFEC-4789-98C1-AB4FEC3A2D94",
             "Status": "Active"
           }
         },
         {
           "primaryKey": {
-            "ID": "E5000005-0000-4000-8000-000000000002"
+            "ID": "C1E6E351-7102-4F72-B689-C4788A1FD887"
           },
           "fields": {
             "AgentID": "@parent:ID",
-            "SkillID": "E5000002-0000-4000-8000-000000000002",
+            "SkillID": "76B26C41-8113-491A-9BBB-2008E1CAEE4B",
             "Status": "Active"
           }
         },
         {
           "primaryKey": {
-            "ID": "E5000005-0000-4000-8000-000000000003"
+            "ID": "35EB0868-1919-4115-B7E0-01E32142253E"
           },
           "fields": {
             "AgentID": "@parent:ID",
-            "SkillID": "E5000002-0000-4000-8000-000000000003",
-            "Status": "Active"
-          }
-        },
-        {
-          "primaryKey": {
-            "ID": "E5000005-0000-4000-8000-000000000004"
-          },
-          "fields": {
-            "AgentID": "@parent:ID",
-            "SkillID": "E5000002-0000-4000-8000-000000000004",
+            "SkillID": "574722E4-961A-4A14-A38F-0DD300F0D53B",
             "Status": "Active"
           }
         }
@@ -63,13 +68,41 @@
       "MJ: AI Agent Search Scopes": [
         {
           "primaryKey": {
-            "ID": "E5000006-0000-4000-8000-000000000001"
+            "ID": "8AA2F88B-B123-4F6B-BAB3-330F19099393"
           },
           "fields": {
             "AgentID": "@parent:ID",
-            "SearchScopeID": "E5000003-0000-4000-8000-000000000001",
+            "SearchScopeID": "6E5187CF-7E5B-447F-893D-D291994083C0",
             "Phase": "Both",
             "Status": "Active"
+          }
+        }
+      ],
+      "MJ: AI Agent Permissions": [
+        {
+          "primaryKey": {
+            "ID": "7B18E340-97CD-4B71-9F1B-94713E229CA8"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration",
+            "CanView": false,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "40DE7236-4EC2-4458-9588-4F9DA34A02A0"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "CanView": false,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
           }
         }
       ]

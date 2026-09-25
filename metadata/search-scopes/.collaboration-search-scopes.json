@@ -1,7 +1,7 @@
 [
   {
     "primaryKey": {
-      "ID": "E5000003-0000-4000-8000-000000000001"
+      "ID": "6E5187CF-7E5B-447F-893D-D291994083C0"
     },
     "fields": {
       "Name": "Collaboration Space Scope",
@@ -10,29 +10,29 @@
       "Status": "Active",
       "IsGlobal": false,
       "IsDefault": false,
-      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid\",\"required\":true}],\"strictValidation\":true}"
+      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true}],\"strictValidation\":true}"
     },
     "relatedEntities": {
       "MJ: Search Scope Entities": [
         {
           "primaryKey": {
-            "ID": "E5000004-0000-4000-8000-000000000001"
+            "ID": "3AA70B8D-C82C-4C04-BA4C-5714F842850E"
           },
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
-            "ExtraFilter": "SpaceID = '{{SpaceID}}'",
+            "ExtraFilter": "SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}')",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         },
         {
           "primaryKey": {
-            "ID": "E5000004-0000-4000-8000-000000000002"
+            "ID": "3F41A6EC-686C-4B9E-9F9E-4653E927B80A"
           },
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
-            "ExtraFilter": "ID IN (SELECT RecordID FROM vwSpaceItems WHERE SpaceID = '{{SpaceID}}' AND Entity = 'MJ_BizApps_Tasks: Tasks')",
+            "ExtraFilter": "CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks')",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         }

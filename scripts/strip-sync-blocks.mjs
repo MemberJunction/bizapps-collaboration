@@ -28,10 +28,30 @@ function processDir(dir) {
             try {
                 const text = fs.readFileSync(full, 'utf-8');
                 const parsed = JSON.parse(text);
-                const cleaned = stripSync(parsed);
-                fs.writeFileSync(full, JSON.stringify(cleaned, null, 2) + '\n');
+                let hadSync = false;
+                function checkAndStrip(val) {
+                    if (Array.isArray(val)) {
+                        return val.map(checkAndStrip);
+                    }
+                    if (val !== null && typeof val === 'object') {
+                        const out = {};
+                        for (const [k, v] of Object.entries(val)) {
+                            if (k === 'sync') {
+                                hadSync = true;
+                                continue;
+                            }
+                            out[k] = checkAndStrip(v);
+                        }
+                        return out;
+                    }
+                    return val;
+                }
+                const cleaned = checkAndStrip(parsed);
+                if (hadSync) {
+                    fs.writeFileSync(full, JSON.stringify(cleaned, null, 2) + '\n');
+                }
             } catch (err) {
-                // ignore non-JSON or invalid
+                console.error(`Error parsing JSON in ${full}:`, err);
             }
         }
     }

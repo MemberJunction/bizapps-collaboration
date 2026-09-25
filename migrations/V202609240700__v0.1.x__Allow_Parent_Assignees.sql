@@ -5,24 +5,6 @@
 -- ancestor spaces whose membership reaches this space.
 -- On by default; only staff may edit Space.AllowParentAssignees.
 -- =============================================================================
-
--- Developer and Integration execution grants and permissions on Row Level Security Filters
--- so that mj sync push can push RLS metadata on fresh database instances.
-GRANT SELECT  ON [${mjSchema}].[vwRowLevelSecurityFilters]     TO [cdp_Developer], [cdp_Integration];
-GO
-GRANT EXECUTE ON [${mjSchema}].[spCreateRowLevelSecurityFilter] TO [cdp_Developer], [cdp_Integration];
-GO
-GRANT EXECUTE ON [${mjSchema}].[spUpdateRowLevelSecurityFilter] TO [cdp_Developer], [cdp_Integration];
-GO
-GRANT EXECUTE ON [${mjSchema}].[spDeleteRowLevelSecurityFilter] TO [cdp_Developer], [cdp_Integration];
-GO
-
-UPDATE [${mjSchema}].[EntityPermission]
-SET CanCreate = 1, CanUpdate = 1
-WHERE EntityID = (SELECT ID FROM [${mjSchema}].[Entity] WHERE Name = 'MJ: Row Level Security Filters')
-  AND RoleID IN (SELECT ID FROM [${mjSchema}].[Role] WHERE Name IN ('Developer', 'Integration'));
-GO
-
 -- 1. Space.AllowParentAssignees column
 IF COL_LENGTH('${flyway:defaultSchema}.Space', 'AllowParentAssignees') IS NULL
     ALTER TABLE [${flyway:defaultSchema}].[Space]

@@ -1,0 +1,20 @@
+[
+  {
+    "primaryKey": {
+      "ID": "FA742FD3-00D4-461F-A356-0265D72C39F4"
+    },
+    "fields": {
+      "Name": "Collaboration Space Subtree",
+      "Description": "Returns all space IDs in the subtree reachable by the acting user, starting from PrimaryScopeRecordID.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Common",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "WITH Subtree AS (\n    SELECT s.ID AS SpaceID, 0 AS Steps\n    FROM [__mj_BizAppsCollaboration].[Space] s\n    INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]('{{ UserID }}') a ON a.SpaceID = s.ID\n    WHERE s.ID = TRY_CAST('{{ PrimaryScopeRecordID }}' AS UNIQUEIDENTIFIER)\n\n    UNION ALL\n\n    SELECT c.ID AS SpaceID, p.Steps + 1\n    FROM [__mj_BizAppsCollaboration].[Space] c\n    INNER JOIN Subtree p ON c.ParentID = p.SpaceID\n    INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]('{{ UserID }}') a ON a.SpaceID = c.ID\n    WHERE c.InheritsMembership = 1 AND p.Steps < 32\n)\nSELECT CONVERT(NVARCHAR(36), SpaceID) AS SpaceID FROM Subtree"
+    }
+  }
+]

@@ -55,7 +55,7 @@ if (!user) throw new Error('No context user in UserCache.');
 const { IntegrationCheckRegistry } = await import('@memberjunction/testing-integration');
 
 const registry = IntegrationCheckRegistry.Instance;
-const ctx = { User: user, Provider: provider, Pool: pool, Schema: process.env.MJ_CORE_SCHEMA || '__mj', Storage: undefined };
+const ctx = { User: user, Provider: provider, Pool: pool, Schema: process.env.MJ_CORE_SCHEMA || '__mj', Storage: undefined, UserCache };
 const requested = only.length ? only : ALL_BUNDLES;
 let pass = 0;
 let fail = 0;

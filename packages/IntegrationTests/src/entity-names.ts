@@ -28,4 +28,6 @@ export const AI_AGENT_ENTITY = 'MJ: AI Agents';
 export const AI_AGENT_SKILL_ENTITY = 'MJ: AI Agent Skills';
 export const AI_AGENT_SEARCH_SCOPE_ENTITY = 'MJ: AI Agent Search Scopes';
 export const AI_SKILL_ENTITY = 'MJ: AI Skills';
+export const AI_AGENT_PROMPT_ENTITY = 'MJ: AI Agent Prompts';
+export const AI_AGENT_PERMISSION_ENTITY = 'MJ: AI Agent Permissions';
 

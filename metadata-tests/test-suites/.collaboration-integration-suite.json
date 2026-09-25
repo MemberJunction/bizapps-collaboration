@@ -6,7 +6,7 @@
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "8A1244EE-11B3-4A55-9430-891012359999"
+      "ID": "63FDDD06-70AF-4BF6-92D8-9D43090BAED9"
     },
     "relatedEntities": {
       "MJ: Test Suite Tests": [
@@ -18,7 +18,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000001"
+            "ID": "2BB1FC85-E00C-405B-8A7E-CDD1A66834EF"
           }
         },
         {
@@ -29,7 +29,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000002"
+            "ID": "A88D53B4-D64B-4D2B-A2EB-4E05EC894BF2"
           }
         },
         {
@@ -40,7 +40,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000003"
+            "ID": "55A17F5D-CB46-448B-A6D3-EBDEA4A1D760"
           }
         },
         {
@@ -51,7 +51,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000004"
+            "ID": "294570F1-37DC-4B23-877D-5C79D910B4CD"
           }
         },
         {
@@ -62,7 +62,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000005"
+            "ID": "40196C21-BC55-45B4-8055-227B8041C5D7"
           }
         },
         {
@@ -73,7 +73,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000006"
+            "ID": "54B2C3E1-1FE4-4E32-910F-16B93E5E1425"
           }
         },
         {
@@ -84,7 +84,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000007"
+            "ID": "9FFF8220-7615-4063-8D8F-EAB8E9129050"
           }
         },
         {
@@ -95,7 +95,7 @@
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "71A0B001-C000-4000-8000-000000000008"
+            "ID": "4A3A7E41-7B0B-44AD-A295-6F3D61276FC1"
           }
         }
       ]
