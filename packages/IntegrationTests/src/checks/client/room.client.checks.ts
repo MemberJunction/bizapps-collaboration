@@ -1,6 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { CollaborationClient, type GraphQLExecutor } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, View } from '../../wire.js';
 
@@ -119,7 +119,7 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
-            const client = new CollaborationClient(beaCtx.Provider as unknown as GraphQLExecutor);
+            const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             const result = await client.postSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
@@ -150,8 +150,8 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
             const remyCtx = await getPersonaContext(ctx, 'remy');
-            const beaClient = new CollaborationClient(beaCtx.Provider as unknown as GraphQLExecutor);
-            const remyClient = new CollaborationClient(remyCtx.Provider as unknown as GraphQLExecutor);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+            const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 
             // 1. Empty message
             const emptyRes = await beaClient.postSpaceMessage({

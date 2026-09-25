@@ -21,7 +21,7 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
-            "ExtraFilter": "SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}')",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}1 = 0{% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         },
@@ -32,8 +32,20 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
-            "ExtraFilter": "CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks')",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'){% else %}1 = 0{% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
+        }
+      ],
+      "MJ: Search Scope Providers": [
+        {
+          "primaryKey": {
+            "ID": "79B8CA6C-DC97-402F-878A-3542971D2578"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database",
+            "Enabled": true
           }
         }
       ],

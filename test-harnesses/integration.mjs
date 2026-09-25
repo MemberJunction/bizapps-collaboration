@@ -90,7 +90,12 @@ for (const request of requested) {
         fail += 1;
     } finally {
         if (lifecycle) {
-            await lifecycle.Teardown(ctx).catch((e) => console.warn(`  teardown warn: ${e?.message}`));
+            try {
+                await lifecycle.Teardown(ctx);
+            } catch (e) {
+                console.error(`  FAIL ${bundle}.<teardown>          ${e instanceof Error ? e.message : String(e)}`);
+                fail += 1;
+            }
         }
     }
 }

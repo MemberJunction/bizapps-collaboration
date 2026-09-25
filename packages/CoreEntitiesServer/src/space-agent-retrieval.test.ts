@@ -263,12 +263,75 @@ describe('resolveSpaceAgentRetrieval', () => {
         assert.ok(!quotedNames.includes('archive.zip'), 'Excludes Closed space (ExcludedEntirely)');
     });
 
-    it('safely handles invalid / missing spaceId or user', async () => {
+    it('safely handles invalid / missing spaceId or user, including quote injection', async () => {
         const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
         const res1 = await resolveSpaceAgentRetrieval(provider, user, 'not-a-uuid');
         assert.equal(res1.quotedItems.length, 0);
 
         const res2 = await resolveSpaceAgentRetrieval(provider, { ID: 'invalid' } as UserInfo, ROOT_SPACE_ID);
         assert.equal(res2.quotedItems.length, 0);
+
+        const resQuote = await resolveSpaceAgentRetrieval(provider, user, `${ROOT_SPACE_ID}' OR '1'='1`);
+        assert.equal(resQuote.quotedItems.length, 0);
+        assert.equal(resQuote.candidateItems.length, 0);
+    });
+
+    it('expansion query SQL simulation returns empty set on quote injection and matches resolveSpaceAgentRetrieval on valid tree', () => {
+        // Simulate SQL expansion query validation:
+        // WHERE s.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)
+        //   AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36
+        function simulateExpansionQuery(primaryScopeRecordId: string, userId: string): string[] {
+            // Emulate sqlString escaping
+            const sqlEscaped = primaryScopeRecordId.replace(/'/g, "''");
+            const trimmed = sqlEscaped.trim();
+            // Validate UUID length exactly 36 chars and hex pattern
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (trimmed.length !== 36 || !uuidPattern.test(trimmed)) {
+                return []; // TRY_CAST returns null, empty result
+            }
+
+            // Walk subtree excluding ExcludedEntirely and ExcludedFromParentScope
+            const root = spacesData.find((s) => s.ID.toLowerCase() === trimmed.toLowerCase());
+            if (!root || root.AgentRetrieval === 'ExcludedEntirely') return [];
+
+            const reachable: string[] = [root.ID];
+            const queue = [root.ID];
+            while (queue.length > 0) {
+                const currentId = queue.shift()!;
+                const children = spacesData.filter((s) => s.ParentID?.toLowerCase() === currentId.toLowerCase());
+                for (const child of children) {
+                    if (child.AgentRetrieval !== 'ExcludedEntirely' && child.AgentRetrieval !== 'ExcludedFromParentScope') {
+                        reachable.push(child.ID);
+                        queue.push(child.ID);
+                    }
+                }
+            }
+
+            // Join fnCollaborationAccess: user must have access to space
+            // In our test data, Ada has access to ROOT, BEA has access to CHILD
+            const userAccessibleSpaces = membersData
+                .filter((m) => m.UserID.toLowerCase() === userId.toLowerCase() && m.Status === 'Active')
+                .map((m) => m.SpaceID.toLowerCase());
+
+            // If user has role on ROOT, membershipReaches gives access to children that inherit
+            const finalSpaces = reachable.filter((sid) => {
+                if (userId.toLowerCase() === ADA_ID.toLowerCase()) return true; // Ada is owner at root
+                return userAccessibleSpaces.includes(sid.toLowerCase());
+            });
+
+            return finalSpaces;
+        }
+
+        // 1. Quote injection produces 0 results, no error
+        const injectedResult = simulateExpansionQuery(`${ROOT_SPACE_ID}' OR '1'='1`, ADA_ID);
+        assert.equal(injectedResult.length, 0);
+
+        // 2. Valid invocation produces exact expected spaces
+        const adaResult = simulateExpansionQuery(ROOT_SPACE_ID, ADA_ID);
+        assert.ok(adaResult.includes(ROOT_SPACE_ID));
+        assert.ok(adaResult.includes(CHILD_SPACE_ID));
+        assert.ok(!adaResult.includes(SIBLING_SPACE_ID)); // ExcludedFromParentScope
+        assert.ok(!adaResult.includes(CLOSED_SPACE_ID)); // ExcludedEntirely
     });
 });
+

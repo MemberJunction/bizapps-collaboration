@@ -1,5 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity, type GraphQLExecutor } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import type { MJFileEntity } from '@memberjunction/core-entities';
 import { FILE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext } from '../../wire.js';
 
@@ -13,7 +14,7 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
-            const client = new CollaborationClient(beaCtx.Provider as unknown as GraphQLExecutor);
+            const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             // 1. Empty content refused
             const emptyRes = await client.uploadSpaceFile({
@@ -42,7 +43,7 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
-            const client = new CollaborationClient(beaCtx.Provider as unknown as GraphQLExecutor);
+            const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             const htmlRes = await client.uploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
@@ -79,7 +80,7 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const remyCtx = await getPersonaContext(ctx, 'remy');
-            const remyClient = new CollaborationClient(remyCtx.Provider as unknown as GraphQLExecutor);
+            const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 
             const refuseRes = await remyClient.uploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
@@ -114,18 +115,41 @@ for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {
+        const errors: string[] = [];
         while (createdItemIds.length > 0) {
             const id = createdItemIds.pop();
             if (id) {
                 try {
                     const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
                     if (await item.Load(id)) {
-                        await item.Delete();
+                        const rawRecId = item.RecordID;
+                        const fileId = rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+                        const deletedItem = await item.Delete();
+                        if (!deletedItem) {
+                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
+
+                        if (fileId) {
+                            try {
+                                const fileEntity = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
+                                if (await fileEntity.Load(fileId)) {
+                                    const deletedFile = await fileEntity.Delete();
+                                    if (!deletedFile) {
+                                        errors.push(`Failed to delete File ${fileId}: ${fileEntity.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                                    }
+                                }
+                            } catch (fe) {
+                                errors.push(`Error deleting File ${fileId}: ${fe instanceof Error ? fe.message : String(fe)}`);
+                            }
+                        }
                     }
-                } catch {
-                    // best effort
+                } catch (e) {
+                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
+        }
+        if (errors.length > 0) {
+            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
         }
     },
 });

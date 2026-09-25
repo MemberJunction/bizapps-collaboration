@@ -114,17 +114,17 @@ const checks: NamedCheck[] = [
             Assert(agentPrompts[0].PromptID.toLowerCase() === PROMPT_ID.toLowerCase(), 'Linked to Collaboration Space Agent - Ask prompt');
             Assert(agentPrompts[0].Status === 'Active', 'Agent prompt is Active');
 
-            // 6. Verify Permissions (restricted to Integration and Developer, closing it from standard UI users)
+            // 6. Verify Permissions: 5 roles (Space Participant, UI, Integration, Developer, Agent Administrator) with CanRun and CanView
             const agentPermissions = await FindRows<{ ID: string; CanRun: boolean; CanView: boolean }>(
                 ctx,
                 AI_AGENT_PERMISSION_ENTITY,
                 `AgentID = '${AGENT_ID}'`,
                 ['ID', 'CanRun', 'CanView'],
             );
-            Assert(agentPermissions.length === 2, 'Agent has 2 permission records (Integration and Developer)');
+            Assert(agentPermissions.length === 5, `Agent has 5 permission records, saw ${agentPermissions.length}`);
             for (const perm of agentPermissions) {
                 Assert(perm.CanRun === true, 'Permission CanRun is true');
-                Assert(perm.CanView === false, 'Permission CanView is false');
+                Assert(perm.CanView === true, 'Permission CanView is true');
             }
 
             // 7. Verify Search Scope link
@@ -170,6 +170,29 @@ const checks: NamedCheck[] = [
             for (const lane of scopeExp.Lanes) {
                 Assert(lane.Status === 'Active', `Lane ${lane.Target} status is Active`);
                 Assert(!!lane.RenderedFilter && lane.RenderedFilter.toLowerCase().includes(DISCOVERY_SPACE_ID.toLowerCase()), `Lane ${lane.Target} filter rendered with Discovery SpaceID`);
+            }
+
+            // 9. Verify expansion query injection safety: single quote in PrimaryScopeRecordID returns empty set, not error
+            const injectionExp = await SearchEngine.Instance.ExplainScope(
+                {
+                    ScopeIDs: [SEARCH_SCOPE_ID],
+                    SearchContext: {
+                        PrimaryScopeRecordID: `${DISCOVERY_SPACE_ID}' OR '1'='1`,
+                    },
+                    AIAgentID: AGENT_ID,
+                },
+                bea,
+            );
+            Assert(injectionExp.length === 1, 'ExplainScope with quote handled without error');
+            const injSpaceDim = injectionExp[0].Dimensions.find((d) => d.Name === 'SpaceID');
+            const injVals = (Array.isArray(injSpaceDim?.Value) ? injSpaceDim.Value : (injSpaceDim?.Value ? [injSpaceDim.Value] : []));
+            Assert(injVals.length === 0, `Quote injection must return empty SpaceID set, saw ${injVals.length}`);
+
+            // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval
+            const retrieval = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID);
+            const explainedIds = new Set(resolvedSpaceIds);
+            for (const item of retrieval.quotedItems) {
+                Assert(explainedIds.has(item.SpaceID.toLowerCase()), `Item ${item.Name} space ${item.SpaceID} must be in expansion query scope`);
             }
         },
     },

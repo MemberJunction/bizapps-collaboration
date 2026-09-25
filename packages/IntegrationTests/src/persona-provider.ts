@@ -1,5 +1,5 @@
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { MJAPIKeyEntity, MJAPIKeyScopeEntity } from '@memberjunction/core-entities';
@@ -100,12 +100,24 @@ export async function mintUserApiKey(
     };
 }
 
-class PersonaContextRegistry {
+export interface PersonaIntegrationCheckContext extends IntegrationCheckContext {
+    GraphQLProvider?: GraphQLDataProvider;
+}
+
+export class PersonaContextRegistry extends BaseSingleton<PersonaContextRegistry> {
     private readonly personaProviders = new Map<string, GraphQLDataProvider>();
     private readonly createdKeyIds: string[] = [];
     private readonly createdScopeRuleIds: string[] = [];
 
-    async getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<IntegrationCheckContext> {
+    public constructor() {
+        super();
+    }
+
+    public static get Instance(): PersonaContextRegistry {
+        return PersonaContextRegistry.getInstance<PersonaContextRegistry>();
+    }
+
+    async getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<PersonaIntegrationCheckContext> {
         const personaUser = await GetPersonaUser(ctx, personaKey);
 
         if (!isClientTransport(ctx)) {
@@ -145,22 +157,27 @@ class PersonaContextRegistry {
 
         return {
             ...ctx,
-            Provider: provider as unknown as IMetadataProvider,
+            Provider: provider,
             User: provider.CurrentUser ?? personaUser,
+            GraphQLProvider: provider,
         };
     }
 
     async cleanup(ctx: IntegrationCheckContext): Promise<void> {
+        const errors: string[] = [];
         while (this.createdScopeRuleIds.length > 0) {
             const ruleId = this.createdScopeRuleIds.pop();
             if (ruleId) {
                 try {
                     const rule = await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User);
                     if (await rule.Load(ruleId)) {
-                        await rule.Delete();
+                        const deleted = await rule.Delete();
+                        if (!deleted) {
+                            errors.push(`Failed to delete API key scope rule ${ruleId}: ${rule.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
-                } catch {
-                    // best effort
+                } catch (e) {
+                    errors.push(`Error deleting API key scope rule ${ruleId}: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
         }
@@ -171,21 +188,28 @@ class PersonaContextRegistry {
                 try {
                     const key = await ctx.Provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User);
                     if (await key.Load(keyId)) {
-                        await key.Delete();
+                        const deleted = await key.Delete();
+                        if (!deleted) {
+                            errors.push(`Failed to delete API key ${keyId}: ${key.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
-                } catch {
-                    // best effort
+                } catch (e) {
+                    errors.push(`Error deleting API key ${keyId}: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
         }
 
         this.personaProviders.clear();
+
+        if (errors.length > 0) {
+            throw new Error(`cleanupPersonaProviders encountered ${errors.length} error(s):\n${errors.join('\n')}`);
+        }
     }
 }
 
-export const PersonaRegistry = new PersonaContextRegistry();
+export const PersonaRegistry = PersonaContextRegistry.Instance;
 
-export async function getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<IntegrationCheckContext> {
+export async function getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<PersonaIntegrationCheckContext> {
     return PersonaRegistry.getPersonaContext(ctx, personaKey);
 }
 

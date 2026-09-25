@@ -48,41 +48,54 @@ let fail = 0;
 
 console.log(`\n  Collaboration integration CLIENT (GraphQL → ${process.env.MJAPI_URL ?? `http://localhost:${process.env.GRAPHQL_PORT ?? 4000}`})\n`);
 
-for (const request of requested) {
-    const [bundle, localId] = request.includes('.') ? request.split('.') : [request, null];
-    const checks = registry.GetBundle(bundle).filter((c) => !localId || c.Id === request);
-    if (!checks.length) {
-        console.error(`  unknown: ${request}`);
-        fail += 1;
-        continue;
-    }
-    const lifecycle = registry.GetLifecycle(bundle);
-    try {
-        if (lifecycle) await lifecycle.Setup(ctx);
-        for (const check of checks) {
-            const t = Date.now();
-            try {
-                await check.Fn(ctx);
-                console.log(`  ok   ${check.Id.padEnd(28)} ${Date.now() - t}ms  ${check.Name}`);
-                pass += 1;
-            } catch (err) {
-                console.error(`  FAIL ${check.Id.padEnd(28)} ${Date.now() - t}ms  ${err instanceof Error ? err.message : String(err)}`);
-                if (process.env.IT_VERBOSE === '1' && err instanceof Error) console.error(err.stack);
-                fail += 1;
+const { cleanupPersonaProviders } = await import('../packages/IntegrationTests/dist/client-index.js');
+
+try {
+    for (const request of requested) {
+        const [bundle, localId] = request.includes('.') ? request.split('.') : [request, null];
+        const checks = registry.GetBundle(bundle).filter((c) => !localId || c.Id === request);
+        if (!checks.length) {
+            console.error(`  unknown: ${request}`);
+            fail += 1;
+            continue;
+        }
+        const lifecycle = registry.GetLifecycle(bundle);
+        try {
+            if (lifecycle) await lifecycle.Setup(ctx);
+            for (const check of checks) {
+                const t = Date.now();
+                try {
+                    await check.Fn(ctx);
+                    console.log(`  ok   ${check.Id.padEnd(28)} ${Date.now() - t}ms  ${check.Name}`);
+                    pass += 1;
+                } catch (err) {
+                    console.error(`  FAIL ${check.Id.padEnd(28)} ${Date.now() - t}ms  ${err instanceof Error ? err.message : String(err)}`);
+                    if (process.env.IT_VERBOSE === '1' && err instanceof Error) console.error(err.stack);
+                    fail += 1;
+                }
+            }
+        } catch (err) {
+            console.error(`  FAIL ${bundle}.<setup>             ${err instanceof Error ? err.message : String(err)}`);
+            fail += 1;
+        } finally {
+            if (lifecycle) {
+                try {
+                    await lifecycle.Teardown(ctx);
+                } catch (e) {
+                    console.error(`  FAIL ${bundle}.<teardown>          ${e instanceof Error ? e.message : String(e)}`);
+                    fail += 1;
+                }
             }
         }
-    } catch (err) {
-        console.error(`  FAIL ${bundle}.<setup>             ${err instanceof Error ? err.message : String(err)}`);
+    }
+} finally {
+    try {
+        await cleanupPersonaProviders(ctx);
+    } catch (e) {
+        console.error(`  FAIL persona-cleanup               ${e instanceof Error ? e.message : String(e)}`);
         fail += 1;
-    } finally {
-        if (lifecycle) {
-            await lifecycle.Teardown(ctx).catch((e) => console.warn(`  teardown warn: ${e?.message}`));
-        }
     }
 }
-
-const { cleanupPersonaProviders } = await import('../packages/IntegrationTests/dist/wire.js');
-await cleanupPersonaProviders(ctx).catch((e) => console.warn(`  persona cleanup warn: ${e?.message}`));
 
 console.log(`\n  ${pass} passed / ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

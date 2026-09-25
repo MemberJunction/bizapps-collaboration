@@ -17,7 +17,10 @@
       "ExposeAsAction": false,
       "IsRestricted": true,
       "SearchScopeAccess": "Assigned",
-      "IconClass": "fa-solid fa-users-viewfinder"
+      "IconClass": "fa-solid fa-users-viewfinder",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "AllowMemoryWrite": false
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -75,7 +78,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "SearchScopeID": "6E5187CF-7E5B-447F-893D-D291994083C0",
-            "Phase": "Both",
+            "Phase": "PreExecution",
             "Status": "Active"
           }
         }

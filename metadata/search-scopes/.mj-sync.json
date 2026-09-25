@@ -24,6 +24,14 @@
       "MJ: Search Scope Entities": {
         "entity": "MJ: Search Scope Entities",
         "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope Providers": {
+        "entity": "MJ: Search Scope Providers",
+        "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope Permissions": {
+        "entity": "MJ: Search Scope Permissions",
+        "foreignKey": "SearchScopeID"
       }
     }
   }

@@ -44,12 +44,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     ResultType: 'simple',
                 }, system);
                 if (!typeRows.Success || !typeRows.Results?.[0]) {
+                    LogError(`Space change refused: space type ${typeId} could not be read: ${typeRows.ErrorMessage ?? 'no rows returned'}`);
                     return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
                 }
                 const spaceType = typeRows.Results[0];
                 defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
                 defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
             } catch (err) {
+                LogError(`Space change refused: error reading space type ${typeId}: ${err instanceof Error ? err.message : String(err)}`);
                 return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
             }
 

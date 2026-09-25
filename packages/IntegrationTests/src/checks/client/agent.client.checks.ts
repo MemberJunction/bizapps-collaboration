@@ -107,14 +107,18 @@ const checks: NamedCheck[] = [
             Assert(agentPrompts[0].PromptID.toLowerCase() === PROMPT_ID.toLowerCase(), 'Linked to Collaboration Space Agent - Ask prompt');
             Assert(agentPrompts[0].Status === 'Active', 'Agent prompt is Active');
 
-            // 6. Verify Permissions
+            // 6. Verify Permissions: 5 roles (Space Participant, UI, Integration, Developer, Agent Administrator) with CanRun and CanView
             const agentPermissions = await FindRows<{ ID: string; CanRun: boolean; CanView: boolean }>(
                 ctx,
                 AI_AGENT_PERMISSION_ENTITY,
                 `AgentID = '${AGENT_ID}'`,
                 ['ID', 'CanRun', 'CanView'],
             );
-            Assert(agentPermissions.length === 2, 'Agent has 2 permission records (Integration and Developer)');
+            Assert(agentPermissions.length === 5, `Agent has 5 permission records, saw ${agentPermissions.length}`);
+            for (const perm of agentPermissions) {
+                Assert(perm.CanRun === true, 'Permission CanRun is true');
+                Assert(perm.CanView === true, 'Permission CanView is true');
+            }
 
             // 7. Verify Search Scope link
             const agentScopes = await FindRows<{ ID: string; SearchScopeID: string; Phase: string }>(
@@ -131,7 +135,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'agent.AG2',
-        Name: 'AG2 — Client asks in Discovery: retrieves only Discovery Shared material, never Team',
+        Name: 'AG2 — Client in Discovery reads only Discovery Shared material via row filters, never Team',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
@@ -182,7 +186,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'agent.AG4',
-        Name: 'AG4 — Staff owner asks in Discovery: can quote Team items',
+        Name: 'AG4 — Staff owner in Discovery reads Team items via row filters',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const adaCtx = await getPersonaContext(ctx, 'ada');

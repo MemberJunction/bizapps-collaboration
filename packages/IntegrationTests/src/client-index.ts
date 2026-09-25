@@ -10,12 +10,12 @@ LoadTaskEntities();
 LoadCollabEntities();
 LoadCollaborationPermissionProvider();
 
-import './checks/collab-world.checks.js';
-import './checks/people-fls.checks.js';
-import './checks/parent-assignees.checks.js';
+import './checks/client/collab-world.client.checks.js';
+import './checks/client/people-fls.client.checks.js';
+import './checks/client/parent-assignees.client.checks.js';
 import './checks/client/room.client.checks.js';
-import './checks/write-gates.checks.js';
-import './checks/row-filters.checks.js';
+import './checks/client/write-gates.client.checks.js';
+import './checks/client/row-filters.client.checks.js';
 import './checks/client/library.client.checks.js';
 import './checks/client/agent.client.checks.js';
 

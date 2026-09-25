@@ -7,7 +7,7 @@ export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
-export { postSpaceMessage, executeRoomAgent } from './post-space-message.js';
+export { postSpaceMessage } from './post-space-message.js';
 export { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';

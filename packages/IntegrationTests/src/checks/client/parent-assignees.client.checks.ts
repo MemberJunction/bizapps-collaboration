@@ -1,8 +1,8 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, PERSON_ENTITY } from '../entity-names.js';
-import { FindRows, GetPersonaUser, View } from '../wire.js';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
+import { FindRows, getPersonaContext, View } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -44,14 +44,14 @@ async function findDiscoveryTaskId(ctx: IntegrationCheckContext, excludingAssign
 const checks: NamedCheck[] = [
     {
         Id: 'parent-assignees.PA1',
-        Name: 'PA1 — when AllowParentAssignees is true, participant assigns ancestor member (Ada)',
+        Name: 'PA1 — when AllowParentAssignees is true, participant assigns ancestor member (Ada) over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const bea = await GetPersonaUser(ctx, 'bea');
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
 
             // 1. Ensure AllowParentAssignees = true on Discovery space (as staff Ada)
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
             Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
             space.AllowParentAssignees = true;
             Assert(await space.Save(), 'Set AllowParentAssignees = true');
@@ -74,8 +74,8 @@ const checks: NamedCheck[] = [
             Assert(!!personEntity, 'Person entity info found');
             if (!personEntity) throw new Error('Person entity info found');
 
-            // 5. As participant Bea, create task assignment to Ada
-            const assignment = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, bea);
+            // 5. As participant Bea, create task assignment to Ada over the wire
+            const assignment = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, beaCtx.User);
             assignment.NewRecord();
             assignment.TaskID = taskId;
             assignment.AssigneeEntityID = personEntity.ID;
@@ -110,13 +110,13 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'parent-assignees.PA2',
-        Name: 'PA2 — when AllowParentAssignees is false, participant assigning ancestor member is refused',
+        Name: 'PA2 — when AllowParentAssignees is false, participant assigning ancestor member is refused over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const bea = await GetPersonaUser(ctx, 'bea');
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
 
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
             Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
 
             let mainError: unknown = null;
@@ -143,7 +143,7 @@ const checks: NamedCheck[] = [
                 if (!personEntity) throw new Error('Person entity info found');
 
                 // 4. As participant Bea, attempt to assign Ada
-                const assignment = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, bea);
+                const assignment = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, beaCtx.User);
                 assignment.NewRecord();
                 assignment.TaskID = taskId;
                 assignment.AssigneeEntityID = personEntity.ID;
@@ -162,7 +162,6 @@ const checks: NamedCheck[] = [
             } finally {
                 let cleanupError: unknown = null;
                 try {
-                    // Restore AllowParentAssignees = true for subsequent checks
                     space.AllowParentAssignees = true;
                     const saved = await space.Save();
                     if (!saved) {
@@ -181,24 +180,22 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'parent-assignees.PA3',
-        Name: 'PA3 — participant assigning same-space member (Bea) succeeds even when AllowParentAssignees is false',
+        Name: 'PA3 — participant assigning same-space member (Bea) succeeds even when AllowParentAssignees is false over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const bea = await GetPersonaUser(ctx, 'bea');
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
 
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
             Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
 
             let mainError: unknown = null;
             try {
-                // Set AllowParentAssignees = false
                 space.AllowParentAssignees = false;
                 Assert(await space.Save(), 'Set AllowParentAssignees = false');
 
                 const taskId = await findDiscoveryTaskId(ctx);
 
-                // Find Bea's person ID
                 const beaPersonRows = await FindRows<{ ID: string }>(
                     ctx,
                     PERSON_ENTITY,
@@ -212,8 +209,7 @@ const checks: NamedCheck[] = [
                 Assert(!!personEntity, 'Person entity info found');
                 if (!personEntity) throw new Error('Person entity info found');
 
-                // Assign Bea to task in Discovery
-                const assignment = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, bea);
+                const assignment = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, beaCtx.User);
                 assignment.NewRecord();
                 assignment.TaskID = taskId;
                 assignment.AssigneeEntityID = personEntity.ID;
@@ -267,18 +263,17 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'parent-assignees.PA4',
-        Name: 'PA4 — only staff may change AllowParentAssignees; non-staff change is refused',
+        Name: 'PA4 — only staff may change AllowParentAssignees; non-staff change is refused over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const bea = await GetPersonaUser(ctx, 'bea');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
 
-            // As non-staff participant Bea, attempt to toggle AllowParentAssignees
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea);
+            const space = await beaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, beaCtx.User);
             Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space as Bea');
             space.AllowParentAssignees = !space.AllowParentAssignees;
 
             const saved = await space.Save();
-            Assert(!saved, 'Non-staff participant changing AllowParentAssignees MUST fail save');
+            Assert(!saved, 'Non-staff participant changing AllowParentAssignees MUST fail save over the wire');
             const reason = space.LatestResult?.CompleteMessage ?? '';
             Assert(
                 reason.includes('only staff may change the allow-parent-assignees setting'),
@@ -288,14 +283,14 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'parent-assignees.PA5',
-        Name: "PA5 — with switch on, Bea can read Ada's seat on Northwind and Person record; with switch off, seat is hidden",
+        Name: "PA5 — with switch on, Bea can read Ada's seat on Northwind and Person record; with switch off, seat is hidden over the wire",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const bea = await GetPersonaUser(ctx, 'bea');
-            const view = View(ctx);
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
+            const view = View(beaCtx);
 
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
             Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
 
             // 1. With switch ON: Bea can read Ada's seat on Northwind and Ada's person record
@@ -304,19 +299,19 @@ const checks: NamedCheck[] = [
 
             const seatsOn = await view.RunView<{ ID: string; SpaceID: string; UserID: string }>({
                 EntityName: SPACE_MEMBER_ENTITY,
-                ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${ada.ID}'`,
+                ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'SpaceID', 'UserID'],
                 ResultType: 'simple',
-            }, bea);
+            });
             Assert(seatsOn.Success, `Bea read seats with switch on: ${seatsOn.ErrorMessage ?? ''}`);
             Assert((seatsOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's seat on Northwind, got ${seatsOn.Results?.length ?? 0}`);
 
             const peopleOn = await view.RunView<{ ID: string; Email: string }>({
                 EntityName: PERSON_ENTITY,
-                ExtraFilter: `LinkedUserID = '${ada.ID}'`,
+                ExtraFilter: `LinkedUserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'Email'],
                 ResultType: 'simple',
-            }, bea);
+            });
             Assert(peopleOn.Success, `Bea read People with switch on: ${peopleOn.ErrorMessage ?? ''}`);
             Assert((peopleOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's person record, got ${peopleOn.Results?.length ?? 0}`);
 
@@ -328,10 +323,10 @@ const checks: NamedCheck[] = [
 
                 const seatsOff = await view.RunView<{ ID: string; SpaceID: string; UserID: string }>({
                     EntityName: SPACE_MEMBER_ENTITY,
-                    ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${ada.ID}'`,
+                    ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                     Fields: ['ID', 'SpaceID', 'UserID'],
                     ResultType: 'simple',
-                }, bea);
+                });
                 Assert(seatsOff.Success, `Bea read seats with switch off: ${seatsOff.ErrorMessage ?? ''}`);
                 Assert((seatsOff.Results?.length ?? 0) === 0, `With switch off, Bea MUST NOT read Ada's seat on Northwind, got ${seatsOff.Results?.length ?? 0}`);
             } catch (e) {
@@ -339,7 +334,6 @@ const checks: NamedCheck[] = [
             } finally {
                 let cleanupError: unknown = null;
                 try {
-                    // Restore switch to true
                     space.AllowParentAssignees = true;
                     const saved = await space.Save();
                     if (!saved) {
@@ -362,16 +356,14 @@ for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {
-        // Ensure Discovery space switch is restored to true
-        const ada = await GetPersonaUser(ctx, 'ada');
-        const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+        const adaCtx = await getPersonaContext(ctx, 'ada');
+        const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
         if (await space.Load(DISCOVERY_SPACE_ID)) {
             if (!space.AllowParentAssignees) {
                 space.AllowParentAssignees = true;
                 const saved = await space.Save();
                 if (!saved) {
                     const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
-                    console.error(`parent-assignees Teardown failed to restore AllowParentAssignees: ${err}`);
                     throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees: ${err}`);
                 }
             }
@@ -380,4 +372,3 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
         }
     },
 });
-

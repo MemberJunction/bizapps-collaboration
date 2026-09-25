@@ -22,6 +22,7 @@ jobs:
       - run: pnpm run build
       - run: pnpm test
       - run: node scripts/check-mj-tokens.mjs
+      - run: node --check test-harnesses/integration.mjs && node --check test-harnesses/integration-client.mjs
 
       # The integration suite (item 22) and the Playwright tour (item 23)
       # run locally against a private database and host. They are not part of
