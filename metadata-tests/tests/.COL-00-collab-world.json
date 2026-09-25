@@ -9,7 +9,7 @@
     },
     "Configuration": {
       "tier": "deterministic",
-      "transport": "client",
+      "transport": "server",
       "checks": [
         {
           "type": "collab-world"

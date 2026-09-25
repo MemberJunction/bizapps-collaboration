@@ -12,16 +12,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const logPath = process.argv[2];
 const mode = process.argv[3] || 'server';
 
-/** Expected counts, parsed from the parity test so there is exactly one source of truth. */
+/** Expected counts, parsed from expected-bundles.ts so there is exactly one source of truth. */
 function expectedCounts() {
     const src = readFileSync(
-        join(root, 'packages/IntegrationTests/src/__tests__/registry-parity.test.ts'),
+        join(root, 'packages/IntegrationTests/src/expected-bundles.ts'),
         'utf8',
     );
     const mapName = mode === 'client' ? 'EXPECTED_CLIENT_BUNDLES' : 'EXPECTED_BUNDLES';
     const regex = new RegExp(`${mapName}[^=]*=\\s*\\{([\\s\\S]*?)\\}\\s*;`);
     const block = src.match(regex);
-    if (!block) throw new Error(`could not find the ${mapName} map in registry-parity.test.ts`);
+    if (!block) throw new Error(`could not find the ${mapName} map in expected-bundles.ts`);
     const counts = new Map();
     for (const [, name, n] of block[1].matchAll(/'?([a-zA-Z-]+)'?\s*:\s*(\d+)/g)) {
         counts.set(name, Number(n));

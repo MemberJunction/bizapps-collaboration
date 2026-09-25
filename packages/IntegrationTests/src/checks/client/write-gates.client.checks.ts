@@ -38,12 +38,19 @@ const checks: NamedCheck[] = [
 
             const savedRoot = await rootAttempt.Save();
             if (savedRoot) {
+                let undoError: string | null = null;
                 try {
-                    await rootAttempt.Delete();
-                } catch {
-                    // rollback cleanup
+                    const adminSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                    if (await adminSpace.Load(rootAttempt.ID)) {
+                        const deleted = await adminSpace.Delete();
+                        if (!deleted) undoError = adminSpace.LatestResult?.CompleteMessage ?? 'Delete returned false';
+                    }
+                } catch (ue) {
+                    undoError = ue instanceof Error ? ue.message : String(ue);
                 }
-                Assert(false, 'Participant creating root space must be refused over the wire');
+                const msg = 'Participant creating root space must be refused over the wire' +
+                    (undoError ? ` AND undo as system user also failed: ${undoError}` : '');
+                Assert(false, msg);
             }
             Assert(!savedRoot, 'Participant creating root space must be refused over the wire');
             const rootReason = rootAttempt.LatestResult?.CompleteMessage ?? '';
@@ -59,13 +66,20 @@ const checks: NamedCheck[] = [
 
             const savedCycle = await space.Save();
             if (savedCycle) {
+                let undoError: string | null = null;
                 try {
-                    space.ParentID = null;
-                    await space.Save();
-                } catch {
-                    // rollback cleanup
+                    const adminSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                    if (await adminSpace.Load(space.ID)) {
+                        adminSpace.ParentID = null;
+                        const reverted = await adminSpace.Save();
+                        if (!reverted) undoError = adminSpace.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    }
+                } catch (ue) {
+                    undoError = ue instanceof Error ? ue.message : String(ue);
                 }
-                Assert(false, 'Moving space under its own descendant must fail save over the wire');
+                const msg = 'Moving space under its own descendant must fail save over the wire' +
+                    (undoError ? ` AND undo as system user also failed: ${undoError}` : '');
+                Assert(false, msg);
             }
             Assert(!savedCycle, 'Moving space under its own descendant must fail save over the wire');
             const cycleReason = space.LatestResult?.CompleteMessage ?? '';
@@ -98,13 +112,20 @@ const checks: NamedCheck[] = [
             member.SpaceID = DISCOVERY_SPACE_ID;
             const savedSpace = await member.Save();
             if (savedSpace) {
+                let undoError: string | null = null;
                 try {
-                    member.SpaceID = NORTHWIND_SPACE_ID;
-                    await member.Save();
-                } catch {
-                    // rollback cleanup
+                    const adminMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                    if (await adminMember.Load(member.ID)) {
+                        adminMember.SpaceID = NORTHWIND_SPACE_ID;
+                        const reverted = await adminMember.Save();
+                        if (!reverted) undoError = adminMember.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    }
+                } catch (ue) {
+                    undoError = ue instanceof Error ? ue.message : String(ue);
                 }
-                Assert(false, 'Changing SpaceID on saved membership must fail over the wire');
+                const msg = 'Changing SpaceID on saved membership must fail over the wire' +
+                    (undoError ? ` AND undo as system user also failed: ${undoError}` : '');
+                Assert(false, msg);
             }
             Assert(!savedSpace, 'Changing SpaceID on saved membership must fail over the wire');
             const spaceReason = member.LatestResult?.CompleteMessage ?? '';
@@ -118,13 +139,20 @@ const checks: NamedCheck[] = [
             member.Status = 'Removed';
             const savedStrand = await member.Save();
             if (savedStrand) {
+                let undoError: string | null = null;
                 try {
-                    member.Status = 'Active';
-                    await member.Save();
-                } catch {
-                    // rollback cleanup
+                    const adminMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                    if (await adminMember.Load(member.ID)) {
+                        adminMember.Status = 'Active';
+                        const reverted = await adminMember.Save();
+                        if (!reverted) undoError = adminMember.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    }
+                } catch (ue) {
+                    undoError = ue instanceof Error ? ue.message : String(ue);
                 }
-                Assert(false, 'Removing last active owner must fail save over the wire');
+                const msg = 'Removing last active owner must fail save over the wire' +
+                    (undoError ? ` AND undo as system user also failed: ${undoError}` : '');
+                Assert(false, msg);
             }
             Assert(!savedStrand, 'Removing last active owner must fail save over the wire');
             const strandReason = member.LatestResult?.CompleteMessage ?? '';

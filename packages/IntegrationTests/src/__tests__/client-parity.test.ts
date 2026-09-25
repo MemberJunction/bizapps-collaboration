@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { BaseEntity } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import {
+    mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { LoadCollaborationClientIntegrationTests } from '../client-index.js';
-
-const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
-    'collab-world': 3,
-    'people-fls': 4,
-    'parent-assignees': 5,
-    'room': 6,
-    'write-gates': 5,
-    'row-filters': 4,
-    'library': 4,
-    'agent': 6,
-};
+import { EXPECTED_CLIENT_BUNDLES } from '../expected-bundles.js';
 
 LoadCollaborationClientIntegrationTests();
 
@@ -44,4 +44,24 @@ describe('Client IntegrationCheckRegistry parity (client-index)', () => {
             expect(typeof lifecycle!.Teardown).toBe('function');
         });
     }
+
+    it('creates generated entity classes without loading server subclasses', () => {
+        const factory = MJGlobal.Instance.ClassFactory;
+        const expectedClasses: Record<string, string> = {
+            'MJ_BizApps_Collaboration: Spaces': mjBizAppsCollaborationSpaceEntity.name,
+            'MJ_BizApps_Collaboration: Space Members': mjBizAppsCollaborationSpaceMemberEntity.name,
+            'MJ_BizApps_Collaboration: Space Items': mjBizAppsCollaborationSpaceItemEntity.name,
+            'MJ_BizApps_Collaboration: Share Notices': mjBizAppsCollaborationShareNoticeEntity.name,
+            'MJ_BizApps_Collaboration: Item Uses': mjBizAppsCollaborationItemUseEntity.name,
+            'MJ_BizApps_Tasks: Tasks': TaskEntity.name,
+        };
+
+        for (const [entityName, expectedClassName] of Object.entries(expectedClasses)) {
+            const reg = factory.GetRegistration(BaseEntity, entityName);
+            expect(reg, `registration for ${entityName} must exist`).toBeDefined();
+            const subClassName = reg?.SubClass?.name;
+            expect(subClassName).toBe(expectedClassName);
+            expect(subClassName?.endsWith('Server')).toBe(false);
+        }
+    });
 });

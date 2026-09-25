@@ -36,6 +36,7 @@ export interface SpaceAgentRetrievalResult {
     spaceId: string;
     askingUserId: string;
     callerCanSeeTeam: boolean;
+    searchedSpaceIds: string[];
     candidateItems: SpaceAgentCandidateItem[];
     quotedItems: SpaceAgentCandidateItem[];
     decisions: SpaceAgentRetrievalDecision[];
@@ -186,6 +187,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: spaceId ?? '',
             askingUserId: user?.ID ?? '',
             callerCanSeeTeam: false,
+            searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
             decisions: [],
@@ -227,6 +229,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam: false,
+            searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
             decisions: [],
@@ -271,6 +274,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam: false,
+            searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
             decisions: [],
@@ -281,18 +285,22 @@ export async function resolveSpaceAgentRetrieval(
 
     // Filter to reachable subtree spaces in SQL rather than fetching all items and filtering in memory
     const subtreeSpaceIds = getReachableSubtreeSpaceIds(spaceNodes, cleanSpaceId);
-    if (subtreeSpaceIds.length === 0) {
+    const searchedSpaceIds = subtreeSpaceIds.filter((spaceId) =>
+        !!membershipReaches(spaceNodes, memberSnapshots, cleanUserId, spaceId)
+    );
+    if (searchedSpaceIds.length === 0) {
         return {
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam,
+            searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
             decisions: [],
         };
     }
 
-    const inClause = subtreeSpaceIds.map((id) => `'${id}'`).join(',');
+    const inClause = searchedSpaceIds.map((id) => `'${id}'`).join(',');
     const rvUser = RunView.FromMetadataProvider(provider);
     const itemsRes = await rvUser.RunView<SpaceItemRow>({
         EntityName: ITEMS_ENTITY,
@@ -308,6 +316,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam,
+            searchedSpaceIds,
             candidateItems: [],
             quotedItems: [],
             decisions: [],
@@ -420,6 +429,7 @@ export async function resolveSpaceAgentRetrieval(
         spaceId: cleanSpaceId,
         askingUserId: cleanUserId,
         callerCanSeeTeam,
+        searchedSpaceIds,
         candidateItems,
         quotedItems,
         decisions,

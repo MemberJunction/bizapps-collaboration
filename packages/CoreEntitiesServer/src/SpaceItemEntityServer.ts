@@ -1,10 +1,12 @@
-import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadWriteContext } from './load-graph.js';
+import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
@@ -108,6 +110,71 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
         }
         return ok;
+    }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const provider = asMetadata(this.ProviderToUse);
+        const filesEntity = provider?.EntityByName('MJ: Files');
+        const isFile = filesEntity && this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+        const rawRecId = this.RecordID;
+        const fileId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+
+        const ok = await super.Delete(options);
+        if (!ok) return false;
+
+        if (fileId && provider) {
+            try {
+                const system = await requireSystemUser(this);
+                await cleanupStoredItemFile(provider, system, fileId);
+            } catch (error) {
+                LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+        return ok;
+    }
+}
+
+async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    let storagePath: string | null = null;
+    let accountId: string | null = null;
+    let fileEntity: MJFileEntity | null = null;
+
+    try {
+        fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+        if (await fileEntity.Load(fileId)) {
+            storagePath = fileEntity.ProviderKey;
+            const providerId = fileEntity.ProviderID;
+            await FileStorageEngine.Instance.Config(false, user, provider);
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerId);
+            const resolved = accounts[0] ? { account: accounts[0] } : FileStorageEngine.Instance.ResolveStorageAccount();
+            if (resolved) {
+                accountId = resolved.account.ID;
+            }
+        }
+    } catch (error) {
+        LogError(`Space item file lookup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    let objectGone = false;
+    if (storagePath && accountId) {
+        try {
+            const driver = await FileStorageEngine.Instance.GetDriver(accountId, user);
+            objectGone = await driver.DeleteObject(storagePath);
+        } catch (error) {
+            LogError(`Space item storage cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    let rowGone = false;
+    if (fileEntity && fileEntity.IsSaved) {
+        try {
+            rowGone = await fileEntity.Delete();
+        } catch (error) {
+            LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    if ((storagePath && !objectGone) || !rowGone) {
+        LogError(`Space item file cleanup incomplete for ${fileId}: object=${objectGone} row=${rowGone}.`);
     }
 }
 

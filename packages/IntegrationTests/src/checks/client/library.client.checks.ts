@@ -1,10 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
-import type { MJFileEntity } from '@memberjunction/core-entities';
 import { FILE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext } from '../../wire.js';
-import { COLLABORATION_STORAGE_ACCOUNT_ID } from '../../world/local-storage-account.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const createdItemIds: string[] = [];
@@ -134,30 +131,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
                 try {
                     const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
                     if (await item.Load(id)) {
-                        const rawRecId = item.RecordID;
-                        const fileId = rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
                         const deletedItem = await item.Delete();
                         if (!deletedItem) {
                             errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-
-                        if (fileId) {
-                            try {
-                                const fileEntity = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
-                                if (await fileEntity.Load(fileId)) {
-                                    const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
-                                    const removed = await store.remove({
-                                        fileId: fileEntity.ID,
-                                        storagePath: fileEntity.ProviderKey ?? '',
-                                        accountId: COLLABORATION_STORAGE_ACCOUNT_ID,
-                                    }, ctx.User);
-                                    if (!removed) {
-                                        errors.push(`Failed to remove stored file ${fileId} and object via collaborationFileStore`);
-                                    }
-                                }
-                            } catch (fe) {
-                                errors.push(`Error deleting File ${fileId}: ${fe instanceof Error ? fe.message : String(fe)}`);
-                            }
                         }
                     }
                 } catch (e) {

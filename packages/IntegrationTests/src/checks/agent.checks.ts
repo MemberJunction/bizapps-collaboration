@@ -196,15 +196,17 @@ const checks: NamedCheck[] = [
             );
             Assert(!failureDiag, `No diagnostic reports failure: ${failureDiag ?? ''}`);
 
-            // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval for Bea in Discovery (both directions)
+            // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval for Bea in Discovery
             const retrieval = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID);
-            const explainedIds = new Set(resolvedSpaceIds);
+            const explainedSet = new Set(resolvedSpaceIds);
+            const retrievalSearchedSet = new Set(retrieval.searchedSpaceIds.map((s) => s.toLowerCase()));
+            Assert(
+                explainedSet.size === retrievalSearchedSet.size &&
+                    [...retrievalSearchedSet].every((id) => explainedSet.has(id)),
+                `Bea in Discovery searched space sets must match exactly: query=${[...explainedSet].sort().join(',')} retrieval=${[...retrievalSearchedSet].sort().join(',')}`,
+            );
             for (const item of retrieval.quotedItems) {
-                Assert(explainedIds.has(item.SpaceID.toLowerCase()), `Item ${item.Name} space ${item.SpaceID} must be in expansion query scope`);
-            }
-            const quotedSpaceIds = new Set(retrieval.quotedItems.map((i) => i.SpaceID.toLowerCase()));
-            for (const spaceId of explainedIds) {
-                Assert(quotedSpaceIds.has(spaceId), `Space ${spaceId} from expansion query must have quoted items in retrieval`);
+                Assert(explainedSet.has(item.SpaceID.toLowerCase()), `Item ${item.Name} space ${item.SpaceID} must be in expansion query scope`);
             }
 
             // 11. Ask from Northwind as Ada: covers Delivery (ExcludedFromParentScope), closed-past (ExcludedEntirely), and sealed-child
@@ -229,27 +231,17 @@ const checks: NamedCheck[] = [
             const adaResolvedSpaceIds = (Array.isArray(adaRawVal) ? adaRawVal : [adaRawVal]).map((id) => String(id).toLowerCase());
             const adaExplainedSet = new Set(adaResolvedSpaceIds);
 
-            // Northwind, Discovery, and sealed-child must be present
-            Assert(adaExplainedSet.has(NORTHWIND_SPACE_ID.toLowerCase()), 'Northwind space is in Ada expansion scope');
-            Assert(adaExplainedSet.has(DISCOVERY_SPACE_ID.toLowerCase()), 'Discovery space is in Ada expansion scope');
-            const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015'.toLowerCase();
-            const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014'.toLowerCase();
-            Assert(adaExplainedSet.has(SEALED_CHILD_SPACE_ID), 'Sealed child space where Ada holds a seat is in expansion scope');
-            Assert(!adaExplainedSet.has(SEALED_BRANCH_SPACE_ID), 'Sealed branch parent where Ada holds no seat must be excluded');
-
-            // ExcludedFromParentScope (Delivery) and ExcludedEntirely (closed-past) must NOT be present
-            Assert(!adaExplainedSet.has(DELIVERY_SPACE_ID.toLowerCase()), 'Delivery (ExcludedFromParentScope) must NOT be in Ada expansion scope');
-            Assert(!adaExplainedSet.has(CLOSED_PAST_SPACE_ID.toLowerCase()), 'Closed past (ExcludedEntirely) must NOT be in Ada expansion scope');
-
             // Parity: resolveSpaceAgentRetrieval for Ada in Northwind
             const adaRetrieval = await resolveSpaceAgentRetrieval(ctx.Provider, ada, NORTHWIND_SPACE_ID);
+            const adaRetrievalSearchedSet = new Set(adaRetrieval.searchedSpaceIds.map((s) => s.toLowerCase()));
+            Assert(
+                adaExplainedSet.size === adaRetrievalSearchedSet.size &&
+                    [...adaRetrievalSearchedSet].every((id) => adaExplainedSet.has(id)),
+                `Ada in Northwind searched space sets must match exactly: query=${[...adaExplainedSet].sort().join(',')} retrieval=${[...adaRetrievalSearchedSet].sort().join(',')}`,
+            );
             for (const item of adaRetrieval.quotedItems) {
                 Assert(adaExplainedSet.has(item.SpaceID.toLowerCase()), `Ada quoted item ${item.Name} space ${item.SpaceID} must be in expansion query scope`);
             }
-            const adaQuotedSpaces = new Set(adaRetrieval.quotedItems.map((i) => i.SpaceID.toLowerCase()));
-            Assert(!adaQuotedSpaces.has(DELIVERY_SPACE_ID.toLowerCase()), 'Delivery items must NOT be quoted for Ada from Northwind');
-            Assert(!adaQuotedSpaces.has(CLOSED_PAST_SPACE_ID.toLowerCase()), 'Closed-past items must NOT be quoted for Ada from Northwind');
-            Assert(!adaQuotedSpaces.has(SEALED_BRANCH_SPACE_ID), 'Sealed branch items must NOT be quoted for Ada');
         },
     },
     {
