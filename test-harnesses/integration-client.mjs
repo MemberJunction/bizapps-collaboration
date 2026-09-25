@@ -79,7 +79,8 @@ for (const request of requested) {
             await lifecycle.Teardown(ctx).catch((e) => console.warn(`  teardown warn: ${e?.message}`));
         }
     }
-}
+const { cleanupPersonaProviders } = await import('../packages/IntegrationTests/dist/wire.js');
+await cleanupPersonaProviders(ctx).catch((e) => console.warn(`  persona cleanup warn: ${e?.message}`));
 
 console.log(`\n  ${pass} passed / ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

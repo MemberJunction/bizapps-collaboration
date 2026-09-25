@@ -137,3 +137,5 @@ export async function GetPersonaUser(ctx: IntegrationCheckContext, keyOrEmail: s
     personaCache.set(email, user);
     return user;
 }
+
+export { getPersonaContext, cleanupPersonaProviders, isClientTransport } from './persona-provider.js';

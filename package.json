@@ -20,5 +20,10 @@
     "build": "pnpm --filter \"./packages/*\" run build",
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
     "mj:push": "mj sync push"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/node": "24.10.11"
+    }
   }
 }

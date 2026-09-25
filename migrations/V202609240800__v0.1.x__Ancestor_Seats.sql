@@ -35,7 +35,6 @@ BEGIN
         FROM AncestorWalk AS w
         INNER JOIN [${flyway:defaultSchema}].[Space] AS parent ON parent.ID = w.AncestorSpaceID
         WHERE parent.InheritsMembership = 1
-          AND parent.AllowParentAssignees = 1
           AND parent.ClosedAt IS NULL
           AND parent.ParentID IS NOT NULL
           AND w.Steps < 32

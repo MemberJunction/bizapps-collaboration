@@ -5,7 +5,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import type { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { lockoutMessage, openMode, type Band, type MemberSnapshot, type RoleFlags } from '@mj-biz-apps/collaboration-core';
-import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, type mjBizAppsCollaborationSpaceItemEntityType } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { NoAccessComponent } from './no-access.component';
 import { SpaceWorkspaceComponent, type WorkspaceRole, type WorkspaceSpace } from './space-workspace.component';
@@ -81,10 +81,9 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         });
     }
 
-    private gql(): ((query: string, variables: unknown) => Promise<Record<string, unknown>>) | null {
-        const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: unknown) => Promise<Record<string, unknown>> } | undefined;
-        if (!provider?.ExecuteGQL) return null;
-        return provider.ExecuteGQL.bind(provider);
+    private client(): CollaborationClient | null {
+        if (!CollaborationClient.isAvailable()) return null;
+        return new CollaborationClient();
     }
 
     private async personFor(user: UserInfo): Promise<string | null> {
@@ -222,21 +221,18 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onMintLink(event: { spaceId: string; email: string; roleId: string }): Promise<void> {
-        const gql = this.gql();
-        if (!gql) {
+        const client = this.client();
+        if (!client) {
             this.message = 'An invite needs the API connection.';
             this.changes.markForCheck();
             return;
         }
         try {
-            const result = await gql(`mutation MintSpaceLink($input: MintSpaceLinkInput!) {
-                MintSpaceLink(input: $input) { Success Sent RedemptionUrl ErrorMessage }
-            }`, { input: { SpaceID: event.spaceId, Email: event.email, RoleID: event.roleId } });
-            const payload = result?.MintSpaceLink as { Success?: boolean; RedemptionUrl?: string; ErrorMessage?: string } | undefined;
-            this.message = payload?.Success
+            const payload = await client.mintSpaceLink({ SpaceID: event.spaceId, Email: event.email, RoleID: event.roleId });
+            this.message = payload.Success
                 ? [payload.ErrorMessage, payload.RedemptionUrl].filter((part) => !!part).join(' ')
-                : (payload?.ErrorMessage || 'Invite refused.');
-            if (payload?.Success) await this.reload();
+                : (payload.ErrorMessage || 'Invite refused.');
+            if (payload.Success) await this.reload();
         } catch {
             this.message = 'Invite refused.';
         }
@@ -277,21 +273,22 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onUpload(event: { spaceId: string; name: string; folder: string | null; mimeType: string; base64: string }): Promise<void> {
-        const gql = this.gql();
-        if (!gql) {
+        const client = this.client();
+        if (!client) {
             this.message = 'Upload needs the API connection.';
             this.changes.markForCheck();
             return;
         }
         try {
-            const result = await gql(`mutation UploadSpaceFile($input: UploadSpaceFileInput!) {
-                UploadSpaceFile(input: $input) { Success ItemID ErrorMessage }
-            }`, {
-                input: { SpaceID: event.spaceId, FileName: event.name, MimeType: event.mimeType, Base64Data: event.base64, Folder: event.folder },
+            const payload = await client.uploadSpaceFile({
+                SpaceID: event.spaceId,
+                FileName: event.name,
+                MimeType: event.mimeType,
+                Base64Data: event.base64,
+                Folder: event.folder,
             });
-            const payload = result?.UploadSpaceFile as { Success?: boolean; ErrorMessage?: string } | undefined;
-            this.message = payload?.Success ? '' : (payload?.ErrorMessage || 'The upload was refused.');
-            if (payload?.Success) await this.reload();
+            this.message = payload.Success ? '' : (payload.ErrorMessage || 'The upload was refused.');
+            if (payload.Success) await this.reload();
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The upload was refused.';
         }
@@ -299,19 +296,16 @@ export class CollaborationSectionResource extends BaseResourceComponent {
     }
 
     async onFileTask(event: { spaceId: string; name: string; band: 'Team' | 'Shared' }): Promise<void> {
-        const gql = this.gql();
-        if (!gql) {
+        const client = this.client();
+        if (!client) {
             this.message = 'A task needs the API connection.';
             this.changes.markForCheck();
             return;
         }
         try {
-            const result = await gql(`mutation CreateSpaceTask($input: CreateSpaceTaskInput!) {
-                CreateSpaceTask(input: $input) { Success TaskID ErrorMessage }
-            }`, { input: { SpaceID: event.spaceId, Name: event.name, Band: event.band } });
-            const payload = result?.CreateSpaceTask as { Success?: boolean; ErrorMessage?: string } | undefined;
-            this.message = payload?.Success ? '' : (payload?.ErrorMessage || 'The task was refused.');
-            if (payload?.Success) await this.reload();
+            const payload = await client.createSpaceTask({ SpaceID: event.spaceId, Name: event.name, Band: event.band });
+            this.message = payload.Success ? '' : (payload.ErrorMessage || 'The task was refused.');
+            if (payload.Success) await this.reload();
         } catch (error) {
             this.message = error instanceof Error ? error.message : 'The task was refused.';
         }
@@ -323,17 +317,14 @@ export class CollaborationSectionResource extends BaseResourceComponent {
         let saved = false;
         let error = '';
         try {
-            const gql = this.gql();
-            if (!gql || !workspace) {
+            const client = this.client();
+            if (!client || !workspace) {
                 error = 'A message needs the API connection.';
                 return;
             }
-            const result = await gql(`mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
-                PostSpaceMessage(input: $input) { Success DetailID ErrorMessage }
-            }`, { input: { SpaceID: event.spaceId, Text: event.text } });
-            const payload = result?.PostSpaceMessage as { Success?: boolean; ErrorMessage?: string } | undefined;
-            saved = !!payload?.Success;
-            if (!saved) error = payload?.ErrorMessage || 'The message was refused.';
+            const payload = await client.postSpaceMessage({ SpaceID: event.spaceId, Text: event.text });
+            saved = !!payload.Success;
+            if (!saved) error = payload.ErrorMessage || 'The message was refused.';
             if (saved) await workspace.loadTalk();
         } catch (caught) {
             error = caught instanceof Error ? caught.message : 'The message was refused.';
@@ -378,8 +369,8 @@ export class CollaborationSectionResource extends BaseResourceComponent {
 
     async onOpenItem(event: { itemId: string }): Promise<void> {
         const user = this.user();
-        const gql = this.gql();
-        if (!user || !gql) return;
+        const client = this.client();
+        if (!user || !client) return;
         const item = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items', user);
         if (!(await item.Load(event.itemId))) return;
         const info = new Metadata().EntityByID(item.EntityID);
@@ -389,12 +380,9 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         try {
-            const result = await gql(`mutation OpenSpaceFile($itemId: String!) {
-                OpenSpaceFile(itemId: $itemId) { Success Base64 MimeType Name ErrorMessage }
-            }`, { itemId: event.itemId });
-            const payload = result?.OpenSpaceFile as { Success?: boolean; Base64?: string; MimeType?: string; Name?: string; ErrorMessage?: string } | undefined;
-            if (!payload?.Success || !payload.Base64) {
-                this.message = payload?.ErrorMessage || 'The file could not be opened.';
+            const payload = await client.openSpaceFile(event.itemId);
+            if (!payload.Success || !payload.Base64) {
+                this.message = payload.ErrorMessage || 'The file could not be opened.';
                 this.changes.markForCheck();
                 return;
             }

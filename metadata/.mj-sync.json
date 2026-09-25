@@ -17,6 +17,7 @@
     "entities",
     "entity-permissions",
     "entity-field-permissions",
+    "query-categories",
     "queries",
     "templates",
     "prompts",

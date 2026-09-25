@@ -226,13 +226,18 @@ DEALLOCATE filters;
 -- Any new column added to People without an explicit Deny for Space Participant will fail this check.
 IF OBJECT_ID('__mj.EntityFieldPermission', 'U') IS NOT NULL
 BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj.Entity WHERE Name = N'MJ_BizApps_Common: People' AND EnableFieldLevelSecurity = 1
+    )
+        THROW 50000, 'MJ_BizApps_Common: People does not have EnableFieldLevelSecurity turned on.', 1;
+
     DECLARE @UnexpectedReadableFields int = (
         SELECT COUNT(*)
         FROM __mj.vwEntityFields ef
         JOIN __mj.Entity e ON ef.EntityID = e.ID
         LEFT JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
         WHERE e.Name = N'MJ_BizApps_Common: People'
-          AND ef.Name NOT LIKE N'__mj_%'
+          AND ef.Name NOT LIKE N'[_][_]mj[_]%'
           AND ef.Name NOT IN (
               N'ID', N'FirstName', N'LastName', N'MiddleName', N'Prefix', N'Suffix',
               N'PreferredName', N'DisplayName', N'Email', N'PrimaryEmail',

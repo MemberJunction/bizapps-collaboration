@@ -36,6 +36,58 @@
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         }
+      ],
+      "MJ: Search Scope Permissions": [
+        {
+          "primaryKey": {
+            "ID": "03F9FDE5-CBF6-4E90-A1DD-35EEC9FF195A"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "88E13B5F-4AA1-4A8C-8489-A8E03684B7D6"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "32F453D9-D634-4617-8E30-A975E4A9A637"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "A5743928-DB75-468B-B41E-1B84BB150EE3"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "B9E95381-3F7A-48BE-AACD-ECBBB6E48FC9"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+            "PermissionLevel": "Search"
+          }
+        }
       ]
     }
   }

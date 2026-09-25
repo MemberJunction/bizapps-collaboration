@@ -15,6 +15,8 @@
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "Never",
       "ExposeAsAction": false,
+      "IsRestricted": true,
+      "SearchScopeAccess": "Assigned",
       "IconClass": "fa-solid fa-users-viewfinder"
     },
     "relatedEntities": {
@@ -81,12 +83,38 @@
       "MJ: AI Agent Permissions": [
         {
           "primaryKey": {
+            "ID": "5E446F19-1EBA-42D6-BB78-16D1A94AEA89"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "4FECA879-D0CF-4574-BAFC-5A9447D0BA57"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
             "ID": "7B18E340-97CD-4B71-9F1B-94713E229CA8"
           },
           "fields": {
             "AgentID": "@parent:ID",
             "RoleID": "@lookup:MJ: Roles.Name=Integration",
-            "CanView": false,
+            "CanView": true,
             "CanRun": true,
             "CanEdit": false,
             "CanDelete": false
@@ -99,7 +127,20 @@
           "fields": {
             "AgentID": "@parent:ID",
             "RoleID": "@lookup:MJ: Roles.Name=Developer",
-            "CanView": false,
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "1259BF2D-F7B8-4390-8BA9-89633E5C278D"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+            "CanView": true,
             "CanRun": true,
             "CanEdit": false,
             "CanDelete": false
@@ -109,3 +150,4 @@
     }
   }
 ]
+

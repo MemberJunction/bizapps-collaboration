@@ -17,7 +17,7 @@ export interface PostSpaceMessageInput {
 }
 
 export type PostSpaceMessageResult =
-    | { ok: true; detailId: string; assistantDetailId?: string; quotedCount?: number }
+    | { ok: true; detailId: string; assistantDetailId?: string; quotedCount?: number; assistantError?: string }
     | { ok: false; message: string };
 
 /**
@@ -88,42 +88,80 @@ export async function postSpaceMessage(
     }
 
     if (input.executeAgent) {
-        const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-        let agentMessage: string;
-        if (retrieval.quotedItems.length === 0) {
-            agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
-        } else {
-            const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
-            agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
+        try {
+            const assistantResult = await postAssistantReply(provider, user, system, conversationId, spaceId);
+            if (assistantResult.ok) {
+                return {
+                    ok: true,
+                    detailId: detail.ID,
+                    assistantDetailId: assistantResult.detailId,
+                    quotedCount: assistantResult.quotedItems.length,
+                };
+            } else {
+                LogError(`Space assistant message failed for space ${spaceId}: ${assistantResult.message}`);
+                return {
+                    ok: true,
+                    detailId: detail.ID,
+                    assistantError: assistantResult.message,
+                };
+            }
+        } catch (error) {
+            const errMessage = error instanceof Error ? error.message : String(error);
+            LogError(`Space assistant message threw for space ${spaceId}: ${errMessage}`);
+            return {
+                ok: true,
+                detailId: detail.ID,
+                assistantError: errMessage,
+            };
         }
-
-        const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
-        assistantDetail.NewRecord();
-        assistantDetail.ConversationID = conversationId;
-        assistantDetail.UserID = system.ID;
-        assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
-        assistantDetail.Role = 'AI';
-        assistantDetail.Message = agentMessage;
-        assistantDetail.Status = 'Complete';
-        assistantDetail.HiddenToUser = false;
-        assistantDetail.IsPinned = false;
-        assistantDetail.OriginalMessageChanged = false;
-
-        if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
-            const message = assistantDetail.LatestResult?.CompleteMessage || 'The assistant message was refused.';
-            LogError(`Space assistant message failed for space ${spaceId}: ${message}`);
-            return { ok: false, message };
-        }
-
-        return {
-            ok: true,
-            detailId: detail.ID,
-            assistantDetailId: assistantDetail.ID,
-            quotedCount: retrieval.quotedItems.length,
-        };
     }
 
     return { ok: true, detailId: detail.ID };
+}
+
+/**
+ * Posts an assistant reply in the room, quoting strictly the items
+ * permitted by agentMayQuote for the asking user.
+ */
+async function postAssistantReply(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    system: UserInfo,
+    conversationId: string,
+    spaceId: string,
+): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
+    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
+    let agentMessage: string;
+    if (retrieval.quotedItems.length === 0) {
+        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
+    } else {
+        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
+        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
+    }
+
+    const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
+    assistantDetail.NewRecord();
+    assistantDetail.ConversationID = conversationId;
+    assistantDetail.UserID = system.ID;
+    assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
+    assistantDetail.Role = 'AI';
+    assistantDetail.Message = agentMessage;
+    assistantDetail.Status = 'Complete';
+    assistantDetail.HiddenToUser = false;
+    assistantDetail.IsPinned = false;
+    assistantDetail.OriginalMessageChanged = false;
+
+    if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
+        const message = assistantDetail.LatestResult?.CompleteMessage || 'Failed to record assistant message';
+        return { ok: false, message };
+    }
+
+    return {
+        ok: true,
+        detailId: assistantDetail.ID,
+        message: agentMessage,
+        quotedItems: retrieval.quotedItems,
+    };
 }
 
 /**
@@ -172,37 +210,5 @@ export async function executeRoomAgent(
     const conversationId = parseUuid(conversation.Results?.[0]?.ID);
     if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
 
-    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-    let agentMessage: string;
-    if (retrieval.quotedItems.length === 0) {
-        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
-    } else {
-        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
-        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
-    }
-
-    const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
-    assistantDetail.NewRecord();
-    assistantDetail.ConversationID = conversationId;
-    assistantDetail.UserID = system.ID;
-    assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
-    assistantDetail.Role = 'AI';
-    assistantDetail.Message = agentMessage;
-    assistantDetail.Status = 'Complete';
-    assistantDetail.HiddenToUser = false;
-    assistantDetail.IsPinned = false;
-    assistantDetail.OriginalMessageChanged = false;
-
-    if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
-        const message = assistantDetail.LatestResult?.CompleteMessage || 'Failed to record assistant message';
-        LogError(`executeRoomAgent failed for space ${spaceId}: ${message}`);
-        return { ok: false, message };
-    }
-
-    return {
-        ok: true,
-        detailId: assistantDetail.ID,
-        message: agentMessage,
-        quotedItems: retrieval.quotedItems,
-    };
+    return postAssistantReply(provider, user, system, conversationId, spaceId);
 }
