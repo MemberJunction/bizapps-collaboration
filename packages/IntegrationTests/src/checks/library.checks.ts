@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJFileEntity } from '@memberjunction/core-entities';
-import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import {
     collaborationFileStore,
     decideUploadBand,
@@ -9,7 +9,7 @@ import {
     uploadSpaceFile,
     vouchStoredFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import { FILE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
+import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
@@ -195,6 +195,85 @@ const checks: NamedCheck[] = [
             // Assert stored object is now gone
             const objectGone = !(await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath));
             Assert(objectGone === true, 'Stored object must be REMOVED after last Space Item is deleted');
+        },
+    },
+    {
+        Id: 'library.LB7',
+        Name: 'LB7 — non-authorized participant (Bea) calling delete on a Shared item with uses is refused, and both item and uses survive',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await GetPersonaUser(ctx, 'bea');
+
+            // 1. Find a Shared space item in Discovery space that has uses
+            const sharedItems = await FindRows<{ ID: string; SpaceID: string; Band: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Band = 'Shared'`,
+                ['ID', 'SpaceID', 'Band'],
+            );
+            Assert(sharedItems.length > 0, 'Discovery space has at least one Shared space item');
+            const targetItem = sharedItems[0];
+
+            // 2. Ensure an Item Use exists for targetItem
+            const existingUses = await FindRows<{ ID: string }>(
+                ctx,
+                ITEM_USE_ENTITY,
+                `ItemID = '${targetItem.ID}'`,
+                ['ID'],
+            );
+            let createdUseId: string | null = null;
+            if (existingUses.length === 0) {
+                const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                use.NewRecord();
+                use.ItemID = targetItem.ID;
+                use.SpaceID = targetItem.SpaceID;
+                use.UserID = bea.ID;
+                use.Kind = 'open';
+                Assert(await use.Save(), 'Created Item Use for test');
+                createdUseId = use.ID;
+            }
+
+            try {
+                // 3. Bea attempts to delete the Space Item
+                const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, bea);
+                Assert(await item.Load(targetItem.ID), 'Bea loads Shared space item');
+
+                let deleteThrew = false;
+                let deleteReturnedFalse = false;
+                try {
+                    const deleted = await item.Delete();
+                    deleteReturnedFalse = !deleted;
+                } catch {
+                    deleteThrew = true;
+                }
+                Assert(deleteThrew || deleteReturnedFalse, 'Bea deleting a Shared space item MUST fail / be refused');
+
+                // 4. Assert BOTH the Space Item and its Item Uses survive!
+                const itemAfter = await FindRows<{ ID: string }>(
+                    ctx,
+                    SPACE_ITEM_ENTITY,
+                    `ID = '${targetItem.ID}'`,
+                    ['ID'],
+                );
+                Assert(itemAfter.length === 1, 'Space Item MUST still exist after unauthorized delete attempt');
+
+                const usesAfter = await FindRows<{ ID: string }>(
+                    ctx,
+                    ITEM_USE_ENTITY,
+                    `ItemID = '${targetItem.ID}'`,
+                    ['ID'],
+                );
+                Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
+            } finally {
+                if (createdUseId) {
+                    try {
+                        const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                        if (await use.Load(createdUseId)) await use.Delete();
+                    } catch {
+                        // ignore cleanup of test use
+                    }
+                }
+            }
         },
     },
 ];

@@ -1,11 +1,12 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
+import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, View } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
+const FIELD_NOTES_SPACE_ID = 'C1000001-0000-4000-8000-000000000011';
 
 async function findDiscoveryTaskId(ctx: IntegrationCheckContext, excludingAssigneePersonId?: string): Promise<string> {
     const taskEntity = ctx.Provider.EntityByName(TASK_ENTITY);
@@ -315,11 +316,19 @@ const checks: NamedCheck[] = [
             Assert(peopleOn.Success, `Bea read People with switch on: ${peopleOn.ErrorMessage ?? ''}`);
             Assert((peopleOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's person record, got ${peopleOn.Results?.length ?? 0}`);
 
-            // 2. With switch OFF: Bea cannot read Ada's Northwind seat
+            // 2. With switch OFF: Bea cannot read Ada's Northwind seat.
+            // Under the leaf-space rule, any reached space with AllowParentAssignees=true
+            // opens ancestor seats. Since Bea reaches both Discovery and Field notes, both
+            // must have the switch off to hide Ada's Northwind seat.
+            const fieldNotes = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await fieldNotes.Load(FIELD_NOTES_SPACE_ID), 'Load Field notes space over wire');
+
             let mainError: unknown = null;
             try {
                 space.AllowParentAssignees = false;
-                Assert(await space.Save(), 'Set AllowParentAssignees = false');
+                Assert(await space.Save(), 'Set Discovery AllowParentAssignees = false');
+                fieldNotes.AllowParentAssignees = false;
+                Assert(await fieldNotes.Save(), 'Set Field notes AllowParentAssignees = false');
 
                 const seatsOff = await view.RunView<{ ID: string; SpaceID: string; UserID: string }>({
                     EntityName: SPACE_MEMBER_ENTITY,
@@ -334,16 +343,128 @@ const checks: NamedCheck[] = [
             } finally {
                 let cleanupError: unknown = null;
                 try {
+                    // Restore switches to true
                     space.AllowParentAssignees = true;
-                    const saved = await space.Save();
-                    if (!saved) {
-                        cleanupError = new Error(`PA5 cleanup failed to restore AllowParentAssignees: ${space.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
-                    }
+                    await space.Save();
                 } catch (ce) {
                     cleanupError = ce;
                 }
+                try {
+                    fieldNotes.AllowParentAssignees = true;
+                    await fieldNotes.Save();
+                } catch (ce) {
+                    if (!cleanupError) cleanupError = ce;
+                }
                 if (mainError && cleanupError) {
                     throw new Error(`PA5 test failed: ${mainError instanceof Error ? mainError.message : String(mainError)}\nAND cleanup also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+                }
+                if (cleanupError) throw cleanupError;
+                if (mainError) throw mainError;
+            }
+        },
+    },
+    {
+        Id: 'parent-assignees.PA6',
+        Name: 'PA6 — when middle space (Discovery) switch is off but leaf space (Field notes) switch is on, participant in leaf space can assign ancestor member (Ada) over the wire',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+            const beaCtx = await getPersonaContext(ctx, 'bea');
+
+            // 1. Setup switches:
+            //    Discovery (middle space) -> AllowParentAssignees = false
+            //    Field notes (leaf space) -> AllowParentAssignees = true
+            const discoverySpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await discoverySpace.Load(DISCOVERY_SPACE_ID), 'Load Discovery space over the wire');
+            discoverySpace.AllowParentAssignees = false;
+            Assert(await discoverySpace.Save(), 'Set Discovery AllowParentAssignees = false over the wire');
+
+            const fieldNotesSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await fieldNotesSpace.Load(FIELD_NOTES_SPACE_ID), 'Load Field notes space over the wire');
+            fieldNotesSpace.AllowParentAssignees = true;
+            Assert(await fieldNotesSpace.Save(), 'Set Field notes AllowParentAssignees = true over the wire');
+
+            // 2. Find Ada's person ID
+            const adaPersonRows = await FindRows<{ ID: string }>(
+                ctx,
+                PERSON_ENTITY,
+                `Email = 'ada.owner@collab-world.example'`,
+                ['ID'],
+            );
+            Assert(adaPersonRows.length === 1, 'Ada person found');
+            const adaPersonId = adaPersonRows[0].ID;
+
+            const personEntity = ctx.Provider.EntityByName(PERSON_ENTITY);
+            Assert(!!personEntity, 'Person entity found');
+            if (!personEntity) throw new Error('Person entity found');
+
+            // 3. File a task in Field notes as staff Ada via CollaborationClient
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const createRes = await adaClient.createSpaceTask({
+                SpaceID: FIELD_NOTES_SPACE_ID,
+                Name: 'Field notes inspection task over wire',
+                Band: 'Shared',
+            });
+            Assert(createRes.Success === true && !!createRes.TaskID && !!createRes.ItemID, `Create task in Field notes over wire: ${createRes.ErrorMessage ?? ''}`);
+            const taskId = createRes.TaskID!;
+            const itemId = createRes.ItemID!;
+
+            // 4. As participant Bea, create task assignment to ancestor member Ada over the wire
+            const assignment = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskAssignmentEntity>(TASK_ASSIGNMENT_ENTITY, beaCtx.User);
+            assignment.NewRecord();
+            assignment.TaskID = taskId;
+            assignment.AssigneeEntityID = personEntity.ID;
+            assignment.AssigneeRecordID = adaPersonId;
+            assignment.Status = 'Pending';
+
+            let mainError: unknown = null;
+            try {
+                const saved = await assignment.Save();
+                Assert(saved, `Assignment in Field notes should succeed over the wire when Field notes AllowParentAssignees=true even if Discovery switch is false: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
+
+                // Also assert Bea reads Ada via People In Reach / ancestor members
+                const view = View(ctx);
+                const peopleRes = await view.RunView<{ ID: string }>({
+                    EntityName: PERSON_ENTITY,
+                    ExtraFilter: `Email = 'ada.owner@collab-world.example'`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                }, beaCtx.User);
+                Assert(peopleRes.Success, `Bea read People with Field notes switch on over wire: ${peopleRes.ErrorMessage ?? ''}`);
+                Assert((peopleRes.Results?.length ?? 0) === 1, 'Bea can read Ada person through Field notes ancestor seat reach over wire');
+            } catch (e) {
+                mainError = e;
+            } finally {
+                let cleanupError: unknown = null;
+                try {
+                    if (assignment.IsSaved) {
+                        const delAssignment = await assignment.Delete();
+                        if (!delAssignment) {
+                            cleanupError = new Error(`PA6 cleanup failed to delete assignment: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
+                        }
+                    }
+                    const item = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, adaCtx.User);
+                    if (await item.Load(itemId)) {
+                        await item.Delete();
+                    }
+                    const task = await adaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, adaCtx.User);
+                    if (await task.Load(taskId)) {
+                        await task.Delete();
+                    }
+                } catch (ce) {
+                    cleanupError = ce;
+                } finally {
+                    try {
+                        discoverySpace.AllowParentAssignees = true;
+                        await discoverySpace.Save();
+                    } catch (de) {
+                        if (!cleanupError) cleanupError = de;
+                    }
+                }
+
+                if (mainError && cleanupError) {
+                    throw new Error(`PA6 failed: ${mainError instanceof Error ? mainError.message : String(mainError)}\nAND cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
                 }
                 if (cleanupError) throw cleanupError;
                 if (mainError) throw mainError;
@@ -364,11 +485,20 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
                 const saved = await space.Save();
                 if (!saved) {
                     const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
-                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees: ${err}`);
+                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Discovery: ${err}`);
                 }
             }
-        } else {
-            throw new Error(`parent-assignees Teardown could not load Discovery space ${DISCOVERY_SPACE_ID}`);
+        }
+        const fnSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+        if (await fnSpace.Load(FIELD_NOTES_SPACE_ID)) {
+            if (!fnSpace.AllowParentAssignees) {
+                fnSpace.AllowParentAssignees = true;
+                const saved = await fnSpace.Save();
+                if (!saved) {
+                    const err = fnSpace.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Field notes: ${err}`);
+                }
+            }
         }
     },
 });

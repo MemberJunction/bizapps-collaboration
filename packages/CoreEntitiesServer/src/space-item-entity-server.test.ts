@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import {
     BaseEntity,
+    TransactionGroupBase,
     WellKnownUserSource,
     type IMetadataProvider,
     type IRunViewProvider,
@@ -175,9 +176,19 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         }
     });
 
-    it('Delete() skips file cleanup when other items still point to the file', async () => {
-        let cleanupCalled = false;
-        const providerMock = {
+    interface MockProviderOptions {
+        itemsRunViewResult?: Array<{ ID: string }>;
+        runViewFails?: boolean;
+        onFileCleanup?: () => void;
+    }
+
+    function createDeleteMockProvider(opts: MockProviderOptions = {}): IMetadataProvider {
+        const mockTg: Partial<TransactionGroupBase> = {
+            AddTransaction() {},
+            async Submit() { return true; },
+        };
+
+        const mock = {
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
                 return undefined;
@@ -186,16 +197,27 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
                 return undefined;
             },
-            async RunView() {
-                return { Success: true, Results: [{ ID: 'other-item-id' }] };
+            async CreateTransactionGroup() {
+                return mockTg as TransactionGroupBase;
+            },
+            async RunView(params: { EntityName: string }) {
+                if (opts.runViewFails && params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Item Uses' || params.EntityName === 'MJ_BizApps_Collaboration: Share Notices') {
+                    return { Success: true, Results: [] };
+                }
+                return { Success: true, Results: opts.itemsRunViewResult ?? [] };
             },
             async RunViews() {
-                // Return 1 other item still pointing to this file
-                return [{ Success: true, Results: [{ ID: 'other-item-id' }] }];
+                if (opts.runViewFails) {
+                    return [{ Success: false, ErrorMessage: 'Database connection failed', Results: [] }];
+                }
+                return [{ Success: true, Results: opts.itemsRunViewResult ?? [] }];
             },
             async GetEntityObject(entityName: string) {
                 if (entityName === 'MJ: Files') {
-                    cleanupCalled = true;
+                    opts.onFileCleanup?.();
                 }
                 return {
                     async Load() { return true; },
@@ -203,16 +225,62 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 } as unknown as BaseEntity;
             },
         };
-        const provider = providerMock as unknown as IMetadataProvider;
+        return mock as unknown as IMetadataProvider;
+    }
 
+    function createMockItem(provider: IMetadataProvider, recordId: string = `ID|${FILE_ID}`): SpaceItemEntityServer {
         const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
         Object.defineProperties(item, {
             ID: { value: 'item-1', writable: true },
+            IsSaved: { value: true, writable: true },
             EntityID: { value: FILES_ENTITY_ID, writable: true },
-            RecordID: { value: `ID|${FILE_ID}`, writable: true },
+            RecordID: { value: recordId, writable: true },
             ProviderToUse: { value: provider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
+            CheckPermissions: { value: () => true, writable: true },
         });
+        return item;
+    }
+
+    it('Delete() returns false when caller lacks delete permission without touching references or file', async () => {
+        let queryRun = false;
+        let tgCreated = false;
+        const providerMock = {
+            async CreateTransactionGroup() {
+                tgCreated = true;
+                const mockTg: Partial<TransactionGroupBase> = {
+                    AddTransaction() {},
+                    async Submit() { return true; },
+                };
+                return mockTg as TransactionGroupBase;
+            },
+            async RunView() {
+                queryRun = true;
+                return { Success: true, Results: [] };
+            },
+        };
+        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
+        Object.defineProperties(item, {
+            ID: { value: 'item-1', writable: true },
+            IsSaved: { value: true, writable: true },
+            ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
+            ContextCurrentUser: { value: user, writable: true },
+            CheckPermissions: { value: () => false, writable: true },
+        });
+
+        const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+        assert.equal(ok, false, 'Delete must return false when caller lacks delete permission');
+        assert.equal(queryRun, false, 'No queries should run when delete permission is refused');
+        assert.equal(tgCreated, false, 'No transaction should be created when delete permission is refused');
+    });
+
+    it('Delete() skips file cleanup when other items still point to the file', async () => {
+        let cleanupCalled = false;
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [{ ID: 'other-item-id' }],
+            onFileCleanup: () => { cleanupCalled = true; },
+        });
+        const item = createMockItem(provider);
 
         const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
         Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
@@ -230,42 +298,11 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     it('Delete() calls file cleanup when no other item points to the file', async () => {
         let cleanupCalled = false;
-        const providerMock = {
-            EntityByName(name: string) {
-                if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
-                return undefined;
-            },
-            EntityByID(id: string) {
-                if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
-                return undefined;
-            },
-            async RunView() {
-                return { Success: true, Results: [] };
-            },
-            async RunViews() {
-                // Return 0 other items pointing to this file
-                return [{ Success: true, Results: [] }];
-            },
-            async GetEntityObject(entityName: string) {
-                if (entityName === 'MJ: Files') {
-                    cleanupCalled = true;
-                }
-                return {
-                    async Load() { return true; },
-                    async Delete() { return true; },
-                } as unknown as BaseEntity;
-            },
-        };
-        const provider = providerMock as unknown as IMetadataProvider;
-
-        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
-        Object.defineProperties(item, {
-            ID: { value: 'item-1', writable: true },
-            EntityID: { value: FILES_ENTITY_ID, writable: true },
-            RecordID: { value: `ID|${FILE_ID}`, writable: true },
-            ProviderToUse: { value: provider, writable: true },
-            ContextCurrentUser: { value: user, writable: true },
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [],
+            onFileCleanup: () => { cleanupCalled = true; },
         });
+        const item = createMockItem(provider);
 
         const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
         Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
@@ -283,41 +320,11 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     it('Delete() preserves file and skips cleanup when count query fails', async () => {
         let cleanupCalled = false;
-        const providerMock = {
-            EntityByName(name: string) {
-                if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
-                return undefined;
-            },
-            EntityByID(id: string) {
-                if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
-                return undefined;
-            },
-            async RunView() {
-                return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
-            },
-            async RunViews() {
-                return [{ Success: false, ErrorMessage: 'Database connection failed', Results: [] }];
-            },
-            async GetEntityObject(entityName: string) {
-                if (entityName === 'MJ: Files') {
-                    cleanupCalled = true;
-                }
-                return {
-                    async Load() { return true; },
-                    async Delete() { return true; },
-                } as unknown as BaseEntity;
-            },
-        };
-        const provider = providerMock as unknown as IMetadataProvider;
-
-        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
-        Object.defineProperties(item, {
-            ID: { value: 'item-1', writable: true },
-            EntityID: { value: FILES_ENTITY_ID, writable: true },
-            RecordID: { value: `ID|${FILE_ID}`, writable: true },
-            ProviderToUse: { value: provider, writable: true },
-            ContextCurrentUser: { value: user, writable: true },
+        const provider = createDeleteMockProvider({
+            runViewFails: true,
+            onFileCleanup: () => { cleanupCalled = true; },
         });
+        const item = createMockItem(provider);
 
         const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
         Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
@@ -335,41 +342,11 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     it('Delete() skips cleanup when file record id is unparseable', async () => {
         let cleanupCalled = false;
-        const providerMock = {
-            EntityByName(name: string) {
-                if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
-                return undefined;
-            },
-            EntityByID(id: string) {
-                if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
-                return undefined;
-            },
-            async RunView() {
-                return { Success: true, Results: [] };
-            },
-            async RunViews() {
-                return [{ Success: true, Results: [] }];
-            },
-            async GetEntityObject(entityName: string) {
-                if (entityName === 'MJ: Files') {
-                    cleanupCalled = true;
-                }
-                return {
-                    async Load() { return true; },
-                    async Delete() { return true; },
-                } as unknown as BaseEntity;
-            },
-        };
-        const provider = providerMock as unknown as IMetadataProvider;
-
-        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
-        Object.defineProperties(item, {
-            ID: { value: 'item-1', writable: true },
-            EntityID: { value: FILES_ENTITY_ID, writable: true },
-            RecordID: { value: "invalid'quote--id", writable: true },
-            ProviderToUse: { value: provider, writable: true },
-            ContextCurrentUser: { value: user, writable: true },
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [],
+            onFileCleanup: () => { cleanupCalled = true; },
         });
+        const item = createMockItem(provider, "invalid'quote--id");
 
         const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
         Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {

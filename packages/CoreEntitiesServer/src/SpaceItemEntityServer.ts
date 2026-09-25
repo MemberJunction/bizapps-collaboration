@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -125,55 +125,130 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     }
 
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        // 1. Permission check FIRST: stop immediately if the caller lacks delete permission.
+        // This prevents unauthorized callers from wiping out child history (Item Uses / Share Notices)
+        // before MJ's ORM check.
+        if (typeof this.CheckPermissions === 'function') {
+            try {
+                if (!this.CheckPermissions(EntityPermissionType.Delete, false)) {
+                    return false;
+                }
+            } catch (error) {
+                LogError(`Space item delete permission check failed: ${error instanceof Error ? error.message : String(error)}`);
+                return false;
+            }
+        }
+
+        const currentItemId = this.ID;
+        if (!currentItemId || !this.IsSaved) {
+            return super.Delete(options);
+        }
+
         const provider = asMetadata(this.ProviderToUse);
-        const filesEntity = provider?.EntityByName('MJ: Files');
+        if (!provider) {
+            LogError(`Space item delete failed: metadata provider is not available for item ${currentItemId}`);
+            return false;
+        }
+
+        // 2. Pre-compute file information BEFORE super.Delete(options) is called,
+        // because super.Delete clears this.RecordID and this.EntityID upon completion.
+        const filesEntity = provider.EntityByName('MJ: Files');
         const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
         const rawRecId = this.RecordID;
         const rawId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
         const parsedFileId = rawId ? parseUuid(rawId) : null;
-        const currentItemId = this.ID;
 
-        if (currentItemId && provider) {
+        // 3. Child deletes (Item Uses & Share Notices) and item delete run atomically in ONE transaction group.
+        const isInitiator = !this.TransactionGroup;
+        let tg = this.TransactionGroup;
+        if (isInitiator) {
             try {
-                const system = await requireSystemUser(this);
-                const rv = RunView.FromMetadataProvider(provider);
-                const uses = await rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Item Uses',
-                    ExtraFilter: `ItemID = '${currentItemId}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                }, system);
-                if (uses?.Success && uses.Results) {
-                    for (const u of uses.Results) {
-                        const useEntity = await provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', system);
-                        if (await useEntity.Load(u.ID)) {
-                            await useEntity.Delete();
-                        }
-                    }
-                }
-                const notices = await rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Share Notices',
-                    ExtraFilter: `ItemID = '${currentItemId}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                }, system);
-                if (notices?.Success && notices.Results) {
-                    for (const n of notices.Results) {
-                        const noticeEntity = await provider.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', system);
-                        if (await noticeEntity.Load(n.ID)) {
-                            await noticeEntity.Delete();
-                        }
-                    }
-                }
+                tg = await provider.CreateTransactionGroup();
             } catch (error) {
-                LogError(`Space item reference cleanup: ${error instanceof Error ? error.message : String(error)}`);
+                LogError(`Space item delete failed to create transaction group: ${error instanceof Error ? error.message : String(error)}`);
+                return false;
             }
         }
 
-        const ok = await super.Delete(options);
-        if (!ok) return false;
+        try {
+            const system = await requireSystemUser(this);
+            const rv = RunView.FromMetadataProvider(provider);
 
-        if (parsedFileId && provider && filesEntity) {
+            const usesRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Item Uses',
+                ExtraFilter: `ItemID = '${currentItemId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, system);
+            if (!usesRes || !usesRes.Success) {
+                LogError(`Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`);
+                return false;
+            }
+
+            if (usesRes.Results && usesRes.Results.length > 0) {
+                for (const u of usesRes.Results) {
+                    const useEntity = await provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', system);
+                    if (!(await useEntity.Load(u.ID))) {
+                        LogError(`Space item reference cleanup: failed to load Item Use ${u.ID} for item ${currentItemId}`);
+                        return false;
+                    }
+                    useEntity.TransactionGroup = tg;
+                    const queued = await useEntity.Delete();
+                    if (!queued) {
+                        LogError(`Space item reference cleanup: failed to queue delete for Item Use ${u.ID}`);
+                        return false;
+                    }
+                }
+            }
+
+            const noticesRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Share Notices',
+                ExtraFilter: `ItemID = '${currentItemId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, system);
+            if (!noticesRes || !noticesRes.Success) {
+                LogError(`Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`);
+                return false;
+            }
+
+            if (noticesRes.Results && noticesRes.Results.length > 0) {
+                for (const n of noticesRes.Results) {
+                    const noticeEntity = await provider.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', system);
+                    if (!(await noticeEntity.Load(n.ID))) {
+                        LogError(`Space item reference cleanup: failed to load Share Notice ${n.ID} for item ${currentItemId}`);
+                        return false;
+                    }
+                    noticeEntity.TransactionGroup = tg;
+                    const queued = await noticeEntity.Delete();
+                    if (!queued) {
+                        LogError(`Space item reference cleanup: failed to queue delete for Share Notice ${n.ID}`);
+                        return false;
+                    }
+                }
+            }
+
+            this.TransactionGroup = tg;
+            const itemQueued = await super.Delete(options);
+            if (!itemQueued) {
+                LogError(`Space item delete failed to queue delete for item ${currentItemId}`);
+                return false;
+            }
+
+            if (isInitiator && tg) {
+                const submitted = await tg.Submit();
+                if (!submitted) {
+                    LogError(`Space item delete transaction failed for item ${currentItemId}`);
+                    return false;
+                }
+            }
+        } catch (error) {
+            LogError(`Space item delete transaction failed: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+
+        // 4. Stored file cleanup only runs AFTER the item delete transaction commits!
+        if (parsedFileId && filesEntity) {
             try {
                 const system = await requireSystemUser(this);
                 const rv = RunView.FromMetadataProvider(provider);
@@ -187,7 +262,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
                 if (!otherItemsRes || !otherItemsRes.Success) {
                     LogError(`Space item file count query failed for ${parsedFileId}: ${otherItemsRes?.ErrorMessage ?? 'RunView failed'}`);
-                    return ok;
+                    return true;
                 }
 
                 const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
@@ -198,7 +273,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
-        return ok;
+
+        return true;
     }
 }
 

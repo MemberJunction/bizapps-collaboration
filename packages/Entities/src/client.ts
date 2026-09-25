@@ -40,6 +40,7 @@ export interface CreateSpaceTaskInput {
 export interface CreateSpaceTaskPayload {
     Success: boolean;
     TaskID?: string;
+    ItemID?: string;
     ErrorMessage?: string;
 }
 
@@ -88,6 +89,7 @@ mutation CreateSpaceTask($input: CreateSpaceTaskInput!) {
     CreateSpaceTask(input: $input) {
         Success
         TaskID
+        ItemID
         ErrorMessage
     }
 }

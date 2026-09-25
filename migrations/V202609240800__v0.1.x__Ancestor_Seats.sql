@@ -3,6 +3,9 @@
 --
 -- Returns active seats on ancestor spaces that reach a space the caller reaches,
 -- when that space has AllowParentAssignees = 1 and inherits membership.
+-- Intermediate spaces require InheritsMembership = 1 for the membership chain
+-- to flow down; their AllowParentAssignees setting governs only tasks filed
+-- directly in those intermediate spaces.
 -- =============================================================================
 
 DROP FUNCTION IF EXISTS [${flyway:defaultSchema}].[fnCollaborationAncestorMembers];
@@ -35,7 +38,6 @@ BEGIN
         FROM AncestorWalk AS w
         INNER JOIN [${flyway:defaultSchema}].[Space] AS parent ON parent.ID = w.AncestorSpaceID
         WHERE parent.InheritsMembership = 1
-          AND parent.AllowParentAssignees = 1
           AND parent.ClosedAt IS NULL
           AND parent.ParentID IS NOT NULL
           AND w.Steps < 32
