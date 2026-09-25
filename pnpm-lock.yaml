@@ -225,8 +225,8 @@ importers:
         specifier: workspace:*
         version: link:../Entities
       '@mj-biz-apps/common-entities':
-        specifier: 5.45.0
-        version: 5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
+        specifier: 5.46.0
+        version: 5.46.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       '@mj-biz-apps/tasks-entities':
         specifier: 1.5.0
         version: 1.5.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
@@ -290,8 +290,8 @@ importers:
         specifier: 6.1.3
         version: 6.1.3(encoding@0.1.13)(typescript@5.9.3)
       '@mj-biz-apps/common-entities':
-        specifier: 5.45.0
-        version: 5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
+        specifier: 5.46.0
+        version: 5.46.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -2356,8 +2356,8 @@ packages:
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
-  '@mj-biz-apps/common-entities@5.45.0':
-    resolution: {integrity: sha512-4cGUSr4tZoHvpNXZEceizrgYQT9Em5Am4805JORjMl8tEaJStTP4HHciSytQkKUhuYVo2r2ckvdMIeG8rmZTQg==}
+  '@mj-biz-apps/common-entities@5.46.0':
+    resolution: {integrity: sha512-sTph/Wppl0aQHmPBX27PxfoN13WRCBlDwdKspGB7GmvQ80dnDP3cXoknCv9Lb7ApLJtlpajAHB1+39JoUIxS2Q==}
     peerDependencies:
       '@memberjunction/core': ^6.1.0-edge.6
       '@memberjunction/global': ^6.1.0-edge.6
@@ -13493,7 +13493,7 @@ snapshots:
 
   '@mixmark-io/domino@2.2.0': {}
 
-  '@mj-biz-apps/common-entities@5.45.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)':
+  '@mj-biz-apps/common-entities@5.46.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)':
     dependencies:
       '@memberjunction/core': 6.1.3
       '@memberjunction/global': 6.1.3

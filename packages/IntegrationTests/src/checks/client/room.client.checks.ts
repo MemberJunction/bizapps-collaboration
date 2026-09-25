@@ -2,7 +2,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaContext, View } from '../../wire.js';
+import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
@@ -118,7 +118,7 @@ const checks: NamedCheck[] = [
         Name: 'RM5 — PostSpaceMessage accepts contributor (Bea) and persists message',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             const result = await client.postSpaceMessage({
@@ -148,8 +148,8 @@ const checks: NamedCheck[] = [
         Name: 'RM6 — PostSpaceMessage write gates: empty, length cap, closed space, and non-contributor',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
-            const remyCtx = await getPersonaContext(ctx, 'remy');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const remyCtx = await getPersonaClientContext(ctx, 'remy');
             const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
             const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 

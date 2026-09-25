@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const logPath = process.argv[2];
+const mode = process.argv[3] || 'server';
 
 /** Expected counts, parsed from the parity test so there is exactly one source of truth. */
 function expectedCounts() {
@@ -17,13 +18,15 @@ function expectedCounts() {
         join(root, 'packages/IntegrationTests/src/__tests__/registry-parity.test.ts'),
         'utf8',
     );
-    const block = src.match(/EXPECTED_BUNDLES[^=]*=\s*\{([\s\S]*?)\}\s*;/);
-    if (!block) throw new Error('could not find the EXPECTED_BUNDLES map in registry-parity.test.ts');
+    const mapName = mode === 'client' ? 'EXPECTED_CLIENT_BUNDLES' : 'EXPECTED_BUNDLES';
+    const regex = new RegExp(`${mapName}[^=]*=\\s*\\{([\\s\\S]*?)\\}\\s*;`);
+    const block = src.match(regex);
+    if (!block) throw new Error(`could not find the ${mapName} map in registry-parity.test.ts`);
     const counts = new Map();
     for (const [, name, n] of block[1].matchAll(/'?([a-zA-Z-]+)'?\s*:\s*(\d+)/g)) {
         counts.set(name, Number(n));
     }
-    if (!counts.size) throw new Error('the EXPECTED_BUNDLES map parsed empty');
+    if (!counts.size) throw new Error(`the ${mapName} map parsed empty`);
     return counts;
 }
 

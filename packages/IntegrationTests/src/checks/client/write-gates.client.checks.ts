@@ -37,6 +37,14 @@ const checks: NamedCheck[] = [
             rootAttempt.ParentID = null;
 
             const savedRoot = await rootAttempt.Save();
+            if (savedRoot) {
+                try {
+                    await rootAttempt.Delete();
+                } catch {
+                    // rollback cleanup
+                }
+                Assert(false, 'Participant creating root space must be refused over the wire');
+            }
             Assert(!savedRoot, 'Participant creating root space must be refused over the wire');
             const rootReason = rootAttempt.LatestResult?.CompleteMessage ?? '';
             Assert(
@@ -50,6 +58,15 @@ const checks: NamedCheck[] = [
             space.ParentID = DISCOVERY_SPACE_ID;
 
             const savedCycle = await space.Save();
+            if (savedCycle) {
+                try {
+                    space.ParentID = null;
+                    await space.Save();
+                } catch {
+                    // rollback cleanup
+                }
+                Assert(false, 'Moving space under its own descendant must fail save over the wire');
+            }
             Assert(!savedCycle, 'Moving space under its own descendant must fail save over the wire');
             const cycleReason = space.LatestResult?.CompleteMessage ?? '';
             Assert(
@@ -80,6 +97,15 @@ const checks: NamedCheck[] = [
             // Attempt to change SpaceID on saved membership
             member.SpaceID = DISCOVERY_SPACE_ID;
             const savedSpace = await member.Save();
+            if (savedSpace) {
+                try {
+                    member.SpaceID = NORTHWIND_SPACE_ID;
+                    await member.Save();
+                } catch {
+                    // rollback cleanup
+                }
+                Assert(false, 'Changing SpaceID on saved membership must fail over the wire');
+            }
             Assert(!savedSpace, 'Changing SpaceID on saved membership must fail over the wire');
             const spaceReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(
@@ -91,6 +117,15 @@ const checks: NamedCheck[] = [
             await member.Load(seats[0].ID);
             member.Status = 'Removed';
             const savedStrand = await member.Save();
+            if (savedStrand) {
+                try {
+                    member.Status = 'Active';
+                    await member.Save();
+                } catch {
+                    // rollback cleanup
+                }
+                Assert(false, 'Removing last active owner must fail save over the wire');
+            }
             Assert(!savedStrand, 'Removing last active owner must fail save over the wire');
             const strandReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(

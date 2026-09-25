@@ -25,3 +25,6 @@ closed-past,bea,client-member,Shared,Active
 closed-open,ada,owner,Team,Active
 studio,ada,owner,Team,Active
 studio,sam,member,Team,Active
+sealed-branch,sam,owner,Team,Active
+sealed-child,sam,owner,Team,Active
+sealed-child,ada,member,Team,Active

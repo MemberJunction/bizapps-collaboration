@@ -1,8 +1,10 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
 import type { MJFileEntity } from '@memberjunction/core-entities';
 import { FILE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext } from '../../wire.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID } from '../../world/local-storage-account.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const createdItemIds: string[] = [];
@@ -13,7 +15,7 @@ const checks: NamedCheck[] = [
         Name: 'LB1 — UploadSpaceFile enforces non-empty content and size cap over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             // 1. Empty content refused
@@ -25,7 +27,17 @@ const checks: NamedCheck[] = [
             });
             Assert(!emptyRes.Success, 'Empty file must be refused over the wire');
 
-            // 2. Valid upload succeeds
+            // 2. Over size cap refused (10MB + 1 byte)
+            const overCapBuffer = Buffer.alloc(10 * 1024 * 1024 + 1);
+            const overCapRes = await client.uploadSpaceFile({
+                SpaceID: DISCOVERY_SPACE_ID,
+                FileName: 'huge.bin',
+                Base64Data: overCapBuffer.toString('base64'),
+                Folder: 'Briefs',
+            });
+            Assert(!overCapRes.Success, 'File over 10MB size cap must be refused over the wire');
+
+            // 3. Valid upload succeeds
             const validRes = await client.uploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'bea-upload.txt',
@@ -42,7 +54,7 @@ const checks: NamedCheck[] = [
         Name: 'LB2 — UploadSpaceFile rewrites unsafe html to text/plain over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             const htmlRes = await client.uploadSpaceFile({
@@ -79,7 +91,7 @@ const checks: NamedCheck[] = [
         Name: 'LB3 — UploadSpaceFile refuses non-contributor over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const remyCtx = await getPersonaContext(ctx, 'remy');
+            const remyCtx = await getPersonaClientContext(ctx, 'remy');
             const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 
             const refuseRes = await remyClient.uploadSpaceFile({
@@ -133,9 +145,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
                             try {
                                 const fileEntity = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
                                 if (await fileEntity.Load(fileId)) {
-                                    const deletedFile = await fileEntity.Delete();
-                                    if (!deletedFile) {
-                                        errors.push(`Failed to delete File ${fileId}: ${fileEntity.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                                    const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+                                    const removed = await store.remove({
+                                        fileId: fileEntity.ID,
+                                        storagePath: fileEntity.ProviderKey ?? '',
+                                        accountId: COLLABORATION_STORAGE_ACCOUNT_ID,
+                                    }, ctx.User);
+                                    if (!removed) {
+                                        errors.push(`Failed to remove stored file ${fileId} and object via collaborationFileStore`);
                                     }
                                 }
                             } catch (fe) {

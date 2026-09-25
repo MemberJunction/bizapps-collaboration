@@ -209,10 +209,21 @@ export class PersonaContextRegistry extends BaseSingleton<PersonaContextRegistry
 
 export const PersonaRegistry = PersonaContextRegistry.Instance;
 
+export interface PersonaClientIntegrationCheckContext extends PersonaIntegrationCheckContext {
+    GraphQLProvider: GraphQLDataProvider;
+}
+
 export async function getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<PersonaIntegrationCheckContext> {
     return PersonaRegistry.getPersonaContext(ctx, personaKey);
+}
+
+export async function getPersonaClientContext(ctx: IntegrationCheckContext, personaKey: string): Promise<PersonaClientIntegrationCheckContext> {
+    const pCtx = await PersonaRegistry.getPersonaContext(ctx, personaKey);
+    Assert(!!pCtx.GraphQLProvider, `GraphQLProvider is required on client path for persona '${personaKey}'`);
+    return pCtx as PersonaClientIntegrationCheckContext;
 }
 
 export async function cleanupPersonaProviders(ctx: IntegrationCheckContext): Promise<void> {
     return PersonaRegistry.cleanup(ctx);
 }
+

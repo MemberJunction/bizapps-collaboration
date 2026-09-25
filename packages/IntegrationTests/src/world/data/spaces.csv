@@ -12,3 +12,5 @@ closed-recent,C1000001-0000-4000-8000-000000000007,Closed this month,workspace,n
 closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,ExcludedEntirely,past,Month
 closed-open,C1000001-0000-4000-8000-000000000009,Closed indefinite,workspace,northwind,ada,1,Included,past,
 studio,C1000001-0000-4000-8000-000000000010,Studio,workshop,,ada,1,Included,,
+sealed-branch,C1000001-0000-4000-8000-000000000014,Sealed branch,workspace,northwind,sam,0,Included,,
+sealed-child,C1000001-0000-4000-8000-000000000015,Sealed child,workspace,sealed-branch,sam,0,Included,,

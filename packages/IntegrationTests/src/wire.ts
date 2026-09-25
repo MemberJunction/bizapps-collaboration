@@ -138,4 +138,11 @@ export async function GetPersonaUser(ctx: IntegrationCheckContext, keyOrEmail: s
     return user;
 }
 
-export { getPersonaContext, cleanupPersonaProviders, isClientTransport } from './persona-provider.js';
+export {
+    getPersonaContext,
+    getPersonaClientContext,
+    type PersonaIntegrationCheckContext,
+    type PersonaClientIntegrationCheckContext,
+    cleanupPersonaProviders,
+    isClientTransport,
+} from './persona-provider.js';
