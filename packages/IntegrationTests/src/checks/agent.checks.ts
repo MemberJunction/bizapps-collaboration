@@ -312,13 +312,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
         while (createdDetailIds.length > 0) {
             const id = createdDetailIds.pop();
             if (id) {
-                try {
-                    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                    if (await detail.Load(id)) {
-                        await detail.Delete();
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                if (await detail.Load(id)) {
+                    const deleted = await detail.Delete();
+                    if (!deleted) {
+                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
+                        console.error(`agent Teardown failed to delete detail ${id}: ${err}`);
+                        throw new Error(`agent Teardown failed to delete detail ${id}: ${err}`);
                     }
-                } catch {
-                    // Best effort cleanup
                 }
             }
         }

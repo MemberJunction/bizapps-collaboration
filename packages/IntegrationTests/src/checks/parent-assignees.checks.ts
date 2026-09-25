@@ -87,7 +87,12 @@ const checks: NamedCheck[] = [
                 Assert(saved, `Assignment should save when AllowParentAssignees=true, but failed: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
             } finally {
                 if (assignment.IsSaved) {
-                    await assignment.Delete();
+                    const deleted = await assignment.Delete();
+                    if (!deleted) {
+                        const err = assignment.LatestResult?.CompleteMessage ?? 'Delete returned false';
+                        console.error(`PA1 cleanup failed to delete assignment: ${err}`);
+                        throw new Error(`PA1 cleanup failed to delete assignment: ${err}`);
+                    }
                 }
             }
         },
@@ -143,7 +148,12 @@ const checks: NamedCheck[] = [
             } finally {
                 // Restore AllowParentAssignees = true for subsequent checks
                 space.AllowParentAssignees = true;
-                await space.Save();
+                const saved = await space.Save();
+                if (!saved) {
+                    const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    console.error(`PA2 cleanup failed to restore AllowParentAssignees: ${err}`);
+                    throw new Error(`PA2 cleanup failed to restore AllowParentAssignees: ${err}`);
+                }
             }
         },
     },
@@ -192,13 +202,23 @@ const checks: NamedCheck[] = [
                     Assert(saved, `Same-space assignment should succeed when switch is false, but failed: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
                 } finally {
                     if (assignment.IsSaved) {
-                        await assignment.Delete();
+                        const deleted = await assignment.Delete();
+                        if (!deleted) {
+                            const err = assignment.LatestResult?.CompleteMessage ?? 'Delete returned false';
+                            console.error(`PA3 cleanup failed to delete assignment: ${err}`);
+                            throw new Error(`PA3 cleanup failed to delete assignment: ${err}`);
+                        }
                     }
                 }
             } finally {
                 // Restore
                 space.AllowParentAssignees = true;
-                await space.Save();
+                const saved = await space.Save();
+                if (!saved) {
+                    const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    console.error(`PA3 cleanup failed to restore AllowParentAssignees: ${err}`);
+                    throw new Error(`PA3 cleanup failed to restore AllowParentAssignees: ${err}`);
+                }
             }
         },
     },
@@ -273,7 +293,12 @@ const checks: NamedCheck[] = [
             } finally {
                 // Restore switch to true
                 space.AllowParentAssignees = true;
-                await space.Save();
+                const saved = await space.Save();
+                if (!saved) {
+                    const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    console.error(`PA5 cleanup failed to restore AllowParentAssignees: ${err}`);
+                    throw new Error(`PA5 cleanup failed to restore AllowParentAssignees: ${err}`);
+                }
             }
         },
     },
@@ -284,17 +309,20 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {
         // Ensure Discovery space switch is restored to true
-        try {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-            if (await space.Load(DISCOVERY_SPACE_ID)) {
-                if (!space.AllowParentAssignees) {
-                    space.AllowParentAssignees = true;
-                    await space.Save();
+        const ada = await GetPersonaUser(ctx, 'ada');
+        const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+        if (await space.Load(DISCOVERY_SPACE_ID)) {
+            if (!space.AllowParentAssignees) {
+                space.AllowParentAssignees = true;
+                const saved = await space.Save();
+                if (!saved) {
+                    const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
+                    console.error(`parent-assignees Teardown failed to restore AllowParentAssignees: ${err}`);
+                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees: ${err}`);
                 }
             }
-        } catch {
-            // Best effort
+        } else {
+            throw new Error(`parent-assignees Teardown could not load Discovery space ${DISCOVERY_SPACE_ID}`);
         }
     },
 });
