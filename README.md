@@ -314,6 +314,20 @@ The platform the other BizApps are built on. Nothing here is installed yet.
 
 ---
 
+## Integration Testing
+
+The integration test suite consists of two complementary execution harnesses:
+- **Server Harness (`pnpm run test:integration:server`)**: Runs the in-process server test checks against the database. The suite records under `metadata-tests/tests/` (`.COL-*.json`) are configured with `"transport": "server"` to execute this suite via `mj test`.
+- **Client Harness (`pnpm run test:integration:client`)**: Runs over-the-wire client checks across Apollo GraphQL as each persona, without loading server packages in-process.
+
+Both harnesses can be executed sequentially with check count assertions via:
+
+```bash
+pnpm run test:integration
+```
+
+---
+
 ## Upgrading
 
 Space Participant read grants with `(1 = 0)` are defined explicitly for the core entities required by active UI engines and the shell. This list is re-derived on every MJ upgrade, because engine configs change between versions (for example, DashboardEngine loading an 8th entity). Target hosts receive this configuration through the release seed rather than `mj sync push`.

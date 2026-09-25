@@ -23,6 +23,24 @@ const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
+const FIELD_NOTES_SPACE_ID = 'C1000001-0000-4000-8000-000000000011';
+const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
+const CLOSED_OPEN_SPACE_ID = 'C1000001-0000-4000-8000-000000000009';
+const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015';
+
+const EXPECTED_BEA_DISCOVERY_SPACES = new Set([
+    DISCOVERY_SPACE_ID.toLowerCase(),
+    FIELD_NOTES_SPACE_ID.toLowerCase(),
+]);
+
+const EXPECTED_ADA_NORTHWIND_SPACES = new Set([
+    NORTHWIND_SPACE_ID.toLowerCase(),
+    DISCOVERY_SPACE_ID.toLowerCase(),
+    FIELD_NOTES_SPACE_ID.toLowerCase(),
+    CLOSED_RECENT_SPACE_ID.toLowerCase(),
+    CLOSED_OPEN_SPACE_ID.toLowerCase(),
+    SEALED_CHILD_SPACE_ID.toLowerCase(),
+]);
 
 const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
 const createdDetailIds: string[] = [];
@@ -200,6 +218,20 @@ const checks: NamedCheck[] = [
             const retrieval = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID);
             const explainedSet = new Set(resolvedSpaceIds);
             const retrievalSearchedSet = new Set(retrieval.searchedSpaceIds.map((s) => s.toLowerCase()));
+
+            // Assert both implementations against the world's own answer: Discovery and Field notes
+            Assert(
+                explainedSet.size === EXPECTED_BEA_DISCOVERY_SPACES.size &&
+                    [...explainedSet].every((id) => EXPECTED_BEA_DISCOVERY_SPACES.has(id)),
+                `ExplainScope for Bea in Discovery must match expected world answer: query=${[...explainedSet].sort().join(',')} expected=${[...EXPECTED_BEA_DISCOVERY_SPACES].sort().join(',')}`,
+            );
+            Assert(
+                retrievalSearchedSet.size === EXPECTED_BEA_DISCOVERY_SPACES.size &&
+                    [...retrievalSearchedSet].every((id) => EXPECTED_BEA_DISCOVERY_SPACES.has(id)),
+                `resolveSpaceAgentRetrieval for Bea in Discovery must match expected world answer: retrieval=${[...retrievalSearchedSet].sort().join(',')} expected=${[...EXPECTED_BEA_DISCOVERY_SPACES].sort().join(',')}`,
+            );
+
+            // Assert exact bidirectional set equality between both implementations
             Assert(
                 explainedSet.size === retrievalSearchedSet.size &&
                     [...retrievalSearchedSet].every((id) => explainedSet.has(id)),
@@ -234,6 +266,20 @@ const checks: NamedCheck[] = [
             // Parity: resolveSpaceAgentRetrieval for Ada in Northwind
             const adaRetrieval = await resolveSpaceAgentRetrieval(ctx.Provider, ada, NORTHWIND_SPACE_ID);
             const adaRetrievalSearchedSet = new Set(adaRetrieval.searchedSpaceIds.map((s) => s.toLowerCase()));
+
+            // Assert both implementations against the world's own answer: Northwind, Discovery, Field notes, Closed this month, Closed indefinite, Sealed child
+            Assert(
+                adaExplainedSet.size === EXPECTED_ADA_NORTHWIND_SPACES.size &&
+                    [...adaExplainedSet].every((id) => EXPECTED_ADA_NORTHWIND_SPACES.has(id)),
+                `ExplainScope for Ada in Northwind must match expected world answer: query=${[...adaExplainedSet].sort().join(',')} expected=${[...EXPECTED_ADA_NORTHWIND_SPACES].sort().join(',')}`,
+            );
+            Assert(
+                adaRetrievalSearchedSet.size === EXPECTED_ADA_NORTHWIND_SPACES.size &&
+                    [...adaRetrievalSearchedSet].every((id) => EXPECTED_ADA_NORTHWIND_SPACES.has(id)),
+                `resolveSpaceAgentRetrieval for Ada in Northwind must match expected world answer: retrieval=${[...adaRetrievalSearchedSet].sort().join(',')} expected=${[...EXPECTED_ADA_NORTHWIND_SPACES].sort().join(',')}`,
+            );
+
+            // Assert exact bidirectional set equality between both implementations
             Assert(
                 adaExplainedSet.size === adaRetrievalSearchedSet.size &&
                     [...adaRetrievalSearchedSet].every((id) => adaExplainedSet.has(id)),

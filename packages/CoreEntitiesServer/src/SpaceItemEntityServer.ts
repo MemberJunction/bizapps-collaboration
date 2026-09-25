@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -35,6 +35,14 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const spaceId = parseUuid(this.SpaceID);
         if (!user || !caller || !spaceId) {
             return fail(result, 'Item change refused: the signer and the space must be real ids.');
+        }
+        const filesEntity = asMetadata(this.ProviderToUse)?.EntityByName('MJ: Files');
+        const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+        if (isFile) {
+            const isNewFilePointer = !this.IsSaved || this.Fields.some((f) => f.Dirty && (f.Name === 'EntityID' || f.Name === 'RecordID'));
+            if (isNewFilePointer && !vouchedItems.has(this)) {
+                return fail(result, 'Item change refused: file items must be created through space upload.');
+            }
         }
         const previousRaw = this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue as string | null | undefined;
         const previousSpace = previousRaw ? parseUuid(String(previousRaw)) : null;
@@ -115,17 +123,30 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         const provider = asMetadata(this.ProviderToUse);
         const filesEntity = provider?.EntityByName('MJ: Files');
-        const isFile = filesEntity && this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+        const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
         const rawRecId = this.RecordID;
         const fileId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+        const currentItemId = this.ID;
 
         const ok = await super.Delete(options);
         if (!ok) return false;
 
-        if (fileId && provider) {
+        if (fileId && provider && filesEntity) {
             try {
                 const system = await requireSystemUser(this);
-                await cleanupStoredItemFile(provider, system, fileId);
+                const rv = RunView.FromMetadataProvider(provider);
+                const recIdFilter = `(RecordID = '${rawRecId}' OR RecordID = 'ID|${fileId}' OR RecordID = '${fileId}')`;
+                const otherItemsRes = await rv.RunView<{ ID: string }>({
+                    EntityName: ENTITY,
+                    ExtraFilter: `EntityID = '${filesEntity.ID}' AND ${recIdFilter} AND ID <> '${currentItemId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                }, system);
+
+                const remainingCount = (otherItemsRes?.Success && otherItemsRes.Results) ? otherItemsRes.Results.length : 0;
+                if (remainingCount === 0) {
+                    await cleanupStoredItemFile(provider, system, fileId);
+                }
             } catch (error) {
                 LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
             }
