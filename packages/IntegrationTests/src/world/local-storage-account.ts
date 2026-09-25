@@ -6,7 +6,7 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJCredentialEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { COLLABORATION_STORAGE_DRIVER_KEY } from './local-directory-storage.js';
+import { COLLABORATION_STORAGE_DRIVER_KEY, LocalDirectoryStorage } from './local-directory-storage.js';
 
 export const COLLABORATION_STORAGE_PROVIDER_ID = 'F3000001-0000-4000-8000-000000000001';
 export const COLLABORATION_STORAGE_ACCOUNT_ID = 'F3000001-0000-4000-8000-000000000002';
@@ -43,6 +43,15 @@ export async function readStoredFile(provider: IMetadataProvider, system: UserIn
     await FileStorageEngine.Instance.Config(false, system, provider);
     const driver = await FileStorageEngine.Instance.GetDriver(accountId, system);
     return driver.GetObject({ fullPath: storagePath });
+}
+
+export async function storedFileExists(provider: IMetadataProvider, system: UserInfo, accountId: string, storagePath: string): Promise<boolean> {
+    await FileStorageEngine.Instance.Config(false, system, provider);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountId, system);
+    if (driver instanceof LocalDirectoryStorage) {
+        return driver.ObjectExists(storagePath);
+    }
+    return false;
 }
 
 async function ensureCredential(provider: IMetadataProvider, system: UserInfo, typeId: string, rootDir: string): Promise<string> {

@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import { isStaffUser, STAFF_ROLES } from '../dist/load-graph.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 
 describe('isStaffUser', () => {
     it('returns true for UI, Developer, and Integration roles', () => {
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'UI' }] } as UserInfo), true);
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Developer' }] } as UserInfo), true);
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Integration' }] } as UserInfo), true);
+        assert.equal(isStaffUser({ UserRoles: [{ Role: 'UI' }] }), true);
+        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Developer' }] }), true);
+        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Integration' }] }), true);
     });
 
     it('returns false for Space Participant, empty roles, or null', () => {
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Space Participant' }] } as UserInfo), false);
-        assert.equal(isStaffUser({ UserRoles: [] } as UserInfo), false);
+        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Space Participant' }] }), false);
+        assert.equal(isStaffUser({ UserRoles: [] }), false);
         assert.equal(isStaffUser(null), false);
         assert.equal(isStaffUser(undefined), false);
     });
@@ -22,13 +22,13 @@ describe('isStaffUser', () => {
 describe('SpaceEntityServer staff-only edit gate', () => {
     const participantUser = {
         ID: '11111111-1111-4111-8111-111111111111',
-        UserRoles: [{ Role: 'Space Participant' }],
-    } as unknown as UserInfo;
+        UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+    } as Partial<UserInfo> as UserInfo;
 
     const staffUser = {
         ID: '22222222-2222-4222-8222-222222222222',
-        UserRoles: [{ Role: 'UI' }],
-    } as unknown as UserInfo;
+        UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
+    } as Partial<UserInfo> as UserInfo;
 
     function mockSpace(user: UserInfo, isSaved: boolean, dirtyFieldName: string) {
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
@@ -85,13 +85,13 @@ describe('SpaceEntityServer staff-only edit gate', () => {
 describe('SpaceEntityServer create path validation', () => {
     const participantUser = {
         ID: '11111111-1111-4111-8111-111111111111',
-        UserRoles: [{ Role: 'Space Participant' }],
-    } as unknown as UserInfo;
+        UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+    } as Partial<UserInfo> as UserInfo;
 
     const staffUser = {
         ID: '22222222-2222-4222-8222-222222222222',
-        UserRoles: [{ Role: 'UI' }],
-    } as unknown as UserInfo;
+        UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
+    } as Partial<UserInfo> as UserInfo;
 
     const TYPE_ID = '44444444-4444-4444-8444-444444444444';
 
@@ -106,7 +106,7 @@ describe('SpaceEntityServer create path validation', () => {
         defaultAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
     }) {
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
-        const fields: Array<{ Name: string; Dirty: boolean; OldValue?: unknown; Value?: unknown }> = [
+        const fields: Array<{ Name: string; Dirty: boolean; OldValue?: string | number | boolean | null; Value?: string | number | boolean | null }> = [
             { Name: 'OwnerID', Dirty: false },
         ];
         if (options.allowDirty) {

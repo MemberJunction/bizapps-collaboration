@@ -258,5 +258,15 @@
       "Description": "The caller's own person, and people linked to a user with an active seat on a space the caller reaches.",
       "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR LinkedUserID IN (SELECT UserID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "52729C5C-9EF5-4097-85A9-F56CB7E0248E"
+    },
+    "fields": {
+      "Name": "Collaboration: Agent Catalog",
+      "Description": "Agent, skill, and search scope metadata needed to run space assistance. No row of the caller's work.",
+      "FilterText": "(1 = 1)"
+    }
   }
 ]

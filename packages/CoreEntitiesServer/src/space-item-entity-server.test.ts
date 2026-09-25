@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import {
+    BaseEntity,
+    WellKnownUserSource,
+    type IMetadataProvider,
+    type IRunViewProvider,
+    type UserInfo,
+    type UserRoleInfo,
+} from '@memberjunction/core';
 import { SpaceItemEntityServer, vouchStoredFile, releaseStoredFile } from '../dist/SpaceItemEntityServer.js';
 
 describe('SpaceItemEntityServer file ownership and validation', () => {
@@ -16,7 +23,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     const partialUser: Partial<UserInfo> = {
         ID: '11111111-1111-4111-8111-111111111111',
-        UserRoles: [{ Role: 'UI' }],
+        UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
     };
     const user = partialUser as UserInfo;
 
@@ -26,7 +33,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
     const FILE_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
     function mockProvider(): IMetadataProvider {
-        const mock: Partial<IMetadataProvider> = {
+        const mock = {
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
                 if (name === 'MJ_BizApps_Tasks: Tasks') return { ID: OTHER_ENTITY_ID, Name: 'MJ_BizApps_Tasks: Tasks' } as ReturnType<IMetadataProvider['EntityByName']>;
@@ -39,12 +46,14 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             async RunViews() {
                 return [{ Success: true, Results: [] }];
             },
-            async GetEntityObject(entityName: string) {
-                const mockEntity: Partial<BaseEntity> = {};
-                return mockEntity as BaseEntity;
+            async GetEntityObject(_entityName: string) {
+                return {
+                    async Load() { return true; },
+                    async Delete() { return true; },
+                } as unknown as BaseEntity;
             },
         };
-        return mock as IMetadataProvider;
+        return mock as unknown as IMetadataProvider;
     }
 
     it('refuses saving a new file item that was not vouched through space upload', async () => {
@@ -168,7 +177,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     it('Delete() skips file cleanup when other items still point to the file', async () => {
         let cleanupCalled = false;
-        const providerMock: Partial<IMetadataProvider> = {
+        const providerMock = {
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
                 return undefined;
@@ -188,14 +197,13 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (entityName === 'MJ: Files') {
                     cleanupCalled = true;
                 }
-                const mockEntity: Partial<BaseEntity> = {
+                return {
                     async Load() { return true; },
                     async Delete() { return true; },
-                };
-                return mockEntity as BaseEntity;
+                } as unknown as BaseEntity;
             },
         };
-        const provider = providerMock as IMetadataProvider;
+        const provider = providerMock as unknown as IMetadataProvider;
 
         const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
         Object.defineProperties(item, {
@@ -222,7 +230,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
 
     it('Delete() calls file cleanup when no other item points to the file', async () => {
         let cleanupCalled = false;
-        const providerMock: Partial<IMetadataProvider> = {
+        const providerMock = {
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
                 return undefined;
@@ -242,14 +250,13 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (entityName === 'MJ: Files') {
                     cleanupCalled = true;
                 }
-                const mockEntity: Partial<BaseEntity> = {
+                return {
                     async Load() { return true; },
                     async Delete() { return true; },
-                };
-                return mockEntity as BaseEntity;
+                } as unknown as BaseEntity;
             },
         };
-        const provider = providerMock as IMetadataProvider;
+        const provider = providerMock as unknown as IMetadataProvider;
 
         const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
         Object.defineProperties(item, {
@@ -273,4 +280,109 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }
     });
+
+    it('Delete() preserves file and skips cleanup when count query fails', async () => {
+        let cleanupCalled = false;
+        const providerMock = {
+            EntityByName(name: string) {
+                if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
+                return undefined;
+            },
+            EntityByID(id: string) {
+                if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
+                return undefined;
+            },
+            async RunView() {
+                return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
+            },
+            async RunViews() {
+                return [{ Success: false, ErrorMessage: 'Database connection failed', Results: [] }];
+            },
+            async GetEntityObject(entityName: string) {
+                if (entityName === 'MJ: Files') {
+                    cleanupCalled = true;
+                }
+                return {
+                    async Load() { return true; },
+                    async Delete() { return true; },
+                } as unknown as BaseEntity;
+            },
+        };
+        const provider = providerMock as unknown as IMetadataProvider;
+
+        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
+        Object.defineProperties(item, {
+            ID: { value: 'item-1', writable: true },
+            EntityID: { value: FILES_ENTITY_ID, writable: true },
+            RecordID: { value: `ID|${FILE_ID}`, writable: true },
+            ProviderToUse: { value: provider, writable: true },
+            ContextCurrentUser: { value: user, writable: true },
+        });
+
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, true);
+            assert.equal(cleanupCalled, false, 'File cleanup must NOT run when count query fails');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() skips cleanup when file record id is unparseable', async () => {
+        let cleanupCalled = false;
+        const providerMock = {
+            EntityByName(name: string) {
+                if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
+                return undefined;
+            },
+            EntityByID(id: string) {
+                if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
+                return undefined;
+            },
+            async RunView() {
+                return { Success: true, Results: [] };
+            },
+            async RunViews() {
+                return [{ Success: true, Results: [] }];
+            },
+            async GetEntityObject(entityName: string) {
+                if (entityName === 'MJ: Files') {
+                    cleanupCalled = true;
+                }
+                return {
+                    async Load() { return true; },
+                    async Delete() { return true; },
+                } as unknown as BaseEntity;
+            },
+        };
+        const provider = providerMock as unknown as IMetadataProvider;
+
+        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
+        Object.defineProperties(item, {
+            ID: { value: 'item-1', writable: true },
+            EntityID: { value: FILES_ENTITY_ID, writable: true },
+            RecordID: { value: "invalid'quote--id", writable: true },
+            ProviderToUse: { value: provider, writable: true },
+            ContextCurrentUser: { value: user, writable: true },
+        });
+
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, true);
+            assert.equal(cleanupCalled, false, 'File cleanup must NOT run when RecordID is not a valid UUID');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
 });
+

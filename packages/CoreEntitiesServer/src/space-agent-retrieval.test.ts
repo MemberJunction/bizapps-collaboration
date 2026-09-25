@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { WellKnownUserSource, type BaseEntity, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import {
+    WellKnownUserSource,
+    type BaseEntity,
+    type EntityInfo,
+    type IMetadataProvider,
+    type IRunViewProvider,
+    type RunViewParams,
+    type UserInfo,
+} from '@memberjunction/core';
 import { resolveSpaceAgentRetrieval } from '../dist/space-agent-retrieval.js';
 
 const ROOT_SPACE_ID = 'AAAAAAAA-1111-4000-8000-000000000001';
@@ -140,35 +148,36 @@ const targetRecords: Record<string, { Name: string; Description: string }> = {
 };
 
 function createMockProvider(): IMetadataProvider {
-    const mockProvider: Partial<IMetadataProvider> = {
+    const mockProvider = {
         async GetEntityObject() {
             return {
-                RunViewProviderToUse: mockProvider,
-                ProviderToUse: mockProvider,
+                RunViewProviderToUse: mockProvider as unknown as IRunViewProvider,
+                ProviderToUse: mockProvider as unknown as IMetadataProvider,
             } as unknown as BaseEntity;
         },
-        EntityByID(id: string) {
+        EntityByID(id: string): EntityInfo | undefined {
             if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) {
-                return { Name: 'MJ_BizApps_Collaboration: Space Files' };
+                return { Name: 'MJ_BizApps_Collaboration: Space Files' } as Partial<EntityInfo> as EntityInfo;
             }
-            return null;
+            return undefined;
         },
         async RunView(params: RunViewParams) {
             const results = runSingleView(params);
-            return { Success: true, Results: results, ErrorMessage: '' };
+            return { Success: true, Results: results, ErrorMessage: '', RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0 };
         },
         async RunViews(params: RunViewParams[]) {
             return params.map((p) => {
                 const results = runSingleView(p);
-                return { Success: true, Results: results, ErrorMessage: '' };
+                return { Success: true, Results: results, ErrorMessage: '', RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0 };
             });
         },
     };
-    return mockProvider as IMetadataProvider;
+    return mockProvider as unknown as IMetadataProvider;
 }
 
-function runSingleView(params: RunViewParams): unknown[] {
+function runSingleView(params: RunViewParams): Record<string, unknown>[] {
     const { EntityName, ExtraFilter } = params;
+    const filter = typeof ExtraFilter === 'string' ? ExtraFilter : (ExtraFilter ? String(ExtraFilter) : '');
     if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
         return spacesData;
     }
@@ -176,7 +185,6 @@ function runSingleView(params: RunViewParams): unknown[] {
         return rolesData;
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
-        const filter = ExtraFilter ?? '';
         return membersData.filter((m) => {
             if (filter.includes('UserID')) {
                 const match = filter.match(/UserID\s*=\s*'([^']+)'/i);
@@ -186,7 +194,6 @@ function runSingleView(params: RunViewParams): unknown[] {
         });
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
-        const filter = ExtraFilter ?? '';
         return itemsData.filter((item) => {
             if (filter.includes('SpaceID IN')) {
                 return filter.toLowerCase().includes(item.SpaceID.toLowerCase());
@@ -195,8 +202,7 @@ function runSingleView(params: RunViewParams): unknown[] {
         });
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Files') {
-        const filter = ExtraFilter ?? '';
-        const matching: unknown[] = [];
+        const matching: Record<string, unknown>[] = [];
         for (const [id, rec] of Object.entries(targetRecords)) {
             if (filter.toLowerCase().includes(id.toLowerCase())) {
                 matching.push({ ID: id, Name: rec.Name, Description: rec.Description });

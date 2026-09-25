@@ -175,7 +175,7 @@ const checks: NamedCheck[] = [
             Assert(explanations.length === 1, 'ExplainScope returned 1 explanation');
             const scopeExp = explanations[0];
             Assert(scopeExp.ScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Scope explanation matches ScopeID');
-            Assert(scopeExp.Entitlement?.Allowed === true, 'Entitlement.Allowed is true');
+            Assert(scopeExp.Entitlement?.Allowed === true, `Entitlement.Allowed is true (saw ${JSON.stringify(scopeExp.Entitlement)})`);
 
             const spaceDim = scopeExp.Dimensions.find((d) => d.Name === 'SpaceID');
             Assert(!!spaceDim && spaceDim.Value !== null, 'SpaceID dimension is explained');

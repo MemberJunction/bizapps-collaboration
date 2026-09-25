@@ -5,7 +5,11 @@ import { FileStorageEngine } from '@memberjunction/storage';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
-import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import {
+    mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+} from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
@@ -125,17 +129,55 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const filesEntity = provider?.EntityByName('MJ: Files');
         const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
         const rawRecId = this.RecordID;
-        const fileId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+        const rawId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+        const parsedFileId = rawId ? parseUuid(rawId) : null;
         const currentItemId = this.ID;
+
+        if (currentItemId && provider) {
+            try {
+                const system = await requireSystemUser(this);
+                const rv = RunView.FromMetadataProvider(provider);
+                const uses = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Item Uses',
+                    ExtraFilter: `ItemID = '${currentItemId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                }, system);
+                if (uses?.Success && uses.Results) {
+                    for (const u of uses.Results) {
+                        const useEntity = await provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', system);
+                        if (await useEntity.Load(u.ID)) {
+                            await useEntity.Delete();
+                        }
+                    }
+                }
+                const notices = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Share Notices',
+                    ExtraFilter: `ItemID = '${currentItemId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                }, system);
+                if (notices?.Success && notices.Results) {
+                    for (const n of notices.Results) {
+                        const noticeEntity = await provider.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', system);
+                        if (await noticeEntity.Load(n.ID)) {
+                            await noticeEntity.Delete();
+                        }
+                    }
+                }
+            } catch (error) {
+                LogError(`Space item reference cleanup: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
 
         const ok = await super.Delete(options);
         if (!ok) return false;
 
-        if (fileId && provider && filesEntity) {
+        if (parsedFileId && provider && filesEntity) {
             try {
                 const system = await requireSystemUser(this);
                 const rv = RunView.FromMetadataProvider(provider);
-                const recIdFilter = `(RecordID = '${rawRecId}' OR RecordID = 'ID|${fileId}' OR RecordID = '${fileId}')`;
+                const recIdFilter = `(RecordID = 'ID|${parsedFileId}' OR RecordID = '${parsedFileId}')`;
                 const otherItemsRes = await rv.RunView<{ ID: string }>({
                     EntityName: ENTITY,
                     ExtraFilter: `EntityID = '${filesEntity.ID}' AND ${recIdFilter} AND ID <> '${currentItemId}'`,
@@ -143,9 +185,14 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                     ResultType: 'simple',
                 }, system);
 
-                const remainingCount = (otherItemsRes?.Success && otherItemsRes.Results) ? otherItemsRes.Results.length : 0;
+                if (!otherItemsRes || !otherItemsRes.Success) {
+                    LogError(`Space item file count query failed for ${parsedFileId}: ${otherItemsRes?.ErrorMessage ?? 'RunView failed'}`);
+                    return ok;
+                }
+
+                const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
                 if (remainingCount === 0) {
-                    await cleanupStoredItemFile(provider, system, fileId);
+                    await cleanupStoredItemFile(provider, system, parsedFileId);
                 }
             } catch (error) {
                 LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);

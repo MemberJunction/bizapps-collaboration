@@ -227,8 +227,9 @@ export async function loadWorld(): Promise<void> {
 
     const saveSpace = async (space: Row) => {
         const typeId = requireMap(types, space.Type, 'space type');
-        const owner = actor(space.Owner);
-        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, owner);
+        const parentSpace = space.Parent ? spaceRows.find((item) => item.Key === space.Parent) : null;
+        const creator = parentSpace ? actor(parentSpace.Owner) : actor(space.Owner);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, creator);
         const existing = await findId(provider, SPACES, `ID = '${space.ID}'`, system);
         if (existing) {
             if (!(await record.Load(existing))) throw new Error(`Could not load space ${space.Key}.`);

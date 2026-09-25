@@ -23,6 +23,10 @@ const checks: NamedCheck[] = [
                 Folder: 'Briefs',
             });
             Assert(!emptyRes.Success, 'Empty file must be refused over the wire');
+            Assert(
+                (emptyRes.ErrorMessage ?? '').toLowerCase().includes('empty'),
+                `Error message should state file is empty: ${emptyRes.ErrorMessage ?? ''}`,
+            );
 
             // 2. Over size cap refused (10MB + 1 byte)
             const overCapBuffer = Buffer.alloc(10 * 1024 * 1024 + 1);
@@ -33,6 +37,10 @@ const checks: NamedCheck[] = [
                 Folder: 'Briefs',
             });
             Assert(!overCapRes.Success, 'File over 10MB size cap must be refused over the wire');
+            Assert(
+                (overCapRes.ErrorMessage ?? '').toLowerCase().includes('limited to'),
+                `Error message should state the size limit: ${overCapRes.ErrorMessage ?? ''}`,
+            );
 
             // 3. Valid upload succeeds
             const validRes = await client.uploadSpaceFile({

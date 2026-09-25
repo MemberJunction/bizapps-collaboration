@@ -11,7 +11,7 @@ import {
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { FILE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
-import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile } from '../world/local-storage-account.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
@@ -72,6 +72,9 @@ const checks: NamedCheck[] = [
             Assert(!!storagePath, 'File row has storage path');
             if (!storagePath) throw new Error('File row has storage path');
 
+            // Assert stored object exists before delete
+            Assert(await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath), 'Stored file object exists before delete');
+
             // Delete the space item
             const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
             Assert(await item.Load(itemId), 'Load created space item');
@@ -84,12 +87,7 @@ const checks: NamedCheck[] = [
             Assert(!fileRowExists, 'MJ: Files row must be deleted after Space Item delete');
 
             // Assert stored object is gone
-            let objectStillExists = true;
-            try {
-                await readStoredFile(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath);
-            } catch {
-                objectStillExists = false;
-            }
+            const objectStillExists = await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath);
             Assert(!objectStillExists, 'Stored file object must be removed after Space Item delete');
         },
     },
@@ -128,19 +126,25 @@ const checks: NamedCheck[] = [
             Assert(!!storagePath, 'File row has storage path');
             if (!storagePath) throw new Error('File row has storage path');
 
+            // Assert stored object exists before delete
+            Assert(await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath), 'Stored file object exists before delete');
+
             // Create a second space item pointing to the same file
             // Using raw RecordID without ID| prefix so that it satisfies unique constraint while pointing to fileId
             const filesEntity = ctx.Provider.EntityByName(FILE_ENTITY);
             Assert(!!filesEntity, 'MJ: Files entity found');
             if (!filesEntity) throw new Error('MJ: Files entity found');
 
+            const itemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
+            Assert(!!itemsEntity, 'Space Items entity found');
+            if (!itemsEntity) throw new Error('Space Items entity found');
+
             const secondItemId = randomUUID();
             createdItemIds.push(secondItemId);
 
-            const appSchema = `${ctx.Schema || '__mj'}_BizAppsCollaboration`;
             if (ctx.Pool) {
                 await ctx.Pool.request().query(`
-                    INSERT INTO [${appSchema}].[SpaceItem]
+                    INSERT INTO [${itemsEntity.SchemaName}].[${itemsEntity.BaseTable}]
                     (ID, SpaceID, EntityID, RecordID, Band, PromotedAt, PromotedByUserID)
                     VALUES ('${secondItemId}', '${DISCOVERY_SPACE_ID}', '${filesEntity.ID}', '${fileId}', 'Shared', GETUTCDATE(), '${ctx.User.ID}')
                 `);
@@ -153,7 +157,8 @@ const checks: NamedCheck[] = [
                 secondItem.Band = 'Shared';
                 vouchStoredFile(secondItem);
                 try {
-                    await secondItem.Save();
+                    const saved = await secondItem.Save();
+                    Assert(saved === true, `Second item save failed: ${secondItem.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
                 } finally {
                     releaseStoredFile(secondItem);
                 }
@@ -175,13 +180,7 @@ const checks: NamedCheck[] = [
             Assert(fileRowStays === true, 'MJ: Files row must STAY when second Space Item still points to it');
 
             // Assert stored object STILL exists
-            let objectStays = false;
-            try {
-                const bytes = await readStoredFile(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath);
-                objectStays = bytes.length > 0;
-            } catch {
-                objectStays = false;
-            }
+            const objectStays = await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath);
             Assert(objectStays === true, 'Stored object must STAY when second Space Item still points to it');
 
             // 2. Delete the second item — now the file should be cleaned up!
@@ -194,12 +193,7 @@ const checks: NamedCheck[] = [
             Assert(fileRowGone === true, 'MJ: Files row must be DELETED after last Space Item is deleted');
 
             // Assert stored object is now gone
-            let objectGone = false;
-            try {
-                await readStoredFile(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath);
-            } catch {
-                objectGone = true;
-            }
+            const objectGone = !(await storedFileExists(ctx.Provider, ctx.User, COLLABORATION_STORAGE_ACCOUNT_ID, storagePath));
             Assert(objectGone === true, 'Stored object must be REMOVED after last Space Item is deleted');
         },
     },
@@ -209,16 +203,20 @@ for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {
+        const errors: string[] = [];
         while (createdItemIds.length > 0) {
             const id = createdItemIds.pop();
             if (id) {
                 try {
                     const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
                     if (await item.Load(id)) {
-                        await item.Delete();
+                        const deleted = await item.Delete();
+                        if (!deleted) {
+                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
-                } catch {
-                    // ignore teardown error
+                } catch (e) {
+                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
         }
@@ -228,12 +226,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
                 try {
                     const file = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
                     if (await file.Load(fid)) {
-                        await file.Delete();
+                        const deleted = await file.Delete();
+                        if (!deleted) {
+                            errors.push(`Failed to delete File ${fid}: ${file.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
-                } catch {
-                    // ignore teardown error
+                } catch (e) {
+                    errors.push(`Error deleting File ${fid}: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
+        }
+        if (errors.length > 0) {
+            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
         }
     },
 });
