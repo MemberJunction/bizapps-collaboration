@@ -5,3 +5,4 @@ codegen.output.log
 node_modules/
 dist/
 .local-storage/
+integration-*.log

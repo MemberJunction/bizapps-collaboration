@@ -16,7 +16,9 @@
   },
   "scripts": {
     "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/CoreEntitiesServer/src/task-space.test.ts packages/CoreEntitiesServer/src/space-entity-server.test.ts packages/CoreEntitiesServer/src/space-agent-retrieval.test.ts && pnpm --filter @mj-biz-apps/collaboration-integration-tests test",
-    "test:integration": "node test-harnesses/integration.mjs | node scripts/assert-check-count.mjs",
+    "test:integration": "node test-harnesses/integration.mjs > integration-server.log 2>&1 && node scripts/assert-check-count.mjs integration-server.log && node test-harnesses/integration-client.mjs > integration-client.log 2>&1 && node scripts/assert-check-count.mjs integration-client.log",
+    "test:integration:server": "node test-harnesses/integration.mjs > integration-server.log 2>&1 && node scripts/assert-check-count.mjs integration-server.log",
+    "test:integration:client": "node test-harnesses/integration-client.mjs > integration-client.log 2>&1 && node scripts/assert-check-count.mjs integration-client.log",
     "build": "pnpm --filter \"./packages/*\" run build",
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
     "mj:push": "mj sync push"
