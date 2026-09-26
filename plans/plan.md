@@ -105,16 +105,18 @@ At `b539790`, reviewed in round 94:
 - **Round 97 found** that the Explorer resource still reads nothing it shows, that RM5's new sub-space check saves a file item the file gate refuses, that frames 03 and 04 got worse while CI's budgets rose to 145,000 and 245,000, and that frame 04's dialog is taller than the screen in Explorer.
 - **`86b48c1` answered round 97** (216 unit tests): the flagged-phrase highlight on the frame's values, which brought frames 03 and 04 down to 115,561 and 190,240 pixels on CI; RM5's sub-space case rebuilt on an uploaded file, with both halves and a checked delete; WG3's exact reasons; and the widgets' own 14px base size. CI's budgets went to 41,500, 130,000 and 200,000.
 - **Round 98 found** that the Explorer resource still reads nothing it shows; that three text sizes are wrong (an invalid `.fs12.5` selector, the note box cut to 62px where the frame's is 80px, and MJ's global `p` rule reaching the drawer's preview in Explorer); that frame 04's dialog is still taller than the space it opens in; and that CI's budgets sit thousands of pixels above CI's counts, with frame 04's count varying between runs.
+- **`42569e2` answered round 98** (216 unit tests): the three text sizes (the class renamed `fs12-5`, the note box at 80px, and the drawer's paragraphs set to 10.5px against MJ's global `p` rule), and a maximum height for frame 04's dialog inside the host. CI measures the frames at 34,188, 114,954 and 82,115 pixels, frame 04 now repeats, and the budgets went to 40,234, 115,661 and 100,000.
+- **Round 99 found** that the Explorer resource still reads nothing it shows, and that slice A's widgets draw their own copies of the MJ components the UI plan's § 6 names: `mjButton`, `mj-dialog`, `mj-switch`, `mj-tab-nav`, `.mj-textarea` and `.mj-input`. That accounts for most of frame 04's count, and it leaves the toggle and the library's band control out of keyboard reach. The widgets' text is also black in Explorer, since their `:host` sets no color, and CI's budgets sit above the new counts again. MJ 6.1.3's `mj-dialog` caps its height at 90% of the window, so frame 04 either takes its differences or keeps its own dialog as a gap recorded in the UI plan.
 
 ### 2.3 PR #3's finish line
 
-PR #3 merges when everything here is done. It's round 98's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `86b48c1` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
+PR #3 merges when everything here is done. It's round 99's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `42569e2` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
 
 **Slice A:** frames 02, 03 and 04 ([the UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work)), passing in the gallery, with live Explorer shots of each in light and dark.
 - **Slice A's data lands in PR #3,** not in the next pull request: item versions, share checks and their findings (the UI plan's gap 7), items that hold a set of files (frame 03's 24 photos), the Milestone task type (gap 4, a `metadata/` row), and the columns frames 02 to 04 read.
 - It's being designed in PR #3's review now. Each shape is posted there before its migration, and the tables go into B0.7's baseline.
 - **The Explorer resource reads the viewer's real data** through `ProviderToUse` and the typed client, and the full-frame budgets go back to what CI measures once the frames match, as tight as frame 02's chrome, or just above a variation that can't be removed.
-- **The frames' text sizes** (round 98): the `.fs12.5` class, whose selector browsers drop; the note box at the frame's 80px; and the drawer's preview paragraphs, which MJ's global `p` rule sets to 16px in Explorer. Frame 04's dialog gets a maximum height inside the host.
+- **MJ's components** (round 99): the widgets use `mjButton`, `mj-switch`, `mj-tab-nav`, `.mj-textarea` and `.mj-input` where they now draw their own, and set their text color on `:host`. Frame 04's dialog is built on `mj-dialog`, unless a screenshot of both shows it can't draw the frame; then the local dialog stays, as a gap recorded in the UI plan. The frames' text sizes are fixed in `42569e2`, and frame 04's dialog has a maximum height inside the host.
 - **Every new user gets the app:** `DefaultForNewUser` is true (D13).
 
 **B0: the fixes to PR #3's own code.**
@@ -164,7 +166,7 @@ PR #3 merges when everything here is done. It's round 98's list: slice A, v0.3's
     - **Done:** PascalCase inputs and `…Requested` events; type colors from `SpaceType.Color`, which the gallery's fixture keeps in one map; CI's chrome budget at 100 pixels; and diffs uploaded as a CI artifact, since the spec writes only to `e2e/test-results/`.
     - **`no-access.component.ts` stays.** The old file was deleted with the old UI in `77b36f4` and written again as the new `mjc-no-access`, on MJ's `mj-empty-state`, in `0c7096a`.
     - **The tokens, done in `002c2c5`:** they're defined on each widget's own `:host` from MJ's tokens (`COLLAB_TOKENS_CSS`, listed first in each component's `styles`), `--mjc-warn-bg` and `--mjc-warn-text` included, and the token check covers `--mjc-*` tokens. Until then nothing in a host defined them, so the band chip and the avatar rings drew their hex fallbacks in Explorer, dark mode included.
-    - **Left (round 98):** remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (102 at `86b48c1`, including the ones `COLLAB_TOKENS_CSS` gives each token); keep one source for the tokens, since `_tokens.scss` is a second copy that nothing includes; and drop the gallery's own copy at `:root` in `bundle.mjs`, so the gallery draws what a host draws.
+    - **Left (round 99):** remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (102 at `42569e2`, including the ones `COLLAB_TOKENS_CSS` gives each token), and the five widgets' `color: #fff`, which becomes `var(--mj-text-inverse)`; keep one source for the tokens, since `_tokens.scss` is a second copy that nothing includes; and drop the gallery's own copy at `:root` in `bundle.mjs`, so the gallery draws what a host draws.
 11. **B0.11. Take the committee specifics out** (task 7's removal half, and the UI plan's gap 10). Partly done in `002c2c5`: the row is out of `metadata/space-types/`, the world has its own type, and the loader no longer looks for `committee`. `GovernancePanel` is left, for B0.7, and `phase0-seed.sql` falls back to the Workspace type silently.
     - `SpaceType.GovernancePanel` leaves the baseline, with its default and extended property, and the regenerated CodeGen output.
     - The `committee` row leaves `metadata/space-types/`. Its ID, `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`, is the one Committees ships in its own metadata (C1), so nothing here reuses it.
@@ -182,9 +184,9 @@ PR #3 merges when everything here is done. It's round 98's list: slice A, v0.3's
 - **Task 16,** the smoke suite and the tour, on slice A's screens.
 - **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour.
 
-**The order to work it** (round 98's):
-1. The three text sizes, then CI's budgets, with frame 04's count made to repeat.
-2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the dialog's maximum height in Explorer, the widget fixes, the frames within tight budgets, and new live shots.
+**The order to work it** (round 99's):
+1. MJ's components in the widgets, then CI's budgets.
+2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the widgets' text color, the widget fixes, the frames within tight budgets, and new live shots.
 3. Task 5's coverage for PR #3's gates, RM5's cleanup and the suites' tallies, with task 2's leftovers.
 4. B0.7's squash, then task 1's rebuild from empty.
 5. B0.5, B0.8, B0.10 and B0.11.
