@@ -59,11 +59,14 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             return fail(result, 'SpaceRoleTypeID', 'Invite refused: that role does not exist.');
         }
         const occupied = this.IsSaved && previous && previous !== 'Removed' ? Math.max(0, context.memberCount - 1) : context.memberCount;
+        const currentRoleId = this.IsSaved ? parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceRoleTypeID')?.OldValue ?? roleId)) : null;
+        const currentRole = currentRoleId ? context.roles.get(currentRoleId) ?? null : null;
         const decision = refuseInvite({
             callerUserId: caller,
             inviteeUserId: invitee,
             targetSpaceId: spaceId,
             granted: context.role,
+            currentRole,
             approval: context.approval,
             memberCap: context.memberCap,
             occupied,

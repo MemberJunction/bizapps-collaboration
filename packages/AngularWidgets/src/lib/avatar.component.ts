@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { avatarColorClass } from '@mj-biz-apps/collaboration-core';
+import type { AvatarItem } from './types';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -10,15 +11,15 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   imports: [CommonModule],
   template: `
     <span
-      class="av {{ computedColorClass }} {{ Size }} {{ IsOutside ? 'ext' : '' }}"
-      [attr.title]="Name || null"
-      [attr.aria-label]="Name || Initials">
-      @if (AvatarUrl) {
-        <img [src]="AvatarUrl" [alt]="Name || Initials" class="av-img" />
+      class="av {{ computedColorClass }} {{ Size }} {{ isOutside ? 'ext' : '' }}"
+      [attr.title]="name || null"
+      [attr.aria-label]="name || initials">
+      @if (avatarUrl) {
+        <img [src]="avatarUrl" [alt]="name || initials" class="av-img" />
       } @else {
-        {{ Initials }}
+        {{ initials }}
       }
-      @if (IsOnline) {
+      @if (isOnline) {
         <span class="presence"></span>
       }
     </span>
@@ -89,25 +90,50 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   `]
 })
 export class CollabAvatarComponent {
-  @Input() Initials = '';
-  @Input() Name = '';
-  @Input() AvatarUrl = '';
-  @Input() ColorClass = '';
-  @Input() PersonId = '';
-  @Input() Size: AvatarSize = 'md';
-  @Input() IsOutside = false;
-  @Input() IsOnline = false;
+  @Input() public Avatar?: AvatarItem;
+  @Input() public Initials = '';
+  @Input() public Name = '';
+  @Input() public AvatarUrl = '';
+  @Input() public ColorClass = '';
+  @Input() public PersonId = '';
+  @Input() public Size: AvatarSize = 'md';
+  @Input() public IsOutside = false;
+  @Input() public IsOnline = false;
 
-  get computedColorClass(): string {
-    if (this.ColorClass) {
-      return this.ColorClass;
+  public get initials(): string {
+    return this.Avatar?.initials || this.Initials;
+  }
+
+  public get name(): string {
+    return this.Avatar?.name || this.Name;
+  }
+
+  public get avatarUrl(): string {
+    return this.Avatar?.avatarUrl || this.AvatarUrl;
+  }
+
+  public get isOutside(): boolean {
+    return this.Avatar?.isOutside ?? this.IsOutside;
+  }
+
+  public get isOnline(): boolean {
+    return this.Avatar?.isOnline ?? this.IsOnline;
+  }
+
+  public get computedColorClass(): string {
+    const cc = this.Avatar?.colorClass || this.ColorClass;
+    if (cc) {
+      return cc;
     }
-    if (this.PersonId) {
-      return avatarColorClass(this.PersonId);
+    const pid = this.Avatar?.id || this.PersonId;
+    if (pid) {
+      return avatarColorClass(pid);
     }
-    if (this.Name) {
-      return avatarColorClass(this.Name);
+    const n = this.name;
+    if (n) {
+      return avatarColorClass(n);
     }
     return 'c1';
   }
 }
+

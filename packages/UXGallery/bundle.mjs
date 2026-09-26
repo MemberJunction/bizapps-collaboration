@@ -7,6 +7,17 @@ import { createRequire } from 'node:module';
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
+const dedupeAngularPlugin = {
+    name: 'dedupe-angular',
+    setup(build) {
+        build.onResolve({ filter: /^@angular\/(core|common|forms|router|platform-browser)($|\/)/ }, (args) => {
+            return {
+                path: require.resolve(args.path, { paths: [join(here, 'node_modules')] }),
+            };
+        });
+    },
+};
+
 export async function bundleGalleryApp() {
     // 1. Bundle Angular application
     await build({
@@ -16,6 +27,7 @@ export async function bundleGalleryApp() {
         format: 'esm',
         target: 'es2022',
         sourcemap: true,
+        plugins: [dedupeAngularPlugin],
         define: {
             'ngDevMode': 'false',
         },
@@ -69,13 +81,18 @@ export async function bundleGalleryApp() {
 html, body {
   margin: 0;
   padding: 0;
+}
+body {
   width: 1440px;
   height: 900px;
   overflow: hidden;
   font-family: var(--mj-font-family, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 14px;
+  line-height: 1.45;
   background: var(--mj-bg-page, #ffffff);
   color: var(--mj-text-primary, #0f172a);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
 }
 `;
 

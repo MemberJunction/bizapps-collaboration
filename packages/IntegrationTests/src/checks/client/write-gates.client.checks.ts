@@ -11,10 +11,12 @@ import {
     SPACE_MEMBER_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_TYPE_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
     SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
     TASK_ENTITY,
 } from '../../entity-names.js';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import { FindRows, getPersonaContext } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
@@ -164,6 +166,52 @@ const checks: NamedCheck[] = [
                 strandReason.includes('last owner of this space'),
                 `Expected last owner message, got: ${strandReason}`,
             );
+
+            // 3. B0.1: Casey (client-admin on Northwind, ceiling 10) removing Sam (member, level 20) is refused; Ada (owner) removing Sam succeeds over the wire
+            const caseyCtx = await getPersonaContext(ctx, 'casey');
+            const samCtx = await getPersonaContext(ctx, 'sam');
+
+            const samSeats = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_MEMBER_ENTITY,
+                `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${samCtx.User.ID}'`,
+                ['ID'],
+            );
+            Assert(samSeats.length === 1, 'Sam seat found on Northwind');
+            const samSeatId = samSeats[0].ID;
+            // 3. B0.1: Casey (client-admin on Northwind, ceiling 10) sets Sam's seat (member, level 20) to client-member and Removed
+            const clientMemberRoles = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_ROLE_TYPE_ENTITY,
+                "Code = 'client-member'",
+                ['ID'],
+            );
+            Assert(clientMemberRoles.length === 1, 'client-member role found');
+            const clientMemberRoleId = clientMemberRoles[0].ID;
+
+            const caseyMember = await caseyCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, caseyCtx.User);
+            Assert(await caseyMember.Load(samSeatId), 'Load Sam seat as Casey');
+            caseyMember.SpaceRoleTypeID = clientMemberRoleId;
+            caseyMember.Status = 'Removed';
+            const savedCaseyRemove = await caseyMember.Save();
+            Assert(!savedCaseyRemove, 'Casey removing Sam must fail save over the wire due to role ceiling');
+            const caseyReason = caseyMember.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                caseyReason.includes('Invite refused: that role is above the level this member may grant.'),
+                `Expected exact role ceiling refusal message over the wire, got: ${caseyReason}`,
+            );
+
+            // Ada (owner, ceiling >= 20) removes Sam
+            const adaSamMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+            Assert(await adaSamMember.Load(samSeatId), 'Load Sam seat as Ada');
+            adaSamMember.Status = 'Removed';
+            const savedAdaRemove = await adaSamMember.Save();
+            Assert(savedAdaRemove, `Ada removing Sam must succeed over the wire, got error: ${adaSamMember.LatestResult?.CompleteMessage ?? ''}`);
+
+            // Undo: Revert Sam back to Active
+            adaSamMember.Status = 'Active';
+            const revertedSam = await adaSamMember.Save();
+            Assert(revertedSam, `Reverting Sam back to Active must succeed over the wire: ${adaSamMember.LatestResult?.CompleteMessage ?? ''}`);
         },
     },
     {
@@ -219,6 +267,85 @@ const checks: NamedCheck[] = [
                 harperReason.includes('Item change refused: the signer does not reach this space.'),
                 `Expected signer does not reach space refusal, got: ${harperReason}`,
             );
+
+            // 3. B0.3: Over the wire as participant Bea:
+            // - a subtask under a Team task is refused
+            // - a subtask under a task in a space she doesn't reach is refused
+            // - a subtask under a writable Shared task is accepted
+            const beaCtx = await getPersonaContext(ctx, 'bea');
+
+            // Find Discovery Shared task (e.g. Discovery plan)
+            const sharedTaskItems = await FindRows<{ RecordID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${taskEntity.ID}' AND Band = 'Shared'`,
+                ['RecordID'],
+            );
+            Assert(sharedTaskItems.length > 0, 'Discovery shared task item found');
+            const sharedTaskId = sharedTaskItems[0].RecordID.replace(/^ID\|/i, '');
+
+            // Find Discovery Team task (e.g. Internal prep)
+            const teamTaskItems = await FindRows<{ RecordID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${taskEntity.ID}' AND Band = 'Team'`,
+                ['RecordID'],
+            );
+            Assert(teamTaskItems.length > 0, 'Discovery team task item found');
+            const teamTaskId = teamTaskItems[0].RecordID.replace(/^ID\|/i, '');
+
+            // Find unreachable task in Committee space (C1000001-0000-4000-8000-000000000004)
+            const unreachableTaskItems = await FindRows<{ RecordID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = 'C1000001-0000-4000-8000-000000000004' AND EntityID = '${taskEntity.ID}'`,
+                ['RecordID'],
+            );
+            Assert(unreachableTaskItems.length > 0, 'Unreachable committee task item found');
+            const unreachableTaskId = unreachableTaskItems[0].RecordID.replace(/^ID\|/i, '');
+
+            // 3a. Bea creating a subtask under Team task is refused
+            const subUnderTeam = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, beaCtx.User);
+            subUnderTeam.NewRecord();
+            subUnderTeam.Name = 'Bea Subtask Under Team Task Wire';
+            subUnderTeam.ParentID = teamTaskId;
+            subUnderTeam.Status = 'Open';
+            const savedTeamSub = await subUnderTeam.Save();
+            Assert(!savedTeamSub, 'Bea creating subtask under Team task must fail save over the wire');
+            const teamSubReason = subUnderTeam.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                teamSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record'),
+                `Expected Access denied refusal for subtask under Team task over the wire, got: ${teamSubReason}`,
+            );
+
+            // 3b. Bea creating a subtask under unreachable task is refused
+            const subUnderUnreachable = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, beaCtx.User);
+            subUnderUnreachable.NewRecord();
+            subUnderUnreachable.Name = 'Bea Subtask Under Unreachable Task Wire';
+            subUnderUnreachable.ParentID = unreachableTaskId;
+            subUnderUnreachable.Status = 'Open';
+            const savedUnreachableSub = await subUnderUnreachable.Save();
+            Assert(!savedUnreachableSub, 'Bea creating subtask under unreachable space task must fail save over the wire');
+            const unreachableSubReason = subUnderUnreachable.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                unreachableSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record'),
+                `Expected Access denied refusal for subtask under unreachable task over the wire, got: ${unreachableSubReason}`,
+            );
+
+            // 3c. Bea creating a subtask under writable Shared task is accepted
+            const subUnderShared = await beaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, beaCtx.User);
+            subUnderShared.NewRecord();
+            subUnderShared.Name = 'Bea Subtask Under Shared Task Wire';
+            subUnderShared.ParentID = sharedTaskId;
+            subUnderShared.Status = 'Open';
+            const savedSharedSub = await subUnderShared.Save();
+            Assert(savedSharedSub, `Bea creating subtask under writable Shared task must succeed over the wire: ${subUnderShared.LatestResult?.CompleteMessage ?? ''}`);
+
+            // Cleanup created subtask
+            if (savedSharedSub && subUnderShared.ID) {
+                const deleted = await subUnderShared.Delete();
+                Assert(deleted, 'Cleanup of Bea subtask must succeed over the wire');
+            }
         },
     },
     {

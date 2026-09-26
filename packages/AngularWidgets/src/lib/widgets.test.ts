@@ -7,7 +7,21 @@ import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabAudiencePillComponent } from './audience-pill.component.ts';
 import { CollabSpaceTabsComponent } from './space-tabs.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
-import { RailSpaceNode } from './types.ts';
+import { CollabFileIconComponent } from './file-icon.component.ts';
+import { CollabItemCardComponent } from './item-card.component.ts';
+import { CollabItemRowComponent } from './item-row.component.ts';
+import { CollabAskBoxComponent } from './ask-box.component.ts';
+import { CollabNeedsYouCardComponent } from './needs-you-card.component.ts';
+import { CollabItemPreviewComponent } from './item-preview.component.ts';
+import { CollabShareCheckComponent } from './share-check.component.ts';
+import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
+import { CollabSpaceLibraryComponent } from './space-library.component.ts';
+import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import {
+  FindingModel,
+  LibraryRowModel,
+  RailSpaceNode,
+} from './types.ts';
 
 describe('CollabAvatarComponent', () => {
   it('uses explicit ColorClass when provided', () => {
@@ -274,3 +288,344 @@ describe('CollabSpaceRailComponent', () => {
     expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'discovery', 'fieldnotes', 'delivery', 'closed', 'committee']);
   });
 });
+
+describe('CollabFileIconComponent', () => {
+  it('computes correct icon classes for various file types', () => {
+    const comp = new CollabFileIconComponent();
+
+    comp.Kind = 'pdf';
+    expect(comp.iconClass).toBe('fa-solid fa-file-pdf');
+    expect(comp.kindClass).toBe('pdf sm');
+
+    comp.Kind = 'doc';
+    expect(comp.iconClass).toBe('fa-solid fa-file-word');
+
+    comp.Kind = 'xls';
+    expect(comp.iconClass).toBe('fa-solid fa-file-excel');
+
+    comp.Kind = 'ppt';
+    expect(comp.iconClass).toBe('fa-solid fa-file-powerpoint');
+
+    comp.Kind = 'img';
+    expect(comp.iconClass).toBe('fa-solid fa-images');
+
+    comp.Kind = 'txt';
+    expect(comp.iconClass).toBe('fa-solid fa-file-lines');
+
+    comp.Kind = 'zip';
+    expect(comp.iconClass).toBe('fa-solid fa-folder');
+
+    comp.Kind = 'unknown-type';
+    expect(comp.iconClass).toBe('fa-solid fa-file');
+  });
+});
+
+describe('CollabItemCardComponent', () => {
+  it('emits ItemSelectRequested when card is clicked', () => {
+    const comp = new CollabItemCardComponent();
+    let emitted = false;
+    comp.ItemSelectRequested.subscribe(() => {
+      emitted = true;
+    });
+
+    comp.onSelect();
+    expect(emitted).toBe(true);
+  });
+});
+
+describe('CollabItemRowComponent', () => {
+  it('emits RowSelectRequested when row is clicked', () => {
+    const comp = new CollabItemRowComponent();
+    let rowEmitted = false;
+    comp.RowSelectRequested.subscribe(() => {
+      rowEmitted = true;
+    });
+
+    comp.onSelect();
+    expect(rowEmitted).toBe(true);
+  });
+
+  it('emits ShareRequested and stops event propagation when share button is clicked', () => {
+    const comp = new CollabItemRowComponent();
+    let shareEmitted = false;
+    comp.ShareRequested.subscribe(() => {
+      shareEmitted = true;
+    });
+
+    let stopped = false;
+    const mockEvent = {
+      stopPropagation: () => {
+        stopped = true;
+      }
+    } as unknown as MouseEvent;
+
+    comp.onShareClick(mockEvent);
+    expect(stopped).toBe(true);
+    expect(shareEmitted).toBe(true);
+  });
+});
+
+describe('CollabAskBoxComponent', () => {
+  it('emits AskRequested when query is provided and clears query', () => {
+    const comp = new CollabAskBoxComponent();
+    let queryResult = '';
+    comp.AskRequested.subscribe(q => {
+      queryResult = q;
+    });
+
+    comp.Query = 'What is the readout schedule?';
+    comp.onSend();
+    expect(queryResult).toBe('What is the readout schedule?');
+    expect(comp.Query).toBe('');
+  });
+
+  it('selects suggestion and sends immediately', () => {
+    const comp = new CollabAskBoxComponent();
+    let queryResult = '';
+    comp.AskRequested.subscribe(q => {
+      queryResult = q;
+    });
+
+    comp.onSelectSuggestion('Draft this week’s note to Casey');
+    expect(queryResult).toBe('Draft this week’s note to Casey');
+  });
+});
+
+describe('CollabNeedsYouCardComponent', () => {
+  it('emits ActionRequested on action button click', () => {
+    const comp = new CollabNeedsYouCardComponent();
+    let actionEmitted = false;
+    comp.ActionRequested.subscribe(() => {
+      actionEmitted = true;
+    });
+
+    comp.onAction();
+    expect(actionEmitted).toBe(true);
+  });
+});
+
+describe('CollabItemPreviewComponent', () => {
+  it('emits CloseRequested and ShareRequested', () => {
+    const comp = new CollabItemPreviewComponent();
+    let closed = false;
+    let shared = false;
+
+    comp.CloseRequested.subscribe(() => {
+      closed = true;
+    });
+    comp.ShareRequested.subscribe(() => {
+      shared = true;
+    });
+
+    comp.onClose();
+    expect(closed).toBe(true);
+
+    comp.onShare();
+    expect(shared).toBe(true);
+  });
+
+  it('parses paragraphs with <mark> tags into marked and unmarked segments', () => {
+    const comp = new CollabItemPreviewComponent();
+    const paragraph = 'Hello <mark>world</mark> test';
+    const segments = comp.parseParagraph(paragraph);
+    expect(segments).toEqual([
+      { text: 'Hello ', isMarked: false },
+      { text: 'world', isMarked: true },
+      { text: ' test', isMarked: false },
+    ]);
+  });
+
+  it('parses recent use text with <b> tags into bold and non-bold parts', () => {
+    const comp = new CollabItemPreviewComponent();
+    const text = 'Saved by <b>Meridian team</b> for review';
+    const parts = comp.parseRecentUseText(text);
+    expect(parts).toEqual([
+      { text: 'Saved by ', isBold: false },
+      { text: 'Meridian team', isBold: true },
+      { text: ' for review', isBold: false },
+    ]);
+  });
+});
+
+describe('CollabShareCheckComponent', () => {
+  it('calculates pending count, formats quotation, and applies fix', () => {
+    const comp = new CollabShareCheckComponent();
+    const fix1: FindingModel = {
+      id: 'f1',
+      quotation: 'As the Dayton plant manager told us, tool is bad.',
+      originalPhrase: 'As the Dayton plant manager told us',
+      suggestedPhrase: 'as one plant leader told us',
+      status: 'Flagged',
+    };
+    const fix2: FindingModel = {
+      id: 'f2',
+      quotation: 'Jim in Finance described it.',
+      originalPhrase: 'Jim in Finance',
+      suggestedPhrase: 'a finance team member',
+      status: 'Flagged',
+    };
+
+    comp.Findings = [fix1, fix2];
+    expect(comp.pendingCount).toBe(2);
+    expect(comp.primaryButtonText).toBe('Apply 2 fixes and share');
+
+    const parts1 = comp.getQuotationParts(fix1);
+    expect(parts1.marked).toBe('As the Dayton plant manager told us');
+
+    let appliedFinding: FindingModel | null = null;
+    comp.ApplyFixRequested.subscribe(f => {
+      appliedFinding = f;
+    });
+
+    comp.onApplyFix(fix1);
+    expect(appliedFinding).toBe(fix1);
+    // Widget emits event without mutating finding directly
+    fix1.status = 'Applied';
+    expect(comp.pendingCount).toBe(1);
+
+    const partsApplied = comp.getQuotationParts(fix1);
+    expect(partsApplied.marked).toBe('as one plant leader told us');
+  });
+
+  it('emits ShareRequested with applyFixes true on onApplyAndShare', () => {
+    const comp = new CollabShareCheckComponent();
+    comp.Note = 'Test note';
+    comp.NotifyRecipients = true;
+
+    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    comp.ShareRequested.subscribe(r => {
+      result = r;
+    });
+
+    comp.onApplyAndShare();
+    expect(result).toEqual({ applyFixes: true, note: 'Test note', notify: true });
+  });
+
+  it('emits ShareRequested with applyFixes false on onShareAsIs', () => {
+    const comp = new CollabShareCheckComponent();
+    comp.Note = 'Raw note';
+    comp.NotifyRecipients = false;
+
+    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    comp.ShareRequested.subscribe(r => {
+      result = r;
+    });
+
+    comp.onShareAsIs();
+    expect(result).toEqual({ applyFixes: false, note: 'Raw note', notify: false });
+  });
+
+  it('emits CancelRequested on cancel', () => {
+    const comp = new CollabShareCheckComponent();
+    let cancelled = false;
+    comp.CancelRequested.subscribe(() => {
+      cancelled = true;
+    });
+
+    comp.onCancel();
+    expect(cancelled).toBe(true);
+  });
+});
+
+describe('CollabSpaceOverviewComponent', () => {
+  it('emits PreviewAsRequested with lowercased persona', () => {
+    const comp = new CollabSpaceOverviewComponent();
+    comp.ClientPersonaName = 'Casey';
+
+    let previewPersona = '';
+    comp.PreviewAsRequested.subscribe(p => {
+      previewPersona = p;
+    });
+    comp.onPreviewAsCasey();
+    expect(previewPersona).toBe('casey');
+  });
+
+  it('emits OpenLibraryRequested, OpenChatRequested, and NewSubSpaceRequested', () => {
+    const comp = new CollabSpaceOverviewComponent();
+    let libOpened = false;
+    let chatOpened = false;
+    let newSub = false;
+
+    comp.OpenLibraryRequested.subscribe(() => {
+      libOpened = true;
+    });
+    comp.OpenChatRequested.subscribe(() => {
+      chatOpened = true;
+    });
+    comp.NewSubSpaceRequested.subscribe(() => {
+      newSub = true;
+    });
+
+    comp.onOpenLibrary();
+    expect(libOpened).toBe(true);
+
+    comp.onOpenChat();
+    expect(chatOpened).toBe(true);
+
+    comp.onNewSubSpace();
+    expect(newSub).toBe(true);
+  });
+});
+
+describe('CollabSpaceLibraryComponent', () => {
+  it('filters rows correctly by band', () => {
+    const comp = new CollabSpaceLibraryComponent();
+    const rowShared: LibraryRowModel = { id: '1', kind: 'pdf', name: 'Readout', folder: 'Deliv', band: 'Shared', who: 'Ada', when: 'Sep 24' };
+    const rowTeam: LibraryRowModel = { id: '2', kind: 'doc', name: 'Synthesis', folder: 'Interviews', band: 'Team', who: 'Sam', when: '2h ago' };
+
+    comp.Rows = [rowShared, rowTeam];
+
+    comp.ActiveBandFilter = 'All';
+    expect(comp.FilteredRows.length).toBe(2);
+
+    comp.ActiveBandFilter = 'Shared';
+    expect(comp.FilteredRows).toEqual([rowShared]);
+
+    comp.ActiveBandFilter = 'Team';
+    expect(comp.FilteredRows).toEqual([rowTeam]);
+  });
+
+  it('selects row and opens drawer', () => {
+    const comp = new CollabSpaceLibraryComponent();
+    const row: LibraryRowModel = { id: '1', kind: 'pdf', name: 'Readout', folder: 'Deliv', band: 'Shared', who: 'Ada', when: 'Sep 24' };
+    comp.Rows = [row];
+
+    let emittedRow: LibraryRowModel | null = null;
+    comp.RowSelectRequested.subscribe(r => {
+      emittedRow = r;
+    });
+
+    comp.onSelectRow(row);
+    expect(comp.SelectedRowId).toBe('1');
+    expect(comp.ShowDrawer).toBe(true);
+    expect(emittedRow).toBe(row);
+
+    comp.onCloseDrawer();
+    expect(comp.ShowDrawer).toBe(false);
+  });
+});
+
+describe('CollabShareCheckDialogComponent', () => {
+  it('emits CancelRequested on onCancel', () => {
+    const comp = new CollabShareCheckDialogComponent();
+    let cancelled = false;
+    comp.CancelRequested.subscribe(() => {
+      cancelled = true;
+    });
+
+    comp.onCancel();
+    expect(cancelled).toBe(true);
+  });
+
+  it('emits ShareRequested on onShareRequested', () => {
+    const comp = new CollabShareCheckDialogComponent();
+    let payload: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    comp.ShareRequested.subscribe(p => {
+      payload = p;
+    });
+
+    comp.onShareRequested({ applyFixes: true, note: 'Done', notify: true });
+  });
+});
+
+

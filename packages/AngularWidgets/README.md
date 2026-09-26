@@ -9,7 +9,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 
 ## What's in it
 
-**Eight standalone widgets** (L1). Inputs are PascalCase, and every event is a request named `…Requested`, which the host decides whether to act on.
+**Widgets and Composites** (L1 and L2). Inputs are PascalCase, and every event is a request named `…Requested`, which the host decides whether to act on.
 
 | Selector | Class | What it draws |
 |---|---|---|
@@ -21,12 +21,18 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-space-header` | `CollabSpaceHeaderComponent` | The breadcrumb, type tile, title, type and status chips, and subtitle |
 | `mjc-space-tabs` | `CollabSpaceTabsComponent` | The space's tabs with counts, on MJ's tab list. Emits `TabSelectRequested`; the host sets `ActiveTab`. |
 | `mjc-space-rail` | `CollabSpaceRailComponent` | The left rail: nav, jump, and the space tree with keyboard access. Emits `NavSelectRequested`, `SpaceOpenRequested`, `SpaceToggleRequested`, `SpaceCreateRequested` and `JumpOpenRequested`. |
+| `mjc-file-icon` | `CollabFileIconComponent` | File type icon for PDF, Word, Excel, PowerPoint, Image, Text |
+| `mjc-item-card` | `CollabItemCardComponent` | Shared grid card with type icon, name, meta, audience avatar, and status |
+| `mjc-item-row` | `CollabItemRowComponent` | Library table row with type icon, name, version, band chip, share button, and menu |
+| `mjc-ask-box` | `CollabAskBoxComponent` | Room assistant input with suggestions and ask button |
+| `mjc-needs-you-card` | `CollabNeedsYouCardComponent` | Overview attention strip card for requests, reviews, and overdue tasks |
+| `mjc-item-preview` | `CollabItemPreviewComponent` | Right drawer preview with doc page snippet, marked text, audience stack, and recent uses |
+| `mjc-share-check` | `CollabShareCheckComponent` | Pre-share finding review panel with recipient cards and finding resolution controls |
+| `mjc-space-overview` | `CollabSpaceOverviewComponent` | Frame 02 Overview page composite (needs-you strip, cards grid, mini room, sub-spaces) |
+| `mjc-space-library` | `CollabSpaceLibraryComponent` | Frame 03 Library page composite (collections, files table, item preview drawer) |
+| `mjc-share-check-dialog` | `CollabShareCheckDialogComponent` | Frame 04 Share check modal dialog composite |
 
-**Types** (`src/lib/types.ts`): `AvatarItem`, `TabItem`, `BreadcrumbItem`, `RailSpaceNode` and `SpaceBand`.
-
-**Two extension base classes** for other apps to extend: `BaseSpaceTab` (inputs `SpaceId`, `SpaceTypeCode` and `Sequence`) and `BaseSpaceOverviewCard` (`SpaceId` and `Sequence`).
-
-**Tokens** (`src/lib/_tokens.scss`): the app's `--mjc-*` tokens (the Shared and Team colors, the Assistant's gradient, the widgets' line height and font features), each an expression of an MJ semantic token, in a mixin applied at `:host`. A space type's color is data: it comes in through an input, not from a stylesheet.
+**Tokens** (`src/lib/tokens.ts` and `src/lib/_tokens.scss`): the app's `--mjc-*` tokens (the Shared and Team colors, the Assistant's gradient, warning colors, line height and font features), each an expression of an MJ semantic token. `COLLAB_TOKENS_CSS` is exported and bound to `:host` in every widget's styles, ensuring tokens resolve in any host environment.
 
 ## Build and test
 
@@ -35,10 +41,5 @@ pnpm --filter @mj-biz-apps/collaboration-ng-widgets run build
 pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
 ```
 
-The build is `ngc`, into `dist/`. The tests use Vitest: 17 tests in `widgets.test.ts`, which exercise the component classes without rendering them. The root `pnpm test` runs them too. The UX gallery renders the widgets for the visual test.
+The build is `ngc`, into `dist/`. The tests use Vitest: 37 tests in `widgets.test.ts`, which exercise the component classes without rendering them. The root `pnpm test` runs them too. The UX gallery renders the widgets for the visual test.
 
-## Not done yet
-
-- **The L2 composites,** which load data through `ProviderToUse` and emit intent: `mjc-space-page`, `mjc-space-overview`, `mjc-space-library` and `mjc-share-check-dialog` come with slice A of [the UI plan](../../docs/ux/IMPLEMENTATION_PLAN.md), with the widgets they need.
-- **The extension classes** aren't loaded by any code yet. The [extensibility plan](../../docs/EXTENSIBILITY_PLAN.md) replaces them.
-- **Nothing includes the tokens partial yet.** The widgets' styles are inline strings, and the package ships only `dist/`. So in any host but the UX gallery, the `--mjc-*` tokens are undefined, and the widgets draw their hex fallbacks, dark mode included. The gallery defines its own copy of the color tokens at `:root`.

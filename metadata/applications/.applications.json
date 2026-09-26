@@ -10,6 +10,9 @@
       "Name": "Collaboration",
       "Description": "Spaces for client, committee, and cohort work.",
       "Icon": "fa-solid fa-people-group",
+      "Path": "collaboration",
+      "DefaultForNewUser": true,
+      "Status": "Active",
       "DefaultNavItems": "[{\"Label\":\"Spaces\",\"Icon\":\"fa-solid fa-people-group\",\"ResourceType\":\"Custom\",\"DriverClass\":\"CollaborationSectionResource\",\"isDefault\":true}]"
     }
   }

@@ -1,4 +1,14 @@
-import type { TabItem, BreadcrumbItem, RailSpaceNode, AvatarItem } from '@mj-biz-apps/collaboration-ng-widgets';
+import type {
+    TabItem,
+    BreadcrumbItem,
+    RailSpaceNode,
+    AvatarItem,
+    NeedsYouItemModel,
+    ItemCardModel,
+    ItemRowModel,
+    RoomMiniMessage,
+    SubSpaceSummary,
+} from '@mj-biz-apps/collaboration-ng-widgets';
 
 export interface Frame02FixtureData {
     topbar: {
@@ -27,6 +37,11 @@ export interface Frame02FixtureData {
         tabs: TabItem[];
         activeTabId: string;
     };
+    needsYouItems: NeedsYouItemModel[];
+    sharedItems: ItemCardModel[];
+    teamItems: ItemRowModel[];
+    roomMessages: RoomMiniMessage[];
+    subSpaces: SubSpaceSummary[];
 }
 
 export const SPACE_TYPE_COLORS: Record<string, string> = {
@@ -90,4 +105,128 @@ export const FRAME_02_FIXTURE: Frame02FixtureData = {
         ],
         activeTabId: 'Overview',
     },
+    needsYouItems: [
+        {
+            id: 'need-1',
+            variant: 'blue',
+            iconClass: 'fa-solid fa-comment-dots',
+            title: 'Casey asked',
+            subtitle: 'Room · 12m ago',
+            actionLabel: 'Reply',
+        },
+        {
+            id: 'need-2',
+            variant: 'warn',
+            isSpark: true,
+            title: '2 names flagged',
+            subtitle: 'Synthesis v3',
+            actionLabel: 'Review',
+        },
+        {
+            id: 'need-3',
+            variant: 'red',
+            iconClass: 'fa-solid fa-clock',
+            title: 'Q2 extract is late',
+            subtitle: 'Bea · due Sep 24',
+            actionLabel: 'Nudge',
+        },
+    ],
+    sharedItems: [
+        {
+            id: 'sh-1',
+            kind: 'pdf',
+            title: 'Discovery readout — draft for review',
+            meta: 'PDF · v4 · 34 pages',
+            stamp: 'Shared by Ada · Sep 24',
+            openers: [
+                { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+                { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
+            ],
+        },
+        {
+            id: 'sh-2',
+            kind: 'pdf',
+            title: 'Current-state process map',
+            meta: 'PDF · v2 · 6 pages',
+            stamp: 'Shared by Ada · Sep 18',
+            citationCount: 6,
+        },
+        {
+            id: 'sh-3',
+            kind: 'img',
+            title: 'Site visit photos — Dayton',
+            meta: '24 photos',
+            stamp: 'Added by Bea · Sep 16',
+            isImage: true,
+            openers: [
+                { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+            ],
+        },
+    ],
+    teamItems: [
+        {
+            id: 'tm-1',
+            kind: 'doc',
+            title: 'Interview synthesis v3',
+            author: 'Sam Okafor',
+            timestamp: '2h ago',
+            flagCount: 2,
+            canShare: true,
+        },
+        {
+            id: 'tm-2',
+            kind: 'xls',
+            title: 'Vendor scoring model',
+            author: 'Priya Shah',
+            timestamp: 'yesterday',
+            statusLabel: 'In progress',
+            canShare: true,
+        },
+        {
+            id: 'tm-3',
+            kind: 'ppt',
+            title: 'Readout storyline',
+            author: 'Ada Lovell',
+            timestamp: 'Sep 23',
+            canShare: true,
+        },
+    ],
+    roomMessages: [
+        {
+            id: 'rm-1',
+            senderName: 'Casey Morgan',
+            senderInitials: 'CM',
+            senderColorClass: 'c4',
+            isOutside: true,
+            timestamp: '9:41',
+            text: 'Before Thursday — can someone summarize where vendor scoring landed?',
+        },
+        {
+            id: 'rm-2',
+            senderName: 'Ada Lovell',
+            senderInitials: 'AL',
+            senderColorClass: 'c1',
+            isOutside: false,
+            timestamp: '9:44',
+            hasMention: true,
+            mentionText: '@Assistant',
+            text: 'can you pull that together from what we’ve shared?',
+        },
+        {
+            id: 'rm-3',
+            senderName: 'Assistant',
+            isAssistant: true,
+            timestamp: '9:44',
+            text: 'Three vendors remain after the second screen: Kestrel, Lumen WMS and Haulbridge…',
+        },
+    ],
+    subSpaces: [
+        {
+            id: 'sub-1',
+            name: 'Field notes',
+            type: 'eng',
+            iconClass: 'fa-solid fa-clipboard',
+            description: 'Same people as Discovery · 6 Team items',
+        },
+    ],
 };

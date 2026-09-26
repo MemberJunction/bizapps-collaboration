@@ -1,11 +1,13 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY } from '../../entity-names.js';
+import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
 
+const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
+const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
@@ -141,6 +143,112 @@ const checks: NamedCheck[] = [
             Assert(details.length === 1, 'Posted message detail found');
             Assert(details[0].Message === 'Hello from Bea in the Discovery space room!', 'Message text matches');
             Assert(details[0].UserID.toLowerCase() === beaCtx.User.ID.toLowerCase(), 'Message UserID is Bea');
+
+            // B0.2: Ada asks with ExecuteAgent: true, and as Bea, the reply in Discovery room does not quote Team files
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const adaResult = await adaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Text: '@Assistant summarize materials in this space',
+                ExecuteAgent: true,
+            });
+            Assert(adaResult.Success === true, `Ada PostSpaceMessage failed: ${adaResult.ErrorMessage ?? ''}`);
+            if (adaResult.DetailID) createdDetailIds.push(adaResult.DetailID);
+            if (adaResult.AssistantDetailID) createdDetailIds.push(adaResult.AssistantDetailID);
+
+            // Read the assistant reply as Bea
+            const beaReplyRes = await View(beaCtx).RunView<{ ID: string; Message: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `ID = '${adaResult.AssistantDetailID}'`,
+                    Fields: ['ID', 'Message'],
+                    ResultType: 'simple',
+                },
+                beaCtx.User,
+            );
+            Assert(beaReplyRes.Success && (beaReplyRes.Results?.length ?? 0) === 1, 'Bea can read room assistant reply over the wire');
+            const replyMsg = beaReplyRes.Results![0].Message;
+            Assert(!replyMsg.includes('discovery-brief.pdf'), 'Room assistant reply must not name Team file discovery-brief.pdf');
+            Assert(!replyMsg.includes('field-notes.txt'), 'Room assistant reply must not name Team file field-notes.txt');
+
+            // B0.2: With a Shared item in Sealed branch, Sam asks in Northwind's room over the wire, and as Casey the reply does not name it
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const caseyCtx = await getPersonaClientContext(ctx, 'casey');
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+
+            const uniqueFileName = `sealed-wire-${Date.now()}.txt`;
+            const uploadOutcome = await samClient.UploadSpaceFile({
+                SpaceID: SEALED_BRANCH_SPACE_ID,
+                FileName: uniqueFileName,
+                MimeType: 'text/plain',
+                Base64Data: Buffer.from('Sealed branch confidential wire test plan content').toString('base64'),
+                Folder: 'Internal',
+            });
+            Assert(uploadOutcome.Success && !!uploadOutcome.ItemID, `Uploading file as Sam in Sealed branch over wire must succeed: ${uploadOutcome.ErrorMessage ?? ''}`);
+            const sealedItemId = uploadOutcome.ItemID!;
+
+            const sealedItem = await samCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, samCtx.User);
+            Assert(await sealedItem.Load(sealedItemId), 'Load uploaded sealed item over wire');
+            sealedItem.Band = 'Shared';
+            const promoted = await sealedItem.Save();
+            Assert(promoted, 'Promoting sealed branch item to Shared over wire must succeed');
+
+            try {
+                // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
+                const samPostRes = await samClient.PostSpaceMessage({
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Text: '@Assistant summarize all materials in this space',
+                    ExecuteAgent: true,
+                });
+                Assert(samPostRes.Success === true, `Sam PostSpaceMessage in Northwind room failed: ${samPostRes.ErrorMessage ?? ''}`);
+                if (samPostRes.DetailID) createdDetailIds.push(samPostRes.DetailID);
+                if (samPostRes.AssistantDetailID) createdDetailIds.push(samPostRes.AssistantDetailID);
+
+                // Casey reads the assistant reply in Northwind's room
+                const caseyReplyRes = await View(caseyCtx).RunView<{ ID: string; Message: string }>(
+                    {
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ID = '${samPostRes.AssistantDetailID}'`,
+                        Fields: ['ID', 'Message'],
+                        ResultType: 'simple',
+                    },
+                    caseyCtx.User,
+                );
+                Assert(caseyReplyRes.Success && (caseyReplyRes.Results?.length ?? 0) === 1, 'Casey can read Northwind room assistant reply over the wire');
+                const nwReplyMsg = caseyReplyRes.Results![0].Message;
+                Assert(!nwReplyMsg.includes(uniqueFileName), `Northwind room assistant reply over the wire must not name sub-space Shared file ${uniqueFileName}`);
+
+                // 2. The other half: Sam asking in Sealed branch's own room names it
+                const samSealedRes = await samClient.PostSpaceMessage({
+                    SpaceID: SEALED_BRANCH_SPACE_ID,
+                    Text: '@Assistant summarize materials in this space',
+                    ExecuteAgent: true,
+                });
+                Assert(samSealedRes.Success === true, `Sam PostSpaceMessage in Sealed branch room failed: ${samSealedRes.ErrorMessage ?? ''}`);
+                if (samSealedRes.DetailID) createdDetailIds.push(samSealedRes.DetailID);
+                if (samSealedRes.AssistantDetailID) createdDetailIds.push(samSealedRes.AssistantDetailID);
+
+                const samSealedReplyRes = await View(samCtx).RunView<{ ID: string; Message: string }>(
+                    {
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ID = '${samSealedRes.AssistantDetailID}'`,
+                        Fields: ['ID', 'Message'],
+                        ResultType: 'simple',
+                    },
+                    samCtx.User,
+                );
+                Assert(samSealedReplyRes.Success && (samSealedReplyRes.Results?.length ?? 0) === 1, 'Sam can read Sealed branch room assistant reply over wire');
+                const sealedReplyMsg = samSealedReplyRes.Results![0].Message;
+                Assert(sealedReplyMsg.includes(uniqueFileName), `Sealed branch room reply over wire must name its own Shared file ${uniqueFileName}`);
+            } finally {
+                if (sealedItemId) {
+                    const itemToDelete = await samCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, samCtx.User);
+                    if (await itemToDelete.Load(sealedItemId)) {
+                        const deleted = await itemToDelete.Delete();
+                        Assert(deleted === true, 'Deleting uploaded Sealed branch space item over wire must succeed');
+                    }
+                }
+            }
         },
     },
     {

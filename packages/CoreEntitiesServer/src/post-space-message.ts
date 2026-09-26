@@ -120,8 +120,20 @@ export async function postSpaceMessage(
 }
 
 /**
+ * Room replies are visible to everyone who reaches the space (including participants
+ * who can only see Shared items). The room reply therefore strictly names items
+ * that everyone in the room can read: this space's own Shared items only.
+ * Items in sub-spaces (even if Shared) have their own audience and cannot be quoted
+ * in this space's room reply.
+ */
+export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[], roomSpaceId: string): SpaceAgentCandidateItem[] {
+    const normRoomId = roomSpaceId.trim().toUpperCase();
+    return items.filter((item) => item.Band === 'Shared' && item.SpaceID.trim().toUpperCase() === normRoomId);
+}
+
+/**
  * Posts an assistant reply in the room, quoting strictly the items
- * permitted by agentMayQuote for the asking user.
+ * permitted by agentMayQuote for the asking user that everyone in the room can read.
  */
 async function postAssistantReply(
     provider: IMetadataProvider,
@@ -131,11 +143,12 @@ async function postAssistantReply(
     spaceId: string,
 ): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
     const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
+    const roomQuoted = filterRoomReplyItems(retrieval.quotedItems, spaceId);
     let agentMessage: string;
-    if (retrieval.quotedItems.length === 0) {
+    if (roomQuoted.length === 0) {
         agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
     } else {
-        const itemNames = retrieval.quotedItems.map((item) => item.Name).join(', ');
+        const itemNames = roomQuoted.map((item) => item.Name).join(', ');
         agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
     }
 
@@ -160,7 +173,7 @@ async function postAssistantReply(
         ok: true,
         detailId: assistantDetail.ID,
         message: agentMessage,
-        quotedItems: retrieval.quotedItems,
+        quotedItems: roomQuoted,
     };
 }
 

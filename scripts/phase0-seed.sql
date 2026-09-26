@@ -12,7 +12,7 @@ IF @Ada IS NULL OR @Bea IS NULL OR @Director IS NULL OR @Learner IS NULL
     THROW 50000, 'Set @Ada, @Bea, @Director and @Learner to real user ids before running.', 1;
 
 DECLARE @Workspace uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'workspace');
-DECLARE @Committee uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'committee');
+DECLARE @Committee uniqueidentifier = COALESCE((SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'world-committee'), (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'committee'), @Workspace);
 DECLARE @Cohort uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'cohort');
 DECLARE @Owner uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'owner');
 DECLARE @Guest uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'guest');

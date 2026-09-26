@@ -23,7 +23,8 @@
     "prompts",
     "ai-skills",
     "search-scopes",
-    "agents"
+    "agents",
+    "task-types"
   ],
   "emitSyncNotes": false,
   "sqlLogging": {

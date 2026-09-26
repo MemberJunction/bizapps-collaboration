@@ -25,30 +25,6 @@
   },
   {
     "primaryKey": {
-      "ID": "5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6"
-    },
-    "fields": {
-      "Code": "committee",
-      "Name": "Committee",
-      "Vocabulary": "committee",
-      "Discoverability": "Listed",
-      "JoinMode": "InviteOnly",
-      "MessagingPanel": true,
-      "LibraryPanel": true,
-      "WorkPanel": true,
-      "GovernancePanel": true,
-      "DefaultRetention": "Year",
-      "DefaultAgentRetrieval": "Included",
-      "DefaultAllowParentAssignees": true,
-      "DefaultBand": "Team",
-      "InviteApproval": "Approve",
-      "IsActive": true,
-      "IconClass": "fa-solid fa-landmark",
-      "Color": "#d97706"
-    }
-  },
-  {
-    "primaryKey": {
       "ID": "20538AF5-5FA2-4FDF-A10D-1A7752DB207D"
     },
     "fields": {

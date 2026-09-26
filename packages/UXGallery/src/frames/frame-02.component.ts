@@ -5,6 +5,7 @@ import {
   CollabSpaceHeaderComponent,
   CollabSpaceTabsComponent,
   CollabAudiencePillComponent,
+  CollabSpaceOverviewComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.fixture';
@@ -18,6 +19,7 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
     CollabAudiencePillComponent,
+    CollabSpaceOverviewComponent,
     MJButtonDirective,
   ],
   template: `
@@ -67,9 +69,19 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
             ></mjc-space-tabs>
           </mjc-space-header>
 
-          <div class="page ov">
-            <!-- Full overview cards land in Slice A -->
-          </div>
+          <mjc-space-overview
+            [SpaceName]="f.header.title"
+            [FirmName]="'Meridian'"
+            [ClientOrgName]="'Northwind'"
+            [ClientPersonaName]="'Casey'"
+            [AudienceCount]="f.header.totalPeople"
+            [NeedsYouItems]="f.needsYouItems"
+            [SharedItems]="f.sharedItems"
+            [TeamItems]="f.teamItems"
+            [RoomMessages]="f.roomMessages"
+            [SubSpaces]="f.subSpaces"
+            (OpenLibraryRequested)="activeTab = 'Library'"
+          ></mjc-space-overview>
         </main>
       </div>
     </div>
@@ -101,11 +113,6 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
       display: flex;
       flex-direction: column;
       background: var(--mj-bg-page, #ffffff);
-    }
-    .page.ov {
-      padding: 18px 28px;
-      flex: 1;
-      overflow-y: auto;
     }
     .row { display: flex; align-items: center; }
     .gap8 { gap: 8px; }
