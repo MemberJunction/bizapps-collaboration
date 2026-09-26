@@ -13,7 +13,7 @@ It also proves the widgets run in an Angular app that isn't Explorer.
 - **`src/main.ts`, `src/app.component.ts` and `src/routes.ts`:** a standalone Angular app. The route `/frame/02` draws frame 02, and `/` redirects there.
 - **`src/frames/frame-02.component.ts`:** frame 02's chrome (the top bar, the rail, the space header, the audience pill and the tabs), built from the widgets.
 - **`src/fixtures/frame-02.fixture.ts`:** the frame's data (`FRAME_02_FIXTURE`), with the space type colors in one map (`SPACE_TYPE_COLORS`).
-- **`bundle.mjs`:** bundles the compiled app with esbuild into `dist/app.bundle.js`, and writes `dist/gallery.css`: pinned fonts (Inter 5.3.0 and JetBrains Mono), MJ's token sheet from `ng-shared-generic`, the app's `--mjc-*` tokens, MJ's button styles, and a 1440×900 page.
+- **`bundle.mjs`:** bundles the compiled app with esbuild into `dist/app.bundle.js`, and writes `dist/gallery.css`: pinned fonts (Inter 5.3.0 and JetBrains Mono), MJ's token sheet from `ng-shared-generic`, its own copy of the app's `--mjc-*` color tokens at `:root`, MJ's button styles, and a 1440×900 page.
 - **`server.mjs`:** serves the gallery on port 4250 (`GALLERY_PORT` changes it). It loads Font Awesome 6.5.2, and `?theme=dark` sets `data-theme="dark"` on the page.
 
 ## Build and run

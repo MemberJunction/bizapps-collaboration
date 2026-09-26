@@ -26,7 +26,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 
 **Two extension base classes** for other apps to extend: `BaseSpaceTab` (inputs `SpaceId`, `SpaceTypeCode` and `Sequence`) and `BaseSpaceOverviewCard` (`SpaceId` and `Sequence`).
 
-**Tokens** (`src/lib/_tokens.scss`): the app's `--mjc-*` tokens (the Shared and Team colors, the Assistant's gradient, the widgets' line height and font features), each an expression of an MJ semantic token. The mixin applies them at `:host`. A space type's color is data: it comes in through an input, not from a stylesheet.
+**Tokens** (`src/lib/_tokens.scss`): the app's `--mjc-*` tokens (the Shared and Team colors, the Assistant's gradient, the widgets' line height and font features), each an expression of an MJ semantic token, in a mixin applied at `:host`. A space type's color is data: it comes in through an input, not from a stylesheet.
 
 ## Build and test
 
@@ -41,3 +41,4 @@ The build is `ngc`, into `dist/`. The tests use Vitest: 17 tests in `widgets.tes
 
 - **The L2 composites,** which load data through `ProviderToUse` and emit intent: `mjc-space-page`, `mjc-space-overview`, `mjc-space-library` and `mjc-share-check-dialog` come with slice A of [the UI plan](../../docs/ux/IMPLEMENTATION_PLAN.md), with the widgets they need.
 - **The extension classes** aren't loaded by any code yet. The [extensibility plan](../../docs/EXTENSIBILITY_PLAN.md) replaces them.
+- **Nothing includes the tokens partial yet.** The widgets' styles are inline strings, and the package ships only `dist/`. So in any host but the UX gallery, the `--mjc-*` tokens are undefined, and the widgets draw their hex fallbacks, dark mode included. The gallery defines its own copy of the color tokens at `:root`.
