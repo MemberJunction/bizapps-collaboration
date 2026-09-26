@@ -162,7 +162,7 @@ export async function loadShareRoster(entity: BaseEntity, spaceId: string): Prom
     const members = await view.RunView<{ SpaceID: string; UserID: string; Status: MemberSnapshot['status']; Band: MemberSnapshot['band']; SpaceRoleTypeID: string }>({
         EntityName: MEMBERS,
         ExtraFilter: `SpaceID IN (${ids}) AND Status = 'Active'`,
-        MaxRows: 2000,
+        IgnoreMaxRows: true,
     }, system);
     if (!members.Success) {
         LogError(`Share notices were not recorded: ${members.ErrorMessage ?? 'the roster could not be read'}`);
