@@ -1,7 +1,7 @@
 # How Collaboration works
 
 This page states the rules Collaboration enforces. Each rule is marked:
-- **built:** in the code at `b539790`, reviewed in round 94. Round 95's `fc77117` and `c125daf` change none of these rules;
+- **built:** in the code at `b539790`, reviewed in round 94. Of these rules, only the seat ceiling (B0.1) and the room's reply (B0.2) changed since, in `6786bd0`, reviewed in round 96;
 - **planned:** with the item in [the plan](../plans/plan.md) that builds it.
 
 D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)).
@@ -34,7 +34,7 @@ A space is a tree. The root is a relationship: a client, a board, a cohort. The 
 - The owner of a space with no seats may seat themselves in the owner role. An owner may grant the owner role, so a space can have more than one owner.
 - Anyone may leave their own seat, except the last owner, who must seat another owner first.
 
-**A bug PR #3 fixes (B0.1):** a change to someone else's seat is checked against the role being saved, not the seat's current role. So a signer can remove someone above them by lowering the role and setting `Removed` in one save. The fix makes the target's current role also fit within the signer's ceiling.
+**Fixed in PR #3 (B0.1, `6786bd0`):** a change to someone else's seat was checked against the role being saved, not the seat's current role, so a signer could remove someone above them by lowering the role and setting `Removed` in one save. Now the target's current role must also fit within the signer's ceiling. PR #3's integration checks for it are still being corrected.
 
 The engine reads role flags. It never compares role names.
 
@@ -66,7 +66,7 @@ The engine reads role flags. It never compares role names.
 **Built:**
 - **`agentMayQuote`** in `rules.ts` is the rule an agent calls before it quotes an item. The caller must be able to read it, a Team item needs `CanSeeTeam`, and the item must be in the subtree of the space the question was asked in. `ExcludedEntirely` on the item's space or any ancestor drops it for every agent; `ExcludedFromParentScope` drops it when the question comes from above that space.
 - **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
-- **No model runs yet.** The room's reply is a fixed sentence that names the items the asker may quote. Because everyone in the room reads it, it can name Team items to people who can't see Team: that's the bug B0.2, which PR #3 fixes. The module's loads also stop at 2,000 rows, which PR #3 pages.
+- **No model runs yet.** The room's reply is a fixed sentence that names the items the asker may quote, and everyone in the room reads it. Since `6786bd0` it names only Shared items, but from the room's whole subtree, so it can still name an item in a sealed sub-space to people with no seat there. That's what's left of the bug B0.2, which PR #3 fixes by naming only the room space's own Shared items. The module's loads refuse when a load comes back full (2,000 rows).
 
 **Planned: the audience of an answer decides what the agent may use (D2; A6, B2).**
 - **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
@@ -108,6 +108,6 @@ pnpm test                    # the unit tests
 pnpm run test:integration    # both integration harnesses, against a database
 ```
 
-- `pnpm test` runs 191 unit tests: 89 in `collaboration-core` (the rules in `rules.ts` and `phase2.ts`, also run over a small fixture world, and the view models), 48 in `collaboration-core-entities-server`, 37 in the integration-test package, and 17 in the widgets. At `fc77117`, slice A's first widgets bring the widgets to 35 and the total to 209.
+- `pnpm test` runs 191 unit tests: 89 in `collaboration-core` (the rules in `rules.ts` and `phase2.ts`, also run over a small fixture world, and the view models), 48 in `collaboration-core-entities-server`, 37 in the integration-test package, and 17 in the widgets. At `fc77117`, slice A's first widgets bring the widgets to 35 and the total to 209; at `6786bd0` the total is 223 (90, 49, 37 and 47).
 - The integration harnesses run 38 server checks and 39 client checks, in eight bundles each, and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata and the sample world; the client harness also needs a running MJAPI.
 - `scripts/persona-check.sql` checks the Space Participant role's grants against a database.

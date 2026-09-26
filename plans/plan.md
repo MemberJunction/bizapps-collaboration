@@ -37,7 +37,7 @@
 - **Source wins.** The platform claims here were read from source on 2026-09-26, and the [appendix](#appendix-source-checks-of-2026-09-26) records what was checked. Re-verify on the pin before building on a claim. If source disagrees with this plan, follow the source and say so in the pull request.
 - **References.** `E:<line>` is a line of `MJ/packages/MJCoreEntities/src/generated/entities/__mj.ts` on MJ `next` as of 2026-09-25. Those lines move between versions, so search by name. Other core paths are relative to `MJ/packages/`.
 - **Nothing firm-specific.** Collaboration is a free, generic engine. Anything that exists only for one firm's practice goes in a private extension built on B8's extension points.
-- **Small pull requests.** PR #3 grew to 263 files and 104 commits over 94 review rounds. That's the failure mode to avoid.
+- **One pull request, merged when it's 100% done (D12).** The next pull request doesn't merge stage by stage. PR #3 took 96 review rounds, so keep this one reviewable another way: work [§ 9](#9-sequencing)'s stages in order, cite item numbers in commits and review threads, and let each review round cover one stage.
 
 ## 1. What we are building
 
@@ -66,7 +66,8 @@
 - **PR #3** (`feat/collaboration-phase-0-2`) finishes as it is and then merges whole. Its finish line is [§ 2.3](#23-pr-3s-finish-line). v0.3's B0.9, splitting it, is dropped.
 - **The next pull request** carries everything new in this plan and in the extensibility plan.
   - It's opened as a draft stacked on PR #3, with base `feat/collaboration-phase-0-2`, and retargets to `next` when PR #3 merges.
-  - The builder moves to it once PR #3 merges. The UI work continues there, slices B to I, with whatever changes this plan needs.
+  - The builder moves to it once PR #3 merges, and works directly on its branch, `claude/hopeful-bell-6ldk4v` (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work continues there, slices B to I, with whatever changes this plan needs.
+  - It merges once, when all of it is 100% done (D12).
   - [§ 9](#9-sequencing) is its order.
 
 ### 2.2 What PR #3 has delivered
@@ -94,46 +95,50 @@ At `b539790`, reviewed in round 94:
   - the tokens partial, which nothing includes yet (B0.10), and the L0 view models;
   - the UX gallery, and frame 02's chrome at 0 pixels on CI.
 
-**Since then,** round 95 reviewed `fc77117` and `c125daf`, which change no server code, migration or rule this plan cites:
+**Since then,** rounds 95 and 96 reviewed three pushes. `fc77117` and `c125daf` change no server code, migration or rule this plan cites; `6786bd0` changes the member gate, the room's reply and its mutation:
 - **`fc77117` began slice A:** the item card and row, the file icon, the item preview, the needs-you card, the ask box, the share check and its dialog, and the overview and library layouts, with 35 widget tests (209 unit tests in all); frames 03 and 04 in the gallery; and the Milestone task type in `metadata/task-types/`.
 - **Round 95 found slice A drawn from the story's data, typed into the code.** The Explorer resource reads and writes nothing and shows the story to every user, six widgets default their inputs to it, and CI measures the full frames at 48,141, 137,911 and 235,685 pixels against budgets of 500. Slice A is rebuilt on real data from the map's second pass ([§ 2.3](#23-pr-3s-finish-line)).
 - **`c125daf` dropped Space Participant's application role,** so clients lose the app. Round 95 asks for it back.
+- **`6786bd0` answered round 95** (223 unit tests): B0.1's rule, the retrieval's full-page refusal, B0.3's checks, Space Participant's application role back, no `sync` blocks, no `[innerHTML]` in slice A's widgets, the 21 old screenshots deleted, and the first live Explorer shots of frames 02 to 04. It also added five chat widgets, which belong to slice B here ([§ 2.4](#24-what-moves-to-the-next-pull-request)), and raised CI's full-frame budgets from 500 to 80,000, 180,000 and 260,000 pixels.
+- **Round 96 found** that B0.2 still leaks through a sealed sub-space and is now reachable over GraphQL, that B0.1's integration checks don't exercise the fix, and that the Explorer resource still shows the story's data typed into the code rather than reading the viewer's.
 
 ### 2.3 PR #3's finish line
 
-PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `b539790` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
+PR #3 merges when everything here is done. It's round 96's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `6786bd0` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
 
 **Slice A:** frames 02, 03 and 04 ([the UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work)), passing in the gallery, with live Explorer shots of each in light and dark.
 - **Slice A's data lands in PR #3,** not in the next pull request: item versions, share checks and their findings (the UI plan's gap 7), items that hold a set of files (frame 03's 24 photos), the Milestone task type (gap 4, a `metadata/` row), and the columns frames 02 to 04 read.
 - It's being designed in PR #3's review now. Each shape is posted there before its migration, and the tables go into B0.7's baseline.
+- **The Explorer resource reads the viewer's real data** through `ProviderToUse` and the typed client, and the full-frame budgets go back to what CI measures once the frames match, as tight as frame 02's chrome.
+- **Every new user gets the app:** `DefaultForNewUser` is true (D13).
 
 **B0: the fixes to PR #3's own code.**
 
-1. **B0.1. A member can remove someone seated above them.** Blocking. Real, and reachable over GraphQL.
-   - On an update, `SpaceMemberEntityServer.ValidateAsync` passes `refuseInvite` only the new role (`packages/Core/src/rules.ts:577`). It reads the target's current role only for the last-owner check (`SpaceMemberEntityServer.ts:36–51`).
-   - In the sample world, Casey is client admin on Northwind, with a ceiling (`MaxGrantableLevel`) of 10, and Sam is a member there, at level 20. Casey can remove Sam by saving Sam's seat with role `client-member` and status `Removed`:
+1. **B0.1. A member can remove someone seated above them.** Blocking. The rule is fixed in `6786bd0`; its checks don't test it yet.
+   - At `b539790`, on an update, `SpaceMemberEntityServer.ValidateAsync` passed `refuseInvite` only the new role, and read the target's current role only for the last-owner check.
+   - In the sample world, Casey is client admin on Northwind, with a ceiling (`MaxGrantableLevel`) of 10, and Sam is a member there, at level 20. Casey could remove Sam by saving Sam's seat with role `client-member` and status `Removed`:
      - the new role is within Casey's ceiling, and its flags are within Casey's;
      - the owner-approval check runs only when the row stays Active (`SpaceMemberEntityServer.ts:79–84`);
      - Space Participant can update Space Members, with no update filter.
-   - The same path lets an admin remove an owner or a peer admin, as long as another owner remains. On a type with `InviteApproval = AutoApprove`, a plain demotion passes too.
+   - The same path let an admin remove an owner or a peer admin, as long as another owner remains. On a type with `InviteApproval = AutoApprove`, a plain demotion passed too.
    - The seeded ceilings: owner 40, admin 20, member 10, guest 0, client admin 10, client member 0.
    - **Fix:** on an update to someone else's seat, the target's current role must also be within the signer's ceiling: its level at or below `MaxGrantableLevel`, and no flag the signer lacks. It goes in the pure rule, with the current role passed in.
-   - **Tests:** unit tests in `rules.test.ts` for demoting and removing someone above, a peer admin, and the signer's own seat, where leaving stays allowed; and checks on both harnesses: Casey removing Sam is refused, and Ada removing Sam is accepted.
-2. **B0.2. The room's reply names Team files to everyone in the room.** Blocking. Real, but not reachable over GraphQL today.
+   - **Done in `6786bd0`:** `refuseInvite` takes the current role, and `SpaceMemberEntityServer` passes the saved one. The unit cases for demoting someone above and for a peer admin prove it.
+   - **Left (round 96):** WG2, on both harnesses, has Casey set only the status, which the old rule already refused, and it expects a message the rule never produces. Casey must save Sam's seat as `client-member` and `Removed`, and the check must assert the rule's exact message. The unit removal case grants `client-member` with the current role `member`, and a unit case covers the signer's own seat through `refuseInvite`.
+2. **B0.2. The room's reply names items some readers can't open.** Blocking. Still open at `6786bd0`, and now reachable over GraphQL.
    - With `executeAgent`, `postAssistantReply` (`post-space-message.ts:133–139`) lists the items the asker may quote, then saves the reply in the room. `Collaboration: Conversation Details In Reach` shows every room message to everyone who reaches the space, whatever their band.
    - So when Ada asks in Discovery's room, the reply names `discovery-brief.pdf` and `field-notes.txt`, both Team, and Bea can read it.
-   - The GraphQL mutation never sets `executeAgent`; only the server harness's agent check does (`agent.checks.ts:400`). But that check asserts that the path succeeds, and the next pull request's agent run starts from it.
-   - **The same module fails open on a big host.** It loads at most 2,000 spaces and 2,000 items, with no check for a full page (`space-agent-retrieval.ts:206`, `:309`), so an `ExcludedEntirely` ancestor that didn't load is missed.
+   - **`6786bd0`** keeps only Shared items in the reply (`filterRoomReplyItems`), but from the room's whole subtree. A sub-space that doesn't inherit membership has its own audience: with a Shared item in Sealed branch, Sam asks in Northwind's room, and Casey, who reads that room with no seat in Sealed branch, learns the item's name. It also made `ExecuteAgent` a public input of `PostSpaceMessage`, and a failed reply comes back as success with its error dropped by the resolver.
+   - **The same module failed open on a big host,** loading at most 2,000 spaces and 2,000 items. `6786bd0` refuses when a load comes back full; it needs a unit test.
    - **Fix it one of two ways, and say which:**
-     - v0.3's short-term fix: the room's reply names only items that everyone who reaches the space can read. This space's own Shared items that pass `AgentRetrieval` are always inside that set. Widen it only with a test that proves the wider set.
-     - Or take the reply path out until the next pull request's agent run replaces it, and have the agent check assert that no reply is posted.
-   - Either way, page the loads, or refuse when a load returns a full page.
-   - **Tests,** for the first way: a unit test on the reply's item list, and room checks on both harnesses where Ada asks in Discovery's room and, as Bea, the reply names no Team item.
+     - v0.3's short-term fix: the room's reply names only items that everyone who reaches the space can read: this space's own Shared items that pass `AgentRetrieval`, filtered on `SpaceID` as well as band. Widen it only with a test that proves the wider set. Return the reply's error as `AssistantError`.
+     - Or take `ExecuteAgent` back out of the mutation and the typed client, and keep the path server-only until the next pull request's agent run replaces it.
+   - **Tests,** for the first way: a unit test where a sub-space's Shared item is left out, and room checks on both harnesses where Sam asks in Northwind's room with a Shared item in Sealed branch and, as Casey, the reply doesn't name it. RM5's Discovery case, where Bea's read names no Team item, stays.
 3. **B0.3. A participant's new subtask.** Not a bug. It needs a check that proves it.
    - MJ 6.1.3 checks the create filter on every new row, before and after the before-save hooks: `CheckCreateRLS`, at `databaseProviderBase.js:1252` and `:1293` in `@memberjunction/core`.
    - Space Participant's create filter on Tasks, `Collaboration: Subtasks Under A Writable Parent`, requires a parent that `fnCollaborationTasks` marks `CanWrite`: one in a space the caller contributes to, and Shared unless the caller sees Team. So the insert is checked against the parent's space and band.
    - The gate itself checks the parent only when a saved task's parent changes (`task-entity-server.ts:27–52`). v0.3's lines (164–170) are from an older file; this one has 67 lines.
-   - **The check,** over the wire as Bea: a subtask under a Team task is refused; so is one under a task in a space Bea doesn't reach; one under a writable Shared task is accepted.
+   - **The check,** over the wire as Bea: a subtask under a Team task is refused; so is one under a task in a space Bea doesn't reach; one under a writable Shared task is accepted. WG3 has it on both harnesses since `6786bd0`; its refusals must also assert their reasons.
 4. **B0.4. The four bizapps-tasks subclasses run async validation.** Holds; no change. MJ 6.1.3's `BaseEntity` runs `ValidateAsync` whenever a subclass overrides it, unless `DefaultSkipAsyncValidation` is overridden (the rule is in MJ since 6.1.0). `CollaborationTaskEntityServer`, `TaskCommentEntityServer`, `TaskDecisionEntityServer` and `TaskAssignmentEntityServer` override it, and neither they nor bizapps-tasks 1.5.0's classes override the flag.
 5. **B0.5. CI against a real database.** Open. CI only syntax-checks the two harnesses (`node --check`), so the integration suite and `scripts/persona-check.sql` never run there.
    - Add a job with a SQL Server service. It installs MJ core, bizapps-common and bizapps-tasks at their pinned versions, migrates, pushes `metadata/`, loads the world, runs `pnpm run test:integration:server` and `persona-check.sql`, and fails on any error.
@@ -144,7 +149,7 @@ PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's
    - Regenerate the CodeGen output in one run from a clean database, and don't edit inside it. That clears any hand edits in the generated blocks.
    - **The two migrations `next` has and PR #3 doesn't,** `V202609230200__v0.1.x__Staff_Filters_And_Files.sql` and `V202609230300__v0.1.x__File_RecordID_And_Conversation_Writes.sql`, held only metadata: the `Conversation Details In Reach` and `Files In Reach` filters, and permission updates. Task 1 moved those rows to `metadata/` (`row-level-security-filters/`, `entity-permissions/` and `entities/.ui-role-permissions.json`), and `a763b4f` deleted the files. The baseline's header says so, since `next`'s history still has them.
    - Every database that ran the old chain rebuilds from empty.
-8. **B0.8. READMEs and screenshots.** Open.
+8. **B0.8. READMEs and screenshots.** Open, except the old screenshots, deleted in `6786bd0`.
    - Merge `next` into PR #3 again, as a merge. It now has PR #6's documents, which the READMEs link to.
    - The READMEs for the root and every package are written on the next pull request's branch. Take only those files, with `git checkout origin/claude/hopeful-bell-6ldk4v -- README.md 'packages/*/README.md'`, check each against the code, and keep them current as the B0 fixes and slice A land.
    - Delete the 21 PNGs of the deleted UI in `docs/screenshots/pr3/` (`01-discovery-library.png` to `21-bea-top-level-refused.png`). Slice A's shots go under `docs/screenshots/pr3/ux/`.
@@ -153,7 +158,7 @@ PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's
     - **Done:** PascalCase inputs and `…Requested` events; type colors from `SpaceType.Color`, which the gallery's fixture keeps in one map; CI's chrome budget at 100 pixels; and diffs uploaded as a CI artifact, since the spec writes only to `e2e/test-results/`.
     - **`no-access.component.ts` stays.** The old file was deleted with the old UI in `77b36f4` and written again as the new `mjc-no-access`, on MJ's `mj-empty-state`, in `0c7096a`.
     - **Open: nothing includes the tokens partial.** No stylesheet imports `_tokens.scss`, the widgets' styles are inline strings, and the package ships only `dist/`. So in Explorer, and in any host but the gallery, `--mjc-shared*` and `--mjc-team*` are never defined, and the band chip and the avatar rings always draw their hex fallbacks, dark mode included: the Shared chip keeps its `#ecfeff` background. The gallery hides this, because `bundle.mjs` writes its own copy of the tokens at `:root`.
-    - **The fix:** define the tokens on each widget's own `:host` from MJ's tokens, for example with a shared styles string listed first in each component's `styles`, and drop the gallery's copy so the gallery draws what a host draws. Then remove the 76 `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources, and make the token check fail on a `var(--mjc-*)` that nothing defines.
+    - **The fix:** define the tokens on each widget's own `:host` from MJ's tokens, for example with a shared styles string listed first in each component's `styles`, and drop the gallery's copy so the gallery draws what a host draws. Then remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (199 at `6786bd0`, 97 of them in the chat widgets), define `--mjc-warn-bg` and `--mjc-warn-text`, which nothing defines, and make the token check fail on a `var(--mjc-*)` that nothing defines.
 11. **B0.11. Take the committee specifics out** (task 7's removal half, and the UI plan's gap 10). Open.
     - `SpaceType.GovernancePanel` leaves the baseline, with its default and extended property, and the regenerated CodeGen output.
     - The `committee` row leaves `metadata/space-types/`. Its ID, `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`, is the one Committees ships in its own metadata (C1), so nothing here reuses it.
@@ -163,20 +168,20 @@ PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's
 - **Task 1,** metadata out of migrations: the rebuild from empty after B0.7, the core-entity list checked on slice A's screens as Bea, and other databases.
 - **Task 2,** clients see only a person's name and email: the geocode columns `__mj_Latitude` and `__mj_Longitude`, which field rules can't restrict (an MJ change, A12.21, or a read model); what bizapps-common#186's release does to a host's own roles; and a check of the fields a participant can actually read, rather than of the rows.
 - **Task 3,** assigning people seated above a space: done, except the assignee picker, which moves ([§ 2.4](#24-what-moves-to-the-next-pull-request)).
-- **Task 4,** proving the room: the wire checks RM1 to RM6, with B0.2's check.
-- **Task 5,** the test scaffolding: B0.1's and B0.3's checks; the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3, AG5 and AG6) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens.
+- **Task 4,** proving the room: the wire checks RM1 to RM6, with B0.2's sub-space check.
+- **Task 5,** the test scaffolding: B0.1's and B0.3's checks, as round 96 corrects them; the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3, AG5 and AG6) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens.
 - **Task 7's removal half:** B0.11.
 - **Task 13,** the staff runs and the client harness over the wire, on PR #3's screens.
 - **Task 14,** the adversarial test of what PR #3 ships.
 - **Task 16,** the smoke suite and the tour, on slice A's screens.
 - **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour.
 
-**The order to work it** (round 95's):
-1. Space Participant's application role back, CI green, then B0.1 and B0.2.
-2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the widget fixes, the frames within CI's budgets, and the live shots.
-3. B0.3's check and task 5's coverage for PR #3's gates, with task 2's leftovers.
+**The order to work it** (round 96's):
+1. CI's budgets back to tight, B0.2's sub-space case and its error, and B0.1's and B0.3's checks.
+2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the icons and tokens, the widget fixes, the frames within tight budgets, and new live shots. The chat widgets leave PR #3.
+3. Task 5's coverage for PR #3's gates, with task 2's leftovers.
 4. B0.7's squash, then task 1's rebuild from empty.
-5. B0.5, B0.8, B0.10 and B0.11.
+5. B0.5, B0.8, B0.10 and B0.11, and `DefaultForNewUser` set to true (D13).
 6. Tasks 13, 14, 16 and 17.
 
 ### 2.4 What moves to the next pull request
@@ -191,7 +196,7 @@ Round 95's list, and where each item lands here:
   - it reads the switch on the task's own space: with Field notes on and Discovery off, a Discovery task mustn't offer Ada.
 - **Task 4's last step,** Bea opening the room's own screen with no console errors, goes with slice B.
 - **The agent checks AG3, AG5 and AG6,** which can't fail as written, are replaced by B2.6's matrix.
-- **Task 15's slices B to I** (B13): frames 01 and 05 to 13, with the UI plan's gap 2 (tab labels per type) and gap 9 (the Assistant's settings).
+- **Task 15's slices B to I** (B13): frames 01 and 05 to 13, with the UI plan's gap 2 (tab labels per type) and gap 9 (the Assistant's settings). The five chat widgets PR #3 added in `6786bd0` (`answer-receipt`, `chat-banner`, `chat-lens`, `chat-list` and `space-chats`) come here with slice B.
 - **v0.3's B1 to B13, and workstreams A and C,** including the extensibility plan's two MJ pull requests (A13).
 
 ## 3. Decisions
@@ -265,6 +270,10 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Where a chat's agents are recorded** is a detail for the next pull request's first design comment: an `AgentID` on core participants, or a row on Collaboration's side.
 
 **D11. The MJ pull requests wait.** The extensibility plan's two MJ pull requests aren't opened now. They're opened during the next pull request's work, in parallel, once the builder is on it. They're A13 below.
+
+**D12. The next pull request merges once, when it's 100% done.** It doesn't merge stage by stage. After PR #3 merges, it's retargeted to `next`, and the builder works directly on its branch, `claude/hopeful-bell-6ldk4v`. The plan's author pushes only plan and document updates there, and reviews of the builder's code stay comments.
+
+**D13. Every new user gets the Collaboration app.** `DefaultForNewUser` is true in `metadata/applications/`. PR #3 sets it. The app's roles still decide who can open it.
 
 ## 4. The model
 
@@ -762,7 +771,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | Recording provenance slows the write path | Medium | Batched inserts; A2's 5% budget on a 1,000-row RunView |
 | Intersection retrieval misses material people expected | Medium | The audience is shown in the chat banner (B3); a private chat is always available |
 | An outside channel answers as a service account | High | D6 and A9: an unresolved identity refuses |
-| The next pull request grows the way PR #3 did | Medium | Small pull requests, cited by item number ([§ 0](#0-how-to-use-this-plan)) |
+| The next pull request grows the way PR #3 did | Medium | It merges once, when done (D12), so it's reviewed by stage: § 9's order, item numbers in commits and review threads, one stage per review round ([§ 0](#0-how-to-use-this-plan)) |
 | The computed reach walk stops being fast enough | Medium | Measure at realistic space counts. If it's ever materialized, recompute on both a space's create or move and a seat's change |
 | A client's security review asks for SOC 2 evidence we don't have | Medium | Name an owner, and start collecting evidence before the first outside client |
 
