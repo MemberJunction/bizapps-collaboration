@@ -28,7 +28,6 @@ export interface BreadcrumbItem {
 export interface RailSpaceNode {
   id: string;
   name: string;
-  typeCode: string;
   iconClass: string;
   color?: string;
   level?: 0 | 1 | 2;

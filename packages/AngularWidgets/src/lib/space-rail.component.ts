@@ -75,11 +75,13 @@ import { RailSpaceNode } from './types';
           <div
             class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
             [mjClickable]="s.name"
+            [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
+            (keydown.arrowright)="onArrowRight(s, $event)"
+            (keydown.arrowleft)="onArrowLeft(s, $event)"
             (click)="selectSpace(s.id)">
             <span
               class="chev"
-              [mjClickable]="(isNodeExpanded(s) ? 'Collapse ' : 'Expand ') + s.name"
-              [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
+              aria-hidden="true"
               (click)="toggleSpace(s, $event)">
               @if (s.hasChildren) {
                 <i [class]="isNodeExpanded(s) ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
@@ -326,27 +328,21 @@ export class CollabSpaceRailComponent {
   @Output() SpaceCreateRequested = new EventEmitter<void>();
   @Output() JumpOpenRequested = new EventEmitter<void>();
 
-  // Compatibility aliases
-  @Input() set activeNav(v: string) { this.ActiveNav = v; }
-  get activeNav(): string { return this.ActiveNav; }
+  onArrowRight(s: RailSpaceNode, event: Event): void {
+    if (s.hasChildren && !this.isNodeExpanded(s)) {
+      event.preventDefault();
+      this._expandedOverrides.set(s.id, true);
+      this.SpaceToggleRequested.emit(s);
+    }
+  }
 
-  @Input() set activeSpaceId(v: string) { this.ActiveSpaceId = v; }
-  get activeSpaceId(): string { return this.ActiveSpaceId; }
-
-  @Input() set inboxCount(v: number) { this.InboxCount = v; }
-  get inboxCount(): number { return this.InboxCount; }
-
-  @Input() set taskCount(v: number) { this.TaskCount = v; }
-  get taskCount(): number { return this.TaskCount; }
-
-  @Input() set spaces(v: RailSpaceNode[]) { this.Spaces = v; }
-  get spaces(): RailSpaceNode[] { return this.Spaces; }
-
-  @Output() navSelect = this.NavSelectRequested;
-  @Output() spaceSelect = this.SpaceOpenRequested;
-  @Output() spaceToggle = this.SpaceToggleRequested;
-  @Output() newSpace = this.SpaceCreateRequested;
-  @Output() jumpClick = this.JumpOpenRequested;
+  onArrowLeft(s: RailSpaceNode, event: Event): void {
+    if (s.hasChildren && this.isNodeExpanded(s)) {
+      event.preventDefault();
+      this._expandedOverrides.set(s.id, false);
+      this.SpaceToggleRequested.emit(s);
+    }
+  }
 
   private _expandedOverrides = new Map<string, boolean>();
 

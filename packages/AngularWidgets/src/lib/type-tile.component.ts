@@ -45,17 +45,4 @@ export class CollabTypeTileComponent {
   @Input() Color = '';
   @Input() Size: TileSize = 'md';
   @Input() IsClosed = false;
-
-  // Compatibility aliases
-  @Input() set iconClass(v: string) { this.IconClass = v; }
-  get iconClass(): string { return this.IconClass; }
-
-  @Input() set color(v: string) { this.Color = v; }
-  get color(): string { return this.Color; }
-
-  @Input() set size(v: TileSize) { this.Size = v; }
-  get size(): TileSize { return this.Size; }
-
-  @Input() set isClosed(v: boolean) { this.IsClosed = v; }
-  get isClosed(): boolean { return this.IsClosed; }
 }

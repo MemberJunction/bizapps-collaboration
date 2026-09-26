@@ -68,19 +68,6 @@ export class CollabAvatarStackComponent {
   @Input() Size: AvatarSize = 'sm';
   @Input() MoreCount: number | null = null;
 
-  // Compatibility aliases
-  @Input() set avatars(v: AvatarItem[]) { this.Avatars = v; }
-  get avatars(): AvatarItem[] { return this.Avatars; }
-
-  @Input() set max(v: number) { this.Max = v; }
-  get max(): number { return this.Max; }
-
-  @Input() set size(v: AvatarSize) { this.Size = v; }
-  get size(): AvatarSize { return this.Size; }
-
-  @Input() set moreCount(v: number | null) { this.MoreCount = v; }
-  get moreCount(): number | null { return this.MoreCount; }
-
   get visibleAvatars(): AvatarItem[] {
     if (!this.Avatars) return [];
     if (this.Avatars.length <= this.Max) return this.Avatars;

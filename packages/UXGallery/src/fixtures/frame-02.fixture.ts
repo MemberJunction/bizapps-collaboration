@@ -14,7 +14,6 @@ export interface Frame02FixtureData {
     };
     header: {
         crumbs: BreadcrumbItem[];
-        typeCode?: string;
         typeColor: string;
         typeIconClass: string;
         title: string;
@@ -49,20 +48,19 @@ export const FRAME_02_FIXTURE: Frame02FixtureData = {
         inboxCount: 4,
         taskCount: 6,
         spaces: [
-            { id: 'northwind', name: 'Northwind', typeCode: 'rel', color: SPACE_TYPE_COLORS['rel'], iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
-            { id: 'discovery', name: 'Discovery', typeCode: 'eng', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-compass', level: 1, hasChildren: true, isExpanded: true, unread: true },
-            { id: 'fieldnotes', name: 'Field notes', typeCode: 'eng', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-clipboard', level: 2, hasChildren: false, isExpanded: false },
-            { id: 'delivery', name: 'Delivery', typeCode: 'eng', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-truck-fast', level: 1, hasChildren: true, isExpanded: false, isLocked: true },
-            { id: 'closed', name: 'Closed', typeCode: 'eng', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-box-archive', level: 1, hasChildren: true, isExpanded: false, meta: '2', isDim: true },
-            { id: 'committee', name: 'Audit Committee', typeCode: 'com', color: SPACE_TYPE_COLORS['com'], iconClass: 'fa-solid fa-landmark', level: 0, hasChildren: true, isExpanded: false, unread: true },
-            { id: 'cohort', name: 'Spring Leadership Cohort', typeCode: 'coh', color: SPACE_TYPE_COLORS['coh'], iconClass: 'fa-solid fa-graduation-cap', level: 0, hasChildren: true, isExpanded: false },
-            { id: 'pinecrest', name: 'Pinecrest Health', typeCode: 'rel', color: SPACE_TYPE_COLORS['rel'], iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false },
-            { id: 'studio', name: 'Studio', typeCode: 'wks', color: SPACE_TYPE_COLORS['wks'], iconClass: 'fa-solid fa-shapes', level: 0, hasChildren: true, isExpanded: false },
+            { id: 'northwind', name: 'Northwind', color: SPACE_TYPE_COLORS['rel'], iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
+            { id: 'discovery', name: 'Discovery', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-compass', level: 1, hasChildren: true, isExpanded: true, unread: true },
+            { id: 'fieldnotes', name: 'Field notes', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-clipboard', level: 2, hasChildren: false, isExpanded: false },
+            { id: 'delivery', name: 'Delivery', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-truck-fast', level: 1, hasChildren: true, isExpanded: false, isLocked: true },
+            { id: 'closed', name: 'Closed', color: SPACE_TYPE_COLORS['eng'], iconClass: 'fa-solid fa-box-archive', level: 1, hasChildren: true, isExpanded: false, meta: '2', isDim: true },
+            { id: 'committee', name: 'Audit Committee', color: SPACE_TYPE_COLORS['com'], iconClass: 'fa-solid fa-landmark', level: 0, hasChildren: true, isExpanded: false, unread: true },
+            { id: 'cohort', name: 'Spring Leadership Cohort', color: SPACE_TYPE_COLORS['coh'], iconClass: 'fa-solid fa-graduation-cap', level: 0, hasChildren: true, isExpanded: false },
+            { id: 'pinecrest', name: 'Pinecrest Health', color: SPACE_TYPE_COLORS['rel'], iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false },
+            { id: 'studio', name: 'Studio', color: SPACE_TYPE_COLORS['wks'], iconClass: 'fa-solid fa-shapes', level: 0, hasChildren: true, isExpanded: false },
         ],
     },
     header: {
         crumbs: [{ label: 'Spaces' }, { label: 'Northwind' }, { label: 'Discovery' }],
-        typeCode: 'eng',
         typeColor: SPACE_TYPE_COLORS['eng'],
         typeIconClass: 'fa-solid fa-compass',
         title: 'Discovery',

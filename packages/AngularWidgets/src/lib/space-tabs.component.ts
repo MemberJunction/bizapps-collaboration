@@ -84,18 +84,9 @@ export class CollabSpaceTabsComponent {
   @Input() Tabs: TabItem[] = [];
   @Input() ActiveTab = '';
   @Output() TabSelectRequested = new EventEmitter<string>();
-  @Output() tabChange = this.TabSelectRequested; // Compatibility alias
-
-  // Compatibility aliases
-  @Input() set tabs(v: TabItem[]) { this.Tabs = v; }
-  get tabs(): TabItem[] { return this.Tabs; }
-
-  @Input() set activeTab(v: string) { this.ActiveTab = v; }
-  get activeTab(): string { return this.ActiveTab; }
 
   selectTab(tabId: string): void {
     if (this.ActiveTab !== tabId) {
-      this.ActiveTab = tabId;
       this.TabSelectRequested.emit(tabId);
     }
   }

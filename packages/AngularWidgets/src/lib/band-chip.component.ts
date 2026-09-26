@@ -8,12 +8,12 @@ import { SpaceBand } from './types';
   imports: [CommonModule],
   template: `
     <span
-      class="chip {{ isShared ? 'shared' : 'team' }} {{ size === 'md' ? 'lg' : '' }}"
+      class="chip {{ isShared ? 'shared' : 'team' }} {{ Size === 'md' ? 'lg' : '' }}"
       role="status">
-      @if (showIcon) {
+      @if (ShowIcon) {
         <i [class]="isShared ? 'fa-solid fa-eye' : 'fa-solid fa-lock'"></i>
       }
-      {{ label || band }}
+      {{ Label || Band }}
     </span>
   `,
   styles: [`
@@ -63,19 +63,6 @@ export class CollabBandChipComponent {
   @Input() Size: 'sm' | 'md' = 'sm';
   @Input() Label = '';
   @Input() ShowIcon = true;
-
-  // Compatibility aliases
-  @Input() set band(v: SpaceBand) { this.Band = v; }
-  get band(): SpaceBand { return this.Band; }
-
-  @Input() set size(v: 'sm' | 'md') { this.Size = v; }
-  get size(): 'sm' | 'md' { return this.Size; }
-
-  @Input() set label(v: string) { this.Label = v; }
-  get label(): string { return this.Label; }
-
-  @Input() set showIcon(v: boolean) { this.ShowIcon = v; }
-  get showIcon(): boolean { return this.ShowIcon; }
 
   get isShared(): boolean {
     return this.Band === 'Shared';

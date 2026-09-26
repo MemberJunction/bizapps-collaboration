@@ -15,8 +15,6 @@ describe('CollabAvatarComponent', () => {
     comp.Initials = 'AL';
     comp.ColorClass = 'c5';
     expect(comp.computedColorClass).toBe('c5');
-    // Test alias
-    expect(comp.colorClass).toBe('c5');
   });
 
   it('computes stable colorClass from PersonId when ColorClass not provided', () => {
@@ -88,11 +86,6 @@ describe('CollabTypeTileComponent', () => {
     expect(comp.Size).toBe('xl');
     expect(comp.Color).toBe('#0076b6');
     expect(comp.IsClosed).toBe(true);
-
-    // Test compatibility aliases
-    comp.color = '#7c3aed';
-    expect(comp.Color).toBe('#7c3aed');
-    expect(comp.color).toBe('#7c3aed');
   });
 });
 
@@ -123,7 +116,7 @@ describe('CollabAudiencePillComponent', () => {
 });
 
 describe('CollabSpaceTabsComponent', () => {
-  it('emits TabSelectRequested and tabChange when selectTab is called with new tab id', () => {
+  it('emits TabSelectRequested when selectTab is called with new tab id without mutating ActiveTab internally', () => {
     const comp = new CollabSpaceTabsComponent();
     comp.Tabs = [
       { id: 'overview', label: 'Overview' },
@@ -132,22 +125,18 @@ describe('CollabSpaceTabsComponent', () => {
     comp.ActiveTab = 'overview';
 
     let emittedPascal: string | null = null;
-    let emittedCamel: string | null = null;
     comp.TabSelectRequested.subscribe(id => {
       emittedPascal = id;
     });
-    comp.tabChange.subscribe(id => {
-      emittedCamel = id;
-    });
 
     comp.selectTab('library');
-    expect(comp.ActiveTab).toBe('library');
+    // ActiveTab remains controlled by the host, not mutated internally
+    expect(comp.ActiveTab).toBe('overview');
     expect(emittedPascal).toBe('library');
-    expect(emittedCamel).toBe('library');
 
     // Selecting already active tab does not re-emit
     emittedPascal = null;
-    comp.selectTab('library');
+    comp.selectTab('overview');
     expect(emittedPascal).toBeNull();
   });
 
@@ -166,7 +155,6 @@ describe('CollabSpaceTabsComponent', () => {
     });
 
     comp.onTabActivateRequested({ Index: 2 });
-    expect(comp.ActiveTab).toBe('work');
     expect(emitted).toBe('work');
   });
 });
@@ -199,7 +187,6 @@ describe('CollabSpaceRailComponent', () => {
     const node: RailSpaceNode = {
       id: 'space-northwind',
       name: 'Northwind',
-      typeCode: 'rel',
       iconClass: 'fa-solid fa-building',
       hasChildren: true,
       isExpanded: false
@@ -224,6 +211,37 @@ describe('CollabSpaceRailComponent', () => {
     expect(node.isExpanded).toBe(false);
     // Component tracks expansion internally
     expect(comp.isNodeExpanded(node)).toBe(true);
+    expect(emittedNode).toBe(node);
+  });
+
+  it('expands with onArrowRight and collapses with onArrowLeft without mutating node', () => {
+    const comp = new CollabSpaceRailComponent();
+    const node: RailSpaceNode = {
+      id: 'space-northwind',
+      name: 'Northwind',
+      iconClass: 'fa-solid fa-building',
+      hasChildren: true,
+      isExpanded: false
+    };
+
+    let emittedNode: RailSpaceNode | null = null;
+    comp.SpaceToggleRequested.subscribe(n => {
+      emittedNode = n;
+    });
+
+    const mockEvent = new Event('keydown', { cancelable: true });
+
+    expect(comp.isNodeExpanded(node)).toBe(false);
+    comp.onArrowRight(node, mockEvent);
+    expect(mockEvent.defaultPrevented).toBe(true);
+    expect(comp.isNodeExpanded(node)).toBe(true);
+    expect(emittedNode).toBe(node);
+
+    emittedNode = null;
+    const mockEventLeft = new Event('keydown', { cancelable: true });
+    comp.onArrowLeft(node, mockEventLeft);
+    expect(mockEventLeft.defaultPrevented).toBe(true);
+    expect(comp.isNodeExpanded(node)).toBe(false);
     expect(emittedNode).toBe(node);
   });
 });

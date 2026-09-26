@@ -10,15 +10,15 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   imports: [CommonModule],
   template: `
     <span
-      class="av {{ computedColorClass }} {{ size }} {{ isOutside ? 'ext' : '' }}"
-      [attr.title]="name || null"
-      [attr.aria-label]="name || initials">
-      @if (avatarUrl) {
-        <img [src]="avatarUrl" [alt]="name || initials" class="av-img" />
+      class="av {{ computedColorClass }} {{ Size }} {{ IsOutside ? 'ext' : '' }}"
+      [attr.title]="Name || null"
+      [attr.aria-label]="Name || Initials">
+      @if (AvatarUrl) {
+        <img [src]="AvatarUrl" [alt]="Name || Initials" class="av-img" />
       } @else {
-        {{ initials }}
+        {{ Initials }}
       }
-      @if (isOnline) {
+      @if (IsOnline) {
         <span class="presence"></span>
       }
     </span>
@@ -97,31 +97,6 @@ export class CollabAvatarComponent {
   @Input() Size: AvatarSize = 'md';
   @Input() IsOutside = false;
   @Input() IsOnline = false;
-
-  // Compatibility aliases
-  @Input() set initials(v: string) { this.Initials = v; }
-  get initials(): string { return this.Initials; }
-
-  @Input() set name(v: string) { this.Name = v; }
-  get name(): string { return this.Name; }
-
-  @Input() set avatarUrl(v: string) { this.AvatarUrl = v; }
-  get avatarUrl(): string { return this.AvatarUrl; }
-
-  @Input() set colorClass(v: string) { this.ColorClass = v; }
-  get colorClass(): string { return this.ColorClass; }
-
-  @Input() set personId(v: string) { this.PersonId = v; }
-  get personId(): string { return this.PersonId; }
-
-  @Input() set size(v: AvatarSize) { this.Size = v; }
-  get size(): AvatarSize { return this.Size; }
-
-  @Input() set isOutside(v: boolean) { this.IsOutside = v; }
-  get isOutside(): boolean { return this.IsOutside; }
-
-  @Input() set isOnline(v: boolean) { this.IsOnline = v; }
-  get isOnline(): boolean { return this.IsOnline; }
 
   get computedColorClass(): string {
     if (this.ColorClass) {

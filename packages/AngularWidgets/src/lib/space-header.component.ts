@@ -180,28 +180,6 @@ export class CollabSpaceHeaderComponent {
   @Input() Subtitle = '';
   @Input() Breadcrumbs: BreadcrumbItem[] = [];
 
-  // Compatibility aliases
-  @Input() set title(v: string) { this.Title = v; }
-  get title(): string { return this.Title; }
-
-  @Input() set typeName(v: string) { this.TypeName = v; }
-  get typeName(): string { return this.TypeName; }
-
-  @Input() set typeIconClass(v: string) { this.TypeIconClass = v; }
-  get typeIconClass(): string { return this.TypeIconClass; }
-
-  @Input() set typeColor(v: string) { this.TypeColor = v; }
-  get typeColor(): string { return this.TypeColor; }
-
-  @Input() set status(v: 'Active' | 'Closed' | string) { this.Status = v; }
-  get status(): 'Active' | 'Closed' | string { return this.Status; }
-
-  @Input() set subtitle(v: string) { this.Subtitle = v; }
-  get subtitle(): string { return this.Subtitle; }
-
-  @Input() set breadcrumbs(v: BreadcrumbItem[]) { this.Breadcrumbs = v; }
-  get breadcrumbs(): BreadcrumbItem[] { return this.Breadcrumbs; }
-
   get subtitleParts(): string[] {
     if (!this.Subtitle) return [];
     // If subtitle contains bullet or dot separator, split on it

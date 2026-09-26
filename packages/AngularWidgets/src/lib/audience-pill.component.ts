@@ -75,23 +75,4 @@ export class CollabAudiencePillComponent {
   @Input() Summary = '';
   @Input() MaxStaff = 4;
   @Input() MaxOutside = 4;
-
-  // Compatibility aliases
-  @Input() set staffAvatars(v: AvatarItem[]) { this.StaffAvatars = v; }
-  get staffAvatars(): AvatarItem[] { return this.StaffAvatars; }
-
-  @Input() set outsideAvatars(v: AvatarItem[]) { this.OutsideAvatars = v; }
-  get outsideAvatars(): AvatarItem[] { return this.OutsideAvatars; }
-
-  @Input() set totalPeople(v: number) { this.TotalPeople = v; }
-  get totalPeople(): number { return this.TotalPeople; }
-
-  @Input() set summary(v: string) { this.Summary = v; }
-  get summary(): string { return this.Summary; }
-
-  @Input() set maxStaff(v: number) { this.MaxStaff = v; }
-  get maxStaff(): number { return this.MaxStaff; }
-
-  @Input() set maxOutside(v: number) { this.MaxOutside = v; }
-  get maxOutside(): number { return this.MaxOutside; }
 }
