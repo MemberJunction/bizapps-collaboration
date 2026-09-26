@@ -27,15 +27,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="dp-page">
           <div class="dp-h"></div>
           @for (p of Paragraphs; track $index) {
-            <p>
-              @for (seg of parseParagraph(p); track $index) {
-                @if (seg.isMarked) {
-                  <mark class="marked-phrase">{{ seg.text }}</mark>
-                } @else {
-                  {{ seg.text }}
-                }
-              }
-            </p>
+            <p>@for (seg of parseParagraph(p); track $index) {@if (seg.isMarked) {<mark class="marked-phrase">{{ seg.text }}</mark>} @else {{{ seg.text }}}}</p>
           }
           <div class="dp-l"></div>
           <div class="dp-l s"></div>
@@ -173,12 +165,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
 
       .marked-phrase {
-        background: var(--mjc-warn-bg, #fef3c7);
-        color: var(--mjc-warn-text, #92400e);
+        background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+        color: var(--mj-text-primary);
         border-radius: 2px;
-        padding: 0 2px;
-        text-decoration: line-through;
-        text-decoration-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 70%, transparent);
+        padding: 0 1px;
       }
     }
 

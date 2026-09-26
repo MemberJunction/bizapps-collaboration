@@ -1,9 +1,11 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { postSpaceMessage } from '@mj-biz-apps/collaboration-core-entities-server';
+import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
+import { worldStorageRoot } from '../world/seed-files.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
@@ -232,21 +234,34 @@ const checks: NamedCheck[] = [
             const sam = await GetPersonaUser(ctx, 'sam');
             const casey = await GetPersonaUser(ctx, 'casey');
 
-            const fileRows = await FindRows<{ ID: string; Name: string }>(ctx, FILE_ENTITY, '1=1', ['ID', 'Name']);
-            Assert(fileRows.length > 0, 'Found at least one file to link in Sealed branch');
-            const fileEntity = ctx.Provider.EntityByName(FILE_ENTITY);
-            Assert(!!fileEntity, 'File entity exists');
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const uniqueFileName = `sealed-branch-plan-${Date.now()}.txt`;
 
+            const uploadOutcome = await uploadSpaceFile({
+                user: sam,
+                storageUser: ctx.User,
+                provider: ctx.Provider,
+                store,
+                spaceId: SEALED_BRANCH_SPACE_ID,
+                folder: 'Internal',
+                fileName: uniqueFileName,
+                mimeType: 'text/plain',
+                content: Buffer.from('Sealed branch confidential test plan content'),
+                gate: () => decideUploadBand(ctx.Provider, sam, SEALED_BRANCH_SPACE_ID),
+            });
+            Assert(uploadOutcome.ok, `Uploading file as Sam in Sealed branch must succeed: ${uploadOutcome.ok ? '' : uploadOutcome.message}`);
+            if (!uploadOutcome.ok) throw new Error(`Upload failed: ${uploadOutcome.message}`);
+
+            const sealedItemId = uploadOutcome.itemId;
             const sealedItem = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, sam);
-            sealedItem.NewRecord();
-            sealedItem.SpaceID = SEALED_BRANCH_SPACE_ID;
-            sealedItem.EntityID = fileEntity!.ID;
-            sealedItem.RecordID = `ID|${fileRows[0].ID}`;
+            Assert(await sealedItem.Load(sealedItemId), 'Load uploaded sealed item');
             sealedItem.Band = 'Shared';
-            const savedSealedItem = await sealedItem.Save();
-            Assert(savedSealedItem, 'Creating Shared item in Sealed branch must succeed');
+            const promoted = await sealedItem.Save();
+            Assert(promoted, 'Promoting sealed branch item to Shared must succeed');
 
             try {
+                // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
                 const samPostRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: NORTHWIND_SPACE_ID,
                     text: '@Assistant summarize all materials in this space',
@@ -269,10 +284,38 @@ const checks: NamedCheck[] = [
                 );
                 Assert(caseyReplyRes.Success && (caseyReplyRes.Results?.length ?? 0) === 1, 'Casey can read Northwind room assistant reply');
                 const nwReplyMsg = caseyReplyRes.Results![0].Message;
-                Assert(!nwReplyMsg.includes(fileRows[0].Name), `Northwind room assistant reply must not name sub-space Shared file ${fileRows[0].Name}`);
+                Assert(!nwReplyMsg.includes(uniqueFileName), `Northwind room assistant reply must not name sub-space Shared file ${uniqueFileName}`);
+
+                // 2. The other half: Sam asking in Sealed branch's own room names it
+                const samSealedRes = await postSpaceMessage(ctx.Provider, sam, {
+                    spaceId: SEALED_BRANCH_SPACE_ID,
+                    text: '@Assistant summarize materials in this space',
+                    executeAgent: true,
+                });
+                Assert(samSealedRes.ok === true, 'Sam postSpaceMessage in Sealed branch room succeeds');
+                if (!samSealedRes.ok) throw new Error(`Sam postSpaceMessage failed: ${samSealedRes.message}`);
+                if (samSealedRes.detailId) createdDetailIds.push(samSealedRes.detailId);
+                if (samSealedRes.assistantDetailId) createdDetailIds.push(samSealedRes.assistantDetailId);
+
+                const samSealedReplyRes = await view.RunView<{ ID: string; Message: string }>(
+                    {
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ID = '${samSealedRes.assistantDetailId}'`,
+                        Fields: ['ID', 'Message'],
+                        ResultType: 'simple',
+                    },
+                    sam,
+                );
+                Assert(samSealedReplyRes.Success && (samSealedReplyRes.Results?.length ?? 0) === 1, 'Sam can read Sealed branch room assistant reply');
+                const sealedReplyMsg = samSealedReplyRes.Results![0].Message;
+                Assert(sealedReplyMsg.includes(uniqueFileName), `Sealed branch room reply must name its own Shared file ${uniqueFileName}`);
             } finally {
-                if (sealedItem.ID) {
-                    await sealedItem.Delete();
+                if (sealedItemId) {
+                    const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, sam);
+                    if (await itemToDelete.Load(sealedItemId)) {
+                        const deleted = await itemToDelete.Delete();
+                        Assert(deleted === true, 'Deleting uploaded Sealed branch space item must succeed');
+                    }
                 }
             }
         },

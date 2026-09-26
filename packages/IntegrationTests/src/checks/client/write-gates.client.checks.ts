@@ -314,7 +314,7 @@ const checks: NamedCheck[] = [
             Assert(!savedTeamSub, 'Bea creating subtask under Team task must fail save over the wire');
             const teamSubReason = subUnderTeam.LatestResult?.CompleteMessage ?? '';
             Assert(
-                teamSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record') || teamSubReason.includes('Access denied'),
+                teamSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record'),
                 `Expected Access denied refusal for subtask under Team task over the wire, got: ${teamSubReason}`,
             );
 
@@ -328,7 +328,7 @@ const checks: NamedCheck[] = [
             Assert(!savedUnreachableSub, 'Bea creating subtask under unreachable space task must fail save over the wire');
             const unreachableSubReason = subUnderUnreachable.LatestResult?.CompleteMessage ?? '';
             Assert(
-                unreachableSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record') || unreachableSubReason.includes('Access denied'),
+                unreachableSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record'),
                 `Expected Access denied refusal for subtask under unreachable task over the wire, got: ${unreachableSubReason}`,
             );
 

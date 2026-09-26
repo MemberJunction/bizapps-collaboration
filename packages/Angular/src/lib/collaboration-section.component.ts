@@ -62,6 +62,8 @@ import { CollaborationNoAccessComponent } from './no-access.component';
             width: 100%;
             height: 100%;
             overflow: hidden;
+            font-family: var(--mj-font-family, Inter, sans-serif);
+            font-size: 14px;
         }
         .mjc-shell {
             display: grid;
@@ -70,6 +72,9 @@ import { CollaborationNoAccessComponent } from './no-access.component';
             height: 100%;
             min-height: 0;
             overflow: hidden;
+            position: relative;
+            font-family: var(--mj-font-family, Inter, sans-serif);
+            font-size: 14px;
         }
         .main {
             min-width: 0;

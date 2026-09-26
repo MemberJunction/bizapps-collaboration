@@ -83,9 +83,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           @for (fix of Findings; track fix.id) {
             @let parts = getQuotationParts(fix);
             <div class="fix">
-              <div class="fix-q">
-                {{ parts.before }}<mark class="marked-phrase" [class.applied]="fix.status === 'Applied'">{{ parts.marked }}</mark>{{ parts.after }}
-              </div>
+              <div class="fix-q">{{ parts.before }}<mark class="marked-phrase" [class.applied]="fix.status === 'Applied'">{{ parts.marked }}</mark>{{ parts.after }}</div>
               <div class="fix-a">
                 <span class="muted fs12">Suggest</span>
                 <span class="sugg">{{ fix.suggestedPhrase }}</span>
@@ -141,6 +139,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
+      font-family: var(--mj-font-family, Inter, sans-serif);
+      font-size: 14px;
       line-height: var(--mjc-line-height);
     }
 
@@ -243,10 +243,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       font-family: Georgia, 'DejaVu Serif', serif;
 
       .marked-phrase {
-        background: var(--mjc-warn-bg, #fef3c7);
-        color: var(--mjc-warn-text, #92400e);
+        background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+        color: var(--mj-text-primary);
         border-radius: 3px;
-        padding: 0 3px;
+        padding: 0 2px;
         text-decoration: line-through;
         text-decoration-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 70%, transparent);
 
@@ -309,8 +309,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .note-textarea {
-      min-height: 80px;
-      height: 80px;
+      min-height: 62px;
+      height: 62px;
       width: 100%;
       box-sizing: border-box;
       resize: none;
