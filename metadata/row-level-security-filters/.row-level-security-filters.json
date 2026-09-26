@@ -51,7 +51,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000001"
+      "ID": "FE9BD3AC-E832-474E-BD80-B70E1BF5005A"
     },
     "fields": {
       "Name": "Collaboration: Shell Empty",
@@ -61,7 +61,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000002"
+      "ID": "63EBE663-2420-4433-801F-EABFF5167F80"
     },
     "fields": {
       "Name": "Collaboration: Own User",
@@ -71,7 +71,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000003"
+      "ID": "EA4D9B49-1CC8-4990-A26B-5BAE8D7C007A"
     },
     "fields": {
       "Name": "Collaboration: Own User Child",
@@ -81,7 +81,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000004"
+      "ID": "E3F72710-966C-4365-BAF6-2723EE6CD86A"
     },
     "fields": {
       "Name": "Collaboration: All Application Roles",
@@ -91,7 +91,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000005"
+      "ID": "3225E3AB-F9A3-49E2-AE33-4B49499DDDEC"
     },
     "fields": {
       "Name": "Collaboration: Conversations In Reach",
@@ -101,7 +101,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000006"
+      "ID": "3CECF865-7204-48A1-A13C-B2A73FE3EB6D"
     },
     "fields": {
       "Name": "Collaboration: Conversation Details In Reach",
@@ -111,7 +111,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000007"
+      "ID": "3539B489-C197-48EF-BDBA-96AD95B5F2A4"
     },
     "fields": {
       "Name": "Collaboration: Files In Reach",
@@ -121,7 +121,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000008"
+      "ID": "C79AD45D-9C11-45CB-AFB9-EAB9C454155C"
     },
     "fields": {
       "Name": "Collaboration: Notices For The Caller",
@@ -131,7 +131,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000009"
+      "ID": "9EB44691-CCD8-4172-8FF4-4F92A7AB159B"
     },
     "fields": {
       "Name": "Collaboration: Own Item Uses",
@@ -141,7 +141,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000010"
+      "ID": "DC44E308-4842-4329-909F-10979999E593"
     },
     "fields": {
       "Name": "Collaboration: Notices The Caller May Send",
@@ -151,7 +151,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000011"
+      "ID": "E6282EA3-879A-4B7F-8333-09DE41F438B8"
     },
     "fields": {
       "Name": "Collaboration: Own Workspace Items",
@@ -161,7 +161,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000012"
+      "ID": "13869C21-5AEB-44EA-B558-9028DDFCEA97"
     },
     "fields": {
       "Name": "Collaboration: Tasks In Reach",
@@ -171,7 +171,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000013"
+      "ID": "012F2B79-FC3E-4EC6-B73D-8B668AF45E42"
     },
     "fields": {
       "Name": "Collaboration: Task Rows In Reach",
@@ -181,7 +181,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000014"
+      "ID": "C925B9C9-C33C-4D97-9526-5C5A578F875C"
     },
     "fields": {
       "Name": "Collaboration: Subtasks Under A Writable Parent",
@@ -191,7 +191,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000015"
+      "ID": "3D1008D1-E327-459B-A836-C319E69888F9"
     },
     "fields": {
       "Name": "Collaboration: Task Catalog",
@@ -201,7 +201,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000016"
+      "ID": "99FA70BA-D7C1-4B82-9CC0-0056AFBC9C36"
     },
     "fields": {
       "Name": "Collaboration: Tasks The Caller May Change",
@@ -211,7 +211,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000017"
+      "ID": "D782305C-C026-4F16-AA75-6BD8389237C0"
     },
     "fields": {
       "Name": "Collaboration: Task Rows A Contributor May Change",
@@ -221,7 +221,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000018"
+      "ID": "D3DBD148-8DE3-4CF8-ADA8-F0099FAFFDDA"
     },
     "fields": {
       "Name": "Collaboration: Task Dependencies In Reach",
@@ -231,7 +231,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000019"
+      "ID": "9786E4C7-F3A5-46E4-8289-ABC11BC0E2F6"
     },
     "fields": {
       "Name": "Collaboration: Task Dependencies A Contributor May Change",
@@ -241,7 +241,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000020"
+      "ID": "F3950945-D6A9-426B-BA67-811E5DF57A45"
     },
     "fields": {
       "Name": "Collaboration: Task Comments The Author May Change",
@@ -251,7 +251,7 @@
   },
   {
     "primaryKey": {
-      "ID": "C0FFEE00-0000-4000-8000-000000000021"
+      "ID": "76439682-05D4-4769-8F8A-AA10083F2C70"
     },
     "fields": {
       "Name": "Collaboration: People In Reach",

@@ -11,11 +11,12 @@ DECLARE @Learner uniqueidentifier = NULL;   -- cohort learner
 IF @Ada IS NULL OR @Bea IS NULL OR @Director IS NULL OR @Learner IS NULL
     THROW 50000, 'Set @Ada, @Bea, @Director and @Learner to real user ids before running.', 1;
 
-DECLARE @Workspace uniqueidentifier = 'A1000001-0000-4000-8000-000000000001';
-DECLARE @Committee uniqueidentifier = 'A1000001-0000-4000-8000-000000000002';
-DECLARE @Cohort uniqueidentifier = 'A1000001-0000-4000-8000-000000000003';
-DECLARE @Owner uniqueidentifier = 'B2000001-0000-4000-8000-000000000001';
-DECLARE @Guest uniqueidentifier = 'B2000001-0000-4000-8000-000000000004';
+DECLARE @Workspace uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'workspace');
+DECLARE @Committee uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'committee');
+DECLARE @Cohort uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'cohort');
+DECLARE @Owner uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'owner');
+DECLARE @Guest uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'guest');
+DECLARE @ClientMember uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'client-member');
 DECLARE @Engagement uniqueidentifier = NEWID();
 DECLARE @Discovery uniqueidentifier = NEWID();
 DECLARE @CommitteeSpace uniqueidentifier = NEWID();
@@ -36,7 +37,7 @@ VALUES
     (@CommitteeSpace, @Ada, @Owner, N'Team', N'Active'),
     (@CommitteeSpace, @Director, @Guest, N'Shared', N'Active'),
     (@CohortSpace, @Ada, @Owner, N'Team', N'Active'),
-    (@CohortSpace, @Learner, 'B2000001-0000-4000-8000-000000000006', N'Shared', N'Active');
+    (@CohortSpace, @Learner, @ClientMember, N'Shared', N'Active');
 
 DECLARE @FileEntity uniqueidentifier = (SELECT ID FROM __mj.Entity WHERE Name = N'MJ: Files');
 INSERT INTO __mj_BizAppsCollaboration.SpaceItem (SpaceID, EntityID, RecordID, Band, PromotedAt, PromotedByUserID)

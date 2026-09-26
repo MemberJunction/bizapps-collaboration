@@ -4,7 +4,7 @@
       "The Sharing Center asks this domain by class name. CollaborationSpacePermissionProvider answers from the roster."
     ],
     "primaryKey": {
-      "ID": "F1000001-0000-4000-8000-000000000001"
+      "ID": "AE56B129-94D6-4B78-AC82-F0E8C645EC71"
     },
     "fields": {
       "Name": "Collaboration Spaces",

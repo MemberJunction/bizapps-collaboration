@@ -11,6 +11,7 @@ import {
     SPACE_ENTITY,
     SPACE_MEMBER_ENTITY,
     SPACE_ITEM_ENTITY,
+    SPACE_TYPE_ENTITY,
     SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
     TASK_ENTITY,
@@ -29,12 +30,15 @@ const checks: NamedCheck[] = [
             const ada = await GetPersonaUser(ctx, 'ada');
             const bea = await GetPersonaUser(ctx, 'bea');
 
+            const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Name = 'Workspace'", ['ID']);
+            Assert(Boolean(workspaceType?.ID), 'Expected Workspace space type to exist');
+
             // 1. Participant (Bea) creating a root space (ParentID = null) is refused
             const rootAttempt = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea);
             rootAttempt.NewRecord();
             rootAttempt.Name = 'Bea Root Space';
             rootAttempt.OwnerID = bea.ID;
-            rootAttempt.SpaceTypeID = 'A1000001-0000-4000-8000-000000000001'; // workspace type
+            rootAttempt.SpaceTypeID = workspaceType.ID;
             rootAttempt.ParentID = null;
 
             const savedRoot = await rootAttempt.Save();
