@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Audit Committee — Dana</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  body { --mjc-type-color: #d97706; } /* this space's SpaceType.Color, which is data */
+  .cm { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: 18px; padding: 16px 28px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .meet { overflow: hidden; }
+  .meet-top { display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: linear-gradient(90deg, color-mix(in srgb, var(--mjc-type-color) 9%, var(--mj-bg-surface)), var(--mj-bg-surface) 70%); border-bottom: 1px solid var(--mj-border-default); }
+  .bigdate { width: 62px; height: 68px; border-radius: 14px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); box-shadow: var(--mj-shadow-sm); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; flex: none; }
+  .bigdate span { font-size: 11px; font-weight: 700; color: var(--mj-status-error); letter-spacing: .08em; }
+  .bigdate b { font-size: 26px; font-weight: 750; margin-top: 3px; }
+  .bigdate em { font-style: normal; font-size: 10.5px; color: var(--mj-text-muted); margin-top: 3px; font-weight: 600; }
+  .pack { display: flex; align-items: center; gap: 14px; padding: 14px 18px; }
+  .fs13\.5 { font-size: 13.5px; }
+  .agenda { padding: 0 8px 6px; }
+  .ag-row { display: flex; align-items: center; gap: 14px; padding: 8px 8px; border-top: 1px solid var(--mj-border-subtle); }
+  .ag-row:first-child { border-top: 0; }
+  .ag-t { width: 38px; font-size: 12.5px; font-weight: 650; color: var(--mj-text-secondary); }
+  .paper { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); padding: 3px 8px; border-radius: 7px; border: 1px solid var(--mj-border-default); }
+  .note-flag { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--mj-status-warning-text); margin-right: 4px; }
+  .vote { padding: 16px; border-color: color-mix(in srgb, var(--mj-status-warning) 45%, var(--mj-border-default)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-status-warning) 8%, transparent), var(--mj-shadow-sm); }
+  .vbtns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .ask { padding: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)), var(--mj-bg-surface) 70%); }
+  .ask-in { position: relative; margin-top: 12px; height: 40px; border-radius: 11px; border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default)); background: var(--mj-bg-surface); display: flex; align-items: center; padding: 0 44px 0 12px; color: var(--mj-text-muted); font-size: 13px; }
+  .ask-in .send { position: absolute; right: 5px; top: 5px; width: 30px; height: 30px; border-radius: 8px; background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); display: grid; place-items: center; font-size: 12px; }
+  .ask-scope { margin-top: 10px; font-size: 12px; color: var(--mj-text-secondary); display: flex; gap: 7px; line-height: 1.45; }
+  .ask-scope i { margin-top: 3px; color: var(--mj-text-muted); }
+  .mem { padding: 0 16px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .mem .m { display: flex; align-items: center; gap: 10px; }
+  .mem b { font-weight: 650; }
+  
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+  <span class="mark"></span>
+  <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration<i class="fa-solid fa-chevron-down caret"></i></span>
+  <span class="spacer"></span>
+  <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+  <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+  <span class="av c10 md ext " title="Dana Whitfield">DW</span>
+</header>
+    <div class="body">
+      <nav class="appnav">
+  <div class="nav-item "><i class="fa-solid fa-house"></i>Home</div>
+  <div class="nav-item "><i class="fa-solid fa-inbox"></i>Inbox<span class="count hot">1</span></div>
+  <div class="nav-item "><i class="fa-solid fa-list-check"></i>My tasks</div>
+  <div class="nav-section">Your spaces</div>
+  <div class="tree-item  active"><span class="chev"></span><span class="tile com sm"><i class="fa-solid fa-landmark"></i></span><span class="ellipsis">Audit Committee</span><span class="unread"></span></div>
+  <div class="nav-footer">
+    <div class="org-card">
+      <div class="row gap8"><span class="firm-mark">M</span><div><div class="fw6 fs13">Meridian Advisory</div><div class="fs12 muted">Board portal</div></div></div>
+    </div>
+  </div>
+</nav>
+      <main class="main">
+        <section class="space-head">
+  <div class="crumbs"><span>Spaces</span><i class="fa-solid fa-chevron-right"></i><b>Audit Committee</b></div>
+  <div class="top" style="margin-top:10px">
+    <span class="tile com xl"><i class="fa-solid fa-landmark"></i></span>
+    <div class="grow">
+      <div class="title-row"><h1 class="h1">Audit Committee</h1><span class="chip plain">Committee</span><span class="chip plain">FY2026 term</span></div>
+      <div class="sub">Financial reporting, internal controls and the external audit<span class="dotsep"></span>Meets quarterly</div>
+    </div>
+    <div class="actions"><div class="aud"><span class="stack"><span class="av c6 sm  " title="Margaret Cole">MC</span><span class="av c3 sm  " title="Tom Reyes">TR</span><span class="av c1 sm  " title="Ada Lovell">AL</span></span><span class="aud-div"></span><span class="stack"><span class="av c10 sm ext " title="Dana Whitfield">DW</span><span class="av c2 sm ext " title="Ken Mori">KM</span></span><span class="aud-t"><b>7 members</b><span>2 outside directors</span></span></div></div>
+  </div>
+  <div class="tabs"><span class="tab active"><i class="fa-solid fa-gauge-high"></i>Overview</span><span class="tab "><i class="fa-solid fa-calendar-days"></i>Meetings<span class="c">4</span></span><span class="tab "><i class="fa-solid fa-folder-open"></i>Papers<span class="c">18</span></span><span class="tab "><i class="fa-solid fa-gavel"></i>Motions<span class="c">1</span></span><span class="tab "><i class="fa-solid fa-user-group"></i>Members<span class="c">7</span></span><span class="tab "><i class="fa-solid fa-comments"></i>Chat</span></div>
+</section>
+        <div class="cm">
+          <section class="col">
+            <div class="card meet">
+              <div class="meet-top">
+                <div class="bigdate"><span>OCT</span><b>2</b><em>Thu</em></div>
+                <div class="grow">
+                  <div class="eyebrow" style="color:var(--mjc-type-color)">Next meeting · in 6 days</div>
+                  <div class="fw7" style="font-size:19px;margin-top:2px">Q3 Audit Committee meeting</div>
+                  <div class="fs13 secondary" style="margin-top:2px">4:00–5:30 PM · Boardroom, 12th floor, and video</div>
+                </div>
+                <div class="row gap8"><span class="btn"><i class="fa-regular fa-calendar-plus"></i>Add to calendar</span><span class="btn" style="opacity:.6"><i class="fa-solid fa-video"></i>Join at 3:55</span></div>
+              </div>
+              <div class="pack">
+                <span class="fi pdf "><i class="fa-solid fa-file-pdf"></i></span>
+                <div class="grow"><div class="fw7 fs13.5">Q3 board pack</div><div class="fs12 muted">42 pages · published today by Ada Lovell, committee secretary</div>
+                  <div class="row gap10" style="margin-top:8px"><div class="progress grow" style="max-width:260px"><span style="width:29%;background:var(--mjc-type-color)"></span></div><span class="fs12 secondary">You’ve read 12 of 42 pages</span></div></div>
+                <span class="btn primary"><i class="fa-solid fa-book-open"></i>Continue reading</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span class="h3">Agenda</span><span class="fs12 muted">6 items</span><span class="link">Download pack</span></div>
+              <div class="agenda">
+                
+    <div class="ag-row"><span class="ag-t tnum">4:00</span><div class="grow"><div class="fw6 fs13">Call to order; minutes of July 17</div><div class="fs12 muted">Margaret Cole, chair</div></div><span class="paper"><i class="fa-regular fa-file-lines"></i>Minutes</span></div>
+                
+    <div class="ag-row"><span class="ag-t tnum">4:05</span><div class="grow"><div class="fw6 fs13">External audit plan for FY2026</div><div class="fs12 muted">Hartwell &amp; Co., invited</div></div><span class="paper"><i class="fa-regular fa-file-lines"></i>Paper 2</span></div>
+                
+    <div class="ag-row"><span class="ag-t tnum">4:30</span><div class="grow"><div class="fw6 fs13">Internal controls update</div><div class="fs12 muted">Tom Reyes</div></div><span class="note-flag"><i class="fa-regular fa-note-sticky"></i>Your note on p.14</span><span class="paper"><i class="fa-regular fa-file-lines"></i>Paper 3</span></div>
+                
+    <div class="ag-row"><span class="ag-t tnum">4:50</span><div class="grow"><div class="fw6 fs13">Motion 2026-14: appoint the external auditor</div><div class="fs12 muted">Margaret Cole</div></div><span class="chip warn"><i class="fa-solid fa-gavel"></i>Vote</span></div>
+                
+    <div class="ag-row"><span class="ag-t tnum">5:10</span><div class="grow"><div class="fw6 fs13">Risk register review</div><div class="fs12 muted">Ada Lovell</div></div><span class="paper"><i class="fa-regular fa-file-lines"></i>Paper 5</span></div>
+                
+    <div class="ag-row"><span class="ag-t tnum">5:25</span><div class="grow"><div class="fw6 fs13">Closed session — members only</div><div class="fs12 muted">Staff and guests leave</div></div><span class="chip team"><i class="fa-solid fa-lock"></i>Members</span></div>
+              </div>
+            </div>
+          </section>
+          <aside class="col">
+            <div class="card vote">
+              <div class="row gap8"><span class="chip warn lg"><i class="fa-solid fa-gavel"></i>Your vote is needed</span><span class="fs12 muted" style="margin-left:auto">Closes Wed 5:00 PM</span></div>
+              <div class="fw7 fs15" style="margin-top:12px">Motion 2026-14</div>
+              <div class="fs13 secondary" style="margin-top:4px;line-height:1.5">Appoint Hartwell &amp; Co. as external auditor for FY2026, fee not to exceed <b class="tnum" style="color:var(--mj-text-primary)">$184,000</b>.</div>
+              <div class="fs12 muted" style="margin-top:6px">Moved by Margaret Cole · seconded by Tom Reyes</div>
+              <div class="row gap8" style="margin-top:12px"><span class="stack"><span class="av c6 xs  " title="Margaret Cole">MC</span><span class="av c3 xs  " title="Tom Reyes">TR</span><span class="av c5 xs  " title="Ruth Alvarez">RA</span><span class="av c2 xs ext " title="Ken Mori">KM</span></span><span class="fs12 secondary">4 of 7 have voted</span><div class="progress grow"><span style="width:57%;background:var(--mjc-type-color)"></span></div></div>
+              <div class="vbtns"><span class="btn"><i class="fa-solid fa-check" style="color:var(--mj-status-success)"></i>For</span><span class="btn"><i class="fa-solid fa-xmark" style="color:var(--mj-status-error)"></i>Against</span><span class="btn">Abstain</span></div>
+              <div class="fs12 muted" style="margin-top:10px"><i class="fa-regular fa-flag"></i>&nbsp; <span class="link" style="font-weight:600">Declare a conflict of interest</span> · votes are recorded by name in the minutes</div>
+            </div>
+            <div class="card ask">
+              <div class="row gap10"><span class="ai-av md"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><div><div class="fw7 fs14">Ask about this committee</div><div class="fs12 muted">Private to you</div></div></div>
+              <div class="ask-in">How does the fee compare to last year?<span class="send"><i class="fa-solid fa-arrow-up"></i></span></div>
+              <div class="ask-scope"><i class="fa-solid fa-lock"></i><span>Uses papers published to members, never unpublished drafts.</span></div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span class="h3">Members</span><span class="link">All 7</span></div>
+              <div class="mem">
+                <div class="m"><span class="av c6 sm  " title="Margaret Cole">MC</span><span class="grow fs12.5"><b>Margaret Cole</b> · chair</span></div>
+                <div class="m"><span class="av c2 sm ext " title="Ken Mori">KM</span><span class="grow fs12.5"><b>Ken Mori</b> · outside director</span></div>
+                <div class="m" style="opacity:.8"><span class="av c8 sm ext " title="Pat Rivera">PR</span><span class="grow fs12.5"><b>Pat Rivera</b> · you invited</span><span class="chip plain">Awaiting staff</span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div></body>
+</html>

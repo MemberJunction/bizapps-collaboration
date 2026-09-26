@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>New space</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  .ns { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+  .ns-form { padding: 20px 22px 18px; }
+  .ns-prev { padding: 20px 20px; background: var(--mj-bg-surface-card); border-left: 1px solid var(--mj-border-default); }
+  .lab { font-size: 12px; font-weight: 650; color: var(--mj-text-secondary); margin: 16px 0 7px; }
+  .types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ty { position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); }
+  .ty .tile.lg { width: 36px; height: 36px; font-size: 15px; border-radius: 10px; }
+  .ty.on { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); }
+  .ty-check { position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 99px; background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); font-size: 9px; display: grid; place-items: center; }
+  .fs13\.5 { font-size: 13.5px; }
+  .input .caret { width: 1.5px; height: 16px; background: var(--mj-brand-primary); margin-left: -6px; }
+  .who { display: flex; flex-direction: column; gap: 8px; }
+  .wopt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); }
+  .wopt .radio { margin-top: 2px; }
+  .wopt.on { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface)); }
+  .picked { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .picked .fs12\.5 { margin-right: 6px; }
+  .picked .add { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--mj-text-link); }
+  .asst-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); }
+  .tree { margin-top: 10px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; padding: 8px; }
+  .tn { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; border-radius: 8px; color: var(--mj-text-secondary); }
+  .tn b { color: var(--mj-text-primary); font-weight: 650; }
+  .tn .muted { margin-left: auto; }
+  .tn.l1 { padding-left: 24px; } .tn.l2 { padding-left: 42px; }
+  .tn.new { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--mj-brand-primary) 45%, transparent); }
+  .newtag { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--mj-brand-on-primary); background: var(--mj-brand-primary); border-radius: 5px; padding: 1px 6px; }
+  .tn.dimt { opacity: .6; }
+  .sum { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .sum-r { display: flex; gap: 10px; font-size: 12.5px; color: var(--mj-text-secondary); line-height: 1.45; }
+  .sum-r i { width: 16px; text-align: center; margin-top: 3px; color: var(--mj-text-muted); }
+  .sum-r b { color: var(--mj-text-primary); font-weight: 650; }
+  .m-f { display: flex; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  
+</style>
+</head>
+<body>
+  <div class="shell" style="position:relative">
+    <header class="topbar">
+  <span class="mark"></span>
+  <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration<i class="fa-solid fa-chevron-down caret"></i></span>
+  <span class="spacer"></span>
+  <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+  <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+  <span class="av c1 md  " title="Ada Lovell">AL</span>
+</header>
+    <div class="body">
+      <nav class="appnav">
+  <div class="jump"><i class="fa-solid fa-magnifying-glass"></i>Jump to a space<span class="kbd">⌘J</span></div>
+  <div class="nav-item "><i class="fa-solid fa-house"></i>Home</div>
+  <div class="nav-item "><i class="fa-solid fa-inbox"></i>Inbox<span class="count hot">4</span></div>
+  <div class="nav-item "><i class="fa-solid fa-list-check"></i>My tasks<span class="count ">6</span></div>
+  <div class="nav-item "><i class="fa-solid fa-folder-open"></i>Recent files</div>
+  <div class="nav-section">Spaces <i class="fa-solid fa-plus"></i></div>
+  <div class="tree-item  active ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Northwind</span></div>
+  <div class="tree-item l1  ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-compass"></i></span><span class="ellipsis">Discovery</span><span class="unread"></span></div>
+  <div class="tree-item l2  ">
+      <span class="chev"></span>
+      <span class="tile eng sm"><i class="fa-solid fa-clipboard"></i></span><span class="ellipsis">Field notes</span></div>
+  <div class="tree-item l1  ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-truck-fast"></i></span><span class="ellipsis">Delivery</span><span class="meta"><i class="fa-solid fa-lock"></i></span></div>
+  <div class="tree-item l1  dim">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-box-archive"></i></span><span class="ellipsis">Closed</span><span class="meta">2</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile com sm"><i class="fa-solid fa-landmark"></i></span><span class="ellipsis">Audit Committee</span><span class="unread"></span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile coh sm"><i class="fa-solid fa-graduation-cap"></i></span><span class="ellipsis">Spring Leadership Cohort</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Pinecrest Health</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile wks sm"><i class="fa-solid fa-shapes"></i></span><span class="ellipsis">Studio</span></div>
+  <div class="nav-footer">
+    <div class="nav-item "><i class="fa-solid fa-wand-magic-sparkles"></i>Assistant</div>
+    <div class="nav-item "><i class="fa-solid fa-gear"></i>Space types & settings</div>
+  </div>
+</nav>
+      <main class="main">
+        <section class="space-head">
+  <div class="crumbs"><span>Spaces</span><i class="fa-solid fa-chevron-right"></i><b>Northwind</b></div>
+  <div class="top" style="margin-top:10px">
+    <span class="tile rel xl"><i class="fa-solid fa-building"></i></span>
+    <div class="grow">
+      <div class="title-row"><h1 class="h1">Northwind</h1><span class="chip plain">Client relationship</span><span class="chip plain">Since 2023</span></div>
+      <div class="sub">Northwind Distribution<span class="dotsep"></span>2 open engagements<span class="dotsep"></span>2 closed</div>
+    </div>
+    <div class="actions"><div class="aud">
+    <span class="stack"><span class="av c1 sm  " title="Ada Lovell">AL</span><span class="av c9 sm  " title="Sam Okafor">SO</span><span class="av c6 sm  " title="Priya Shah">PS</span></span>
+    <span class="aud-div"></span>
+    <span class="stack"><span class="av c4 sm ext " title="Casey Morgan">CM</span><span class="av c5 sm ext " title="Bea Tanaka">BT</span><span class="av c3 sm ext " title="Omar Haddad">OH</span><span class="av c2 sm ext " title="Lena Fischer">LF</span></span>
+    <span class="aud-t"><b>9 people</b><span>3 Meridian · 6 Northwind</span></span>
+  </div><span class="btn primary"><i class="fa-solid fa-plus"></i>New space</span></div>
+  </div>
+  <div class="tabs"><span class="tab "><i class="fa-solid fa-gauge-high"></i>Overview</span><span class="tab active"><i class="fa-solid fa-sitemap"></i>Spaces<span class="c">4</span></span><span class="tab "><i class="fa-solid fa-folder-open"></i>Library<span class="c">31</span></span><span class="tab "><i class="fa-solid fa-user-group"></i>People<span class="c">9</span></span><span class="tab "><i class="fa-solid fa-sliders"></i>Settings</span></div>
+</section>
+      </main>
+    </div>
+    
+  <div class="scrim"></div>
+  <div class="modal" style="left:50%;top:50%;width:940px;transform:translate(-50%,-50%)">
+    <div class="ns">
+      <div class="ns-form">
+        <div class="row gap10"><div class="grow"><div class="fw7" style="font-size:19px">New space in Northwind</div><div class="fs13 secondary">A place with its own people, files, chats and tasks.</div></div><i class="fa-solid fa-xmark muted" style="font-size:16px"></i></div>
+        <div class="lab">What kind of space?</div>
+        <div class="types">
+          <div class="ty on"><span class="tile eng lg"><i class="fa-solid fa-compass"></i></span><div><div class="fw7 fs13.5">Engagement</div><div class="fs12 muted">Client work with deliverables</div></div><span class="ty-check"><i class="fa-solid fa-check"></i></span></div>
+          <div class="ty "><span class="tile com lg"><i class="fa-solid fa-landmark"></i></span><div><div class="fw7 fs13.5">Committee</div><div class="fs12 muted">Meetings, papers and votes</div></div></div>
+          <div class="ty "><span class="tile coh lg"><i class="fa-solid fa-graduation-cap"></i></span><div><div class="fw7 fs13.5">Cohort</div><div class="fs12 muted">Sessions and learners</div></div></div>
+          <div class="ty "><span class="tile wks lg"><i class="fa-solid fa-shapes"></i></span><div><div class="fw7 fs13.5">Workshop</div><div class="fs12 muted">A short working session</div></div></div>
+        </div>
+        <div class="row gap12" style="margin-top:16px">
+          <div class="grow"><div class="lab" style="margin-top:0">Name</div><div class="input focus" style="color:var(--mj-text-primary)">Dayton pilot<span class="caret"></span></div></div>
+          <div style="width:220px"><div class="lab" style="margin-top:0">Closes on</div><div class="input" style="justify-content:space-between;color:var(--mj-text-primary)">Jan 30, 2027<i class="fa-regular fa-calendar fs12 muted"></i></div></div>
+        </div>
+        <div class="lab">Who’s in it?</div>
+        <div class="who">
+          <div class="wopt"><span class="radio"></span><div class="grow"><div class="fw6 fs13">Everyone in Northwind <span class="muted fw5">· 9 people</span></div><div class="fs12 muted">Northwind’s 6 see Shared material only. New Northwind people join automatically.</div></div></div>
+          <div class="wopt on"><span class="radio on"></span><div class="grow"><div class="fw6 fs13">Only people I add <span class="chip team" style="margin-left:6px"><i class="fa-solid fa-lock"></i>Sealed</span></div><div class="fs12 muted">Nobody joins from Northwind unless you add them.</div>
+            <div class="picked"><span class="av c1 sm  " title="Ada Lovell">AL</span><span class="fs12.5">Ada (you)</span><span class="av c9 sm  " title="Sam Okafor">SO</span><span class="fs12.5">Sam</span><span class="av c3 sm ext " title="Omar Haddad">OH</span><span class="fs12.5">Omar</span><span class="add"><i class="fa-solid fa-plus"></i>Add</span></div></div></div>
+        </div>
+        <div class="lab">Assistant</div>
+        <div class="asst-row"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><span class="fs12.5 secondary grow">Starts with Northwind’s 2 notes. Add the pilot’s own after you create it.</span><span class="switch on"></span><span class="fs12 secondary">Searchable from Northwind</span></div>
+      </div>
+      <div class="ns-prev">
+        <div class="eyebrow">Where it will live</div>
+        <div class="tree">
+          <div class="tn"><span class="tile rel sm"><i class="fa-solid fa-building"></i></span><b>Northwind</b><span class="muted fs12">9 people</span></div>
+          <div class="tn l1"><span class="tile eng sm"><i class="fa-solid fa-compass"></i></span>Discovery<span class="muted fs12">9</span></div>
+          <div class="tn l2"><span class="tile eng sm"><i class="fa-solid fa-clipboard"></i></span>Field notes</div>
+          <div class="tn l1"><span class="tile eng sm"><i class="fa-solid fa-truck-fast"></i></span>Delivery<i class="fa-solid fa-lock muted fs11"></i><span class="muted fs12">3</span></div>
+          <div class="tn l1 new"><span class="tile eng sm"><i class="fa-solid fa-flask"></i></span><b>Dayton pilot</b><span class="chip team" style="height:18px;font-size:10.5px"><i class="fa-solid fa-lock"></i>Sealed</span><span class="newtag">New</span></div>
+          <div class="tn l1 dimt"><span class="tile eng sm closed"><i class="fa-solid fa-box-archive"></i></span>Closed engagements<span class="muted fs12">2</span></div>
+        </div>
+        <div class="eyebrow" style="margin-top:20px">What you’re creating</div>
+        <div class="sum">
+          <div class="sum-r"><i class="fa-solid fa-user-group"></i><span><b>3 people</b> to start — 2 Meridian, 1 Northwind</span></div>
+          <div class="sum-r"><i class="fa-solid fa-lock"></i><span>Omar sees <b>Shared</b> material only, like everywhere in Northwind</span></div>
+          <div class="sum-r"><i class="fa-solid fa-wand-magic-sparkles"></i><span>The Assistant brings Northwind’s notes along</span></div>
+          <div class="sum-r"><i class="fa-solid fa-box-archive"></i><span>Closes <b>Jan 30, 2027</b>; answerable for 2 years after</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="m-f">
+      <span class="btn primary"><i class="fa-solid fa-check"></i>Create Dayton pilot</span>
+      <span class="btn ghost" style="margin-left:auto">Cancel</span>
+    </div>
+  </div>
+  </div></body>
+</html>

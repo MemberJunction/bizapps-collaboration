@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Home</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  .home { padding: 18px 32px; }
+  .home-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 14px; }
+  .askall { display: flex; align-items: center; gap: 10px; width: 340px; height: 38px; padding: 0 10px 0 8px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default)); background: var(--mj-bg-surface);
+    color: var(--mj-text-muted); font-size: 13.5px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 6%, transparent); }
+  .askall .kbd { margin-left: auto; }
+  .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: 22px; }
+  .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .col > .row { margin: 4px 2px 0 !important; }
+  .count-pill { font-size: 11.5px; font-weight: 700; color: var(--mj-brand-on-primary); background: var(--mj-brand-primary); border-radius: 99px; padding: 1px 8px; }
+  .needs { padding: 0 6px 6px; }
+  .need { display: flex; align-items: center; gap: 14px; padding: 10px 10px; border-radius: 10px; }
+  .need + .need { border-top: 1px solid var(--mj-border-subtle); }
+  .need-lead { width: 40px; display: grid; place-items: center; }
+  .need-t { font-size: 13.5px; } .need-t b { font-weight: 650; }
+  .need-m { font-size: 12.5px; color: var(--mj-text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .quote { color: var(--mj-text-secondary); font-style: normal; }
+  .need-move { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; vertical-align: middle; }
+  .need-move > i { font-size: 11px; color: var(--mj-text-muted); }
+  .srows { padding: 0 6px 6px; }
+  .srow { display: grid; grid-template-columns: 40px minmax(0, 1fr) 176px 124px 84px 12px; align-items: center; gap: 14px; padding: 6px 10px; border-top: 1px solid var(--mj-border-subtle); }
+  .srow:first-child { border-top: 0; }
+  .srow .tile.lg { width: 38px; height: 38px; font-size: 16px; border-radius: 10px; }
+  .srow-people { display: flex; align-items: center; gap: 7px; }
+  .srow-people .aud-div { width: 1px; height: 14px; background: var(--mj-border-default); }
+  .srow-sig { display: flex; justify-content: flex-end; }
+  .unread-pill { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
+  .unread-pill.warn { color: var(--mj-status-warning-text); background: var(--mj-status-warning-bg); }
+  .agenda { padding: 0 10px 8px; }
+  .ag { display: flex; align-items: center; gap: 12px; padding: 9px 6px; border-top: 1px solid var(--mj-border-subtle); }
+  .ag:first-child { border-top: 0; }
+  .date { width: 42px; height: 44px; border-radius: 10px; border: 1px solid var(--mj-border-default); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; background: var(--mj-bg-surface); }
+  .date span { font-size: 9.5px; font-weight: 700; color: var(--mj-status-error); letter-spacing: .06em; }
+  .date b { font-size: 17px; font-weight: 700; margin-top: 3px; }
+  .digest { background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)), var(--mj-bg-surface) 60%); }
+  .dig { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--mj-text-secondary); }
+  .dig b { color: var(--mj-text-primary); font-weight: 650; }
+  .dig-foot { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--mj-border-default); font-size: 11.5px; color: var(--mj-text-muted); display: flex; gap: 7px; align-items: center; }
+  
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+  <span class="mark"></span>
+  <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration<i class="fa-solid fa-chevron-down caret"></i></span>
+  <span class="spacer"></span>
+  <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+  <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+  <span class="av c1 md  " title="Ada Lovell">AL</span>
+</header>
+    <div class="body">
+      <nav class="appnav">
+  <div class="jump"><i class="fa-solid fa-magnifying-glass"></i>Jump to a space<span class="kbd">⌘J</span></div>
+  <div class="nav-item active"><i class="fa-solid fa-house"></i>Home</div>
+  <div class="nav-item "><i class="fa-solid fa-inbox"></i>Inbox<span class="count hot">4</span></div>
+  <div class="nav-item "><i class="fa-solid fa-list-check"></i>My tasks<span class="count ">6</span></div>
+  <div class="nav-item "><i class="fa-solid fa-folder-open"></i>Recent files</div>
+  <div class="nav-section">Spaces <i class="fa-solid fa-plus"></i></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Northwind</span></div>
+  <div class="tree-item l1  ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-compass"></i></span><span class="ellipsis">Discovery</span><span class="unread"></span></div>
+  <div class="tree-item l2  ">
+      <span class="chev"></span>
+      <span class="tile eng sm"><i class="fa-solid fa-clipboard"></i></span><span class="ellipsis">Field notes</span></div>
+  <div class="tree-item l1  ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-truck-fast"></i></span><span class="ellipsis">Delivery</span><span class="meta"><i class="fa-solid fa-lock"></i></span></div>
+  <div class="tree-item l1  dim">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-box-archive"></i></span><span class="ellipsis">Closed</span><span class="meta">2</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile com sm"><i class="fa-solid fa-landmark"></i></span><span class="ellipsis">Audit Committee</span><span class="unread"></span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile coh sm"><i class="fa-solid fa-graduation-cap"></i></span><span class="ellipsis">Spring Leadership Cohort</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Pinecrest Health</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile wks sm"><i class="fa-solid fa-shapes"></i></span><span class="ellipsis">Studio</span></div>
+  <div class="nav-footer">
+    <div class="nav-item "><i class="fa-solid fa-wand-magic-sparkles"></i>Assistant</div>
+    <div class="nav-item "><i class="fa-solid fa-gear"></i>Space types & settings</div>
+  </div>
+</nav>
+      <main class="main"><div class="page home">
+        <div class="home-head">
+          <div>
+            <div class="eyebrow">Friday, September 26</div>
+            <h1 class="h1" style="font-size:28px;margin-top:4px">Good morning, Ada</h1>
+            <div class="secondary" style="margin-top:4px">Four things need you across five spaces. Northwind's readout is in 13 days.</div>
+          </div>
+          <div class="row gap8" style="margin-left:auto">
+            <div class="askall"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><span>Ask across your spaces…</span><span class="kbd">⌘I</span></div>
+            <span class="btn primary"><i class="fa-solid fa-plus"></i>New space</span>
+          </div>
+        </div>
+
+        <div class="home-grid">
+          <div class="col">
+            <div class="card">
+              <div class="card-h"><span class="h3">Needs you</span><span class="count-pill">4</span><span class="link">Open inbox</span></div>
+              <div class="needs">
+                
+    <div class="need">
+      <div class="need-lead"><span class="av c4 md ext " title="Casey Morgan">CM</span></div>
+      <div class="grow">
+        <div class="need-t"><b>Casey Morgan</b> asked in <b>Discovery</b> · Room</div>
+        <div class="need-m"><span class="quote">“Can someone summarize where vendor scoring landed? Our CFO will ask.”</span></div>
+      </div>
+      <div class="row gap8"><span class="muted fs12">12m</span><span class="btn sm primary"><i class="fa-solid fa-reply"></i>Reply</span></div>
+    </div>
+                
+    <div class="need">
+      <div class="need-lead"><span class="ai-av md"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span></div>
+      <div class="grow">
+        <div class="need-t"><b>Review before sharing</b> · Interview synthesis v3 <span class="need-move"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span><i class="fa-solid fa-arrow-right-long"></i><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span></span></div>
+        <div class="need-m">The Assistant found 2 people who could be identified in a file Sam wants to share.</div>
+      </div>
+      <div class="row gap8"><span class="muted fs12">2h</span><span class="btn sm"><i class="fa-solid fa-magnifying-glass"></i>Review</span></div>
+    </div>
+                
+    <div class="need">
+      <div class="need-lead"><span class="tile com lg"><i class="fa-solid fa-landmark"></i></span></div>
+      <div class="grow">
+        <div class="need-t"><b>Audit Committee</b> meets Thu, Oct 2 at 4:00 PM</div>
+        <div class="need-m">The board pack is ready but not published. 7 members are waiting on it.</div>
+      </div>
+      <div class="row gap8"><span class="btn sm"><i class="fa-solid fa-paper-plane"></i>Publish pack</span></div>
+    </div>
+                
+    <div class="need">
+      <div class="need-lead"><span class="av c8 md ext " title="Pat Rivera">PR</span></div>
+      <div class="grow">
+        <div class="need-t"><b>Dana Whitfield</b> invited <b>Pat Rivera</b> to Audit Committee</div>
+        <div class="need-m">Outside director · new outside members need staff approval</div>
+      </div>
+      <div class="row gap8"><span class="btn sm primary">Approve</span><span class="btn sm ghost">Decline</span></div>
+    </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="h3">Your spaces</span>
+                <span class="seg" style="margin-left:8px"><span class="on">Active <span class="n">6</span></span><span>Closed <span class="n">2</span></span></span>
+                <span class="fs12 muted" style="margin-left:auto">Recent activity <i class="fa-solid fa-chevron-down fs11"></i></span></div>
+              <div class="srows">
+              
+    <div class="srow">
+      <span class="tile eng lg"><i class="fa-solid fa-compass"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Discovery</div><div class="fs12 muted ellipsis">Engagement · in Northwind</div></div>
+      <div class="srow-prog"><div class="row fs12"><span class="secondary">Week 7 of 10</span><span class="muted" style="margin-left:auto">Readout Oct 9</span></div><div class="progress" style="margin-top:6px"><span style="width:70%"></span></div></div>
+      <div class="srow-people"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span><span class="av c6 xs  " title="Priya Shah">PS</span></span><span class="aud-div"></span><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span><span class="av c5 xs ext " title="Bea Tanaka">BT</span><span class="av c3 xs ext " title="Omar Haddad">OH</span></span></div>
+      <div class="srow-sig"><span class="unread-pill">3 new</span></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              
+    <div class="srow">
+      <span class="tile com lg"><i class="fa-solid fa-landmark"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Audit Committee</div><div class="fs12 muted ellipsis">Committee · FY2026 term</div></div>
+      <div class="srow-prog"><div class="row fs12"><span class="secondary">Next meeting</span><span class="muted" style="margin-left:auto">Thu, Oct 2</span></div><div class="progress" style="margin-top:6px"><span style="width:88%"></span></div></div>
+      <div class="srow-people"><span class="stack"><span class="av c6 xs  " title="Margaret Cole">MC</span><span class="av c3 xs  " title="Tom Reyes">TR</span><span class="av c1 xs  " title="Ada Lovell">AL</span></span><span class="aud-div"></span><span class="stack"><span class="av c10 xs ext " title="Dana Whitfield">DW</span></span></div>
+      <div class="srow-sig"><span class="unread-pill warn">Vote open</span></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              
+    <div class="srow">
+      <span class="tile coh lg"><i class="fa-solid fa-graduation-cap"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Spring Leadership Cohort</div><div class="fs12 muted ellipsis">Cohort · 18 learners</div></div>
+      <div class="srow-prog"><div class="row fs12"><span class="secondary">Session 4 of 8</span><span class="muted" style="margin-left:auto">Tue, Sep 30</span></div><div class="progress" style="margin-top:6px"><span style="width:50%"></span></div></div>
+      <div class="srow-people"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c6 xs  " title="Priya Shah">PS</span></span><span class="aud-div"></span><span class="stack"><span class="av c2 xs ext " title="Lee Park">LP</span></span></div>
+      <div class="srow-sig"><span class="fs12 muted">14 of 18 in</span></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              
+    <div class="srow">
+      <span class="tile eng lg"><i class="fa-solid fa-truck-fast"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Delivery</div><div class="fs12 muted ellipsis">Engagement · in Northwind</div></div>
+      <div class="srow-prog"><div class="row fs12"><span class="secondary">Starts after readout</span><span class="muted" style="margin-left:auto">Oct 20</span></div><div class="progress" style="margin-top:6px"><span style="width:6%"></span></div></div>
+      <div class="srow-people"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span></span><span class="aud-div"></span><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span></span></div>
+      <div class="srow-sig"><span class="chip team"><i class="fa-solid fa-lock"></i>Sealed</span></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              
+    <div class="srow">
+      <span class="tile rel lg"><i class="fa-solid fa-building"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Northwind</div><div class="fs12 muted ellipsis">Client relationship · since 2023</div></div>
+      <div class="srow-prog"><div class="fs12 secondary ellipsis">2 open · 2 closed, still answerable</div></div>
+      <div class="srow-people"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span></span><span class="aud-div"></span><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span><span class="av c2 xs ext " title="Lena Fischer">LF</span></span></div>
+      <div class="srow-sig"></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              
+    <div class="srow">
+      <span class="tile rel lg"><i class="fa-solid fa-building"></i></span>
+      <div class="srow-name"><div class="fw7 fs14 ellipsis">Pinecrest Health</div><div class="fs12 muted ellipsis">Client relationship · proposal</div></div>
+      <div class="srow-prog"><div class="fs12 secondary ellipsis">Proposal · no one invited yet</div></div>
+      <div class="srow-people"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span></span></div>
+      <div class="srow-sig"></div>
+      <i class="fa-solid fa-chevron-right muted fs12"></i>
+    </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="card">
+              <div class="card-h"><span class="h3">Coming up</span><span class="link">Calendar</span></div>
+              <div class="agenda">
+                <div class="ag"><div class="date"><span>OCT</span><b>2</b></div><div class="grow"><div class="fw6 fs13 ellipsis">Audit Committee meeting</div><div class="fs12 muted ellipsis">4:00 PM · board pack due today</div></div><span class="tile com sm"><i class="fa-solid fa-landmark"></i></span></div><div class="ag"><div class="date"><span>OCT</span><b>7</b></div><div class="grow"><div class="fw6 fs13 ellipsis">Casey reviews the readout draft</div><div class="fs12 muted ellipsis">Task · Discovery</div></div><span class="tile eng sm"><i class="fa-solid fa-compass"></i></span></div><div class="ag"><div class="date"><span>OCT</span><b>9</b></div><div class="grow"><div class="fw6 fs13 ellipsis">Discovery readout</div><div class="fs12 muted ellipsis">2:00 PM · with Northwind leadership</div></div><span class="tile eng sm"><i class="fa-solid fa-compass"></i></span></div><div class="ag"><div class="date"><span>OCT</span><b>14</b></div><div class="grow"><div class="fw6 fs13 ellipsis">Cohort session 5 — Leading change</div><div class="fs12 muted ellipsis">Spring Leadership Cohort</div></div><span class="tile coh sm"><i class="fa-solid fa-graduation-cap"></i></span></div>
+              </div>
+            </div>
+
+            <div class="card digest">
+              <div class="card-h"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><span class="h3">Your week so far</span><span class="chip plain" style="margin-left:auto">Monday digest</span></div>
+              <div class="card-b">
+                <ul class="dig">
+                  <li><b>Northwind</b> opened the readout draft twice and asked 3 questions. Casey is still waiting on the vendor-scoring summary.</li>
+                  <li><b>Audit Committee:</b> 5 of 7 members opened the draft board pack; Dana flagged page 14.</li>
+                  <li><b>Cohort:</b> reflections are due Monday; 4 learners haven’t started.</li>
+                </ul>
+                <div class="dig-foot"><i class="fa-solid fa-shield-halved"></i>Built from what you can see, space by space. Team material stays in Team.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></main>
+    </div>
+  </div></body>
+</html>
