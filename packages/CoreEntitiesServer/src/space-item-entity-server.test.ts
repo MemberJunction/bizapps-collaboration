@@ -179,13 +179,17 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
     interface MockProviderOptions {
         itemsRunViewResult?: Array<{ ID: string }>;
         runViewFails?: boolean;
+        submitFails?: boolean;
         onFileCleanup?: () => void;
+        usesResult?: Array<{ ID: string }>;
+        noticesResult?: Array<{ ID: string }>;
+        onChildDelete?: (entityName: string, entity: BaseEntity) => void;
     }
 
     function createDeleteMockProvider(opts: MockProviderOptions = {}): IMetadataProvider {
         const mockTg: Partial<TransactionGroupBase> = {
             AddTransaction() {},
-            async Submit() { return true; },
+            async Submit() { return !opts.submitFails; },
         };
 
         const mock = {
@@ -204,8 +208,11 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (opts.runViewFails && params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
                     return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
                 }
-                if (params.EntityName === 'MJ_BizApps_Collaboration: Item Uses' || params.EntityName === 'MJ_BizApps_Collaboration: Share Notices') {
-                    return { Success: true, Results: [] };
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Item Uses') {
+                    return { Success: true, Results: opts.usesResult ?? [] };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Share Notices') {
+                    return { Success: true, Results: opts.noticesResult ?? [] };
                 }
                 return { Success: true, Results: opts.itemsRunViewResult ?? [] };
             },
@@ -219,10 +226,15 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (entityName === 'MJ: Files') {
                     opts.onFileCleanup?.();
                 }
-                return {
+                const entity = {
+                    TransactionGroup: undefined as TransactionGroupBase | undefined,
                     async Load() { return true; },
-                    async Delete() { return true; },
-                } as unknown as BaseEntity;
+                    async Delete() {
+                        opts.onChildDelete?.(entityName, entity as unknown as BaseEntity);
+                        return true;
+                    },
+                };
+                return entity as unknown as BaseEntity;
             },
         };
         return mock as unknown as IMetadataProvider;
@@ -233,6 +245,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         Object.defineProperties(item, {
             ID: { value: 'item-1', writable: true },
             IsSaved: { value: true, writable: true },
+            TransactionGroup: { value: undefined, writable: true },
             EntityID: { value: FILES_ENTITY_ID, writable: true },
             RecordID: { value: recordId, writable: true },
             ProviderToUse: { value: provider, writable: true },
@@ -357,6 +370,149 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
             assert.equal(ok, true);
             assert.equal(cleanupCalled, false, 'File cleanup must NOT run when RecordID is not a valid UUID');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() returns false and skips file cleanup when transaction commit fails', async () => {
+        let cleanupCalled = false;
+        const provider = createDeleteMockProvider({
+            submitFails: true,
+            onFileCleanup: () => { cleanupCalled = true; },
+        });
+        const item = createMockItem(provider);
+
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, false, 'Delete must return false when transaction commit fails');
+            assert.equal(cleanupCalled, false, 'File cleanup must NOT run when transaction commit fails');
+            assert.equal(item.TransactionGroup, undefined, 'TransactionGroup must be cleared on failed submit');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() queues child uses and share notices into the same transaction group', async () => {
+        const queuedEntities: Array<{ name: string; tg: TransactionGroupBase | undefined }> = [];
+        let createdTg: TransactionGroupBase | undefined;
+        const provider = createDeleteMockProvider({
+            usesResult: [{ ID: 'use-1' }],
+            noticesResult: [{ ID: 'notice-1' }],
+            onChildDelete: (name, ent) => {
+                queuedEntities.push({ name, tg: ent.TransactionGroup });
+            },
+        });
+        const originalCreateTg = provider.CreateTransactionGroup;
+        provider.CreateTransactionGroup = async () => {
+            const tg = await originalCreateTg();
+            createdTg = tg;
+            return tg;
+        };
+
+        const item = createMockItem(provider);
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            queuedEntities.push({ name: 'item', tg: this.TransactionGroup });
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, true);
+            assert.equal(queuedEntities.length, 3, 'Use, notice, and item must all be queued');
+            assert.ok(createdTg, 'Transaction group should be created');
+            assert.equal(queuedEntities[0].name, 'MJ_BizApps_Collaboration: Item Uses');
+            assert.equal(queuedEntities[0].tg, createdTg);
+            assert.equal(queuedEntities[1].name, 'MJ_BizApps_Collaboration: Share Notices');
+            assert.equal(queuedEntities[1].tg, createdTg);
+            assert.equal(queuedEntities[2].name, 'item');
+            assert.equal(queuedEntities[2].tg, createdTg);
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() clears transaction group on failure so a retry starts fresh with a new transaction group', async () => {
+        let shouldFail = true;
+        let createdGroupsCount = 0;
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [],
+        });
+        provider.CreateTransactionGroup = async () => {
+            createdGroupsCount++;
+            return {
+                AddTransaction() {},
+                async Submit() { return !shouldFail; },
+            } as unknown as TransactionGroupBase;
+        };
+
+        const item = createMockItem(provider);
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            // First call fails
+            const firstOk = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(firstOk, false, 'First attempt fails');
+            assert.equal(item.TransactionGroup, undefined, 'Item transaction group cleared after failure');
+            assert.equal(createdGroupsCount, 1);
+
+            // Second call succeeds
+            shouldFail = false;
+            const secondOk = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(secondOk, true, 'Retry attempt succeeds');
+            assert.equal(createdGroupsCount, 2, 'Retry created a fresh transaction group');
+            assert.equal(item.TransactionGroup, undefined, 'Item transaction group cleared after success');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() inside caller transaction group defers cleanup to TransactionNotifications$', async () => {
+        let cleanupCalled = false;
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [],
+            onFileCleanup: () => { cleanupCalled = true; },
+        });
+        const item = createMockItem(provider);
+
+        type NotificationCallback = (n: { success: boolean }) => void;
+        const subscribers: NotificationCallback[] = [];
+        const callerTg = {
+            AddTransaction() {},
+            async Submit() { return true; },
+            TransactionNotifications$: {
+                subscribe(cb: NotificationCallback) {
+                    subscribers.push(cb);
+                    return { unsubscribe() {} };
+                },
+            },
+        } as unknown as TransactionGroupBase;
+
+        item.TransactionGroup = callerTg;
+
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, true, 'Delete queues in caller group and returns true');
+            assert.equal(cleanupCalled, false, 'File cleanup must NOT run before caller group commits');
+            assert.equal(subscribers.length, 1, 'Subscribed to TransactionNotifications$');
+
+            // Emit success
+            await subscribers[0]({ success: true });
+            assert.equal(cleanupCalled, true, 'File cleanup runs after TransactionNotifications$ reports success');
         } finally {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }

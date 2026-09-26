@@ -266,11 +266,12 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    try {
-                        const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                        if (await use.Load(createdUseId)) await use.Delete();
-                    } catch {
-                        // ignore cleanup of test use
+                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                    if (await use.Load(createdUseId)) {
+                        const deleted = await use.Delete();
+                        if (!deleted) {
+                            throw new Error(`LB7 cleanup failed to delete Item Use ${createdUseId}: ${use.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
                 }
             }

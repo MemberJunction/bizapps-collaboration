@@ -12,6 +12,7 @@ export const TASK_ENTITY = 'MJ_BizApps_Tasks: Tasks';
 export const TASK_ASSIGNMENT_ENTITY = 'MJ_BizApps_Tasks: Task Assignments';
 export const TASK_TYPE_ENTITY = 'MJ_BizApps_Tasks: Task Types';
 export const TASK_LINK_ENTITY = 'MJ_BizApps_Tasks: Task Links';
+export const TASK_ACTIVITY_ENTITY = 'MJ_BizApps_Tasks: Task Activities';
 
 export const USER_ENTITY = 'MJ: Users';
 export const USER_ROLE_ENTITY = 'MJ: User Roles';

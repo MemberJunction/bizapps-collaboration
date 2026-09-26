@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -170,6 +170,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             }
         }
 
+        const loadedUses: mjBizAppsCollaborationItemUseEntity[] = [];
+        const loadedNotices: mjBizAppsCollaborationShareNoticeEntity[] = [];
+
         try {
             const system = await requireSystemUser(this);
             const rv = RunView.FromMetadataProvider(provider);
@@ -192,6 +195,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                         LogError(`Space item reference cleanup: failed to load Item Use ${u.ID} for item ${currentItemId}`);
                         return false;
                     }
+                    loadedUses.push(useEntity);
                     useEntity.TransactionGroup = tg;
                     const queued = await useEntity.Delete();
                     if (!queued) {
@@ -219,6 +223,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                         LogError(`Space item reference cleanup: failed to load Share Notice ${n.ID} for item ${currentItemId}`);
                         return false;
                     }
+                    loadedNotices.push(noticeEntity);
                     noticeEntity.TransactionGroup = tg;
                     const queued = await noticeEntity.Delete();
                     if (!queued) {
@@ -241,10 +246,52 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                     LogError(`Space item delete transaction failed for item ${currentItemId}`);
                     return false;
                 }
+            } else if (!isInitiator && tg) {
+                // Inside a caller's transaction group:
+                // Hook file cleanup to run only when caller's transaction group commits successfully.
+                if (parsedFileId && filesEntity && typeof tg.TransactionNotifications$?.subscribe === 'function') {
+                    const fileIdToClean = parsedFileId;
+                    const entityIdToMatch = filesEntity.ID;
+                    const currentId = currentItemId;
+                    tg.TransactionNotifications$.subscribe(async (notification) => {
+                        if (notification?.success) {
+                            try {
+                                const sys = await requireSystemUser(this);
+                                const rvw = RunView.FromMetadataProvider(provider);
+                                const recIdFilter = `(RecordID = 'ID|${fileIdToClean}' OR RecordID = '${fileIdToClean}')`;
+                                const otherItemsRes = await rvw.RunView<{ ID: string }>({
+                                    EntityName: ENTITY,
+                                    ExtraFilter: `EntityID = '${entityIdToMatch}' AND ${recIdFilter} AND ID <> '${currentId}'`,
+                                    Fields: ['ID'],
+                                    ResultType: 'simple',
+                                }, sys);
+                                if (otherItemsRes?.Success) {
+                                    const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
+                                    if (remainingCount === 0) {
+                                        await cleanupStoredItemFile(provider, sys, fileIdToClean);
+                                    }
+                                }
+                            } catch (error) {
+                                LogError(`Space item file cleanup via TransactionNotifications: ${error instanceof Error ? error.message : String(error)}`);
+                            }
+                        }
+                    });
+                }
+                return true;
             }
         } catch (error) {
             LogError(`Space item delete transaction failed: ${error instanceof Error ? error.message : String(error)}`);
             return false;
+        } finally {
+            if (isInitiator) {
+                (this as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                for (const u of loadedUses) {
+                    (u as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+                for (const n of loadedNotices) {
+                    (n as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+            }
         }
 
         // 4. Stored file cleanup only runs AFTER the item delete transaction commits!

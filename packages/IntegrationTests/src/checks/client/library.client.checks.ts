@@ -164,19 +164,33 @@ const checks: NamedCheck[] = [
             }
 
             try {
-                // 3. Bea attempts to delete the Space Item over GraphQL
-                const item = await beaCtx.GraphQLProvider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY);
-                Assert(await item.Load(targetItem.ID), 'Bea loads Shared space item over the wire');
-
-                let deleteThrew = false;
-                let deleteReturnedFalse = false;
+                // 3. Bea attempts to delete the Space Item by sending the mutation directly over GraphQL
+                const DELETE_SPACE_ITEM_MUTATION = `
+                    mutation DeletemjBizAppsCollaborationSpaceItem($ID: String!, $options___: DeleteOptionsInput!) {
+                        DeletemjBizAppsCollaborationSpaceItem(ID: $ID, options___: $options___) {
+                            ID
+                        }
+                    }
+                `;
+                let mutationThrew = false;
+                let mutationNullOrRefused = false;
                 try {
-                    const deleted = await item.Delete();
-                    deleteReturnedFalse = !deleted;
+                    const res = await beaCtx.GraphQLProvider.ExecuteGQL(DELETE_SPACE_ITEM_MUTATION, {
+                        ID: targetItem.ID,
+                        options___: {
+                            SkipEntityAIActions: false,
+                            SkipEntityActions: false,
+                            ReplayOnly: false,
+                            IsParentEntityDelete: false,
+                            SkipRecordChanges: false,
+                        },
+                    });
+                    const deletedId = (res?.DeletemjBizAppsCollaborationSpaceItem as { ID?: string } | undefined)?.ID;
+                    mutationNullOrRefused = !deletedId;
                 } catch {
-                    deleteThrew = true;
+                    mutationThrew = true;
                 }
-                Assert(deleteThrew || deleteReturnedFalse, 'Bea deleting a Shared space item MUST fail / be refused');
+                Assert(mutationThrew || mutationNullOrRefused, 'Server MUST refuse DeletemjBizAppsCollaborationSpaceItem mutation when sent by participant Bea');
 
                 // 4. Assert BOTH the Space Item and its Item Uses survive!
                 const itemAfter = await FindRows<{ ID: string }>(
@@ -196,11 +210,12 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    try {
-                        const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                        if (await use.Load(createdUseId)) await use.Delete();
-                    } catch {
-                        // ignore cleanup of test use
+                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                    if (await use.Load(createdUseId)) {
+                        const deleted = await use.Delete();
+                        if (!deleted) {
+                            throw new Error(`client LB5 cleanup failed to delete Item Use ${createdUseId}: ${use.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
+                        }
                     }
                 }
             }

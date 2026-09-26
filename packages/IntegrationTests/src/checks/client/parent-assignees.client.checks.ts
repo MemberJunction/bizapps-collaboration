@@ -1,7 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
+import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, TASK_LINK_ENTITY, TASK_ACTIVITY_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, View } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
@@ -345,13 +345,15 @@ const checks: NamedCheck[] = [
                 try {
                     // Restore switches to true
                     space.AllowParentAssignees = true;
-                    await space.Save();
+                    const saved1 = await space.Save();
+                    if (!saved1) throw new Error(`PA5 cleanup failed to restore AllowParentAssignees on Discovery: ${space.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
                 } catch (ce) {
                     cleanupError = ce;
                 }
                 try {
                     fieldNotes.AllowParentAssignees = true;
-                    await fieldNotes.Save();
+                    const saved2 = await fieldNotes.Save();
+                    if (!saved2) throw new Error(`PA5 cleanup failed to restore AllowParentAssignees on Field notes: ${fieldNotes.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
                 } catch (ce) {
                     if (!cleanupError) cleanupError = ce;
                 }
@@ -423,7 +425,7 @@ const checks: NamedCheck[] = [
                 Assert(saved, `Assignment in Field notes should succeed over the wire when Field notes AllowParentAssignees=true even if Discovery switch is false: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
 
                 // Also assert Bea reads Ada via People In Reach / ancestor members
-                const view = View(ctx);
+                const view = View(beaCtx);
                 const peopleRes = await view.RunView<{ ID: string }>({
                     EntityName: PERSON_ENTITY,
                     ExtraFilter: `Email = 'ada.owner@collab-world.example'`,
@@ -444,20 +446,64 @@ const checks: NamedCheck[] = [
                             cleanupError = new Error(`PA6 cleanup failed to delete assignment: ${assignment.LatestResult?.CompleteMessage ?? ''}`);
                         }
                     }
-                    const item = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, adaCtx.User);
+                    const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
                     if (await item.Load(itemId)) {
-                        await item.Delete();
+                        const delItem = await item.Delete();
+                        if (!delItem && !cleanupError) {
+                            cleanupError = new Error(`PA6 cleanup failed to delete item: ${item.LatestResult?.CompleteMessage ?? ''}`);
+                        }
                     }
-                    const task = await adaCtx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, adaCtx.User);
+                    const rv = View(ctx);
+                    const linkRows = await rv.RunView<{ ID: string }>({
+                        EntityName: TASK_LINK_ENTITY,
+                        ExtraFilter: `TaskID = '${taskId}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, ctx.User);
+                    if (linkRows.Success && linkRows.Results) {
+                        for (const r of linkRows.Results) {
+                            const link = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskLinkEntity>(TASK_LINK_ENTITY, ctx.User);
+                            if (await link.Load(r.ID)) {
+                                const delLink = await link.Delete();
+                                if (!delLink && !cleanupError) {
+                                    cleanupError = new Error(`PA6 cleanup failed to delete task link: ${link.LatestResult?.CompleteMessage ?? ''}`);
+                                }
+                            }
+                        }
+                    }
+                    const actRows = await rv.RunView<{ ID: string }>({
+                        EntityName: TASK_ACTIVITY_ENTITY,
+                        ExtraFilter: `TaskID = '${taskId}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, ctx.User);
+                    if (actRows.Success && actRows.Results) {
+                        for (const r of actRows.Results) {
+                            const act = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskActivityEntity>(TASK_ACTIVITY_ENTITY, ctx.User);
+                            if (await act.Load(r.ID)) {
+                                const delAct = await act.Delete();
+                                if (!delAct && !cleanupError) {
+                                    cleanupError = new Error(`PA6 cleanup failed to delete task activity: ${act.LatestResult?.CompleteMessage ?? ''}`);
+                                }
+                            }
+                        }
+                    }
+                    const task = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
                     if (await task.Load(taskId)) {
-                        await task.Delete();
+                        const delTask = await task.Delete();
+                        if (!delTask && !cleanupError) {
+                            cleanupError = new Error(`PA6 cleanup failed to delete task: ${task.LatestResult?.CompleteMessage ?? ''}`);
+                        }
                     }
                 } catch (ce) {
                     cleanupError = ce;
                 } finally {
                     try {
                         discoverySpace.AllowParentAssignees = true;
-                        await discoverySpace.Save();
+                        const saved = await discoverySpace.Save();
+                        if (!saved && !cleanupError) {
+                            cleanupError = new Error(`PA6 cleanup failed to restore Discovery space: ${discoverySpace.LatestResult?.CompleteMessage ?? ''}`);
+                        }
                     } catch (de) {
                         if (!cleanupError) cleanupError = de;
                     }
@@ -479,25 +525,27 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
     Teardown: async (ctx: IntegrationCheckContext) => {
         const adaCtx = await getPersonaContext(ctx, 'ada');
         const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-        if (await space.Load(DISCOVERY_SPACE_ID)) {
-            if (!space.AllowParentAssignees) {
-                space.AllowParentAssignees = true;
-                const saved = await space.Save();
-                if (!saved) {
-                    const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
-                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Discovery: ${err}`);
-                }
+        if (!(await space.Load(DISCOVERY_SPACE_ID))) {
+            throw new Error('parent-assignees Teardown failed to load Discovery space');
+        }
+        if (!space.AllowParentAssignees) {
+            space.AllowParentAssignees = true;
+            const saved = await space.Save();
+            if (!saved) {
+                const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
+                throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Discovery: ${err}`);
             }
         }
         const fnSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-        if (await fnSpace.Load(FIELD_NOTES_SPACE_ID)) {
-            if (!fnSpace.AllowParentAssignees) {
-                fnSpace.AllowParentAssignees = true;
-                const saved = await fnSpace.Save();
-                if (!saved) {
-                    const err = fnSpace.LatestResult?.CompleteMessage ?? 'Save returned false';
-                    throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Field notes: ${err}`);
-                }
+        if (!(await fnSpace.Load(FIELD_NOTES_SPACE_ID))) {
+            throw new Error('parent-assignees Teardown failed to load Field notes space');
+        }
+        if (!fnSpace.AllowParentAssignees) {
+            fnSpace.AllowParentAssignees = true;
+            const saved = await fnSpace.Save();
+            if (!saved) {
+                const err = fnSpace.LatestResult?.CompleteMessage ?? 'Save returned false';
+                throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Field notes: ${err}`);
             }
         }
     },
