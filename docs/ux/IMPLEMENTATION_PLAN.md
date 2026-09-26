@@ -285,34 +285,23 @@ Use MJ's piece wherever one exists. The frames are drawn to these components' ex
 | # | Gap | Frames | Proposal |
 |---|---|---|---|
 | 1 | A type's tile | all | `SpaceType.IconClass` (Font Awesome class) and `SpaceType.Color` (hex), like MJ Applications |
-| 2 | Relabeled tabs | 08 | Per-type tab labels, for example `Library` → "Papers" and `People` → "Members", as a JSONType column (`TabLabels`) or folded into `Vocabulary` |
+| 2 | Relabeled tabs | 08 | Per-type tab labels, for example `Library` → "Papers" and `People` → "Members", in the type's `Configuration.Labels`, with no new column. The type's UI driver can also rename or replace tabs ([extensibility plan § 4](../EXTENSIBILITY_PLAN.md#4-configuration-one-bag-per-type-and-per-space)). |
 | 3 | Planned close | 01, 02, 06, 07, 13 | `Space.PlannedCloseAt`. It drives "Week 7 of 10", *Close-out*, "Access ends when Discovery closes" and *Closes on*. `ClosedAt` stays the actual close. |
 | 4 | Milestones | 01, 02, 07 | A *Milestone* task type seeded by Collaboration's `metadata/` (a `MJ_BizApps_Tasks: Task Types` row) |
 | 5 | Invite provenance and removal | 06 | On `SpaceMember`: `InvitedByUserID`, `ExpiresAt`, `RemovedAt` |
 | 6 | Delegated invites | 06 | Per space: who may invite, allowed domain, highest role, cap. Check what already exists first. `SpaceType.InviteApproval` and `MemberCap` cover part of it. |
 | 7 | Share-check findings | 02–04 | A per-item record of what the Assistant flagged and suggested, and whether each suggestion was applied |
 | 8 | Unread | 01, 05 | Per-member last-visited on a space. Chats use Conversations' own read state. |
-| 9 | Assistant per space | 09 | Notes, skills and scope. This is the task 6 design, so build this screen after it is approved. |
-| 10 | Committee specifics | 08, 13 | Drop `SpaceType.GovernancePanel` and the `committee` seed row. The Committees app adds its own type and behavior ([§ 9](#9-extension-points-for-apps-on-top)). |
+| 9 | Assistant per space | 09 | Instructions, skills, allowed agents and the chat rules, from [extensibility plan § 8](../EXTENSIBILITY_PLAN.md#8-chats-history-and-agents). Build this screen with it. |
+| 10 | Committee specifics | 08, 13 | Drop `SpaceType.GovernancePanel` and the `committee` seed row. The Committees app adds its own type, plug-ins and subtype ([the extensibility plan](../EXTENSIBILITY_PLAN.md)). |
 
 ## 9. Extension points for apps on top
 
-Collaboration defines these extension points and never implements anything app-specific. An app layered on top, such as Committees, registers its implementations with `@RegisterClass` in its own packages:
+[The extensibility plan](../EXTENSIBILITY_PLAN.md) replaces this section. An app on top adds a **space type**, which names a server plug-in class, a browser plug-in class and, optionally, its own table extending `Space` through MJ's IsA. Tabs, cards, chips, needs-you rows and dated items come from those plug-ins and from contributions registered with metadata.
 
-| Point | Base class (package) | Adds | Seen in |
-|---|---|---|---|
-| Space tab | `BaseSpaceTab` (widgets), an Angular component | A tab and its content for spaces of a given type code | 08 *Meetings*, *Motions* |
-| Overview card | `BaseSpaceOverviewCard` (widgets) | A card in the overview's main or side column, with an order | 08 next meeting, vote |
-| Header chip | `SpaceHeaderChipProvider` (core) | Chips next to the type chip | 08 *FY2026 term* |
-| Needs you | `NeedsYouProvider` (core) | Rows in Home and in a space's needs-you cards | 01 *Publish pack* |
-| Dated items | `AgendaProvider` (core) | Entries in *Coming up* and the calendar | 01 *Audit Committee meeting* |
-| Space type | `metadata/` rows | A new type with its icon, color, tab labels and defaults | 13 *Committee* |
+Build nothing of the earlier shape: provider classes resolved with `ClassFactory.GetAllRegistrations`, filtered by type code and ordered by `Sequence`.
 
-**How the points work:**
-
-- **Resolution.** `ClassFactory.GetAllRegistrations(BaseSpaceTab)` is filtered by the space's type code and ordered by a `Sequence` property.
-- **Permissions.** Every provider receives the space and the viewer and returns only what that viewer may see. Collaboration renders what it is given and adds no permission logic of its own.
-- **Proof.** The UX gallery registers a fixture extension that draws frame 08's committee cards from static data. That makes frame 08 testable pixel for pixel while Collaboration's shipped code stays ignorant of committees. The real committee pieces are built later, in bizapps-committees.
+**Proof for frame 08** is still a stand-in that Collaboration never ships: an example plug-in in a private package draws frame 08 in the gallery ([extensibility plan § 10](../EXTENSIBILITY_PLAN.md#103-examples-in-collaboration-itself)).
 
 ## 10. Visual tests: how "pixel perfect" is checked
 
@@ -351,11 +340,11 @@ Work in vertical slices. Each slice ends with its frames passing in the gallery 
 3. **Slice A: Discovery.** Frames 02, 03 and 04, plus gap 7.
 4. **Slice B: chats.** Frames 05 and 11.
 5. **Slice C: people.** Frame 06, plus gaps 5 and 6.
-6. **Slice D: home.** Frame 01, plus the needs-you and agenda providers and gaps 4 and 8.
+6. **Slice D: home.** Frame 01, plus gaps 4 and 8, from Collaboration's own data. Its needs-you and agenda rows move onto the extensibility plan's providers when that plan is built ([its § 13](../EXTENSIBILITY_PLAN.md#13-order-of-work)).
 7. **Slice E: work.** Frame 10, plus the `CardTemplate` and `ColumnLabels` inputs on `bizapps-task-kanban` (a small PR in bizapps-tasks).
 8. **Slice F: outside participants.** Frames 07 and 12.
-9. **Slice G: Assistant settings.** Frame 09, after the task 6 design is approved.
+9. **Slice G: Assistant settings.** Frame 09, built with [extensibility plan § 8](../EXTENSIBILITY_PLAN.md#8-chats-history-and-agents), after the other slices.
 10. **Slice H: new space.** Frame 13, plus gap 2.
-11. **Slice I: extension points.** Frame 08, through the fixture extension, plus gap 10.
+11. **Slice I: extension points.** Frame 08, through the extensibility plan's example plug-in, plus gap 10, after the other slices.
 
 Each slice is its own commit series and review. Don't do this as one big sweep: one slice finished properly, with tests, teaches the pattern for the rest.
