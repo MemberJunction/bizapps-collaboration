@@ -16,7 +16,7 @@ const checks: NamedCheck[] = [
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
             // 1. Empty content refused
-            const emptyRes = await client.uploadSpaceFile({
+            const emptyRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'empty.txt',
                 Base64Data: '',
@@ -30,7 +30,7 @@ const checks: NamedCheck[] = [
 
             // 2. Over size cap refused (10MB + 1 byte)
             const overCapBuffer = Buffer.alloc(10 * 1024 * 1024 + 1);
-            const overCapRes = await client.uploadSpaceFile({
+            const overCapRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'huge.bin',
                 Base64Data: overCapBuffer.toString('base64'),
@@ -43,7 +43,7 @@ const checks: NamedCheck[] = [
             );
 
             // 3. Valid upload succeeds
-            const validRes = await client.uploadSpaceFile({
+            const validRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'bea-upload.txt',
                 Base64Data: Buffer.from('Hello from Bea over GraphQL').toString('base64'),
@@ -62,7 +62,7 @@ const checks: NamedCheck[] = [
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
-            const htmlRes = await client.uploadSpaceFile({
+            const htmlRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'unsafe.html',
                 MimeType: 'text/html',
@@ -99,7 +99,7 @@ const checks: NamedCheck[] = [
             const remyCtx = await getPersonaClientContext(ctx, 'remy');
             const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 
-            const refuseRes = await remyClient.uploadSpaceFile({
+            const refuseRes = await remyClient.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'blocked.pdf',
                 Base64Data: Buffer.from('blocked content').toString('base64'),

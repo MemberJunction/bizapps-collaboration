@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import {
     BaseEntity,
+    EntityPermissionType,
     TransactionGroupBase,
     WellKnownUserSource,
     type IMetadataProvider,
@@ -32,6 +33,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
     const OTHER_ENTITY_ID = '55555555-5555-4555-8555-555555555555';
     const SPACE_ID = '22222222-2222-4222-8222-222222222222';
     const FILE_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    const ROLE_ID = '44444444-4444-4444-8444-444444444444';
 
     function mockProvider(): IMetadataProvider {
         const mock = {
@@ -44,8 +46,28 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 if (id.toLowerCase() === FILES_ENTITY_ID.toLowerCase()) return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByID']>;
                 return undefined;
             },
-            async RunViews() {
-                return [{ Success: true, Results: [] }];
+            async RunView(params: { EntityName: string }) {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    return { Success: true, Results: [{ ID: SPACE_ID, ParentID: null, SpaceTypeID: null, AgentRetrieval: 'Inherited', AllowParentAssignees: true }] };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
+                    return { Success: true, Results: [{ ID: ROLE_ID, Level: 100, MaxGrantableLevel: 100, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true }] };
+                }
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    return { Success: true, Results: [{ ID: 'mem-1', SpaceID: SPACE_ID, UserID: user.ID, Status: 'Active', Band: 'Team', SpaceRoleTypeID: ROLE_ID }] };
+                }
+                return { Success: true, Results: [] };
+            },
+            async RunViews(views: Array<{ EntityName: string }>) {
+                return views.map((v) => {
+                    if (v.EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                        return { Success: true, Results: [{ ID: 'mem-1', SpaceID: SPACE_ID, UserID: user.ID, Status: 'Active', Band: 'Team', SpaceRoleTypeID: ROLE_ID }] };
+                    }
+                    if (v.EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
+                        return { Success: true, Results: [{ ID: ROLE_ID, Level: 100, MaxGrantableLevel: 100, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true }] };
+                    }
+                    return { Success: true, Results: [] };
+                });
             },
             async GetEntityObject(_entityName: string) {
                 return {
@@ -151,6 +173,8 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
                 ],
                 writable: true,
             },
+            PromotedAt: { value: null, writable: true },
+            PromotedByUserID: { value: null, writable: true },
         });
 
         vouchStoredFile(item);
@@ -161,13 +185,9 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             };
 
             try {
-                // When vouched, it passes the isFile voucher check and proceeds to loadWriteContext
-                // (which fails because loadWriteContext is not mocked here, proving it passed the file check!)
-                const res = await SpaceItemEntityServer.prototype.ValidateAsync.call(item).catch((err: Error) => {
-                    return { Success: false, Errors: [{ Source: 'Band', Message: err.message }] };
-                });
-                const fileCheckErr = res.Errors.find((e: { Message: string }) => e.Message.includes('file items must be created through space upload'));
-                assert.equal(fileCheckErr, undefined, 'Vouched item should not fail file upload check');
+                const res = await SpaceItemEntityServer.prototype.ValidateAsync.call(item);
+                assert.equal(res.Success, true, 'Vouched item should validate successfully');
+                assert.equal(res.Errors.length, 0, 'Vouched item should have no validation errors');
             } finally {
                 Object.getPrototypeOf(SpaceItemEntityServer.prototype).ValidateAsync = originalValidateAsync;
             }
@@ -204,15 +224,37 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             async CreateTransactionGroup() {
                 return mockTg as TransactionGroupBase;
             },
-            async RunView(params: { EntityName: string }) {
+            async RunView(params: { EntityName: string; ResultType?: string }) {
                 if (opts.runViewFails && params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
                     return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
                 }
                 if (params.EntityName === 'MJ_BizApps_Collaboration: Item Uses') {
-                    return { Success: true, Results: opts.usesResult ?? [] };
+                    const results = (opts.usesResult ?? []).map((r) => {
+                        const ent = {
+                            ID: r.ID,
+                            TransactionGroup: undefined as TransactionGroupBase | undefined,
+                            async Delete() {
+                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                return true;
+                            },
+                        };
+                        return ent;
+                    });
+                    return { Success: true, Results: results };
                 }
                 if (params.EntityName === 'MJ_BizApps_Collaboration: Share Notices') {
-                    return { Success: true, Results: opts.noticesResult ?? [] };
+                    const results = (opts.noticesResult ?? []).map((r) => {
+                        const ent = {
+                            ID: r.ID,
+                            TransactionGroup: undefined as TransactionGroupBase | undefined,
+                            async Delete() {
+                                opts.onChildDelete?.(params.EntityName, ent as unknown as BaseEntity);
+                                return true;
+                            },
+                        };
+                        return ent;
+                    });
+                    return { Success: true, Results: results };
                 }
                 return { Success: true, Results: opts.itemsRunViewResult ?? [] };
             },
@@ -279,7 +321,15 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             IsSaved: { value: true, writable: true },
             ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
-            CheckPermissions: { value: () => false, writable: true },
+            CheckPermissions: {
+                value: (_type: EntityPermissionType, throwError: boolean) => {
+                    if (throwError) {
+                        throw new Error('User does NOT have permission to Delete Space Item records.');
+                    }
+                    return false;
+                },
+                writable: true,
+            },
             _resultHistory: { value: [], writable: true },
         });
 
@@ -289,6 +339,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         assert.equal(tgCreated, false, 'No transaction should be created when delete permission is refused');
         assert.ok(item.LatestResult, 'LatestResult must be recorded on refusal');
         assert.equal(item.LatestResult.Success, false);
+        assert.equal(item.LatestResult.Type, 'delete');
         assert.match(item.LatestResult.CompleteMessage, /permission/i);
     });
 
@@ -400,6 +451,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             assert.equal(item.TransactionGroup, undefined, 'TransactionGroup must be cleared on failed submit');
             assert.ok(item.LatestResult, 'LatestResult must be recorded on commit failure');
             assert.equal(item.LatestResult.Success, false);
+            assert.equal(item.LatestResult.Type, 'delete');
             assert.match(item.LatestResult.CompleteMessage, /transaction failed/i);
         } finally {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
@@ -521,6 +573,47 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             // Emit success
             await subscribers[0]({ success: true });
             assert.equal(cleanupCalled, true, 'File cleanup runs after TransactionNotifications$ reports success');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
+        }
+    });
+
+    it('Delete() inside caller transaction group skips file cleanup when caller group fails', async () => {
+        let cleanupCalled = false;
+        const provider = createDeleteMockProvider({
+            itemsRunViewResult: [],
+            onFileCleanup: () => { cleanupCalled = true; },
+        });
+        const item = createMockItem(provider);
+
+        type NotificationCallback = (n: { success: boolean }) => void;
+        const subscribers: NotificationCallback[] = [];
+        const callerTg = {
+            AddTransaction() {},
+            async Submit() { return false; },
+            TransactionNotifications$: {
+                subscribe(cb: NotificationCallback) {
+                    subscribers.push(cb);
+                    return { unsubscribe() {} };
+                },
+            },
+        } as unknown as TransactionGroupBase;
+
+        item.TransactionGroup = callerTg;
+
+        const originalDelete = Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = async function () {
+            return true;
+        };
+
+        try {
+            const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
+            assert.equal(ok, true, 'Delete queues in caller group and returns true');
+            assert.equal(subscribers.length, 1, 'Subscribed to TransactionNotifications$');
+
+            // Emit failure
+            await subscribers[0]({ success: false });
+            assert.equal(cleanupCalled, false, 'File cleanup must NOT run when caller group fails');
         } finally {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }

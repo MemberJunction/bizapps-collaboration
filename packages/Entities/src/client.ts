@@ -143,48 +143,69 @@ export class CollaborationClient {
         return resolveExecutor(this.executor);
     }
 
-    async mintSpaceLink(input: MintSpaceLinkInput): Promise<MintSpaceLinkPayload> {
+    async MintSpaceLink(input: MintSpaceLinkInput): Promise<MintSpaceLinkPayload> {
         const res = await this.activeExecutor.ExecuteGQL(MINT_SPACE_LINK_MUTATION, { input });
         return (res?.MintSpaceLink as MintSpaceLinkPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async uploadSpaceFile(input: UploadSpaceFileInput): Promise<UploadSpaceFilePayload> {
+    async UploadSpaceFile(input: UploadSpaceFileInput): Promise<UploadSpaceFilePayload> {
         const res = await this.activeExecutor.ExecuteGQL(UPLOAD_SPACE_FILE_MUTATION, { input });
         return (res?.UploadSpaceFile as UploadSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async createSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
+    async CreateSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
         const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_TASK_MUTATION, { input });
         return (res?.CreateSpaceTask as CreateSpaceTaskPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async postSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {
+    async PostSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(POST_SPACE_MESSAGE_MUTATION, { input });
         return (res?.PostSpaceMessage as PostSpaceMessageGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async openSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
+    async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
         const res = await this.activeExecutor.ExecuteGQL(OPEN_SPACE_FILE_MUTATION, { itemId });
         return (res?.OpenSpaceFile as OpenSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    // Backwards-compatible aliases
+    async mintSpaceLink(input: MintSpaceLinkInput): Promise<MintSpaceLinkPayload> {
+        return this.MintSpaceLink(input);
+    }
+
+    async uploadSpaceFile(input: UploadSpaceFileInput): Promise<UploadSpaceFilePayload> {
+        return this.UploadSpaceFile(input);
+    }
+
+    async createSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
+        return this.CreateSpaceTask(input);
+    }
+
+    async postSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {
+        return this.PostSpaceMessage(input);
+    }
+
+    async openSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
+        return this.OpenSpaceFile(itemId);
     }
 }
 
 export async function mintSpaceLink(input: MintSpaceLinkInput, executor?: GraphQLExecutor): Promise<MintSpaceLinkPayload> {
-    return new CollaborationClient(executor).mintSpaceLink(input);
+    return new CollaborationClient(executor).MintSpaceLink(input);
 }
 
 export async function uploadSpaceFileClient(input: UploadSpaceFileInput, executor?: GraphQLExecutor): Promise<UploadSpaceFilePayload> {
-    return new CollaborationClient(executor).uploadSpaceFile(input);
+    return new CollaborationClient(executor).UploadSpaceFile(input);
 }
 
 export async function createSpaceTaskClient(input: CreateSpaceTaskInput, executor?: GraphQLExecutor): Promise<CreateSpaceTaskPayload> {
-    return new CollaborationClient(executor).createSpaceTask(input);
+    return new CollaborationClient(executor).CreateSpaceTask(input);
 }
 
 export async function postSpaceMessageClient(input: PostSpaceMessageGraphQLInput, executor?: GraphQLExecutor): Promise<PostSpaceMessageGraphQLPayload> {
-    return new CollaborationClient(executor).postSpaceMessage(input);
+    return new CollaborationClient(executor).PostSpaceMessage(input);
 }
 
 export async function openSpaceFileClient(itemId: string, executor?: GraphQLExecutor): Promise<OpenSpaceFilePayload> {
-    return new CollaborationClient(executor).openSpaceFile(itemId);
+    return new CollaborationClient(executor).OpenSpaceFile(itemId);
 }

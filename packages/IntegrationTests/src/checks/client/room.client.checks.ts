@@ -121,7 +121,7 @@ const checks: NamedCheck[] = [
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
 
-            const result = await client.postSpaceMessage({
+            const result = await client.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 Text: 'Hello from Bea in the Discovery space room!',
             });
@@ -154,7 +154,7 @@ const checks: NamedCheck[] = [
             const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
 
             // 1. Empty message
-            const emptyRes = await beaClient.postSpaceMessage({
+            const emptyRes = await beaClient.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 Text: '   ',
             });
@@ -163,7 +163,7 @@ const checks: NamedCheck[] = [
 
             // 2. Message over 4000 chars
             const longText = 'x'.repeat(4001);
-            const longRes = await beaClient.postSpaceMessage({
+            const longRes = await beaClient.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 Text: longText,
             });
@@ -171,14 +171,14 @@ const checks: NamedCheck[] = [
             Assert(longRes.ErrorMessage?.includes('limited to 4000 characters') ?? false, 'Correct length limit error');
 
             // 3. Closed space
-            const closedRes = await beaClient.postSpaceMessage({
+            const closedRes = await beaClient.PostSpaceMessage({
                 SpaceID: CLOSED_PAST_SPACE_ID,
                 Text: 'Message to closed space',
             });
             Assert(!closedRes.Success, 'Message to closed space must be refused');
 
             // 4. Non-contributor (Remy - Removed)
-            const remyRes = await remyClient.postSpaceMessage({
+            const remyRes = await remyClient.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 Text: 'Message from removed user',
             });

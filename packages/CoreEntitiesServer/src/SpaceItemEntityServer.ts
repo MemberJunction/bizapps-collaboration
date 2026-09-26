@@ -129,9 +129,6 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         result.Success = false;
         result.Type = 'delete';
         result.Message = message;
-        if (!Reflect.get(this, '_resultHistory')) {
-            Reflect.set(this, '_resultHistory', []);
-        }
         this.RegisterResultHistoryEntry(result);
         return false;
     }
@@ -140,21 +137,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         // 1. Permission check FIRST: stop immediately if the caller lacks delete permission.
         // This prevents unauthorized callers from wiping out child history (Item Uses / Share Notices)
         // before MJ's ORM check.
-        if (typeof this.CheckPermissions === 'function') {
-            try {
-                if (!this.CheckPermissions(EntityPermissionType.Delete, false)) {
-                    const u = this.ContextCurrentUser;
-                    const entityName = this.EntityInfo?.Name ?? 'Space Item';
-                    const msg = u
-                        ? `User: ${u.Name ?? u.Email} does NOT have permission to Delete ${entityName} records.`
-                        : `Permission denied: caller lacks permission to Delete ${entityName} records.`;
-                    return this.failDelete(msg);
-                }
-            } catch (error) {
-                const msg = `Space item delete permission check failed: ${error instanceof Error ? error.message : String(error)}`;
-                LogError(msg);
-                return this.failDelete(msg);
-            }
+        try {
+            this.CheckPermissions(EntityPermissionType.Delete, true);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(msg);
+            return this.failDelete(msg);
         }
 
         const currentItemId = this.ID;
@@ -197,11 +185,10 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             const system = await requireSystemUser(this);
             const rv = RunView.FromMetadataProvider(provider);
 
-            const usesRes = await rv.RunView<{ ID: string }>({
+            const usesRes = await rv.RunView<mjBizAppsCollaborationItemUseEntity>({
                 EntityName: 'MJ_BizApps_Collaboration: Item Uses',
                 ExtraFilter: `ItemID = '${currentItemId}'`,
-                Fields: ['ID'],
-                ResultType: 'simple',
+                ResultType: 'entity_object',
             }, system);
             if (!usesRes || !usesRes.Success) {
                 const msg = `Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`;
@@ -210,29 +197,22 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             }
 
             if (usesRes.Results && usesRes.Results.length > 0) {
-                for (const u of usesRes.Results) {
-                    const useEntity = await provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', system);
-                    if (!(await useEntity.Load(u.ID))) {
-                        const msg = `Space item reference cleanup: failed to load Item Use ${u.ID} for item ${currentItemId}`;
-                        LogError(msg);
-                        return this.failDelete(msg);
-                    }
+                for (const useEntity of usesRes.Results) {
                     loadedUses.push(useEntity);
                     useEntity.TransactionGroup = tg;
                     const queued = await useEntity.Delete();
                     if (!queued) {
-                        const msg = `Space item reference cleanup: failed to queue delete for Item Use ${u.ID}`;
+                        const msg = `Space item reference cleanup: failed to queue delete for Item Use ${useEntity.ID}`;
                         LogError(msg);
                         return this.failDelete(msg);
                     }
                 }
             }
 
-            const noticesRes = await rv.RunView<{ ID: string }>({
+            const noticesRes = await rv.RunView<mjBizAppsCollaborationShareNoticeEntity>({
                 EntityName: 'MJ_BizApps_Collaboration: Share Notices',
                 ExtraFilter: `ItemID = '${currentItemId}'`,
-                Fields: ['ID'],
-                ResultType: 'simple',
+                ResultType: 'entity_object',
             }, system);
             if (!noticesRes || !noticesRes.Success) {
                 const msg = `Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`;
@@ -241,18 +221,12 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             }
 
             if (noticesRes.Results && noticesRes.Results.length > 0) {
-                for (const n of noticesRes.Results) {
-                    const noticeEntity = await provider.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', system);
-                    if (!(await noticeEntity.Load(n.ID))) {
-                        const msg = `Space item reference cleanup: failed to load Share Notice ${n.ID} for item ${currentItemId}`;
-                        LogError(msg);
-                        return this.failDelete(msg);
-                    }
+                for (const noticeEntity of noticesRes.Results) {
                     loadedNotices.push(noticeEntity);
                     noticeEntity.TransactionGroup = tg;
                     const queued = await noticeEntity.Delete();
                     if (!queued) {
-                        const msg = `Space item reference cleanup: failed to queue delete for Share Notice ${n.ID}`;
+                        const msg = `Space item reference cleanup: failed to queue delete for Share Notice ${noticeEntity.ID}`;
                         LogError(msg);
                         return this.failDelete(msg);
                     }
@@ -282,29 +256,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 // Hook file cleanup to run only when caller's transaction group commits successfully.
                 if (parsedFileId && filesEntity && typeof tg.TransactionNotifications$?.subscribe === 'function') {
                     const fileIdToClean = parsedFileId;
-                    const entityIdToMatch = filesEntity.ID;
+                    const filesEntityId = filesEntity.ID;
                     const currentId = currentItemId;
                     tg.TransactionNotifications$.subscribe(async (notification) => {
                         if (notification?.success) {
-                            try {
-                                const sys = await requireSystemUser(this);
-                                const rvw = RunView.FromMetadataProvider(provider);
-                                const recIdFilter = `(RecordID = 'ID|${fileIdToClean}' OR RecordID = '${fileIdToClean}')`;
-                                const otherItemsRes = await rvw.RunView<{ ID: string }>({
-                                    EntityName: ENTITY,
-                                    ExtraFilter: `EntityID = '${entityIdToMatch}' AND ${recIdFilter} AND ID <> '${currentId}'`,
-                                    Fields: ['ID'],
-                                    ResultType: 'simple',
-                                }, sys);
-                                if (otherItemsRes?.Success) {
-                                    const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
-                                    if (remainingCount === 0) {
-                                        await cleanupStoredItemFile(provider, sys, fileIdToClean);
-                                    }
-                                }
-                            } catch (error) {
-                                LogError(`Space item file cleanup via TransactionNotifications: ${error instanceof Error ? error.message : String(error)}`);
-                            }
+                            await cleanupStoredFileIfUnreferenced(provider, this, fileIdToClean, filesEntityId, currentId);
                         }
                     });
                 }
@@ -328,32 +284,41 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
         // 4. Stored file cleanup only runs AFTER the item delete transaction commits!
         if (parsedFileId && filesEntity) {
-            try {
-                const system = await requireSystemUser(this);
-                const rv = RunView.FromMetadataProvider(provider);
-                const recIdFilter = `(RecordID = 'ID|${parsedFileId}' OR RecordID = '${parsedFileId}')`;
-                const otherItemsRes = await rv.RunView<{ ID: string }>({
-                    EntityName: ENTITY,
-                    ExtraFilter: `EntityID = '${filesEntity.ID}' AND ${recIdFilter} AND ID <> '${currentItemId}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                }, system);
-
-                if (!otherItemsRes || !otherItemsRes.Success) {
-                    LogError(`Space item file count query failed for ${parsedFileId}: ${otherItemsRes?.ErrorMessage ?? 'RunView failed'}`);
-                    return true;
-                }
-
-                const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
-                if (remainingCount === 0) {
-                    await cleanupStoredItemFile(provider, system, parsedFileId);
-                }
-            } catch (error) {
-                LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
-            }
+            await cleanupStoredFileIfUnreferenced(provider, this, parsedFileId, filesEntity.ID, currentItemId);
         }
 
         return true;
+    }
+}
+
+async function cleanupStoredFileIfUnreferenced(
+    provider: IMetadataProvider,
+    contextEntity: BaseEntity,
+    fileId: string,
+    filesEntityId: string,
+    currentItemId: string
+): Promise<void> {
+    try {
+        const sys = await requireSystemUser(contextEntity);
+        const rvw = RunView.FromMetadataProvider(provider);
+        const recIdFilter = `(RecordID = 'ID|${fileId}' OR RecordID = '${fileId}')`;
+        const otherItemsRes = await rvw.RunView<{ ID: string }>({
+            EntityName: ENTITY,
+            ExtraFilter: `EntityID = '${filesEntityId}' AND ${recIdFilter} AND ID <> '${currentItemId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, sys);
+        if (!otherItemsRes || !otherItemsRes.Success) {
+            LogError(`Space item file count query failed for ${fileId}: ${otherItemsRes?.ErrorMessage ?? 'RunView failed'}`);
+            return;
+        }
+
+        const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
+        if (remainingCount === 0) {
+            await cleanupStoredItemFile(provider, sys, fileId);
+        }
+    } catch (error) {
+        LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

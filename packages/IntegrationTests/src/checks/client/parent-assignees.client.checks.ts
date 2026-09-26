@@ -402,7 +402,7 @@ const checks: NamedCheck[] = [
 
             // 3. File a task in Field notes as staff Ada via CollaborationClient
             const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
-            const createRes = await adaClient.createSpaceTask({
+            const createRes = await adaClient.CreateSpaceTask({
                 SpaceID: FIELD_NOTES_SPACE_ID,
                 Name: 'Field notes inspection task over wire',
                 Band: 'Shared',

@@ -209,10 +209,7 @@ const checks: NamedCheck[] = [
             Assert(injSpaceDim.Provenance === 'ServerDerived', 'SpaceID dimension provenance must be ServerDerived');
             const injVals = (Array.isArray(injSpaceDim.Value) ? injSpaceDim.Value : (injSpaceDim.Value ? [injSpaceDim.Value] : []));
             Assert(injVals.length === 0, `Quote injection must return empty SpaceID set, saw ${injVals.length}`);
-            const failureDiag = (injectionExp[0].Diagnostics ?? []).find(
-                (d) => d.toLowerCase().includes('failed') || d.toLowerCase().includes('error'),
-            );
-            Assert(!failureDiag, `No diagnostic reports failure: ${failureDiag ?? ''}`);
+            Assert(injectionExp[0].Reachable === false, 'Quote injection dimension resolution fails, so Reachable is false');
 
             // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval for Bea in Discovery
             const retrieval = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID);

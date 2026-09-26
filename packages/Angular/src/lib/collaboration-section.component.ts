@@ -228,7 +228,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         try {
-            const payload = await client.mintSpaceLink({ SpaceID: event.spaceId, Email: event.email, RoleID: event.roleId });
+            const payload = await client.MintSpaceLink({ SpaceID: event.spaceId, Email: event.email, RoleID: event.roleId });
             this.message = payload.Success
                 ? [payload.ErrorMessage, payload.RedemptionUrl].filter((part) => !!part).join(' ')
                 : (payload.ErrorMessage || 'Invite refused.');
@@ -280,7 +280,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         try {
-            const payload = await client.uploadSpaceFile({
+            const payload = await client.UploadSpaceFile({
                 SpaceID: event.spaceId,
                 FileName: event.name,
                 MimeType: event.mimeType,
@@ -303,7 +303,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         try {
-            const payload = await client.createSpaceTask({ SpaceID: event.spaceId, Name: event.name, Band: event.band });
+            const payload = await client.CreateSpaceTask({ SpaceID: event.spaceId, Name: event.name, Band: event.band });
             this.message = payload.Success ? '' : (payload.ErrorMessage || 'The task was refused.');
             if (payload.Success) await this.reload();
         } catch (error) {
@@ -322,7 +322,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
                 error = 'A message needs the API connection.';
                 return;
             }
-            const payload = await client.postSpaceMessage({ SpaceID: event.spaceId, Text: event.text });
+            const payload = await client.PostSpaceMessage({ SpaceID: event.spaceId, Text: event.text });
             saved = !!payload.Success;
             if (!saved) error = payload.ErrorMessage || 'The message was refused.';
             if (saved) await workspace.loadTalk();
@@ -380,7 +380,7 @@ export class CollaborationSectionResource extends BaseResourceComponent {
             return;
         }
         try {
-            const payload = await client.openSpaceFile(event.itemId);
+            const payload = await client.OpenSpaceFile(event.itemId);
             if (!payload.Success || !payload.Base64) {
                 this.message = payload.ErrorMessage || 'The file could not be opened.';
                 this.changes.markForCheck();
