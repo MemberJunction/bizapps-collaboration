@@ -491,7 +491,7 @@ A framework built around one example tends to carry that example's assumptions. 
 - A committee and a term are each a space: `Committee` and `Term` extend `Space` through IsA.
 - Seats come from Committees' memberships, through `SyncSeats`.
 - Meetings, motions, votes and minutes stay in Committees, filtered through `fnCollaborationAccess`.
-- Its plan is in bizapps-committees ([§ 13](#13-order-of-work)). It's built after Collaboration is done.
+- Its plan is in [bizapps-committees](https://github.com/MemberJunction/bizapps-committees/pull/54). It's built after Collaboration is done ([§ 13](#13-order-of-work)).
 
 ### 10.2 A deal room: the space belongs to another app's record
 
@@ -573,7 +573,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
    4. chats, history and agents, which is task 6 rewritten from [§ 8](#8-chats-history-and-agents), with slice G (frame 09). The chat area's part needs the `ng-conversations` change in a released MJ. If it isn't out yet, build the data, the server operation and the agent path first, and wire the chat area when it lands;
    5. the starter types' configuration ([§ 10](#103-examples-in-collaboration-itself));
    6. the example plug-ins, and slice I (frame 08) through `example-board`.
-3. **After Collaboration is 100% done,** rebuild Committees on it, in bizapps-committees, from [its plan](https://github.com/MemberJunction/bizapps-committees/pulls?q=head%3Aclaude%2Fhopeful-bell-6ldk4v).
+3. **After Collaboration is 100% done,** rebuild Committees on it, in bizapps-committees, from [its plan](https://github.com/MemberJunction/bizapps-committees/pull/54).
 4. **Then the deal room** ([§ 10](#102-a-deal-room-the-space-belongs-to-another-apps-record)), in Sales or a bridge app.
 
 ## 14. Changes to the UX plan
