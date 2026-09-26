@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -495,6 +495,16 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Default AllowParentAssignees setting for new spaces of this type.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class representing the space type (e.g., fa-solid fa-compass).`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Hex color code representing the space type (e.g., #0076b6).`),
 });
 
 export type mjBizAppsCollaborationSpaceTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeSchema>;
@@ -587,6 +597,11 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: 1 if participants in this space may assign people seated on ancestor spaces whose membership reaches this space; 0 to restrict assignment to seats in this space or below. Only staff may change this switch.`),
+    PlannedCloseAt: z.date().nullable().describe(`
+        * * Field Name: PlannedCloseAt
+        * * Display Name: Planned Close At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Target or planned close date/time for the space. Actual closure is recorded in ClosedAt.`),
     SpaceType: z.string().describe(`
         * * Field Name: SpaceType
         * * Display Name: Space Type
@@ -599,10 +614,6 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Field Name: Owner
         * * Display Name: Owner
         * * SQL Data Type: nvarchar(100)`),
-    RootParentID: z.string().nullable().describe(`
-        * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
-        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceSchema>;
@@ -1803,6 +1814,32 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     set DefaultAllowParentAssignees(value: boolean) {
         this.Set('DefaultAllowParentAssignees', value);
     }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class representing the space type (e.g., fa-solid fa-compass).
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Hex color code representing the space type (e.g., #0076b6).
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
 }
 
 
@@ -2027,6 +2064,19 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
 
     /**
+    * * Field Name: PlannedCloseAt
+    * * Display Name: Planned Close At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Target or planned close date/time for the space. Actual closure is recorded in ClosedAt.
+    */
+    get PlannedCloseAt(): Date | null {
+        return this.Get('PlannedCloseAt');
+    }
+    set PlannedCloseAt(value: Date | null) {
+        this.Set('PlannedCloseAt', value);
+    }
+
+    /**
     * * Field Name: SpaceType
     * * Display Name: Space Type
     * * SQL Data Type: nvarchar(200)
@@ -2051,14 +2101,5 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     */
     get Owner(): string {
         return this.Get('Owner');
-    }
-
-    /**
-    * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
-    * * SQL Data Type: uniqueidentifier
-    */
-    get RootParentID(): string | null {
-        return this.Get('RootParentID');
     }
 }

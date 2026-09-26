@@ -532,6 +532,18 @@
                     "Description": "\bDefault\b \bAllowParentAssignees\b \bsetting\b \bfor\b \bnew\b \bspaces\b \bof\b \bthis\b \btype\b.",  
                     "Type": "\bbit\b",
                     "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bIconClass\b", 
+                    "Description": "\bFont\b \bAwesome\b \bicon\b \bclass\b \brepresenting\b \bthe\b \bspace\b \btype\b (\be\b.\bg\b., \bfa\b-\bsolid\b \bfa\b-\bcompass\b).",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bColor\b", 
+                    "Description": "\bHex\b \bcolor\b \bcode\b \brepresenting\b \bthe\b \bspace\b \btype\b (\be\b.\bg\b., #\b0076b6\b).",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
                 }        
             ]
         },
@@ -631,6 +643,12 @@
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bPlannedCloseAt\b", 
+                    "Description": "\bTarget\b \bor\b \bplanned\b \bclose\b \bdate\b/\btime\b \bfor\b \bthe\b \bspace\b. \bActual\b \bclosure\b \bis\b \brecorded\b \bin\b \bClosedAt\b.",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
                     "Name": "\bSpaceType\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
@@ -647,12 +665,6 @@
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bRootParentID\b", 
-                    "Description": "",  
-                    "Type": "\buniqueidentifier\b",
-                    "AllowsNull": true 
                 }        
             ]
         }

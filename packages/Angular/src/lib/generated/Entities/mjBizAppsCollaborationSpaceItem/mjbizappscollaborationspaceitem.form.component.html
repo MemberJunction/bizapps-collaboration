@@ -115,9 +115,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Item Uses','ItemID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Item Uses')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Item Uses','ItemID')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationItemUses')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationItemUses', $event.totalRowCount)"
                 >
@@ -140,9 +140,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Share Notices','ItemID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Share Notices')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Share Notices','ItemID')"
                 [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationShareNotices')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationShareNotices', $event.totalRowCount)"
                 >

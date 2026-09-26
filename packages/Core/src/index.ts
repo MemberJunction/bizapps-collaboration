@@ -51,7 +51,6 @@ export {
     AVATAR_COLOR_CLASSES,
     avatarColorClass,
     summarizeAudience,
-    computeBandVisibility,
     computeSpaceProgress,
     mergeAgenda,
     NeedsYouProvider,
@@ -61,8 +60,8 @@ export {
 export type {
     AvatarColorClass,
     AudienceMemberInput,
+    ExternalOrgGroup,
     AudienceBreakdown,
-    BandVisibilityResult,
     SpaceProgressResult,
     NeedsYouItem,
     AgendaItem,

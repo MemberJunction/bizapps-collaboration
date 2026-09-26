@@ -3,9 +3,12 @@ name: ci
 on:
   pull_request:
     branches: [next]
+  push:
+    branches: [next, main]
 
 jobs:
   build:
+    name: Build, test, standards & visual e2e
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,8 +25,10 @@ jobs:
       - run: pnpm run build
       - run: pnpm test
       - run: node scripts/check-mj-tokens.mjs
+      - name: Check adopted MJ standards
+        run: pnpm exec mj standards check
       - run: node --check test-harnesses/integration.mjs && node --check test-harnesses/integration-client.mjs
-
-      # The integration suite (item 22) and the Playwright tour (item 23)
-      # run locally against a private database and host. They are not part of
-      # this job. ExplainScope joins this job when the agent (item 12) lands.
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run Gallery Visual Tests
+        run: pnpm run test:e2e

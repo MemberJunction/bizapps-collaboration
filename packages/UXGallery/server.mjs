@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const mockupDir = join(here, '../../docs/ux/mockup');
-const htmlDir = join(mockupDir, 'html');
+const distDir = join(here, 'dist');
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -15,22 +15,7 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
     '.woff2': 'font/woff2',
-};
-
-const FRAME_MAP = {
-    '01': '01-home.html',
-    '02': '02-space-overview.html',
-    '03': '03-library.html',
-    '04': '04-share-check.html',
-    '05': '05-chat-room.html',
-    '06': '06-people-access.html',
-    '07': '07-client-home.html',
-    '08': '08-committee-member.html',
-    '09': '09-assistant-settings.html',
-    '10': '10-work-board.html',
-    '11': '11-chat-dark.html',
-    '12': '12-mobile-client.html',
-    '13': '13-new-space.html',
+    '.map': 'application/json; charset=utf-8',
 };
 
 export function startGalleryServer(port = 4250) {
@@ -38,43 +23,74 @@ export function startGalleryServer(port = 4250) {
         try {
             const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
             const pathname = reqUrl.pathname;
-            const theme = reqUrl.searchParams.get('theme');
+            const theme = reqUrl.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
 
-            // Handle frame routes: /frame/01, /frame/02, etc.
+            // Serve Angular app bundle
+            if (pathname === '/app.bundle.js') {
+                const bundlePath = join(distDir, 'app.bundle.js');
+                if (existsSync(bundlePath)) {
+                    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+                    res.end(readFileSync(bundlePath));
+                    return;
+                }
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('app.bundle.js not found. Run pnpm --filter @mj-biz-apps/collaboration-ux-gallery run build');
+                return;
+            }
+
+            if (pathname === '/app.bundle.js.map') {
+                const mapPath = join(distDir, 'app.bundle.js.map');
+                if (existsSync(mapPath)) {
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(readFileSync(mapPath));
+                    return;
+                }
+            }
+
+            // Handle frame routes: /frame/01, /frame/02, etc. -> Return Angular shell
             const frameMatch = pathname.match(/^\/frame\/(\d{2})$/);
             if (frameMatch) {
                 const frameId = frameMatch[1];
-                const fileName = FRAME_MAP[frameId];
-                if (!fileName) {
-                    res.writeHead(404, { 'Content-Type': 'text/plain' });
-                    res.end(`Frame ${frameId} not found`);
-                    return;
-                }
-                const filePath = join(htmlDir, fileName);
-                let content = readFileSync(filePath, 'utf8');
-
-                // Adjust data-theme if specified
-                if (theme === 'dark') {
-                    content = content.replace(/data-theme="[^"]*"/, 'data-theme="dark"');
-                } else if (theme === 'light') {
-                    content = content.replace(/data-theme="[^"]*"/, 'data-theme="light"');
-                }
-
-                // Rewrite relative base.css path if needed
-                content = content.replace(/href="\.\.\/base\.css"/g, 'href="/base.css"');
-
+                const html = `<!doctype html>
+<html lang="en" data-theme="${theme}">
+<head>
+  <meta charset="utf-8">
+  <base href="/">
+  <title>Collaboration UX Gallery — Frame ${frameId}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 1440px;
+      height: 900px;
+      overflow: hidden;
+      font-family: var(--mj-font-family, 'Inter', sans-serif);
+      background: var(--mj-bg-surface, #ffffff);
+      color: var(--mj-text-primary, #0f172a);
+    }
+  </style>
+</head>
+<body>
+  <gallery-root></gallery-root>
+  <script type="module" src="/app.bundle.js"></script>
+</body>
+</html>`;
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                res.end(content);
+                res.end(html);
                 return;
             }
 
             // Static files: /base.css
             if (pathname === '/base.css') {
                 const cssPath = join(mockupDir, 'base.css');
-                const content = readFileSync(cssPath, 'utf8');
-                res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
-                res.end(content);
-                return;
+                if (existsSync(cssPath)) {
+                    const content = readFileSync(cssPath, 'utf8');
+                    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+                    res.end(content);
+                    return;
+                }
             }
 
             // Static assets: /assets/*

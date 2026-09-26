@@ -4,7 +4,6 @@ import {
     avatarColorClass,
     AVATAR_COLOR_CLASSES,
     summarizeAudience,
-    computeBandVisibility,
     computeSpaceProgress,
     mergeAgenda,
     type AudienceMemberInput,
@@ -47,7 +46,7 @@ describe('view-models (L0)', () => {
             { id: '9', organization: 'Northwind', isExternal: true },
         ];
 
-        it('formats pill summary with internal and external counts', () => {
+        it('formats pill summary with internal and external counts from data', () => {
             const summary = summarizeAudience(members);
             assert.equal(summary.totalCount, 9);
             assert.equal(summary.internalCount, 3);
@@ -76,21 +75,31 @@ describe('view-models (L0)', () => {
             assert.equal(summary.composerLine, 'Only the 2 Meridian staff here will see this');
             assert.equal(summary.uploadLine, 'Only the 2 Meridian staff here will see this');
         });
-    });
 
-    describe('computeBandVisibility', () => {
-        it('allows Team and Shared when all participants are internal', () => {
-            const res = computeBandVisibility([{ isExternal: false }, { isExternal: false }]);
-            assert.equal(res.canUseTeam, true);
-            assert.equal(res.canUseShared, true);
-            assert.equal(res.explanation, 'It can use Team and Shared material.');
+        it('uses singular "1 person" not "1 people"', () => {
+            const singleMember: AudienceMemberInput[] = [
+                { id: '1', organization: 'Acme', isExternal: false },
+            ];
+            const summary = summarizeAudience(singleMember);
+            assert.equal(summary.totalCount, 1);
+            assert.equal(summary.pillSummary, '1 person · 1 Acme');
+            assert.equal(summary.composerLine, 'Only the 1 Acme staff here will see this');
+            assert.equal(summary.uploadLine, 'Only the 1 Acme staff here will see this');
         });
 
-        it('restricts to Shared only when external participants exist', () => {
-            const res = computeBandVisibility([{ isExternal: false }, { isExternal: true }]);
-            assert.equal(res.canUseTeam, false);
-            assert.equal(res.canUseShared, true);
-            assert.equal(res.explanation, 'It can use Shared material only.');
+        it('supports multiple outside organizations grouped by their own organization', () => {
+            const multiOrg: AudienceMemberInput[] = [
+                { id: '1', organization: 'Meridian', isExternal: false },
+                { id: '2', organization: 'Northwind', isExternal: true },
+                { id: '3', organization: 'Northwind', isExternal: true },
+                { id: '4', organization: 'Acme', isExternal: true },
+            ];
+            const summary = summarizeAudience(multiOrg, false);
+            assert.equal(summary.totalCount, 4);
+            assert.equal(summary.internalCount, 1);
+            assert.equal(summary.externalCount, 3);
+            assert.equal(summary.pillSummary, '4 people · 1 Meridian · 2 Northwind · 1 Acme');
+            assert.equal(summary.composerLine, '4 people will see this, 2 at Northwind, 1 at Acme');
         });
     });
 

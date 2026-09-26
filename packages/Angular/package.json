@@ -2,7 +2,7 @@
   "name": "@mj-biz-apps/collaboration-ng",
   "type": "module",
   "version": "0.1.0",
-  "description": "Collaboration workspace and the no-access page.",
+  "description": "Collaboration Explorer UI surface and components.",
   "main": "dist/public-api.js",
   "types": "dist/public-api.d.ts",
   "mjUILayer": "surface",

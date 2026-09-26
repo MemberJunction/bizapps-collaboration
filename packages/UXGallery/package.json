@@ -6,7 +6,7 @@
   "description": "UX Gallery for Collaboration visual regression testing against design frames.",
   "mjUILayer": "shell",
   "scripts": {
-    "build": "ngc"
+    "build": "ngc && node bundle.mjs"
   },
   "dependencies": {
     "@angular/common": "^21.2.22",
@@ -20,6 +20,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.23",
     "@angular/compiler-cli": "21.2.23",
+    "esbuild": "^0.25.12",
     "typescript": "5.9.3"
   }
 }

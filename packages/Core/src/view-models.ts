@@ -30,8 +30,13 @@ export function avatarColorClass(personId: string): AvatarColorClass {
 
 export interface AudienceMemberInput {
     id: string;
-    organization: string;
+    organization?: string;
     isExternal: boolean;
+}
+
+export interface ExternalOrgGroup {
+    organization: string;
+    count: number;
 }
 
 export interface AudienceBreakdown {
@@ -39,8 +44,8 @@ export interface AudienceBreakdown {
     internalCount: number;
     externalCount: number;
     internalOrg: string;
-    externalOrg: string;
-    /** e.g. "9 people · 3 Meridian · 6 Northwind" */
+    externalOrgs: ExternalOrgGroup[];
+    /** e.g. "9 people · 3 Meridian · 6 Northwind" or "1 person" */
     pillSummary: string;
     /** e.g. "9 people will see this, 6 at Northwind" */
     composerLine: string;
@@ -48,14 +53,18 @@ export interface AudienceBreakdown {
     uploadLine: string;
 }
 
+function formatPeopleCount(count: number): string {
+    return count === 1 ? '1 person' : `${count} people`;
+}
+
 /**
  * Computes audience summaries, breakdown counts, and descriptive lines for composer and header.
+ * Takes names strictly from member data.
  */
 export function summarizeAudience(
     members: readonly AudienceMemberInput[],
     viewerIsExternal: boolean = false,
-    defaultInternalOrg: string = 'Meridian',
-    defaultExternalOrg: string = 'Northwind',
+    hostFirmName?: string,
 ): AudienceBreakdown {
     const totalCount = members.length;
     const internalMembers = members.filter((m) => !m.isExternal);
@@ -64,23 +73,70 @@ export function summarizeAudience(
     const internalCount = internalMembers.length;
     const externalCount = externalMembers.length;
 
-    const internalOrg = internalMembers[0]?.organization || defaultInternalOrg;
-    const externalOrg = externalMembers[0]?.organization || defaultExternalOrg;
+    // Firm is the host's company (from argument, or from internal member data)
+    const internalOrg = hostFirmName || internalMembers.find((m) => !!m.organization?.trim())?.organization?.trim() || '';
 
-    const pillSummary = `${totalCount} people · ${internalCount} ${internalOrg} · ${externalCount} ${externalOrg}`;
+    // Group outside people by their own organization
+    const orgMap = new Map<string, number>();
+    for (const m of externalMembers) {
+        const org = m.organization?.trim() || '';
+        if (org) {
+            orgMap.set(org, (orgMap.get(org) ?? 0) + 1);
+        }
+    }
+    const externalOrgs: ExternalOrgGroup[] = Array.from(orgMap.entries()).map(([organization, count]) => ({
+        organization,
+        count,
+    }));
 
+    // Build pill summary
+    let pillSummary: string;
+    if (totalCount === 0) {
+        pillSummary = '0 people';
+    } else {
+        const parts: string[] = [];
+        if (internalCount > 0 && internalOrg) {
+            parts.push(`${internalCount} ${internalOrg}`);
+        } else if (internalCount > 0 && externalCount > 0) {
+            parts.push(`${internalCount} staff`);
+        }
+        for (const ext of externalOrgs) {
+            parts.push(`${ext.count} ${ext.organization}`);
+        }
+        if (parts.length > 0) {
+            pillSummary = `${formatPeopleCount(totalCount)} · ${parts.join(' · ')}`;
+        } else {
+            pillSummary = formatPeopleCount(totalCount);
+        }
+    }
+
+    // Build composer and upload lines
     let composerLine: string;
     let uploadLine: string;
 
-    if (externalCount === 0) {
-        composerLine = `Only the ${internalCount} ${internalOrg} staff here will see this`;
-        uploadLine = `Only the ${internalCount} ${internalOrg} staff here will see this`;
+    if (totalCount === 0) {
+        composerLine = 'No members in this space';
+        uploadLine = 'No members in this space';
+    } else if (externalCount === 0) {
+        const staffLabel = internalOrg ? `${internalOrg} staff` : 'staff';
+        const countStr = internalCount === 1 ? '1' : `${internalCount}`;
+        composerLine = `Only the ${countStr} ${staffLabel} here will see this`;
+        uploadLine = `Only the ${countStr} ${staffLabel} here will see this`;
     } else if (viewerIsExternal) {
-        composerLine = `${totalCount} people will see this, ${internalCount} at ${internalOrg}`;
-        uploadLine = `Shared with ${totalCount} people (${internalCount} at ${internalOrg})`;
+        const hostSuffix = internalOrg ? `at ${internalOrg}` : 'staff';
+        const internalCountStr = internalCount === 1 ? '1' : `${internalCount}`;
+        composerLine = `${formatPeopleCount(totalCount)} will see this, ${internalCountStr} ${hostSuffix}`;
+        uploadLine = `Shared with ${formatPeopleCount(totalCount)} (${internalCountStr} ${hostSuffix})`;
     } else {
-        composerLine = `${totalCount} people will see this, ${externalCount} at ${externalOrg}`;
-        uploadLine = `Shared with ${totalCount} people (${externalCount} at ${externalOrg})`;
+        // Staff viewer
+        let extDesc: string;
+        if (externalOrgs.length > 0) {
+            extDesc = externalOrgs.map((o) => `${o.count} at ${o.organization}`).join(', ');
+        } else {
+            extDesc = externalCount === 1 ? '1 external' : `${externalCount} external`;
+        }
+        composerLine = `${formatPeopleCount(totalCount)} will see this, ${extDesc}`;
+        uploadLine = `Shared with ${formatPeopleCount(totalCount)} (${extDesc})`;
     }
 
     return {
@@ -88,39 +144,10 @@ export function summarizeAudience(
         internalCount,
         externalCount,
         internalOrg,
-        externalOrg,
+        externalOrgs,
         pillSummary,
         composerLine,
         uploadLine,
-    };
-}
-
-// ============================================================================
-// Band Visibility
-// ============================================================================
-
-export interface BandVisibilityResult {
-    canUseTeam: boolean;
-    canUseShared: boolean;
-    explanation: string;
-}
-
-/**
- * Determines which data bands the Assistant may access based on chat participants.
- */
-export function computeBandVisibility(participants: readonly { isExternal: boolean }[]): BandVisibilityResult {
-    const hasExternal = participants.some((p) => p.isExternal);
-    if (hasExternal) {
-        return {
-            canUseTeam: false,
-            canUseShared: true,
-            explanation: 'It can use Shared material only.',
-        };
-    }
-    return {
-        canUseTeam: true,
-        canUseShared: true,
-        explanation: 'It can use Team and Shared material.',
     };
 }
 

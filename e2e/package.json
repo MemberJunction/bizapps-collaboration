@@ -6,5 +6,11 @@
   "description": "Playwright e2e and visual regression testing harness for BizApps Collaboration.",
   "scripts": {
     "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.1",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
+    "typescript": "5.9.3"
   }
 }

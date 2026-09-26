@@ -41,9 +41,9 @@ The owner of a space can read it before the first roster row exists. A magic-lin
 
 Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permissions, and one unfiltered permission exempts the user from every filter.
 
-## The workspace
+## The UI surface
 
-`mj-collaboration-workspace` is the screen: the tree, the roster, the material, and an invite form. The form calls `refuseInvite` with the same inputs the server will, and shows the refusal before the save. `mj-collaboration-no-access` is the page a person sees when they are signed in and not on the roster. The components do not load data. The host passes the rows in.
+`CollaborationSectionResource` (`mj-collaboration-section`) is the Explorer resource component hosting the Collaboration application in MemberJunction Explorer. It is composed from `@mj-biz-apps/collaboration-ng-widgets` (space rail, header, tabs, and content views). When a signed-in user opens a space where they hold no seat, `CollaborationNoAccessComponent` (`mjc-no-access`) presents a branded empty state powered by MemberJunction's canonical `<mj-empty-state>` using `lockoutMessage` from `@mj-biz-apps/collaboration-core`.
 
 ## What this repo does not contain
 
