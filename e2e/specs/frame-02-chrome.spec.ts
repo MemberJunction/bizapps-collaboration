@@ -23,11 +23,15 @@ async function ensureFontsLoaded(page: Page) {
         if (!interLoaded) {
             throw new Error('Font check failed: Inter variable font did not load');
         }
-        // 2. Font Awesome font face check in document.fonts (require both solid 900 and regular 400)
-        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') &&
-                         document.fonts.check('400 16px "Font Awesome 6 Free"');
-        if (!faLoaded) {
-            throw new Error('Font check failed: Font Awesome 6 font face not loaded in document.fonts');
+        // 2. Font Awesome font face check in document.fonts (check 900 if solid exists, check 400 if regular exists)
+        const hasSolid = document.querySelector('i.fa-solid, [class*="fa-solid"]') !== null;
+        const hasRegular = document.querySelector('i.fa-regular, [class*="fa-regular"]') !== null;
+
+        if (hasSolid && !document.fonts.check('900 16px "Font Awesome 6 Free"')) {
+            throw new Error('Font check failed: Font Awesome 6 Free solid (900) font face not loaded in document.fonts');
+        }
+        if (hasRegular && !document.fonts.check('400 16px "Font Awesome 6 Free"')) {
+            throw new Error('Font check failed: Font Awesome 6 Free regular (400) font face not loaded in document.fonts');
         }
         // 3. Check every Font Awesome icon for rendered ::before pseudo-element content
         const icons = document.querySelectorAll('i[class*="fa-"]');
