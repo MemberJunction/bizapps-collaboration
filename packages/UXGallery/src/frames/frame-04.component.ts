@@ -4,26 +4,26 @@ import {
   CollabSpaceRailComponent,
   CollabSpaceHeaderComponent,
   CollabSpaceTabsComponent,
-  CollabAudiencePillComponent,
-  CollabSpaceOverviewComponent,
+  CollabSpaceLibraryComponent,
+  CollabShareCheckDialogComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.fixture';
+import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
 
 @Component({
-  selector: 'gallery-frame-02',
+  selector: 'gallery-frame-04',
   standalone: true,
   imports: [
     CommonModule,
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
-    CollabAudiencePillComponent,
-    CollabSpaceOverviewComponent,
+    CollabSpaceLibraryComponent,
+    CollabShareCheckDialogComponent,
     MJButtonDirective,
   ],
   template: `
-    <div class="shell">
+    <div class="shell" style="position: relative">
       <!-- Static Explorer Topbar Stand-in (56px) as required by § 10 -->
       <header class="topbar">
         <span class="mark"></span>
@@ -53,37 +53,51 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
             [Subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
-              <mjc-audience-pill
-                [StaffAvatars]="f.header.staffAvatars"
-                [OutsideAvatars]="f.header.outsideAvatars"
-                [TotalPeople]="f.header.totalPeople"
-                [Summary]="f.header.audienceSummary"
-              ></mjc-audience-pill>
-              <button mjButton variant="secondary" size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
-              <button mjButton variant="primary" size="md"><i class="fa-solid fa-plus"></i>New</button>
+              <button mjButton variant="primary" size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs
               [Tabs]="f.header.tabs"
-              [ActiveTab]="activeTab"
-              (TabSelectRequested)="activeTab = $event"
+              [ActiveTab]="'Library'"
             ></mjc-space-tabs>
           </mjc-space-header>
 
-          <mjc-space-overview
-            [SpaceName]="f.header.title"
-            [FirmName]="'Meridian'"
-            [ClientOrgName]="'Northwind'"
-            [ClientPersonaName]="'Casey'"
-            [AudienceCount]="f.header.totalPeople"
-            [NeedsYouItems]="f.needsYouItems"
-            [SharedItems]="f.sharedItems"
-            [TeamItems]="f.teamItems"
-            [RoomMessages]="f.roomMessages"
-            [SubSpaces]="f.subSpaces"
-            (OpenLibraryRequested)="activeTab = 'Library'"
-          ></mjc-space-overview>
+          <mjc-space-library
+            [TotalCount]="f.library.allMaterialCount"
+            [Collections]="f.library.collections"
+            [SmartViews]="f.library.smartViews"
+            [Rows]="f.library.rows"
+            [SelectedRowId]="'row-3'"
+            [ShowDrawer]="true"
+            [PreviewMeta]="f.library.selectedItem.meta"
+            [PreviewParagraphs]="f.library.selectedItem.snippets"
+            [PreviewBandLabel]="f.library.selectedItem.bandLabel"
+            [PreviewAudienceSub]="f.library.selectedItem.bandSubtitle"
+            [PreviewStaffAvatars]="f.library.selectedItem.bandAvatars"
+            [PreviewFlagTitle]="f.library.selectedItem.flagTitle"
+            [PreviewFlagDescription]="f.library.selectedItem.flagDescription"
+            [PreviewRecentUses]="f.library.selectedItem.recentUses"
+          ></mjc-space-library>
         </main>
       </div>
+
+      <!-- Share Check Dialog Modal Overlay -->
+      <mjc-share-check-dialog
+        [Title]="f.dialog.title"
+        [ItemName]="f.dialog.itemName"
+        [Kind]="f.dialog.kind"
+        [ClientOrgName]="f.dialog.clientOrgName"
+        [RecipientCount]="f.dialog.recipientCount"
+        [AudienceHeader]="f.dialog.audienceHeader"
+        [AudienceStaffSub]="f.dialog.audienceStaffSub"
+        [Recipients]="f.dialog.recipients"
+        [ReviewHeader]="f.dialog.reviewHeader"
+        [ReviewSub]="f.dialog.reviewSub"
+        [Findings]="f.dialog.findings"
+        [Note]="f.dialog.note"
+        [NotifyRecipients]="f.dialog.notifyRecipients"
+        [AuthorName]="f.dialog.authorName"
+        [Timestamp]="f.dialog.timestamp"
+      ></mjc-share-check-dialog>
     </div>
   `,
   styles: [`
@@ -92,6 +106,7 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
       width: 1440px;
       height: 900px;
       overflow: hidden;
+      position: relative;
     }
     .shell {
       display: grid;
@@ -99,6 +114,7 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
       width: 1440px;
       height: 900px;
       overflow: hidden;
+      position: relative;
     }
     .body {
       display: grid;
@@ -216,7 +232,6 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
     .topbar .av.md { width: 32px; height: 32px; }
   `]
 })
-export class Frame02Component {
-  readonly f = FRAME_02_FIXTURE;
-  activeTab = FRAME_02_FIXTURE.header.activeTabId;
+export class Frame04Component {
+  readonly f = FRAME_04_FIXTURE;
 }

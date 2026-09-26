@@ -4,22 +4,20 @@ import {
   CollabSpaceRailComponent,
   CollabSpaceHeaderComponent,
   CollabSpaceTabsComponent,
-  CollabAudiencePillComponent,
-  CollabSpaceOverviewComponent,
+  CollabSpaceLibraryComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.fixture';
+import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
 
 @Component({
-  selector: 'gallery-frame-02',
+  selector: 'gallery-frame-03',
   standalone: true,
   imports: [
     CommonModule,
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
-    CollabAudiencePillComponent,
-    CollabSpaceOverviewComponent,
+    CollabSpaceLibraryComponent,
     MJButtonDirective,
   ],
   template: `
@@ -53,14 +51,7 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
             [Subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
-              <mjc-audience-pill
-                [StaffAvatars]="f.header.staffAvatars"
-                [OutsideAvatars]="f.header.outsideAvatars"
-                [TotalPeople]="f.header.totalPeople"
-                [Summary]="f.header.audienceSummary"
-              ></mjc-audience-pill>
-              <button mjButton variant="secondary" size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
-              <button mjButton variant="primary" size="md"><i class="fa-solid fa-plus"></i>New</button>
+              <button mjButton variant="primary" size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs
               [Tabs]="f.header.tabs"
@@ -69,19 +60,22 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
             ></mjc-space-tabs>
           </mjc-space-header>
 
-          <mjc-space-overview
-            [SpaceName]="f.header.title"
-            [FirmName]="'Meridian'"
-            [ClientOrgName]="'Northwind'"
-            [ClientPersonaName]="'Casey'"
-            [AudienceCount]="f.header.totalPeople"
-            [NeedsYouItems]="f.needsYouItems"
-            [SharedItems]="f.sharedItems"
-            [TeamItems]="f.teamItems"
-            [RoomMessages]="f.roomMessages"
-            [SubSpaces]="f.subSpaces"
-            (OpenLibraryRequested)="activeTab = 'Library'"
-          ></mjc-space-overview>
+          <mjc-space-library
+            [TotalCount]="f.allMaterialCount"
+            [Collections]="f.collections"
+            [SmartViews]="f.smartViews"
+            [Rows]="f.rows"
+            [SelectedRowId]="'row-3'"
+            [ShowDrawer]="true"
+            [PreviewMeta]="f.selectedItem.meta"
+            [PreviewParagraphs]="f.selectedItem.snippets"
+            [PreviewBandLabel]="f.selectedItem.bandLabel"
+            [PreviewAudienceSub]="f.selectedItem.bandSubtitle"
+            [PreviewStaffAvatars]="f.selectedItem.bandAvatars"
+            [PreviewFlagTitle]="f.selectedItem.flagTitle"
+            [PreviewFlagDescription]="f.selectedItem.flagDescription"
+            [PreviewRecentUses]="f.selectedItem.recentUses"
+          ></mjc-space-library>
         </main>
       </div>
     </div>
@@ -216,7 +210,7 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
     .topbar .av.md { width: 32px; height: 32px; }
   `]
 })
-export class Frame02Component {
-  readonly f = FRAME_02_FIXTURE;
-  activeTab = FRAME_02_FIXTURE.header.activeTabId;
+export class Frame03Component {
+  readonly f = FRAME_03_FIXTURE;
+  activeTab = FRAME_03_FIXTURE.header.activeTabId;
 }

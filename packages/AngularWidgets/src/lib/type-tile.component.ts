@@ -42,7 +42,7 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
 })
 export class CollabTypeTileComponent {
   @Input() IconClass = 'fa-solid fa-shapes';
-  @Input() Color = '';
+  @Input() Color: string | undefined = '';
   @Input() Size: TileSize = 'md';
   @Input() IsClosed = false;
 }

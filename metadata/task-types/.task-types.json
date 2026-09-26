@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Milestone",
+      "Code": "MILESTONE",
+      "Description": "A key project event or deliverable date marking significant progress",
+      "IconClass": "fa-solid fa-flag-checkered",
+      "DefaultPriority": "High"
+    },
+    "primaryKey": {
+      "ID": "8AFDE498-1B11-42A7-A1C6-41B537A1AEAA"
+    },
+    "sync": {
+      "lastModified": "2026-09-26T18:35:00.000Z",
+      "checksum": "8afde4981b1142a7a1c641b537a1aeaa"
+    }
+  }
+]

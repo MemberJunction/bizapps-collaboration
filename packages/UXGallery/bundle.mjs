@@ -69,13 +69,18 @@ export async function bundleGalleryApp() {
 html, body {
   margin: 0;
   padding: 0;
+}
+body {
   width: 1440px;
   height: 900px;
   overflow: hidden;
   font-family: var(--mj-font-family, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 14px;
+  line-height: 1.45;
   background: var(--mj-bg-page, #ffffff);
   color: var(--mj-text-primary, #0f172a);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
 }
 `;
 
