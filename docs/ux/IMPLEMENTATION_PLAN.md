@@ -23,7 +23,7 @@ The rule behind every section below comes from MJ's [UI Layering Guide](https://
 
 "Pixel perfect" is literal. The frames already use MJ's real tokens, fonts, Font Awesome version and component metrics, so a faithful build matches them. The rules for anything that can't match:
 
-- **If a frame and an MJ component disagree, don't restyle MJ.** Stop and raise it in the PR with a screenshot of both. We will adjust the frame or improve MJ.
+- **If a frame and an MJ component disagree, keep MJ's look** (Amith, 2026-09-26). Don't restyle the component: list the difference as a known difference in the PR. Where one matters, we adjust the frame or improve MJ.
 - **Don't guess where a frame is ambiguous.** Open the matching page in [`mockup/html/`](mockup/html/); it has every size, color and spacing value.
 
 ## 2. What to delete, and what to keep
