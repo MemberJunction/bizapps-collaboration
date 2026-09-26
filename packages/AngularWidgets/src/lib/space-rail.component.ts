@@ -71,7 +71,7 @@ import { RailSpaceNode } from './types';
       </div>
 
       <div class="tree-list">
-        @for (s of Spaces; track s.id) {
+        @for (s of visibleSpaces; track s.id) {
           <div
             class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
             [mjClickable]="s.name"
@@ -224,7 +224,6 @@ import { RailSpaceNode } from './types';
       justify-content: space-between;
       margin: 14px 10px 4px;
       font-size: 11px;
-      line-height: 1.45;
       font-weight: 600;
       letter-spacing: .06em;
       text-transform: uppercase;
@@ -236,6 +235,8 @@ import { RailSpaceNode } from './types';
       color: var(--mj-text-muted, #64748b);
       cursor: pointer;
       padding: 2px 4px;
+      margin: -2px -4px;
+      letter-spacing: inherit;
       font-size: 12px;
       display: inline-flex;
       align-items: center;
@@ -272,8 +273,6 @@ import { RailSpaceNode } from './types';
       width: 10px;
       font-size: 9px;
       color: var(--mj-text-disabled, #94a3b8);
-      display: inline-flex;
-      justify-content: center;
     }
     .tree-item.active {
       background: var(--mj-bg-surface-sunken, #f1f5f9);
@@ -345,6 +344,29 @@ export class CollabSpaceRailComponent {
   }
 
   private _expandedOverrides = new Map<string, boolean>();
+
+  get visibleSpaces(): RailSpaceNode[] {
+    const result: RailSpaceNode[] = [];
+    const stack: { level: number; expanded: boolean }[] = [];
+
+    for (const s of this.Spaces) {
+      const level = s.level ?? 0;
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+
+      const isVisible = stack.every(a => a.expanded);
+      if (isVisible) {
+        result.push(s);
+      }
+
+      if (s.hasChildren) {
+        stack.push({ level, expanded: this.isNodeExpanded(s) });
+      }
+    }
+
+    return result;
+  }
 
   isNodeExpanded(s: RailSpaceNode): boolean {
     if (this._expandedOverrides.has(s.id)) {

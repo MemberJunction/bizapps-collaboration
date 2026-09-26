@@ -23,8 +23,8 @@ async function ensureFontsLoaded(page: Page) {
         if (!interLoaded) {
             throw new Error('Font check failed: Inter variable font did not load');
         }
-        // 2. Font Awesome font face check in document.fonts
-        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') ||
+        // 2. Font Awesome font face check in document.fonts (require both solid 900 and regular 400)
+        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') &&
                          document.fonts.check('400 16px "Font Awesome 6 Free"');
         if (!faLoaded) {
             throw new Error('Font check failed: Font Awesome 6 font face not loaded in document.fonts');
@@ -107,7 +107,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(tabs.nth(4).locator('.c')).toHaveText('9');
         await expect(tabs.nth(5)).toContainText('Settings');
 
-        const screenshot = await page.screenshot({ fullPage: false });
+        const screenshot = await page.screenshot({ fullPage: false, animations: 'disabled' });
         saveTestResultScreenshot('02-light.png', screenshot);
     });
 
@@ -121,7 +121,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(header).toBeVisible();
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
 
-        const screenshot = await page.screenshot({ fullPage: false });
+        const screenshot = await page.screenshot({ fullPage: false, animations: 'disabled' });
         saveTestResultScreenshot('02-dark.png', screenshot);
     });
 
@@ -130,7 +130,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');
 
-        const screenshotBuffer = await page.screenshot({ fullPage: false });
+        const screenshotBuffer = await page.screenshot({ fullPage: false, animations: 'disabled' });
         const targetPath = resolve(__dirname, '../../docs/ux/screens/02-space-overview.png');
         if (!existsSync(targetPath)) {
             throw new Error(`Target screen not found: ${targetPath}`);
@@ -187,8 +187,9 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         const diffRatio = numDiffPixels / chromeTotalPixels;
         console.log(`Chrome visual diff: ${numDiffPixels} / ${chromeTotalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: <= 10,000 pixels (~0.62% of chrome pixels, down from 38,000 following Chromium channel & line-height inheritance; local measured 5,254 px, Linux CI measured 684 px)
-        expect(numDiffPixels).toBeLessThanOrEqual(10000);
+        // Budget: Separate CI (full Chromium on Linux: <= 100 px) vs local macOS (~5k px due to platform font rendering)
+        const budget = process.env.CI ? 100 : 10000;
+        expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 
     test('visual regression: full-frame comparison against 02-space-overview.png (Slice A overview cards pending)', async ({ page }) => {
@@ -201,7 +202,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');
 
-        const screenshotBuffer = await page.screenshot({ fullPage: false });
+        const screenshotBuffer = await page.screenshot({ fullPage: false, animations: 'disabled' });
         const targetPath = resolve(__dirname, '../../docs/ux/screens/02-space-overview.png');
         if (!existsSync(targetPath)) {
             throw new Error(`Target screen not found: ${targetPath}`);

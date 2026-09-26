@@ -244,4 +244,33 @@ describe('CollabSpaceRailComponent', () => {
     expect(comp.isNodeExpanded(node)).toBe(false);
     expect(emittedNode).toBe(node);
   });
+
+  it('collapsing a parent space hides its descendants and expanding it shows them in visibleSpaces', () => {
+    const comp = new CollabSpaceRailComponent();
+    const northwind: RailSpaceNode = { id: 'northwind', name: 'Northwind', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true };
+    const discovery: RailSpaceNode = { id: 'discovery', name: 'Discovery', iconClass: 'fa-solid fa-compass', level: 1, hasChildren: true, isExpanded: true };
+    const fieldnotes: RailSpaceNode = { id: 'fieldnotes', name: 'Field notes', iconClass: 'fa-solid fa-clipboard', level: 2, hasChildren: false, isExpanded: false };
+    const delivery: RailSpaceNode = { id: 'delivery', name: 'Delivery', iconClass: 'fa-solid fa-truck-fast', level: 1, hasChildren: true, isExpanded: false };
+    const closed: RailSpaceNode = { id: 'closed', name: 'Closed', iconClass: 'fa-solid fa-box-archive', level: 1, hasChildren: true, isExpanded: false };
+    const committee: RailSpaceNode = { id: 'committee', name: 'Audit Committee', iconClass: 'fa-solid fa-landmark', level: 0, hasChildren: true, isExpanded: false };
+
+    comp.Spaces = [northwind, discovery, fieldnotes, delivery, closed, committee];
+
+    // Initially Northwind is expanded: all 6 spaces visible
+    expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'discovery', 'fieldnotes', 'delivery', 'closed', 'committee']);
+
+    // Collapse Northwind via onArrowLeft
+    const mockEventLeft = new Event('keydown', { cancelable: true });
+    comp.onArrowLeft(northwind, mockEventLeft);
+
+    // Collapsing Northwind hides its 4 descendants (discovery, fieldnotes, delivery, closed)
+    expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'committee']);
+
+    // Re-expand Northwind via onArrowRight
+    const mockEventRight = new Event('keydown', { cancelable: true });
+    comp.onArrowRight(northwind, mockEventRight);
+
+    // Descendants are visible again
+    expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'discovery', 'fieldnotes', 'delivery', 'closed', 'committee']);
+  });
 });
