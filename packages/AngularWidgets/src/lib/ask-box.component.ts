@@ -48,6 +48,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
+      font-size: 14px;
       line-height: var(--mjc-line-height);
     }
 
@@ -75,7 +78,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       display: inline-grid;
       place-items: center;
       background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
-      color: #fff;
+      color: var(--mj-text-inverse);
       flex: none;
     }
 

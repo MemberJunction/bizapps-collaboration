@@ -143,6 +143,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       max-height: 100%;
       min-height: 0;
       box-sizing: border-box;
+      color: var(--mj-text-primary);
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
@@ -290,13 +291,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       padding: 0 12px;
       border-radius: var(--mj-radius-sm);
       border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+
+      i {
+        font-size: 13px;
+      }
 
       &:hover {
         background: var(--mj-bg-surface-hover);
@@ -421,9 +427,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       padding: 0 20px;
       border-radius: var(--mj-radius-md);
       border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-sunken);
       color: var(--mj-text-primary);
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
@@ -475,14 +481,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .ai-av.md {
-      width: 34px;
-      height: 34px;
-      font-size: 16px;
+      width: 32px;
+      height: 32px;
+      font-size: 14px;
       border-radius: 9px;
       display: inline-grid;
       place-items: center;
       background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
-      color: #fff;
+      color: var(--mj-text-inverse);
       flex: none;
     }
 

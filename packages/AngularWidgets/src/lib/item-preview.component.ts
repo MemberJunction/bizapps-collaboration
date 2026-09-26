@@ -100,6 +100,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
+      font-size: 14px;
       line-height: var(--mjc-line-height);
     }
 
@@ -220,14 +223,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     .share-btn-full {
       width: 100%;
       margin-top: 12px;
-      height: 38px;
+      min-height: 44px;
+      height: 44px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       font-weight: 600;
-      font-size: 13.5px;
-      border-radius: var(--mj-radius-sm);
+      font-size: 14px;
+      border-radius: var(--mj-radius-md);
       border: 0;
       background: var(--mj-brand-primary);
       color: var(--mj-brand-on-primary);
@@ -262,7 +266,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       display: inline-grid;
       place-items: center;
       background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
-      color: #fff;
+      color: var(--mj-text-inverse);
       flex: none;
     }
 

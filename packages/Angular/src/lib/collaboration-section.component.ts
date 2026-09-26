@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import type { ResourceData } from '@memberjunction/core-entities';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -45,6 +45,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
+        MJEmptyStateComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
         CollabSpaceTabsComponent,
@@ -193,28 +194,32 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                         />
                                     }
                                     @case ('Work') {
-                                        <div class="tab-placeholder">
-                                            <h3>Work & Tasks</h3>
-                                            <p>Tasks for {{ spaceTitle }} will display here via bizapps-tasks integration.</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Icon="fa-solid fa-list-check"
+                                            Title="Work & Tasks"
+                                            [Message]="'Tasks for ' + spaceTitle + ' will display here via bizapps-tasks integration.'"
+                                        />
                                     }
                                     @case ('Chat') {
-                                        <div class="tab-placeholder">
-                                            <h3>Room & Conversations</h3>
-                                            <p>Space discussions and agent interactions for {{ spaceTitle }}.</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Icon="fa-solid fa-comments"
+                                            Title="Room & Conversations"
+                                            [Message]="'Space discussions and agent interactions for ' + spaceTitle + '.'"
+                                        />
                                     }
                                     @case ('People') {
-                                        <div class="tab-placeholder">
-                                            <h3>People & Access</h3>
-                                            <p>Team members, outside client participants, and permission levels.</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Icon="fa-solid fa-user-group"
+                                            Title="People & Access"
+                                            Message="Team members, outside client participants, and permission levels."
+                                        />
                                     }
                                     @case ('Settings') {
-                                        <div class="tab-placeholder">
-                                            <h3>Space Settings</h3>
-                                            <p>Configuration, Assistant retrieval rules, and space lifecycle controls.</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Icon="fa-solid fa-sliders"
+                                            Title="Space Settings"
+                                            Message="Configuration, Assistant retrieval rules, and space lifecycle controls."
+                                        />
                                     }
                                 }
                             </div>

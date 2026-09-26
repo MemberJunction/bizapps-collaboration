@@ -39,6 +39,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       position: absolute;
       inset: 0;
       z-index: 1000;
+      color: var(--mj-text-primary);
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
