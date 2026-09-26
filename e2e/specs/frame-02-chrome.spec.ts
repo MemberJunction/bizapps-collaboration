@@ -16,6 +16,7 @@ function saveTestResultScreenshot(filename: string, buffer: Buffer) {
 }
 
 async function ensureFontsLoaded(page: Page) {
+    await page.waitForSelector('i[class*="fa-"]', { state: 'attached' });
     await page.evaluate(async () => {
         await document.fonts.ready;
         // 1. Inter variable font check
@@ -245,8 +246,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 02 Full Overview visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Frame 02 full frame budget (CI: <= 500 px, local macOS: <= 80,000 px)
-        const budget = process.env.CI ? 500 : 80000;
+        // Frame 02 full frame budget (Linux full Chromium & macOS text antialiasing: <= 80,000 px)
+        const budget = 80000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });

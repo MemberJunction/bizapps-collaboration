@@ -141,6 +141,33 @@ const checks: NamedCheck[] = [
             Assert(details.length === 1, 'Posted message detail found');
             Assert(details[0].Message === 'Hello from Bea in the Discovery space room!', 'Message text matches');
             Assert(details[0].UserID.toLowerCase() === beaCtx.User.ID.toLowerCase(), 'Message UserID is Bea');
+
+            // B0.2: Ada asks with ExecuteAgent: true, and as Bea, the reply in Discovery room does not quote Team files
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const adaResult = await adaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Text: '@Assistant summarize materials in this space',
+                ExecuteAgent: true,
+            });
+            Assert(adaResult.Success === true, `Ada PostSpaceMessage failed: ${adaResult.ErrorMessage ?? ''}`);
+            if (adaResult.DetailID) createdDetailIds.push(adaResult.DetailID);
+            if (adaResult.AssistantDetailID) createdDetailIds.push(adaResult.AssistantDetailID);
+
+            // Read the assistant reply as Bea
+            const beaReplyRes = await View(beaCtx).RunView<{ ID: string; Message: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `ID = '${adaResult.AssistantDetailID}'`,
+                    Fields: ['ID', 'Message'],
+                    ResultType: 'simple',
+                },
+                beaCtx.User,
+            );
+            Assert(beaReplyRes.Success && (beaReplyRes.Results?.length ?? 0) === 1, 'Bea can read room assistant reply over the wire');
+            const replyMsg = beaReplyRes.Results![0].Message;
+            Assert(!replyMsg.includes('discovery-brief.pdf'), 'Room assistant reply must not name Team file discovery-brief.pdf');
+            Assert(!replyMsg.includes('field-notes.txt'), 'Room assistant reply must not name Team file field-notes.txt');
         },
     },
     {

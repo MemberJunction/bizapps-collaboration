@@ -166,7 +166,7 @@ export class CollabItemCardComponent {
   @Input() public CitationCount?: number;
   @Input() public IsImage = false;
 
-  @Output() public ItemSelected = new EventEmitter<void>();
+  @Output() public ItemSelectRequested = new EventEmitter<void>();
 
   public get kindClass(): string {
     const k = (this.Item?.kind || this.Kind || 'doc').toLowerCase();
@@ -174,6 +174,6 @@ export class CollabItemCardComponent {
   }
 
   public onSelect(): void {
-    this.ItemSelected.emit();
+    this.ItemSelectRequested.emit();
   }
 }

@@ -9,6 +9,9 @@ export class PostSpaceMessageInput {
 
     @Field()
     Text: string;
+
+    @Field({ nullable: true })
+    ExecuteAgent?: boolean;
 }
 
 @ObjectType()
@@ -18,6 +21,9 @@ export class PostSpaceMessagePayload {
 
     @Field({ nullable: true })
     DetailID?: string;
+
+    @Field({ nullable: true })
+    AssistantDetailID?: string;
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -41,11 +47,13 @@ export class PostSpaceMessageResolver extends ResolverBase {
             const result = await postSpaceMessage(provider, user, {
                 spaceId: input.SpaceID,
                 text: input.Text ?? '',
+                executeAgent: input.ExecuteAgent ?? false,
             });
             if (result.ok === false) return { Success: false, ErrorMessage: result.message };
             return {
                 Success: true,
                 DetailID: result.detailId,
+                AssistantDetailID: result.assistantDetailId,
             };
         } catch (error) {
             LogError(`PostSpaceMessage failed for space ${input.SpaceID} and user ${user.ID}: ${error instanceof Error ? error.message : String(error)}`);

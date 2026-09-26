@@ -59,7 +59,7 @@ export interface SubSpaceSummary {
                   [Title]="item.title"
                   [Subtitle]="item.subtitle"
                   [ActionLabel]="item.actionLabel"
-                  (ActionTriggered)="onNeedsYouAction(item)"
+                  (ActionRequested)="onNeedsYouAction(item)"
                 />
               }
             </div>
@@ -90,7 +90,7 @@ export interface SubSpaceSummary {
                   [Openers]="item.openers"
                   [CitationCount]="item.citationCount"
                   [IsImage]="item.isImage || false"
-                  (ItemSelected)="onItemSelected(item)"
+                  (ItemSelectRequested)="onItemSelected(item)"
                 />
               }
             </div>
@@ -119,7 +119,7 @@ export interface SubSpaceSummary {
                   [FlagCount]="item.flagCount"
                   [StatusLabel]="item.statusLabel"
                   [CanShare]="item.canShare !== false"
-                  (RowSelected)="onItemSelected(item)"
+                  (RowSelectRequested)="onItemSelected(item)"
                   (ShareRequested)="onShareRequested(item)"
                 />
               }
@@ -315,6 +315,7 @@ export interface SubSpaceSummary {
       text-decoration: none;
       cursor: pointer;
       font-size: 12px;
+      font-weight: 600;
       margin-left: auto;
 
       &:hover {
@@ -340,12 +341,19 @@ export interface SubSpaceSummary {
       -webkit-line-clamp: 1;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     .mention {
-      color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary, #0076b6);
+      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+      padding: 1px 5px;
+      border-radius: 4px;
       font-weight: 600;
-      margin-right: 4px;
+      font-size: 11.5px;
+      display: inline-block;
+      margin-right: 2px;
     }
 
     .sub-row {
@@ -406,22 +414,22 @@ export class CollabSpaceOverviewComponent {
   @Input() public RoomMessages: RoomMiniMessage[] = [];
   @Input() public SubSpaces: SubSpaceSummary[] = [];
 
-  @Output() public NeedsYouAction = new EventEmitter<NeedsYouItemModel>();
-  @Output() public ItemSelected = new EventEmitter<ItemCardModel | ItemRowModel>();
+  @Output() public NeedsYouActionRequested = new EventEmitter<NeedsYouItemModel>();
+  @Output() public ItemSelectRequested = new EventEmitter<ItemCardModel | ItemRowModel>();
   @Output() public ShareRequested = new EventEmitter<ItemRowModel>();
   @Output() public PreviewAsRequested = new EventEmitter<string>();
   @Output() public OpenLibraryRequested = new EventEmitter<void>();
   @Output() public OpenChatRequested = new EventEmitter<void>();
   @Output() public NewSubSpaceRequested = new EventEmitter<void>();
-  @Output() public SubSpaceSelected = new EventEmitter<SubSpaceSummary>();
+  @Output() public SubSpaceSelectRequested = new EventEmitter<SubSpaceSummary>();
   @Output() public AskRequested = new EventEmitter<string>();
 
   public onNeedsYouAction(item: NeedsYouItemModel): void {
-    this.NeedsYouAction.emit(item);
+    this.NeedsYouActionRequested.emit(item);
   }
 
   public onItemSelected(item: ItemCardModel | ItemRowModel): void {
-    this.ItemSelected.emit(item);
+    this.ItemSelectRequested.emit(item);
   }
 
   public onShareRequested(item: ItemRowModel): void {
@@ -449,7 +457,7 @@ export class CollabSpaceOverviewComponent {
   }
 
   public onSubSpaceSelected(sub: SubSpaceSummary): void {
-    this.SubSpaceSelected.emit(sub);
+    this.SubSpaceSelectRequested.emit(sub);
   }
 
   public onAskRequested(query: string): void {

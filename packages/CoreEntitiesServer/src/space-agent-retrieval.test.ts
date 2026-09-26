@@ -9,7 +9,8 @@ import {
     type RunViewParams,
     type UserInfo,
 } from '@memberjunction/core';
-import { resolveSpaceAgentRetrieval } from '../dist/space-agent-retrieval.js';
+import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from '../dist/space-agent-retrieval.js';
+import { filterRoomReplyItems } from '../dist/post-space-message.js';
 
 const ROOT_SPACE_ID = 'AAAAAAAA-1111-4000-8000-000000000001';
 const CHILD_SPACE_ID = 'AAAAAAAA-1111-4000-8000-000000000002';
@@ -280,6 +281,18 @@ describe('resolveSpaceAgentRetrieval', () => {
         const resQuote = await resolveSpaceAgentRetrieval(provider, user, `${ROOT_SPACE_ID}' OR '1'='1`);
         assert.equal(resQuote.quotedItems.length, 0);
         assert.equal(resQuote.candidateItems.length, 0);
+    });
+
+    it('B0.2: filterRoomReplyItems includes only Shared items for the room reply', () => {
+        const items: SpaceAgentCandidateItem[] = [
+            { ID: '1', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r1', Name: 'site-photo.png', Description: null, Band: 'Shared', StoredContentType: 'image/png' },
+            { ID: '2', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r2', Name: 'discovery-brief.pdf', Description: null, Band: 'Team', StoredContentType: 'application/pdf' },
+            { ID: '3', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r3', Name: 'field-notes.txt', Description: null, Band: 'Team', StoredContentType: 'text/plain' },
+        ];
+        const roomItems = filterRoomReplyItems(items);
+        assert.equal(roomItems.length, 1);
+        assert.equal(roomItems[0].Name, 'site-photo.png');
+        assert.equal(roomItems[0].Band, 'Shared');
     });
 });
 

@@ -80,8 +80,11 @@ import { CollabFileIconComponent } from './file-icon.component';
           </div>
 
           @for (fix of Findings; track fix.id) {
+            @let parts = getQuotationParts(fix);
             <div class="fix">
-              <div class="fix-q" [innerHTML]="formatQuotation(fix)"></div>
+              <div class="fix-q">
+                {{ parts.before }}<mark class="marked-phrase" [class.applied]="fix.status === 'Applied'">{{ parts.marked }}</mark>{{ parts.after }}
+              </div>
               <div class="fix-a">
                 <span class="muted fs12">Suggest</span>
                 <span class="sugg">{{ fix.suggestedPhrase }}</span>
@@ -119,7 +122,7 @@ import { CollabFileIconComponent } from './file-icon.component';
           </div>
           <div class="eff">
             <i class="fa-solid fa-signature"></i>
-            <span>Recorded as shared by <b>{{ AuthorName }}</b> today at {{ Timestamp }}. You can move it back to Team; a sent notification can’t be recalled.</span>
+            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. You can move it back to Team; a sent notification can’t be recalled.</span>
           </div>
         </div>
       </div>
@@ -240,13 +243,19 @@ import { CollabFileIconComponent } from './file-icon.component';
       color: var(--mj-text-secondary);
       font-family: Georgia, 'DejaVu Serif', serif;
 
-      ::ng-deep mark {
-        background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
-        color: var(--mj-text-primary);
+      .marked-phrase {
+        background: var(--mjc-warn-bg, #fef3c7);
+        color: var(--mjc-warn-text, #92400e);
         border-radius: 3px;
-        padding: 0 2px;
+        padding: 0 3px;
         text-decoration: line-through;
-        text-decoration-color: color-mix(in srgb, var(--mj-status-error) 70%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 70%, transparent);
+
+        &.applied {
+          text-decoration: none;
+          background: var(--mj-status-success-bg);
+          color: var(--mj-status-success-text);
+        }
       }
     }
 
@@ -305,7 +314,7 @@ import { CollabFileIconComponent } from './file-icon.component';
       height: 80px;
       width: 100%;
       box-sizing: border-box;
-      resize: vertical;
+      resize: none;
     }
 
     .textarea {
@@ -508,7 +517,7 @@ export class CollabShareCheckComponent {
   @Input() public Timestamp = '10:14 AM';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
-  @Output() public ShareCompleted = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
+  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
   @Output() public CancelRequested = new EventEmitter<void>();
 
   public get pendingCount(): number {
@@ -520,22 +529,31 @@ export class CollabShareCheckComponent {
     return count > 0 ? `Apply ${count} fixes and share` : 'Share';
   }
 
-  public formatQuotation(fix: FindingModel): string {
-    const q = fix.quotation;
+  public get formattedTimestamp(): string {
+    if (!this.Timestamp) return '';
+    return this.Timestamp.startsWith('today at ') ? this.Timestamp : `today at ${this.Timestamp}`;
+  }
+
+  public getQuotationParts(fix: FindingModel): { before: string; marked: string; after: string } {
+    let q = fix.quotation;
+    q = q.replace(/<\/?mark[^>]*>/g, '');
     const phrase = fix.originalPhrase;
-    if (fix.status === 'Applied') {
-      return q.replace(phrase, `<mark style="text-decoration:none">${fix.suggestedPhrase}</mark>`);
+    const idx = q.indexOf(phrase);
+    if (idx === -1) {
+      return { before: q, marked: '', after: '' };
     }
-    return q.replace(phrase, `<mark>${phrase}</mark>`);
+    const before = q.slice(0, idx);
+    const after = q.slice(idx + phrase.length);
+    const marked = fix.status === 'Applied' ? fix.suggestedPhrase : phrase;
+    return { before, marked, after };
   }
 
   public onApplyFix(fix: FindingModel): void {
-    fix.status = 'Applied';
     this.ApplyFixRequested.emit(fix);
   }
 
   public onApplyAndShare(): void {
-    this.ShareCompleted.emit({
+    this.ShareRequested.emit({
       applyFixes: true,
       note: this.Note,
       notify: this.NotifyRecipients,
@@ -543,7 +561,7 @@ export class CollabShareCheckComponent {
   }
 
   public onShareAsIs(): void {
-    this.ShareCompleted.emit({
+    this.ShareRequested.emit({
       applyFixes: false,
       note: this.Note,
       notify: this.NotifyRecipients,

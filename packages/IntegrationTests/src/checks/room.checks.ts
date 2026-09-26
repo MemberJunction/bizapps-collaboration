@@ -196,6 +196,34 @@ const checks: NamedCheck[] = [
             Assert(details.length === 1, 'Posted message detail found');
             Assert(details[0].Message === 'Hello from Bea in the Discovery space room!', 'Message text matches');
             Assert(details[0].UserID.toLowerCase() === bea.ID.toLowerCase(), 'Message UserID is Bea');
+
+            // B0.2: Ada asks with executeAgent: true, and as Bea, the reply in Discovery room does not quote Team files
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const adaRes = await postSpaceMessage(ctx.Provider, ada, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: '@Assistant summarize materials in this space',
+                executeAgent: true,
+            });
+            Assert(adaRes.ok === true, 'Ada postSpaceMessage with executeAgent succeeds');
+            if (!adaRes.ok) throw new Error(`Ada postSpaceMessage failed: ${adaRes.message}`);
+            if (adaRes.detailId) createdDetailIds.push(adaRes.detailId);
+            if (adaRes.assistantDetailId) createdDetailIds.push(adaRes.assistantDetailId);
+
+            // Read the assistant reply as Bea
+            const view = View(ctx);
+            const beaReplyRes = await view.RunView<{ ID: string; Message: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `ID = '${adaRes.assistantDetailId}'`,
+                    Fields: ['ID', 'Message'],
+                    ResultType: 'simple',
+                },
+                bea,
+            );
+            Assert(beaReplyRes.Success && (beaReplyRes.Results?.length ?? 0) === 1, 'Bea can read room assistant reply');
+            const replyMsg = beaReplyRes.Results![0].Message;
+            Assert(!replyMsg.includes('discovery-brief.pdf'), 'Room assistant reply must not name Team file discovery-brief.pdf');
+            Assert(!replyMsg.includes('field-notes.txt'), 'Room assistant reply must not name Team file field-notes.txt');
         },
     },
     {

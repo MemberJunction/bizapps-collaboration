@@ -7,6 +7,17 @@ import { createRequire } from 'node:module';
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
+const dedupeAngularPlugin = {
+    name: 'dedupe-angular',
+    setup(build) {
+        build.onResolve({ filter: /^@angular\/(core|common|forms|router|platform-browser)($|\/)/ }, (args) => {
+            return {
+                path: require.resolve(args.path, { paths: [join(here, 'node_modules')] }),
+            };
+        });
+    },
+};
+
 export async function bundleGalleryApp() {
     // 1. Bundle Angular application
     await build({
@@ -16,6 +27,7 @@ export async function bundleGalleryApp() {
         format: 'esm',
         target: 'es2022',
         sourcemap: true,
+        plugins: [dedupeAngularPlugin],
         define: {
             'ngDevMode': 'false',
         },

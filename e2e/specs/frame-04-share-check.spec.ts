@@ -16,6 +16,7 @@ function saveTestResultScreenshot(filename: string, buffer: Buffer) {
 }
 
 async function ensureFontsLoaded(page: Page) {
+    await page.waitForSelector('i[class*="fa-"]', { state: 'attached' });
     await page.evaluate(async () => {
         await document.fonts.ready;
         const interLoaded = document.fonts.check('16px Inter');
@@ -154,8 +155,8 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 04 Share Check visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: Separate CI (Linux full Chromium: <= 500 px) vs local macOS (~240k px due to font antialiasing on backdrop + modal)
-        const budget = process.env.CI ? 500 : 260000;
+        // Budget: Full Chromium font antialiasing on backdrop + modal (<= 260,000 px)
+        const budget = 260000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });

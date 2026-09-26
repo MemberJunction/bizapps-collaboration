@@ -76,27 +76,27 @@ import { CollabFileIconComponent } from './file-icon.component';
     }
 
     .share-btn {
-      color: var(--mjc-shared);
-      border-color: var(--mjc-shared-border);
-      background: var(--mj-bg-surface-sunken);
+      color: var(--mjc-shared, #0284c7);
+      border-color: var(--mjc-shared-border, #bae6fd);
+      background: var(--mj-bg-surface-sunken, #f0f9ff);
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
       min-height: 32px;
-      border-radius: var(--mj-radius-md);
-      border: 1px solid var(--mjc-shared-border);
+      border-radius: var(--mj-radius-md, 8px);
+      border: 1px solid var(--mjc-shared-border, #bae6fd);
       font-size: 0.8125rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
 
       i {
-        color: var(--mjc-shared);
-        font-size: 11px;
+        color: var(--mjc-shared, #0284c7);
+        font-size: 13px;
       }
 
       &:hover {
-        background: var(--mjc-shared-bg);
+        background: var(--mjc-shared-bg, #e0f2fe);
       }
     }
 
@@ -148,11 +148,11 @@ export class CollabItemRowComponent {
   @Input() public StatusLabel?: string;
   @Input() public CanShare = true;
 
-  @Output() public RowSelected = new EventEmitter<void>();
+  @Output() public RowSelectRequested = new EventEmitter<void>();
   @Output() public ShareRequested = new EventEmitter<void>();
 
   public onSelect(): void {
-    this.RowSelected.emit();
+    this.RowSelectRequested.emit();
   }
 
   public onShareClick(event: MouseEvent): void {

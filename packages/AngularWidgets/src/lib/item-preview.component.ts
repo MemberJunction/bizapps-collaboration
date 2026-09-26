@@ -26,7 +26,15 @@ import { CollabFileIconComponent } from './file-icon.component';
         <div class="dp-page">
           <div class="dp-h"></div>
           @for (p of Paragraphs; track $index) {
-            <p [innerHTML]="p"></p>
+            <p>
+              @for (seg of parseParagraph(p); track $index) {
+                @if (seg.isMarked) {
+                  <mark class="marked-phrase">{{ seg.text }}</mark>
+                } @else {
+                  {{ seg.text }}
+                }
+              }
+            </p>
           }
           <div class="dp-l"></div>
           <div class="dp-l s"></div>
@@ -80,7 +88,15 @@ import { CollabFileIconComponent } from './file-icon.component';
               } @else if (use.avatar) {
                 <mjc-avatar [Avatar]="use.avatar" Size="xs" />
               }
-              <span class="grow fs12.5" [innerHTML]="use.text"></span>
+              <span class="grow fs12.5">
+                @for (part of parseRecentUseText(use.text); track $index) {
+                  @if (part.isBold) {
+                    <b>{{ part.text }}</b>
+                  } @else {
+                    {{ part.text }}
+                  }
+                }
+              </span>
               <span class="fs12 muted">{{ use.timestamp }}</span>
             </div>
           }
@@ -157,11 +173,13 @@ import { CollabFileIconComponent } from './file-icon.component';
         margin: 0 0 8px;
       }
 
-      ::ng-deep mark {
-        background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
-        color: var(--mj-text-primary);
+      .marked-phrase {
+        background: var(--mjc-warn-bg, #fef3c7);
+        color: var(--mjc-warn-text, #92400e);
         border-radius: 2px;
-        padding: 0 1px;
+        padding: 0 2px;
+        text-decoration: line-through;
+        text-decoration-color: color-mix(in srgb, var(--mj-status-error, #ef4444) 70%, transparent);
       }
     }
 
@@ -300,5 +318,41 @@ export class CollabItemPreviewComponent {
 
   public onShare(): void {
     this.ShareRequested.emit();
+  }
+
+  public parseParagraph(p: string): Array<{ text: string; isMarked: boolean }> {
+    const parts: Array<{ text: string; isMarked: boolean }> = [];
+    const regex = /<mark>(.*?)<\/mark>/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(p)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: p.slice(lastIndex, match.index), isMarked: false });
+      }
+      parts.push({ text: match[1], isMarked: true });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.length) {
+      parts.push({ text: p.slice(lastIndex), isMarked: false });
+    }
+    return parts.length > 0 ? parts : [{ text: p, isMarked: false }];
+  }
+
+  public parseRecentUseText(text: string): Array<{ text: string; isBold: boolean }> {
+    const parts: Array<{ text: string; isBold: boolean }> = [];
+    const regex = /<b>(.*?)<\/b>/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: text.slice(lastIndex, match.index), isBold: false });
+      }
+      parts.push({ text: match[1], isBold: true });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push({ text: text.slice(lastIndex), isBold: false });
+    }
+    return parts.length > 0 ? parts : [{ text, isBold: false }];
   }
 }

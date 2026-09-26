@@ -47,11 +47,13 @@ export interface CreateSpaceTaskPayload {
 export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
+    ExecuteAgent?: boolean;
 }
 
 export interface PostSpaceMessageGraphQLPayload {
     Success: boolean;
     DetailID?: string;
+    AssistantDetailID?: string;
     ErrorMessage?: string;
 }
 
@@ -100,6 +102,7 @@ mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
     PostSpaceMessage(input: $input) {
         Success
         DetailID
+        AssistantDetailID
         ErrorMessage
     }
 }

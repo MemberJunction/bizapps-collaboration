@@ -236,6 +236,10 @@ export async function resolveSpaceAgentRetrieval(
         };
     }
 
+    if ((spacesRes.Results?.length ?? 0) >= 2000) {
+        throw new Error('Refusing retrieval: spaces page came back full, so the check would be incomplete.');
+    }
+
     const spaceNodes: SpaceNode[] = (spacesRes.Results as SpaceRow[] ?? []).map(toSpaceNode);
     const roleMap = new Map<string, RoleFlags>();
     for (const r of (rolesRes.Results as RoleRow[] ?? [])) {
@@ -321,6 +325,10 @@ export async function resolveSpaceAgentRetrieval(
             quotedItems: [],
             decisions: [],
         };
+    }
+
+    if ((itemsRes.Results?.length ?? 0) >= (options?.maxRows ?? 2000)) {
+        throw new Error('Refusing retrieval: items page came back full, so the check would be incomplete.');
     }
 
     const rawItems = itemsRes.Results ?? [];

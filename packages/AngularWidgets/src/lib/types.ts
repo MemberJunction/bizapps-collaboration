@@ -115,3 +115,75 @@ export interface RecipientPersonModel {
   moreSubtitle?: string;
 }
 
+export type ChatPrivacyType = 'Shared' | 'Internal' | 'Direct' | 'Assistant';
+
+export interface ChatSummaryModel {
+  id: string;
+  title: string;
+  privacy: ChatPrivacyType;
+  timestamp: string;
+  avatars: AvatarItem[];
+  audienceLabel: string;
+  unreadCount?: number;
+  lastSender?: string;
+  lastMessage: string;
+  isActive?: boolean;
+}
+
+export interface ChatMessageCitation {
+  id: string;
+  label: string;
+  kind: FileKind;
+  page?: number | string;
+}
+
+export interface ChatMessageSplitCard {
+  sharedTitle: string;
+  sharedText: string;
+  sharedCitations?: ChatMessageCitation[];
+  internalTitle: string;
+  internalText: string;
+  internalCitation?: ChatMessageCitation;
+}
+
+export interface ChatMessageAction {
+  id: string;
+  label: string;
+  iconClass?: string;
+}
+
+export interface ChatAnswerReceiptModel {
+  sharedCount: number;
+  teamCount: number;
+  isInternal: boolean;
+  clientOrgName?: string;
+  thumbsUpCount?: number;
+}
+
+export interface ChatMessageModel {
+  id: string;
+  authorName: string;
+  authorAvatar: AvatarItem;
+  orgBadge?: string;
+  isAssistant?: boolean;
+  timestamp: string;
+  text: string;
+  bullets?: { text: string; citation?: ChatMessageCitation }[];
+  splitCards?: ChatMessageSplitCard;
+  suggestedActions?: ChatMessageAction[];
+  answerReceipt?: ChatAnswerReceiptModel;
+}
+
+export interface ChatLensPinnedItem {
+  id: string;
+  kind: FileKind;
+  title: string;
+  meta: string;
+}
+
+export interface ChatLensAudienceGroup {
+  name: string;
+  count: number;
+  members: AvatarItem[];
+}
+

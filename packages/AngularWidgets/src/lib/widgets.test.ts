@@ -17,7 +17,21 @@ import { CollabShareCheckComponent } from './share-check.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
 import { CollabSpaceLibraryComponent } from './space-library.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
-import { FindingModel, LibraryRowModel, RailSpaceNode } from './types.ts';
+import { CollabChatBannerComponent } from './chat-banner.component.ts';
+import { CollabAnswerReceiptComponent } from './answer-receipt.component.ts';
+import { CollabChatListComponent } from './chat-list.component.ts';
+import { CollabChatLensComponent } from './chat-lens.component.ts';
+import { CollabSpaceChatsComponent } from './space-chats.component.ts';
+import {
+  FindingModel,
+  LibraryRowModel,
+  RailSpaceNode,
+  ChatSummaryModel,
+  ChatMessageModel,
+  ChatMessageCitation,
+  ChatLensAudienceGroup,
+  ChatLensPinnedItem,
+} from './types.ts';
 
 describe('CollabAvatarComponent', () => {
   it('uses explicit ColorClass when provided', () => {
@@ -317,10 +331,10 @@ describe('CollabFileIconComponent', () => {
 });
 
 describe('CollabItemCardComponent', () => {
-  it('emits ItemSelected when card is clicked', () => {
+  it('emits ItemSelectRequested when card is clicked', () => {
     const comp = new CollabItemCardComponent();
     let emitted = false;
-    comp.ItemSelected.subscribe(() => {
+    comp.ItemSelectRequested.subscribe(() => {
       emitted = true;
     });
 
@@ -330,10 +344,10 @@ describe('CollabItemCardComponent', () => {
 });
 
 describe('CollabItemRowComponent', () => {
-  it('emits RowSelected when row is clicked', () => {
+  it('emits RowSelectRequested when row is clicked', () => {
     const comp = new CollabItemRowComponent();
     let rowEmitted = false;
-    comp.RowSelected.subscribe(() => {
+    comp.RowSelectRequested.subscribe(() => {
       rowEmitted = true;
     });
 
@@ -388,10 +402,10 @@ describe('CollabAskBoxComponent', () => {
 });
 
 describe('CollabNeedsYouCardComponent', () => {
-  it('emits ActionTriggered on action button click', () => {
+  it('emits ActionRequested on action button click', () => {
     const comp = new CollabNeedsYouCardComponent();
     let actionEmitted = false;
-    comp.ActionTriggered.subscribe(() => {
+    comp.ActionRequested.subscribe(() => {
       actionEmitted = true;
     });
 
@@ -419,6 +433,28 @@ describe('CollabItemPreviewComponent', () => {
     comp.onShare();
     expect(shared).toBe(true);
   });
+
+  it('parses paragraphs with <mark> tags into marked and unmarked segments', () => {
+    const comp = new CollabItemPreviewComponent();
+    const paragraph = 'Hello <mark>world</mark> test';
+    const segments = comp.parseParagraph(paragraph);
+    expect(segments).toEqual([
+      { text: 'Hello ', isMarked: false },
+      { text: 'world', isMarked: true },
+      { text: ' test', isMarked: false },
+    ]);
+  });
+
+  it('parses recent use text with <b> tags into bold and non-bold parts', () => {
+    const comp = new CollabItemPreviewComponent();
+    const text = 'Saved by <b>Meridian team</b> for review';
+    const parts = comp.parseRecentUseText(text);
+    expect(parts).toEqual([
+      { text: 'Saved by ', isBold: false },
+      { text: 'Meridian team', isBold: true },
+      { text: ' for review', isBold: false },
+    ]);
+  });
 });
 
 describe('CollabShareCheckComponent', () => {
@@ -443,8 +479,8 @@ describe('CollabShareCheckComponent', () => {
     expect(comp.pendingCount).toBe(2);
     expect(comp.primaryButtonText).toBe('Apply 2 fixes and share');
 
-    const formatted = comp.formatQuotation(fix1);
-    expect(formatted).toContain('<mark>As the Dayton plant manager told us</mark>');
+    const parts1 = comp.getQuotationParts(fix1);
+    expect(parts1.marked).toBe('As the Dayton plant manager told us');
 
     let appliedFinding: FindingModel | null = null;
     comp.ApplyFixRequested.subscribe(f => {
@@ -452,21 +488,22 @@ describe('CollabShareCheckComponent', () => {
     });
 
     comp.onApplyFix(fix1);
-    expect(fix1.status).toBe('Applied');
     expect(appliedFinding).toBe(fix1);
+    // Widget emits event without mutating finding directly
+    fix1.status = 'Applied';
     expect(comp.pendingCount).toBe(1);
 
-    const formattedApplied = comp.formatQuotation(fix1);
-    expect(formattedApplied).toContain('as one plant leader told us');
+    const partsApplied = comp.getQuotationParts(fix1);
+    expect(partsApplied.marked).toBe('as one plant leader told us');
   });
 
-  it('emits ShareCompleted with applyFixes true on onApplyAndShare', () => {
+  it('emits ShareRequested with applyFixes true on onApplyAndShare', () => {
     const comp = new CollabShareCheckComponent();
     comp.Note = 'Test note';
     comp.NotifyRecipients = true;
 
     let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
-    comp.ShareCompleted.subscribe(r => {
+    comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
@@ -474,13 +511,13 @@ describe('CollabShareCheckComponent', () => {
     expect(result).toEqual({ applyFixes: true, note: 'Test note', notify: true });
   });
 
-  it('emits ShareCompleted with applyFixes false on onShareAsIs', () => {
+  it('emits ShareRequested with applyFixes false on onShareAsIs', () => {
     const comp = new CollabShareCheckComponent();
     comp.Note = 'Raw note';
     comp.NotifyRecipients = false;
 
     let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
-    comp.ShareCompleted.subscribe(r => {
+    comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
@@ -564,7 +601,7 @@ describe('CollabSpaceLibraryComponent', () => {
     comp.Rows = [row];
 
     let emittedRow: LibraryRowModel | null = null;
-    comp.RowSelected.subscribe(r => {
+    comp.RowSelectRequested.subscribe(r => {
       emittedRow = r;
     });
 
@@ -590,15 +627,181 @@ describe('CollabShareCheckDialogComponent', () => {
     expect(cancelled).toBe(true);
   });
 
-  it('emits ShareCompleted on onShareCompleted', () => {
+  it('emits ShareRequested on onShareRequested', () => {
     const comp = new CollabShareCheckDialogComponent();
     let payload: { applyFixes: boolean; note: string; notify: boolean } | null = null;
-    comp.ShareCompleted.subscribe(p => {
+    comp.ShareRequested.subscribe(p => {
       payload = p;
     });
 
-    comp.onShareCompleted({ applyFixes: true, note: 'Done', notify: true });
+    comp.onShareRequested({ applyFixes: true, note: 'Done', notify: true });
     expect(payload).toEqual({ applyFixes: true, note: 'Done', notify: true });
+  });
+});
+
+describe('CollabChatBannerComponent', () => {
+  it('initializes with default inputs', () => {
+    const comp = new CollabChatBannerComponent();
+    expect(comp.IsInternal).toBe(false);
+    expect(comp.ClientOrgName).toBe('Northwind');
+    expect(comp.FirmName).toBe('Meridian');
+    expect(comp.TotalPeople).toBe(9);
+  });
+});
+
+describe('CollabAnswerReceiptComponent', () => {
+  it('toggles upvote and increments/decrements thumbsCount', () => {
+    const comp = new CollabAnswerReceiptComponent();
+    comp.ThumbsUpCount = 2;
+    comp.thumbsCount = 2;
+
+    let feedback: 'up' | 'down' | null = null;
+    comp.FeedbackGiven.subscribe(f => {
+      feedback = f;
+    });
+
+    comp.onThumbUp();
+    expect(comp.hasUpvoted).toBe(true);
+    expect(comp.thumbsCount).toBe(3);
+    expect(feedback).toBe('up');
+
+    comp.onThumbUp();
+    expect(comp.hasUpvoted).toBe(false);
+    expect(comp.thumbsCount).toBe(2);
+  });
+
+  it('emits downvote, copy, and view sources events', () => {
+    const comp = new CollabAnswerReceiptComponent();
+    let downEmitted = false;
+    let copyEmitted = false;
+    let sourcesEmitted = false;
+
+    comp.FeedbackGiven.subscribe(f => {
+      if (f === 'down') downEmitted = true;
+    });
+    comp.CopyRequested.subscribe(() => {
+      copyEmitted = true;
+    });
+    comp.ViewSourcesRequested.subscribe(() => {
+      sourcesEmitted = true;
+    });
+
+    comp.onThumbDown();
+    expect(downEmitted).toBe(true);
+
+    comp.onCopy();
+    expect(copyEmitted).toBe(true);
+
+    comp.onViewSources();
+    expect(sourcesEmitted).toBe(true);
+  });
+});
+
+describe('CollabChatListComponent', () => {
+  it('emits ChatSelected when chat item is clicked', () => {
+    const comp = new CollabChatListComponent();
+    const chat: ChatSummaryModel = {
+      id: 'c1',
+      title: 'Discovery room',
+      privacy: 'Shared',
+      timestamp: '9:52',
+      avatars: [],
+      audienceLabel: 'Everyone · 9',
+      lastMessage: 'Hello',
+    };
+    comp.Chats = [chat];
+
+    let selectedId = '';
+    comp.ChatSelected.subscribe(id => {
+      selectedId = id;
+    });
+
+    comp.onSelectChat('c1');
+    expect(selectedId).toBe('c1');
+  });
+
+  it('emits NewChatRequested on new chat button click', () => {
+    const comp = new CollabChatListComponent();
+    let requested = false;
+    comp.NewChatRequested.subscribe(() => {
+      requested = true;
+    });
+
+    comp.onNewChat();
+    expect(requested).toBe(true);
+  });
+});
+
+describe('CollabChatLensComponent', () => {
+  it('emits PinnedItemSelected on pinned item click', () => {
+    const comp = new CollabChatLensComponent();
+    const pin: ChatLensPinnedItem = {
+      id: 'p1',
+      kind: 'pdf',
+      title: 'Readout draft',
+      meta: 'Shared · v4',
+    };
+    comp.PinnedItems = [pin];
+
+    let selectedPin = '';
+    comp.PinnedItemSelected.subscribe(id => {
+      selectedPin = id;
+    });
+
+    comp.onSelectPinned('p1');
+    expect(selectedPin).toBe('p1');
+  });
+});
+
+describe('CollabSpaceChatsComponent', () => {
+  it('emits MessageSent and clears draft on onSendMessage', () => {
+    const comp = new CollabSpaceChatsComponent();
+    comp.draftText = 'Can someone summarize the vendor matrix?';
+
+    let sentText = '';
+    comp.MessageSent.subscribe(t => {
+      sentText = t;
+    });
+
+    comp.onSendMessage();
+    expect(sentText).toBe('Can someone summarize the vendor matrix?');
+    expect(comp.draftText).toBe('');
+  });
+
+  it('ignores empty message on onSendMessage', () => {
+    const comp = new CollabSpaceChatsComponent();
+    comp.draftText = '   ';
+
+    let sentText = '';
+    comp.MessageSent.subscribe(t => {
+      sentText = t;
+    });
+
+    comp.onSendMessage();
+    expect(sentText).toBe('');
+  });
+
+  it('prefills @Assistant on onAskAssistant', () => {
+    const comp = new CollabSpaceChatsComponent();
+    comp.onAskAssistant();
+    expect(comp.draftText).toBe('@Assistant ');
+  });
+
+  it('emits CitationSelected on citation click', () => {
+    const comp = new CollabSpaceChatsComponent();
+    const citation: ChatMessageCitation = {
+      id: 'cit-1',
+      label: 'Readout draft · p.12',
+      kind: 'pdf',
+    };
+
+    let selectedCitation: ChatMessageCitation | null = null;
+    comp.CitationSelected.subscribe(c => {
+      selectedCitation = c;
+    });
+
+    comp.onCitationClicked(citation);
+    expect(selectedCitation).toEqual(citation);
   });
 });
 

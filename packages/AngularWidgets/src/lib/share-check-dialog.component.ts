@@ -27,7 +27,7 @@ import { CollabShareCheckComponent } from './share-check.component';
         [AuthorName]="AuthorName"
         [Timestamp]="Timestamp"
         (ApplyFixRequested)="onApplyFix($event)"
-        (ShareCompleted)="onShareCompleted($event)"
+        (ShareRequested)="onShareRequested($event)"
         (CancelRequested)="onCancel()"
       />
     </div>
@@ -84,15 +84,15 @@ export class CollabShareCheckDialogComponent {
   @Input() public Timestamp = '10:14 AM';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
-  @Output() public ShareCompleted = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
+  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
   @Output() public CancelRequested = new EventEmitter<void>();
 
   public onApplyFix(fix: FindingModel): void {
     this.ApplyFixRequested.emit(fix);
   }
 
-  public onShareCompleted(result: { applyFixes: boolean; note: string; notify: boolean }): void {
-    this.ShareCompleted.emit(result);
+  public onShareRequested(result: { applyFixes: boolean; note: string; notify: boolean }): void {
+    this.ShareRequested.emit(result);
   }
 
   public onCancel(): void {

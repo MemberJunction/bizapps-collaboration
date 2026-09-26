@@ -11,6 +11,7 @@ import {
     CollabSpaceOverviewComponent,
     CollabSpaceLibraryComponent,
     CollabShareCheckDialogComponent,
+    CollabAudiencePillComponent,
     type TabItem,
     type RailSpaceNode,
     type BreadcrumbItem,
@@ -48,6 +49,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
         CollabSpaceOverviewComponent,
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
+        CollabAudiencePillComponent,
         CollaborationNoAccessComponent,
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -117,9 +119,24 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                 [Subtitle]="spaceSubtitle"
                             >
                                 <div actions class="row gap8">
-                                    <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
-                                        <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
-                                    </button>
+                                    <mjc-audience-pill
+                                        [StaffAvatars]="headerStaffAvatars"
+                                        [OutsideAvatars]="headerOutsideAvatars"
+                                        [TotalPeople]="headerTotalPeople"
+                                        [Summary]="headerAudienceSummary"
+                                    />
+                                    @if (activeTab === 'Overview') {
+                                        <button mjButton variant="secondary" size="md">
+                                            <i class="fa-solid fa-user-plus"></i>Invite
+                                        </button>
+                                        <button mjButton variant="primary" size="md">
+                                            <i class="fa-solid fa-plus"></i>New
+                                        </button>
+                                    } @else {
+                                        <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
+                                            <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
+                                        </button>
+                                    }
                                 </div>
                                 <mjc-space-tabs
                                     [Tabs]="tabs"
@@ -143,7 +160,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                             [SubSpaces]="overviewSubSpaces"
                                             (OpenLibraryRequested)="onOpenLibraryRequested()"
                                             (OpenChatRequested)="onOpenChatRequested()"
-                                            (ItemSelected)="onItemSelected($event)"
+                                            (ItemSelectRequested)="onItemSelected($event)"
                                             (ShareRequested)="onShareRequested($event)"
                                         />
                                     }
@@ -163,7 +180,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                             [PreviewFlagTitle]="previewFlagTitle"
                                             [PreviewFlagDescription]="previewFlagDescription"
                                             [PreviewRecentUses]="previewRecentUses"
-                                            (RowSelected)="onRowSelected($event)"
+                                            (RowSelectRequested)="onRowSelected($event)"
                                             (ShareRequested)="onShareRequested($event)"
                                             (CloseDrawerRequested)="onCloseDrawerRequested()"
                                         />
@@ -214,7 +231,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                 [AuthorName]="'Ada Lovell'"
                                 [Timestamp]="'10:14 AM'"
                                 (ApplyFixRequested)="onApplyFix($event)"
-                                (ShareCompleted)="onShareCompleted($event)"
+                                (ShareRequested)="onShareCompleted($event)"
                                 (CancelRequested)="onShareDialogCancel()"
                             />
                         }
@@ -244,6 +261,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceSubtitle = 'in Northwind · Week 7 of 10 · Readout Oct 9';
     public headerTypeColor = 'var(--mjc-type-eng, #0ea5e9)';
     public headerTypeIcon = 'fa-compass';
+    public headerStaffAvatars: AvatarItem[] = [
+        { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
+        { initials: 'SO', name: 'Sam Okafor', colorClass: 'c2' },
+        { initials: 'PS', name: 'Priya Shah', colorClass: 'c3' },
+    ];
+    public headerOutsideAvatars: AvatarItem[] = [
+        { initials: 'CM', name: 'Casey Miller', colorClass: 'c4' },
+        { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5' },
+        { initials: 'OH', name: 'Omar Hassan', colorClass: 'c6' },
+        { initials: 'LF', name: 'Lisa Flores', colorClass: 'c7' },
+    ];
+    public headerTotalPeople = 9;
+    public headerAudienceSummary = '3 Meridian · 6 Northwind';
 
     public breadcrumbs: BreadcrumbItem[] = [
         { label: 'Northwind' },

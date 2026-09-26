@@ -5,6 +5,7 @@ import {
   CollabSpaceHeaderComponent,
   CollabSpaceTabsComponent,
   CollabSpaceLibraryComponent,
+  CollabAudiencePillComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
@@ -18,6 +19,7 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
     CollabSpaceLibraryComponent,
+    CollabAudiencePillComponent,
     MJButtonDirective,
   ],
   template: `
@@ -51,6 +53,12 @@ import { FRAME_03_FIXTURE } from '../fixtures/frame-03.fixture';
             [Subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
+              <mjc-audience-pill
+                [StaffAvatars]="f.header.staffAvatars"
+                [OutsideAvatars]="f.header.outsideAvatars"
+                [TotalPeople]="f.header.totalPeople"
+                [Summary]="f.header.audienceSummary"
+              ></mjc-audience-pill>
               <button mjButton variant="primary" size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs

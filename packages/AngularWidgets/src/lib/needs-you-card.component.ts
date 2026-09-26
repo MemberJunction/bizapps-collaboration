@@ -81,19 +81,19 @@ import type { NeedsYouItemModel } from './types';
     }
 
     .btn.sm {
-      height: 32px;
+      height: 30px;
       padding: 0 12px;
-      border-radius: var(--mj-radius-sm);
-      border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
+      border-radius: 8px;
+      border: 0;
+      background: var(--mj-bg-surface-active, #f1f5f9);
+      color: var(--mj-text-primary, #0f172a);
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
       flex: none;
 
       &:hover {
-        background: var(--mj-bg-surface-hover);
+        background: var(--mj-bg-surface-hover, #e2e8f0);
       }
     }
 
@@ -117,9 +117,9 @@ export class CollabNeedsYouCardComponent {
   @Input() public Subtitle = '';
   @Input() public ActionLabel = '';
 
-  @Output() public ActionTriggered = new EventEmitter<void>();
+  @Output() public ActionRequested = new EventEmitter<void>();
 
   public onAction(): void {
-    this.ActionTriggered.emit();
+    this.ActionRequested.emit();
   }
 }

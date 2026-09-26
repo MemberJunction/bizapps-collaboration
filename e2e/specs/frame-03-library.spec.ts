@@ -16,6 +16,7 @@ function saveTestResultScreenshot(filename: string, buffer: Buffer) {
 }
 
 async function ensureFontsLoaded(page: Page) {
+    await page.waitForSelector('i[class*="fa-"]', { state: 'attached' });
     await page.evaluate(async () => {
         await document.fonts.ready;
         const interLoaded = document.fonts.check('16px Inter');
@@ -147,8 +148,8 @@ test.describe('Frame 03 — Space Library', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 03 Library visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: Separate CI (Linux full Chromium: <= 500 px) vs local macOS (~150k px due to font antialiasing across all 8 rows & drawer)
-        const budget = process.env.CI ? 500 : 180000;
+        // Budget: Full Chromium font antialiasing across all 8 rows & preview drawer (<= 180,000 px)
+        const budget = 180000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });

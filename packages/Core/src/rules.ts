@@ -579,6 +579,7 @@ export function refuseInvite(input: {
     inviteeUserId: string;
     targetSpaceId: string;
     granted: RoleFlags;
+    currentRole?: RoleFlags | null;
     approval: InviteApproval;
     memberCap: number | null;
     /** When set, the roster size already counted by the server. Otherwise counted from memberships. */
@@ -619,6 +620,23 @@ export function refuseInvite(input: {
 
     if (!grantor.role.canInvite) {
         return { ok: false, code: 'cannot-invite', message: 'Invite refused: this role cannot invite.' };
+    }
+    if (input.currentRole && idKey(input.callerUserId) !== idKey(input.inviteeUserId)) {
+        if (input.currentRole.level > grantor.role.maxGrantableLevel) {
+            return {
+                ok: false,
+                code: 'above-ceiling',
+                message: 'Invite refused: that role is above the level this member may grant.',
+            };
+        }
+        const currentFlagGap = flagExceedsGrantor(input.currentRole, grantor.role);
+        if (currentFlagGap) {
+            return {
+                ok: false,
+                code: 'above-ceiling',
+                message: `Invite refused: the granted role can ${currentFlagGap}, and the signer cannot.`,
+            };
+        }
     }
     if (input.granted.level > grantor.role.maxGrantableLevel) {
         return {

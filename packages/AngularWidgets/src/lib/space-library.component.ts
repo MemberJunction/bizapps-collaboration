@@ -498,12 +498,12 @@ export class CollabSpaceLibraryComponent {
   @Input() public PreviewShareButtonLabel = 'Share with Northwind…';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
 
-  @Output() public FolderSelected = new EventEmitter<string>();
-  @Output() public BandFilterChanged = new EventEmitter<'All' | 'Shared' | 'Team'>();
-  @Output() public RowSelected = new EventEmitter<LibraryRowModel>();
+  @Output() public FolderSelectRequested = new EventEmitter<string>();
+  @Output() public BandFilterChangeRequested = new EventEmitter<'All' | 'Shared' | 'Team'>();
+  @Output() public RowSelectRequested = new EventEmitter<LibraryRowModel>();
   @Output() public ShareRequested = new EventEmitter<LibraryRowModel>();
   @Output() public CloseDrawerRequested = new EventEmitter<void>();
-  @Output() public FilterButtonClicked = new EventEmitter<void>();
+  @Output() public FilterButtonClickRequested = new EventEmitter<void>();
 
   public get FilteredRows(): LibraryRowModel[] {
     if (this.ActiveBandFilter === 'All') {
@@ -518,18 +518,18 @@ export class CollabSpaceLibraryComponent {
 
   public onSelectFolder(id: string): void {
     this.ActiveFolderId = id;
-    this.FolderSelected.emit(id);
+    this.FolderSelectRequested.emit(id);
   }
 
   public onFilterBand(band: 'All' | 'Shared' | 'Team'): void {
     this.ActiveBandFilter = band;
-    this.BandFilterChanged.emit(band);
+    this.BandFilterChangeRequested.emit(band);
   }
 
   public onSelectRow(row: LibraryRowModel): void {
     this.SelectedRowId = row.id;
     this.ShowDrawer = true;
-    this.RowSelected.emit(row);
+    this.RowSelectRequested.emit(row);
   }
 
   public onCloseDrawer(): void {
@@ -544,6 +544,6 @@ export class CollabSpaceLibraryComponent {
   }
 
   public onOpenFilter(): void {
-    this.FilterButtonClicked.emit();
+    this.FilterButtonClickRequested.emit();
   }
 }
