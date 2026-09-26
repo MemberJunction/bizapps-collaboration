@@ -74,12 +74,20 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
             [FirmName]="'Meridian'"
             [ClientOrgName]="'Northwind'"
             [ClientPersonaName]="'Casey'"
+            [SharedBandTitle]="'Shared with Northwind'"
+            [SharedBandSubtitle]="'What Northwind sees here · 9 items · the Assistant can quote these to anyone'"
             [AudienceCount]="f.header.totalPeople"
             [NeedsYouItems]="f.needsYouItems"
             [SharedItems]="f.sharedItems"
             [TeamItems]="f.teamItems"
+            [TeamTotalCount]="15"
             [RoomMessages]="f.roomMessages"
             [SubSpaces]="f.subSpaces"
+            [AskSuggestions]="[
+              'What’s still open for the readout?',
+              'Draft this week’s note to Casey',
+              'Which interviews mention scheduling?'
+            ]"
             (OpenLibraryRequested)="activeTab = 'Library'"
           ></mjc-space-overview>
         </main>

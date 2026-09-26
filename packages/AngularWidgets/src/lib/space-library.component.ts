@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { AvatarItem, LibraryRowModel, SpaceBand } from './types';
+import { MJButtonDirective, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
 import { CollabAvatarStackComponent } from './avatar-stack.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -29,6 +30,8 @@ export interface LibrarySmartView {
     CollabBandChipComponent,
     CollabFileIconComponent,
     CollabItemPreviewComponent,
+    MJButtonDirective,
+    MJTabNavComponent,
   ],
   template: `
     <div class="lib">
@@ -78,7 +81,7 @@ export interface LibrarySmartView {
           </div>
           <div class="row gap8">
             <mjc-band-chip Band="Team" Label="Team" />
-            <span class="fs12 muted">Meridian only</span>
+            <span class="fs12 muted">{{ TeamBandLegend || 'Team only' }}</span>
           </div>
         </div>
       </aside>
@@ -88,22 +91,15 @@ export interface LibrarySmartView {
         <div class="lib-tools">
           <div class="input search-input">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <span>Search the library</span>
+            <input type="text" class="mj-input" placeholder="Search the library" />
           </div>
-          <span class="seg">
-            <span [class.on]="ActiveBandFilter === 'All'" (click)="onFilterBand('All')">
-              All <span class="n">{{ TotalCount }}</span>
-            </span>
-            <span [class.on]="ActiveBandFilter === 'Shared'" (click)="onFilterBand('Shared')">
-              <i class="fa-solid fa-eye" style="color:var(--mjc-shared)"></i>
-              Shared <span class="n">{{ SharedCount }}</span>
-            </span>
-            <span [class.on]="ActiveBandFilter === 'Team'" (click)="onFilterBand('Team')">
-              <i class="fa-solid fa-lock"></i>
-              Team <span class="n">{{ TeamCount }}</span>
-            </span>
-          </span>
-          <button type="button" class="btn sm filter-btn" (click)="onOpenFilter()">
+          <mj-tab-nav
+            class="seg"
+            [Tabs]="bandNavTabs"
+            [ActiveKey]="ActiveBandFilter"
+            (TabChange)="onFilterBand($event)"
+          />
+          <button mjButton variant="secondary" size="sm" class="btn sm filter-btn" (click)="onOpenFilter()">
             <i class="fa-solid fa-sliders"></i>
             <span>Filter</span>
           </button>
@@ -176,7 +172,7 @@ export interface LibrarySmartView {
       @if (ShowDrawer) {
         <mjc-item-preview
           [Kind]="SelectedRow?.kind || 'doc'"
-          [Title]="SelectedRow?.name || 'Interview synthesis v3'"
+          [Title]="SelectedRow?.name || ''"
           [Meta]="PreviewMeta"
           [Paragraphs]="PreviewParagraphs"
           [Band]="SelectedRow?.band || 'Team'"
@@ -200,6 +196,9 @@ export interface LibrarySmartView {
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
+      font-size: 14px;
       line-height: var(--mjc-line-height);
     }
 
@@ -474,28 +473,23 @@ export class CollabSpaceLibraryComponent {
     { id: 'contracts', name: 'Contracts', band: 'Team', count: 2 },
   ];
 
-  @Input() public SmartViews: LibrarySmartView[] = [
-    { id: 'northwind', name: 'From Northwind', iconClass: 'fa-solid fa-inbox', count: 4 },
-    { id: 'flagged', name: 'Flagged', iconClass: 'fa-solid fa-triangle-exclamation', count: 1 },
-    { id: 'shared_week', name: 'Shared this week', iconClass: 'fa-regular fa-clock', count: 2 },
-  ];
+  @Input() public SmartViews: LibrarySmartView[] = [];
 
   @Input() public Rows: LibraryRowModel[] = [];
   @Input() public SelectedRowId = '';
   @Input() public ShowDrawer = true;
 
-  @Input() public PreviewMeta = 'Word · 18 pages · version 3';
-  @Input() public PreviewParagraphs: string[] = [
-    'Across 18 interviews, scheduling came up more than any other theme. <mark>As the Dayton plant manager told us</mark>, the current tool “can’t see past Tuesday.”',
-    'Finance reports a nine-day close on inventory reconciliation; <mark>Jim in Finance</mark> described the process as manual.',
-  ];
-  @Input() public PreviewBandLabel = 'Team only';
-  @Input() public PreviewAudienceSub = 'Meridian staff';
+  @Input() public PreviewMeta = '';
+  @Input() public PreviewParagraphs: string[] = [];
+  @Input() public PreviewBandLabel = '';
+  @Input() public PreviewAudienceSub = '';
   @Input() public PreviewStaffAvatars: AvatarItem[] = [];
-  @Input() public PreviewFlagTitle = '2 people could be identified';
-  @Input() public PreviewFlagDescription = 'Checked when Sam asked to share it. Review the highlighted phrases before Northwind sees them.';
-  @Input() public PreviewShareButtonLabel = 'Share with Northwind…';
+  @Input() public PreviewFlagTitle = '';
+  @Input() public PreviewFlagDescription = '';
+  @Input() public PreviewShareButtonLabel = '';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
+  @Input() public SharedBandLegend = '';
+  @Input() public TeamBandLegend = '';
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();
   @Output() public BandFilterChangeRequested = new EventEmitter<'All' | 'Shared' | 'Team'>();
@@ -511,6 +505,14 @@ export class CollabSpaceLibraryComponent {
     return this.Rows.filter((r) => r.band === this.ActiveBandFilter);
   }
 
+  public get bandNavTabs(): TabConfig[] {
+    return [
+      { key: 'All', label: 'All', badge: this.TotalCount },
+      { key: 'Shared', label: 'Shared', icon: 'fa-solid fa-eye', badge: this.SharedCount },
+      { key: 'Team', label: 'Team', icon: 'fa-solid fa-lock', badge: this.TeamCount },
+    ];
+  }
+
   public get SelectedRow(): LibraryRowModel | undefined {
     return this.Rows.find((r) => r.id === this.SelectedRowId);
   }
@@ -520,9 +522,10 @@ export class CollabSpaceLibraryComponent {
     this.FolderSelectRequested.emit(id);
   }
 
-  public onFilterBand(band: 'All' | 'Shared' | 'Team'): void {
-    this.ActiveBandFilter = band;
-    this.BandFilterChangeRequested.emit(band);
+  public onFilterBand(band: 'All' | 'Shared' | 'Team' | string): void {
+    const validBand = (band === 'Shared' || band === 'Team') ? band : 'All';
+    this.ActiveBandFilter = validBand;
+    this.BandFilterChangeRequested.emit(validBand);
   }
 
   public onSelectRow(row: LibraryRowModel): void {

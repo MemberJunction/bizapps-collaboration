@@ -19,6 +19,8 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -30,14 +32,14 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
       height: 22px;
       border-radius: 6px;
       font-size: 11px;
-      color: var(--mj-brand-on-primary, #ffffff);
-      background: var(--mjc-type-color, var(--mj-brand-primary, #0076b6));
+      color: var(--mj-brand-on-primary);
+      background: var(--mjc-type-color, var(--mj-brand-primary));
       box-sizing: border-box;
     }
     .tile.sm { width: 18px; height: 18px; font-size: 9.5px; border-radius: 5px; }
     .tile.lg { width: 44px; height: 44px; font-size: 20px; border-radius: 12px; }
     .tile.xl { width: 52px; height: 52px; font-size: 22px; border-radius: 14px; }
-    .tile.closed { --mjc-type-color: var(--mj-text-disabled, #94a3b8); }
+    .tile.closed { --mjc-type-color: var(--mj-text-disabled); }
   `]
 })
 export class CollabTypeTileComponent {

@@ -76,7 +76,7 @@ export interface SubSpaceSummary {
                 <div class="fw7 fs14">{{ SharedBandTitle }}</div>
                 <div class="fs12 band-sub">{{ SharedBandSubtitle }}</div>
               </div>
-              <a class="link fs12 preview-link" (click)="onPreviewAsCasey($event)">
+              <a class="link fs12 preview-link" (click)="onPreviewAsPersona($event)">
                 <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
               </a>
             </div>
@@ -132,6 +132,7 @@ export interface SubSpaceSummary {
           <!-- Ask Box -->
           <mjc-ask-box
             [Title]="'Ask about ' + SpaceName"
+            [Suggestions]="AskSuggestions"
             (AskRequested)="onAskRequested($event)"
           />
 
@@ -175,7 +176,7 @@ export interface SubSpaceSummary {
             </div>
           </div>
 
-          <!-- Inside Discovery / Sub-spaces -->
+          <!-- Sub-spaces -->
           @if (SubSpaces && SubSpaces.length > 0) {
             <div class="card sub-card">
               <div class="card-h">
@@ -400,21 +401,22 @@ export interface SubSpaceSummary {
   `],
 })
 export class CollabSpaceOverviewComponent {
-  @Input() public SpaceName = 'Discovery';
-  @Input() public FirmName = 'Meridian';
-  @Input() public ClientOrgName = 'Northwind';
-  @Input() public ClientPersonaName = 'Casey';
-  @Input() public AudienceCount = 9;
+  @Input() public SpaceName = '';
+  @Input() public FirmName = '';
+  @Input() public ClientOrgName = '';
+  @Input() public ClientPersonaName = '';
+  @Input() public AudienceCount = 0;
 
-  @Input() public SharedBandTitle = 'Shared with Northwind';
-  @Input() public SharedBandSubtitle = 'What Northwind sees here · 9 items · the Assistant can quote these to anyone';
+  @Input() public SharedBandTitle = '';
+  @Input() public SharedBandSubtitle = '';
 
   @Input() public NeedsYouItems: NeedsYouItemModel[] = [];
   @Input() public SharedItems: ItemCardModel[] = [];
   @Input() public TeamItems: ItemRowModel[] = [];
-  @Input() public TeamTotalCount = 15;
+  @Input() public TeamTotalCount = 0;
   @Input() public RoomMessages: RoomMiniMessage[] = [];
   @Input() public SubSpaces: SubSpaceSummary[] = [];
+  @Input() public AskSuggestions: string[] = [];
 
   @Output() public NeedsYouActionRequested = new EventEmitter<NeedsYouItemModel>();
   @Output() public ItemSelectRequested = new EventEmitter<ItemCardModel | ItemRowModel>();
@@ -438,7 +440,7 @@ export class CollabSpaceOverviewComponent {
     this.ShareRequested.emit(item);
   }
 
-  public onPreviewAsCasey(event?: MouseEvent): void {
+  public onPreviewAsPersona(event?: MouseEvent): void {
     event?.preventDefault();
     this.PreviewAsRequested.emit(this.ClientPersonaName.toLowerCase());
   }

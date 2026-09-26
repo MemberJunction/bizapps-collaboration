@@ -536,7 +536,7 @@ describe('CollabSpaceOverviewComponent', () => {
     comp.PreviewAsRequested.subscribe(p => {
       previewPersona = p;
     });
-    comp.onPreviewAsCasey();
+    comp.onPreviewAsPersona();
     expect(previewPersona).toBe('casey');
   });
 

@@ -30,6 +30,8 @@ import { AvatarItem } from './types';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -39,9 +41,9 @@ import { AvatarItem } from './types';
       gap: 10px;
       margin-right: 4px;
       padding: 4px 12px 4px 6px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
+      border: 1px solid var(--mj-border-default);
       border-radius: 99px;
-      background: var(--mj-bg-surface, #ffffff);
+      background: var(--mj-bg-surface);
       height: 38px;
       box-sizing: border-box;
       user-select: none;
@@ -49,7 +51,7 @@ import { AvatarItem } from './types';
     .aud-div {
       width: 1px;
       height: 18px;
-      background: var(--mj-border-default, #e2e8f0);
+      background: var(--mj-border-default);
     }
     .aud-t {
       display: flex;
@@ -59,11 +61,11 @@ import { AvatarItem } from './types';
     .aud-t b {
       font-size: 12.5px;
       font-weight: 650;
-      color: var(--mj-text-primary, #1e293b);
+      color: var(--mj-text-primary);
     }
     .aud-t span {
       font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       white-space: nowrap;
     }
   `]

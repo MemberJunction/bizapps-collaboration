@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { AvatarItem, FileKind, RecentUseModel, SpaceBand } from './types';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -9,7 +10,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-preview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent],
+  imports: [CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent, MJButtonDirective],
   template: `
     <aside class="drawer">
       <div class="row gap10 header-row">
@@ -18,7 +19,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="fw7 fs14 ellipsis title">{{ Title }}</div>
           <div class="fs12 muted meta">{{ Meta }}</div>
         </div>
-        <button type="button" class="icon-btn-ghost close-btn" (click)="onClose()" aria-label="Close preview">
+        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onClose()" ariaLabel="Close preview">
           <i class="fa-solid fa-xmark muted"></i>
         </button>
       </div>
@@ -60,7 +61,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
         }
 
-        <button type="button" class="btn primary share-btn-full" (click)="onShare()">
+        <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
           <i class="fa-solid fa-share-from-square"></i>
           <span>{{ ShareButtonLabel }}</span>
         </button>
@@ -287,20 +288,17 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 })
 export class CollabItemPreviewComponent {
   @Input() public Kind: FileKind = 'doc';
-  @Input() public Title = 'Interview synthesis v3';
-  @Input() public Meta = 'Word · 18 pages · version 3';
-  @Input() public Paragraphs: string[] = [
-    'Across 18 interviews, scheduling came up more than any other theme. <mark>As the Dayton plant manager told us</mark>, the current tool “can’t see past Tuesday.”',
-    'Finance reports a nine-day close on inventory reconciliation; <mark>Jim in Finance</mark> described the process as manual.',
-  ];
+  @Input() public Title = '';
+  @Input() public Meta = '';
+  @Input() public Paragraphs: string[] = [];
   @Input() public Band: SpaceBand = 'Team';
-  @Input() public BandLabel = 'Team only';
-  @Input() public AudienceSubtitle = 'Meridian staff';
+  @Input() public BandLabel = '';
+  @Input() public AudienceSubtitle = '';
   @Input() public StaffAvatars: AvatarItem[] = [];
-  @Input() public FlagCount = 2;
-  @Input() public FlagTitle = '2 people could be identified';
-  @Input() public FlagDescription = 'Checked when Sam asked to share it. Review the highlighted phrases before Northwind sees them.';
-  @Input() public ShareButtonLabel = 'Share with Northwind…';
+  @Input() public FlagCount = 0;
+  @Input() public FlagTitle = '';
+  @Input() public FlagDescription = '';
+  @Input() public ShareButtonLabel = '';
   @Input() public RecentUses: RecentUseModel[] = [];
 
   @Output() public CloseRequested = new EventEmitter<void>();

@@ -128,6 +128,8 @@ import { RailSpaceNode } from './types';
     :host {
       display: block;
       height: 100%;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -136,8 +138,8 @@ import { RailSpaceNode } from './types';
       line-height: inherit;
     }
     .appnav {
-      background: var(--mj-bg-surface, #ffffff);
-      border-right: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
       padding: 12px 10px;
       display: flex;
       flex-direction: column;
@@ -156,8 +158,8 @@ import { RailSpaceNode } from './types';
       padding: 0 10px;
       margin: 0 2px 8px;
       border-radius: var(--mj-radius-md, 8px);
-      background: var(--mj-bg-surface-sunken, #f1f5f9);
-      color: var(--mj-text-muted, #64748b);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
       font-size: 13px;
       cursor: pointer;
     }
@@ -165,11 +167,11 @@ import { RailSpaceNode } from './types';
       margin-left: auto;
       font-size: 11px;
       font-weight: 500;
-      color: var(--mj-text-muted, #64748b);
-      border: 1px solid var(--mj-border-default, #e2e8f0);
+      color: var(--mj-text-muted);
+      border: 1px solid var(--mj-border-default);
       border-radius: 5px;
       padding: 1px 6px;
-      background: var(--mj-bg-surface-card, #f8fafc);
+      background: var(--mj-bg-surface-card);
     }
     .nav-item {
       display: flex;
@@ -178,7 +180,7 @@ import { RailSpaceNode } from './types';
       height: 34px;
       padding: 0 10px;
       border-radius: var(--mj-radius-md, 8px);
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-weight: 500;
       font-size: 13.5px;
       border: none;
@@ -190,33 +192,33 @@ import { RailSpaceNode } from './types';
       box-sizing: border-box;
     }
     .nav-item:hover {
-      background: var(--mj-bg-surface-card, #f8fafc);
+      background: var(--mj-bg-surface-card);
     }
     .nav-item i {
       width: 16px;
       text-align: center;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
     .nav-item.active {
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 10%, transparent);
-      color: var(--mj-brand-primary, #0076b6);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      color: var(--mj-brand-primary);
     }
     .nav-item.active i {
-      color: var(--mj-brand-primary, #0076b6);
+      color: var(--mj-brand-primary);
     }
     .nav-item .count {
       margin-left: auto;
       font-size: 11.5px;
       font-weight: 600;
-      color: var(--mj-text-secondary, #475569);
-      background: var(--mj-bg-surface-sunken, #f1f5f9);
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
       border-radius: 99px;
       padding: 1px 7px;
     }
     .nav-item .count.hot {
-      background: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-brand-on-primary, #ffffff);
+      background: var(--mj-brand-primary);
+      color: var(--mj-brand-on-primary);
     }
     .nav-section {
       display: flex;
@@ -227,12 +229,12 @@ import { RailSpaceNode } from './types';
       font-weight: 600;
       letter-spacing: .06em;
       text-transform: uppercase;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
     }
     .nav-section .icon-btn-inline {
       background: none;
       border: none;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       cursor: pointer;
       padding: 2px 4px;
       margin: -2px -4px;

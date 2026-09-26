@@ -83,7 +83,9 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
             [PreviewStaffAvatars]="f.library.selectedItem.bandAvatars"
             [PreviewFlagTitle]="f.library.selectedItem.flagTitle"
             [PreviewFlagDescription]="f.library.selectedItem.flagDescription"
+            [PreviewShareButtonLabel]="'Share with Northwind…'"
             [PreviewRecentUses]="f.library.selectedItem.recentUses"
+            [TeamBandLegend]="'Meridian only'"
           ></mjc-space-library>
         </main>
       </div>

@@ -72,21 +72,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckDialogComponent {
-  @Input() public Title = 'Share with Northwind';
-  @Input() public ItemName = 'Interview synthesis v3';
+  @Input() public Title = '';
+  @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';
-  @Input() public ClientOrgName = 'Northwind';
-  @Input() public RecipientCount = 6;
-  @Input() public AudienceHeader = '6 people at Northwind will be able to open it';
-  @Input() public AudienceStaffSub = 'Meridian’s 3 already can';
+  @Input() public ClientOrgName = '';
+  @Input() public RecipientCount = 0;
+  @Input() public AudienceHeader = '';
+  @Input() public AudienceStaffSub = '';
   @Input() public Recipients: RecipientPersonModel[] = [];
-  @Input() public ReviewHeader = 'The Assistant checked it first';
-  @Input() public ReviewSub = 'Two phrases could identify someone you interviewed under a promise of anonymity.';
+  @Input() public ReviewHeader = '';
+  @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
-  @Input() public Note = 'Synthesis from all 18 interviews — we’ll walk through it together on Thursday.';
+  @Input() public Note = '';
   @Input() public NotifyRecipients = true;
-  @Input() public AuthorName = 'Ada Lovell';
-  @Input() public Timestamp = '10:14 AM';
+  @Input() public AuthorName = '';
+  @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
   @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();

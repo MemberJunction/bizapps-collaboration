@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { FindingModel, FileKind, RecipientPersonModel } from './types';
+import { MJButtonDirective, MJSwitchComponent } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -10,9 +11,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-share-check',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent],
+  imports: [
+    FormsModule,
+    CollabAvatarComponent,
+    CollabBandChipComponent,
+    CollabFileIconComponent,
+    MJButtonDirective,
+    MJSwitchComponent,
+  ],
   template: `
-    <div class="m-h">
+    <div class="m-h mj-dialog-titlebar">
       <span class="m-ic">
         <i class="fa-solid fa-share-from-square"></i>
       </span>
@@ -27,7 +35,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <mjc-band-chip Band="Shared" Label="Shared" />
         </div>
       </div>
-      <button type="button" class="icon-btn-ghost close-btn" (click)="onCancel()" aria-label="Close dialog">
+      <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
         <i class="fa-solid fa-xmark muted"></i>
       </button>
     </div>
@@ -93,7 +101,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>Applied</span>
                   </span>
                 } @else {
-                  <button type="button" class="btn sm apply-btn" (click)="onApplyFix(fix)">
+                  <button mjButton variant="secondary" size="sm" class="btn sm apply-btn" (click)="onApplyFix(fix)">
                     <i class="fa-solid fa-check"></i>
                     <span>Apply</span>
                   </button>
@@ -109,10 +117,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>Note to {{ ClientOrgName }}</span>
           <span class="muted fw5">&nbsp;(sent with the notification)</span>
         </div>
-        <textarea class="textarea note-textarea" [(ngModel)]="Note"></textarea>
+        <textarea class="mj-textarea textarea note-textarea" [(ngModel)]="Note"></textarea>
         <div class="effects">
           <div class="eff">
-            <span class="switch" [class.on]="NotifyRecipients" (click)="NotifyRecipients = !NotifyRecipients"></span>
+            <mj-switch [(ngModel)]="NotifyRecipients" class="switch" />
             <span>Notify the {{ RecipientCount }} people at {{ ClientOrgName }}</span>
           </div>
           <div class="eff">
@@ -127,13 +135,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
     </div>
 
-    <div class="m-f">
-      <button type="button" class="btn primary" (click)="onApplyAndShare()">
+    <div class="m-f mj-dialog-actions">
+      <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
         <i class="fa-solid fa-check"></i>
         <span>{{ primaryButtonText }}</span>
       </button>
-      <button type="button" class="btn" (click)="onShareAsIs()">Share as is</button>
-      <button type="button" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
+      <button mjButton variant="secondary" class="btn" (click)="onShareAsIs()">Share as is</button>
+      <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
   `,
   styles: [COLLAB_TOKENS_CSS, `
@@ -526,21 +534,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckComponent {
-  @Input() public Title = 'Share with Northwind';
-  @Input() public ItemName = 'Interview synthesis v3';
+  @Input() public Title = '';
+  @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';
-  @Input() public ClientOrgName = 'Northwind';
-  @Input() public RecipientCount = 6;
-  @Input() public AudienceHeader = '6 people at Northwind will be able to open it';
-  @Input() public AudienceStaffSub = 'Meridian’s 3 already can';
+  @Input() public ClientOrgName = '';
+  @Input() public RecipientCount = 0;
+  @Input() public AudienceHeader = '';
+  @Input() public AudienceStaffSub = '';
   @Input() public Recipients: RecipientPersonModel[] = [];
-  @Input() public ReviewHeader = 'The Assistant checked it first';
-  @Input() public ReviewSub = 'Two phrases could identify someone you interviewed under a promise of anonymity.';
+  @Input() public ReviewHeader = '';
+  @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
-  @Input() public Note = 'Synthesis from all 18 interviews — we’ll walk through it together on Thursday.';
+  @Input() public Note = '';
   @Input() public NotifyRecipients = true;
-  @Input() public AuthorName = 'Ada Lovell';
-  @Input() public Timestamp = '10:14 AM';
+  @Input() public AuthorName = '';
+  @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
   @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();

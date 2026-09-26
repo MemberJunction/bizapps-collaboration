@@ -64,6 +64,8 @@ import { BreadcrumbItem } from './types';
   styles: [`
     :host {
       display: block;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -72,8 +74,8 @@ import { BreadcrumbItem } from './types';
       line-height: inherit;
     }
     .space-head {
-      background: var(--mj-bg-surface, #ffffff);
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
       padding: 16px 28px 0;
       box-sizing: border-box;
     }
@@ -82,15 +84,15 @@ import { BreadcrumbItem } from './types';
       align-items: center;
       gap: 6px;
       font-size: 12.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
     .crumbs i {
       font-size: 9px;
-      color: var(--mj-text-disabled, #94a3b8);
+      color: var(--mj-text-disabled);
     }
     .crumbs b {
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-weight: 600;
     }
     .top {
@@ -114,10 +116,10 @@ import { BreadcrumbItem } from './types';
       font-weight: 700;
       letter-spacing: -0.015em;
       margin: 0;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
     }
     .sub {
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-size: 13px;
       margin-top: 3px;
       display: flex;
@@ -136,7 +138,7 @@ import { BreadcrumbItem } from './types';
       width: 3px;
       height: 3px;
       border-radius: 9px;
-      background: var(--mj-text-disabled, #94a3b8);
+      background: var(--mj-text-disabled);
       display: inline-block;
       margin: 0 8px;
       vertical-align: middle;
@@ -151,9 +153,9 @@ import { BreadcrumbItem } from './types';
       font-size: 11.5px;
       font-weight: 600;
       white-space: nowrap;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      color: var(--mj-text-secondary, #475569);
-      background: var(--mj-bg-surface, #ffffff);
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface);
       box-sizing: border-box;
       user-select: none;
     }

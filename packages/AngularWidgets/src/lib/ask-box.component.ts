@@ -172,14 +172,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabAskBoxComponent {
-  @Input() public Title = 'Ask about Discovery';
+  @Input() public Title = '';
   @Input() public Subtitle = 'One assistant, bounded by who’s asking';
   @Input() public Placeholder = 'Ask anything about this engagement…';
-  @Input() public Suggestions: string[] = [
-    'What’s still open for the readout?',
-    'Draft this week’s note to Casey',
-    'Which interviews mention scheduling?',
-  ];
+  @Input() public Suggestions: string[] = [];
 
   @Input() public Query = '';
   @Output() public AskRequested = new EventEmitter<string>();

@@ -31,6 +31,8 @@ import { AvatarItem } from './types';
     :host {
       display: inline-flex;
       align-items: center;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -48,15 +50,15 @@ import { AvatarItem } from './types';
       margin-left: -2px;
     }
     .stack ::ng-deep .av {
-      box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff);
+      box-shadow: 0 0 0 2px var(--mj-bg-surface);
     }
     .stack ::ng-deep .av.ext {
-      box-shadow: 0 0 0 1.5px var(--mj-bg-surface, #ffffff), 0 0 0 3px var(--mjc-shared-strong, #0891b2);
+      box-shadow: 0 0 0 1.5px var(--mj-bg-surface), 0 0 0 3px var(--mjc-shared-strong);
     }
     .more {
       margin-left: 4px;
       font-size: 12px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       font-weight: 600;
       user-select: none;
     }
