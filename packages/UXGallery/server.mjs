@@ -4,8 +4,8 @@ import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const mockupDir = join(here, '../../docs/ux/mockup');
 const distDir = join(here, 'dist');
+const assetsDir = join(here, 'src/assets');
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -58,19 +58,7 @@ export function startGalleryServer(port = 4250) {
   <base href="/">
   <title>Collaboration UX Gallery — Frame ${frameId}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="/base.css">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 1440px;
-      height: 900px;
-      overflow: hidden;
-      font-family: var(--mj-font-family, 'Inter', sans-serif);
-      background: var(--mj-bg-surface, #ffffff);
-      color: var(--mj-text-primary, #0f172a);
-    }
-  </style>
+  <link rel="stylesheet" href="/gallery.css">
 </head>
 <body>
   <gallery-root></gallery-root>
@@ -82,9 +70,9 @@ export function startGalleryServer(port = 4250) {
                 return;
             }
 
-            // Static files: /base.css
-            if (pathname === '/base.css') {
-                const cssPath = join(mockupDir, 'base.css');
+            // Static gallery stylesheet: /gallery.css (or legacy /base.css)
+            if (pathname === '/gallery.css' || pathname === '/base.css') {
+                const cssPath = join(distDir, 'gallery.css');
                 if (existsSync(cssPath)) {
                     const content = readFileSync(cssPath, 'utf8');
                     res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
@@ -93,9 +81,10 @@ export function startGalleryServer(port = 4250) {
                 }
             }
 
-            // Static assets: /assets/*
+            // Static gallery assets: /assets/*
             if (pathname.startsWith('/assets/')) {
-                const assetPath = join(mockupDir, pathname);
+                const relPath = pathname.replace(/^\/assets\//, '');
+                const assetPath = join(assetsDir, relPath);
                 if (existsSync(assetPath) && statSync(assetPath).isFile()) {
                     const ext = extname(assetPath).toLowerCase();
                     const mime = MIME_TYPES[ext] ?? 'application/octet-stream';

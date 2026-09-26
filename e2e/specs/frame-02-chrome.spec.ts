@@ -90,8 +90,76 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await page.screenshot({ path: join(diffDir, '02-dark.png'), fullPage: false });
     });
 
-    test('visual regression against 02-space-overview.png with pixelmatch (§ 10 masks)', async ({ page }) => {
-        // As specified by reviewer in Round 87:
+    test('visual regression: chrome matches 02-space-overview.png within budget (§ 10 masks)', async ({ page }) => {
+        await page.goto('/frame/02');
+        await page.waitForSelector('mjc-space-header section.space-head');
+
+        const screenshotBuffer = await page.screenshot({ fullPage: false });
+        const targetPath = resolve(__dirname, '../../docs/ux/screens/02-space-overview.png');
+        if (!existsSync(targetPath)) {
+            throw new Error(`Target screen not found: ${targetPath}`);
+        }
+
+        const actualPng = PNG.sync.read(screenshotBuffer);
+        const targetPng = PNG.sync.read(readFileSync(targetPath));
+
+        const width = actualPng.width;
+        const height = actualPng.height;
+
+        expect(targetPng.width).toBe(width);
+        expect(targetPng.height).toBe(height);
+
+        // Chrome mask:
+        // 1. Topbar mask: y < 56 * 2 (112px in 2x buffer)
+        // 2. Page body mask: x >= 252 * 2 (504px) AND y > 214.5 * 2 (429px)
+        const topbarHeightPx = 56 * 2;
+        const railWidthPx = 252 * 2;
+        const headerBottomPx = 214.5 * 2;
+
+        const maskedActual = new PNG({ width, height });
+        const maskedTarget = new PNG({ width, height });
+        maskedActual.data.set(actualPng.data);
+        maskedTarget.data.set(targetPng.data);
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const isTopbar = y < topbarHeightPx;
+                const isPageBody = (x >= railWidthPx && y > headerBottomPx);
+                if (isTopbar || isPageBody) {
+                    const idx = (width * y + x) * 4;
+                    maskedActual.data[idx] = maskedTarget.data[idx];
+                    maskedActual.data[idx + 1] = maskedTarget.data[idx + 1];
+                    maskedActual.data[idx + 2] = maskedTarget.data[idx + 2];
+                    maskedActual.data[idx + 3] = maskedTarget.data[idx + 3];
+                }
+            }
+        }
+
+        const diffPng = new PNG({ width, height });
+        const numDiffPixels = pixelmatch(
+            maskedActual.data,
+            maskedTarget.data,
+            diffPng.data,
+            width,
+            height,
+            { threshold: 0.1 }
+        );
+
+        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
+        mkdirSync(diffDir, { recursive: true });
+        writeFileSync(join(diffDir, '02-chrome-diff.png'), PNG.sync.write(diffPng));
+        writeFileSync(join(diffDir, '02-diff.png'), PNG.sync.write(diffPng));
+
+        const chromeTotalPixels = (railWidthPx * (height - topbarHeightPx)) + ((width - railWidthPx) * (headerBottomPx - topbarHeightPx));
+        const diffRatio = numDiffPixels / chromeTotalPixels;
+        console.log(`Chrome visual diff: ${numDiffPixels} / ${chromeTotalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
+
+        // Budget: <= 25,000 pixels (~1.5% of chrome pixels)
+        expect(numDiffPixels).toBeLessThanOrEqual(25000);
+    });
+
+    test('visual regression: full-frame comparison against 02-space-overview.png (Slice A overview cards pending)', async ({ page }) => {
+        // As specified by reviewer in Round 87/88:
         // Frame 02's chrome matches foundations, but the full-page overview content cards
         // (Shared band, Team band, activity, calendar) land in Slice A.
         test.fail(true, 'Frame 02 chrome matches foundations, full page overview cards land in Slice A');
@@ -99,9 +167,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await page.goto('/frame/02');
         await page.waitForSelector('mjc-space-header section.space-head');
 
-        // Screenshot at 1440x900 2x
         const screenshotBuffer = await page.screenshot({ fullPage: false });
-
         const targetPath = resolve(__dirname, '../../docs/ux/screens/02-space-overview.png');
         if (!existsSync(targetPath)) {
             throw new Error(`Target screen not found: ${targetPath}`);
@@ -139,13 +205,11 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
             { threshold: 0.1 }
         );
 
-        if (numDiffPixels > 0) {
-            const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
-            mkdirSync(diffDir, { recursive: true });
-            writeFileSync(join(diffDir, '02-diff.png'), PNG.sync.write(diffPng));
-        }
+        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
+        mkdirSync(diffDir, { recursive: true });
+        writeFileSync(join(diffDir, '02-full-diff.png'), PNG.sync.write(diffPng));
 
-        // Target budget comparison
+        // Target budget comparison (50 px - expected to fail until Slice A)
         expect(numDiffPixels).toBeLessThanOrEqual(50);
     });
 });

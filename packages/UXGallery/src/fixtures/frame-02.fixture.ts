@@ -9,17 +9,16 @@ export interface Frame02FixtureData {
     };
     rail: {
         spaces: RailSpaceNode[];
-        footerOrgName: string;
-        footerOrgInitial: string;
-        footerStatusText: string;
+        inboxCount: number;
+        taskCount: number;
     };
     header: {
         crumbs: BreadcrumbItem[];
         typeCode: string;
+        typeIconClass: string;
         title: string;
-        typeLabel: string;
-        statusLabel: string;
-        statusVariant: 'ok' | 'warn' | 'plain';
+        typeName: string;
+        status: 'Active' | 'Closed' | string;
         subtitle: string;
         staffAvatars: AvatarItem[];
         outsideAvatars: AvatarItem[];
@@ -34,37 +33,42 @@ export const FRAME_02_FIXTURE: Frame02FixtureData = {
     topbar: {
         appName: 'Collaboration',
         workspaceName: 'Northwind',
-        userInitials: 'A',
+        userInitials: 'AL',
         userColorClass: 'c1',
     },
     rail: {
+        inboxCount: 4,
+        taskCount: 6,
         spaces: [
             { id: 'northwind', name: 'Northwind', typeCode: 'rel', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
-            { id: 'discovery', name: 'Discovery', typeCode: 'eng', iconClass: 'fa-solid fa-compass', level: 1, unread: true },
-            { id: 'delivery', name: 'Delivery', typeCode: 'eng', iconClass: 'fa-solid fa-truck-fast', level: 1, meta: 'Oct 20' },
+            { id: 'discovery', name: 'Discovery', typeCode: 'eng', iconClass: 'fa-solid fa-compass', level: 1, hasChildren: true, isExpanded: true, unread: true },
+            { id: 'fieldnotes', name: 'Field notes', typeCode: 'eng', iconClass: 'fa-solid fa-clipboard', level: 2, hasChildren: false, isExpanded: false },
+            { id: 'delivery', name: 'Delivery', typeCode: 'eng', iconClass: 'fa-solid fa-truck-fast', level: 1, hasChildren: true, isExpanded: false, isLocked: true },
+            { id: 'closed', name: 'Closed', typeCode: 'eng', iconClass: 'fa-solid fa-box-archive', level: 1, hasChildren: true, isExpanded: false, meta: '2', isDim: true },
+            { id: 'committee', name: 'Audit Committee', typeCode: 'com', iconClass: 'fa-solid fa-landmark', level: 0, hasChildren: true, isExpanded: false, unread: true },
+            { id: 'cohort', name: 'Spring Leadership Cohort', typeCode: 'coh', iconClass: 'fa-solid fa-graduation-cap', level: 0, hasChildren: true, isExpanded: false },
+            { id: 'pinecrest', name: 'Pinecrest Health', typeCode: 'rel', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false },
+            { id: 'studio', name: 'Studio', typeCode: 'wks', iconClass: 'fa-solid fa-shapes', level: 0, hasChildren: true, isExpanded: false },
         ],
-        footerOrgName: 'Meridian Advisory',
-        footerOrgInitial: 'M',
-        footerStatusText: 'Your team is online',
     },
     header: {
         crumbs: [{ label: 'Spaces' }, { label: 'Northwind' }, { label: 'Discovery' }],
         typeCode: 'eng',
+        typeIconClass: 'fa-solid fa-compass',
         title: 'Discovery',
-        typeLabel: 'Engagement',
-        statusLabel: 'Active',
-        statusVariant: 'ok',
+        typeName: 'Engagement',
+        status: 'Active',
         subtitle: 'Supply-chain operating model diagnostic · Week 7 of 10 · Readout Oct 9',
         staffAvatars: [
-            { initials: 'A', name: 'Ada Lovelace', colorClass: 'c1' },
-            { initials: 'S', name: 'Sam Taylor', colorClass: 'c2' },
-            { initials: 'P', name: 'Priya Patel', colorClass: 'c3' },
+            { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
+            { initials: 'SO', name: 'Sam Okafor', colorClass: 'c9' },
+            { initials: 'PS', name: 'Priya Shah', colorClass: 'c6' },
         ],
         outsideAvatars: [
-            { initials: 'C', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
-            { initials: 'B', name: 'Bea Vance', colorClass: 'c5', isOutside: true },
-            { initials: 'O', name: 'Omar Ortiz', colorClass: 'c6', isOutside: true },
-            { initials: 'L', name: 'Lena Chen', colorClass: 'c7', isOutside: true },
+            { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+            { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5', isOutside: true },
+            { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+            { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
         ],
         totalPeople: 9,
         audienceSummary: '3 Meridian · 6 Northwind',

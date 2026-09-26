@@ -5,11 +5,9 @@ import {
   CollabSpaceHeaderComponent,
   CollabSpaceTabsComponent,
   CollabAudiencePillComponent,
-  type BreadcrumbItem,
-  type TabItem,
-  type RailSpaceNode,
-  type AvatarItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.fixture';
 
 @Component({
   selector: 'gallery-frame-02',
@@ -20,54 +18,50 @@ import {
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
     CollabAudiencePillComponent,
+    MJButtonDirective,
   ],
   template: `
     <div class="shell">
       <!-- Static Explorer Topbar Stand-in (56px) as required by § 10 -->
       <header class="topbar">
-        <div class="row gap10">
-          <span class="app-pill"><i class="fa-solid fa-shapes"></i>Collaboration</span>
-          <span class="muted fs12">/</span>
-          <span class="fs13 fw6">Northwind</span>
-        </div>
-        <div class="search"><i class="fa-solid fa-magnifying-glass"></i><span>Search everything…</span><span class="kbd">⌘K</span></div>
-        <div class="row gap12" style="margin-left:auto">
-          <span class="btn ghost sm"><i class="fa-solid fa-bell"></i></span>
-          <span class="btn ghost sm"><i class="fa-solid fa-gear"></i></span>
-          <span class="av c1 md">A</span>
-        </div>
+        <span class="mark"></span>
+        <span class="app-pill"><i class="fa-solid fa-people-roof"></i>{{ f.topbar.appName }}<i class="fa-solid fa-chevron-down caret"></i></span>
+        <span class="spacer"></span>
+        <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+        <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+        <span class="av c1 md" title="Ada Lovell">{{ f.topbar.userInitials }}</span>
       </header>
 
       <div class="body">
         <mjc-space-rail
-          [spaces]="spaces"
+          [spaces]="f.rail.spaces"
           [activeSpaceId]="'discovery'"
-          [inboxCount]="4"
-          [taskCount]="6"
+          [inboxCount]="f.rail.inboxCount"
+          [taskCount]="f.rail.taskCount"
         ></mjc-space-rail>
 
         <main class="main">
           <mjc-space-header
-            [breadcrumbs]="breadcrumbs"
-            [typeCode]="'eng'"
-            [typeIconClass]="'fa-solid fa-compass'"
-            [title]="'Discovery'"
-            [typeName]="'Engagement'"
-            [status]="'Active'"
-            [subtitle]="subtitle"
+            [breadcrumbs]="f.header.crumbs"
+            [typeCode]="f.header.typeCode"
+            [typeIconClass]="f.header.typeIconClass"
+            [title]="f.header.title"
+            [typeName]="f.header.typeName"
+            [status]="f.header.status"
+            [subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
               <mjc-audience-pill
-                [staffAvatars]="staffAvatars"
-                [outsideAvatars]="outsideAvatars"
-                [totalPeople]="9"
-                [summary]="'3 Meridian · 6 Northwind'"
+                [staffAvatars]="f.header.staffAvatars"
+                [outsideAvatars]="f.header.outsideAvatars"
+                [totalPeople]="f.header.totalPeople"
+                [summary]="f.header.audienceSummary"
               ></mjc-audience-pill>
-              <button type="button" class="btn"><i class="fa-solid fa-user-plus"></i>Invite</button>
-              <button type="button" class="btn primary"><i class="fa-solid fa-plus"></i>New</button>
+              <button mjButton variant="secondary" size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
+              <button mjButton variant="primary" size="md"><i class="fa-solid fa-plus"></i>New</button>
             </div>
             <mjc-space-tabs
-              [tabs]="tabs"
+              [tabs]="f.header.tabs"
               [activeTab]="activeTab"
               (tabChange)="activeTab = $event"
             ></mjc-space-tabs>
@@ -83,163 +77,139 @@ import {
   styles: [`
     :host {
       display: block;
-      width: 100vw;
-      height: 100vh;
+      width: 1440px;
+      height: 900px;
       overflow: hidden;
     }
     .shell {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      height: 100%;
+      display: grid;
+      grid-template-rows: 56px 1fr;
+      width: 1440px;
+      height: 900px;
+      overflow: hidden;
     }
     .body {
-      display: flex;
-      flex: 1;
+      display: grid;
+      grid-template-columns: 252px 1fr;
       min-height: 0;
       overflow: hidden;
     }
     .main {
-      flex: 1;
       min-width: 0;
+      min-height: 0;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      background: var(--mj-bg-surface-sunken, #f8fafc);
-      overflow-y: auto;
+      background: var(--mj-bg-page, #ffffff);
     }
     .page.ov {
-      padding: 24px 28px;
+      padding: 18px 28px;
       flex: 1;
+      overflow-y: auto;
     }
     .row { display: flex; align-items: center; }
     .gap8 { gap: 8px; }
-    .gap10 { gap: 10px; }
-    .gap12 { gap: 12px; }
-    .fs12 { font-size: 12px; }
-    .fs13 { font-size: 13px; }
-    .fw6 { font-weight: 600; }
-    .muted { color: var(--mj-text-muted, #64748b); }
 
-    /* Topbar stand-in (masked in § 10) */
+    /* Topbar stand-in (masked 56px per § 10) */
     .topbar {
-      height: 56px;
-      padding: 0 16px;
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface, #ffffff);
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
+      padding: 0 16px 0 14px;
+      background: var(--mj-bg-surface, #ffffff);
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      height: 56px;
       box-sizing: border-box;
-      flex: none;
+    }
+    .topbar .mark {
+      width: 34px;
+      height: 19px;
+      background: url('/assets/mj-mark.svg') center/contain no-repeat;
+    }
+    :host-context([data-theme="dark"]) .topbar .mark,
+    [data-theme="dark"] .topbar .mark {
+      background-image: url('/assets/mj-mark-dark.svg');
     }
     .app-pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 99px;
-      background: var(--mj-brand-accent-subtle, #f1f5f9);
-      color: var(--mj-brand-primary, #0284c7);
-      font-size: 12.5px;
-      font-weight: 650;
+      gap: 8px;
+      height: 32px;
+      padding: 0 12px 0 10px;
+      border-radius: var(--mj-radius-md, 8px);
+      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 10%, transparent);
+      color: var(--mj-brand-primary, #0076b6);
+      font-weight: 600;
+      font-size: 13.5px;
+    }
+    .app-pill .caret {
+      font-size: 10px;
+      opacity: .7;
+      margin-left: 2px;
+    }
+    .topbar .spacer {
+      flex: 1;
     }
     .search {
       display: flex;
       align-items: center;
       gap: 8px;
-      width: 280px;
-      height: 32px;
+      width: 300px;
+      height: 34px;
       padding: 0 10px;
-      border-radius: 8px;
       border: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
+      border-radius: var(--mj-radius-md, 8px);
       color: var(--mj-text-muted, #64748b);
-      font-size: 12.5px;
+      background: var(--mj-bg-surface, #ffffff);
+      font-size: 13px;
     }
-    .search .kbd {
+    .kbd {
       margin-left: auto;
       font-size: 11px;
-      padding: 1px 4px;
+      font-weight: 500;
+      color: var(--mj-text-muted, #64748b);
       border: 1px solid var(--mj-border-default, #e2e8f0);
-      border-radius: 4px;
-      background: var(--mj-bg-surface, #ffffff);
+      border-radius: 5px;
+      padding: 1px 6px;
+      background: var(--mj-bg-surface-card, #f8fafc);
     }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 32px;
-      padding: 0 12px;
-      border-radius: 8px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface, #ffffff);
-      color: var(--mj-text-primary, #0f172a);
-      font-size: 12.5px;
-      font-weight: 550;
-      cursor: pointer;
-    }
-    .btn.primary {
-      background: var(--mj-brand-primary, #0284c7);
-      color: var(--mj-brand-on-primary, #ffffff);
-      border-color: var(--mj-brand-primary, #0284c7);
-    }
-    .btn.ghost {
-      background: transparent;
-      border: none;
-      color: var(--mj-text-secondary, #475569);
-    }
-    .btn.sm {
-      height: 28px;
-      padding: 0 8px;
-    }
-    .av {
+    .icon-btn {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      border-radius: var(--mj-radius-md, 8px);
       display: inline-grid;
       place-items: center;
-      width: 30px;
-      height: 30px;
+      color: var(--mj-text-secondary, #475569);
+      font-size: 15px;
+    }
+    .icon-btn .dot {
+      position: absolute;
+      top: 6px;
+      right: 7px;
+      min-width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--mj-status-error, #ef4444);
+      box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff);
+    }
+    .topbar .av {
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
       border-radius: 99px;
       font-size: 12px;
       font-weight: 650;
       color: #fff;
+      background: #6366f1;
+      user-select: none;
     }
-    .av.c1 { background: #6366f1; }
-    .av.md { width: 30px; height: 30px; }
+    .topbar .av.c1 { background: #6366f1; }
+    .topbar .av.md { width: 32px; height: 32px; }
   `]
 })
 export class Frame02Component {
-  breadcrumbs: BreadcrumbItem[] = [
-    { label: 'Spaces' },
-    { label: 'Northwind' },
-    { label: 'Discovery' },
-  ];
-  subtitle = 'Supply-chain operating model diagnostic · Week 7 of 10 · Readout Oct 9';
-  activeTab = 'Overview';
-
-  tabs: TabItem[] = [
-    { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
-    { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open', count: 24 },
-    { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check', count: 10 },
-    { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments', count: 3 },
-    { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group', count: 9 },
-    { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' },
-  ];
-
-  spaces: RailSpaceNode[] = [
-    { id: 'northwind', name: 'Northwind', typeCode: 'rel', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
-    { id: 'discovery', name: 'Discovery', typeCode: 'eng', iconClass: 'fa-solid fa-compass', level: 1, unread: true },
-    { id: 'delivery', name: 'Delivery', typeCode: 'eng', iconClass: 'fa-solid fa-truck-fast', level: 1, meta: 'Oct 20' },
-  ];
-
-  staffAvatars: AvatarItem[] = [
-    { initials: 'A', name: 'Ada Lovelace', colorClass: 'c1' },
-    { initials: 'S', name: 'Sam Taylor', colorClass: 'c2' },
-    { initials: 'P', name: 'Priya Patel', colorClass: 'c3' },
-  ];
-
-  outsideAvatars: AvatarItem[] = [
-    { initials: 'C', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
-    { initials: 'B', name: 'Bea Vance', colorClass: 'c5', isOutside: true },
-    { initials: 'O', name: 'Omar Ortiz', colorClass: 'c6', isOutside: true },
-    { initials: 'L', name: 'Lena Chen', colorClass: 'c7', isOutside: true },
-  ];
+  readonly f = FRAME_02_FIXTURE;
+  activeTab = FRAME_02_FIXTURE.header.activeTabId;
 }

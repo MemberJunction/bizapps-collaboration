@@ -48,6 +48,7 @@ import { TabItem } from './types';
       padding: 9px 1px 11px;
       font-weight: 550;
       font-size: 13.5px;
+      line-height: 1.45;
       color: var(--mj-text-muted, #64748b);
       border: none;
       border-bottom: 2px solid transparent;

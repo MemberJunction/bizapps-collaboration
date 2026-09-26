@@ -40,6 +40,7 @@ import { AvatarItem } from './types';
       border-radius: 99px;
       background: var(--mj-bg-surface, #ffffff);
       height: 38px;
+      margin-right: 4px;
       box-sizing: border-box;
       user-select: none;
     }

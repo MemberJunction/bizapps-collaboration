@@ -77,6 +77,7 @@ import { BreadcrumbItem } from './types';
       align-items: center;
       gap: 6px;
       font-size: 12.5px;
+      line-height: 1.45;
       color: var(--mj-text-muted, #64748b);
       font-weight: 500;
     }
@@ -108,12 +109,14 @@ import { BreadcrumbItem } from './types';
       font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.015em;
+      line-height: 1.45;
       margin: 0;
       color: var(--mj-text-primary, #0f172a);
     }
     .sub {
       color: var(--mj-text-secondary, #475569);
       font-size: 13px;
+      line-height: 1.45;
       margin-top: 3px;
       display: flex;
       align-items: center;
