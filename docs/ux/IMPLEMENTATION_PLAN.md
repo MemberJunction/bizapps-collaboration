@@ -49,7 +49,7 @@ These paths are on `feat/collaboration-phase-0-2`.
 | **L0 runtime** | `@mj-biz-apps/collaboration-entities` (`packages/Entities`) | `runtime` | CodeGen entities, which already exist |
 | **L0 runtime** | `@mj-biz-apps/collaboration-core` (`packages/Core`) | `runtime` | Pure TypeScript view models and rules, plus the non-visual extension contracts ([§ 5.1](#51-l0--collaboration-core)) |
 | **L1 + L2 widgets** | **new** `@mj-biz-apps/collaboration-ng-widgets` (`packages/AngularWidgets`) | `widgets` | Every widget and composite in [§ 5.2](#52-l1--widgets-props-in-events-out) and [§ 5.3](#53-l2--composites-load-through-providertouse-emit-intent) |
-| **L3 Explorer surface** | `@mj-biz-apps/collaboration-ng` (`packages/Angular`) | `surface` | The Explorer resource, the generated forms, and the bizapps-tasks panels ([§ 4](#4-how-explorer-hosts-it-l3)) |
+| **L3 Explorer surface** | `@mj-biz-apps/collaboration-ng` (`packages/Angular`) | `surface` | The Explorer resource, the generated forms, the Work tab and the bizapps-tasks panels ([§ 4](#4-how-explorer-hosts-it-l3)) |
 | none | **new, private** `packages/UXGallery` | none (it is an app) | A plain Angular app with no Explorer that renders every frame from fixtures. It proves the widgets work in any Angular app and hosts the visual tests ([§ 10](#10-visual-tests-how-pixel-perfect-is-checked)). |
 
 **Allowed dependencies** (guide § 7):
@@ -58,7 +58,7 @@ These paths are on `feat/collaboration-phase-0-2`.
   - the L0 packages;
   - `@angular/{core,common,forms,animations}`;
   - `@memberjunction/ng-base-types`, `ng-ui-components`, `ng-shared-generic`, `ng-base-forms`, `ng-entity-viewer`;
-  - any `Generic/**` package. For this work that means `ng-conversations` (which declares itself `widgets`), `ng-gantt`, `ng-timeline` and `ng-trees`.
+  - any `Generic/**` package. For this work that means `ng-conversations`, which declares itself `widgets`.
 - **`collaboration-ng-widgets` must never import or depend on** `@angular/router`, `@memberjunction/ng-shared` or any `@memberjunction/ng-explorer-*` package.
 - **`collaboration-ng`** adds `@memberjunction/ng-shared`, and it is also where `@mj-biz-apps/tasks-ng` goes. `tasks-ng` is one package that depends on `ng-shared`: its panels open Explorer tabs through `OpenTaskRecord()`. That makes it an L3 dependency, so a widgets package can't use it until bizapps-tasks splits out its own widgets package.
 - **No cross-package re-exports.** Consumers import widgets from `collaboration-ng-widgets` itself.
@@ -100,6 +100,11 @@ These paths are on `feat/collaboration-phase-0-2`.
   - **`NotifyLoadComplete()`**, called once the first view's data is in. Also call `super.ngOnInit()` and `super.ngOnDestroy()`.
   - **`SetAgentContext(...)`** with the current space and chat, so Explorer's own agent knows where the user is. MJ's dashboard rules require it.
 - **Outside participants** use the same resource, not a separate app. The view model decides the portal from the viewer's membership (frames 07 and 12): no Team side, no settings, only their spaces. A magic-link session already locks app switching (`appSwitchingLocked`).
+- **The Work tab** (frame 10) is composed here, because it reuses bizapps-tasks' own components (Amith, 2026-09-23).
+  - `<bizapps-task-kanban>`, `<bizapps-task-list>` and `<bizapps-task-gantt>` from `tasks-ng` draw *Board*, *List* and *Timeline*.
+  - Each gets the space's task set through `ExtraFilter`: the tasks linked to the space through `SpaceItem`. What a viewer may read is still decided by the server's permissions, never by this filter.
+  - The toolbar above them is the L1 `mjc-work-toolbar`.
+  - The board's cards are Collaboration's `mjc-task-card`, passed in as the board's card template ([§ 6](#6-mj-components-to-use-and-the-five-gaps), gap 3).
 - **The task detail panel.** When the user clicks a task anywhere, L3 opens `<bizapps-task-detail-panel>` from `tasks-ng` in an `mj-slide-panel`. Edits happen there, with `<bizapps-task-edit-panel>`.
 
 ## 5. Component inventory
@@ -151,7 +156,7 @@ L1 widgets take plain models (not entities), do no data access, and inject nothi
 | `mjc-invite-card`, `mjc-join-rules` | 06 | `.mj-input`, `mj-dropdown`, `mj-datepicker`, `mj-switch` |
 | `mjc-milestone-track`, `mjc-activity-feed`, `mjc-team-card` | 07 | |
 | `mjc-assistant-notes`, `mjc-skill-list`, `mjc-scope-picker`, `mjc-try-it` | 09 | `.mj-textarea`, `mj-switch`, radio cards. The settings sub-nav is plain `mj-left-nav`. |
-| `mjc-work-board`, `mjc-task-card` | 10 | **Reviewed exception:** `mj-kanban-board`'s card has fixed fields. The view switch is `mj-tab-nav` and the filters are `mj-filter-chip`. |
+| `mjc-work-toolbar`, `mjc-task-card` | 10 | The toolbar holds the view switch (`mj-tab-nav`), the filters (`mj-filter-chip`) and the "Northwind sees 5 of these 10" line. The card is what bizapps-tasks' board renders through its card template (gap 3). |
 | `mjc-type-picker`, `mjc-membership-picker`, `mjc-space-placement` | 13 | Type cards from `SpaceType` rows, radio cards, and a preview of the tree |
 
 ### 5.3 L2 · composites (load through `ProviderToUse`, emit intent)
@@ -176,8 +181,9 @@ A composite can take a key (a space ID) or an already-loaded model. The session-
 | `mjc-space-people` | 06 | Members, roles, invites, join rules | `BeforeMemberApproved` / `AfterMemberApproved`, `BeforeMemberRemoved` / `AfterMemberRemoved` |
 | `mjc-participant-home` | 07, 12 | An outside participant's Shared view | `ItemOpenRequested`, `ChatOpenRequested` |
 | `mjc-space-assistant-settings` | 09 | The per-space Assistant configuration (the task 6 design) | `Before…` / `After…` save pair |
-| `mjc-space-work` | 10 | Tasks linked through `SpaceItem` | `TaskOpenRequested`, `BeforeTaskMoved` / `AfterTaskMoved` |
 | `mjc-new-space-dialog` | 13 | Space types, the parent tree, notes to carry | `BeforeSpaceCreated` / `AfterSpaceCreated` |
+
+The Work tab (frame 10) is not an L2 composite. It hosts bizapps-tasks' own components, which are an L3 dependency, so L3 composes it ([§ 4](#4-how-explorer-hosts-it-l3)).
 
 **The chat (frames 05 and 11)** is `mj-conversation-chat-area` from `@memberjunction/ng-conversations` 6.1.3. It is `standalone: false`, so import `ConversationsModule`, and its inputs are camelCase. Set these inputs:
 
@@ -194,7 +200,7 @@ Project four slots with `<ng-template mjChatSlot="…">`:
 - `messageExtra`: `mjc-answer-receipt` and the citations;
 - `emptyState`.
 
-Two event pairs matter. Use `beforeAgentTurn` / `afterAgentTurn` where the host needs to know a turn is happening. The band rule itself is enforced on the server (task 6), not in the browser.
+Use the `beforeAgentTurn` / `afterAgentTurn` pair where the host needs to know a turn is happening. The band rule itself is enforced on the server (task 6), not in the browser.
 
 ## 6. MJ components to use, and the five gaps
 
@@ -210,14 +216,18 @@ Use MJ's piece wherever one exists. The frames are drawn to these components' ex
 | Dialogs, panels, sheets | `mj-dialog`, `mj-slide-panel`, `mj-bottom-sheet` | Confirm on the left, cancel on the right (frames 04 and 13). The phone upload in frame 12 is `mj-bottom-sheet`. |
 | Progress | `mj-progress-bar` | |
 | Tooltips, loading, empty, alerts | `[mjTip]`, `<mj-loading>`, `mj-empty-state`, `mj-alert` | Every list needs a loading state and an empty state |
-| Timeline view | `@memberjunction/ng-gantt` | L2-safe; feed it the space's tasks |
+| Work tab: board, list, timeline | bizapps-tasks' `bizapps-task-kanban`, `bizapps-task-list`, `bizapps-task-gantt` | Amith's decision of 2026-09-23. They are an L3 dependency, so the Work tab is composed at L3 ([§ 4](#4-how-explorer-hosts-it-l3)). |
 | Chat | `mj-conversation-chat-area` | See [§ 5.3](#53-l2--composites-load-through-providertouse-emit-intent) |
 
-**The five gaps.** For each, MJ can't draw the frame today, so the builder builds it locally as a reviewed exception. The small upstream change noted in each item removes the gap later.
+**The five gaps.** In each, the component we should use can't draw the frame today. Four are built locally as reviewed exceptions, and the small upstream change noted in each removes the gap later. The fifth, the board, is fixed where it lives, in bizapps-tasks.
 
 1. **Space header.** `mj-page-header` has a 40px tinted icon, a 20px title, and meta chips under the subtitle. Build `mjc-space-header`.
 2. **Rail items.** `mj-left-nav` and `mj-tree` have no item template. Build `mjc-space-rail` to `mj-left-nav`'s metrics. Upstream: an `ItemTemplate` input on `mj-left-nav`.
-3. **Board cards.** `mj-kanban-board`'s `KanbanCardData` is fixed: title, subtitle, badge, footer. Build `mjc-work-board`. Upstream: a `CardTemplate` input on `mj-kanban-board`.
+3. **Board cards and column labels.** `bizapps-task-kanban` draws its own fixed cards under its fixed status names (Open, InProgress, Blocked, Completed). Frame 10 needs two things it can't do:
+   - Collaboration's card, `mjc-task-card`, which shows band, provenance, progress, attachment and lateness.
+   - Space-worded column labels: *To do*, *In progress*, *Waiting on Northwind* (Blocked, in a client space) and *Done*.
+
+   Add two optional inputs to `bizapps-task-kanban` in bizapps-tasks: `CardTemplate` (an `ng-template` given the task row) and `ColumnLabels` (status → label). This is not a local copy of the board. Until the inputs ship, the board shows bizapps-tasks' standard cards, and frame 10 is a known difference.
 4. **The composer's audience line.** `mj-conversation-chat-area` 6.1.3 has no slot inside the composer. Until MJ adds one, render the line directly under the composer; the visual test masks that strip. Upstream: a `composerTools` slot.
 5. **Avatars.** MJ ships no avatar component. Build `mjc-avatar`.
 
@@ -317,6 +327,8 @@ Collaboration defines these extension points and never implements anything app-s
 - Inter 5.3.0 and Font Awesome 6.5.2, pinned;
 - a compare of each route against `docs/ux/screens/NN-*.png` with `pixelmatch`: threshold 0.1 and a small total-difference budget, with a diff PNG saved as a CI artifact on failure.
 
+Frame 10 is compared in Explorer, not in the gallery, because its board is bizapps-tasks' component: an L3 dependency the gallery doesn't load.
+
 **What the comparison masks:**
 
 - the Explorer top bar, the first 56px, which the gallery draws as a static stand-in;
@@ -340,7 +352,7 @@ Work in vertical slices. Each slice ends with its frames passing in the gallery 
 4. **Slice B: chats.** Frames 05 and 11.
 5. **Slice C: people.** Frame 06, plus gaps 5 and 6.
 6. **Slice D: home.** Frame 01, plus the needs-you and agenda providers and gaps 4 and 8.
-7. **Slice E: work.** Frame 10.
+7. **Slice E: work.** Frame 10, plus the `CardTemplate` and `ColumnLabels` inputs on `bizapps-task-kanban` (a small PR in bizapps-tasks).
 8. **Slice F: outside participants.** Frames 07 and 12.
 9. **Slice G: Assistant settings.** Frame 09, after the task 6 design is approved.
 10. **Slice H: new space.** Frame 13, plus gap 2.

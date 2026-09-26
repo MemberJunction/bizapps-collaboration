@@ -209,7 +209,7 @@ There is one Assistant for the whole firm. Each space adds what it should know a
 
 ![Frame 10: the Work board](screens/10-work-board.png)
 
-- Tasks are bizapps-tasks tasks that belong to the space. Each card says its side, and Northwind sees the 5 open tasks that are Shared.
+- Tasks are bizapps-tasks tasks that belong to the space, and the board, list and timeline are bizapps-tasks' own components. Collaboration supplies the cards and the column names. Each card says its side, and Northwind sees the 5 open tasks that are Shared.
 - *Waiting on Northwind* collects what the client owes. A late item says so and offers a nudge.
 - A card can say *Suggested from Discovery room*, which means the Assistant proposed it from a chat.
 - *Board / List / Timeline* and *Everyone's / Mine / Northwind's* are views of the same tasks.
