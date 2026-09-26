@@ -103,15 +103,18 @@ At `b539790`, reviewed in round 94:
 - **Round 96 found** that B0.2 still leaks through a sealed sub-space and is now reachable over GraphQL, that B0.1's integration checks don't exercise the fix, and that the Explorer resource still shows the story's data typed into the code rather than reading the viewer's.
 - **`e18615a` answered round 96** (216 unit tests): B0.2's reply names only the room space's own Shared items and returns `AssistantError`, B0.1's WG2 and unit cases test the fix, WG3 asserts reasons, the tokens are defined on each widget's `:host`, `DefaultForNewUser` is true, the committee row is out of `metadata/`, `next` is merged in, and the five chat widgets are out of PR #3.
 - **Round 97 found** that the Explorer resource still reads nothing it shows, that RM5's new sub-space check saves a file item the file gate refuses, that frames 03 and 04 got worse while CI's budgets rose to 145,000 and 245,000, and that frame 04's dialog is taller than the screen in Explorer.
+- **`86b48c1` answered round 97** (216 unit tests): the flagged-phrase highlight on the frame's values, which brought frames 03 and 04 down to 115,561 and 190,240 pixels on CI; RM5's sub-space case rebuilt on an uploaded file, with both halves and a checked delete; WG3's exact reasons; and the widgets' own 14px base size. CI's budgets went to 41,500, 130,000 and 200,000.
+- **Round 98 found** that the Explorer resource still reads nothing it shows; that three text sizes are wrong (an invalid `.fs12.5` selector, the note box cut to 62px where the frame's is 80px, and MJ's global `p` rule reaching the drawer's preview in Explorer); that frame 04's dialog is still taller than the space it opens in; and that CI's budgets sit thousands of pixels above CI's counts, with frame 04's count varying between runs.
 
 ### 2.3 PR #3's finish line
 
-PR #3 merges when everything here is done. It's round 97's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `e18615a` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
+PR #3 merges when everything here is done. It's round 98's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `86b48c1` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
 
 **Slice A:** frames 02, 03 and 04 ([the UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work)), passing in the gallery, with live Explorer shots of each in light and dark.
 - **Slice A's data lands in PR #3,** not in the next pull request: item versions, share checks and their findings (the UI plan's gap 7), items that hold a set of files (frame 03's 24 photos), the Milestone task type (gap 4, a `metadata/` row), and the columns frames 02 to 04 read.
 - It's being designed in PR #3's review now. Each shape is posted there before its migration, and the tables go into B0.7's baseline.
-- **The Explorer resource reads the viewer's real data** through `ProviderToUse` and the typed client, and the full-frame budgets go back to what CI measures once the frames match, as tight as frame 02's chrome.
+- **The Explorer resource reads the viewer's real data** through `ProviderToUse` and the typed client, and the full-frame budgets go back to what CI measures once the frames match, as tight as frame 02's chrome, or just above a variation that can't be removed.
+- **The frames' text sizes** (round 98): the `.fs12.5` class, whose selector browsers drop; the note box at the frame's 80px; and the drawer's preview paragraphs, which MJ's global `p` rule sets to 16px in Explorer. Frame 04's dialog gets a maximum height inside the host.
 - **Every new user gets the app:** `DefaultForNewUser` is true (D13).
 
 **B0: the fixes to PR #3's own code.**
@@ -127,13 +130,13 @@ PR #3 merges when everything here is done. It's round 97's list: slice A, v0.3's
    - **Fix:** on an update to someone else's seat, the target's current role must also be within the signer's ceiling: its level at or below `MaxGrantableLevel`, and no flag the signer lacks. It goes in the pure rule, with the current role passed in.
    - **Done in `6786bd0`:** `refuseInvite` takes the current role, and `SpaceMemberEntityServer` passes the saved one. The unit cases for demoting someone above and for a peer admin prove it.
    - **Done in `002c2c5`:** on both harnesses WG2 has Casey save Sam's seat as `client-member` and `Removed` and asserts the rule's exact message; the unit removal case grants `client-member` over `member`, and a unit case covers the signer's own seat through `refuseInvite`.
-2. **B0.2. The room's reply names items some readers can't open.** Fixed in `002c2c5`; its sub-space check has to be rebuilt.
+2. **B0.2. The room's reply names items some readers can't open.** Fixed in `002c2c5`, with its sub-space check rebuilt in `86b48c1`.
    - With `executeAgent`, `postAssistantReply` (`post-space-message.ts:133–139`) lists the items the asker may quote, then saves the reply in the room. `Collaboration: Conversation Details In Reach` shows every room message to everyone who reaches the space, whatever their band.
    - So when Ada asks in Discovery's room, the reply names `discovery-brief.pdf` and `field-notes.txt`, both Team, and Bea can read it.
    - **`6786bd0`** keeps only Shared items in the reply (`filterRoomReplyItems`), but from the room's whole subtree. A sub-space that doesn't inherit membership has its own audience: with a Shared item in Sealed branch, Sam asks in Northwind's room, and Casey, who reads that room with no seat in Sealed branch, learns the item's name. It also made `ExecuteAgent` a public input of `PostSpaceMessage`, and a failed reply comes back as success with its error dropped by the resolver.
    - **The same module failed open on a big host,** loading at most 2,000 spaces and 2,000 items. `6786bd0` refuses when a load comes back full, with unit tests since `002c2c5`.
    - **Done in `002c2c5`:** the reply names only the room space's own Shared items (`SpaceID` and band), with the sub-space unit case, and the resolver and typed client return `AssistantError`.
-   - **Left (round 97):** RM5's sub-space case saves a file item directly, which the file gate refuses, and links an arbitrary file. Rebuild it on an uploaded file, with a check that the item is quotable from Sealed branch, and a cleanup that fails the run when the delete fails.
+   - **Done in `86b48c1`:** RM5's sub-space case uploads its own file into Sealed branch as Sam and promotes it to Shared. Casey's read of Sam's Northwind reply doesn't name it, Sealed branch's own room reply does, and a failed delete fails the run. Left (round 98): the cleanup skips the delete silently when the item doesn't load.
    - **`002c2c5` took the first of the two fixes round 96 offered:**
      - v0.3's short-term fix: the room's reply names only items that everyone who reaches the space can read: this space's own Shared items that pass `AgentRetrieval`, filtered on `SpaceID` as well as band. Widen it only with a test that proves the wider set. Return the reply's error as `AssistantError`.
      - Or take `ExecuteAgent` back out of the mutation and the typed client, and keep the path server-only until the next pull request's agent run replaces it.
@@ -142,7 +145,7 @@ PR #3 merges when everything here is done. It's round 97's list: slice A, v0.3's
    - MJ 6.1.3 checks the create filter on every new row, before and after the before-save hooks: `CheckCreateRLS`, at `databaseProviderBase.js:1252` and `:1293` in `@memberjunction/core`.
    - Space Participant's create filter on Tasks, `Collaboration: Subtasks Under A Writable Parent`, requires a parent that `fnCollaborationTasks` marks `CanWrite`: one in a space the caller contributes to, and Shared unless the caller sees Team. So the insert is checked against the parent's space and band.
    - The gate itself checks the parent only when a saved task's parent changes (`task-entity-server.ts:27–52`). v0.3's lines (164–170) are from an older file; this one has 67 lines.
-   - **The check,** over the wire as Bea: a subtask under a Team task is refused; so is one under a task in a space Bea doesn't reach; one under a writable Shared task is accepted. WG3 has it on both harnesses since `6786bd0`, and asserts reasons since `002c2c5`, though it still accepts any "Access denied" (round 97).
+   - **The check,** over the wire as Bea: a subtask under a Team task is refused; so is one under a task in a space Bea doesn't reach; one under a writable Shared task is accepted. WG3 has it on both harnesses since `6786bd0`, and asserts MJ's exact refusal since `86b48c1`.
 4. **B0.4. The four bizapps-tasks subclasses run async validation.** Holds; no change. MJ 6.1.3's `BaseEntity` runs `ValidateAsync` whenever a subclass overrides it, unless `DefaultSkipAsyncValidation` is overridden (the rule is in MJ since 6.1.0). `CollaborationTaskEntityServer`, `TaskCommentEntityServer`, `TaskDecisionEntityServer` and `TaskAssignmentEntityServer` override it, and neither they nor bizapps-tasks 1.5.0's classes override the flag.
 5. **B0.5. CI against a real database.** Open. CI only syntax-checks the two harnesses (`node --check`), so the integration suite and `scripts/persona-check.sql` never run there.
    - Add a job with a SQL Server service. It installs MJ core, bizapps-common and bizapps-tasks at their pinned versions, migrates, pushes `metadata/`, loads the world, runs `pnpm run test:integration:server` and `persona-check.sql`, and fails on any error.
@@ -161,7 +164,7 @@ PR #3 merges when everything here is done. It's round 97's list: slice A, v0.3's
     - **Done:** PascalCase inputs and `…Requested` events; type colors from `SpaceType.Color`, which the gallery's fixture keeps in one map; CI's chrome budget at 100 pixels; and diffs uploaded as a CI artifact, since the spec writes only to `e2e/test-results/`.
     - **`no-access.component.ts` stays.** The old file was deleted with the old UI in `77b36f4` and written again as the new `mjc-no-access`, on MJ's `mj-empty-state`, in `0c7096a`.
     - **The tokens, done in `002c2c5`:** they're defined on each widget's own `:host` from MJ's tokens (`COLLAB_TOKENS_CSS`, listed first in each component's `styles`), `--mjc-warn-bg` and `--mjc-warn-text` included, and the token check covers `--mjc-*` tokens. Until then nothing in a host defined them, so the band chip and the avatar rings drew their hex fallbacks in Explorer, dark mode included.
-    - **Left (round 97):** remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (107 at `e18615a`, including the ones `COLLAB_TOKENS_CSS` gives each token); keep one source for the tokens, since `_tokens.scss` is a second copy that nothing includes; and drop the gallery's own copy at `:root` in `bundle.mjs`, so the gallery draws what a host draws.
+    - **Left (round 98):** remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (102 at `86b48c1`, including the ones `COLLAB_TOKENS_CSS` gives each token); keep one source for the tokens, since `_tokens.scss` is a second copy that nothing includes; and drop the gallery's own copy at `:root` in `bundle.mjs`, so the gallery draws what a host draws.
 11. **B0.11. Take the committee specifics out** (task 7's removal half, and the UI plan's gap 10). Partly done in `002c2c5`: the row is out of `metadata/space-types/`, the world has its own type, and the loader no longer looks for `committee`. `GovernancePanel` is left, for B0.7, and `phase0-seed.sql` falls back to the Workspace type silently.
     - `SpaceType.GovernancePanel` leaves the baseline, with its default and extended property, and the regenerated CodeGen output.
     - The `committee` row leaves `metadata/space-types/`. Its ID, `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`, is the one Committees ships in its own metadata (C1), so nothing here reuses it.
@@ -172,17 +175,17 @@ PR #3 merges when everything here is done. It's round 97's list: slice A, v0.3's
 - **Task 2,** clients see only a person's name and email: the geocode columns `__mj_Latitude` and `__mj_Longitude`, which field rules can't restrict (an MJ change, A12.21, or a read model); what bizapps-common#186's release does to a host's own roles; and a check of the fields a participant can actually read, rather than of the rows.
 - **Task 3,** assigning people seated above a space: done, except the assignee picker, which moves ([§ 2.4](#24-what-moves-to-the-next-pull-request)).
 - **Task 4,** proving the room: the wire checks RM1 to RM6, with B0.2's sub-space check.
-- **Task 5,** the test scaffolding: RM5's sub-space case and WG3's exact reasons (round 97); the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3 and AG5) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens.
+- **Task 5,** the test scaffolding: RM5's cleanup and the suites' tallies (round 98); the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3 and AG5) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens.
 - **Task 7's removal half:** B0.11.
 - **Task 13,** the staff runs and the client harness over the wire, on PR #3's screens.
 - **Task 14,** the adversarial test of what PR #3 ships.
 - **Task 16,** the smoke suite and the tour, on slice A's screens.
 - **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour.
 
-**The order to work it** (round 97's):
-1. The flagged-phrase highlight and CI's budgets back to tight, RM5's sub-space case, and WG3's exact reasons.
-2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the dialog and drawer sizes in Explorer, the widget fixes, the frames within tight budgets, and new live shots.
-3. Task 5's coverage for PR #3's gates, with task 2's leftovers.
+**The order to work it** (round 98's):
+1. The three text sizes, then CI's budgets, with frame 04's count made to repeat.
+2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the dialog's maximum height in Explorer, the widget fixes, the frames within tight budgets, and new live shots.
+3. Task 5's coverage for PR #3's gates, RM5's cleanup and the suites' tallies, with task 2's leftovers.
 4. B0.7's squash, then task 1's rebuild from empty.
 5. B0.5, B0.8, B0.10 and B0.11.
 6. Tasks 13, 14, 16 and 17.
