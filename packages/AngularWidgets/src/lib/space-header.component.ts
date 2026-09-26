@@ -65,9 +65,11 @@ import { BreadcrumbItem } from './types';
     :host {
       display: block;
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+      line-height: var(--mjc-line-height, 1.45);
     }
     button {
       font-family: inherit;
+      line-height: inherit;
     }
     .space-head {
       background: var(--mj-bg-surface, #ffffff);

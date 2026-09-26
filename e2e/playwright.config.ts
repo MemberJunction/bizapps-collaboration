@@ -32,6 +32,7 @@ export default defineConfig({
             name: 'gallery-chromium',
             use: {
                 ...devices['Desktop Chrome'],
+                channel: 'chromium',
                 viewport: { width: 1440, height: 900 },
                 deviceScaleFactor: 2,
             },

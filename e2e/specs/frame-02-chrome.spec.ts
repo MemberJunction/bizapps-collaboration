@@ -18,18 +18,27 @@ function saveTestResultScreenshot(filename: string, buffer: Buffer) {
 async function ensureFontsLoaded(page: Page) {
     await page.evaluate(async () => {
         await document.fonts.ready;
+        // 1. Inter variable font check
         const interLoaded = document.fonts.check('16px Inter');
         if (!interLoaded) {
             throw new Error('Font check failed: Inter variable font did not load');
         }
-        // Verify Font Awesome: check pseudo-element ::before content on icons
-        const icon = document.querySelector('i[class*="fa-"]');
-        if (!icon) {
-            throw new Error('Font check failed: No Font Awesome icon found on page to verify');
+        // 2. Font Awesome font face check in document.fonts
+        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') ||
+                         document.fonts.check('400 16px "Font Awesome 6 Free"');
+        if (!faLoaded) {
+            throw new Error('Font check failed: Font Awesome 6 font face not loaded in document.fonts');
         }
-        const pseudoContent = window.getComputedStyle(icon, '::before').content;
-        if (!pseudoContent || pseudoContent === 'none' || pseudoContent === 'normal' || pseudoContent === '""') {
-            throw new Error('Font check failed: Font Awesome icon ::before pseudo-element has no rendered glyph');
+        // 3. Check every Font Awesome icon for rendered ::before pseudo-element content
+        const icons = document.querySelectorAll('i[class*="fa-"]');
+        if (icons.length === 0) {
+            throw new Error('Font check failed: No Font Awesome icons found on page to verify');
+        }
+        for (const icon of icons) {
+            const pseudoContent = window.getComputedStyle(icon, '::before').content;
+            if (!pseudoContent || pseudoContent === 'none' || pseudoContent === 'normal' || pseudoContent === '""') {
+                throw new Error(`Font check failed: Font Awesome icon with class "${icon.className}" has no rendered ::before glyph`);
+            }
         }
     });
 }
@@ -178,8 +187,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         const diffRatio = numDiffPixels / chromeTotalPixels;
         console.log(`Chrome visual diff: ${numDiffPixels} / ${chromeTotalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: <= 38,000 pixels (~2.37% of chrome pixels, calibrated from CI measurement 35,010 px)
-        expect(numDiffPixels).toBeLessThanOrEqual(38000);
+        // Budget: <= 10,000 pixels (~0.62% of chrome pixels, down from 38,000 following Chromium channel & line-height inheritance; local measured 5,254 px, Linux CI measured 684 px)
+        expect(numDiffPixels).toBeLessThanOrEqual(10000);
     });
 
     test('visual regression: full-frame comparison against 02-space-overview.png (Slice A overview cards pending)', async ({ page }) => {

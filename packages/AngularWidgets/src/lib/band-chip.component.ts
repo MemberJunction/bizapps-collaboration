@@ -21,6 +21,7 @@ import { SpaceBand } from './types';
       display: inline-flex;
       vertical-align: middle;
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+      line-height: var(--mjc-line-height, 1.45);
     }
     .chip {
       display: inline-flex;

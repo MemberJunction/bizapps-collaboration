@@ -32,6 +32,7 @@ import { AvatarItem } from './types';
       display: inline-flex;
       align-items: center;
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+      line-height: var(--mjc-line-height, 1.45);
     }
     .stack {
       display: inline-flex;

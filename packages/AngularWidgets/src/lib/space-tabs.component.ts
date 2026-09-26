@@ -35,6 +35,7 @@ import { TabItem } from './types';
     :host {
       display: block;
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+      line-height: var(--mjc-line-height, 1.45);
     }
     .tabs {
       display: flex;
@@ -49,7 +50,7 @@ import { TabItem } from './types';
       padding: 9px 1px 11px;
       font-weight: 550;
       font-size: 13.5px;
-      line-height: 1.45;
+      line-height: inherit;
       color: var(--mj-text-muted, #64748b);
       border: none;
       border-bottom: 2px solid transparent;
