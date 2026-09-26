@@ -155,8 +155,8 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 04 Share Check visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: Full Chromium font antialiasing on backdrop + modal (CI: <= 200,000 px, local: <= 210,000 px)
-        const budget = process.env.CI ? 200000 : 210000;
+        // Budget: Full Chromium font antialiasing on backdrop + modal (CI Linux: <= 100,000 px [measured 98,665 repeatable + margin for Linux FreeType variation], local macOS: <= 105,000 px)
+        const budget = process.env.CI ? 100000 : 105000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });

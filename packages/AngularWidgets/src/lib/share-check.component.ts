@@ -44,7 +44,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="pp more">
                 <mjc-avatar [Initials]="'+' + (p.moreCount || 2)" Size="sm" ColorClass="c7" [IsOutside]="true" />
                 <div class="grow">
-                  <div class="fw6 fs12.5">{{ p.name }}</div>
+                  <div class="fw6 fs12-5">{{ p.name }}</div>
                   <div class="fs11 muted">{{ p.role }}</div>
                 </div>
               </div>
@@ -52,7 +52,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="pp">
                 <mjc-avatar [Avatar]="p.avatar" Size="sm" />
                 <div class="grow">
-                  <div class="fw6 fs12.5 ellipsis">{{ p.name }}</div>
+                  <div class="fw6 fs12-5 ellipsis">{{ p.name }}</div>
                   <div class="fs11 muted ellipsis">{{ p.role }}</div>
                 </div>
               </div>
@@ -72,7 +72,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </span>
             <div class="grow">
               <div class="fw7 fs14">{{ ReviewHeader }}</div>
-              <div class="fs12.5 secondary">{{ ReviewSub }}</div>
+              <div class="fs12-5 secondary">{{ ReviewSub }}</div>
             </div>
             <span class="chip warn">
               <i class="fa-solid fa-triangle-exclamation"></i>
@@ -138,7 +138,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      max-height: 100%;
+      min-height: 0;
+      box-sizing: border-box;
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
@@ -150,6 +154,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       gap: 14px;
       padding: 20px 22px 16px;
       border-bottom: 1px solid var(--mj-border-default);
+      flex: none;
     }
 
     .m-ic {
@@ -191,6 +196,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       display: flex;
       flex-direction: column;
       gap: 14px;
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
     .audience-sub {
@@ -277,17 +285,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
     .apply-btn {
       margin-left: auto;
-      height: 28px;
-      padding: 0 10px;
+      min-height: 32px;
+      height: 33.5px;
+      padding: 0 12px;
       border-radius: var(--mj-radius-sm);
       border: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface);
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
 
       &:hover {
         background: var(--mj-bg-surface-hover);
@@ -309,11 +318,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .note-textarea {
-      min-height: 62px;
-      height: 62px;
+      min-height: 80px;
+      height: 80px;
       width: 100%;
       box-sizing: border-box;
       resize: none;
+      display: block;
     }
 
     .textarea {
@@ -398,6 +408,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       border-top: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface-card);
       margin-top: 6px;
+      flex: none;
     }
 
     .cancel-btn {
@@ -405,9 +416,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .btn {
-      height: 38px;
-      padding: 0 16px;
-      border-radius: var(--mj-radius-sm);
+      min-height: 44px;
+      height: 44px;
+      padding: 0 20px;
+      border-radius: var(--mj-radius-md);
       border: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface);
       color: var(--mj-text-primary);
@@ -416,7 +428,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      justify-content: center;
+      gap: 8px;
+
+      &.sm {
+        min-height: 32px;
+        height: 33.5px;
+        padding: 0 12px;
+        font-size: 13px;
+        gap: 6px;
+      }
 
       &.primary {
         background: var(--mj-brand-primary);
@@ -491,7 +512,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     .fw7 { font-weight: 700; }
     .fs11 { font-size: 11px; }
     .fs12 { font-size: 12px; }
-    .fs12.5 { font-size: 12.5px; }
+    .fs12-5 { font-size: 12.5px; }
     .fs13 { font-size: 13px; }
     .fs14 { font-size: 14px; }
     .muted { color: var(--mj-text-muted); }

@@ -81,7 +81,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               } @else if (use.avatar) {
                 <mjc-avatar [Avatar]="use.avatar" Size="xs" />
               }
-              <span class="grow fs12.5">
+              <span class="grow fs12-5">
                 @for (part of parseRecentUseText(use.text); track $index) {
                   @if (part.isBold) {
                     <b>{{ part.text }}</b>
@@ -161,6 +161,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       box-sizing: border-box;
 
       p {
+        font-size: 10.5px;
         margin: 0 0 8px;
       }
 
@@ -274,7 +275,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     .fw6 { font-weight: 600; }
     .fw7 { font-weight: 700; }
     .fs12 { font-size: 12px; }
-    .fs12.5 { font-size: 12.5px; }
+    .fs12-5 { font-size: 12.5px; }
     .fs13 { font-size: 13px; }
     .fs14 { font-size: 14px; }
     .muted { color: var(--mj-text-muted); }

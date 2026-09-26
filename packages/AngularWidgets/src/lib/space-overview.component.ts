@@ -163,7 +163,7 @@ export interface SubSpaceSummary {
                       <b>{{ msg.senderName }}</b>
                       <span class="muted timestamp">&nbsp;{{ msg.timestamp }}</span>
                     </div>
-                    <div class="fs12.5 secondary clamp">
+                    <div class="fs12-5 secondary clamp">
                       @if (msg.hasMention) {
                         <span class="mention">{{ msg.mentionText }}</span><span>&nbsp;</span>
                       }
@@ -377,7 +377,7 @@ export interface SubSpaceSummary {
     .fw7 { font-weight: 700; }
     .fs11 { font-size: 11px; }
     .fs12 { font-size: 12px; }
-    .fs12.5 { font-size: 12.5px; }
+    .fs12-5 { font-size: 12.5px; }
     .fs13 { font-size: 13px; }
     .fs14 { font-size: 14px; }
     .muted { color: var(--mj-text-muted); }

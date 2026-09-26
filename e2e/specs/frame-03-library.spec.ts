@@ -148,8 +148,8 @@ test.describe('Frame 03 — Space Library', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 03 Library visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: Full Chromium font antialiasing across all 8 rows & preview drawer (CI: <= 130,000 px, local: <= 145,000 px)
-        const budget = process.env.CI ? 130000 : 145000;
+        // Budget: Full Chromium font antialiasing across all 8 rows & preview drawer (CI: <= 115,661 px [measured 115,561 + 100 margin], local: <= 145,000 px)
+        const budget = process.env.CI ? 115661 : 145000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });
