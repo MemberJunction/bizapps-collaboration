@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Casey — Home</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  .ch-home { padding: 20px 32px; }
+  .hero { padding: 16px 18px 12px; }
+  .hero .next { text-align: right; margin-right: 6px; }
+  .miles { display: flex; align-items: center; gap: 10px; padding: 16px 4px 4px; }
+  .mile { display: flex; align-items: center; gap: 8px; flex: none; }
+  .mile .dot { width: 20px; height: 20px; border-radius: 99px; border: 2px solid var(--mj-border-strong); display: grid; place-items: center; font-size: 9px; color: var(--mj-text-inverse); background: var(--mj-bg-surface); }
+  .mile.done .dot { background: var(--mj-status-success); border-color: var(--mj-status-success); }
+  .mile.now .dot { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  .mile.now .dot::after { content: ''; width: 8px; height: 8px; border-radius: 9px; background: var(--mj-brand-primary); }
+  .bar { flex: 1; height: 2px; background: var(--mj-border-default); border-radius: 2px; }
+  .bar.done { background: var(--mj-status-success); }
+  .bar.half { background: linear-gradient(90deg, var(--mj-status-success), var(--mj-brand-primary)); }
+  .cgrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; margin-top: 16px; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .count-pill { font-size: 11.5px; font-weight: 700; color: var(--mj-brand-on-primary); background: var(--mj-brand-primary); border-radius: 99px; padding: 1px 8px; }
+  .wrows { padding: 0 8px 8px; }
+  .wrow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-top: 1px solid var(--mj-border-subtle); }
+  .wrow:first-child { border-top: 0; }
+  .fs13\.5 { font-size: 13.5px; }
+  .due { font-size: 12px; font-weight: 600; color: var(--mj-status-warning-text); background: var(--mj-status-warning-bg); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  .nrows { padding: 0 16px 10px; }
+  .nrow { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--mj-border-subtle); }
+  .nrow:first-child { border-top: 0; }
+  .nrow b { font-weight: 650; color: var(--mj-text-primary); }
+  .ask { padding: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)), var(--mj-bg-surface) 70%); }
+  .ask-in { position: relative; margin-top: 14px; height: 42px; border-radius: 11px; border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default)); background: var(--mj-bg-surface); display: flex; align-items: center; padding: 0 44px 0 12px; color: var(--mj-text-muted); font-size: 13.5px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 7%, transparent); }
+  .ask-in .send { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 8px; background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); display: grid; place-items: center; font-size: 12px; }
+  .ask-scope { margin-top: 10px; font-size: 12px; color: var(--mjc-shared); display: flex; align-items: center; gap: 7px; }
+  .sugs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .sug { font-size: 12px; color: var(--mj-text-secondary); padding: 5px 10px; border-radius: 99px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  .team-rows { padding: 0 16px 10px; }
+  .sw { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0 16px 14px; }
+  .swi { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); min-width: 0; }
+  .tm { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--mj-border-subtle); }
+  .tm:first-child { border-top: 0; }
+  
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+  <span class="mark"></span>
+  <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration<i class="fa-solid fa-chevron-down caret"></i></span>
+  <span class="spacer"></span>
+  <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+  <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+  <span class="av c4 md ext " title="Casey Morgan">CM</span>
+</header>
+    <div class="body">
+      <nav class="appnav">
+  <div class="nav-item active"><i class="fa-solid fa-house"></i>Home</div>
+  <div class="nav-item "><i class="fa-solid fa-inbox"></i>Inbox<span class="count hot">2</span></div>
+  <div class="nav-item "><i class="fa-solid fa-list-check"></i>My tasks<span class="count hot">3</span></div>
+  <div class="nav-section">Your spaces</div>
+  <div class="tree-item  "><span class="chev"><i class="fa-solid fa-chevron-down"></i></span><span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Northwind</span></div>
+       <div class="tree-item l1 "><span class="chev"><i class="fa-solid fa-chevron-down"></i></span><span class="tile eng sm"><i class="fa-solid fa-compass"></i></span><span class="ellipsis">Discovery</span><span class="unread"></span></div>
+       <div class="tree-item l1 "><span class="chev"></span><span class="tile eng sm"><i class="fa-solid fa-truck-fast"></i></span><span class="ellipsis">Delivery</span><span class="meta">Oct 20</span></div>
+  <div class="nav-footer">
+    <div class="org-card">
+      <div class="row gap8"><span class="firm-mark">M</span><div><div class="fw6 fs13">Meridian Advisory</div><div class="fs12 muted">Your team is online</div></div></div>
+    </div>
+  </div>
+</nav>
+      <main class="main"><div class="page ch-home">
+        <div class="row" style="align-items:flex-end;margin-bottom:16px">
+          <div>
+            <div class="eyebrow">Meridian Advisory × Northwind</div>
+            <h1 class="h1" style="font-size:27px;margin-top:4px">Good afternoon, Casey</h1>
+            <div class="secondary" style="margin-top:3px">Two things are waiting on you. The readout is a week from Thursday.</div>
+          </div>
+        </div>
+
+        <div class="card hero">
+          <div class="row gap12">
+            <span class="tile eng lg"><i class="fa-solid fa-compass"></i></span>
+            <div class="grow"><div class="fw7 fs16">Discovery</div><div class="fs12.5 secondary">Supply-chain operating model diagnostic · Week 7 of 10</div></div>
+            <div class="next"><div class="fs11 fw6 eyebrow" style="color:var(--mj-brand-primary)">Your next step</div><div class="fw6 fs13">Review the readout draft by Tue, Oct 7</div></div>
+            <span class="btn primary"><i class="fa-solid fa-book-open"></i>Open the draft</span>
+          </div>
+          <div class="miles">
+            <div class="mile done"><span class="dot"><i class="fa-solid fa-check"></i></span><div><div class="fw6 fs12">Kickoff</div><div class="fs11 muted">Aug 11</div></div></div>
+            <div class="bar done"></div>
+            <div class="mile done"><span class="dot"><i class="fa-solid fa-check"></i></span><div><div class="fw6 fs12">18 interviews</div><div class="fs11 muted">Sep 12</div></div></div>
+            <div class="bar half"></div>
+            <div class="mile now"><span class="dot"></span><div><div class="fw6 fs12">Findings</div><div class="fs11 muted">This week</div></div></div>
+            <div class="bar"></div>
+            <div class="mile"><span class="dot"></span><div><div class="fw6 fs12">Readout</div><div class="fs11 muted">Thu, Oct 9 · 2:00 PM</div></div></div>
+            <div class="bar"></div>
+            <div class="mile"><span class="dot"></span><div><div class="fw6 fs12">Close-out</div><div class="fs11 muted">Oct 16</div></div></div>
+          </div>
+        </div>
+
+        <div class="cgrid">
+          <div class="col">
+            <div class="card">
+              <div class="card-h"><span class="h3">Waiting on you</span><span class="count-pill">2</span></div>
+              <div class="wrows">
+                
+    <div class="wrow"><span class="wic"><span class="fi pdf sm"><i class="fa-solid fa-file-pdf"></i></span></span><div class="grow"><div class="fw6 fs13.5">Review the readout draft</div><div class="fs12 muted">Ada Lovell asked · 34 pages · comments go straight to Meridian</div></div><span class="due">Tue, Oct 7</span><span class="btn sm primary">Open</span></div>
+                
+    <div class="wrow"><span class="wic"><span class="fi sm" style="color:var(--mj-brand-primary)"><i class="fa-solid fa-circle-question"></i></span></span><div class="grow"><div class="fw6 fs13.5">Answer 3 questions about Dayton scheduling</div><div class="fs12 muted">Sam Okafor asked · about 5 minutes</div></div><span class="due">Fri, Oct 3</span><span class="btn sm">Answer</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span class="h3">New since Tuesday</span><span class="link">See all</span></div>
+              <div class="nrows">
+                <div class="nrow"><span class="av c1 sm  " title="Ada Lovell">AL</span><div class="grow fs13 secondary"><b>Ada</b> shared <b>Interview synthesis v3</b> with you — “we’ll walk through it Thursday”</div><span class="fs12 muted">1h</span></div>
+                <div class="nrow"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><div class="grow fs13 secondary">The <b>Assistant</b> answered your question about vendor scoring in <b>Discovery room</b></div><span class="fs12 muted">9:44</span></div>
+                <div class="nrow"><span class="av c9 sm  " title="Sam Okafor">SO</span><div class="grow fs13 secondary"><b>Sam</b> replied in <b>Readout prep</b>: “2:00 works for us”</div><span class="fs12 muted">Tue</span></div>
+                <div class="nrow"><span class="av c5 sm ext " title="Bea Tanaka">BT</span><div class="grow fs13 secondary"><b>Bea</b> (your team) uploaded <b>Q2 inventory extract</b></div><span class="fs12 muted">Mon</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span class="h3">Shared with you</span><span class="fs12 muted">9 items</span><span class="link">Open library</span></div>
+              <div class="sw">
+                <div class="swi"><span class="fi pdf "><i class="fa-solid fa-file-pdf"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Discovery readout — draft</div><div class="fs12 muted">v4 · Sep 24</div></div></div>
+                <div class="swi"><span class="fi doc "><i class="fa-solid fa-file-word"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Interview synthesis v3</div><div class="fs12 muted">New · today</div></div></div>
+                <div class="swi"><span class="fi pdf "><i class="fa-solid fa-file-pdf"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Current-state process map</div><div class="fs12 muted">v2 · Sep 18</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="card ask">
+              <div class="row gap10"><span class="ai-av md"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><div><div class="fw7 fs14">Ask about Discovery</div><div class="fs12 muted">Private to you</div></div></div>
+              <div class="ask-in">What did the interviews find?<span class="send"><i class="fa-solid fa-arrow-up"></i></span></div>
+              <div class="ask-scope"><i class="fa-solid fa-eye"></i><span>Answers come only from what Meridian has shared with Northwind.</span></div>
+              <div class="sugs"><span class="sug">When is the readout?</span><span class="sug">What do you still need from us?</span><span class="sug">Summarize the synthesis</span></div>
+            </div>
+            <div class="card">
+              <div class="card-h"><span class="h3">Your Meridian team</span></div>
+              <div class="team-rows">
+                <div class="tm"><span class="av c1 md ">AL<span class="presence"></span></span><div class="grow"><div class="fw6 fs13">Ada Lovell</div><div class="fs12 muted">Engagement lead · online</div></div><span class="btn sm icon"><i class="fa-regular fa-comment"></i></span></div>
+                <div class="tm"><span class="av c9 md  " title="Sam Okafor">SO</span><div class="grow"><div class="fw6 fs13">Sam Okafor</div><div class="fs12 muted">Senior consultant</div></div><span class="btn sm icon"><i class="fa-regular fa-comment"></i></span></div>
+                <div class="tm"><span class="av c6 md ">PS<span class="presence"></span></span><div class="grow"><div class="fw6 fs13">Priya Shah</div><div class="fs12 muted">Analyst · online</div></div><span class="btn sm icon"><i class="fa-regular fa-comment"></i></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></main>
+    </div>
+  </div></body>
+</html>

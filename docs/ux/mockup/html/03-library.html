@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Discovery — Library</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  .lib { display: grid; grid-template-columns: 206px minmax(0, 1fr) 318px; min-height: 0; flex: 1; }
+  .folders { padding: 16px 10px 16px 14px; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; gap: 1px; }
+  .fold { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 9px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--mj-text-secondary); }
+  .fold i { color: var(--mj-text-muted); width: 14px; font-size: 13px; }
+  .fold.on { background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); font-weight: 600; }
+  .fold .n { margin-left: auto; font-size: 11.5px; color: var(--mj-text-muted); font-weight: 600; }
+  .fold-h { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); margin: 14px 9px 4px; }
+  .dotc { width: 7px; height: 7px; border-radius: 9px; margin-left: 2px; }
+  .dotc.shared { background: var(--mjc-shared-strong); }
+  .dotc.team { background: var(--mj-text-disabled); }
+  .legend { margin-top: auto; padding: 12px 8px 4px; border-top: 1px solid var(--mj-border-default); display: flex; flex-direction: column; gap: 8px; }
+  .files { padding: 16px 18px; min-width: 0; }
+  .lib-tools { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ai-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)); border-radius: 6px; padding: 2px 6px; }
+  .ai-chip svg { width: 11px; height: 11px; }
+  .drawer { border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: hidden; }
+  .doc-prev { background: var(--mj-bg-surface-sunken); border-radius: 12px; padding: 14px 16px 0; height: 196px; overflow: hidden; border: 1px solid var(--mj-border-default); }
+  .dp-page { background: var(--mj-bg-surface); border-radius: 6px 6px 0 0; box-shadow: var(--mj-shadow-md); padding: 14px 16px; height: 100%; font-size: 10.5px; line-height: 1.6; color: var(--mj-text-secondary); font-family: Georgia, 'DejaVu Serif', serif; }
+  .dp-page p { margin: 0 0 8px; }
+  .dp-page mark { background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent); color: var(--mj-text-primary); border-radius: 2px; padding: 0 1px; }
+  .dp-h { width: 55%; height: 9px; border-radius: 3px; background: var(--mj-text-secondary); opacity: .55; margin-bottom: 10px; }
+  .dp-l { height: 5px; border-radius: 3px; background: var(--mj-border-default); margin-top: 7px; }
+  .dp-l.s { width: 60%; }
+  .dr-sec { border-top: 1px solid var(--mj-border-default); padding-top: 14px; }
+  .flag-box { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 35%, transparent); }
+  .use { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+
+</style>
+</head>
+<body><div class="shell"><header class="topbar">
+  <span class="mark"></span>
+  <span class="app-pill"><i class="fa-solid fa-people-roof"></i>Collaboration<i class="fa-solid fa-chevron-down caret"></i></span>
+  <span class="spacer"></span>
+  <span class="search"><i class="fa-solid fa-magnifying-glass"></i>Search everything…<span class="kbd">⌘K</span></span>
+  <span class="icon-btn"><i class="fa-regular fa-bell"></i><span class="dot"></span></span>
+  <span class="av c1 md  " title="Ada Lovell">AL</span>
+</header><div class="body"><nav class="appnav">
+  <div class="jump"><i class="fa-solid fa-magnifying-glass"></i>Jump to a space<span class="kbd">⌘J</span></div>
+  <div class="nav-item "><i class="fa-solid fa-house"></i>Home</div>
+  <div class="nav-item "><i class="fa-solid fa-inbox"></i>Inbox<span class="count hot">4</span></div>
+  <div class="nav-item "><i class="fa-solid fa-list-check"></i>My tasks<span class="count ">6</span></div>
+  <div class="nav-item "><i class="fa-solid fa-folder-open"></i>Recent files</div>
+  <div class="nav-section">Spaces <i class="fa-solid fa-plus"></i></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Northwind</span></div>
+  <div class="tree-item l1 active ">
+      <span class="chev"><i class="fa-solid fa-chevron-down"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-compass"></i></span><span class="ellipsis">Discovery</span><span class="unread"></span></div>
+  <div class="tree-item l2  ">
+      <span class="chev"></span>
+      <span class="tile eng sm"><i class="fa-solid fa-clipboard"></i></span><span class="ellipsis">Field notes</span></div>
+  <div class="tree-item l1  ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-truck-fast"></i></span><span class="ellipsis">Delivery</span><span class="meta"><i class="fa-solid fa-lock"></i></span></div>
+  <div class="tree-item l1  dim">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile eng sm"><i class="fa-solid fa-box-archive"></i></span><span class="ellipsis">Closed</span><span class="meta">2</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile com sm"><i class="fa-solid fa-landmark"></i></span><span class="ellipsis">Audit Committee</span><span class="unread"></span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile coh sm"><i class="fa-solid fa-graduation-cap"></i></span><span class="ellipsis">Spring Leadership Cohort</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile rel sm"><i class="fa-solid fa-building"></i></span><span class="ellipsis">Pinecrest Health</span></div>
+  <div class="tree-item   ">
+      <span class="chev"><i class="fa-solid fa-chevron-right"></i></span>
+      <span class="tile wks sm"><i class="fa-solid fa-shapes"></i></span><span class="ellipsis">Studio</span></div>
+  <div class="nav-footer">
+    <div class="nav-item "><i class="fa-solid fa-wand-magic-sparkles"></i>Assistant</div>
+    <div class="nav-item "><i class="fa-solid fa-gear"></i>Space types & settings</div>
+  </div>
+</nav>
+  <main class="main">
+    <section class="space-head">
+  <div class="crumbs"><span>Spaces</span><i class="fa-solid fa-chevron-right"></i><span>Northwind</span><i class="fa-solid fa-chevron-right"></i><b>Discovery</b></div>
+  <div class="top" style="margin-top:10px">
+    <span class="tile eng xl"><i class="fa-solid fa-compass"></i></span>
+    <div class="grow">
+      <div class="title-row"><h1 class="h1">Discovery</h1><span class="chip plain">Engagement</span><span class="chip ok"><i class="fa-solid fa-circle" style="font-size:6px"></i>Active</span></div>
+      <div class="sub">Supply-chain operating model diagnostic<span class="dotsep"></span>Week 7 of 10<span class="dotsep"></span>Readout Oct 9</div>
+    </div>
+    <div class="actions"><div class="aud">
+    <span class="stack"><span class="av c1 sm  " title="Ada Lovell">AL</span><span class="av c9 sm  " title="Sam Okafor">SO</span><span class="av c6 sm  " title="Priya Shah">PS</span></span>
+    <span class="aud-div"></span>
+    <span class="stack"><span class="av c4 sm ext " title="Casey Morgan">CM</span><span class="av c5 sm ext " title="Bea Tanaka">BT</span><span class="av c3 sm ext " title="Omar Haddad">OH</span><span class="av c2 sm ext " title="Lena Fischer">LF</span></span>
+    <span class="aud-t"><b>9 people</b><span>3 Meridian · 6 Northwind</span></span>
+  </div><span class="btn primary"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</span></div>
+  </div>
+  <div class="tabs"><span class="tab "><i class="fa-solid fa-gauge-high"></i>Overview</span><span class="tab active"><i class="fa-solid fa-folder-open"></i>Library<span class="c">24</span></span><span class="tab "><i class="fa-solid fa-list-check"></i>Work<span class="c">10</span></span><span class="tab "><i class="fa-solid fa-comments"></i>Chat<span class="c">3</span></span><span class="tab "><i class="fa-solid fa-user-group"></i>People<span class="c">9</span></span><span class="tab "><i class="fa-solid fa-sliders"></i>Settings</span></div>
+</section>
+    <div class="lib">
+      <aside class="folders">
+        <div class="fold on"><i class="fa-solid fa-layer-group"></i>All material<span class="n">24</span></div>
+        <div class="fold-h">Collections</div>
+        <div class="fold"><i class="fa-solid fa-folder"></i>Deliverables<span class="dotc shared"></span><span class="n">5</span></div>
+        <div class="fold"><i class="fa-solid fa-folder"></i>Process maps<span class="dotc shared"></span><span class="n">3</span></div>
+        <div class="fold"><i class="fa-solid fa-folder"></i>Interviews<span class="dotc team"></span><span class="n">9</span></div>
+        <div class="fold"><i class="fa-solid fa-folder"></i>Vendor scoring<span class="dotc team"></span><span class="n">3</span></div>
+        <div class="fold"><i class="fa-solid fa-folder"></i>Contracts<span class="dotc team"></span><span class="n">2</span></div>
+        <div class="fold-h">Smart views</div>
+        <div class="fold"><i class="fa-solid fa-inbox"></i>From Northwind<span class="n">4</span></div>
+        <div class="fold"><i class="fa-solid fa-triangle-exclamation"></i>Flagged<span class="n">1</span></div>
+        <div class="fold"><i class="fa-regular fa-clock"></i>Shared this week<span class="n">2</span></div>
+        <div class="legend">
+          <div class="row gap8"><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span><span class="fs12 muted">Both firms</span></div>
+          <div class="row gap8"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span><span class="fs12 muted">Meridian only</span></div>
+        </div>
+      </aside>
+      <section class="files">
+        <div class="lib-tools">
+          <div class="input" style="width:220px"><i class="fa-solid fa-magnifying-glass"></i>Search the library</div>
+          <span class="seg"><span class="on">All <span class="n">24</span></span><span><i class="fa-solid fa-eye" style="color:var(--mjc-shared)"></i>Shared <span class="n">9</span></span><span><i class="fa-solid fa-lock"></i>Team <span class="n">15</span></span></span>
+          <span class="btn sm" style="margin-left:auto"><i class="fa-solid fa-sliders"></i>Filter</span>
+        </div>
+        <div class="card" style="overflow:hidden">
+          <table class="table">
+            <thead><tr><th style="padding-top:12px">Name</th><th style="padding-top:12px;width:150px">Who can see it</th><th style="padding-top:12px;width:130px">Used by</th><th></th></tr></thead>
+            <tbody>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi pdf sm"><i class="fa-solid fa-file-pdf"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Discovery readout — draft for review</div><div class="fs12 muted ellipsis">Deliverables<span class="dotsep"></span>Ada Lovell, Sep 24</div></div></div></td>
+      <td><div class="row gap6"><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span><span class="av c2 xs ext " title="Lena Fischer">LF</span></span><span class="ai-chip"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg>4</span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi pdf sm"><i class="fa-solid fa-file-pdf"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Current-state process map</div><div class="fs12 muted ellipsis">Process maps<span class="dotsep"></span>Ada Lovell, Sep 18</div></div></div></td>
+      <td><div class="row gap6"><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span><span class="av c5 xs ext " title="Bea Tanaka">BT</span><span class="av c3 xs ext " title="Omar Haddad">OH</span></span><span class="ai-chip"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg>6</span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="sel">
+      <td><div class="row gap10"><span class="fi doc sm"><i class="fa-solid fa-file-word"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Interview synthesis v3</div><div class="fs12 muted ellipsis">Interviews<span class="dotsep"></span>Sam Okafor, 2h ago</div></div></div></td>
+      <td><div class="row gap6"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span><span class="chip warn"><i class="fa-solid fa-triangle-exclamation"></i>2</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span></span><span class="ai-chip"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg>2</span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi xls sm"><i class="fa-solid fa-file-excel"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Vendor scoring model</div><div class="fs12 muted ellipsis">Vendor scoring<span class="dotsep"></span>Priya Shah, Yesterday</div></div></div></td>
+      <td><div class="row gap6"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span></span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi xls sm"><i class="fa-solid fa-file-excel"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Q2 inventory extract</div><div class="fs12 muted ellipsis">From Northwind<span class="dotsep"></span>Bea Tanaka, Sep 22</div></div></div></td>
+      <td><div class="row gap6"><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c6 xs  " title="Priya Shah">PS</span></span><span class="ai-chip"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg>1</span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi img sm"><i class="fa-solid fa-images"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Site visit photos — Dayton</div><div class="fs12 muted ellipsis">24 photos<span class="dotsep"></span>Bea Tanaka, Sep 16</div></div></div></td>
+      <td><div class="row gap6"><span class="chip shared"><i class="fa-solid fa-eye"></i>Shared</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c3 xs ext " title="Omar Haddad">OH</span><span class="av c1 xs  " title="Ada Lovell">AL</span></span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi doc sm"><i class="fa-solid fa-file-word"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Interview notes — Dayton plant</div><div class="fs12 muted ellipsis">Interviews<span class="dotsep"></span>Sam Okafor, Sep 12</div></div></div></td>
+      <td><div class="row gap6"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span></div></td>
+      <td><div class="row gap8"><span class="stack"><span class="av c6 xs  " title="Priya Shah">PS</span></span><span class="ai-chip"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg>3</span></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+              
+    <tr class="">
+      <td><div class="row gap10"><span class="fi pdf sm"><i class="fa-solid fa-file-pdf"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Statement of work — Discovery</div><div class="fs12 muted ellipsis">Contracts & SOW<span class="dotsep"></span>Ada Lovell, Aug 1</div></div></div></td>
+      <td><div class="row gap6"><span class="chip team"><i class="fa-solid fa-lock"></i>Team</span></div></td>
+      <td><div class="row gap8"></div></td>
+      <td style="text-align:right;width:36px"><i class="fa-solid fa-ellipsis muted"></i></td>
+    </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <aside class="drawer">
+        <div class="row gap10"><span class="fi doc "><i class="fa-solid fa-file-word"></i></span><div class="grow"><div class="fw7 fs14 ellipsis">Interview synthesis v3</div><div class="fs12 muted">Word · 18 pages · version 3</div></div><i class="fa-solid fa-xmark muted"></i></div>
+        <div class="doc-prev">
+          <div class="dp-page">
+            <div class="dp-h"></div>
+            <p>Across 18 interviews, scheduling came up more than any other theme. <mark>As the Dayton plant manager told us</mark>, the current tool “can’t see past Tuesday.”</p>
+            <p>Finance reports a nine-day close on inventory reconciliation; <mark>Jim in Finance</mark> described the process as manual.</p>
+            <div class="dp-l"></div><div class="dp-l s"></div>
+          </div>
+        </div>
+        <div class="dr-sec">
+          <div class="row gap8"><span class="chip team"><i class="fa-solid fa-lock"></i>Team only</span><span class="fs12 muted">Meridian staff</span><span class="stack" style="margin-left:auto"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span><span class="av c6 xs  " title="Priya Shah">PS</span></span></div>
+          <div class="flag-box">
+            <div class="row gap8"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><span class="fw6 fs13">2 people could be identified</span></div>
+            <div class="fs12 secondary" style="margin-top:4px">Checked when Sam asked to share it. Review the highlighted phrases before Northwind sees them.</div>
+          </div>
+          <span class="btn primary" style="width:100%;margin-top:12px"><i class="fa-solid fa-share-from-square"></i>Share with Northwind…</span>
+        </div>
+        <div class="dr-sec">
+          <div class="eyebrow" style="margin-bottom:8px">Recent use</div>
+          <div class="use"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><span class="grow fs12.5">Cited in <b>Meridian team</b> chat</span><span class="fs12 muted">2h</span></div>
+          <div class="use"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="grow fs12.5">Ada opened it</span><span class="fs12 muted">1h</span></div>
+          <div class="use"><span class="av c9 xs  " title="Sam Okafor">SO</span><span class="grow fs12.5">Sam uploaded version 3</span><span class="fs12 muted">2h</span></div>
+        </div>
+      </aside>
+    </div>
+  </main></div></div></body>
+</html>
