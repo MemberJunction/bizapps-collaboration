@@ -1,7 +1,7 @@
 # How Collaboration works
 
 This page states the rules Collaboration enforces. Each rule is marked:
-- **built:** in the code at `b539790`, PR #3's head as reviewed in rounds 94 and 95;
+- **built:** in the code at `b539790`, reviewed in round 94. Round 95's `fc77117` and `c125daf` change none of these rules;
 - **planned:** with the item in [the plan](../plans/plan.md) that builds it.
 
 D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)).
@@ -108,6 +108,6 @@ pnpm test                    # the unit tests
 pnpm run test:integration    # both integration harnesses, against a database
 ```
 
-- `pnpm test` runs 191 unit tests: 89 in `collaboration-core` (the rules in `rules.ts` and `phase2.ts`, also run over a small fixture world, and the view models), 48 in `collaboration-core-entities-server`, 37 in the integration-test package, and 17 in the widgets.
+- `pnpm test` runs 191 unit tests: 89 in `collaboration-core` (the rules in `rules.ts` and `phase2.ts`, also run over a small fixture world, and the view models), 48 in `collaboration-core-entities-server`, 37 in the integration-test package, and 17 in the widgets. At `fc77117`, slice A's first widgets bring the widgets to 35 and the total to 209.
 - The integration harnesses run 38 server checks and 39 client checks, in eight bundles each, and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata and the sample world; the client harness also needs a running MJAPI.
 - `scripts/persona-check.sql` checks the Space Participant role's grants against a database.

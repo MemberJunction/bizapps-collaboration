@@ -122,6 +122,7 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 
 - `SpaceChat`, for chats ([§ 8](#8-chats-history-and-agents)). A chat's people aren't a Collaboration table: they're MJ core's conversation participants (the plan's A5). The table `SpaceChatMember` that this plan first proposed is gone.
 - `SpaceAgent`, for allowed agents ([§ 8](#8-chats-history-and-agents)). It's a table rather than configuration because its rows point at agents, which can be deleted. The foreign key keeps the list honest, and the app-wide defaults ship as metadata that finds each agent by name.
+- `SpaceAgentSkill`, for the Assistant's skills at one level ([§ 8](#8-chats-history-and-agents)): `SkillID`, an `MJ: AI Skills` row, and at most one of `SpaceTypeID` and `SpaceID`, resolved down the tree like `SpaceAgent`. It's a table for the same reason: skills can be deleted.
 - A knowledge binding table, proposed as `SpaceKnowledgeSource`: one row per Content Source an agent may use at one level, with `ContentSourceID` and at most one of `SpaceTypeID` and `SpaceID`, resolved down the tree like `SpaceAgent`. It's a table for the same reason: Content Sources can be deleted. What an agent may quote from a source follows its classification (the plan's A10).
 
 **How this follows bizapps-orders.** Orders extends products the same way, and Collaboration copies its shape:

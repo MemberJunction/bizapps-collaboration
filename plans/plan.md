@@ -94,6 +94,11 @@ At `b539790`, reviewed in round 94:
   - the tokens partial, which nothing includes yet (B0.10), and the L0 view models;
   - the UX gallery, and frame 02's chrome at 0 pixels on CI.
 
+**Since then,** round 95 reviewed `fc77117` and `c125daf`, which change no server code, migration or rule this plan cites:
+- **`fc77117` began slice A:** the item card and row, the file icon, the item preview, the needs-you card, the ask box, the share check and its dialog, and the overview and library layouts, with 35 widget tests (209 unit tests in all); frames 03 and 04 in the gallery; and the Milestone task type in `metadata/task-types/`.
+- **Round 95 found slice A drawn from the story's data, typed into the code.** The Explorer resource reads and writes nothing and shows the story to every user, six widgets default their inputs to it, and CI measures the full frames at 48,141, 137,911 and 235,685 pixels against budgets of 500. Slice A is rebuilt on real data from the map's second pass ([§ 2.3](#23-pr-3s-finish-line)).
+- **`c125daf` dropped Space Participant's application role,** so clients lose the app. Round 95 asks for it back.
+
 ### 2.3 PR #3's finish line
 
 PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `b539790` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
@@ -166,9 +171,9 @@ PR #3 merges when everything here is done. It's round 95's list: slice A, v0.3's
 - **Task 16,** the smoke suite and the tour, on slice A's screens.
 - **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour.
 
-**The order to work it:**
-1. B0.1 and B0.2.
-2. Task 15: the slice A map's second pass, then slice A.
+**The order to work it** (round 95's):
+1. Space Participant's application role back, CI green, then B0.1 and B0.2.
+2. Task 15: the slice A map's second pass, then slice A on real data: its data layer, the host and the composites, the widget fixes, the frames within CI's budgets, and the live shots.
 3. B0.3's check and task 5's coverage for PR #3's gates, with task 2's leftovers.
 4. B0.7's squash, then task 1's rebuild from empty.
 5. B0.5, B0.8, B0.10 and B0.11.
@@ -750,6 +755,8 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | A participant holds a second role with an unfiltered grant, which disables row-level security | High | Never grant `UI`; audit every role a persona holds; `persona-check.sql` drives the narrowest persona |
 | A participant forges a write that MJ's generated mutation accepts | High | Gates are `BaseEntity` subclasses; every rule tests `isNew`; no constructor; create filters as a second line |
 | A signer changes the seat of someone above them | High | B0.1's fix: the ceiling covers the target's current role |
+| bizapps-tasks#67, still open, adds a `TaskAssignmentEntityServer` at priority 2, the same entity and priority as Collaboration's assignee gate. On a tie MJ uses the last registration, so one of the two checks would stop running, silently | High | If #67 merges, extend its class and register at 3 |
+| bizapps-tasks#46, still open, takes a decision's decider from `User.LinkedEntityRecordID` and requires `User.LinkedEntityID`. Collaboration links people only through `Person.LinkedUserID`, so a member's decision would be refused | Medium | If #46 merges, set both user fields wherever a Person is linked: in the loader and in `mint-space-link.ts` |
 | Every save reaches every signed-in socket through `cacheInvalidation` | High | A12.13, urgent; recorded by round 94's task 14 |
 | A shared room answers from material one participant can't read | High | D2's intersection; A6's per-principal check; no real client in a shared room before stage 3 passes |
 | Recording provenance slows the write path | Medium | Batched inserts; A2's 5% budget on a 1,000-row RunView |
@@ -770,7 +777,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 
 ## Appendix: source checks of 2026-09-26
 
-Collaboration was checked at `b539790`. MJ was checked on `origin/next` at `903f1af7da` (2026-09-25), and MJ 6.1.3 from its tag and from the installed packages. v0.3's `E:` line numbers match that `next` exactly.
+Collaboration was checked at `b539790`. Round 95 read `fc77117` and `c125daf`, which change none of the code these claims cite. MJ was checked on `origin/next` at `903f1af7da` (2026-09-25), and MJ 6.1.3 from its tag and from the installed packages. v0.3's `E:` line numbers match that `next` exactly.
 
 | Claim | Finding | Evidence |
 |---|---|---|
