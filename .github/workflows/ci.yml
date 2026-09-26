@@ -29,6 +29,6 @@ jobs:
         run: pnpm exec mj standards check
       - run: node --check test-harnesses/integration.mjs && node --check test-harnesses/integration-client.mjs
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @mj-biz-apps/collaboration-e2e exec playwright install --with-deps chromium
       - name: Run Gallery Visual Tests
         run: pnpm run test:e2e
