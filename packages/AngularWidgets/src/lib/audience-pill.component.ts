@@ -36,6 +36,7 @@ import { AvatarItem } from './types';
       display: flex;
       align-items: center;
       gap: 10px;
+      margin-right: 4px;
       padding: 4px 12px 4px 6px;
       border: 1px solid var(--mj-border-default, #e2e8f0);
       border-radius: 99px;

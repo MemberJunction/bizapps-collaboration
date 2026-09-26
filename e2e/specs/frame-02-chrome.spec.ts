@@ -8,13 +8,10 @@ import pixelmatch from 'pixelmatch';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const galleryDiffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux/gallery');
 const testResultsDir = resolve(__dirname, '../test-results/gallery');
 
-function saveGalleryScreenshot(filename: string, buffer: Buffer) {
-    mkdirSync(galleryDiffDir, { recursive: true });
+function saveTestResultScreenshot(filename: string, buffer: Buffer) {
     mkdirSync(testResultsDir, { recursive: true });
-    writeFileSync(join(galleryDiffDir, filename), buffer);
     writeFileSync(join(testResultsDir, filename), buffer);
 }
 
@@ -25,10 +22,14 @@ async function ensureFontsLoaded(page: Page) {
         if (!interLoaded) {
             throw new Error('Font check failed: Inter variable font did not load');
         }
-        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') ||
-                         document.fonts.check('400 16px "Font Awesome 6 Free"');
-        if (!faLoaded) {
-            throw new Error('Font check failed: Font Awesome 6 font did not load');
+        // Verify Font Awesome: check pseudo-element ::before content on icons
+        const icon = document.querySelector('i[class*="fa-"]');
+        if (!icon) {
+            throw new Error('Font check failed: No Font Awesome icon found on page to verify');
+        }
+        const pseudoContent = window.getComputedStyle(icon, '::before').content;
+        if (!pseudoContent || pseudoContent === 'none' || pseudoContent === 'normal' || pseudoContent === '""') {
+            throw new Error('Font check failed: Font Awesome icon ::before pseudo-element has no rendered glyph');
         }
     });
 }
@@ -98,7 +99,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(tabs.nth(5)).toContainText('Settings');
 
         const screenshot = await page.screenshot({ fullPage: false });
-        saveGalleryScreenshot('02-light.png', screenshot);
+        saveTestResultScreenshot('02-light.png', screenshot);
     });
 
     test('supports dark mode via ?theme=dark query param', async ({ page }) => {
@@ -112,7 +113,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
 
         const screenshot = await page.screenshot({ fullPage: false });
-        saveGalleryScreenshot('02-dark.png', screenshot);
+        saveTestResultScreenshot('02-dark.png', screenshot);
     });
 
     test('visual regression: chrome matches 02-space-overview.png within budget (§ 10 masks)', async ({ page }) => {
@@ -171,15 +172,14 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
             { threshold: 0.1 }
         );
 
-        saveGalleryScreenshot('02-chrome-diff.png', PNG.sync.write(diffPng));
-        saveGalleryScreenshot('02-diff.png', PNG.sync.write(diffPng));
+        saveTestResultScreenshot('02-chrome-diff.png', PNG.sync.write(diffPng));
 
         const chromeTotalPixels = (railWidthPx * (height - topbarHeightPx)) + ((width - railWidthPx) * (headerBottomPx - topbarHeightPx));
         const diffRatio = numDiffPixels / chromeTotalPixels;
         console.log(`Chrome visual diff: ${numDiffPixels} / ${chromeTotalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Budget: <= 45,000 pixels (~2.8% of chrome pixels, accommodating Linux/macOS font rasterization differences)
-        expect(numDiffPixels).toBeLessThanOrEqual(45000);
+        // Budget: <= 35,000 pixels (~2.18% of chrome pixels, calibrated for cross-OS font rasterization)
+        expect(numDiffPixels).toBeLessThanOrEqual(35000);
     });
 
     test('visual regression: full-frame comparison against 02-space-overview.png (Slice A overview cards pending)', async ({ page }) => {
@@ -230,7 +230,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
             { threshold: 0.1 }
         );
 
-        saveGalleryScreenshot('02-full-diff.png', PNG.sync.write(diffPng));
+        saveTestResultScreenshot('02-full-diff.png', PNG.sync.write(diffPng));
 
         // Target budget comparison (50 px - expected to fail until Slice A)
         expect(numDiffPixels).toBeLessThanOrEqual(50);
