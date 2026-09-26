@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Mobile — Bea</title>
+<!-- Font Awesome 6.5.2: the exact file MJ Explorer loads (packages/MJExplorer/src/index.html). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="../base.css">
+<style>
+body { width: 1440px; height: 900px; }
+
+.aud { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 1px solid var(--mj-border-default); border-radius: 99px; background: var(--mj-bg-surface); height: 38px; margin-right: 4px; }
+.aud-div { width: 1px; height: 18px; background: var(--mj-border-default); }
+.aud-t { display: flex; flex-direction: column; line-height: 1.15; }
+.aud-t b { font-size: 12.5px; font-weight: 650; }
+.aud-t span { font-size: 11px; color: var(--mj-text-muted); }
+.org-card { padding: 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); }
+.firm-mark { width: 30px; height: 30px; border-radius: 8px; display: inline-grid; place-items: center; font-weight: 800; color: var(--mj-brand-on-secondary); background: linear-gradient(135deg, var(--mj-brand-secondary), var(--mj-brand-primary)); font-size: 14px; }
+
+  body { background: radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--mj-brand-tertiary) 14%, var(--mj-bg-page)), var(--mj-bg-page)); }
+  .stage { height: 900px; padding: 30px 40px 0; display: flex; flex-direction: column; align-items: center; }
+  .stage-h { text-align: center; }
+  .phones { display: flex; gap: 56px; margin-top: 22px; }
+  .pcol { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  /* Device frame: an illustration of a phone, not UI, so its colors are not tokens. */
+  .phone { width: 318px; height: 664px; border-radius: 48px; padding: 10px; background: #0b1220; box-shadow: 0 30px 60px -20px rgba(15, 23, 42, .45), 0 0 0 1.5px #334155 inset; }
+  .scr { position: relative; width: 100%; height: 100%; border-radius: 39px; overflow: hidden; background: var(--mj-bg-page); display: flex; flex-direction: column; }
+  .sb { height: 40px; display: flex; align-items: center; padding: 0 22px 0 26px; font-size: 13px; flex: none; }
+  .sb .island { width: 92px; height: 26px; border-radius: 99px; background: #0b1220; margin: 0 auto; }
+  .sb-r { display: flex; gap: 5px; font-size: 11px; }
+  .m-top { display: flex; align-items: center; gap: 10px; padding: 8px 16px 10px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); flex: none; }
+  .m-av { margin-left: auto; }
+  .m-body { padding: 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+  .m-h1 { font-size: 21px; font-weight: 750; letter-spacing: -.01em; margin-bottom: 4px; }
+  .m-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 16px; padding: 14px; box-shadow: var(--mj-shadow-sm); }
+  .m-card.late { border-color: color-mix(in srgb, var(--mj-status-error) 35%, var(--mj-border-default)); }
+  .m-btn { margin-top: 12px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 650; font-size: 14px; border: 1px solid var(--mj-border-default); }
+  .m-btn.primary { background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); border-color: var(--mj-brand-primary); }
+  .m-sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mj-text-muted); margin-top: 10px; }
+  .m-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; }
+  .m-dot { width: 8px; height: 8px; border-radius: 9px; background: var(--mj-brand-primary); }
+  .tb { display: flex; justify-content: space-around; padding: 8px 8px 20px; background: var(--mj-bg-surface); border-top: 1px solid var(--mj-border-default); flex: none; }
+  .tb span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--mj-text-muted); font-weight: 600; }
+  .tb span i { font-size: 17px; }
+  .tb span.on { color: var(--mj-brand-primary); }
+  .scr.dimmed::after { content: ''; position: absolute; inset: 0; background: var(--mj-bg-overlay); z-index: 1; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--mj-bg-surface); border-radius: 22px 22px 0 0; padding: 10px 16px 24px; box-shadow: var(--mj-shadow-2xl); }
+  .grab { width: 38px; height: 5px; border-radius: 9px; background: var(--mj-border-strong); margin: 0 auto 12px; }
+  .m-file { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); }
+  .m-lab { font-size: 11.5px; font-weight: 650; color: var(--mj-text-muted); margin: 14px 0 6px; }
+  .m-aud { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--mjc-shared-bg); border: 1px solid var(--mjc-shared-border); }
+  .m-aud .stack + .stack { margin-left: -2px; }
+  .m-task { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); }
+  .m-note { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+  .m-chat { flex: 1; min-height: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; background: var(--mj-bg-surface); }
+  .mm-msg { display: flex; gap: 10px; align-items: flex-start; }
+  .mm-msg b { font-weight: 650; }
+  .m-comp { display: flex; align-items: center; gap: 10px; margin: 0 12px; padding: 6px 6px 6px 14px; border-radius: 22px; border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface); flex: none; }
+  .m-send { width: 32px; height: 32px; border-radius: 99px; background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); display: grid; place-items: center; font-size: 13px; }
+  .m-comp-note { font-size: 11px; color: var(--mjc-shared); text-align: center; padding: 6px 0 18px; flex: none; }
+  .m-comp-note i { margin-right: 5px; }
+  .cap { font-size: 13.5px; color: var(--mj-text-secondary); font-weight: 550; display: flex; align-items: center; gap: 8px; }
+  .cap b { width: 22px; height: 22px; border-radius: 99px; display: inline-grid; place-items: center; background: var(--mj-brand-secondary); color: var(--mj-brand-on-secondary); font-size: 12px; }
+  
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="stage-h">
+      <div class="eyebrow" style="color:var(--mjc-shared)">Outside participants, on the phone</div>
+      <div class="fw7" style="font-size:24px;letter-spacing:-.01em;margin-top:4px">Bea at Northwind: the late file, uploaded from the plant floor</div>
+    </div>
+    <div class="phones">
+      <div class="pcol">
+    <div class="phone"><div class="scr">
+      <div class="sb"><b>9:41</b><span class="island"></span><span class="sb-r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-three-quarters"></i></span></div>
+      <div class="m-top"><span class="firm-mark" style="width:28px;height:28px;font-size:12px">M</span><span class="fw7 fs15">Meridian × Northwind</span><span class="m-av"><span class="av c5 sm ext " title="Bea Tanaka">BT</span></span></div>
+      <div class="m-body">
+        <div class="fs12 muted fw6">Good afternoon, Bea</div>
+        <div class="m-h1">One thing is late</div>
+        <div class="m-card late">
+          <div class="row gap10"><span class="fi xls "><i class="fa-solid fa-file-excel"></i></span><div class="grow"><div class="fw7 fs14">Q2 inventory extract</div><div class="fs12" style="color:var(--mj-status-error-text);font-weight:600">2 days late · Priya is waiting</div></div></div>
+          <div class="m-btn primary"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload the file</div>
+        </div>
+        <div class="m-sec">Discovery</div>
+        <div class="m-row"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><div class="grow"><div class="fw6 fs13">The Assistant answered Casey</div><div class="fs12 muted ellipsis">Three vendors remain after the second…</div></div><span class="m-dot"></span></div>
+        <div class="m-row"><span class="av c1 sm  " title="Ada Lovell">AL</span><div class="grow"><div class="fw6 fs13">Ada shared a file</div><div class="fs12 muted ellipsis">Interview synthesis v3</div></div><span class="m-dot"></span></div>
+        <div class="m-row"><span class="tile eng "><i class="fa-solid fa-compass"></i></span><div class="grow"><div class="fw6 fs13">Readout · Thu, Oct 9</div><div class="fs12 muted">2:00 PM · with Northwind leadership</div></div></div>
+      </div>
+      <div class="tb"><span class="on"><i class="fa-solid fa-house"></i>Home</span><span class=""><i class="fa-solid fa-inbox"></i>Inbox</span><span class=""><i class="fa-solid fa-comments"></i>Chats</span><span class=""><i class="fa-solid fa-list-check"></i>Tasks</span></div>
+    </div></div><div class="cap"><b>1</b>What’s late comes first</div></div>
+      <div class="pcol">
+    <div class="phone"><div class="scr dimmed">
+      <div class="sb"><b>9:41</b><span class="island"></span><span class="sb-r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-three-quarters"></i></span></div>
+      <div class="m-top"><span class="fw7 fs15">Discovery</span></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="fw7" style="font-size:17px">Upload to Discovery</div>
+        <div class="m-file"><span class="fi xls "><i class="fa-solid fa-file-excel"></i></span><div class="grow"><div class="fw6 fs13 ellipsis">Q2_inventory_extract.xlsx</div><div class="fs12 muted">2.4 MB · from Files</div></div><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i></div>
+        <div class="m-lab">Who will see it</div>
+        <div class="m-aud"><span class="stack"><span class="av c1 xs  " title="Ada Lovell">AL</span><span class="av c9 xs  " title="Sam Okafor">SO</span><span class="av c6 xs  " title="Priya Shah">PS</span></span><span class="stack"><span class="av c4 xs ext " title="Casey Morgan">CM</span><span class="av c2 xs ext " title="Lena Fischer">LF</span></span><div class="grow"><div class="fw6 fs13" style="color:var(--mjc-shared)">Meridian and Northwind</div><div class="fs12 muted">9 people · Shared</div></div></div>
+        <div class="m-lab">This completes</div>
+        <div class="m-task"><span class="check on"><i class="fa-solid fa-check"></i></span><span class="fs13 fw6">Q2 inventory extract</span><span class="fs12 muted" style="margin-left:auto">task</span></div>
+        <div class="m-lab">Add a note</div>
+        <div class="m-note">Sorry for the delay — Dayton’s numbers were late.</div>
+        <div class="m-btn primary" style="margin-top:14px">Upload and notify Priya</div>
+      </div>
+    </div></div><div class="cap"><b>2</b>Uploading says exactly who will see it</div></div>
+      <div class="pcol">
+    <div class="phone"><div class="scr">
+      <div class="sb"><b>9:41</b><span class="island"></span><span class="sb-r"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-three-quarters"></i></span></div>
+      <div class="m-top"><i class="fa-solid fa-chevron-left" style="color:var(--mj-brand-primary)"></i><div class="grow" style="text-align:center"><div class="fw7 fs14">Discovery room</div><div class="fs11" style="color:var(--mjc-shared)"><i class="fa-solid fa-eye"></i> Everyone · 9</div></div><i class="fa-solid fa-circle-info muted"></i></div>
+      <div class="m-chat">
+        <div class="mm-msg"><span class="av c4 sm ext " title="Casey Morgan">CM</span><div><div class="fs12"><b>Casey Morgan</b> <span class="muted">9:41</span></div><div class="fs13">Before Thursday — can someone summarize where vendor scoring landed?</div></div></div>
+        <div class="mm-msg"><span class="ai-av sm"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.4 3.9 1.5 6.2 3.1 7.6 1.4 1.3 3.5 2 6.4 2.4-2.9.4-5 1.1-6.4 2.4-1.6 1.4-2.7 3.7-3.1 7.6-.4-3.9-1.5-6.2-3.1-7.6-1.4-1.3-3.5-2-6.4-2.4 2.9-.4 5-1.1 6.4-2.4 1.6-1.4 2.7-3.7 3.1-7.6z"/><path d="M19 1.8c.15 1.3.5 2 1.05 2.5.5.45 1.2.7 2.2.85-1 .15-1.7.4-2.2.85-.55.5-.9 1.2-1.05 2.5-.15-1.3-.5-2-1.05-2.5-.5-.45-1.2-.7-2.2-.85 1-.15 1.7-.4 2.2-.85.55-.5.9-1.2 1.05-2.5z" opacity=".8"/></svg></span><div><div class="fs12"><b>Assistant</b> <span class="muted">9:44</span></div><div class="fs13">Three vendors remain: <b>Kestrel</b>, <b>Lumen WMS</b> and <b>Haulbridge</b>. Kestrel leads on ERP fit; Lumen WMS on cost.</div>
+          <div class="row gap6" style="margin-top:6px;flex-wrap:wrap"><span class="cite shared"><i class="fa-solid fa-file-pdf"></i>Readout · p.12</span><span class="cite shared"><i class="fa-solid fa-file-pdf"></i>p.14</span></div>
+          <div class="fs11 muted" style="margin-top:6px"><i class="fa-solid fa-shield-halved"></i> From 3 shared files</div></div></div>
+        <div class="mm-msg"><span class="av c2 sm ext " title="Lena Fischer">LF</span><div><div class="fs12"><b>Lena Fischer</b> <span class="muted">9:52</span></div><div class="fs13">Thanks — this is what I needed.</div></div></div>
+      </div>
+      <div class="m-comp"><i class="fa-solid fa-plus muted"></i><span class="grow muted fs13">Message Discovery room</span><span class="m-send"><i class="fa-solid fa-arrow-up"></i></span></div>
+      <div class="m-comp-note"><i class="fa-solid fa-eye"></i>9 people will see this, 3 at Meridian</div>
+    </div></div><div class="cap"><b>3</b>The same room, the same answers</div></div>
+    </div>
+  </div></body>
+</html>
