@@ -21,7 +21,7 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
-            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}1 = 0{% endif %}",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         },
@@ -32,7 +32,7 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
-            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'){% else %}1 = 0{% endif %}",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'){% else %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IS NULL AND 1 = 0 AND Entity = 'MJ_BizApps_Tasks: Tasks'){% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         }

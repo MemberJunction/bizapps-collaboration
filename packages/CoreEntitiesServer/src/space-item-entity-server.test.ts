@@ -204,6 +204,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         usesResult?: Array<{ ID: string }>;
         noticesResult?: Array<{ ID: string }>;
         onChildDelete?: (entityName: string, entity: BaseEntity) => void;
+        onRunView?: (params: { EntityName: string; ResultType?: string; IgnoreMaxRows?: boolean; ExtraFilter?: string }) => void;
     }
 
     function createDeleteMockProvider(opts: MockProviderOptions = {}): IMetadataProvider {
@@ -224,7 +225,8 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             async CreateTransactionGroup() {
                 return mockTg as TransactionGroupBase;
             },
-            async RunView(params: { EntityName: string; ResultType?: string }) {
+            async RunView(params: { EntityName: string; ResultType?: string; IgnoreMaxRows?: boolean; ExtraFilter?: string }) {
+                opts.onRunView?.(params);
                 if (opts.runViewFails && params.EntityName === 'MJ_BizApps_Collaboration: Space Items') {
                     return { Success: false, ErrorMessage: 'Database connection failed', Results: [] };
                 }
@@ -458,14 +460,18 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         }
     });
 
-    it('Delete() queues child uses and share notices into the same transaction group', async () => {
+    it('Delete() queues child uses and share notices into the same transaction group with IgnoreMaxRows: true', async () => {
         const queuedEntities: Array<{ name: string; tg: TransactionGroupBase | undefined }> = [];
+        const runViewCalls: Array<{ EntityName: string; ResultType?: string; IgnoreMaxRows?: boolean }> = [];
         let createdTg: TransactionGroupBase | undefined;
         const provider = createDeleteMockProvider({
             usesResult: [{ ID: 'use-1' }],
             noticesResult: [{ ID: 'notice-1' }],
             onChildDelete: (name, ent) => {
                 queuedEntities.push({ name, tg: ent.TransactionGroup });
+            },
+            onRunView: (params) => {
+                runViewCalls.push(params);
             },
         });
         const originalCreateTg = provider.CreateTransactionGroup;
@@ -493,6 +499,16 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             assert.equal(queuedEntities[1].tg, createdTg);
             assert.equal(queuedEntities[2].name, 'item');
             assert.equal(queuedEntities[2].tg, createdTg);
+
+            const usesCall = runViewCalls.find((c) => c.EntityName === 'MJ_BizApps_Collaboration: Item Uses');
+            assert.ok(usesCall, 'Item Uses RunView call must occur');
+            assert.equal(usesCall.IgnoreMaxRows, true, 'Item Uses query must set IgnoreMaxRows: true');
+            assert.equal(usesCall.ResultType, 'entity_object', 'Item Uses query must set ResultType: entity_object');
+
+            const noticesCall = runViewCalls.find((c) => c.EntityName === 'MJ_BizApps_Collaboration: Share Notices');
+            assert.ok(noticesCall, 'Share Notices RunView call must occur');
+            assert.equal(noticesCall.IgnoreMaxRows, true, 'Share Notices query must set IgnoreMaxRows: true');
+            assert.equal(noticesCall.ResultType, 'entity_object', 'Share Notices query must set ResultType: entity_object');
         } finally {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }

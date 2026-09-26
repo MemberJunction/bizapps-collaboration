@@ -167,45 +167,4 @@ export class CollaborationClient {
         const res = await this.activeExecutor.ExecuteGQL(OPEN_SPACE_FILE_MUTATION, { itemId });
         return (res?.OpenSpaceFile as OpenSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
-
-    // Backwards-compatible aliases
-    async mintSpaceLink(input: MintSpaceLinkInput): Promise<MintSpaceLinkPayload> {
-        return this.MintSpaceLink(input);
-    }
-
-    async uploadSpaceFile(input: UploadSpaceFileInput): Promise<UploadSpaceFilePayload> {
-        return this.UploadSpaceFile(input);
-    }
-
-    async createSpaceTask(input: CreateSpaceTaskInput): Promise<CreateSpaceTaskPayload> {
-        return this.CreateSpaceTask(input);
-    }
-
-    async postSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {
-        return this.PostSpaceMessage(input);
-    }
-
-    async openSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
-        return this.OpenSpaceFile(itemId);
-    }
-}
-
-export async function mintSpaceLink(input: MintSpaceLinkInput, executor?: GraphQLExecutor): Promise<MintSpaceLinkPayload> {
-    return new CollaborationClient(executor).MintSpaceLink(input);
-}
-
-export async function uploadSpaceFileClient(input: UploadSpaceFileInput, executor?: GraphQLExecutor): Promise<UploadSpaceFilePayload> {
-    return new CollaborationClient(executor).UploadSpaceFile(input);
-}
-
-export async function createSpaceTaskClient(input: CreateSpaceTaskInput, executor?: GraphQLExecutor): Promise<CreateSpaceTaskPayload> {
-    return new CollaborationClient(executor).CreateSpaceTask(input);
-}
-
-export async function postSpaceMessageClient(input: PostSpaceMessageGraphQLInput, executor?: GraphQLExecutor): Promise<PostSpaceMessageGraphQLPayload> {
-    return new CollaborationClient(executor).PostSpaceMessage(input);
-}
-
-export async function openSpaceFileClient(itemId: string, executor?: GraphQLExecutor): Promise<OpenSpaceFilePayload> {
-    return new CollaborationClient(executor).OpenSpaceFile(itemId);
 }

@@ -189,6 +189,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 EntityName: 'MJ_BizApps_Collaboration: Item Uses',
                 ExtraFilter: `ItemID = '${currentItemId}'`,
                 ResultType: 'entity_object',
+                IgnoreMaxRows: true,
             }, system);
             if (!usesRes || !usesRes.Success) {
                 const msg = `Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`;
@@ -213,6 +214,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 EntityName: 'MJ_BizApps_Collaboration: Share Notices',
                 ExtraFilter: `ItemID = '${currentItemId}'`,
                 ResultType: 'entity_object',
+                IgnoreMaxRows: true,
             }, system);
             if (!noticesRes || !noticesRes.Success) {
                 const msg = `Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`;
