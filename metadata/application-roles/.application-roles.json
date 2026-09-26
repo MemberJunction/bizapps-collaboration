@@ -1,11 +1,33 @@
 [
   {
     "primaryKey": {
-      "ID": "3A6BEA98-46FC-491C-BAFD-8AEFB1C23627"
+      "ID": "08E35F1F-7DCA-40D3-AAA0-D0EF441A433A"
     },
     "fields": {
       "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
-      "RoleID": "AAF434FD-EF58-4857-854E-2607ACAF763B",
+      "RoleID": "E0AFCCEC-6A37-EF11-86D4-000D3A4E707E",
+      "CanAccess": 1,
+      "CanAdmin": 0
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "45232CFB-3B4B-4028-AE4C-652E8A4B61CF"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "DEAFCCEC-6A37-EF11-86D4-000D3A4E707E",
+      "CanAccess": 1,
+      "CanAdmin": 1
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D1AC417A-9815-4F5A-9D57-E8ACDF76420E"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "DFAFCCEC-6A37-EF11-86D4-000D3A4E707E",
       "CanAccess": 1,
       "CanAdmin": 0
     }

@@ -333,7 +333,7 @@ export interface LibrarySmartView {
           background: var(--mj-bg-surface);
           color: var(--mj-text-primary);
           font-weight: 600;
-          box-shadow: var(--mj-shadow-xs);
+          box-shadow: var(--mj-shadow-sm);
         }
 
         .n {
