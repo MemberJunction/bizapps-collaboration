@@ -30,7 +30,7 @@ const checks: NamedCheck[] = [
             const ada = await GetPersonaUser(ctx, 'ada');
             const bea = await GetPersonaUser(ctx, 'bea');
 
-            const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Name = 'Workspace'", ['ID']);
+            const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
             Assert(Boolean(workspaceType?.ID), 'Expected Workspace space type to exist');
 
             // 1. Participant (Bea) creating a root space (ParentID = null) is refused
