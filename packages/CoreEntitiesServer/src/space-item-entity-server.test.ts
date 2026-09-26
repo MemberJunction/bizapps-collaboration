@@ -251,6 +251,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             ProviderToUse: { value: provider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
             CheckPermissions: { value: () => true, writable: true },
+            _resultHistory: { value: [], writable: true },
         });
         return item;
     }
@@ -279,12 +280,16 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
             CheckPermissions: { value: () => false, writable: true },
+            _resultHistory: { value: [], writable: true },
         });
 
         const ok = await SpaceItemEntityServer.prototype.Delete.call(item);
         assert.equal(ok, false, 'Delete must return false when caller lacks delete permission');
         assert.equal(queryRun, false, 'No queries should run when delete permission is refused');
         assert.equal(tgCreated, false, 'No transaction should be created when delete permission is refused');
+        assert.ok(item.LatestResult, 'LatestResult must be recorded on refusal');
+        assert.equal(item.LatestResult.Success, false);
+        assert.match(item.LatestResult.CompleteMessage, /permission/i);
     });
 
     it('Delete() skips file cleanup when other items still point to the file', async () => {
@@ -393,6 +398,9 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             assert.equal(ok, false, 'Delete must return false when transaction commit fails');
             assert.equal(cleanupCalled, false, 'File cleanup must NOT run when transaction commit fails');
             assert.equal(item.TransactionGroup, undefined, 'TransactionGroup must be cleared on failed submit');
+            assert.ok(item.LatestResult, 'LatestResult must be recorded on commit failure');
+            assert.equal(item.LatestResult.Success, false);
+            assert.match(item.LatestResult.CompleteMessage, /transaction failed/i);
         } finally {
             Object.getPrototypeOf(SpaceItemEntityServer.prototype).Delete = originalDelete;
         }

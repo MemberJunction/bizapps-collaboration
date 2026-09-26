@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -124,6 +124,18 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         return ok;
     }
 
+    private failDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        if (!Reflect.get(this, '_resultHistory')) {
+            Reflect.set(this, '_resultHistory', []);
+        }
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         // 1. Permission check FIRST: stop immediately if the caller lacks delete permission.
         // This prevents unauthorized callers from wiping out child history (Item Uses / Share Notices)
@@ -131,11 +143,17 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (typeof this.CheckPermissions === 'function') {
             try {
                 if (!this.CheckPermissions(EntityPermissionType.Delete, false)) {
-                    return false;
+                    const u = this.ContextCurrentUser;
+                    const entityName = this.EntityInfo?.Name ?? 'Space Item';
+                    const msg = u
+                        ? `User: ${u.Name ?? u.Email} does NOT have permission to Delete ${entityName} records.`
+                        : `Permission denied: caller lacks permission to Delete ${entityName} records.`;
+                    return this.failDelete(msg);
                 }
             } catch (error) {
-                LogError(`Space item delete permission check failed: ${error instanceof Error ? error.message : String(error)}`);
-                return false;
+                const msg = `Space item delete permission check failed: ${error instanceof Error ? error.message : String(error)}`;
+                LogError(msg);
+                return this.failDelete(msg);
             }
         }
 
@@ -146,8 +164,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
         const provider = asMetadata(this.ProviderToUse);
         if (!provider) {
-            LogError(`Space item delete failed: metadata provider is not available for item ${currentItemId}`);
-            return false;
+            const msg = `Space item delete failed: metadata provider is not available for item ${currentItemId}`;
+            LogError(msg);
+            return this.failDelete(msg);
         }
 
         // 2. Pre-compute file information BEFORE super.Delete(options) is called,
@@ -165,8 +184,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             try {
                 tg = await provider.CreateTransactionGroup();
             } catch (error) {
-                LogError(`Space item delete failed to create transaction group: ${error instanceof Error ? error.message : String(error)}`);
-                return false;
+                const msg = `Space item delete failed to create transaction group: ${error instanceof Error ? error.message : String(error)}`;
+                LogError(msg);
+                return this.failDelete(msg);
             }
         }
 
@@ -184,23 +204,26 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 ResultType: 'simple',
             }, system);
             if (!usesRes || !usesRes.Success) {
-                LogError(`Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`);
-                return false;
+                const msg = `Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`;
+                LogError(msg);
+                return this.failDelete(msg);
             }
 
             if (usesRes.Results && usesRes.Results.length > 0) {
                 for (const u of usesRes.Results) {
                     const useEntity = await provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', system);
                     if (!(await useEntity.Load(u.ID))) {
-                        LogError(`Space item reference cleanup: failed to load Item Use ${u.ID} for item ${currentItemId}`);
-                        return false;
+                        const msg = `Space item reference cleanup: failed to load Item Use ${u.ID} for item ${currentItemId}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
                     }
                     loadedUses.push(useEntity);
                     useEntity.TransactionGroup = tg;
                     const queued = await useEntity.Delete();
                     if (!queued) {
-                        LogError(`Space item reference cleanup: failed to queue delete for Item Use ${u.ID}`);
-                        return false;
+                        const msg = `Space item reference cleanup: failed to queue delete for Item Use ${u.ID}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
                     }
                 }
             }
@@ -212,23 +235,26 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 ResultType: 'simple',
             }, system);
             if (!noticesRes || !noticesRes.Success) {
-                LogError(`Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`);
-                return false;
+                const msg = `Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`;
+                LogError(msg);
+                return this.failDelete(msg);
             }
 
             if (noticesRes.Results && noticesRes.Results.length > 0) {
                 for (const n of noticesRes.Results) {
                     const noticeEntity = await provider.GetEntityObject<mjBizAppsCollaborationShareNoticeEntity>('MJ_BizApps_Collaboration: Share Notices', system);
                     if (!(await noticeEntity.Load(n.ID))) {
-                        LogError(`Space item reference cleanup: failed to load Share Notice ${n.ID} for item ${currentItemId}`);
-                        return false;
+                        const msg = `Space item reference cleanup: failed to load Share Notice ${n.ID} for item ${currentItemId}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
                     }
                     loadedNotices.push(noticeEntity);
                     noticeEntity.TransactionGroup = tg;
                     const queued = await noticeEntity.Delete();
                     if (!queued) {
-                        LogError(`Space item reference cleanup: failed to queue delete for Share Notice ${n.ID}`);
-                        return false;
+                        const msg = `Space item reference cleanup: failed to queue delete for Share Notice ${n.ID}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
                     }
                 }
             }
@@ -236,15 +262,20 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             this.TransactionGroup = tg;
             const itemQueued = await super.Delete(options);
             if (!itemQueued) {
-                LogError(`Space item delete failed to queue delete for item ${currentItemId}`);
+                const msg = this.LatestResult?.CompleteMessage || `Space item delete failed to queue delete for item ${currentItemId}`;
+                LogError(msg);
+                if (!this.LatestResult || this.LatestResult.Success) {
+                    this.failDelete(msg);
+                }
                 return false;
             }
 
             if (isInitiator && tg) {
                 const submitted = await tg.Submit();
                 if (!submitted) {
-                    LogError(`Space item delete transaction failed for item ${currentItemId}`);
-                    return false;
+                    const msg = `Space item delete transaction failed for item ${currentItemId}`;
+                    LogError(msg);
+                    return this.failDelete(msg);
                 }
             } else if (!isInitiator && tg) {
                 // Inside a caller's transaction group:
@@ -280,8 +311,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 return true;
             }
         } catch (error) {
-            LogError(`Space item delete transaction failed: ${error instanceof Error ? error.message : String(error)}`);
-            return false;
+            const msg = `Space item delete transaction failed: ${error instanceof Error ? error.message : String(error)}`;
+            LogError(msg);
+            return this.failDelete(msg);
         } finally {
             if (isInitiator) {
                 (this as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;

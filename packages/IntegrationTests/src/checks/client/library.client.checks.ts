@@ -174,6 +174,7 @@ const checks: NamedCheck[] = [
                 `;
                 let mutationThrew = false;
                 let mutationNullOrRefused = false;
+                let rejectionReason: string | null = null;
                 try {
                     const res = await beaCtx.GraphQLProvider.ExecuteGQL(DELETE_SPACE_ITEM_MUTATION, {
                         ID: targetItem.ID,
@@ -186,11 +187,19 @@ const checks: NamedCheck[] = [
                         },
                     });
                     const deletedId = (res?.DeletemjBizAppsCollaborationSpaceItem as { ID?: string } | undefined)?.ID;
-                    mutationNullOrRefused = !deletedId;
-                } catch {
+                    if (!deletedId) {
+                        mutationNullOrRefused = true;
+                        rejectionReason = (res as { errors?: Array<{ message: string }> })?.errors?.[0]?.message ?? 'Mutation returned null ID';
+                    }
+                } catch (e) {
                     mutationThrew = true;
+                    rejectionReason = e instanceof Error ? e.message : String(e);
                 }
                 Assert(mutationThrew || mutationNullOrRefused, 'Server MUST refuse DeletemjBizAppsCollaborationSpaceItem mutation when sent by participant Bea');
+                Assert(
+                    !!rejectionReason && /permission/i.test(rejectionReason),
+                    `Rejection reason MUST indicate permission refusal, got: "${rejectionReason ?? ''}"`
+                );
 
                 // 4. Assert BOTH the Space Item and its Item Uses survive!
                 const itemAfter = await FindRows<{ ID: string }>(

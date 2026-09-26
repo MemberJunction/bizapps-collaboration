@@ -240,13 +240,20 @@ const checks: NamedCheck[] = [
 
                 let deleteThrew = false;
                 let deleteReturnedFalse = false;
+                let refusalMessage: string = '';
                 try {
                     const deleted = await item.Delete();
                     deleteReturnedFalse = !deleted;
-                } catch {
+                    refusalMessage = item.LatestResult?.CompleteMessage ?? '';
+                } catch (e) {
                     deleteThrew = true;
+                    refusalMessage = e instanceof Error ? e.message : String(e);
                 }
                 Assert(deleteThrew || deleteReturnedFalse, 'Bea deleting a Shared space item MUST fail / be refused');
+                Assert(
+                    /permission/i.test(refusalMessage),
+                    `Rejection reason MUST indicate permission refusal, got: "${refusalMessage}"`
+                );
 
                 // 4. Assert BOTH the Space Item and its Item Uses survive!
                 const itemAfter = await FindRows<{ ID: string }>(
