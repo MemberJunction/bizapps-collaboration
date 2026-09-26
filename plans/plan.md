@@ -300,7 +300,7 @@ The two search items marked *fix first* are small and are the ones that would bi
 1. **Owner.** Unnamed.
 2. **Does `MJ: Artifact Uses` cover plain files, or only artifacts?** Decides whether agent-usage tracking is free or a small build.
 3. **File Requests** — lift the shape into Collaboration, or revisit `bizapps-secure-messaging` as an optional dependency later?
-4. **Does committees adopt Space in Phase 3, or is that forked into its own decision?** It is the strongest proof and the largest refactor.
+4. **Does committees adopt Space in Phase 3, or is that forked into its own decision?** It is the strongest proof and the largest refactor. **Decided 2026-09-26:** Committees becomes a plug-in on top of Collaboration, after Collaboration is done. See [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md).
 5. **License and distribution posture** — source-available in the manner of `bizapps-forms`, or another free distribution? Free is decided (§3); *how* it is distributed is not, and it sets the repo's license header and publish path.
 6. **Does the deliverable-agent offer outlive the engagement, and on what entitlement?** The perpetual root makes it *possible*; grants carry `ExpiresAt`. The business rule is unwritten.
 7. **Which door creates an external participant's identity?** Invite-based (an IdP invitation, or a pre-created account plus a password-set link) versus open self-signup. For outside directors and client teams, invite is almost certainly right — but it decides the provisioning service's shape, so settle it before writing one.
