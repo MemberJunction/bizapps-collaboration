@@ -4,6 +4,7 @@ import type { FindingModel, FileKind, RecipientPersonModel } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-share-check',
@@ -137,9 +138,7 @@ import { CollabFileIconComponent } from './file-icon.component';
       <button type="button" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       line-height: var(--mjc-line-height);

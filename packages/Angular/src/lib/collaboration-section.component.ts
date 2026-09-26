@@ -1,9 +1,11 @@
 import { Component, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ResourceData } from '@memberjunction/core-entities';
+import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import {
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
@@ -126,10 +128,10 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                         [Summary]="headerAudienceSummary"
                                     />
                                     @if (activeTab === 'Overview') {
-                                        <button mjButton variant="secondary" size="md">
+                                        <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
                                             <i class="fa-solid fa-user-plus"></i>Invite
                                         </button>
-                                        <button mjButton variant="primary" size="md">
+                                        <button mjButton variant="primary" size="md" (click)="onNewClicked()">
                                             <i class="fa-solid fa-plus"></i>New
                                         </button>
                                     } @else {
@@ -258,143 +260,111 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceTitle = 'Discovery';
     public spaceTypeName = 'Engagement';
     public spaceStatus = 'Active';
-    public spaceSubtitle = 'in Northwind · Week 7 of 10 · Readout Oct 9';
-    public headerTypeColor = 'var(--mjc-type-eng, #0ea5e9)';
-    public headerTypeIcon = 'fa-compass';
+    public spaceSubtitle = 'Supply-chain operating model diagnostic · Week 7 of 10 · Readout Oct 9';
+    public headerTypeColor = '#0076b6';
+    public headerTypeIcon = 'fa-solid fa-compass';
     public headerStaffAvatars: AvatarItem[] = [
         { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
-        { initials: 'SO', name: 'Sam Okafor', colorClass: 'c2' },
-        { initials: 'PS', name: 'Priya Shah', colorClass: 'c3' },
+        { initials: 'SO', name: 'Sam Okafor', colorClass: 'c9' },
+        { initials: 'PS', name: 'Priya Shah', colorClass: 'c6' },
     ];
     public headerOutsideAvatars: AvatarItem[] = [
-        { initials: 'CM', name: 'Casey Miller', colorClass: 'c4' },
-        { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5' },
-        { initials: 'OH', name: 'Omar Hassan', colorClass: 'c6' },
-        { initials: 'LF', name: 'Lisa Flores', colorClass: 'c7' },
+        { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+        { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5', isOutside: true },
+        { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+        { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
     ];
     public headerTotalPeople = 9;
     public headerAudienceSummary = '3 Meridian · 6 Northwind';
 
     public breadcrumbs: BreadcrumbItem[] = [
+        { label: 'Spaces' },
         { label: 'Northwind' },
         { label: 'Discovery' },
     ];
 
     public tabs: TabItem[] = [
-        { id: 'Overview', label: 'Overview', iconClass: 'fa-gauge-high' },
-        { id: 'Library', label: 'Library', iconClass: 'fa-folder-open', count: 24 },
-        { id: 'Work', label: 'Work', iconClass: 'fa-list-check', count: 10 },
-        { id: 'Chat', label: 'Chat', iconClass: 'fa-comments', count: 3 },
-        { id: 'People', label: 'People', iconClass: 'fa-user-group', count: 9 },
-        { id: 'Settings', label: 'Settings', iconClass: 'fa-sliders' },
+        { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
+        { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open', count: 24 },
+        { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check', count: 10 },
+        { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments', count: 3 },
+        { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group', count: 9 },
+        { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' },
     ];
 
     // Navigation Rail data
     public inboxCount = 4;
-    public taskCount = 10;
+    public taskCount = 6;
     public spaces: RailSpaceNode[] = [
-        {
-            id: 'northwind',
-            name: 'Northwind',
-            iconClass: 'fa-building',
-            color: 'var(--mjc-type-rel, #6366f1)',
-            isExpanded: true,
-            hasChildren: true,
-            level: 0,
-        },
-        {
-            id: 'discovery',
-            name: 'Discovery',
-            iconClass: 'fa-compass',
-            color: 'var(--mjc-type-eng, #0ea5e9)',
-            level: 1,
-            meta: '3 new',
-        },
-        {
-            id: 'delivery',
-            name: 'Delivery',
-            iconClass: 'fa-truck-fast',
-            color: 'var(--mjc-type-eng, #0ea5e9)',
-            level: 1,
-            isLocked: true,
-        },
-        {
-            id: 'audit-committee',
-            name: 'Audit Committee',
-            iconClass: 'fa-landmark',
-            color: 'var(--mjc-type-com, #d97706)',
-            level: 0,
-            meta: 'Vote open',
-        },
-        {
-            id: 'spring-cohort',
-            name: 'Spring Leadership Cohort',
-            iconClass: 'fa-graduation-cap',
-            color: 'var(--mjc-type-coh, #10b981)',
-            level: 0,
-            meta: '14 of 18 in',
-        },
+        { id: 'northwind', name: 'Northwind', color: '#092340', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: true },
+        { id: 'discovery', name: 'Discovery', color: '#0076b6', iconClass: 'fa-solid fa-compass', level: 1, hasChildren: true, isExpanded: true, unread: true },
+        { id: 'fieldnotes', name: 'Field notes', color: '#0076b6', iconClass: 'fa-solid fa-clipboard', level: 2, hasChildren: false, isExpanded: false },
+        { id: 'delivery', name: 'Delivery', color: '#0076b6', iconClass: 'fa-solid fa-truck-fast', level: 1, hasChildren: true, isExpanded: false, isLocked: true },
+        { id: 'closed', name: 'Closed', color: '#0076b6', iconClass: 'fa-solid fa-box-archive', level: 1, hasChildren: true, isExpanded: false, meta: '2', isDim: true },
+        { id: 'committee', name: 'Audit Committee', color: '#d97706', iconClass: 'fa-solid fa-landmark', level: 0, hasChildren: true, isExpanded: false, unread: true },
+        { id: 'cohort', name: 'Spring Leadership Cohort', color: '#16a34a', iconClass: 'fa-solid fa-graduation-cap', level: 0, hasChildren: true, isExpanded: false },
+        { id: 'pinecrest', name: 'Pinecrest Health', color: '#092340', iconClass: 'fa-solid fa-building', level: 0, hasChildren: true, isExpanded: false },
+        { id: 'studio', name: 'Studio', color: '#7c3aed', iconClass: 'fa-solid fa-shapes', level: 0, hasChildren: true, isExpanded: false },
     ];
 
     // Overview state data
     public overviewNeedsYou: NeedsYouItemModel[] = [
         {
-            id: 'ny-1',
+            id: 'need-1',
             variant: 'blue',
-            iconClass: 'fa-comments',
-            title: 'Casey Morgan asked in Discovery · Room',
-            subtitle: '“Can someone summarize where vendor scoring landed? Our CFO will ask.”',
+            iconClass: 'fa-solid fa-comment-dots',
+            title: 'Casey asked',
+            subtitle: 'Room · 12m ago',
             actionLabel: 'Reply',
         },
         {
-            id: 'ny-2',
+            id: 'need-2',
             variant: 'warn',
             isSpark: true,
-            title: 'Review before sharing · Interview synthesis v3',
-            subtitle: 'The Assistant found 2 people who could be identified in a file Sam wants to share.',
+            title: '2 names flagged',
+            subtitle: 'Synthesis v3',
             actionLabel: 'Review',
         },
         {
-            id: 'ny-3',
-            variant: 'blue',
-            iconClass: 'fa-landmark',
-            title: 'Audit Committee meets Thu, Oct 2 at 4:00 PM',
-            subtitle: 'The board pack is ready but not published. 7 members are waiting on it.',
-            actionLabel: 'Publish pack',
-        },
-        {
-            id: 'ny-4',
-            variant: 'blue',
-            iconClass: 'fa-user-check',
-            title: 'Dana Whitfield invited Pat Rivera to Audit Committee',
-            subtitle: 'Outside director · new outside members need staff approval',
-            actionLabel: 'Approve',
+            id: 'need-3',
+            variant: 'red',
+            iconClass: 'fa-solid fa-clock',
+            title: 'Q2 extract is late',
+            subtitle: 'Bea · due Sep 24',
+            actionLabel: 'Nudge',
         },
     ];
 
     public overviewSharedItems: ItemCardModel[] = [
         {
             id: 'sh-1',
-            kind: 'doc',
-            title: 'Discovery findings draft',
-            meta: 'Shared by Ada · Sep 24',
-            stamp: 'Casey, Lena opened',
-            citationCount: 6,
+            kind: 'pdf',
+            title: 'Discovery readout — draft for review',
+            meta: 'PDF · v4 · 34 pages',
+            stamp: 'Shared by Ada · Sep 24',
+            openers: [
+                { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+                { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
+            ],
         },
         {
             id: 'sh-2',
-            kind: 'sheet',
-            title: 'Vendor scoring model',
-            meta: 'Shared by Sam · Sep 22',
-            stamp: 'Bea, Omar opened',
-            citationCount: 4,
+            kind: 'pdf',
+            title: 'Current-state process map',
+            meta: 'PDF · v2 · 6 pages',
+            stamp: 'Shared by Ada · Sep 18',
+            citationCount: 6,
         },
         {
             id: 'sh-3',
-            kind: 'deck',
-            title: 'Readout outline',
-            meta: 'Shared by Ada · Sep 20',
-            stamp: 'Casey opened',
+            kind: 'img',
+            title: 'Site visit photos — Dayton',
+            meta: '24 photos',
+            stamp: 'Added by Bea · Sep 16',
+            isImage: true,
+            openers: [
+                { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+            ],
         },
     ];
 
@@ -406,62 +376,64 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             author: 'Sam Okafor',
             timestamp: '2h ago',
             flagCount: 2,
-            statusLabel: 'In progress',
             canShare: true,
         },
         {
             id: 'tm-2',
-            kind: 'doc',
-            title: 'Plant manager interview notes',
-            author: 'Ada Lovell',
-            timestamp: 'Yesterday',
+            kind: 'xls',
+            title: 'Vendor scoring model',
+            author: 'Priya Shah',
+            timestamp: 'yesterday',
+            statusLabel: 'In progress',
             canShare: true,
         },
         {
             id: 'tm-3',
-            kind: 'sheet',
-            title: 'Raw vendor quotes',
-            author: 'Priya Patel',
-            timestamp: 'Sep 21',
+            kind: 'ppt',
+            title: 'Readout storyline',
+            author: 'Ada Lovell',
+            timestamp: 'Sep 23',
             canShare: true,
         },
     ];
 
     public overviewRoomMessages: RoomMiniMessage[] = [
         {
-            id: 'msg-1',
+            id: 'rm-1',
             senderName: 'Casey Morgan',
             senderInitials: 'CM',
             senderColorClass: 'c4',
             isOutside: true,
-            timestamp: '12m ago',
-            text: 'Can someone summarize where vendor scoring landed? Our CFO will ask.',
+            timestamp: '9:41',
+            text: 'Before Thursday — can someone summarize where vendor scoring landed?',
         },
         {
-            id: 'msg-2',
+            id: 'rm-2',
             senderName: 'Ada Lovell',
             senderInitials: 'AL',
             senderColorClass: 'c1',
-            timestamp: '8m ago',
-            text: 'Pulling that together now with Sam. We’ll post the excerpt here.',
+            isOutside: false,
+            timestamp: '9:44',
+            hasMention: true,
+            mentionText: '@Assistant',
+            text: 'can you pull that together from what we’ve shared?',
         },
         {
-            id: 'msg-3',
+            id: 'rm-3',
             senderName: 'Assistant',
             isAssistant: true,
-            timestamp: '5m ago',
-            text: 'Vendor scoring model shows Vendor B leading on reliability (4.8/5) and cost.',
+            timestamp: '9:44',
+            text: 'Three vendors remain after the second screen: Kestrel, Lumen WMS and Haulbridge…',
         },
     ];
 
     public overviewSubSpaces: SubSpaceSummary[] = [
         {
-            id: 'sp-field-notes',
+            id: 'sub-1',
             name: 'Field notes',
             type: 'eng',
-            iconClass: 'fa-compass',
-            color: 'var(--mjc-type-eng, #0ea5e9)',
-            description: '6 Team items',
+            iconClass: 'fa-solid fa-clipboard',
+            description: 'Same people as Discovery · 6 Team items',
         },
     ];
 
@@ -471,14 +443,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         { id: 'deliv', name: 'Deliverables', band: 'Shared', count: 5 },
         { id: 'maps', name: 'Process maps', band: 'Shared', count: 3 },
         { id: 'interviews', name: 'Interviews', band: 'Team', count: 9 },
-        { id: 'scoring', name: 'Vendor scoring', band: 'Shared', count: 3 },
-        { id: 'contracts', name: 'Contracts', band: 'Shared', count: 2 },
+        { id: 'vendor', name: 'Vendor scoring', band: 'Team', count: 3 },
+        { id: 'contracts', name: 'Contracts', band: 'Team', count: 2 },
     ];
 
     public librarySmartViews: LibrarySmartView[] = [
-        { id: 'from-northwind', name: 'From Northwind', iconClass: 'fa-circle-arrow-down', count: 4 },
-        { id: 'flagged', name: 'Flagged', iconClass: 'fa-triangle-exclamation', count: 1 },
-        { id: 'shared-this-week', name: 'Shared this week', iconClass: 'fa-clock', count: 2 },
+        { id: 'northwind', name: 'From Northwind', iconClass: 'fa-solid fa-inbox', count: 4 },
+        { id: 'flagged', name: 'Flagged', iconClass: 'fa-solid fa-triangle-exclamation', count: 1 },
+        { id: 'shared-week', name: 'Shared this week', iconClass: 'fa-regular fa-clock', count: 2 },
     ];
 
     public libraryRows: LibraryRowModel[] = [
@@ -487,81 +459,105 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             kind: 'pdf',
             name: 'Discovery readout — draft for review',
             folder: 'Deliverables',
-            who: 'Ada Lovell',
-            when: '10:42 AM',
             band: 'Shared',
+            when: 'Sep 24',
+            who: 'Ada Lovell',
+            openers: [
+                { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+                { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
+            ],
             aiSeenCount: 4,
-            openers: [{ initials: 'CM', colorClass: 'c4' }, { initials: 'LF', colorClass: 'c2' }],
         },
         {
             id: 'row-2',
-            kind: 'sheet',
-            name: 'Vendor evaluation matrix v2',
-            folder: 'Vendor scoring',
-            who: 'Sam Okafor',
-            when: 'Yesterday',
+            kind: 'pdf',
+            name: 'Current-state process map',
+            folder: 'Process maps',
             band: 'Shared',
+            when: 'Sep 18',
+            who: 'Ada Lovell',
+            openers: [
+                { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
+                { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5', isOutside: true },
+                { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+            ],
             aiSeenCount: 6,
-            openers: [{ initials: 'BT', colorClass: 'c5' }],
         },
         {
             id: 'row-3',
             kind: 'doc',
             name: 'Interview synthesis v3',
             folder: 'Interviews',
-            who: 'Sam Okafor',
-            when: '2h ago',
             band: 'Team',
             flagCount: 2,
+            when: '2h ago',
+            who: 'Sam Okafor',
+            openers: [
+                { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
+            ],
+            aiSeenCount: 2,
             selected: true,
         },
         {
             id: 'row-4',
-            kind: 'doc',
-            name: 'Plant manager interview notes — Dayton',
-            folder: 'Interviews',
-            who: 'Ada Lovell',
-            when: 'Sep 23',
+            kind: 'xls',
+            name: 'Vendor scoring model',
+            folder: 'Vendor scoring',
             band: 'Team',
+            when: 'Yesterday',
+            who: 'Priya Shah',
+            openers: [
+                { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
+                { initials: 'SO', name: 'Sam Okafor', colorClass: 'c9' },
+            ],
         },
         {
             id: 'row-5',
-            kind: 'pdf',
-            name: 'Statement of work — Discovery phase',
-            folder: 'Contracts & SOW',
-            who: 'Ada Lovell',
-            when: 'Sep 2',
+            kind: 'xls',
+            name: 'Q2 inventory extract',
+            folder: 'From Northwind',
             band: 'Shared',
-            openers: [{ initials: 'CM', colorClass: 'c4' }],
+            when: 'Sep 22',
+            who: 'Bea Tanaka',
+            openers: [
+                { initials: 'PS', name: 'Priya Shah', colorClass: 'c6' },
+            ],
+            aiSeenCount: 1,
         },
         {
             id: 'row-6',
-            kind: 'sheet',
-            name: 'Plant equipment list & serials',
-            folder: 'From Northwind',
-            who: 'Bea Tanaka',
-            when: 'Sep 16',
-            band: 'Shared',
-        },
-        {
-            id: 'row-7',
-            kind: 'deck',
-            name: 'Kickoff deck & governance model',
-            folder: 'Deliverables',
-            who: 'Ada Lovell',
-            when: 'Sep 4',
-            band: 'Shared',
-            aiSeenCount: 2,
-            openers: [{ initials: 'CM', colorClass: 'c4' }, { initials: 'OH', colorClass: 'c3' }],
-        },
-        {
-            id: 'row-8',
             kind: 'img',
             name: 'Site visit photos — Dayton',
             folder: '24 photos',
-            who: 'Priya Patel',
-            when: 'Sep 18',
+            band: 'Shared',
+            when: 'Sep 16',
+            who: 'Bea Tanaka',
+            openers: [
+                { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
+                { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
+            ],
+        },
+        {
+            id: 'row-7',
+            kind: 'doc',
+            name: 'Interview notes — Dayton plant',
+            folder: 'Interviews',
             band: 'Team',
+            when: 'Sep 12',
+            who: 'Sam Okafor',
+            openers: [
+                { initials: 'PS', name: 'Priya Shah', colorClass: 'c6' },
+            ],
+            aiSeenCount: 3,
+        },
+        {
+            id: 'row-8',
+            kind: 'pdf',
+            name: 'Statement of work — Discovery',
+            folder: 'Contracts & SOW',
+            band: 'Team',
+            when: 'Aug 1',
+            who: 'Ada Lovell',
         },
     ];
 
@@ -576,14 +572,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public previewStaffAvatars: AvatarItem[] = [
         { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' },
         { initials: 'SO', name: 'Sam Okafor', colorClass: 'c9' },
-        { initials: 'PP', name: 'Priya Patel', colorClass: 'c3' },
+        { initials: 'PS', name: 'Priya Shah', colorClass: 'c6' },
     ];
     public previewFlagTitle = '2 people could be identified';
     public previewFlagDescription = 'Checked when Sam asked to share it. Review the highlighted phrases before Northwind sees them.';
     public previewRecentUses: RecentUseModel[] = [
-        { id: 'ru-1', isSpark: true, text: 'Cited in <b>Meridian team</b> chat', timestamp: '2h' },
-        { id: 'ru-2', avatar: { initials: 'AL', colorClass: 'c1' }, text: 'Ada opened it', timestamp: '1h' },
-        { id: 'ru-3', avatar: { initials: 'SO', colorClass: 'c9' }, text: 'Sam uploaded version 3', timestamp: '2h' },
+        { id: 'use-1', isSpark: true, text: 'Cited in <b>Meridian team</b> chat', timestamp: '2h' },
+        { id: 'use-2', avatar: { initials: 'AL', name: 'Ada Lovell', colorClass: 'c1' }, text: 'Ada opened it', timestamp: '1h' },
+        { id: 'use-3', avatar: { initials: 'SO', name: 'Sam Okafor', colorClass: 'c9' }, text: 'Sam uploaded version 3', timestamp: '2h' },
     ];
 
     // Share check dialog state
@@ -594,49 +590,50 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public shareRecipients: RecipientPersonModel[] = [
         {
-            id: 'casey',
+            id: 'rcp-1',
             name: 'Casey Morgan',
             role: 'VP Operations · Client admin',
             avatar: { initials: 'CM', name: 'Casey Morgan', colorClass: 'c4', isOutside: true },
         },
         {
-            id: 'bea',
+            id: 'rcp-2',
             name: 'Bea Tanaka',
             role: 'Operations analyst',
             avatar: { initials: 'BT', name: 'Bea Tanaka', colorClass: 'c5', isOutside: true },
         },
         {
-            id: 'omar',
+            id: 'rcp-3',
             name: 'Omar Haddad',
             role: 'Plant director, Dayton',
             avatar: { initials: 'OH', name: 'Omar Haddad', colorClass: 'c3', isOutside: true },
         },
         {
-            id: 'lena',
+            id: 'rcp-4',
             name: 'Lena Fischer',
             role: 'CFO · read-only',
             avatar: { initials: 'LF', name: 'Lena Fischer', colorClass: 'c2', isOutside: true },
         },
         {
-            id: 'more',
+            id: 'rcp-more',
             name: '2 more',
             role: 'through Northwind',
             avatar: { initials: '+2', name: '2 more', colorClass: 'c7', isOutside: true },
             isMore: true,
             moreCount: 2,
+            moreSubtitle: 'through Northwind',
         },
     ];
 
     public shareFindings: FindingModel[] = [
         {
-            id: 'f-1',
+            id: 'fnd-1',
             quotation: '“…<mark>as the Dayton plant manager told us</mark>, the current tool can’t see past Tuesday.”',
             originalPhrase: 'as the Dayton plant manager told us',
             suggestedPhrase: 'as one plant leader told us',
             status: 'Flagged',
         },
         {
-            id: 'f-2',
+            id: 'fnd-2',
             quotation: '“Finance reports a nine-day close; <mark>Jim in Finance</mark> described the process as manual.”',
             originalPhrase: 'Jim in Finance',
             suggestedPhrase: 'a finance team member',
@@ -644,9 +641,39 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         },
     ];
 
+    private client: CollaborationClient | null = null;
+
+    protected async loadRealData(): Promise<void> {
+        try {
+            if (CollaborationClient.isAvailable()) {
+                this.client = new CollaborationClient();
+            }
+            const rv = new RunView();
+            const spacesRes = await rv.RunView<{ ID: string; Name: string; Description: string; Status: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                ResultType: 'simple',
+                MaxRows: 50,
+            });
+            if (spacesRes?.Success && spacesRes.Results && spacesRes.Results.length > 0) {
+                this.hasAccess = true;
+            }
+        } catch {
+            // Graceful fallback to canonical story representation
+        }
+    }
+
+    public onInviteClicked(): void {
+        // Invite member dialog / flow
+    }
+
+    public onNewClicked(): void {
+        // Create sub-space / resource flow
+    }
+
     public override ngOnInit(): void {
         super.ngOnInit();
         this.syncStateWithAgent();
+        void this.loadRealData();
         this.NotifyLoadComplete();
     }
 

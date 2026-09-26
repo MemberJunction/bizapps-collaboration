@@ -54,6 +54,7 @@ export interface PostSpaceMessageGraphQLPayload {
     Success: boolean;
     DetailID?: string;
     AssistantDetailID?: string;
+    AssistantError?: string;
     ErrorMessage?: string;
 }
 
@@ -103,6 +104,7 @@ mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
         Success
         DetailID
         AssistantDetailID
+        AssistantError
         ErrorMessage
     }
 }

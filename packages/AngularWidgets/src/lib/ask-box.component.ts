@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-ask-box',
@@ -44,9 +45,7 @@ import { FormsModule } from '@angular/forms';
       }
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       line-height: var(--mjc-line-height);

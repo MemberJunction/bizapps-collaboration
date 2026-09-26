@@ -7,6 +7,7 @@ import { CollabNeedsYouCardComponent } from './needs-you-card.component';
 import { CollabItemCardComponent } from './item-card.component';
 import { CollabItemRowComponent } from './item-row.component';
 import { CollabAskBoxComponent } from './ask-box.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface RoomMiniMessage {
   id?: string;
@@ -197,9 +198,7 @@ export interface SubSpaceSummary {
       </div>
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       flex: 1;

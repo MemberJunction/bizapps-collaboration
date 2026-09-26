@@ -1,11 +1,13 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY } from '../../entity-names.js';
+import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
 
+const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
+const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
@@ -168,6 +170,54 @@ const checks: NamedCheck[] = [
             const replyMsg = beaReplyRes.Results![0].Message;
             Assert(!replyMsg.includes('discovery-brief.pdf'), 'Room assistant reply must not name Team file discovery-brief.pdf');
             Assert(!replyMsg.includes('field-notes.txt'), 'Room assistant reply must not name Team file field-notes.txt');
+
+            // B0.2: With a Shared item in Sealed branch, Sam asks in Northwind's room over the wire, and as Casey the reply does not name it
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const caseyCtx = await getPersonaClientContext(ctx, 'casey');
+
+            const fileRows = await FindRows<{ ID: string; Name: string }>(ctx, FILE_ENTITY, '1=1', ['ID', 'Name']);
+            Assert(fileRows.length > 0, 'Found at least one file to link in Sealed branch');
+            const fileEntity = ctx.Provider.EntityByName(FILE_ENTITY);
+            Assert(!!fileEntity, 'File entity exists');
+
+            const sealedItem = await samCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, samCtx.User);
+            sealedItem.NewRecord();
+            sealedItem.SpaceID = SEALED_BRANCH_SPACE_ID;
+            sealedItem.EntityID = fileEntity!.ID;
+            sealedItem.RecordID = `ID|${fileRows[0].ID}`;
+            sealedItem.Band = 'Shared';
+            const savedSealedItem = await sealedItem.Save();
+            Assert(savedSealedItem, 'Creating Shared item in Sealed branch must succeed over the wire');
+
+            try {
+                const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+                const samPostRes = await samClient.PostSpaceMessage({
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Text: '@Assistant summarize all materials in this space',
+                    ExecuteAgent: true,
+                });
+                Assert(samPostRes.Success === true, `Sam PostSpaceMessage in Northwind room failed: ${samPostRes.ErrorMessage ?? ''}`);
+                if (samPostRes.DetailID) createdDetailIds.push(samPostRes.DetailID);
+                if (samPostRes.AssistantDetailID) createdDetailIds.push(samPostRes.AssistantDetailID);
+
+                // Casey reads the assistant reply in Northwind's room
+                const caseyReplyRes = await View(caseyCtx).RunView<{ ID: string; Message: string }>(
+                    {
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ID = '${samPostRes.AssistantDetailID}'`,
+                        Fields: ['ID', 'Message'],
+                        ResultType: 'simple',
+                    },
+                    caseyCtx.User,
+                );
+                Assert(caseyReplyRes.Success && (caseyReplyRes.Results?.length ?? 0) === 1, 'Casey can read Northwind room assistant reply over the wire');
+                const nwReplyMsg = caseyReplyRes.Results![0].Message;
+                Assert(!nwReplyMsg.includes(fileRows[0].Name), `Northwind room assistant reply over the wire must not name sub-space Shared file ${fileRows[0].Name}`);
+            } finally {
+                if (sealedItem.ID) {
+                    await sealedItem.Delete();
+                }
+            }
         },
     },
     {

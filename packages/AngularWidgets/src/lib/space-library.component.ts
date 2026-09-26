@@ -4,6 +4,7 @@ import { CollabAvatarStackComponent } from './avatar-stack.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { CollabItemPreviewComponent } from './item-preview.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface LibraryCollection {
   id: string;
@@ -193,9 +194,7 @@ export interface LibrarySmartView {
       }
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: flex;
       flex-direction: column;

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { FileKind, FindingModel, RecipientPersonModel } from './types';
 import { CollabShareCheckComponent } from './share-check.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-share-check-dialog',
@@ -32,9 +33,7 @@ import { CollabShareCheckComponent } from './share-check.component';
       />
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       position: absolute;

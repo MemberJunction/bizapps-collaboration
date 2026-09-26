@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { FileKind, ItemRowModel } from './types';
 import { CollabFileIconComponent } from './file-icon.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-item-row',
@@ -31,9 +32,7 @@ import { CollabFileIconComponent } from './file-icon.component';
       }
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       line-height: var(--mjc-line-height);

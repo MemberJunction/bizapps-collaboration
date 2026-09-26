@@ -190,7 +190,7 @@ export async function loadWorld(): Promise<void> {
     };
 
     const types = new Map<string, string>();
-    for (const code of ['workspace', 'committee', 'cohort']) {
+    for (const code of ['workspace', 'cohort']) {
         const id = await findId(provider, TYPES, `Code = '${code}'`, system);
         if (!id) throw new Error(`Seeded type ${code} is missing. Run the Collaboration migrations first.`);
         types.set(code, id);

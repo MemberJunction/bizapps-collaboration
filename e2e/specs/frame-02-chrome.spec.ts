@@ -246,8 +246,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         const diffRatio = numDiffPixels / totalPixels;
         console.log(`Frame 02 Full Overview visual diff: ${numDiffPixels} / ${totalPixels} pixels (${(diffRatio * 100).toFixed(2)}%)`);
 
-        // Frame 02 full frame budget (Linux full Chromium & macOS text antialiasing: <= 80,000 px)
-        const budget = 80000;
+        // Frame 02 full frame budget (CI Linux full Chromium: <= 45,000 px; macOS text antialiasing: <= 80,000 px)
+        const budget = process.env.CI ? 45000 : 80000;
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 });

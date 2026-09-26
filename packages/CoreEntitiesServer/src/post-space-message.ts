@@ -122,10 +122,13 @@ export async function postSpaceMessage(
 /**
  * Room replies are visible to everyone who reaches the space (including participants
  * who can only see Shared items). The room reply therefore strictly names items
- * that everyone in the room can read: Shared items only.
+ * that everyone in the room can read: this space's own Shared items only.
+ * Items in sub-spaces (even if Shared) have their own audience and cannot be quoted
+ * in this space's room reply.
  */
-export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[]): SpaceAgentCandidateItem[] {
-    return items.filter((item) => item.Band === 'Shared');
+export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[], roomSpaceId: string): SpaceAgentCandidateItem[] {
+    const normRoomId = roomSpaceId.trim().toUpperCase();
+    return items.filter((item) => item.Band === 'Shared' && item.SpaceID.trim().toUpperCase() === normRoomId);
 }
 
 /**
@@ -140,7 +143,7 @@ async function postAssistantReply(
     spaceId: string,
 ): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
     const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-    const roomQuoted = filterRoomReplyItems(retrieval.quotedItems);
+    const roomQuoted = filterRoomReplyItems(retrieval.quotedItems, spaceId);
     let agentMessage: string;
     if (roomQuoted.length === 0) {
         agentMessage = 'I searched this space for materials within your reach, but found no matching items.';

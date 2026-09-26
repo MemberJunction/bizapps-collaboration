@@ -6,11 +6,16 @@ import {
     AI_AGENT_SEARCH_SCOPE_ENTITY,
     AI_AGENT_SKILL_ENTITY,
     AI_SKILL_ENTITY,
+    CONVERSATION_DETAIL_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
 } from '../../entity-names.js';
-import { FindRows, getPersonaContext } from '../../wire.js';
+import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
+import { FindRows, getPersonaContext, getPersonaClientContext } from '../../wire.js';
+
+const createdDetailIds: string[] = [];
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
@@ -234,11 +239,21 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'agent.AG6',
-        Name: 'AG6 — Space room message reflects user context',
-        RequiresMutation: false,
+        Name: 'AG6 — Space room message submission via typed client verifies DetailID',
+        RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
-            Assert(!!beaCtx.User.ID, 'Bea context is valid');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const client = new CollaborationClient(beaCtx.GraphQLProvider);
+            const result = await client.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Text: 'AG6 client check verification message',
+                ExecuteAgent: false,
+            });
+            Assert(result.Success === true, `PostSpaceMessage succeeded: ${result.ErrorMessage ?? 'none'}`);
+            Assert(typeof result.DetailID === 'string' && result.DetailID.length > 0, 'PostSpaceMessage returned valid DetailID');
+            if (result.DetailID) {
+                createdDetailIds.push(result.DetailID);
+            }
         },
     },
 ];
@@ -246,5 +261,20 @@ const checks: NamedCheck[] = [
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
     Setup: async () => {},
-    Teardown: async () => {},
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        while (createdDetailIds.length > 0) {
+            const id = createdDetailIds.pop();
+            if (id) {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                if (await detail.Load(id)) {
+                    const deleted = await detail.Delete();
+                    if (!deleted) {
+                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
+                        console.error(`agent client Teardown failed to delete detail ${id}: ${err}`);
+                        throw new Error(`agent client Teardown failed to delete detail ${id}: ${err}`);
+                    }
+                }
+            }
+        }
+    },
 });

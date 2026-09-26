@@ -26,6 +26,9 @@ export class PostSpaceMessagePayload {
     AssistantDetailID?: string;
 
     @Field({ nullable: true })
+    AssistantError?: string;
+
+    @Field({ nullable: true })
     ErrorMessage?: string;
 }
 
@@ -54,6 +57,7 @@ export class PostSpaceMessageResolver extends ResolverBase {
                 Success: true,
                 DetailID: result.detailId,
                 AssistantDetailID: result.assistantDetailId,
+                AssistantError: result.assistantError,
             };
         } catch (error) {
             LogError(`PostSpaceMessage failed for space ${input.SpaceID} and user ${user.ID}: ${error instanceof Error ? error.message : String(error)}`);

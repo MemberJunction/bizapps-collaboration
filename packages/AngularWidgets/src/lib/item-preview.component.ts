@@ -3,6 +3,7 @@ import type { AvatarItem, FileKind, RecentUseModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-item-preview',
@@ -104,9 +105,7 @@ import { CollabFileIconComponent } from './file-icon.component';
       }
     </aside>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       line-height: var(--mjc-line-height);

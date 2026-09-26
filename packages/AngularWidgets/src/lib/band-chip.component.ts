@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SpaceBand } from './types';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-band-chip',
@@ -16,7 +17,7 @@ import { SpaceBand } from './types';
       {{ Label || Band }}
     </span>
   `,
-  styles: [`
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: inline-flex;
       vertical-align: middle;

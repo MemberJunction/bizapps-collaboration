@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import type { FileKind } from './types';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-file-icon',
@@ -10,9 +11,7 @@ import type { FileKind } from './types';
       <i [class]="iconClass"></i>
     </span>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: inline-flex;
       vertical-align: middle;

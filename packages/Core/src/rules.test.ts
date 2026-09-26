@@ -630,20 +630,23 @@ describe('item writes', () => {
         assert.equal(demoteAbove.ok, false);
         if (!demoteAbove.ok) assert.equal(demoteAbove.code, 'above-ceiling');
 
-        // 2. Removing someone above: Casey tries to remove Sam (currentRole level 20 > 10)
+        // 2. Removing someone above: Casey tries to remove Sam (currentRole level 20 > 10) while setting role to client-member
         const removeAbove = refuseInvite({
             callerUserId: 'casey',
             inviteeUserId: 'sam',
             targetSpaceId: 'northwind',
             currentRole: memberRole,
-            granted: memberRole,
+            granted: clientMember,
             approval: 'AutoApprove',
             memberCap: null,
             spaces: testTree,
             memberships,
         });
         assert.equal(removeAbove.ok, false);
-        if (!removeAbove.ok) assert.equal(removeAbove.code, 'above-ceiling');
+        if (!removeAbove.ok) {
+            assert.equal(removeAbove.code, 'above-ceiling');
+            assert.equal(removeAbove.message, 'Invite refused: that role is above the level this member may grant.');
+        }
 
         // 3. Peer admin: Casey tries to modify another client-admin peer (currentRole level 20 > 10)
         const peerAdmin = refuseInvite({
@@ -660,7 +663,21 @@ describe('item writes', () => {
         assert.equal(peerAdmin.ok, false);
         if (!peerAdmin.ok) assert.equal(peerAdmin.code, 'above-ceiling');
 
-        // 4. Own seat: Casey leaves (own seat where leaving stays allowed via isSelfRemoval)
+        // 4. Own seat through refuseInvite: caller is target, current role is above ceiling (e.g. member level 20 > 10), current-role check does not refuse it
+        const selfUpdate = refuseInvite({
+            callerUserId: 'sam',
+            inviteeUserId: 'sam',
+            targetSpaceId: 'northwind',
+            currentRole: memberRole,
+            granted: clientMember,
+            approval: 'AutoApprove',
+            memberCap: null,
+            spaces: testTree,
+            memberships,
+        });
+        assert.equal(selfUpdate.ok, true);
+
+        // 5. Own seat self-removal helper
         assert.equal(isSelfRemoval({ callerUserId: 'casey', inviteeUserId: 'casey', nextStatus: 'Removed' }), true);
         assert.equal(isSelfRemoval({ callerUserId: 'casey', inviteeUserId: 'sam', nextStatus: 'Removed' }), false);
     });

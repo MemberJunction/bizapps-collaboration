@@ -12,6 +12,7 @@ import {
     SPACE_MEMBER_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_TYPE_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
     SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
     TASK_ENTITY,
@@ -178,17 +179,26 @@ const checks: NamedCheck[] = [
             );
             Assert(samSeats.length === 1, 'Sam seat found on Northwind');
             const samSeatId = samSeats[0].ID;
+            // 3. B0.1: Casey (client-admin on Northwind, ceiling 10) sets Sam's seat (member, level 20) to client-member and Removed
+            const clientMemberRoles = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_ROLE_TYPE_ENTITY,
+                "Code = 'client-member'",
+                ['ID'],
+            );
+            Assert(clientMemberRoles.length === 1, 'client-member role found');
+            const clientMemberRoleId = clientMemberRoles[0].ID;
 
-            // Casey attempts to remove Sam (level 20 > Casey's ceiling 10)
             const caseyMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, casey);
             Assert(await caseyMember.Load(samSeatId), 'Load Sam seat as Casey');
+            caseyMember.SpaceRoleTypeID = clientMemberRoleId;
             caseyMember.Status = 'Removed';
             const savedCaseyRemove = await caseyMember.Save();
             Assert(!savedCaseyRemove, 'Casey removing Sam must fail save due to role ceiling');
             const caseyReason = caseyMember.LatestResult?.CompleteMessage ?? '';
             Assert(
-                caseyReason.includes('above your role ceiling') || caseyReason.includes('within your ceiling') || caseyReason.includes('Grant refused'),
-                `Expected role ceiling refusal message, got: ${caseyReason}`,
+                caseyReason.includes('Invite refused: that role is above the level this member may grant.'),
+                `Expected exact role ceiling refusal message, got: ${caseyReason}`,
             );
 
             // Ada (owner, ceiling >= 20) removes Sam
@@ -299,6 +309,11 @@ const checks: NamedCheck[] = [
             subUnderTeam.Status = 'Open';
             const savedTeamSub = await subUnderTeam.Save();
             Assert(!savedTeamSub, 'Bea creating subtask under Team task must fail save');
+            const teamSubReason = subUnderTeam.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                teamSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record') || teamSubReason.includes('Access denied'),
+                `Expected Access denied refusal for subtask under Team task, got: ${teamSubReason}`,
+            );
 
             // 3b. Bea creating a subtask under unreachable task is refused
             const subUnderUnreachable = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, bea);
@@ -308,6 +323,11 @@ const checks: NamedCheck[] = [
             subUnderUnreachable.Status = 'Open';
             const savedUnreachableSub = await subUnderUnreachable.Save();
             Assert(!savedUnreachableSub, 'Bea creating subtask under unreachable space task must fail save');
+            const unreachableSubReason = subUnderUnreachable.LatestResult?.CompleteMessage ?? '';
+            Assert(
+                unreachableSubReason.includes('Access denied for new MJ_BizApps_Tasks: Tasks record') || unreachableSubReason.includes('Access denied'),
+                `Expected Access denied refusal for subtask under unreachable task, got: ${unreachableSubReason}`,
+            );
 
             // 3c. Bea creating a subtask under writable Shared task is accepted
             const subUnderShared = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, bea);

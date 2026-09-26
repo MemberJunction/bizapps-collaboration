@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import type { AvatarItem, FileKind, ItemCardModel } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabFileIconComponent } from './file-icon.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-item-card',
@@ -37,9 +38,7 @@ import { CollabFileIconComponent } from './file-icon.component';
       </div>
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       min-width: 0;

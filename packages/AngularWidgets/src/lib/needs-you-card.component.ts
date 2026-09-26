@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { NeedsYouItemModel } from './types';
+import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-needs-you-card',
@@ -24,9 +25,7 @@ import type { NeedsYouItemModel } from './types';
       <button type="button" class="btn sm" (click)="onAction()">{{ ActionLabel }}</button>
     </div>
   `,
-  styles: [`
-    @use './tokens' as *;
-
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: block;
       min-width: 0;

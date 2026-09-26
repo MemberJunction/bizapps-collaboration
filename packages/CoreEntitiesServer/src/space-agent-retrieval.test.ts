@@ -176,11 +176,14 @@ function createMockProvider(): IMetadataProvider {
     return mockProvider as unknown as IMetadataProvider;
 }
 
+let mockSpacesOverride: Record<string, unknown>[] | null = null;
+let mockItemsOverride: Record<string, unknown>[] | null = null;
+
 function runSingleView(params: RunViewParams): Record<string, unknown>[] {
     const { EntityName, ExtraFilter } = params;
     const filter = typeof ExtraFilter === 'string' ? ExtraFilter : (ExtraFilter ? String(ExtraFilter) : '');
     if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
-        return spacesData;
+        return mockSpacesOverride ?? spacesData;
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
         return rolesData;
@@ -195,6 +198,7 @@ function runSingleView(params: RunViewParams): Record<string, unknown>[] {
         });
     }
     if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+        if (mockItemsOverride) return mockItemsOverride;
         return itemsData.filter((item) => {
             if (filter.includes('SpaceID IN')) {
                 return filter.toLowerCase().includes(item.SpaceID.toLowerCase());
@@ -283,16 +287,58 @@ describe('resolveSpaceAgentRetrieval', () => {
         assert.equal(resQuote.candidateItems.length, 0);
     });
 
-    it('B0.2: filterRoomReplyItems includes only Shared items for the room reply', () => {
+    it('B0.2: filterRoomReplyItems includes only Shared items for the room space', () => {
         const items: SpaceAgentCandidateItem[] = [
             { ID: '1', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r1', Name: 'site-photo.png', Description: null, Band: 'Shared', StoredContentType: 'image/png' },
             { ID: '2', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r2', Name: 'discovery-brief.pdf', Description: null, Band: 'Team', StoredContentType: 'application/pdf' },
             { ID: '3', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r3', Name: 'field-notes.txt', Description: null, Band: 'Team', StoredContentType: 'text/plain' },
+            { ID: '4', SpaceID: 'SOME-SUB-SPACE-ID', EntityID: FILES_ENTITY_ID, RecordID: 'r4', Name: 'subspace-shared.pdf', Description: null, Band: 'Shared', StoredContentType: 'application/pdf' },
         ];
-        const roomItems = filterRoomReplyItems(items);
+        const roomItems = filterRoomReplyItems(items, CHILD_SPACE_ID);
         assert.equal(roomItems.length, 1);
         assert.equal(roomItems[0].Name, 'site-photo.png');
         assert.equal(roomItems[0].Band, 'Shared');
+        assert.equal(roomItems[0].SpaceID, CHILD_SPACE_ID);
+    });
+
+    it('B0.2: filterRoomReplyItems excludes Shared items from sub-spaces even when asker may quote them', () => {
+        const SUB_SPACE_ID = 'SUB-0001-0000-4000-8000-000000000001';
+        const items: SpaceAgentCandidateItem[] = [
+            { ID: '10', SpaceID: SUB_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r10', Name: 'sub-space-shared.docx', Description: null, Band: 'Shared', StoredContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+            { ID: '11', SpaceID: CHILD_SPACE_ID, EntityID: FILES_ENTITY_ID, RecordID: 'r11', Name: 'this-space-shared.docx', Description: null, Band: 'Shared', StoredContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        ];
+        const roomItems = filterRoomReplyItems(items, CHILD_SPACE_ID);
+        assert.equal(roomItems.length, 1);
+        assert.equal(roomItems[0].Name, 'this-space-shared.docx');
+        assert.equal(roomItems.some((i) => i.Name === 'sub-space-shared.docx'), false);
+    });
+
+    it('refuses retrieval if spaces page comes back full (2000 rows)', async () => {
+        const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const fakeSpaces = Array.from({ length: 2000 }, () => spacesData[0]);
+        mockSpacesOverride = fakeSpaces;
+        try {
+            await assert.rejects(
+                () => resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID),
+                /spaces page came back full/
+            );
+        } finally {
+            mockSpacesOverride = null;
+        }
+    });
+
+    it('refuses retrieval if items page comes back full (2000 rows)', async () => {
+        const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const fakeItems = Array.from({ length: 2000 }, () => itemsData[0]);
+        mockItemsOverride = fakeItems;
+        try {
+            await assert.rejects(
+                () => resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID),
+                /items page came back full/
+            );
+        } finally {
+            mockItemsOverride = null;
+        }
     });
 });
 
