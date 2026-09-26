@@ -20,6 +20,7 @@ import { SpaceBand } from './types';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .chip {
       display: inline-flex;
@@ -57,12 +58,25 @@ import { SpaceBand } from './types';
   `]
 })
 export class CollabBandChipComponent {
-  @Input() band: SpaceBand = 'Shared';
-  @Input() size: 'sm' | 'md' = 'sm';
-  @Input() label = '';
-  @Input() showIcon = true;
+  @Input() Band: SpaceBand = 'Shared';
+  @Input() Size: 'sm' | 'md' = 'sm';
+  @Input() Label = '';
+  @Input() ShowIcon = true;
+
+  // Compatibility aliases
+  @Input() set band(v: SpaceBand) { this.Band = v; }
+  get band(): SpaceBand { return this.Band; }
+
+  @Input() set size(v: 'sm' | 'md') { this.Size = v; }
+  get size(): 'sm' | 'md' { return this.Size; }
+
+  @Input() set label(v: string) { this.Label = v; }
+  get label(): string { return this.Label; }
+
+  @Input() set showIcon(v: boolean) { this.ShowIcon = v; }
+  get showIcon(): boolean { return this.ShowIcon; }
 
   get isShared(): boolean {
-    return this.band === 'Shared';
+    return this.Band === 'Shared';
   }
 }

@@ -12,13 +12,13 @@ import { TabItem } from './types';
       class="tabs"
       mjTabList
       (TabActivateRequested)="onTabActivateRequested($event)">
-      @for (tab of tabs; track tab.id; let idx = $index) {
+      @for (tab of Tabs; track tab.id; let idx = $index) {
         <button
           type="button"
           role="tab"
           class="tab"
-          [class.active]="tab.id === activeTab"
-          [attr.aria-selected]="tab.id === activeTab"
+          [class.active]="tab.id === ActiveTab"
+          [attr.aria-selected]="tab.id === ActiveTab"
           (click)="selectTab(tab.id)">
           @if (tab.iconClass) {
             <i [class]="tab.iconClass"></i>
@@ -34,6 +34,7 @@ import { TabItem } from './types';
   styles: [`
     :host {
       display: block;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .tabs {
       display: flex;
@@ -79,19 +80,27 @@ import { TabItem } from './types';
   `]
 })
 export class CollabSpaceTabsComponent {
-  @Input() tabs: TabItem[] = [];
-  @Input() activeTab = '';
-  @Output() tabChange = new EventEmitter<string>();
+  @Input() Tabs: TabItem[] = [];
+  @Input() ActiveTab = '';
+  @Output() TabSelectRequested = new EventEmitter<string>();
+  @Output() tabChange = this.TabSelectRequested; // Compatibility alias
+
+  // Compatibility aliases
+  @Input() set tabs(v: TabItem[]) { this.Tabs = v; }
+  get tabs(): TabItem[] { return this.Tabs; }
+
+  @Input() set activeTab(v: string) { this.ActiveTab = v; }
+  get activeTab(): string { return this.ActiveTab; }
 
   selectTab(tabId: string): void {
-    if (this.activeTab !== tabId) {
-      this.activeTab = tabId;
-      this.tabChange.emit(tabId);
+    if (this.ActiveTab !== tabId) {
+      this.ActiveTab = tabId;
+      this.TabSelectRequested.emit(tabId);
     }
   }
 
   onTabActivateRequested(req: { Index: number }): void {
-    const target = this.tabs[req.Index];
+    const target = this.Tabs[req.Index];
     if (target) {
       this.selectTab(target.id);
     }

@@ -10,24 +10,26 @@ import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { RailSpaceNode } from './types.ts';
 
 describe('CollabAvatarComponent', () => {
-  it('uses explicit colorClass when provided', () => {
+  it('uses explicit ColorClass when provided', () => {
     const comp = new CollabAvatarComponent();
-    comp.initials = 'AL';
-    comp.colorClass = 'c5';
+    comp.Initials = 'AL';
+    comp.ColorClass = 'c5';
     expect(comp.computedColorClass).toBe('c5');
+    // Test alias
+    expect(comp.colorClass).toBe('c5');
   });
 
-  it('computes stable colorClass from personId when colorClass not provided', () => {
+  it('computes stable colorClass from PersonId when ColorClass not provided', () => {
     const comp = new CollabAvatarComponent();
-    comp.initials = 'SO';
-    comp.personId = 'user-sam-okafor';
+    comp.Initials = 'SO';
+    comp.PersonId = 'user-sam-okafor';
     const computed = comp.computedColorClass;
     expect(computed).toMatch(/^c([1-9]|10)$/);
   });
 
-  it('computes stable colorClass from name as fallback', () => {
+  it('computes stable colorClass from Name as fallback', () => {
     const comp = new CollabAvatarComponent();
-    comp.name = 'Priya Shah';
+    comp.Name = 'Priya Shah';
     const computed = comp.computedColorClass;
     expect(computed).toMatch(/^c([1-9]|10)$/);
   });
@@ -39,10 +41,10 @@ describe('CollabAvatarComponent', () => {
 });
 
 describe('CollabAvatarStackComponent', () => {
-  it('slices visible avatars to max and computes moreCount', () => {
+  it('slices visible avatars to Max and computes moreCount', () => {
     const comp = new CollabAvatarStackComponent();
-    comp.max = 3;
-    comp.avatars = [
+    comp.Max = 3;
+    comp.Avatars = [
       { initials: 'A', name: 'Alice' },
       { initials: 'B', name: 'Bob' },
       { initials: 'C', name: 'Charlie' },
@@ -54,17 +56,17 @@ describe('CollabAvatarStackComponent', () => {
     expect(comp.computedMoreCount).toBe(2);
   });
 
-  it('respects explicit moreCount when provided', () => {
+  it('respects explicit MoreCount when provided', () => {
     const comp = new CollabAvatarStackComponent();
-    comp.max = 4;
-    comp.moreCount = 10;
-    comp.avatars = [{ initials: 'A' }];
+    comp.Max = 4;
+    comp.MoreCount = 10;
+    comp.Avatars = [{ initials: 'A' }];
     expect(comp.computedMoreCount).toBe(10);
   });
 
   it('handles empty avatars gracefully', () => {
     const comp = new CollabAvatarStackComponent();
-    comp.avatars = [];
+    comp.Avatars = [];
     expect(comp.visibleAvatars.length).toBe(0);
     expect(comp.computedMoreCount).toBe(0);
   });
@@ -73,31 +75,34 @@ describe('CollabAvatarStackComponent', () => {
 describe('CollabTypeTileComponent', () => {
   it('has defaults and accepts custom inputs', () => {
     const comp = new CollabTypeTileComponent();
-    expect(comp.iconClass).toBe('fa-solid fa-shapes');
-    expect(comp.size).toBe('md');
-    expect(comp.isClosed).toBe(false);
+    expect(comp.IconClass).toBe('fa-solid fa-shapes');
+    expect(comp.Size).toBe('md');
+    expect(comp.IsClosed).toBe(false);
 
-    comp.iconClass = 'fa-solid fa-compass';
-    comp.typeCode = 'eng';
-    comp.size = 'xl';
-    comp.color = '#0076b6';
-    comp.isClosed = true;
+    comp.IconClass = 'fa-solid fa-compass';
+    comp.Size = 'xl';
+    comp.Color = '#0076b6';
+    comp.IsClosed = true;
 
-    expect(comp.iconClass).toBe('fa-solid fa-compass');
-    expect(comp.typeCode).toBe('eng');
-    expect(comp.size).toBe('xl');
-    expect(comp.color).toBe('#0076b6');
-    expect(comp.isClosed).toBe(true);
+    expect(comp.IconClass).toBe('fa-solid fa-compass');
+    expect(comp.Size).toBe('xl');
+    expect(comp.Color).toBe('#0076b6');
+    expect(comp.IsClosed).toBe(true);
+
+    // Test compatibility aliases
+    comp.color = '#7c3aed';
+    expect(comp.Color).toBe('#7c3aed');
+    expect(comp.color).toBe('#7c3aed');
   });
 });
 
 describe('CollabBandChipComponent', () => {
   it('correctly reports isShared and defaults label', () => {
     const comp = new CollabBandChipComponent();
-    comp.band = 'Shared';
+    comp.Band = 'Shared';
     expect(comp.isShared).toBe(true);
 
-    comp.band = 'Team';
+    comp.Band = 'Team';
     expect(comp.isShared).toBe(false);
   });
 });
@@ -105,88 +110,91 @@ describe('CollabBandChipComponent', () => {
 describe('CollabAudiencePillComponent', () => {
   it('accepts staff and outside avatar arrays and summary', () => {
     const comp = new CollabAudiencePillComponent();
-    comp.staffAvatars = [{ initials: 'AL' }];
-    comp.outsideAvatars = [{ initials: 'CM', isOutside: true }];
-    comp.totalPeople = 9;
-    comp.summary = '3 Meridian · 6 Northwind';
+    comp.StaffAvatars = [{ initials: 'AL' }];
+    comp.OutsideAvatars = [{ initials: 'CM', isOutside: true }];
+    comp.TotalPeople = 9;
+    comp.Summary = '3 Meridian · 6 Northwind';
 
-    expect(comp.totalPeople).toBe(9);
-    expect(comp.summary).toBe('3 Meridian · 6 Northwind');
-    expect(comp.staffAvatars.length).toBe(1);
-    expect(comp.outsideAvatars.length).toBe(1);
+    expect(comp.TotalPeople).toBe(9);
+    expect(comp.Summary).toBe('3 Meridian · 6 Northwind');
+    expect(comp.StaffAvatars.length).toBe(1);
+    expect(comp.OutsideAvatars.length).toBe(1);
   });
 });
 
 describe('CollabSpaceTabsComponent', () => {
-  it('emits tabChange when selectTab is called with new tab id', () => {
+  it('emits TabSelectRequested and tabChange when selectTab is called with new tab id', () => {
     const comp = new CollabSpaceTabsComponent();
-    comp.tabs = [
+    comp.Tabs = [
       { id: 'overview', label: 'Overview' },
       { id: 'library', label: 'Library', count: 24 }
     ];
-    comp.activeTab = 'overview';
+    comp.ActiveTab = 'overview';
 
-    let emitted: string | null = null;
+    let emittedPascal: string | null = null;
+    let emittedCamel: string | null = null;
+    comp.TabSelectRequested.subscribe(id => {
+      emittedPascal = id;
+    });
     comp.tabChange.subscribe(id => {
-      emitted = id;
+      emittedCamel = id;
     });
 
     comp.selectTab('library');
-    expect(comp.activeTab).toBe('library');
-    expect(emitted).toBe('library');
+    expect(comp.ActiveTab).toBe('library');
+    expect(emittedPascal).toBe('library');
+    expect(emittedCamel).toBe('library');
 
     // Selecting already active tab does not re-emit
-    emitted = null;
+    emittedPascal = null;
     comp.selectTab('library');
-    expect(emitted).toBeNull();
+    expect(emittedPascal).toBeNull();
   });
 
   it('handles onTabActivateRequested from keyboard directive', () => {
     const comp = new CollabSpaceTabsComponent();
-    comp.tabs = [
+    comp.Tabs = [
       { id: 'overview', label: 'Overview' },
       { id: 'library', label: 'Library' },
       { id: 'work', label: 'Work' }
     ];
-    comp.activeTab = 'overview';
+    comp.ActiveTab = 'overview';
 
     let emitted: string | null = null;
-    comp.tabChange.subscribe(id => {
+    comp.TabSelectRequested.subscribe(id => {
       emitted = id;
     });
 
     comp.onTabActivateRequested({ Index: 2 });
-    expect(comp.activeTab).toBe('work');
+    expect(comp.ActiveTab).toBe('work');
     expect(emitted).toBe('work');
   });
 });
 
 describe('CollabSpaceRailComponent', () => {
-  it('emits navSelect when selectNav is called', () => {
+  it('emits NavSelectRequested when selectNav is called', () => {
     const comp = new CollabSpaceRailComponent();
     let emitted: string | null = null;
-    comp.navSelect.subscribe(nav => {
+    comp.NavSelectRequested.subscribe(nav => {
       emitted = nav;
     });
 
     comp.selectNav('inbox');
-    expect(comp.activeNav).toBe('inbox');
     expect(emitted).toBe('inbox');
   });
 
-  it('emits spaceSelect when selectSpace is called', () => {
+  it('emits SpaceOpenRequested when selectSpace is called', () => {
     const comp = new CollabSpaceRailComponent();
     let emitted: string | null = null;
-    comp.spaceSelect.subscribe(id => {
+    comp.SpaceOpenRequested.subscribe(id => {
       emitted = id;
     });
 
     comp.selectSpace('space-123');
-    expect(comp.activeSpaceId).toBe('space-123');
     expect(emitted).toBe('space-123');
   });
 
-  it('toggles isExpanded on node with children and emits spaceToggle', () => {
+  it('toggles expansion without mutating the input node and emits SpaceToggleRequested', () => {
     const comp = new CollabSpaceRailComponent();
     const node: RailSpaceNode = {
       id: 'space-northwind',
@@ -198,7 +206,7 @@ describe('CollabSpaceRailComponent', () => {
     };
 
     let emittedNode: RailSpaceNode | null = null;
-    comp.spaceToggle.subscribe(n => {
+    comp.SpaceToggleRequested.subscribe(n => {
       emittedNode = n;
     });
 
@@ -209,9 +217,13 @@ describe('CollabSpaceRailComponent', () => {
       }
     };
 
+    expect(comp.isNodeExpanded(node)).toBe(false);
     comp.toggleSpace(node, mockEvent);
     expect(stopped).toBe(true);
-    expect(node.isExpanded).toBe(true);
+    // Pure: caller's node is NOT mutated
+    expect(node.isExpanded).toBe(false);
+    // Component tracks expansion internally
+    expect(comp.isNodeExpanded(node)).toBe(true);
     expect(emittedNode).toBe(node);
   });
 });

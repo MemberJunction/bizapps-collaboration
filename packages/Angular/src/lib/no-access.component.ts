@@ -39,13 +39,29 @@ import { lockoutMessage } from '@mj-biz-apps/collaboration-core';
   `]
 })
 export class CollaborationNoAccessComponent {
-  @Input() seats: readonly { spaceName: string; status: string }[] = [];
-  @Input() customMessage?: string;
+  @Input('seats')
+  set seats(val: readonly { spaceName: string; status: string }[]) {
+    this.Seats = val;
+  }
+  get seats(): readonly { spaceName: string; status: string }[] {
+    return this.Seats;
+  }
+  @Input() Seats: readonly { spaceName: string; status: string }[] = [];
+
+  @Input('customMessage')
+  set customMessage(val: string | undefined) {
+    this.CustomMessage = val;
+  }
+  get customMessage(): string | undefined {
+    return this.CustomMessage;
+  }
+  @Input() CustomMessage?: string;
 
   get message(): string {
-    if (this.customMessage) {
-      return this.customMessage;
+    if (this.CustomMessage) {
+      return this.CustomMessage;
     }
-    return lockoutMessage(this.seats);
+    return lockoutMessage(this.Seats);
   }
 }
+

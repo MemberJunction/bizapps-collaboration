@@ -26,6 +26,8 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   styles: [`
     :host {
       display: inline-flex;
+      vertical-align: middle;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .av {
       position: relative;
@@ -86,24 +88,49 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   `]
 })
 export class CollabAvatarComponent {
-  @Input() initials = '';
-  @Input() name = '';
-  @Input() avatarUrl = '';
-  @Input() colorClass = '';
-  @Input() personId = '';
-  @Input() size: AvatarSize = 'md';
-  @Input() isOutside = false;
-  @Input() isOnline = false;
+  @Input() Initials = '';
+  @Input() Name = '';
+  @Input() AvatarUrl = '';
+  @Input() ColorClass = '';
+  @Input() PersonId = '';
+  @Input() Size: AvatarSize = 'md';
+  @Input() IsOutside = false;
+  @Input() IsOnline = false;
+
+  // Compatibility aliases
+  @Input() set initials(v: string) { this.Initials = v; }
+  get initials(): string { return this.Initials; }
+
+  @Input() set name(v: string) { this.Name = v; }
+  get name(): string { return this.Name; }
+
+  @Input() set avatarUrl(v: string) { this.AvatarUrl = v; }
+  get avatarUrl(): string { return this.AvatarUrl; }
+
+  @Input() set colorClass(v: string) { this.ColorClass = v; }
+  get colorClass(): string { return this.ColorClass; }
+
+  @Input() set personId(v: string) { this.PersonId = v; }
+  get personId(): string { return this.PersonId; }
+
+  @Input() set size(v: AvatarSize) { this.Size = v; }
+  get size(): AvatarSize { return this.Size; }
+
+  @Input() set isOutside(v: boolean) { this.IsOutside = v; }
+  get isOutside(): boolean { return this.IsOutside; }
+
+  @Input() set isOnline(v: boolean) { this.IsOnline = v; }
+  get isOnline(): boolean { return this.IsOnline; }
 
   get computedColorClass(): string {
-    if (this.colorClass) {
-      return this.colorClass;
+    if (this.ColorClass) {
+      return this.ColorClass;
     }
-    if (this.personId) {
-      return avatarColorClass(this.personId);
+    if (this.PersonId) {
+      return avatarColorClass(this.PersonId);
     }
-    if (this.name) {
-      return avatarColorClass(this.name);
+    if (this.Name) {
+      return avatarColorClass(this.Name);
     }
     return 'c1';
   }

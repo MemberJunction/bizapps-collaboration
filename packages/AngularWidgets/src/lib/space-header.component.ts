@@ -9,9 +9,9 @@ import { BreadcrumbItem } from './types';
   imports: [CommonModule, CollabTypeTileComponent],
   template: `
     <section class="space-head">
-      @if (breadcrumbs && breadcrumbs.length > 0) {
+      @if (Breadcrumbs && Breadcrumbs.length > 0) {
         <div class="crumbs">
-          @for (c of breadcrumbs; track c.label; let last = $last) {
+          @for (c of Breadcrumbs; track c.label; let last = $last) {
             @if (!last) {
               <span>{{ c.label }}</span>
               <i class="fa-solid fa-chevron-right"></i>
@@ -21,29 +21,28 @@ import { BreadcrumbItem } from './types';
           }
         </div>
       }
-      <div class="top" [style.margin-top]="breadcrumbs && breadcrumbs.length > 0 ? '10px' : '0'">
+      <div class="top" [style.margin-top]="Breadcrumbs && Breadcrumbs.length > 0 ? '10px' : '0'">
         <mjc-type-tile
-          [iconClass]="typeIconClass || 'fa-solid fa-compass'"
-          [color]="typeColor || ''"
-          [typeCode]="typeCode || ''"
-          size="xl">
+          [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
+          [Color]="TypeColor || ''"
+          Size="xl">
         </mjc-type-tile>
         <div class="grow">
           <div class="title-row">
-            <h1 class="h1">{{ title }}</h1>
-            @if (typeName) {
-              <span class="chip plain">{{ typeName }}</span>
+            <h1 class="h1">{{ Title }}</h1>
+            @if (TypeName) {
+              <span class="chip plain">{{ TypeName }}</span>
             }
-            @if (status === 'Active') {
+            @if (Status === 'Active') {
               <span class="chip ok"><i class="fa-solid fa-circle" style="font-size:6px"></i>Active</span>
-            } @else if (status === 'Closed') {
+            } @else if (Status === 'Closed') {
               <span class="chip plain">Closed</span>
-            } @else if (status) {
-              <span class="chip plain">{{ status }}</span>
+            } @else if (Status) {
+              <span class="chip plain">{{ Status }}</span>
             }
             <ng-content select="[chips]"></ng-content>
           </div>
-          @if (subtitle) {
+          @if (Subtitle) {
             <div class="sub">
               @for (part of subtitleParts; track $index; let last = $last) {
                 <span>{{ part }}</span>
@@ -65,6 +64,10 @@ import { BreadcrumbItem } from './types';
   styles: [`
     :host {
       display: block;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+    }
+    button {
+      font-family: inherit;
     }
     .space-head {
       background: var(--mj-bg-surface, #ffffff);
@@ -167,21 +170,42 @@ import { BreadcrumbItem } from './types';
   `]
 })
 export class CollabSpaceHeaderComponent {
-  @Input() title = '';
-  @Input() typeName = '';
-  @Input() typeIconClass = '';
-  @Input() typeColor = '';
-  @Input() typeCode = '';
-  @Input() status: 'Active' | 'Closed' | string = 'Active';
-  @Input() subtitle = '';
-  @Input() breadcrumbs: BreadcrumbItem[] = [];
+  @Input() Title = '';
+  @Input() TypeName = '';
+  @Input() TypeIconClass = '';
+  @Input() TypeColor = '';
+  @Input() Status: 'Active' | 'Closed' | string = 'Active';
+  @Input() Subtitle = '';
+  @Input() Breadcrumbs: BreadcrumbItem[] = [];
+
+  // Compatibility aliases
+  @Input() set title(v: string) { this.Title = v; }
+  get title(): string { return this.Title; }
+
+  @Input() set typeName(v: string) { this.TypeName = v; }
+  get typeName(): string { return this.TypeName; }
+
+  @Input() set typeIconClass(v: string) { this.TypeIconClass = v; }
+  get typeIconClass(): string { return this.TypeIconClass; }
+
+  @Input() set typeColor(v: string) { this.TypeColor = v; }
+  get typeColor(): string { return this.TypeColor; }
+
+  @Input() set status(v: 'Active' | 'Closed' | string) { this.Status = v; }
+  get status(): 'Active' | 'Closed' | string { return this.Status; }
+
+  @Input() set subtitle(v: string) { this.Subtitle = v; }
+  get subtitle(): string { return this.Subtitle; }
+
+  @Input() set breadcrumbs(v: BreadcrumbItem[]) { this.Breadcrumbs = v; }
+  get breadcrumbs(): BreadcrumbItem[] { return this.Breadcrumbs; }
 
   get subtitleParts(): string[] {
-    if (!this.subtitle) return [];
+    if (!this.Subtitle) return [];
     // If subtitle contains bullet or dot separator, split on it
-    if (this.subtitle.includes('·')) {
-      return this.subtitle.split('·').map(s => s.trim());
+    if (this.Subtitle.includes('·')) {
+      return this.Subtitle.split('·').map(s => s.trim());
     }
-    return [this.subtitle];
+    return [this.Subtitle];
   }
 }

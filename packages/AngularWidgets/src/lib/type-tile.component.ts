@@ -9,16 +9,17 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
   imports: [CommonModule],
   template: `
     <span
-      class="tile {{ size }} {{ typeCode }} {{ isClosed ? 'closed' : '' }}"
-      [style.--mjc-type-color]="color || null"
+      class="tile {{ Size }} {{ IsClosed ? 'closed' : '' }}"
+      [style.--mjc-type-color]="Color || null"
       aria-hidden="true">
-      <i [class]="iconClass || 'fa-solid fa-shapes'"></i>
+      <i [class]="IconClass || 'fa-solid fa-shapes'"></i>
     </span>
   `,
   styles: [`
     :host {
       display: inline-flex;
       vertical-align: middle;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .tile {
       display: inline-grid;
@@ -32,11 +33,6 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
       background: var(--mjc-type-color, var(--mj-brand-primary, #0076b6));
       box-sizing: border-box;
     }
-    .tile.rel { --mjc-type-color: #092340; }
-    .tile.eng { --mjc-type-color: #0076b6; }
-    .tile.com { --mjc-type-color: #d97706; }
-    .tile.coh { --mjc-type-color: #16a34a; }
-    .tile.wks { --mjc-type-color: #7c3aed; }
     .tile.sm { width: 18px; height: 18px; font-size: 9.5px; border-radius: 5px; }
     .tile.lg { width: 44px; height: 44px; font-size: 20px; border-radius: 12px; }
     .tile.xl { width: 52px; height: 52px; font-size: 22px; border-radius: 14px; }
@@ -44,9 +40,21 @@ export type TileSize = 'sm' | 'md' | 'lg' | 'xl';
   `]
 })
 export class CollabTypeTileComponent {
-  @Input() iconClass = 'fa-solid fa-shapes';
-  @Input() color = '';
-  @Input() typeCode = '';
-  @Input() size: TileSize = 'md';
-  @Input() isClosed = false;
+  @Input() IconClass = 'fa-solid fa-shapes';
+  @Input() Color = '';
+  @Input() Size: TileSize = 'md';
+  @Input() IsClosed = false;
+
+  // Compatibility aliases
+  @Input() set iconClass(v: string) { this.IconClass = v; }
+  get iconClass(): string { return this.IconClass; }
+
+  @Input() set color(v: string) { this.Color = v; }
+  get color(): string { return this.Color; }
+
+  @Input() set size(v: TileSize) { this.Size = v; }
+  get size(): TileSize { return this.Size; }
+
+  @Input() set isClosed(v: boolean) { this.IsClosed = v; }
+  get isClosed(): boolean { return this.IsClosed; }
 }

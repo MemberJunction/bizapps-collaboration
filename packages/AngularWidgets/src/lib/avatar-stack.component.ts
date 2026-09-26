@@ -11,14 +11,15 @@ import { AvatarItem } from './types';
     <span class="stack">
       @for (av of visibleAvatars; track av.id || av.name || $index) {
         <mjc-avatar
-          [initials]="av.initials"
-          [name]="av.name || ''"
-          [avatarUrl]="av.avatarUrl || ''"
-          [colorClass]="av.colorClass || ''"
-          [personId]="av.id || ''"
-          [size]="size"
-          [isOutside]="!!av.isOutside"
-          [isOnline]="!!av.isOnline">
+          [class.ext]="!!av.isOutside"
+          [Initials]="av.initials"
+          [Name]="av.name || ''"
+          [AvatarUrl]="av.avatarUrl || ''"
+          [ColorClass]="av.colorClass || ''"
+          [PersonId]="av.id || ''"
+          [Size]="Size"
+          [IsOutside]="!!av.isOutside"
+          [IsOnline]="!!av.isOnline">
         </mjc-avatar>
       }
       @if (computedMoreCount > 0) {
@@ -30,6 +31,7 @@ import { AvatarItem } from './types';
     :host {
       display: inline-flex;
       align-items: center;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .stack {
       display: inline-flex;
@@ -40,6 +42,9 @@ import { AvatarItem } from './types';
     }
     .stack ::ng-deep mjc-avatar:first-child {
       margin-left: 0;
+    }
+    .stack ::ng-deep mjc-avatar.ext + mjc-avatar.ext {
+      margin-left: -2px;
     }
     .stack ::ng-deep .av {
       box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff);
@@ -57,22 +62,35 @@ import { AvatarItem } from './types';
   `]
 })
 export class CollabAvatarStackComponent {
-  @Input() avatars: AvatarItem[] = [];
-  @Input() max = 5;
-  @Input() size: AvatarSize = 'sm';
-  @Input() moreCount: number | null = null;
+  @Input() Avatars: AvatarItem[] = [];
+  @Input() Max = 5;
+  @Input() Size: AvatarSize = 'sm';
+  @Input() MoreCount: number | null = null;
+
+  // Compatibility aliases
+  @Input() set avatars(v: AvatarItem[]) { this.Avatars = v; }
+  get avatars(): AvatarItem[] { return this.Avatars; }
+
+  @Input() set max(v: number) { this.Max = v; }
+  get max(): number { return this.Max; }
+
+  @Input() set size(v: AvatarSize) { this.Size = v; }
+  get size(): AvatarSize { return this.Size; }
+
+  @Input() set moreCount(v: number | null) { this.MoreCount = v; }
+  get moreCount(): number | null { return this.MoreCount; }
 
   get visibleAvatars(): AvatarItem[] {
-    if (!this.avatars) return [];
-    if (this.avatars.length <= this.max) return this.avatars;
-    return this.avatars.slice(0, this.max);
+    if (!this.Avatars) return [];
+    if (this.Avatars.length <= this.Max) return this.Avatars;
+    return this.Avatars.slice(0, this.Max);
   }
 
   get computedMoreCount(): number {
-    if (this.moreCount !== null && this.moreCount !== undefined) {
-      return this.moreCount;
+    if (this.MoreCount !== null && this.MoreCount !== undefined) {
+      return this.MoreCount;
     }
-    if (!this.avatars) return 0;
-    return Math.max(0, this.avatars.length - this.max);
+    if (!this.Avatars) return 0;
+    return Math.max(0, this.Avatars.length - this.Max);
   }
 }

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,9 +8,35 @@ import pixelmatch from 'pixelmatch';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const galleryDiffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux/gallery');
+const testResultsDir = resolve(__dirname, '../test-results/gallery');
+
+function saveGalleryScreenshot(filename: string, buffer: Buffer) {
+    mkdirSync(galleryDiffDir, { recursive: true });
+    mkdirSync(testResultsDir, { recursive: true });
+    writeFileSync(join(galleryDiffDir, filename), buffer);
+    writeFileSync(join(testResultsDir, filename), buffer);
+}
+
+async function ensureFontsLoaded(page: Page) {
+    await page.evaluate(async () => {
+        await document.fonts.ready;
+        const interLoaded = document.fonts.check('16px Inter');
+        if (!interLoaded) {
+            throw new Error('Font check failed: Inter variable font did not load');
+        }
+        const faLoaded = document.fonts.check('900 16px "Font Awesome 6 Free"') ||
+                         document.fonts.check('400 16px "Font Awesome 6 Free"');
+        if (!faLoaded) {
+            throw new Error('Font check failed: Font Awesome 6 font did not load');
+        }
+    });
+}
+
 test.describe('Frame 02 Chrome — Space Overview', () => {
     test('renders topbar, navigation rail, space header, audience pill, and tabs in light theme', async ({ page }) => {
         await page.goto('/frame/02');
+        await ensureFontsLoaded(page);
 
         // 1. Topbar (masked stand-in in § 10)
         const topbar = page.locator('header.topbar');
@@ -71,13 +97,13 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(tabs.nth(4).locator('.c')).toHaveText('9');
         await expect(tabs.nth(5)).toContainText('Settings');
 
-        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
-        mkdirSync(diffDir, { recursive: true });
-        await page.screenshot({ path: join(diffDir, '02-light.png'), fullPage: false });
+        const screenshot = await page.screenshot({ fullPage: false });
+        saveGalleryScreenshot('02-light.png', screenshot);
     });
 
     test('supports dark mode via ?theme=dark query param', async ({ page }) => {
         await page.goto('/frame/02?theme=dark');
+        await ensureFontsLoaded(page);
         const html = page.locator('html');
         await expect(html).toHaveAttribute('data-theme', 'dark');
 
@@ -85,13 +111,13 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         await expect(header).toBeVisible();
         await expect(header.locator('h1.h1')).toHaveText('Discovery');
 
-        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
-        mkdirSync(diffDir, { recursive: true });
-        await page.screenshot({ path: join(diffDir, '02-dark.png'), fullPage: false });
+        const screenshot = await page.screenshot({ fullPage: false });
+        saveGalleryScreenshot('02-dark.png', screenshot);
     });
 
     test('visual regression: chrome matches 02-space-overview.png within budget (§ 10 masks)', async ({ page }) => {
         await page.goto('/frame/02');
+        await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');
 
         const screenshotBuffer = await page.screenshot({ fullPage: false });
@@ -145,10 +171,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
             { threshold: 0.1 }
         );
 
-        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
-        mkdirSync(diffDir, { recursive: true });
-        writeFileSync(join(diffDir, '02-chrome-diff.png'), PNG.sync.write(diffPng));
-        writeFileSync(join(diffDir, '02-diff.png'), PNG.sync.write(diffPng));
+        saveGalleryScreenshot('02-chrome-diff.png', PNG.sync.write(diffPng));
+        saveGalleryScreenshot('02-diff.png', PNG.sync.write(diffPng));
 
         const chromeTotalPixels = (railWidthPx * (height - topbarHeightPx)) + ((width - railWidthPx) * (headerBottomPx - topbarHeightPx));
         const diffRatio = numDiffPixels / chromeTotalPixels;
@@ -165,6 +189,7 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         test.fail(true, 'Frame 02 chrome matches foundations, full page overview cards land in Slice A');
 
         await page.goto('/frame/02');
+        await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');
 
         const screenshotBuffer = await page.screenshot({ fullPage: false });
@@ -205,11 +230,10 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
             { threshold: 0.1 }
         );
 
-        const diffDir = resolve(__dirname, '../../docs/screenshots/pr3/ux');
-        mkdirSync(diffDir, { recursive: true });
-        writeFileSync(join(diffDir, '02-full-diff.png'), PNG.sync.write(diffPng));
+        saveGalleryScreenshot('02-full-diff.png', PNG.sync.write(diffPng));
 
         // Target budget comparison (50 px - expected to fail until Slice A)
         expect(numDiffPixels).toBeLessThanOrEqual(50);
     });
 });
+

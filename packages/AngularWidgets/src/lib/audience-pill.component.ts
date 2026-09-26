@@ -9,19 +9,19 @@ import { AvatarItem } from './types';
   imports: [CommonModule, CollabAvatarStackComponent],
   template: `
     <div class="aud">
-      @if (staffAvatars && staffAvatars.length > 0) {
-        <mjc-avatar-stack [avatars]="staffAvatars" [max]="maxStaff" size="sm"></mjc-avatar-stack>
+      @if (StaffAvatars && StaffAvatars.length > 0) {
+        <mjc-avatar-stack [Avatars]="StaffAvatars" [Max]="MaxStaff" Size="sm"></mjc-avatar-stack>
       }
-      @if (staffAvatars && staffAvatars.length > 0 && outsideAvatars && outsideAvatars.length > 0) {
+      @if (StaffAvatars && StaffAvatars.length > 0 && OutsideAvatars && OutsideAvatars.length > 0) {
         <span class="aud-div"></span>
       }
-      @if (outsideAvatars && outsideAvatars.length > 0) {
-        <mjc-avatar-stack [avatars]="outsideAvatars" [max]="maxOutside" size="sm"></mjc-avatar-stack>
+      @if (OutsideAvatars && OutsideAvatars.length > 0) {
+        <mjc-avatar-stack [Avatars]="OutsideAvatars" [Max]="MaxOutside" Size="sm"></mjc-avatar-stack>
       }
       <div class="aud-t">
-        <b>{{ totalPeople }} {{ totalPeople === 1 ? 'person' : 'people' }}</b>
-        @if (summary) {
-          <span>{{ summary }}</span>
+        <b>{{ TotalPeople }} {{ TotalPeople === 1 ? 'person' : 'people' }}</b>
+        @if (Summary) {
+          <span>{{ Summary }}</span>
         }
       </div>
     </div>
@@ -30,6 +30,7 @@ import { AvatarItem } from './types';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
     }
     .aud {
       display: flex;
@@ -40,7 +41,6 @@ import { AvatarItem } from './types';
       border-radius: 99px;
       background: var(--mj-bg-surface, #ffffff);
       height: 38px;
-      margin-right: 4px;
       box-sizing: border-box;
       user-select: none;
     }
@@ -67,10 +67,29 @@ import { AvatarItem } from './types';
   `]
 })
 export class CollabAudiencePillComponent {
-  @Input() staffAvatars: AvatarItem[] = [];
-  @Input() outsideAvatars: AvatarItem[] = [];
-  @Input() totalPeople = 0;
-  @Input() summary = '';
-  @Input() maxStaff = 4;
-  @Input() maxOutside = 4;
+  @Input() StaffAvatars: AvatarItem[] = [];
+  @Input() OutsideAvatars: AvatarItem[] = [];
+  @Input() TotalPeople = 0;
+  @Input() Summary = '';
+  @Input() MaxStaff = 4;
+  @Input() MaxOutside = 4;
+
+  // Compatibility aliases
+  @Input() set staffAvatars(v: AvatarItem[]) { this.StaffAvatars = v; }
+  get staffAvatars(): AvatarItem[] { return this.StaffAvatars; }
+
+  @Input() set outsideAvatars(v: AvatarItem[]) { this.OutsideAvatars = v; }
+  get outsideAvatars(): AvatarItem[] { return this.OutsideAvatars; }
+
+  @Input() set totalPeople(v: number) { this.TotalPeople = v; }
+  get totalPeople(): number { return this.TotalPeople; }
+
+  @Input() set summary(v: string) { this.Summary = v; }
+  get summary(): string { return this.Summary; }
+
+  @Input() set maxStaff(v: number) { this.MaxStaff = v; }
+  get maxStaff(): number { return this.MaxStaff; }
+
+  @Input() set maxOutside(v: number) { this.MaxOutside = v; }
+  get maxOutside(): number { return this.MaxOutside; }
 }

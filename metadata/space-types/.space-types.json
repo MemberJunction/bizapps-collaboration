@@ -21,10 +21,6 @@
       "IsActive": true,
       "IconClass": "fa-solid fa-shapes",
       "Color": "#7c3aed"
-    },
-    "sync": {
-      "lastModified": "2026-09-26T14:38:17.081Z",
-      "checksum": "085b1633603ae561ca73e991c0894b212085143dc6ff44928083c46866a48b2d"
     }
   },
   {
@@ -49,10 +45,6 @@
       "IsActive": true,
       "IconClass": "fa-solid fa-landmark",
       "Color": "#d97706"
-    },
-    "sync": {
-      "lastModified": "2026-09-26T14:38:17.101Z",
-      "checksum": "3b21942c87c493536b9e304a5a4a9fb0243c050b6968242899d731e637c7fd23"
     }
   },
   {
@@ -77,10 +69,6 @@
       "IsActive": true,
       "IconClass": "fa-solid fa-graduation-cap",
       "Color": "#16a34a"
-    },
-    "sync": {
-      "lastModified": "2026-09-26T14:38:17.116Z",
-      "checksum": "d5213f01e5425c29dbad20eea344504847169c1a8d16ca16a4ccca80f9400e4e"
     }
   }
 ]

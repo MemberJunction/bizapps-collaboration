@@ -1,15 +1,16 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { RailSpaceNode } from './types';
 
 @Component({
   selector: 'mjc-space-rail',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent],
+  imports: [CommonModule, CollabTypeTileComponent, MJClickableDirective],
   template: `
     <nav class="appnav" aria-label="Collaboration Navigation">
-      <div class="jump" (click)="jumpClick.emit()">
+      <div class="jump" [mjClickable]="'Jump to a space'" (click)="onJumpClick()">
         <i class="fa-solid fa-magnifying-glass"></i>
         <span>Jump to a space</span>
         <span class="kbd">⌘J</span>
@@ -18,7 +19,7 @@ import { RailSpaceNode } from './types';
       <button
         type="button"
         class="nav-item"
-        [class.active]="activeNav === 'home'"
+        [class.active]="ActiveNav === 'home'"
         (click)="selectNav('home')">
         <i class="fa-solid fa-house"></i>
         <span>Home</span>
@@ -27,31 +28,31 @@ import { RailSpaceNode } from './types';
       <button
         type="button"
         class="nav-item"
-        [class.active]="activeNav === 'inbox'"
+        [class.active]="ActiveNav === 'inbox'"
         (click)="selectNav('inbox')">
         <i class="fa-solid fa-inbox"></i>
         <span>Inbox</span>
-        @if (inboxCount > 0) {
-          <span class="count hot">{{ inboxCount }}</span>
+        @if (InboxCount > 0) {
+          <span class="count hot">{{ InboxCount }}</span>
         }
       </button>
 
       <button
         type="button"
         class="nav-item"
-        [class.active]="activeNav === 'tasks'"
+        [class.active]="ActiveNav === 'tasks'"
         (click)="selectNav('tasks')">
         <i class="fa-solid fa-list-check"></i>
         <span>My tasks</span>
-        @if (taskCount > 0) {
-          <span class="count">{{ taskCount }}</span>
+        @if (TaskCount > 0) {
+          <span class="count">{{ TaskCount }}</span>
         }
       </button>
 
       <button
         type="button"
         class="nav-item"
-        [class.active]="activeNav === 'files'"
+        [class.active]="ActiveNav === 'files'"
         (click)="selectNav('files')">
         <i class="fa-solid fa-folder-open"></i>
         <span>Recent files</span>
@@ -62,7 +63,7 @@ import { RailSpaceNode } from './types';
         <button
           type="button"
           class="icon-btn-inline"
-          (click)="newSpace.emit()"
+          (click)="SpaceCreateRequested.emit()"
           title="New Space"
           aria-label="New Space">
           <i class="fa-solid fa-plus"></i>
@@ -70,20 +71,24 @@ import { RailSpaceNode } from './types';
       </div>
 
       <div class="tree-list">
-        @for (s of spaces; track s.id) {
+        @for (s of Spaces; track s.id) {
           <div
-            class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === activeSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
+            class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
+            [mjClickable]="s.name"
             (click)="selectSpace(s.id)">
-            <span class="chev" (click)="toggleSpace(s, $event)">
+            <span
+              class="chev"
+              [mjClickable]="(isNodeExpanded(s) ? 'Collapse ' : 'Expand ') + s.name"
+              [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
+              (click)="toggleSpace(s, $event)">
               @if (s.hasChildren) {
-                <i [class]="s.isExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+                <i [class]="isNodeExpanded(s) ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
               }
             </span>
             <mjc-type-tile
-              [iconClass]="s.iconClass"
-              [color]="s.color || ''"
-              [typeCode]="s.typeCode"
-              size="sm">
+              [IconClass]="s.iconClass"
+              [Color]="s.color || ''"
+              Size="sm">
             </mjc-type-tile>
             <span class="ellipsis">{{ s.name }}</span>
             @if (s.unread) {
@@ -101,7 +106,7 @@ import { RailSpaceNode } from './types';
         <button
           type="button"
           class="nav-item"
-          [class.active]="activeNav === 'assistant'"
+          [class.active]="ActiveNav === 'assistant'"
           (click)="selectNav('assistant')">
           <i class="fa-solid fa-wand-magic-sparkles"></i>
           <span>Assistant</span>
@@ -109,7 +114,7 @@ import { RailSpaceNode } from './types';
         <button
           type="button"
           class="nav-item"
-          [class.active]="activeNav === 'settings'"
+          [class.active]="ActiveNav === 'settings'"
           (click)="selectNav('settings')">
           <i class="fa-solid fa-gear"></i>
           <span>Space types & settings</span>
@@ -121,6 +126,10 @@ import { RailSpaceNode } from './types';
     :host {
       display: block;
       height: 100%;
+      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
+    }
+    button {
+      font-family: inherit;
     }
     .appnav {
       background: var(--mj-bg-surface, #ffffff);
@@ -211,6 +220,7 @@ import { RailSpaceNode } from './types';
       justify-content: space-between;
       margin: 14px 10px 4px;
       font-size: 11px;
+      line-height: 1.45;
       font-weight: 600;
       letter-spacing: .06em;
       text-transform: uppercase;
@@ -290,7 +300,7 @@ import { RailSpaceNode } from './types';
       padding-top: 10px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 0;
     }
     .ellipsis {
       white-space: nowrap;
@@ -302,33 +312,67 @@ import { RailSpaceNode } from './types';
   `]
 })
 export class CollabSpaceRailComponent {
-  @Input() activeNav = '';
-  @Input() activeSpaceId = '';
-  @Input() inboxCount = 0;
-  @Input() taskCount = 0;
-  @Input() spaces: RailSpaceNode[] = [];
+  @Input() ActiveNav = '';
+  @Input() ActiveSpaceId = '';
+  @Input() InboxCount = 0;
+  @Input() TaskCount = 0;
+  @Input() Spaces: RailSpaceNode[] = [];
 
-  @Output() navSelect = new EventEmitter<string>();
-  @Output() spaceSelect = new EventEmitter<string>();
-  @Output() spaceToggle = new EventEmitter<RailSpaceNode>();
-  @Output() newSpace = new EventEmitter<void>();
-  @Output() jumpClick = new EventEmitter<void>();
+  @Output() NavSelectRequested = new EventEmitter<string>();
+  @Output() SpaceOpenRequested = new EventEmitter<string>();
+  @Output() SpaceToggleRequested = new EventEmitter<RailSpaceNode>();
+  @Output() SpaceCreateRequested = new EventEmitter<void>();
+  @Output() JumpOpenRequested = new EventEmitter<void>();
+
+  // Compatibility aliases
+  @Input() set activeNav(v: string) { this.ActiveNav = v; }
+  get activeNav(): string { return this.ActiveNav; }
+
+  @Input() set activeSpaceId(v: string) { this.ActiveSpaceId = v; }
+  get activeSpaceId(): string { return this.ActiveSpaceId; }
+
+  @Input() set inboxCount(v: number) { this.InboxCount = v; }
+  get inboxCount(): number { return this.InboxCount; }
+
+  @Input() set taskCount(v: number) { this.TaskCount = v; }
+  get taskCount(): number { return this.TaskCount; }
+
+  @Input() set spaces(v: RailSpaceNode[]) { this.Spaces = v; }
+  get spaces(): RailSpaceNode[] { return this.Spaces; }
+
+  @Output() navSelect = this.NavSelectRequested;
+  @Output() spaceSelect = this.SpaceOpenRequested;
+  @Output() spaceToggle = this.SpaceToggleRequested;
+  @Output() newSpace = this.SpaceCreateRequested;
+  @Output() jumpClick = this.JumpOpenRequested;
+
+  private _expandedOverrides = new Map<string, boolean>();
+
+  isNodeExpanded(s: RailSpaceNode): boolean {
+    if (this._expandedOverrides.has(s.id)) {
+      return this._expandedOverrides.get(s.id)!;
+    }
+    return !!s.isExpanded;
+  }
 
   selectNav(nav: string): void {
-    this.activeNav = nav;
-    this.navSelect.emit(nav);
+    this.NavSelectRequested.emit(nav);
   }
 
   selectSpace(spaceId: string): void {
-    this.activeSpaceId = spaceId;
-    this.spaceSelect.emit(spaceId);
+    this.SpaceOpenRequested.emit(spaceId);
   }
 
   toggleSpace(s: RailSpaceNode, event?: { stopPropagation?: () => void }): void {
     event?.stopPropagation?.();
     if (s.hasChildren) {
-      s.isExpanded = !s.isExpanded;
-      this.spaceToggle.emit(s);
+      const next = !this.isNodeExpanded(s);
+      this._expandedOverrides.set(s.id, next);
+      this.SpaceToggleRequested.emit(s);
     }
+  }
+
+  onJumpClick(): void {
+    this.JumpOpenRequested.emit();
   }
 }

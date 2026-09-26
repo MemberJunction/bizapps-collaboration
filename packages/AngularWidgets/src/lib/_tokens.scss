@@ -13,8 +13,10 @@
   --mjc-on-strong: var(--mj-text-inverse);
   --mjc-ai-from: var(--mj-brand-primary);
   --mjc-ai-to: var(--mj-brand-accent);
+  --mjc-font-feature-settings: 'cv11', 'ss01';
 }
 
 :host {
   @include collaboration-tokens;
 }
+

@@ -76,10 +76,6 @@ html, body {
   background: var(--mj-bg-page, #ffffff);
   color: var(--mj-text-primary, #0f172a);
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: 'cv11', 'ss01';
-}
-button {
-  font-family: inherit;
 }
 `;
 

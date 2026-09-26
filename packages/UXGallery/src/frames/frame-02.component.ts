@@ -34,36 +34,36 @@ import { FRAME_02_FIXTURE, type Frame02FixtureData } from '../fixtures/frame-02.
 
       <div class="body">
         <mjc-space-rail
-          [spaces]="f.rail.spaces"
-          [activeSpaceId]="'discovery'"
-          [inboxCount]="f.rail.inboxCount"
-          [taskCount]="f.rail.taskCount"
+          [Spaces]="f.rail.spaces"
+          [ActiveSpaceId]="'discovery'"
+          [InboxCount]="f.rail.inboxCount"
+          [TaskCount]="f.rail.taskCount"
         ></mjc-space-rail>
 
         <main class="main">
           <mjc-space-header
-            [breadcrumbs]="f.header.crumbs"
-            [typeCode]="f.header.typeCode"
-            [typeIconClass]="f.header.typeIconClass"
-            [title]="f.header.title"
-            [typeName]="f.header.typeName"
-            [status]="f.header.status"
-            [subtitle]="f.header.subtitle"
+            [Breadcrumbs]="f.header.crumbs"
+            [TypeColor]="f.header.typeColor"
+            [TypeIconClass]="f.header.typeIconClass"
+            [Title]="f.header.title"
+            [TypeName]="f.header.typeName"
+            [Status]="f.header.status"
+            [Subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
               <mjc-audience-pill
-                [staffAvatars]="f.header.staffAvatars"
-                [outsideAvatars]="f.header.outsideAvatars"
-                [totalPeople]="f.header.totalPeople"
-                [summary]="f.header.audienceSummary"
+                [StaffAvatars]="f.header.staffAvatars"
+                [OutsideAvatars]="f.header.outsideAvatars"
+                [TotalPeople]="f.header.totalPeople"
+                [Summary]="f.header.audienceSummary"
               ></mjc-audience-pill>
               <button mjButton variant="secondary" size="md"><i class="fa-solid fa-user-plus"></i>Invite</button>
               <button mjButton variant="primary" size="md"><i class="fa-solid fa-plus"></i>New</button>
             </div>
             <mjc-space-tabs
-              [tabs]="f.header.tabs"
-              [activeTab]="activeTab"
-              (tabChange)="activeTab = $event"
+              [Tabs]="f.header.tabs"
+              [ActiveTab]="activeTab"
+              (TabSelectRequested)="activeTab = $event"
             ></mjc-space-tabs>
           </mjc-space-header>
 
