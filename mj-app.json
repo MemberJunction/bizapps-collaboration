@@ -50,6 +50,10 @@
         "name": "@mj-biz-apps/collaboration-ng",
         "role": "bootstrap",
         "startupExport": "LoadBizAppsCollaborationClient"
+      },
+      {
+        "name": "@mj-biz-apps/collaboration-ng-widgets",
+        "role": "library"
       }
     ],
     "shared": [

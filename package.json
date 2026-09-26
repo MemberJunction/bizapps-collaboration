@@ -15,13 +15,15 @@
     "mssql": "12.7.0"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec tsc -p tsconfig.test.json && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/CoreEntitiesServer/src/task-space.test.ts packages/CoreEntitiesServer/src/space-entity-server.test.ts packages/CoreEntitiesServer/src/space-agent-retrieval.test.ts packages/CoreEntitiesServer/src/space-item-entity-server.test.ts && pnpm --filter @mj-biz-apps/collaboration-integration-tests test",
+    "test": "node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts packages/Core/src/view-models.test.ts && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec tsc -p tsconfig.test.json && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/CoreEntitiesServer/src/task-space.test.ts packages/CoreEntitiesServer/src/space-entity-server.test.ts packages/CoreEntitiesServer/src/space-agent-retrieval.test.ts packages/CoreEntitiesServer/src/space-item-entity-server.test.ts && pnpm --filter @mj-biz-apps/collaboration-integration-tests test",
     "test:integration": "pnpm run test:integration:server && pnpm run test:integration:client",
     "test:integration:server": "node test-harnesses/integration.mjs 2>&1 | tee integration-server.log && node scripts/assert-check-count.mjs integration-server.log server",
     "test:integration:client": "node test-harnesses/integration-client.mjs 2>&1 | tee integration-client.log && node scripts/assert-check-count.mjs integration-client.log client",
     "build": "pnpm --filter \"./packages/*\" run build",
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
-    "mj:push": "mj sync push"
+    "mj:push": "mj sync push",
+    "mj:standards": "mj standards check",
+    "test:e2e": "cd e2e && npx playwright test"
   },
   "pnpm": {
     "overrides": {

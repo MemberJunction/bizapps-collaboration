@@ -6,3 +6,5 @@ node_modules/
 dist/
 .local-storage/
 integration-*.log
+e2e/test-results/
+playwright-report/

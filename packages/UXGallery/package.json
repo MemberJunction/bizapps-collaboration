@@ -1,0 +1,25 @@
+{
+  "name": "@mj-biz-apps/collaboration-ux-gallery",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "UX Gallery for Collaboration visual regression testing against design frames.",
+  "mjUILayer": "shell",
+  "scripts": {
+    "build": "ngc"
+  },
+  "dependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@angular/router": "^21.2.22",
+    "@mj-biz-apps/collaboration-core": "0.1.0",
+    "@mj-biz-apps/collaboration-ng-widgets": "0.1.0"
+  },
+  "devDependencies": {
+    "@angular/compiler": "21.2.23",
+    "@angular/compiler-cli": "21.2.23",
+    "typescript": "5.9.3"
+  }
+}

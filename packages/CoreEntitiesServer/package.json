@@ -5,9 +5,15 @@
   "description": "Server subclasses that enforce the Collaboration invitation ceiling, band promotion, and tree cycle check.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "publishConfig": { "access": "public" },
-  "files": ["/dist"],
-  "scripts": { "build": "tsc" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
   "license": "UNLICENSED",
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",
@@ -36,5 +42,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/bizapps-collaboration"
-  }
+  },
+  "mjUILayer": "runtime"
 }

@@ -47,3 +47,24 @@ export type {
     InviteDecision,
     InviteEmail,
 } from './rules.js';
+export {
+    AVATAR_COLOR_CLASSES,
+    avatarColorClass,
+    summarizeAudience,
+    computeBandVisibility,
+    computeSpaceProgress,
+    mergeAgenda,
+    NeedsYouProvider,
+    AgendaProvider,
+    SpaceHeaderChipProvider,
+} from './view-models.js';
+export type {
+    AvatarColorClass,
+    AudienceMemberInput,
+    AudienceBreakdown,
+    BandVisibilityResult,
+    SpaceProgressResult,
+    NeedsYouItem,
+    AgendaItem,
+    SpaceHeaderChip,
+} from './view-models.js';
