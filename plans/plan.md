@@ -66,7 +66,7 @@
 - **PR #3** (`feat/collaboration-phase-0-2`) finishes as it is and then merges whole. Its finish line is [§ 2.3](#23-pr-3s-finish-line). v0.3's B0.9, splitting it, is dropped.
 - **The next pull request** carries everything new in this plan and in the extensibility plan.
   - It's opened as a draft stacked on PR #3, with base `feat/collaboration-phase-0-2`, and retargets to `next` when PR #3 merges.
-  - The builder moves to it once PR #3 merges, and works directly on its branch, `claude/hopeful-bell-6ldk4v` (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work continues there, slices B to I, with whatever changes this plan needs.
+  - The builder moves to it once PR #3 merges, and works directly on its branch, `claude/hopeful-bell-6ldk4v` (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work continues there, slices B to I, and comes last (D16).
   - It merges once, when all of it is 100% done (D12).
   - [§ 9](#9-sequencing) is its order.
 
@@ -292,6 +292,14 @@ These are v0.3's decisions. They change v0.2's doctrine.
 **D14. Nothing typed into the code comes first.** The screens show only data read as the viewer; the story lives only in the gallery's fixtures and the dev loader. When that and the rest of PR #3's finish line are done, Amith hears, even if small visual differences such as a text size remain. Those are listed for him and still fixed.
 
 **D15. MJ's components can look the way they look.** Where the UI plan names an MJ component (`mjButton`, `mj-dialog`, `mj-switch`, `mj-tab-nav`, `.mj-input` or `.mj-textarea`), it's used as it is. Where its look makes a frame differ, the difference is listed as a known difference rather than restyled away. That settles `mj-dialog`: its cap at 90% of the window is accepted, so frame 04's body scrolls a little at 1440 by 900. It holds for every slice, in PR #3 and the next pull request.
+
+### 3.4 Decided on 2026-09-27
+
+**D16. The UI comes last, and it's checked by using it.**
+- **Last:** the next pull request's screens are finished once everything else in it is 100% done. That covers slices B to I, and the screen side of any item whose acceptance includes one (B2.4's scope control, B4's receipts, B9's door, B8's frame 08). Their server side lands in its own stage.
+- **Walked end to end:** the builder drives every screen in Explorer with Playwright, as the sample world's people where what they see differs, and posts the screenshots in the pull request's comments as embedded images. The shots are committed under `docs/screenshots/pr7/` and embedded by commit, so a comment keeps showing what was reviewed.
+- **Reviewed as an outsider would:** the plan's author reviews the shots for completeness and quality. Does each screen do its job, on real data, and is its overall form right? Pixel parity with the frames isn't the bar. The frames still set layout and content, and D15 still holds.
+- **The gallery's pixel tests stay** as regression checks for the frames they cover. When a change is intended, move the budget to the new count and say why in the commit.
 
 ## 4. The model
 
@@ -635,6 +643,8 @@ Port `fnCollaborationAccess`, `fnCollaborationTasks`, `fnCollaborationAncestorMe
 
 ### B13. The remaining UX slices
 
+**Last, and checked by using it (D16).** These are the next pull request's final work, reviewed through the builder's end-to-end screenshots for function and overall form.
+
 Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work), in the next pull request, with:
 - **Slice B (chats):** the scope control (B2.4), sealed messages and receipts (B4), chats on core participants (B3), and Bea opening the room's own screen with no console errors (task 4's last step).
 - **Slice C (people):** B9's identity door.
@@ -700,7 +710,7 @@ This is the next pull request's order. Stage 1's B0 is done in PR #3.
 | **4. Reach** | A8, A9, A10; A13 | B5, B6, B7, B8 | C1 |
 | **5. Breadth** | The rest of A12 | B11, B12, B13 | C2, then C3 |
 
-- **The UI keeps moving.** The builder continues the UX slices as soon as the next pull request starts. Slices D, E, F and H need no new core work. Slices B, C, G and I land with what they depend on: B with B2 to B4, C with B9, G and I with B8.
+- **The UI comes last (D16).** Slices B to I, and the screen side of items whose acceptance includes one, start once everything else in the next pull request is 100% done. They're checked through the builder's end-to-end Playwright screenshots, for function and overall form. That's why B13 sits in stage 5.
 - **The extensibility plan's build** (its § 13) maps onto these stages: the schema and the drivers with B8, chats with B3, the starter types' configuration and the example plug-ins with B8's acceptance. The MJ pull requests (A13) are opened in parallel as soon as the builder is on the next pull request (D11).
 - **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared room is provably bounded by its audience. Don't put a real client in a shared room before A6 and B2 pass [§ 10](#10-verification).
 - **Within a stage,** core and app items can run in parallel. App items that depend on a core item ship behind a feature check until the core version is pinned.
@@ -763,7 +773,6 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 - **`SpaceType.DefaultInheritsMembership` is a column,** like `DefaultAllowParentAssignees`.
 - **Lifecycle subscribers run after the commit,** through `provider.RunAfterCommit`, so a subscriber never sees a change that's rolled back. Refusing a change stays with the type's Validate hooks (the extensibility plan's § 5).
 - **Knowledge bindings are rows,** proposed as `SpaceKnowledgeSource`, by the extensibility plan's own rule: a setting that points at a record that can be deleted is a row with a foreign key.
-- **The UX slices continue right away** in the next pull request ([§ 9](#9-sequencing)), where v0.3 placed B13 in stage 5.
 - **A12.13 is in stage 1,** as urgent.
 - **`mjc-no-access` stays** (B0.10): it's the new UI's component, not the old UI's.
 
@@ -772,6 +781,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 - Its decision 4 (Committees adopting Space): Committees is a plug-in, extending Space through IsA (D9).
 - Its decision 6 (the deliverable agent after the engagement): `PostCloseAccess = ReadOnlyWithAgent` (B8.2); the defaults are decision 8 above.
 - Its decision 7 (the identity door): invite-based (B9).
+- v0.4's proposal that the UX slices continue right away: no. The UI comes last (D16), where v0.3's stage 5 had it.
 
 ## 12. Risks
 
