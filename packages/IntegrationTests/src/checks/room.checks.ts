@@ -2,7 +2,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../entity-names.js';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
@@ -47,6 +47,23 @@ const checks: NamedCheck[] = [
             const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
             Assert(systemUsers.length === 1, 'System user found in MJ: Users');
             Assert(room.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Room conversation must be bound to system user, saw: ${room.UserID}`);
+
+            // Assert Space Chat room row exists for room conversation
+            const spaceChats = await FindRows<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Kind: string;
+                Status: string;
+            }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND ConversationID = '${room.ID}'`,
+                ['ID', 'SpaceID', 'ConversationID', 'Kind', 'Status'],
+            );
+            Assert(spaceChats.length === 1, `Discovery Space Chat room row exists (found ${spaceChats.length})`);
+            Assert(spaceChats[0].Kind === 'Room', `Space Chat Kind is Room, saw ${spaceChats[0].Kind}`);
+            Assert(spaceChats[0].Status === 'Active', `Space Chat Status is Active, saw ${spaceChats[0].Status}`);
         },
     },
     {

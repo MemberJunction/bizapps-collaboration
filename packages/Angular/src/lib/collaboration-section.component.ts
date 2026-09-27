@@ -16,8 +16,8 @@ import {
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
 import {
-    TaskPanelComponent,
-    type TaskViewMode,
+    TaskKanbanComponent,
+    TaskGanttComponent,
     MyTasksComponent,
     ApprovalInboxComponent,
 } from '@mj-biz-apps/tasks-ng';
@@ -30,6 +30,7 @@ import {
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
     CollabUploadDialogComponent,
+    CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
     CollabSpacePeopleComponent,
     CollabSpaceSettingsComponent,
@@ -89,6 +90,8 @@ function isValidUuid(id?: string | null): boolean {
     return !!id && UUID_REGEX.test(id.trim());
 }
 
+export type WorkViewMode = 'list' | 'kanban' | 'gantt';
+
 /**
  * Collaboration section resource host for MemberJunction Explorer (L3).
  * Owns NavigationService, deep-linking query parameters, and tab/record routing.
@@ -110,11 +113,13 @@ function isValidUuid(id?: string | null): boolean {
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
         CollabUploadDialogComponent,
+        CollabSpaceWorkComponent,
         CollabSpaceChatComponent,
         CollabSpacePeopleComponent,
         CollabSpaceSettingsComponent,
         CollaborationNoAccessComponent,
-        TaskPanelComponent,
+        TaskKanbanComponent,
+        TaskGanttComponent,
         MyTasksComponent,
         ApprovalInboxComponent,
     ],
@@ -922,19 +927,75 @@ function isValidUuid(id?: string | null): boolean {
                                                 />
                                             }
                                             @case ('Work') {
-                                                 <div class="work-tab-container">
-                                                     <bizapps-task-panel
-                                                         [ExtraFilter]="taskScopeFilter"
-                                                         [AllowedViewModes]="['list', 'kanban', 'gantt']"
-                                                         [ViewMode]="workViewMode"
-                                                         (ViewModeChange)="onWorkViewModeChanged($event)"
-                                                         [ShowCreateButton]="true"
-                                                         [GanttHeight]="'620px'"
-                                                         (AfterTaskCreated)="onTaskSavedOrCreated($event)"
-                                                         (AfterTaskSaved)="onTaskSavedOrCreated($event)"
-                                                         (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                     />
-                                                 </div>
+                                                <div class="work-tab-container">
+                                                    <div class="work-view-toolbar">
+                                                        <div class="view-switch-group" role="group" aria-label="Task view mode">
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'list'"
+                                                                (click)="onWorkViewModeChanged('list')"
+                                                                title="List View"
+                                                            >
+                                                                <i class="fa-solid fa-list"></i>
+                                                                <span>List</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'kanban'"
+                                                                (click)="onWorkViewModeChanged('kanban')"
+                                                                title="Kanban Board View"
+                                                            >
+                                                                <i class="fa-solid fa-table-columns"></i>
+                                                                <span>Board</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'gantt'"
+                                                                (click)="onWorkViewModeChanged('gantt')"
+                                                                title="Timeline / Gantt View"
+                                                            >
+                                                                <i class="fa-solid fa-chart-gantt"></i>
+                                                                <span>Timeline</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="work-view-body">
+                                                        @switch (workViewMode) {
+                                                            @case ('list') {
+                                                                <mjc-space-work
+                                                                    [Tasks]="spaceTasks"
+                                                                    [SpaceName]="spaceTitle"
+                                                                    [CanCreateTask]="true"
+                                                                    (TaskSelectRequested)="onTaskSelected($event)"
+                                                                    (TaskToggleRequested)="onTaskToggled($event)"
+                                                                    (CreateTaskRequested)="onCreateTask($event)"
+                                                                />
+                                                            }
+                                                            @case ('kanban') {
+                                                                <div class="work-kanban-pane">
+                                                                    <bizapps-task-kanban
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                            @case ('gantt') {
+                                                                <div class="work-gantt-pane">
+                                                                    <bizapps-task-gantt
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        [Height]="'620px'"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                </div>
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
@@ -1112,7 +1173,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Work tab state
     public spaceTasks: TaskItemModel[] = [];
-    public workViewMode: TaskViewMode = 'list';
+    public workViewMode: WorkViewMode = 'list';
 
     public currentPersonId = '';
 
@@ -1609,19 +1670,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
             }
 
-            if (items.length === 0) {
-                const defaultConvId = await this.ensureDefaultSpaceConversation(spaceId);
-                if (defaultConvId) {
-                    items.push({
-                        id: defaultConvId,
-                        name: 'general-room',
-                        kind: 'General',
-                        band: this.spaceAudienceBand,
-                        unreadCount: 0,
-                    });
-                }
-            }
-
             this.spaceConversations = items;
 
             if (preferredConvId && items.some(i => i.id === preferredConvId)) {
@@ -1638,47 +1686,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         } catch (err) {
             LogError('Error loading space conversations: ' + (err instanceof Error ? err.message : String(err)));
-        }
-    }
-
-    private async ensureDefaultSpaceConversation(spaceId: string): Promise<string | null> {
-        try {
-            const md = this.ProviderToUse;
-            const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            if (!spaceEntity) {
-                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
-                return null;
-            }
-            const spaceEntityId = spaceEntity.ID;
-            const currentUser = md.CurrentUser;
-            if (!currentUser) return null;
-
-            const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
-            conv.NewRecord();
-            conv.Name = 'general-room';
-            conv.UserID = currentUser.ID;
-            conv.LinkedEntityID = spaceEntityId;
-            conv.LinkedRecordID = spaceId;
-            const saved = await conv.Save();
-            if (saved && conv.ID) {
-                try {
-                    const chat = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats');
-                    chat.NewRecord();
-                    chat.SpaceID = spaceId;
-                    chat.ConversationID = conv.ID;
-                    chat.Name = 'general-room';
-                    chat.Kind = 'General';
-                    chat.Status = 'Active';
-                    await chat.Save();
-                } catch (chatErr) {
-                    LogError('Failed to save Space Chat record: ' + (chatErr instanceof Error ? chatErr.message : String(chatErr)));
-                }
-                return conv.ID;
-            }
-            return null;
-        } catch (err) {
-            LogError('Error ensuring default space conversation: ' + (err instanceof Error ? err.message : String(err)));
-            return null;
         }
     }
 
@@ -1993,7 +2000,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public onWorkViewModeChanged(mode: TaskViewMode): void {
+    public onWorkViewModeChanged(mode: WorkViewMode): void {
         this.workViewMode = mode;
         this.UpdateQueryParams({ workView: mode });
         this.RefreshView();

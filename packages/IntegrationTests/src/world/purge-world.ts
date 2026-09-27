@@ -115,6 +115,7 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
             WHILE EXISTS (
                 SELECT 1 FROM __mj_BizAppsCollaboration.Space AS child

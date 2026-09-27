@@ -13,7 +13,11 @@ import {
     type ISpaceConfiguration,
     type ISpaceTypeConfiguration,
 } from '@mj-biz-apps/collaboration-core';
-import { mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
+import {
+    mjBizAppsCollaborationSpaceChatEntity,
+    mjBizAppsCollaborationSpaceEntity,
+    type mjBizAppsCollaborationSpaceTypeEntity,
+} from '@mj-biz-apps/collaboration-entities';
 import { type BaseSpaceTypeServerDriver } from './base-space-type-server-driver.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -422,14 +426,58 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         && conversation.ApplicationScope === 'Application'
         && conversation.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()
         && conversation.Name === space.Name;
-    if (alreadyBound) return;
-    conversation.UserID = system.ID;
-    conversation.Name = space.Name;
-    conversation.ApplicationScope = 'Application';
-    conversation.ApplicationID = COLLABORATION_APP_ID;
-    const saved = await conversation.Save();
-    if (!saved) {
-        LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+    if (!alreadyBound) {
+        conversation.UserID = system.ID;
+        conversation.Name = space.Name;
+        conversation.ApplicationScope = 'Application';
+        conversation.ApplicationID = COLLABORATION_APP_ID;
+        const saved = await conversation.Save();
+        if (!saved) {
+            LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            return;
+        }
+    }
+
+    const convId = conversation.ID;
+    if (!convId) return;
+
+    // Ensure Space Chat room record exists for this space and conversation
+    const chatExisting = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string; Name: string; Kind: string; Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID = '${space.ID}' AND ConversationID = '${convId}'`,
+        Fields: ['ID', 'Name', 'Kind', 'Status'],
+        ResultType: 'simple',
+        MaxRows: 1,
+    }, system);
+    if (!chatExisting.Success) {
+        LogError(`Space chat room was not bound: ${chatExisting.ErrorMessage ?? 'the lookup failed'}`);
+        return;
+    }
+
+    const foundChat = chatExisting.Results?.[0];
+    if (!foundChat) {
+        const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+        spaceChat.NewRecord();
+        spaceChat.SpaceID = space.ID;
+        spaceChat.ConversationID = convId;
+        spaceChat.Name = space.Name;
+        spaceChat.Kind = 'Room';
+        spaceChat.Status = 'Active';
+        const chatSaved = await spaceChat.Save();
+        if (!chatSaved) {
+            LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+        }
+    } else if (foundChat.Name !== space.Name || foundChat.Kind !== 'Room' || foundChat.Status !== 'Active') {
+        const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+        if (await spaceChat.Load(foundChat.ID)) {
+            spaceChat.Name = space.Name;
+            spaceChat.Kind = 'Room';
+            spaceChat.Status = 'Active';
+            const chatSaved = await spaceChat.Save();
+            if (!chatSaved) {
+                LogError(`Space chat room was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            }
+        }
     }
 }
 
