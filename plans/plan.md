@@ -1,8 +1,8 @@
 # Collaboration: the plan
 
-**Version:** v0.4 · 2026-09-26, updated 2026-09-27. This is the one plan for this wave. It merges this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day. Where v0.2 and v0.3 disagreed, v0.3 stands.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan.
 
-**Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-committees`.
+**Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
 **Owner:** not named yet ([§ 11](#11-open-decisions), decision 1).
 
@@ -10,7 +10,8 @@
 - [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md): space types as plug-ins, with chats, history and agents;
 - [the UX storyboard](../docs/ux/README.md) and [its implementation plan](../docs/ux/IMPLEMENTATION_PLAN.md);
 - [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md);
-- [How Collaboration works](../docs/HOW_THE_SYSTEM_WORKS.md): the rules, each marked built or planned.
+- [How Collaboration works](../docs/HOW_THE_SYSTEM_WORKS.md): the rules, each marked built or planned;
+- [PR 8's plan](pr8-plan.md): the build plan for D26 to D35's Collaboration work, from where PR #7 leaves the app.
 
 ## Contents
 
@@ -23,6 +24,7 @@
 6. [Workstream A: MemberJunction core](#6-workstream-a-memberjunction-core)
 7. [Workstream B: Collaboration](#7-workstream-b-collaboration)
 8. [Workstream C: Committees on Collaboration](#8-workstream-c-committees-on-collaboration)
+   - [8a. Workstream T: meetings and agendas in bizapps-tasks](#8a-workstream-t-meetings-and-agendas-in-bizapps-tasks)
 9. [Sequencing](#9-sequencing)
 10. [Verification](#10-verification)
 11. [Open decisions](#11-open-decisions)
@@ -32,7 +34,7 @@
 
 ## 0. How to use this plan
 
-- **Three workstreams:** A is MemberJunction core, B is Collaboration, C is Committees. [§ 9](#9-sequencing) sets their order. Items are numbered so pull requests and commits can cite them (`A4`, `B2.3`, `D2`).
+- **Four workstreams:** A is MemberJunction core, B is Collaboration, C is Committees, and T is meetings and agendas in bizapps-tasks. [§ 9](#9-sequencing) sets their order. Items are numbered so pull requests and commits can cite them (`A4`, `B2.3`, `D2`, `T1`).
 - **Every item has acceptance criteria.** An item is done when they pass, not when the code compiles.
 - **Source wins.** The platform claims here were read from source on 2026-09-26, and the [appendix](#appendix-source-checks-of-2026-09-26) records what was checked. Re-verify on the pin before building on a claim. If source disagrees with this plan, follow the source and say so in the pull request.
 - **References.** `E:<line>` is a line of `MJ/packages/MJCoreEntities/src/generated/entities/__mj.ts` on MJ `next` as of 2026-09-25. Those lines move between versions, so search by name. Other core paths are relative to `MJ/packages/`.
@@ -48,6 +50,13 @@
 2. **Committees and boards** for associations, with outside directors who aren't staff. BizApps Committees is rebuilt on this engine (workstream C).
 3. **Cohorts:** learning cohorts, mastermind groups, chapters, task forces and volunteer crews. Collaboration's widgets must also run inside another Angular app, such as a learning portal, without Explorer.
 
+**Three more kinds of customer, from the same boundary** (D26 to D34). A space can also hold the organization's data, its approved queries and views, and its actions, bounded by the space and handed to its agents:
+4. **Federations and their components.** A national with hundreds of state and local components, such as a home builders federation. The national's MJ instance is its source of truth, cleaned and enriched from its AMS and other systems. A chapter's space shows that chapter's own members, renewals and events through the national's approved definitions, next to the national's playbooks and the chapter board's own conversations. MJ isn't an AMS, and the chapter doesn't run on the national's system: it gets a room.
+5. **Relationships an association delivers to another organization over time.** Sponsors, exhibitors and advertisers, where the space shows that company's booth leads, ad performance and renewal history; accreditation, where it shows the institution's submission status and the reviewers' findings. The counterparty is an organization, so the room has to outlive its staff turning over.
+6. **Reviews by outsiders:** standards development, peer review, certification item writing and awards juries.
+
+The client portal is the same mechanism with a narrow aperture: a client sees a small, restricted slice of data about their own engagements. **Correctness rests on the Canon.** What a space shows through a query, a view or a dashboard is a definition that was reviewed, tested and approved before any type could grant it (D34).
+
 **Engine versus extension.** The engine stays generic and plain. Anything that sets one adopter apart goes in an extension built on B8's extension points. There will always be pressure to move a feature into the engine because it feels general. The test is whether a second, unrelated adopter would configure it the same way.
 
 **Scope and distribution.**
@@ -61,7 +70,7 @@
 
 ## 2. Where things stand
 
-### 2.1 Two pull requests
+### 2.1 The pull requests
 
 - **PR #3** (`feat/collaboration-phase-0-2`) merged into `next` whole on 2026-09-27 at 02:20Z (`15a737b`), before its finish line ([§ 2.3](#23-pr-3s-finish-line)) was reached. That was Amith's call: PR #3 merges as it is, and what it left is handled in the next pull request. v0.3's B0.9, splitting it, was dropped.
 - **The next pull request is #7**, on `claude/hopeful-bell-6ldk4v`. It carries everything new in this plan and in the extensibility plan, and what PR #3 left.
@@ -70,6 +79,11 @@
   - It merges once, when all of it is 100% done (D12).
   - Each review of it carries one numbered punch list, and each push gets a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
   - [§ 9](#9-sequencing) is its order.
+- **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
+  - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. The builder takes it over once #7 merges, and it's retargeted to `next` then, as #7 was when PR #3 merged.
+  - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
+- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, and A18's. The builder implements it; Amith and MJ's reviewers review it. PR #8 pins the MJ release that carries it.
+- **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
 ### 2.2 What PR #3 delivered
 
@@ -272,7 +286,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 
 ### 3.3 Decided after v0.3, on 2026-09-26
 
-**D8. Two pull requests.** PR #3 finishes and merges whole; everything new goes in the next pull request ([§ 2.1](#21-two-pull-requests)).
+**D8. Two pull requests.** PR #3 finishes and merges whole; everything new goes in the next pull request ([§ 2.1](#21-the-pull-requests)).
 
 **D9. Committees extends Space through IsA, in stages.**
 - `Committee` and `Term` extend `Space` through IsA, disjoint, with `Committee.ID = Space.ID`, as [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) says.
@@ -356,6 +370,92 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Wiring to A13.1 features:** `<mj-conversation-chat-area>` is integrated directly with the conversation floor (`AgentHistoryFrom`), reply mode (`AgentReplyMode`), allowed agents (`AllowedAgentIDs`), and server-turn moderation (`AgentTurnHandler`), preserving audience isolation while delegating conversation state, streaming, attachments, and mentions to core.
 - **Conversation creation flow:** Multi-conversation spaces allow creating new conversations via the space rail and chat area empty states. New conversations create an underlying `MJ: Conversations` record, bind a `MJ_BizApps_Collaboration: Space Chats` record, and select the newly created conversation seamlessly.
 
+### 3.5 Decided on 2026-09-27: anchors, grants, data, notes and meetings
+
+These come from Amith's increment of the same day, *Collaboration Plan v0.4: anchors, grants, data, meetings, notes*. It was written against v0.3 and the extensibility plan, so its numbers collide with this plan's. This plan renumbers them and uses only the new numbers:
+
+| In the increment | In this plan |
+|---|---|
+| D8 to D17 | D26 to D35, in the same order |
+| A13 to A17 | A14 to A18. A13 is the extensibility plan's two MJ pull requests. |
+| Workstream T, T1 to T4 | The same ([§ 8a](#8a-workstream-t-meetings-and-agendas-in-bizapps-tasks)) |
+| B14 to B24, and C4 | The same |
+| Matrix rows 13 to 24 | The same ([§ 10](#10-verification)) |
+| Open decisions 1 to 6 | 11 to 16 ([§ 11](#11-open-decisions)) |
+
+**Why.** A space already holds documents, tasks and chats inside one boundary. These decisions add what an MJ instance has and no collaboration product can match: the organization's data, its approved queries and views, and its actions, all bounded by the same space and handed to the same agents. That opens three more kinds of customer ([§ 1](#1-what-we-are-building)). Correctness rests on the Canon: a chapter leader who asks how many members they have gets the national's approved definition of a member (D34).
+
+**D26. A space can be anchored to one or more records it's about.** Amends the extensibility plan's decision 15, one `AnchorEntityID` and `AnchorRecordID` pair on `Space`.
+- **IsA or an anchor.** IsA (the extensibility plan's § 7) when the concept exists only as a space, like a committee rebuilt on the engine. An anchor when the concept has its own life in the data, like a chapter imported from the AMS, a sponsor's organization, an accredited institution or a deal: those rows exist whether or not anyone opens a space, so the space points at them.
+- **Many to many, each with a role.** A sponsor space can be anchored to the company (`sponsor`) and to this year's conference (`event`), and one chapter can anchor both its leadership space and its members' space.
+- **At most one primary anchor per space.** `EnsureSpaceForRecord` finds or creates a space by its primary anchor, which is unique per type, entity and record.
+- **An anchor grants nothing by itself.** It says what the space is about. It becomes access only through a type's data reach (D28) and its grants' bindings (D27).
+
+**D27. Grants: what a space offers, with bindings the space fills in.** A type, a space or a sub-space grants its people and agents:
+
+| Kind | What it is | Who uses it |
+|---|---|---|
+| `Agent` | An agent people can talk to | People. It replaces `SpaceAgent`. |
+| `Action` | An MJ action | Agents |
+| `Query` | An MJ query | Agents, and people through the data surface |
+| `View` | An MJ user view | People, and agents as a data tool |
+| `Dashboard` | An MJ dashboard | People |
+| `Component` | An interactive component, the kind that hosts Skip's components | People |
+| `KnowledgeSource` | An MJ Content Source (A10) | Agents. It replaces `SpaceKnowledgeSource`. |
+
+- **Bindings** map a parameter or property of the granted thing to a value the space supplies: an action's `ChapterID` input, a query's `ChapterID` parameter, a view's or a dashboard's `Chapter` property.
+- **The server resolves them when the thing runs.** The agent never sees a bound parameter: it's taken out of the tool description the model gets, and a value the model sends for it is discarded and logged. A person can't override one either: the browser can't supply it, and a client value for a bound name is refused.
+- **Where a value comes from:** `Anchor:<role>` (the anchored record's ID), `Anchor:<role>.<Field>` (a field of that record, read on the server), `Space.<Field>` (`ID`, `Name`, `PlannedCloseAt` and so on), `Config:<dotted.path>` (the effective configuration), `User.ID`, `User.Email` or `User.PersonID` (the acting user), or a literal.
+- **A binding that doesn't resolve refuses the run,** for example when the space has no anchor with that role. Nothing runs unbound.
+
+**D28. Data reach: how a participant reads rows a space doesn't own.** Amends the extensibility plan's decision 17, which allowed only copies into a subtype's own columns. Copying stays allowed. This adds a second path, and it keeps the rule that reads are SQL's ([§ 5.5](#55-where-the-boundary-lives)).
+- **A type declares its data reach.** For each entity its participants may read: the path from that entity to an anchor role (`Members.ChapterID → Anchor:chapter`), the band that may use it, and the fields.
+- **The filters are generated, reviewed and shipped.** A script turns the declarations into the Space Participant role's row-level security filter on each entity: the rows whose path value is the record of an anchor with that role, on a space the caller reaches through `fnCollaborationAccess`, in a band they can see. It writes them into `metadata/`, where they're reviewed like any other filter. Nothing is generated at runtime.
+- **One filter per entity.** MJ OR-composes a role's filters, and this plan keeps one per entity (§ 5.5), so every declaration that reaches an entity, across every type, becomes that entity's one filter.
+- **Views and dashboards on those entities run as the viewer.** The filter is the boundary; a view's bound property only narrows, for relevance.
+- **Fields:** an allow-list per entity, through MJ's entity field permissions, as People already has (B10).
+- **No reach, no rows.** A type that declares no reach on an entity gives its participants nothing from it. It can still offer aggregates, through granted queries (D29). Staff are unaffected.
+
+**D29. A granted query is the one read the server runs for a participant, and it's held to the Canon.** MJ treats a query as trusted SQL: row-level security doesn't apply to it, its parameters can't be locked, and Query Permissions are by role only. So a participant never gets general permission to run queries. They run one only through Collaboration's server operation for a grant, which:
+1. checks that the caller reaches the space, and that the grant is in force there for the caller's band;
+2. resolves the bindings, and refuses a client value for any bound name (A17);
+3. runs the query with the bound values, and records the run in the access log when an agent made it (A2).
+
+It's a deliberate door, like a stored procedure. Collaboration grants a query to a type only if it's Canon-approved (D34), binds every parameter that narrows its scope (the chapter, the organization), and returns only what the type is meant to show: an aggregate-only type gets aggregate queries.
+
+**D30. One configuration, inherited down the tree, restarting where the type changes.** Amends D20's chain, the extensibility plan's § 4, and its decision 10, whose agent list is inherited down the whole tree whatever the type.
+- **What it covers:** the settings (D20), the grants (D27, the agent list among them) and each agent's settings (D31).
+- **The chain,** lowest first: the app's defaults; the space's type; each ancestor in the space's **same-type run**, top down; the space. The same-type run is the unbroken line of ancestors directly above the space that have the space's type.
+- **So** a sub-space of the same type inherits its parent's overrides; a sub-space of another type doesn't, and starts again from its own type; and a same-type space further down starts a new run.
+- **Keys and grants:** `SpaceOverridable` still decides which keys a level below the type may change. Grants combine per kind with `ListMode` (`Extend` or `Replace`), and a level can remove one grant it inherits (`Remove`), so a space can drop one action its type offers without restating the rest.
+- **One output:** `EffectiveSpaceConfiguration`, a JSON document the server, the browser and the agent path all use.
+- **It answers #7's item 55,** which asks whose type governs a parent's value: a parent counts only inside the space's same-type run, where its type is the space's.
+
+**D31. Agents and their settings are part of the configuration.**
+- **Which agents** people can talk to, one of them the default.
+- **Each agent's settings,** which only narrow what the agent's own definition allows: its skills (none, or a list within its `AcceptsSkills`); plan mode (off, allowed or required, only where `SupportsPlanMode` is set); its effort level; memory writes; and per-run limits. They replace `SpaceAgentSkill`.
+- **The actions, queries, views and knowledge sources** the agent gets in the space, with their bindings.
+- **They map onto what `ExecuteAgentParams` already takes:** `planMode`, `requestedSkillIDs`, `effortLevel`, `actionChanges` (add or remove actions per scope) and `context`. Bound parameters need A16.
+- **A setting never widens the agent.** MJ's Run permission on the agent stays the boundary.
+- **The audience still decides** (D2). A grant on the Team band isn't offered, or given to the agent, in a chat where anyone can't see Team.
+
+**D32. A space shows its granted views, dashboards and components, and members pin what they use.**
+- **The data surface** shows the space's granted views, dashboards and components, with their properties bound (D27). Views use every display type MJ has (grid, cards, timeline, map and the rest), and dashboards every part type.
+- **Pins:** a member pins any item, note, view, dashboard or component to the top of a space. Pins are the member's own.
+- **Home** shows a member's pins across the spaces they're in.
+- **Starring** a space uses MJ's User Favorites.
+
+**D33. Notes live in Collaboration; meetings and agendas move to bizapps-tasks.** Amends the extensibility plan's § 10.1, which kept meetings in Committees.
+- **Notes** are light in-app notes, kept apart from documents: quick to write, part of the space, and readable by agents. A note is Shared, Team, or private to its author. An agent uses a private note only in its author's own one-to-one chat, never in a room or a group chat.
+- **Meetings and agendas are work,** so they move out of Committees into bizapps-tasks: meetings, agenda items, attendees, video providers, and notes drafted by AI from transcripts. Every app gets them: Collaboration, Committees, and Tasks on its own. Tasks and meetings link both ways.
+- **Calendar sync** with Outlook and Google Calendar is built once, in MJ's Communication layer (A18), and Tasks uses it.
+- **Committees keeps the governance:** motions, votes, ballots, quorum, and approving minutes.
+
+**D34. Anything granted to a type that seats outsiders is Canon-approved.** A query, view, dashboard or component granted to a type that seats Space Participants carries an approved status: who approved it, when, and the tests it passed. Approved means reviewed by a person and tested, including test cases an AI wrote against known answers. An unapproved object can be granted only to a staff-only type. A17 adds the status where MJ has none.
+
+**D35. Breaking changes are fine before a first external customer.** Collaboration, Committees and bizapps-tasks may change shape freely until each ships to its first external customer.
+- **v0.3's staged Committees path is withdrawn:** C1 to C3 give way to C4. It amends D9's stages; the IsA stays.
+- **A published package still takes a major version** for a breaking change, under MJ's publish-then-no-breaking-changes policy, as [§ 8](#8-workstream-c-committees-on-collaboration) already says.
 
 ## 4. The model
 
@@ -386,6 +486,13 @@ These are v0.3's decisions. They change v0.2's doctrine.
 
 **What this plan adds** is designed in the extensibility plan and in B8: type drivers and subtypes, configuration bags and the settings chain (D20), the metadata engine (D19), chats and allowed agents, sub-spaces that inherit only when asked (D22), access after close (D21), settings rights (D23), knowledge bindings, `SpaceMember.PersonID`, and the lifecycle and signal contributions.
 
+**What D26 to D35 add** (PR #8, from [its plan](pr8-plan.md)):
+- **`SpaceAnchor`:** the records a space is about, each with a role, at most one of them primary (D26). It replaces `Space.AnchorEntityID` and `AnchorRecordID`.
+- **`SpaceGrant`:** what a type, a space or a sub-space offers (agents, actions, queries, views, dashboards, components and knowledge sources), with bindings and, for agents, settings (D27, D31). It replaces `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`.
+- **`SpaceNote`** (D33) and **`SpaceMemberPin`** (D32).
+- **The effective configuration:** one document from one resolver, with the same-type restart (D30), and each type's data reach, from which the participant role's filters on other apps' entities are generated (D28).
+- **Meetings** come from bizapps-tasks (workstream T), tied to a space the way a task is, through a link row.
+
 **Two siblings stay siblings.**
 - **`MJ: Collections`** is right for folders and browsing but not for membership. It holds artifact versions only, shares with users only, and writes inheritance into each descendant instead of computing it. `SpaceItem` stays the library's spine. A12.10 is the Collections work.
 - **BizApps Secure Messaging** stays a sibling, not a dependency: it's one-to-one by construction and published at 2.0.0. If a space needs its File Requests, lift the fields rather than take the dependency.
@@ -412,7 +519,8 @@ The caller's own access is the ceiling, and nothing exceeds it. The space narrow
 - **The audience's readable set** is the caller's union of reach in a private conversation, and the intersection over every participant in a shared one.
 - **`AgentRetrieval`** is the axis permissions alone can't express: material a person may read that no agent may quote. `ExcludedFromParentScope` drops a space's items when the question comes from above it; `ExcludedEntirely` drops them for every agent.
 - **`agentMayQuote`** is called on every candidate, on the server, and every refusal goes to the access log with its reason (B2.5).
-- **Knowledge** beyond the space's items comes only from the Content Sources bound to the type or space (B8.2), under A10's classification.
+- **Knowledge** beyond the space's items comes only from the Content Sources granted to the type or space (D27, B8.2), under A10's classification.
+- **Its tools** are Collaboration's own actions plus the ones granted in the space for the chat's audience (D27, D31), with every bound parameter hidden from the model and fixed by the server (A16). Granted queries and views reach it through one action, *Run space data* (B20).
 
 ### 5.4 Provenance, sealing and copying
 
@@ -445,7 +553,7 @@ D3 to D5 are built in A4 (provenance on every answer), A7 (sealing on a change o
 ### 5.8 Lanes row-level security doesn't reach
 
 - **Root `All<Entity>` queries.** Collaboration generates none: every entity keeps `AllowAllRowsAPI` at 0, and `persona-check.sql` asserts it.
-- **`RunQuery`, datasets and reports.** A stored query this app ships carries its scope predicate inside its own SQL.
+- **`RunQuery`, datasets and reports.** A stored query this app ships carries its scope predicate inside its own SQL. A query granted to a space runs only through Collaboration's `RunSpaceQuery`, with its scope parameters bound and locked (D29, A17); a participant holds no general right to run queries.
 - **A resolver that reads by a client-supplied id.** That's a gate site, always. MJ's storage routes are one (A12.16).
 - **MJAPI's `cacheInvalidation` subscription,** which sends every saved row to every signed-in socket (A12.13).
 - **A client filter that calls `fnCollaborationAccess`** can probe another person's reach (A12.9).
@@ -471,6 +579,21 @@ D3 to D5 are built in A4 (provenance on every answer), A7 (sealing on a change o
 ### 5.11 Test with a persona
 
 A green unit suite won't see these findings; a persona driven through a browser and over GraphQL will. The exit criterion for every stage is each persona in [§ 10](#10-verification) seeing exactly what it should, on every lane.
+
+### 5.12 Data a space doesn't own
+
+D28, D29 and D34 let a space show another app's rows, and they keep reads in SQL:
+- **Rows:** a participant reads another app's rows only through the data reach their space's type declares. It's a generated row-level security filter on the Space Participant role, one per entity, reviewed in `metadata/` like any other filter. Views and dashboards on those rows run as the viewer.
+- **Fields:** an allow-list per entity, through MJ's entity field permissions.
+- **Aggregates, and anything else a query computes:** only through a granted query, run by Collaboration's server with its scope parameters bound and locked. A participant never holds MJ's general right to run queries.
+- **The Canon:** anything granted to a type that seats outsiders is approved and tested first.
+- **Staff are unaffected.** Their own roles decide what they read.
+
+### 5.13 Grants and bindings
+
+- **A grant only narrows.** A granted action, query or view is offered only where the grant is in force, for the bands it names, and the agent still needs MJ's Run permission on itself and on each action (D27, D31).
+- **A bound value is the server's.** The model never sees it and can't set it, a client value for a bound name is refused and logged, and a binding that doesn't resolve refuses the run (D27, A16, A17).
+- **The audience decides what's offered** (D2). In a chat with anyone who can't see Team, no Team grant is listed or handed to the agent.
 
 ## 6. Workstream A: MemberJunction core
 
@@ -607,6 +730,65 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
   - a parent's read filter doesn't reach its subtypes' views;
   - a loaded record never looks for its subtype again when it's reloaded.
 
+**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 is [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), in review. Collaboration builds against them once an MJ release carries them.
+
+**A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)), and the builder implements it. PR #8 needs A14 to A17; A18 serves workstream T.
+
+### A14. Properties on user views
+
+**Today:** a view holds a filter, a sort, and grid and display state, and `RunViewParams` adds `ExtraFilter`, `OrderBy` and a search string. A view's filter takes one template token, `{%UserView "id"%}`, and any other throws. A view can't declare an input.
+
+**Add:**
+- **`Properties` on `MJ: User Views`,** a JSON list. Each property has `Name`, `Type`, `Description`, `DefaultValue`, `IsRequired`, `AllowOverride`, and a target: an entity field and an operator (`=`, `IN`, `>=` and so on).
+- **`RunViewParams.Properties`** supplies values at run time. The provider adds each as a parameterized predicate ANDed with the view's filter, never by string concatenation, and runs it through the SQL screen.
+- **A Properties panel** in the view designer. A view with no properties runs exactly as today.
+
+**Accept:** a *Members* view with a `Chapter` property that defaults to null returns every member to staff; run with `Chapter = X`, it returns X's members; a value of the wrong type is refused; row-level security still applies on top.
+
+### A15. Properties on dashboards, and a component part
+
+**Today:** a dashboard keeps its layout in `UIConfigDetails`, has no parameters, and passes no context to its parts. Its Query part saves each user's own parameter values. A component reaches a dashboard only through the Artifact part.
+
+**Add:**
+- **`Properties` on the dashboard,** shaped like A14's.
+- **A mapping in each part's configuration** from the dashboard's properties to the part's inputs: a view's properties (A14), a query's parameters, and a component's props, which interactive components already take as `ComponentProps`.
+- **A `Properties` input** on the dashboard viewer.
+- **An Interactive Component part type,** first-class.
+
+**Accept:** one chapter dashboard, with its `Chapter` property set once, drives a view part, a query part and a component part, and each shows only that chapter.
+
+### A16. Bound, hidden action parameters for agents
+
+**Today:** every input parameter of an agent's actions is described to the model. `ExecuteSingleAction` passes the model's values straight through, and passes `params.context`, which the model can't see, to the action. `MJ: AI Agent Actions` has no column for a fixed value.
+
+**Add:**
+- **`ExecuteAgentParams.boundActionParams`:** action ID → `{ paramName: value }`, applied to the run and all its sub-agents.
+- **A bound parameter** is taken out of the description the model gets, injected in `ExecuteSingleAction`, and overrides a value the model sent for it, which is logged. A required parameter bound to nothing refuses the action.
+- **Optionally,** the same map as a column on AI Agent Actions, for values fixed per agent.
+
+**Accept:** the model's tool list shows no `ChapterID` for a bound action; a `ChapterID` the model writes is ignored and logged; the action gets the bound value; a sub-agent's call to the same action gets the same binding.
+
+### A17. Locked query parameters, a context variable, and an approval status
+
+**Add:**
+- **`RunQueryParams.LockedParameters`:** names a caller may not supply. The server sets them, and a client value for a locked name is refused.
+- **Template variables only the server sets,** such as `{{Context.UserID}}`, so a query's SQL can carry its own access predicate. Queries are exempt from row-level security.
+- **An approval status** on queries, user views, dashboards and components, with who approved it, when, and the tests it passed (D34). First check whether a status MJ already has covers it.
+
+**Accept:** a granted query's `ChapterID` can't be changed over GraphQL; the attempt is refused and logged.
+
+### A18. Calendars in Communication
+
+**Today:** a communication provider can only read events, and only MS Graph implements it. The realtime bridge has its own Graph and Google calendar clients, which poll the agent's invitations. MJ has no calendar entities.
+
+**Add:**
+- **A calendar interface on communication providers:** create, update and cancel an event; invite attendees; read RSVPs; and sync changes both ways, through Graph delta queries and Google sync tokens.
+- **A Google Calendar implementation.**
+- **`MJ: Calendar Event Links`:** the provider, the external event's ID and series ID, `EntityID` and `RecordID`, and when it last synced, so any record can be tied to an event.
+- **One implementation:** the bridge's two clients fold into this layer.
+
+**Accept:** an MJ record creates an Outlook event and a Google event with attendees; a time change in either calendar flows back to the record; an RSVP updates the attendee.
+
 ## 7. Workstream B: Collaboration
 
 ### B0. Land PR #3
@@ -662,8 +844,8 @@ The contract for Committees and for private extensions. The design is the [exten
 
 1. **Wire them.** Space types name server and UI driver classes. Contributions register with `RegisterClassEx` metadata and are found with `GetAllRegistrationsByMetadata` (the extensibility plan's § 6), not v0.3's `GetAllRegistrations` filtered by type code and ordered by `Sequence`. Every provider receives the space and the viewer.
 2. **Add:**
-   - **The agent binding is the allowed-agent list.** An extension supplies its agent, or a parent agent with sub-agents, through `SpaceAgent` rows at the type level, with `IsDefault` (the extensibility plan's § 8). There are no `SpaceType.DefaultAgentID` or `Space.AgentID` columns.
-   - **Knowledge bindings:** a type or a space lists the Content Sources (A10) its agent may use beyond the space's own items.
+   - **The agent binding is the allowed-agent list.** An extension supplies its agent, or a parent agent with sub-agents, through `SpaceAgent` rows at the type level, with `IsDefault` (the extensibility plan's § 8). There are no `SpaceType.DefaultAgentID` or `Space.AgentID` columns. D27 moves the list into `SpaceGrant` (B15).
+   - **Knowledge bindings:** a type or a space lists the Content Sources (A10) its agent may use beyond the space's own items. D27 moves them into `SpaceGrant` too.
    - **Lifecycle events** that any extension can subscribe to: `AfterSpaceClosed`, `AfterMemberAdded`, `AfterMemberRemoved` and `AfterItemPromoted`, on the server. They're a contribution, beside the type's own driver hooks. That's how an extension turns a closed engagement into a case-study draft, or notifies a team.
    - **Access after close** (D21): `PostCloseAccess` (`ReadOnly`, `ReadOnlyWithAgent` or `None`) and `PostCloseAccessDays` (empty means indefinite) are settings (D20). The app's default is `ReadOnly` with no end, and a type, a space or a sub-space can set its own. When a space closes, the server stamps the resolved value on the space. They replace what `DefaultRetention` and `Space.Retention` meant, and round 94's tasks 8 and 9: `ReadOnlyWithAgent` is task 9's agent for former clients. They're enforced in `fnCollaborationAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` honors `ClosedAt`; fix that drift here. How access is priced or granted beyond the window is an extension's business, not the engine's.
    - **Outreach sources:** a server-side `SpaceSignalProvider` base class. An extension registers providers that produce dated observations about a space, such as "a public filing changed". The engine stores them as Team-band items, and only A8 can turn one into a post.
@@ -710,6 +892,102 @@ Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-orde
 - **Slice H (new space):** the UI plan's gap 2, tab labels per type.
 - **Slice I (extension points):** frame 08 through the example plug-in (B8). The UI plan's gap 10, the committee removal, is B0.11: begun in PR #3 and finished here (item 18).
 
+**B14 to B24** are D26 to D35's Collaboration work, built in PR #8 from [its plan](pr8-plan.md), except B23, which waits for workstream T. They change the extensibility plan's schema, which #7 built, before any version ships (D35). Each data change is proposed in a pull request comment before its migration, as the extensibility plan's § 3 asks.
+
+### B14. `SpaceAnchor` (D26)
+
+- **The table:** `SpaceID`, `EntityID`, `RecordID`, `Role`, `IsPrimary` and `Sequence`.
+- **Keys:** unique on `SpaceID`, `EntityID`, `RecordID` and `Role`; and at most one primary anchor per type, entity and record, a filtered unique key on `SpaceTypeID`, `EntityID` and `RecordID` where `IsPrimary = 1`. Either denormalize `SpaceTypeID` onto the row, or enforce the key in the server class.
+- **It replaces** `Space.AnchorEntityID` and `AnchorRecordID`, which #7's `V202609262200` added.
+- **Uses:** `EnsureSpaceForRecord` finds and creates by the primary anchor. An anchor can drive seats through `SyncSeats`: a chapter type's driver seats the anchored chapter's officers, and removes them when their term ends. Reads of `SpaceAnchor` use the space's filter.
+
+### B15. `SpaceGrant` (D27, D31)
+
+| Column | Holds |
+|---|---|
+| `ID` | The key |
+| `SpaceTypeID` or `SpaceID` | The level: at most one of them; neither means app-wide |
+| `Kind` | One of D27's kinds |
+| `TargetEntityID` and `TargetRecordID` | The granted object |
+| `Label` | Its display name |
+| `Band` | `Team` or `Shared` |
+| `IsDefault` | For agents: the one a new chat starts with |
+| `Bindings` | JSON: D27's bindings |
+| `Settings` | JSON: an agent's settings (D31) |
+| `Mode` | `Extend`, or `Remove` for a single inherited grant. `Replace` stays per kind in the configuration. |
+| `Sequence` | The order |
+
+- **It replaces** `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`, which #7 added. It's a table by the extensibility plan's own rule: a setting that points at a record that can be deleted is a row. Its target is polymorphic, so it has no foreign key: the save checks that the target exists, and the resolver leaves out a grant whose target is gone, with a log, which only narrows.
+- **Validation on save:** the target exists; each bound name is a real parameter or property of the target; each binding expression parses; the target is Canon-approved when the type seats participants (D34); an agent's settings stay inside its own definition (D31). Writes need the settings authorizations (D23).
+- **The resolver folds the rows** into D30's one document.
+
+### B16. The configuration resolver (D30)
+
+`ResolveSpaceConfiguration(chain)`, a pure function in `collaboration-core`, implements D30's chain and its restart:
+- it returns `EffectiveSpaceConfiguration`: the settings, the grants per kind with their bindings, and the agents with their settings;
+- it replaces D20's `ResolveCollaborationSettings`, the old `ResolveSpaceRules`, and the separate agent, skill and knowledge resolution #7 built (its items 42 and 55);
+- the type's server driver keeps `AdjustRules`, which can narrow the result.
+
+**Unit tests:** same-type inheritance; the restart at a type change; a same-type space below a parent of another type; `Extend`, `Replace` and `Remove`; refused overrides; a grant whose target is gone.
+
+### B17. Bindings and the grant operations (D27, D29)
+
+- **The binding resolver,** on the server, evaluates D27's expressions against the space, its anchors and the caller.
+- **Three operations,** on the server, over GraphQL and in the typed client:
+  - `RunSpaceView(spaceId, grantId, properties?)` runs as the caller, with the bindings applied and row-level security on top (A14);
+  - `RunSpaceQuery(spaceId, grantId, parameters?)` is D29's door (A17);
+  - `GetSpaceDashboard(spaceId, grantId)` returns the dashboard with its properties bound (A15).
+- **Every one** checks reach and band, refuses a client value for a bound name, and logs the run.
+
+### B18. Data reach and filter generation (D28)
+
+- **The declarations:** a type's configuration gains `DataReach: [{ Entity, Path, AnchorRole, Band, Fields }]`. `Path` may take one hop through a foreign key, and `Fields` is the allow-list.
+- **The generator,** `scripts/generate-data-reach-filters.mjs`, follows `generate-core-permissions.mjs`: it reads the declarations from the type metadata, and writes one combined Space Participant filter per entity, and the entity field permissions, into `metadata/`.
+- **Checks:** `scripts/persona-check.sql` gains a check for each declared entity, and CI fails when the generated files are stale.
+
+### B19. The data surface (D32)
+
+- **A data tab,** labelled from the type's `Labels`, lists the space's granted views, dashboards and components. Views render in MJ's own view types, dashboards in MJ's dashboard viewer with their properties from B17, and components in MJ's React host with props from their bindings.
+- **Layering:** where an MJ viewer is L3-only, it's composed at L3, as the Work tab is.
+- **Empty states** say what the space's type offers.
+
+### B20. Agent turns use the effective configuration (D30, D31)
+
+The server operation for an agent turn (the extensibility plan's § 8) gains four steps:
+1. **The grants in force for the chat's audience.** Team grants are left out when anyone in the chat can't see Team.
+2. **Tools:** `actionChanges` that limit the agent to Collaboration's own actions plus the granted ones; `boundActionParams` (A16); and `planMode`, `requestedSkillIDs` and `effortLevel` from the agent's settings.
+3. **Granted queries and views reach the agent as tools** through one Collaboration action, *Run space data*. Its `Name` parameter is limited to the granted names, its other inputs are only the unbound parameters of the named query or view, and it calls B17's operations.
+4. **Knowledge:** the granted knowledge sources join the bounded search.
+
+### B21. Notes (D33)
+
+- **The table:** `SpaceNote`, with `ID`, `SpaceID` (not null), `Title`, `Body` (Markdown), `Band`, `Visibility` (`Space` or `Private`) and `AuthorUserID`. CodeGen's `__mj_UpdatedAt` records the last change. A note exists only in its space, so it's a space-scoped table with a real `SpaceID`, not a `SpaceItem` pointer.
+- **Reads:** row-level security, as for items; a private note is visible to its author only.
+- **In the UI:** a Notes list, a quick add from anywhere in the space, and *Turn into document*, which creates a file item.
+- **Search and agents:** notes are in the space's search scope. A private note is used only in its author's own one-to-one chat.
+
+### B22. Pins and Home (D32)
+
+- **The table:** `SpaceMemberPin`, with `SpaceID`, `UserID`, `Kind`, either `TargetEntityID` and `TargetRecordID` or `GrantID`, and `Sequence`. Only its owner reads or writes a row.
+- **In the UI:** a *Pinned* strip at the top of the space's overview, *My pins* on Home across spaces, and a star on each space through MJ's User Favorites.
+
+### B23. Meetings in spaces (D33)
+
+After workstream T ships, in a later pull request:
+- a meeting belongs to a space through `MeetingLink`;
+- a **Meetings** tab shows the space's meetings, and Collaboration's `AgendaProvider` feeds *Coming up*;
+- a meeting's chat is a `SpaceChat` whose subject is the meeting;
+- the agent can use a meeting's agenda and notes in the space, under the same band rules.
+
+### B24. A chapter example type
+
+`example-chapter` joins the extensibility plan's private example package, so every new mechanism is tested without Collaboration naming a real app. It has:
+- a Chapter entity, with Members, in the package's test-only migration;
+- a primary anchor, and a data reach on Members;
+- a granted *Members* view with a bound property, a granted aggregate query, and a granted dashboard with a bound property;
+- a granted action with a bound parameter;
+- a same-type sub-space, and a sub-space of another type.
+
 ## 8. Workstream C: Committees on Collaboration
 
 **Committees today (1.4.0):**
@@ -721,15 +999,17 @@ Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-orde
 
 The ActionItem-to-Tasks move dropped a published entity in a 1.0.x patch with no compatibility layer. Don't repeat that: breaking steps take a major version.
 
-The mapping, the drivers and the tests are in [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md). This section sets the stages (D9).
+The mapping, the drivers and the tests are in [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md). This section set the stages (D9). **D35 withdraws C1 to C3:** C0 still comes first, and C4 replaces the rest.
 
 ### C0. Fixes before the refactor (1.4.x)
 
-1. Enforce ballot sealing on the server: while a ballot is open, only the voter can read their vote.
-2. Fix the registration names in `packages/GeneratedEntities/src/custom/{Membership,Meeting}Entity.ts`.
+1. Enforce ballot sealing on the server: while a ballot is open, only the voter can read their vote. Today the UI role reads `Committees: Votes` with no filter, so `VoteValue` is readable through the generic API.
+2. Fix the registration names in `packages/GeneratedEntities/src/custom/{Membership,Meeting}Entity.ts`. They're in the shared entities package, so today they bind on neither the client nor the server.
 3. Decide whether `IsPublic` means anything. Nothing enforces it today.
 
 ### C1. 1.5: declare the dependency and backfill
+
+*Withdrawn by D35: C4 replaces it. Kept for the record.*
 
 - Declare the dependency on Collaboration, and raise the floors to bizapps-tasks 1.5.0 and bizapps-common 5.46.
 - Ship Committees' own `committee` space type in its `metadata/`, with the ID Collaboration seeded before B0.11 removed the row: `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`. A database that already has the row keeps it as the one `committee` row, since type codes are unique, and Collaboration never reuses the ID.
@@ -743,6 +1023,8 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ### C2. 1.6: dual read and security
 
+*Withdrawn by D35: C4 replaces it. Kept for the record.*
+
 - The existing screens keep working. Committee spaces light up with the library, chats, work and the Assistant through Collaboration.
 - Row-level security on Committees' entities for Space Participant, through `fnCollaborationAccess`: a committee row passes when its ID is in the caller's reach, since it's the space's ID. Staff roles stay as they are.
 - Motions, meetings, minutes and ballots appear through B8's extension points: tabs (*Meetings*, *Motions*), overview cards (the next meeting, an open vote), a header chip (the term), *Needs you* (ballots awaiting my vote) and the agenda (meetings).
@@ -750,10 +1032,75 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ### C3. 2.0: cut over (a major version)
 
+*Withdrawn by D35: C4 replaces it. Kept for the record.*
+
 - Declare `Committee` and `Term` as IsA children of `Space` in Committees' `codegen-schema-info.json`.
 - Drop the duplicated columns: `Committee.Name`, `Description` and `ParentCommitteeID`, and `Term.Name`. The rebuild plan maps the rest of each table.
 - Retire Committees' `Artifact` and `Comment` in favor of space items, MJ Files and space chats. Leave read-only views for old readers.
 - **Accept:** an outside director with the Space Participant role can join a committee, read its Shared material and vote on an e-ballot, and can't see a sealed Compensation sub-committee. A director who sits on both sees both, and in a private chat the agent can answer across both. In the full board's room it can't use Compensation material ([§ 10](#10-verification)).
+
+### C4. Rebuild Committees in one step (D35)
+
+It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes:
+- **`Committee` and `Term` stay IsA subtypes of `Space`.**
+- **Meetings, agenda items, attendance and video providers move to bizapps-tasks** (workstream T). Existing rows are copied with their IDs reused, as the ActionItem move did.
+- **Every link to them is re-pointed** at Tasks' `Meeting` and `AgendaItem`:
+  - the foreign keys to a meeting, from `AgendaItem`, `Attendance`, `Artifact`, `Minute` (both `MeetingID` and `ApprovedByMeetingID`), `Motion` and `Comment`;
+  - the foreign keys to an agenda item, from its own parent key, `Artifact`, `Motion` and `Comment`. Votes and ballots follow through their motion; they have no key of their own to either;
+  - the soft references: `TaskLink` rows, and the ML pipeline, models and weekly scoring job that target `Committees: Meetings`;
+  - the computed columns: 1.4.0's migration registers 12 computed `vwMeetings` columns as entity fields that the generated class doesn't carry, so the move settles which of them go with the meeting.
+- **Quorum** is computed in the UI today, with `Meeting.PredictedQuorumRisk…` the only stored quorum data; it stays with the governance.
+- **A committee type grants its governance data** through B15: for example, the roster and term view to members, and a voting-record dashboard to officers.
+- **C0 still comes first:** ballot sealing enforced on the server, and the entity overrides registered under the wrong names fixed.
+- **It's a major version of Committees,** since it drops published tables.
+
+## 8a. Workstream T: meetings and agendas in bizapps-tasks
+
+Meetings and agendas are work, so they move out of Committees into bizapps-tasks, where every app gets them (D33). bizapps-tasks 1.6.0 has nothing meeting-like. Committees 1.4.0 has the model, and apart from its link to a committee it's generic:
+- `Meeting`: times, time zone, location type, video fields, status and a transcript URL, with an unused `CalendarEventID`;
+- `AgendaItem`: nested, with a sequence, presenter, duration, type and status;
+- `Attendance`;
+- `VideoProvider`, with drivers in `bizapps-committees/packages/CoreEntitiesServer/src/drivers/`. Zoom creates the meeting and registers attendees; Teams creates the online meeting, and its invitations are a stub; Meet creates the meeting but ignores its input, and its invitations and delete are stubs. Nothing calls delete for any provider, and no provider rows are seeded.
+
+It's its own pull request in bizapps-tasks, with a minor version, since it only adds. bizapps-tasks' `next` has bizapps-tasks#79 (the task panel's view modes, merged 2026-09-27), which ships as 1.6.1; 1.6.0 is the latest release.
+
+### T1. Entities
+
+Add to `__mj_BizAppsTasks`:
+
+| Entity | Contents |
+|---|---|
+| `MeetingType` | A lookup, with a default duration and an agenda template |
+| `Meeting` | Committees' fields, with no committee column |
+| `MeetingLink` | `EntityID` and `RecordID`, the way `TaskLink` ties a task to any record: how a meeting belongs to a space, a committee or a deal |
+| `AgendaItem` | As in Committees, with `ItemType` a lookup table, since *Vote* is governance |
+| `MeetingAttendee` | An attendee with an RSVP and an attendance status. `TaskAssignment`'s columns allow any entity, but every consumer reads a Person, so say which kinds of attendee are supported: a Person, and a guest by email |
+| `VideoProvider` | Moved from Committees, with its drivers |
+| `MeetingNote` | Notes from a transcript, drafted by AI |
+
+`TaskLink` already lets a follow-up task point at a meeting or an agenda item.
+
+### T2. Calendar sync
+
+- Create and sync meetings through A18, from the organizer's calendar, and keep the event's link in `MJ: Calendar Event Links`.
+- Keep an `.ics` download as a fallback, built on the server with a `DTSTAMP`. Committees builds its `.ics` in the browser, for the member's next meeting only, without the `DTSTAMP` RFC 5545 requires.
+- Finish the Teams and Meet invitation stubs, Meet's delete, and Meet's create, which ignores its input. Call delete when a meeting is cancelled, and seed the providers.
+
+### T3. AI
+
+Move the generic part of Committees' `MinutesService.GenerateDraftMinutes` into Tasks, as meeting notes from a transcript, with its prompt as an MJ AI Prompt in `metadata/` rather than the TypeScript it's written in today. The live meeting passes it a transcript built from the agenda, motions and attendance; notes need the real transcript. Then add:
+- agenda drafting from open tasks and past notes;
+- turning the action items in the notes into tasks, with the person's approval.
+
+Approving minutes is a governance act, and stays in Committees.
+
+### T4. UI and layering
+
+- **Components:** a meetings list, a calendar view, a meeting page with an agenda builder, and Committees' live-meeting screen made generic.
+- **Split `tasks-ng`.** It depends on Explorer's `ng-shared`, so Collaboration's widgets can't use it (the UX plan's § 3). The peer is imported in three files (`open-task-record.ts`, `task-overview.component.ts` and `tasks-sections.component.ts`), and the package's one entry point loads them all. Split out a `tasks-ng-widgets` package now, while adding the meeting components, so Collaboration composes meetings and tasks at the widget layer. MJ's `RecordNavigationAdapter`, in `ng-base-types` since 6.1.0, replaces the record-open use.
+- **View types:** a Calendar view type, and Gantt if wanted. View types are MJ core's, so that part is MJ work, with the MJ pull request or after it.
+
+**Accept:** a meeting created from a space appears in the organizer's Outlook with its attendees; its agenda is built in the app; its transcript produces notes and proposed tasks; and all of it works with no Committees package installed.
 
 ## 9. Sequencing
 
@@ -772,6 +1119,21 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 - **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared room is provably bounded by its audience. Don't put a real client in a shared room before A6 and B2 pass [§ 10](#10-verification).
 - **Within a stage,** core and app items can run in parallel. App items that depend on a core item ship behind a feature check until the core version is pinned.
 
+**After #7: PR #8, the MJ pull request, Tasks and Committees.** D26 to D35's work runs in this order. [PR #8's plan](pr8-plan.md) details its stages.
+
+| When | MJ core (A) | Collaboration (B) | bizapps-tasks (T) | Committees (C) |
+|---|---|---|---|---|
+| **Now, beside #7** | The MJ pull request: A16, A14, A15, then A17 | PR #8's plan, as a draft | T1's schema, proposed for review | C0 |
+| **PR #8, stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
+| **PR #8, stage 2: the server** | An MJ release carries A14 to A17, and PR #8 pins it | B16, B17, B18, and B24's example type | T1 | |
+| **PR #8, stage 3: agents** | A18 | B20 | T2 with A18, and T3 | |
+| **PR #8, stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
+| **After T ships** | | B23, in a later pull request | | C4, in a major version |
+
+- **PR #8 starts when #7 merges.** Its plan starts from the app as #7 leaves it.
+- **The MJ pull request runs beside #7 and PR #8.** Nothing in PR #8 that needs A14 to A17 merges before an MJ release carries them. Where one isn't out yet, the builder builds the parts that don't need it first, and wires the rest when it lands.
+- **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass.
+
 ## 10. Verification
 
 **Personas,** each a real user in a seeded database, driven through a browser and over GraphQL:
@@ -784,8 +1146,11 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 | Consultant C | Staff, with the Team band on the client space Acme and its engagement sub-space |
 | Client K | Space Participant, with the Shared band on Acme |
 | Stranger S | No seats |
+| Chapter leader L | The Space Participant role, a seat on the *Chapter 12* space, which is anchored to chapter 12 |
+| Chapter leader M | The same, on the *Chapter 40* space |
+| National staff N | Staff, with the Team band on both chapters' spaces |
 
-The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada and Sam are staff, Casey and Bea are clients, Dana is an outside director, and Nora holds no seat. It gains the rest: a board with a sealed compensation sub-space, and directors D and E.
+The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada and Sam are staff, Casey and Bea are clients, Dana is an outside director, and Nora holds no seat. It gains the rest: a board with a sealed compensation sub-space, and directors D and E. `example-chapter` (B24) gives L, M and N their chapters.
 
 **The matrix.** Each row passes through the portal, GraphQL and MCP, and from stage 4 a bound Teams channel.
 
@@ -803,6 +1168,18 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | 10 | S calls any Collaboration or Committees read | Nothing |
 | 11 | The agent drafts outreach to K | Nothing is posted until C approves (A8, B7) |
 | 12 | The engagement sub-space is closed with `ReadOnlyWithAgent` | K can read and ask, but can't upload or invite |
+| 13 | L opens the granted *Members* view | Chapter 12's members only, and only the allow-listed fields |
+| 14 | L runs `Members` directly over GraphQL, with no filter | Chapter 12's members only (the generated filter) |
+| 15 | L's agent calls *renewals by month* | The chapter is bound to 12; the tool shows no chapter input; a 40 the model writes is ignored and logged |
+| 16 | L calls the granted query over GraphQL with `ChapterID = 40` | Refused and logged (A17) |
+| 17 | M tries to run one of Chapter 12's grants | Refused: M doesn't reach that space |
+| 18 | A same-type sub-space and a sub-space of another type under Chapter 12 | The first inherits the parent's overrides; the second starts from its own type |
+| 19 | A Team-band grant, a dues-arrears dashboard, in a room with L | Not listed in the room, and not a tool for the agent there; N alone can use it |
+| 20 | L writes a private note, then asks in a room | The note isn't used |
+| 21 | A space removes one action its type grants | The action is gone for that space only |
+| 22 | A meeting is created in a space (after workstream T) | It appears in the organizer's Outlook with the attendees, and an RSVP updates the attendee |
+| 23 | A query that isn't Canon-approved is granted to a type that seats participants | The grant is refused on save |
+| 24 | A binding's anchor role is missing | The run is refused; it never runs unbound |
 
 **KPIs that must be measurable** once A2 and A4 land: zero cross-band retrievals in audit; zero sealed-source quotes; every AI message has an `AgentRunID` and source rows.
 
@@ -821,15 +1198,21 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 8. ~~**The default `PostCloseAccess` and `PostCloseAccessDays`** for each starter type.~~ Settled by D21: the app's default is `ReadOnly` with no end, and the shipped types set nothing.
 9. **May deleting an item erase its item uses?** Today the item's delete removes its uses and notices in one transaction, and MJ's Record Changes keeps every deleted row. Slice A adds versions, set members, checks and findings to the same question. The choices: keep that; refuse to delete an item that has a promotion; or keep the uses after the item goes. Until it's decided, the delete removes them all in its one transaction.
 10. **File Requests** (from v0.2): lift the shape into Collaboration if a space needs it, or revisit Secure Messaging as an optional dependency.
+11. **Member-level or aggregate-only, by default,** for a chapter-style type. The mechanism supports both, and each association chooses (D28, D29).
+12. **Approving Canon objects** (D34): who approves, where it's recorded, and how the AI-written tests are stored.
+13. **Issues.** BizApps Issues is its own app ([MemberJunction/bizapps-issues](https://github.com/MemberJunction/bizapps-issues)). Should spaces project issues the way they project tasks, and do issues need meetings too?
+14. **Whose calendar owns a meeting:** the organizer's mailbox, or a shared service mailbox per space type (T2).
+15. **Notes:** can a Team note be promoted to Shared with the same audited step as an item (D33)?
+16. **The deal room** (the extensibility plan's § 10.2): does it keep its IsA subtype, or become a plain space anchored to the deal, now that anchors are plural (D26)?
 
 **Reconciled; Amith to confirm in review:**
 - **Contributions** use the extensibility plan's `RegisterClassEx` metadata and `GetAllRegistrationsByMetadata`, not v0.3's B8.1 (`GetAllRegistrations` by `Sequence`). v0.3 predates that design.
-- **The agent binding is the allowed-agent list:** an extension supplies its agent through `SpaceAgent` rows at the type level, with `IsDefault`. No `DefaultAgentID` or `Space.AgentID` columns.
+- **The agent binding is the allowed-agent list:** an extension supplies its agent through `SpaceAgent` rows at the type level, with `IsDefault`. No `DefaultAgentID` or `Space.AgentID` columns. D27 turns those rows into `SpaceGrant` rows of kind `Agent` (B15).
 - **B8.2's additions are all in:** knowledge bindings; lifecycle events any extension can subscribe to, beside the type's driver hooks; `PostCloseAccess` and `PostCloseAccessDays`, now settings (D21), replacing `Space.Retention`'s meaning and round 94's tasks 8 and 9, with `ReadOnlyWithAgent` as task 9's agent for former clients; and `SpaceSignalProvider`.
 - **D2's scope control extends the subtree bound:** a private chat uses the caller's union with a scope control, and a shared chat the intersection. The extensibility plan's "What an agent sees" says so.
 - ~~**`SpaceType.DefaultInheritsMembership` is a column,** like `DefaultAllowParentAssignees`.~~ Superseded by D22: no type-level default.
 - **Lifecycle subscribers run after the commit,** through `provider.RunAfterCommit`, so a subscriber never sees a change that's rolled back. Refusing a change stays with the type's Validate hooks (the extensibility plan's § 5).
-- **Knowledge bindings are rows,** proposed as `SpaceKnowledgeSource`, by the extensibility plan's own rule: a setting that points at a record that can be deleted is a row with a foreign key.
+- **Knowledge bindings are rows,** proposed as `SpaceKnowledgeSource`, by the extensibility plan's own rule: a setting that points at a record that can be deleted is a row with a foreign key. D27 turns them into `SpaceGrant` rows of kind `KnowledgeSource` (B15).
 - **A12.13 is in stage 1,** as urgent.
 - **`mjc-no-access` stays** (B0.10): it's the new UI's component, not the old UI's.
 
@@ -858,6 +1241,10 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | An outside channel answers as a service account | High | D6 and A9: an unresolved identity refuses |
 | The next pull request grows the way PR #3 did | Medium | It merges once, when done (D12), so it's reviewed by stage: § 9's order, item numbers in commits and review threads, one stage per review round ([§ 0](#0-how-to-use-this-plan)) |
 | The computed reach walk stops being fast enough | Medium | Measure at realistic space counts. If it's ever materialized, recompute on both a space's create or move and a seat's change |
+| A generated data-reach filter is stale or wrong, and widens what a participant reads of another app's entity | High | The generator writes reviewed metadata; CI fails on stale output; `persona-check.sql` checks every declared entity (B18); matrix rows 13 and 14 |
+| A granted query returns more than its type should show | High | D29's door: only Canon-approved queries (D34), with every scope parameter bound and locked (A17); aggregate-only types get aggregates |
+| A model sets a scope parameter by writing it into a tool call | High | A16: a bound parameter is taken out of the tool description, and a value the model sends is discarded and logged |
+| Moving meetings out of Committees breaks its governance links | Medium | C4 copies the rows with their IDs reused and re-points motions, votes, ballots and minutes, in a major version |
 | A client's security review asks for SOC 2 evidence we don't have | Medium | Name an owner, and start collecting evidence before the first outside client |
 
 ## 13. Out of scope
@@ -868,6 +1255,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 - Competing with Slack or Teams, or becoming a document-management system. Files stay in MJ Storage.
 - Reshaping BizApps Secure Messaging into group chat.
 - Hand-written PostgreSQL. `migrations-pg/` is converter output (B11).
+- Becoming an association management system. A chapter's space reads the national's data through approved definitions; the chapter doesn't run on the national's system.
 
 ## Appendix: source checks of 2026-09-26
 

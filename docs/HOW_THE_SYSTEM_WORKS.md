@@ -86,6 +86,16 @@ The engine reads role flags. It never compares role names.
 - **Identity (D6; A9, B5):** a space's agent over MCP, Slack or Teams must resolve the person to an MJ user and apply D2 for the channel's audience, or refuse. Today the messaging adapters fall back to a service account, and MCP's `mode=none` and its system API key run as the system user.
 - **Proposed posts (D7; A8, B7):** an unsolicited agent message to outside participants is a draft until a named staff member approves or edits it. A digest a member subscribed to needs no approval.
 
+## Data a space doesn't own, and what it grants
+
+**Planned: PR #8** (the plan's D26 to D34; B14 to B20, A14 to A17).
+- **Anchors (D26; B14).** A space can be anchored to one or more records it's about, each with a role, at most one primary. An anchor grants nothing by itself.
+- **Data reach (D28; B18).** A type declares which other apps' entities its participants may read, by a path to an anchor role, with a band and a field allow-list. A script turns the declarations into the Space Participant role's row-level security filters, one per entity, reviewed in `metadata/`. Reads stay in SQL, and a type that declares no reach on an entity gives its participants nothing from it.
+- **Grants (D27, D31; B15, B20).** A type, a space or a sub-space grants agents, actions, queries, views, dashboards, components and knowledge sources. A grant's bindings are filled in by the server from the space, its anchors and the caller: the model never sees a bound parameter, a client value for one is refused and logged, and a binding that doesn't resolve refuses the run. A grant on the Team band isn't offered in a chat where anyone can't see Team.
+- **Granted queries (D29; B17, A17).** A participant never holds MJ's general right to run queries. They run one only through `RunSpaceQuery`, which checks reach and band, binds and locks the scope parameters, and logs the run.
+- **The Canon (D34).** Anything granted to a type that seats outsiders is approved and tested first.
+- **One configuration (D30; B16).** Settings, grants and agent settings resolve through the space's same-type run of ancestors, restarting where the type changes.
+
 ## The All query
 
 CodeGen emits an `All…` query only when `AllowAllRowsAPI` is 1. Every Collaboration entity leaves that flag at 0, so this app generates no `All…` route. MemberJunction 6.1.3 still ships `All…` queries for metadata entities such as Users and Roles; each appends the caller's read filter. None covers Conversations, Conversation Details or Files, and BizApps Tasks generates none. The lane is as safe as the grants: a NULL filter on a Space Participant read row would open it, and `scripts/persona-check.sql` asserts there's no such row and that every Collaboration entity keeps `AllowAllRowsAPI` at 0.
