@@ -67,3 +67,16 @@ export type {
     AgendaItem,
     SpaceHeaderChip,
 } from './view-models.js';
+export {
+    DEFAULT_SPACE_RULES,
+    ResolveSpaceRules,
+    validateSpaceConfiguration,
+    validateSpaceTypeConfiguration,
+} from './configuration.js';
+export type {
+    ConfigurationValue,
+    EffectiveSpaceRules,
+    ISpaceConfiguration,
+    ISpaceRules,
+    ISpaceTypeConfiguration,
+} from './configuration.js';

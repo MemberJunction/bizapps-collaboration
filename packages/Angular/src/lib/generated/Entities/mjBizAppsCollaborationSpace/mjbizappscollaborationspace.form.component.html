@@ -156,6 +156,47 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AnchorEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AnchorRecordID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PostCloseAccess"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PostCloseAccessDays"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -284,6 +325,106 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationShareNotices', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Knowledge Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceKnowledgeSources"
+        SectionName="Space Knowledge Sources"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceKnowledgeSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Knowledge Sources','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Knowledge Sources','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceKnowledgeSources')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceKnowledgeSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Agent Skills Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceAgentSkills"
+        SectionName="Space Agent Skills"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceAgentSkills')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Agent Skills','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Agent Skills','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceAgentSkills')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceAgentSkills', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Chats Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceChats"
+        SectionName="Space Chats"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceChats')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Chats','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Chats','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceChats')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceChats', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Agents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceAgents"
+        SectionName="Space Agents"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceAgents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Agents','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Agents','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceAgents')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -118,6 +118,180 @@ export const mjBizAppsCollaborationShareNoticeSchema = z.object({
 export type mjBizAppsCollaborationShareNoticeEntityType = z.infer<typeof mjBizAppsCollaborationShareNoticeSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Agent Skills
+ */
+export const mjBizAppsCollaborationSpaceAgentSkillSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)`),
+    SpaceTypeID: z.string().nullable().describe(`
+        * * Field Name: SpaceTypeID
+        * * Display Name: Space Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
+    SpaceID: z.string().nullable().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    SpaceType: z.string().nullable().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+    Space: z.string().nullable().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationSpaceAgentSkillEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSkillSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Agents
+ */
+export const mjBizAppsCollaborationSpaceAgentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    SpaceTypeID: z.string().nullable().describe(`
+        * * Field Name: SpaceTypeID
+        * * Display Name: Space Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
+    SpaceID: z.string().nullable().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    SpaceType: z.string().nullable().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+    Space: z.string().nullable().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationSpaceAgentEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Chats
+ */
+export const mjBizAppsCollaborationSpaceChatSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Subject: z.string().nullable().describe(`
+        * * Field Name: Subject
+        * * Display Name: Subject
+        * * SQL Data Type: nvarchar(500)`),
+    Kind: z.union([z.literal('General'), z.literal('Private'), z.literal('Room'), z.literal('Topic')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: General
+    * * Value List Type: List
+    * * Possible Values 
+    *   * General
+    *   * Private
+    *   * Room
+    *   * Topic`),
+    Status: z.union([z.literal('Active'), z.literal('Archived')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type mjBizAppsCollaborationSpaceChatEntityType = z.infer<typeof mjBizAppsCollaborationSpaceChatSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Items
  */
 export const mjBizAppsCollaborationSpaceItemSchema = z.object({
@@ -194,6 +368,56 @@ export const mjBizAppsCollaborationSpaceItemSchema = z.object({
 export type mjBizAppsCollaborationSpaceItemEntityType = z.infer<typeof mjBizAppsCollaborationSpaceItemSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Knowledge Sources
+ */
+export const mjBizAppsCollaborationSpaceKnowledgeSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newid()`),
+    ContentSourceID: z.string().describe(`
+        * * Field Name: ContentSourceID
+        * * Display Name: Content Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
+    SpaceTypeID: z.string().nullable().describe(`
+        * * Field Name: SpaceTypeID
+        * * Display Name: Space Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
+    SpaceID: z.string().nullable().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentSource: z.string().nullable().describe(`
+        * * Field Name: ContentSource
+        * * Display Name: Content Source
+        * * SQL Data Type: nvarchar(255)`),
+    SpaceType: z.string().nullable().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+    Space: z.string().nullable().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationSpaceKnowledgeSourceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceKnowledgeSourceSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Members
  */
 export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
@@ -247,6 +471,15 @@ export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SyncSource: z.string().nullable().describe(`
+        * * Field Name: SyncSource
+        * * Display Name: Sync Source
+        * * SQL Data Type: nvarchar(100)`),
+    PersonID: z.string().nullable().describe(`
+        * * Field Name: PersonID
+        * * Display Name: Person ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Common: People (vwPeople.ID)`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -259,6 +492,10 @@ export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
         * * Field Name: SpaceRoleType
         * * Display Name: Space Role Type
         * * SQL Data Type: nvarchar(200)`),
+    Person: z.string().nullable().describe(`
+        * * Field Name: Person
+        * * Display Name: Person
+        * * SQL Data Type: nvarchar(201)`),
 });
 
 export type mjBizAppsCollaborationSpaceMemberEntityType = z.infer<typeof mjBizAppsCollaborationSpaceMemberSchema>;
@@ -505,6 +742,41 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(50)
         * * Description: Hex color code representing the space type (e.g., #0076b6).`),
+    ServerDriverClass: z.string().nullable().describe(`
+        * * Field Name: ServerDriverClass
+        * * Display Name: Server Driver Class
+        * * SQL Data Type: nvarchar(255)`),
+    UIDriverClass: z.string().nullable().describe(`
+        * * Field Name: UIDriverClass
+        * * Display Name: UI Driver Class
+        * * SQL Data Type: nvarchar(255)`),
+    SpaceExtensionEntity: z.string().nullable().describe(`
+        * * Field Name: SpaceExtensionEntity
+        * * Display Name: Space Extension Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)`),
+    DefaultInheritsMembership: z.boolean().describe(`
+        * * Field Name: DefaultInheritsMembership
+        * * Display Name: Default Inherits Membership
+        * * SQL Data Type: bit
+        * * Default Value: 1`),
+    PostCloseAccess: z.union([z.literal('None'), z.literal('ReadOnly'), z.literal('ReadOnlyWithAgent')]).describe(`
+        * * Field Name: PostCloseAccess
+        * * Display Name: Post Close Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * ReadOnly
+    *   * ReadOnlyWithAgent`),
+    PostCloseAccessDays: z.number().nullable().describe(`
+        * * Field Name: PostCloseAccessDays
+        * * Display Name: Post Close Access Days
+        * * SQL Data Type: int`),
 });
 
 export type mjBizAppsCollaborationSpaceTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeSchema>;
@@ -605,15 +877,44 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
     IconClass: z.string().nullable().describe(`
         * * Field Name: IconClass
         * * Display Name: Icon Class
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class representing the space (e.g., fa-solid fa-folder-tree, fa-solid fa-briefcase). Overrides SpaceType.IconClass if set.`),
     Color: z.string().nullable().describe(`
         * * Field Name: Color
         * * Display Name: Color
-        * * SQL Data Type: nvarchar(50)`),
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Hex color code representing the space (e.g., #0076b6, #10b981). Overrides SpaceType.Color if set.`),
     BackgroundImageURL: z.string().nullable().describe(`
         * * Field Name: BackgroundImageURL
         * * Display Name: Background Image URL
-        * * SQL Data Type: nvarchar(1000)`),
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL of an optional hero banner or background image displayed in the space header and overview.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)`),
+    AnchorEntityID: z.string().nullable().describe(`
+        * * Field Name: AnchorEntityID
+        * * Display Name: Anchor Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    AnchorRecordID: z.string().nullable().describe(`
+        * * Field Name: AnchorRecordID
+        * * Display Name: Anchor Record ID
+        * * SQL Data Type: nvarchar(450)`),
+    PostCloseAccess: z.union([z.literal('None'), z.literal('ReadOnly'), z.literal('ReadOnlyWithAgent')]).nullable().describe(`
+        * * Field Name: PostCloseAccess
+        * * Display Name: Post Close Access
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * ReadOnly
+    *   * ReadOnlyWithAgent`),
+    PostCloseAccessDays: z.number().nullable().describe(`
+        * * Field Name: PostCloseAccessDays
+        * * Display Name: Post Close Access Days
+        * * SQL Data Type: int`),
     SpaceType: z.string().describe(`
         * * Field Name: SpaceType
         * * Display Name: Space Type
@@ -626,6 +927,10 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Field Name: Owner
         * * Display Name: Owner
         * * SQL Data Type: nvarchar(100)`),
+    AnchorEntity: z.string().nullable().describe(`
+        * * Field Name: AnchorEntity
+        * * Display Name: Anchor Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceSchema>;
@@ -914,6 +1219,447 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
 
 
 /**
+ * MJ_BizApps_Collaboration: Space Agent Skills - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceAgentSkill
+ * * Base View: vwSpaceAgentSkills
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Agent Skills')
+export class mjBizAppsCollaborationSpaceAgentSkillEntity extends BaseEntity<mjBizAppsCollaborationSpaceAgentSkillEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Agent Skills record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Agent Skills record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceAgentSkillEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: SpaceTypeID
+    * * Display Name: Space Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    */
+    get SpaceTypeID(): string | null {
+        return this.Get('SpaceTypeID');
+    }
+    set SpaceTypeID(value: string | null) {
+        this.Set('SpaceTypeID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string | null {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string | null) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: SpaceType
+    * * Display Name: Space Type
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SpaceType(): string | null {
+        return this.Get('SpaceType');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string | null {
+        return this.Get('Space');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Space Agents - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceAgent
+ * * Base View: vwSpaceAgents
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Agents')
+export class mjBizAppsCollaborationSpaceAgentEntity extends BaseEntity<mjBizAppsCollaborationSpaceAgentEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Agents record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Agents record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceAgentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: SpaceTypeID
+    * * Display Name: Space Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    */
+    get SpaceTypeID(): string | null {
+        return this.Get('SpaceTypeID');
+    }
+    set SpaceTypeID(value: string | null) {
+        this.Set('SpaceTypeID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string | null {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string | null) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: SpaceType
+    * * Display Name: Space Type
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SpaceType(): string | null {
+        return this.Get('SpaceType');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string | null {
+        return this.Get('Space');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Space Chats - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceChat
+ * * Base View: vwSpaceChats
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Chats')
+export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsCollaborationSpaceChatEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Chats record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Chats record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceChatEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    */
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Subject
+    * * Display Name: Subject
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Subject(): string | null {
+        return this.Get('Subject');
+    }
+    set Subject(value: string | null) {
+        this.Set('Subject', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: General
+    * * Value List Type: List
+    * * Possible Values 
+    *   * General
+    *   * Private
+    *   * Room
+    *   * Topic
+    */
+    get Kind(): 'General' | 'Private' | 'Room' | 'Topic' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'General' | 'Private' | 'Room' | 'Topic') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    */
+    get Status(): 'Active' | 'Archived' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string {
+        return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+}
+
+
+/**
  * MJ_BizApps_Collaboration: Space Items - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpaceItem
@@ -1103,6 +1849,136 @@ export class mjBizAppsCollaborationSpaceItemEntity extends BaseEntity<mjBizAppsC
 
 
 /**
+ * MJ_BizApps_Collaboration: Space Knowledge Sources - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceKnowledgeSource
+ * * Base View: vwSpaceKnowledgeSources
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Knowledge Sources')
+export class mjBizAppsCollaborationSpaceKnowledgeSourceEntity extends BaseEntity<mjBizAppsCollaborationSpaceKnowledgeSourceEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Knowledge Sources record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Knowledge Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceKnowledgeSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceID
+    * * Display Name: Content Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+    */
+    get ContentSourceID(): string {
+        return this.Get('ContentSourceID');
+    }
+    set ContentSourceID(value: string) {
+        this.Set('ContentSourceID', value);
+    }
+
+    /**
+    * * Field Name: SpaceTypeID
+    * * Display Name: Space Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    */
+    get SpaceTypeID(): string | null {
+        return this.Get('SpaceTypeID');
+    }
+    set SpaceTypeID(value: string | null) {
+        this.Set('SpaceTypeID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    */
+    get SpaceID(): string | null {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string | null) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentSource
+    * * Display Name: Content Source
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContentSource(): string | null {
+        return this.Get('ContentSource');
+    }
+
+    /**
+    * * Field Name: SpaceType
+    * * Display Name: Space Type
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SpaceType(): string | null {
+        return this.Get('SpaceType');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string | null {
+        return this.Get('Space');
+    }
+}
+
+
+/**
  * MJ_BizApps_Collaboration: Space Members - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpaceMember
@@ -1241,6 +2117,31 @@ export class mjBizAppsCollaborationSpaceMemberEntity extends BaseEntity<mjBizApp
     }
 
     /**
+    * * Field Name: SyncSource
+    * * Display Name: Sync Source
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SyncSource(): string | null {
+        return this.Get('SyncSource');
+    }
+    set SyncSource(value: string | null) {
+        this.Set('SyncSource', value);
+    }
+
+    /**
+    * * Field Name: PersonID
+    * * Display Name: Person ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Common: People (vwPeople.ID)
+    */
+    get PersonID(): string | null {
+        return this.Get('PersonID');
+    }
+    set PersonID(value: string | null) {
+        this.Set('PersonID', value);
+    }
+
+    /**
     * * Field Name: Space
     * * Display Name: Space
     * * SQL Data Type: nvarchar(200)
@@ -1265,6 +2166,15 @@ export class mjBizAppsCollaborationSpaceMemberEntity extends BaseEntity<mjBizApp
     */
     get SpaceRoleType(): string {
         return this.Get('SpaceRoleType');
+    }
+
+    /**
+    * * Field Name: Person
+    * * Display Name: Person
+    * * SQL Data Type: nvarchar(201)
+    */
+    get Person(): string | null {
+        return this.Get('Person');
     }
 }
 
@@ -1852,6 +2762,97 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     set Color(value: string | null) {
         this.Set('Color', value);
     }
+
+    /**
+    * * Field Name: ServerDriverClass
+    * * Display Name: Server Driver Class
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ServerDriverClass(): string | null {
+        return this.Get('ServerDriverClass');
+    }
+    set ServerDriverClass(value: string | null) {
+        this.Set('ServerDriverClass', value);
+    }
+
+    /**
+    * * Field Name: UIDriverClass
+    * * Display Name: UI Driver Class
+    * * SQL Data Type: nvarchar(255)
+    */
+    get UIDriverClass(): string | null {
+        return this.Get('UIDriverClass');
+    }
+    set UIDriverClass(value: string | null) {
+        this.Set('UIDriverClass', value);
+    }
+
+    /**
+    * * Field Name: SpaceExtensionEntity
+    * * Display Name: Space Extension Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SpaceExtensionEntity(): string | null {
+        return this.Get('SpaceExtensionEntity');
+    }
+    set SpaceExtensionEntity(value: string | null) {
+        this.Set('SpaceExtensionEntity', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: DefaultInheritsMembership
+    * * Display Name: Default Inherits Membership
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    */
+    get DefaultInheritsMembership(): boolean {
+        return this.Get('DefaultInheritsMembership');
+    }
+    set DefaultInheritsMembership(value: boolean) {
+        this.Set('DefaultInheritsMembership', value);
+    }
+
+    /**
+    * * Field Name: PostCloseAccess
+    * * Display Name: Post Close Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * ReadOnly
+    *   * ReadOnlyWithAgent
+    */
+    get PostCloseAccess(): 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' {
+        return this.Get('PostCloseAccess');
+    }
+    set PostCloseAccess(value: 'None' | 'ReadOnly' | 'ReadOnlyWithAgent') {
+        this.Set('PostCloseAccess', value);
+    }
+
+    /**
+    * * Field Name: PostCloseAccessDays
+    * * Display Name: Post Close Access Days
+    * * SQL Data Type: int
+    */
+    get PostCloseAccessDays(): number | null {
+        return this.Get('PostCloseAccessDays');
+    }
+    set PostCloseAccessDays(value: number | null) {
+        this.Set('PostCloseAccessDays', value);
+    }
 }
 
 
@@ -2092,6 +3093,7 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Field Name: IconClass
     * * Display Name: Icon Class
     * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class representing the space (e.g., fa-solid fa-folder-tree, fa-solid fa-briefcase). Overrides SpaceType.IconClass if set.
     */
     get IconClass(): string | null {
         return this.Get('IconClass');
@@ -2104,6 +3106,7 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Field Name: Color
     * * Display Name: Color
     * * SQL Data Type: nvarchar(50)
+    * * Description: Hex color code representing the space (e.g., #0076b6, #10b981). Overrides SpaceType.Color if set.
     */
     get Color(): string | null {
         return this.Get('Color');
@@ -2116,12 +3119,79 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Field Name: BackgroundImageURL
     * * Display Name: Background Image URL
     * * SQL Data Type: nvarchar(1000)
+    * * Description: URL of an optional hero banner or background image displayed in the space header and overview.
     */
     get BackgroundImageURL(): string | null {
         return this.Get('BackgroundImageURL');
     }
     set BackgroundImageURL(value: string | null) {
         this.Set('BackgroundImageURL', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: AnchorEntityID
+    * * Display Name: Anchor Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get AnchorEntityID(): string | null {
+        return this.Get('AnchorEntityID');
+    }
+    set AnchorEntityID(value: string | null) {
+        this.Set('AnchorEntityID', value);
+    }
+
+    /**
+    * * Field Name: AnchorRecordID
+    * * Display Name: Anchor Record ID
+    * * SQL Data Type: nvarchar(450)
+    */
+    get AnchorRecordID(): string | null {
+        return this.Get('AnchorRecordID');
+    }
+    set AnchorRecordID(value: string | null) {
+        this.Set('AnchorRecordID', value);
+    }
+
+    /**
+    * * Field Name: PostCloseAccess
+    * * Display Name: Post Close Access
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * ReadOnly
+    *   * ReadOnlyWithAgent
+    */
+    get PostCloseAccess(): 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' | null {
+        return this.Get('PostCloseAccess');
+    }
+    set PostCloseAccess(value: 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' | null) {
+        this.Set('PostCloseAccess', value);
+    }
+
+    /**
+    * * Field Name: PostCloseAccessDays
+    * * Display Name: Post Close Access Days
+    * * SQL Data Type: int
+    */
+    get PostCloseAccessDays(): number | null {
+        return this.Get('PostCloseAccessDays');
+    }
+    set PostCloseAccessDays(value: number | null) {
+        this.Set('PostCloseAccessDays', value);
     }
 
     /**
@@ -2149,5 +3219,14 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     */
     get Owner(): string {
         return this.Get('Owner');
+    }
+
+    /**
+    * * Field Name: AnchorEntity
+    * * Display Name: Anchor Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AnchorEntity(): string | null {
+        return this.Get('AnchorEntity');
     }
 }

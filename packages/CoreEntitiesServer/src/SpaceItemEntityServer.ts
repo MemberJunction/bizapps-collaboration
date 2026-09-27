@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogEr
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, ResolveSpaceRules, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
@@ -11,6 +11,8 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { ServerDriverRegistry } from './server-driver-registry.js';
+import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
@@ -108,6 +110,39 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (at) this.PromotedAt = (at.OldValue as Date | null) ?? null;
             if (by) this.PromotedByUserID = (by.OldValue as string | null) ?? null;
         }
+
+        // Extensibility Driver Validation
+        try {
+            const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
+            const isNew = !this.IsSaved;
+            const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
+            const spaceChanged = this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty);
+
+            let itemKind: 'Add' | 'Promote' | 'Move' | 'Remove' = 'Add';
+            if (spaceChanged) {
+                itemKind = 'Move';
+            } else if (bandChanged && this.Band === 'Shared') {
+                itemKind = 'Promote';
+            } else if (isNew) {
+                itemKind = 'Add';
+            }
+
+            const driverValidation = await spaceInfo.driver.ValidateItemChange({
+                actingUser: user,
+                provider: this.ProviderToUse,
+                space: spaceInfo.space,
+                spaceType: spaceInfo.spaceType,
+                effectiveRules: ResolveSpaceRules(null, null),
+                item: this,
+                kind: itemKind,
+            });
+            if (!driverValidation.ok) {
+                return fail(result, driverValidation.message ?? 'Item change refused by driver.');
+            }
+        } catch (driverErr) {
+            return fail(result, driverErr instanceof Error ? driverErr.message : 'Item change refused: driver could not be resolved.');
+        }
+
         return result;
     }
 
@@ -124,6 +159,32 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         } catch (error) {
             LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
         }
+
+        try {
+            const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
+            await spaceInfo.driver.OnItemChanged({
+                actingUser: user,
+                provider: this.ProviderToUse,
+                space: spaceInfo.space,
+                spaceType: spaceInfo.spaceType,
+                effectiveRules: ResolveSpaceRules(null, null),
+                item: this,
+                kind: becameShared ? 'Promote' : wasNew ? 'Add' : 'Move',
+            });
+        } catch (driverErr) {
+            LogError(`Item driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+        }
+
+        if (becameShared) {
+            notifySpaceLifecycleSubscribers(this.ProviderToUse, {
+                spaceId: this.SpaceID,
+                actingUserId: user.ID,
+                event: 'AfterItemPromoted',
+                timestamp: new Date(),
+                data: { itemId: this.ID, entityId: this.EntityID, recordId: this.RecordID },
+            });
+        }
+
         return ok;
     }
 

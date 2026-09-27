@@ -17,7 +17,10 @@ export class mjBizAppsCollaborationSpaceTypeFormComponent extends BaseFormCompon
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJBizAppsCollaborationSpaces', sectionName: 'Spaces', isExpanded: false }
+            { sectionKey: 'mJBizAppsCollaborationSpaces', sectionName: 'Spaces', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationSpaceKnowledgeSources', sectionName: 'Space Knowledge Sources', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationSpaceAgentSkills', sectionName: 'Space Agent Skills', isExpanded: false },
+            { sectionKey: 'mJBizAppsCollaborationSpaceAgents', sectionName: 'Space Agents', isExpanded: false }
         ]);
     }
 }
