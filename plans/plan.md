@@ -206,7 +206,7 @@ PR #3 merged before this list was done. It's round 100's list: slice A, v0.3's B
 Round 95's list, and where each item lands here:
 - **Task 6, the agent and chats** (B2 and B3): the real agent run replacing the fixed reply, retrieval by audience, the scope control in private chats, chats in a space, and per-space agents and knowledge. What's done stays in PR #3: the agent's metadata, its bounded scope, and the retrieval module, with B0.2's fix.
 - **Task 7's extension points** (B8).
-- **Tasks 8 and 9, closure and retention,** become B8.2's `PostCloseAccess` and `PostCloseAccessDays`, with `ReadOnlyWithAgent` as task 9's agent for former clients.
+- **Tasks 8 and 9, closure and retention,** become B8.2's `PostCloseAccess` and `PostCloseAccessDays`, with `ReadOnlyWithAgent` as task 9's agent for former clients. They're settings (D21).
 - **Tasks 10 and 12,** starting a plan from a template and what's left of bizapps-tasks#73 (merged), go with the Work tab (slice E).
 - **Task 3's assignee picker** goes with the Work tab too. PR #3 has no picker: the old one (`assigneeScope`, in `space-workspace.component.ts`) went with the old UI in `77b36f4`. Build the new one so that:
   - it can offer Ada to Bea. The old walk went up only through the spaces the client had loaded, and `Collaboration: Visible Spaces` doesn't return Northwind to Bea, so it stopped at Discovery. Load those rows for the walk without adding them to Bea's space list, or have the server return who a space can assign;
@@ -237,7 +237,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Reach is unchanged.** An active seat reaches its space and every descendant that inherits (`InheritsMembership = 1`). A sealed sub-space (`InheritsMembership = 0`) is reached only by its own seats. That's built: `fnCollaborationAccess` and `membershipReaches`.
 - **What a person can read is the union** of everything their seats reach, anywhere in the tree, not the subtree of the page they're on.
 - **A parent seat never reaches into a sealed child** through the tree. The union is over seats, not over the tree; otherwise sealing means nothing.
-- **Add `SpaceType.DefaultInheritsMembership`,** a column like `DefaultAllowParentAssignees`, so a committee type such as Compensation or Audit can default to sealed. Today `Space.InheritsMembership` defaults to 1, and nothing on the type overrides it.
+- ~~**Add `SpaceType.DefaultInheritsMembership`,** a column like `DefaultAllowParentAssignees`, so a committee type such as Compensation or Audit can default to sealed.~~ D22 replaces this: every new sub-space is sealed unless its creator asks, so no type needs the column. Today `Space.InheritsMembership` defaults to 1.
 
 **D2. The audience of an answer decides the agent's retrieval scope.** The variable isn't where the person is standing. It's who will see the answer.
 
@@ -304,13 +304,52 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Walked end to end:** the builder drives every screen in Explorer with Playwright, as the sample world's people where what they see differs, and posts the screenshots in the pull request's comments as embedded images. The shots are committed under `docs/screenshots/pr7/` and embedded by commit, so a comment keeps showing what was reviewed.
 - **Reviewed as an outsider would:** the plan's author reviews the shots for completeness and quality. Does each screen do its job, on real data, and is its overall form right? Pixel parity with the frames isn't the bar. The frames still set layout and content, and D15 still holds.
 - **The gallery's pixel tests stay** as regression checks for the frames they cover. When a change is intended, move the budget to the new count and say why in the commit.
+- **D24 amends this:** the mockups aren't the reference any more, so the frames no longer set layout and content, and the gallery's comparisons with them are retired or re-baselined on the new design.
 
 **D17. Where a space's files are stored is configured, never typed in.**
+- **D20 amends this:** the setting is the `StorageAccountID` key of the one settings shape, not a column, and the Collaboration app sets a default after the type's.
 - A space type names a default storage account. A space can name its own, the spaces under it inherit it, and any level can override it.
 - **The first value set wins:** the space, then its parent spaces up the tree, then the space's type. With nothing set, the host's single active storage account is used when there's exactly one. With more than one, the upload is refused with a message saying where to set it. This is MJ's own rule for agent files (`DefaultStorageAccountID` on agents, their category tree and agent types, in `base-agent.ts`), so it reads the same way here.
 - **The setting names an MJ storage account** (`MJ: File Storage Accounts`), not a provider. An account carries its provider, its credentials and its container, and the upload already takes an account ID.
 - **No storage provider or account ID is typed into code,** linked documents included. A linked document isn't a stored file, so its shape is proposed before its migration.
 - **A change applies to new uploads.** `MJ: Files` records a file's provider but not its account, so each item records the account its file went to, and reads and deletes use that account.
+
+**D18. Collaboration ships generic space types.**
+- **No professional-services types.** Engagement, Client Relationship, Workshop and the like belong to BC's professional-services layer, which builds them on the extension points (B8).
+- **Seven ship:** Workspace (the default), Team, Project, Working Group, Event, Community and Cohort. Their join modes, bands and nesting are in the [extensibility plan's § 10.3](../docs/EXTENSIBILITY_PLAN.md#103-examples-in-collaboration-itself). None sets a setting (D20) or names a driver.
+- **The sample world keeps its own copies** of any type its checks need.
+- **The screens' words are generic too.** A band's name and description come from the type's labels, never from copy that says *client*.
+
+**D19. One engine caches Collaboration's metadata.**
+- **`CollaborationEngineBase`,** modeled on MJ's `AIEngineBase`: a `BaseEngine` subclass, safe in the browser and on the server, that caches every Collaboration metadata set, with typed getters and lookups by ID and by code. It lives in its own package, like bizapps-accounting's `EngineBase`.
+- **`CollaborationEngine`,** the server's, modeled on `AIEngine`: a `BaseSingleton` that holds the base as `Base`, delegates to it, and adds the server-only parts.
+- **A space's type is always known.** There's no fallback name: a missing type is broken data, logged with the space's ID and shown as an error.
+
+**D20. One settings model, at every level.**
+- **One typed shape,** `CollaborationSettings`, at every level. The Collaboration app's default is one row in MJ's Application Settings, shipped as metadata. A type's and a space's overrides live in their `Configuration`. Each level stores only the keys it sets.
+- **One pure resolver:** the sub-space, then its parents up the tree, then the type, then the app. The first value set wins. The type's `SpaceOverridable` list says which keys a space may set.
+- **Storage (D17) and closing (D21) are settings.** A value that SQL or history needs is stamped where it's used: a closed space's access on the space, and an upload's account on its item.
+- **A save validates** the JSON against the shape and fails closed. A missing app row is refused with a message saying where to fix it.
+
+**D21. Closing is a space setting that admins control.**
+- `PostCloseAccess` and `PostCloseAccessDays` are keys of the settings shape (D20). The app's default is `ReadOnly`, with no end. A type, a space or a sub-space can set its own.
+- **The type-level columns go,** with their `None` default. When a space closes, the server resolves the setting and writes it to the space's own columns, which `fnCollaborationAccess` and `membershipReaches` read.
+- This settles [§ 11](#11-open-decisions)'s decision 8.
+
+**D22. A sub-space inherits its parent's members only when its creator asks.**
+- **The default is no, everywhere.** `Space.InheritsMembership` defaults to 0, and `SpaceType.DefaultInheritsMembership` goes. A compensation committee under a board is the case: most directors mustn't reach it.
+- **The UI asks** when a sub-space is created, with no preselected answer. The rule lives in the entity and the server, so a call over the wire behaves as the screen does; the UI only asks and saves the answer.
+- **Inheritance is live.** The parent's members reach the sub-space through the access walk (D1), and seats are never copied onto it.
+
+**D23. Settings rights are MJ Authorizations.**
+- **One tree:** a root authorization, *Collaboration*, with sub-authorizations under it through `ParentID`, not names with a prefix. To start, *Configure Space Types* (the types and the app's settings) and *Configure Spaces* (a space's settings, where the user's role type allows configuring).
+- **The server checks** `UserCanExecute` on every settings write, at every level, and the Settings screen isn't offered without it.
+- **Staff admin roles get them.** Space Participant, the external role, gets none.
+
+**D24. The UI's style and design are Amith's, with the local builder.**
+- **The mockups in `docs/ux/` are retired as the reference.** A difference from them isn't a regression.
+- **The screens are reviewed for function and completeness** (D16). The gallery's comparisons with the mockups are retired or re-baselined on the new design, and its functional tests stay.
+- D14 (nothing typed in) and D15 (MJ's components as they are) still hold.
 
 ## 4. The model
 
@@ -339,7 +378,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Bands don't nest.** A Team item in a child space is Team.
 - **The engine reads flags, never names.**
 
-**What this plan adds** is designed in the extensibility plan and in B8: type drivers and subtypes, configuration bags, chats and allowed agents, `DefaultInheritsMembership`, `PostCloseAccess`, knowledge bindings, `SpaceMember.PersonID`, and the lifecycle and signal contributions.
+**What this plan adds** is designed in the extensibility plan and in B8: type drivers and subtypes, configuration bags and the settings chain (D20), the metadata engine (D19), chats and allowed agents, sub-spaces that inherit only when asked (D22), access after close (D21), settings rights (D23), knowledge bindings, `SpaceMember.PersonID`, and the lifecycle and signal contributions.
 
 **Two siblings stay siblings.**
 - **`MJ: Collections`** is right for folders and browsing but not for membership. It holds artifact versions only, shares with users only, and writes inheritance into each descendant instead of computing it. `SpaceItem` stays the library's spine. A12.10 is the Collections work.
@@ -620,9 +659,10 @@ The contract for Committees and for private extensions. The design is the [exten
    - **The agent binding is the allowed-agent list.** An extension supplies its agent, or a parent agent with sub-agents, through `SpaceAgent` rows at the type level, with `IsDefault` (the extensibility plan's § 8). There are no `SpaceType.DefaultAgentID` or `Space.AgentID` columns.
    - **Knowledge bindings:** a type or a space lists the Content Sources (A10) its agent may use beyond the space's own items.
    - **Lifecycle events** that any extension can subscribe to: `AfterSpaceClosed`, `AfterMemberAdded`, `AfterMemberRemoved` and `AfterItemPromoted`, on the server. They're a contribution, beside the type's own driver hooks. That's how an extension turns a closed engagement into a case-study draft, or notifies a team.
-   - **Access after close:** `SpaceType.PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays` (empty means indefinite), each overridable per space. They replace what `DefaultRetention` and `Space.Retention` meant, and round 94's tasks 8 and 9: `ReadOnlyWithAgent` is task 9's agent for former clients. They're enforced in `fnCollaborationAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` honors `ClosedAt`; fix that drift here. How access is priced or granted beyond the window is an extension's business, not the engine's.
+   - **Access after close** (D21): `PostCloseAccess` (`ReadOnly`, `ReadOnlyWithAgent` or `None`) and `PostCloseAccessDays` (empty means indefinite) are settings (D20). The app's default is `ReadOnly` with no end, and a type, a space or a sub-space can set its own. When a space closes, the server stamps the resolved value on the space. They replace what `DefaultRetention` and `Space.Retention` meant, and round 94's tasks 8 and 9: `ReadOnlyWithAgent` is task 9's agent for former clients. They're enforced in `fnCollaborationAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` honors `ClosedAt`; fix that drift here. How access is priced or granted beyond the window is an extension's business, not the engine's.
    - **Outreach sources:** a server-side `SpaceSignalProvider` base class. An extension registers providers that produce dated observations about a space, such as "a public filing changed". The engine stores them as Team-band items, and only A8 can turn one into a post.
-   - **`SpaceType.DefaultInheritsMembership`** (D1).
+   - **Sub-spaces inherit only when asked** (D22): `Space.InheritsMembership` defaults to 0, and the creator chooses. No type-level default.
+   - **The metadata engine** (D19), **the settings chain** (D20) and **settings rights** (D23).
 3. **Accept:** the UX gallery's example plug-in draws frame 08 through these points, and a second example registers an agent, a knowledge binding and a lifecycle subscriber with no engine change.
 
 ### B9. Outside participants and identity
@@ -687,7 +727,7 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 - Declare the dependency on Collaboration, and raise the floors to bizapps-tasks 1.5.0 and bizapps-common 5.46.
 - Ship Committees' own `committee` space type in its `metadata/`, with the ID Collaboration seeded before B0.11 removed the row: `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`. A database that already has the row keeps it as the one `committee` row, since type codes are unique, and Collaboration never reuses the ID.
-- Add sealed-by-default types, such as Compensation and Audit, with `DefaultInheritsMembership = 0` (D1).
+- Sub-committees are sealed unless the backfill says otherwise (D22): a committee whose parent's members should reach it gets `InheritsMembership = 1`. No type needs a default.
 - **Backfill one space per committee, with the committee's own ID** as the space's ID, since an IsA child shares its parent's key:
   - the parent comes from `ParentCommitteeID`;
   - the owner is the chair's linked user, or a designated service owner;
@@ -772,16 +812,16 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 5. **Disclose to this conversation (D4):** build it in stage 3, or wait for demand?
 6. **Storage hits under `Intersection` (A6.2):** refuse them, or build per-principal storage checks?
 7. **When Committees 2.0 ships,** relative to the first association customer.
-8. **The default `PostCloseAccess` and `PostCloseAccessDays`** for each starter type (round 94's task 9 asked for a default).
+8. ~~**The default `PostCloseAccess` and `PostCloseAccessDays`** for each starter type.~~ Settled by D21: the app's default is `ReadOnly` with no end, and the shipped types set nothing.
 9. **May deleting an item erase its item uses?** Today the item's delete removes its uses and notices in one transaction, and MJ's Record Changes keeps every deleted row. Slice A adds versions, set members, checks and findings to the same question. The choices: keep that; refuse to delete an item that has a promotion; or keep the uses after the item goes. Until it's decided, the delete removes them all in its one transaction.
 10. **File Requests** (from v0.2): lift the shape into Collaboration if a space needs it, or revisit Secure Messaging as an optional dependency.
 
 **Reconciled; Amith to confirm in review:**
 - **Contributions** use the extensibility plan's `RegisterClassEx` metadata and `GetAllRegistrationsByMetadata`, not v0.3's B8.1 (`GetAllRegistrations` by `Sequence`). v0.3 predates that design.
 - **The agent binding is the allowed-agent list:** an extension supplies its agent through `SpaceAgent` rows at the type level, with `IsDefault`. No `DefaultAgentID` or `Space.AgentID` columns.
-- **B8.2's additions are all in:** knowledge bindings; lifecycle events any extension can subscribe to, beside the type's driver hooks; `PostCloseAccess` and `PostCloseAccessDays`, replacing `Space.Retention`'s meaning and round 94's tasks 8 and 9, with `ReadOnlyWithAgent` as task 9's agent for former clients; and `SpaceSignalProvider`.
+- **B8.2's additions are all in:** knowledge bindings; lifecycle events any extension can subscribe to, beside the type's driver hooks; `PostCloseAccess` and `PostCloseAccessDays`, now settings (D21), replacing `Space.Retention`'s meaning and round 94's tasks 8 and 9, with `ReadOnlyWithAgent` as task 9's agent for former clients; and `SpaceSignalProvider`.
 - **D2's scope control extends the subtree bound:** a private chat uses the caller's union with a scope control, and a shared chat the intersection. The extensibility plan's "What an agent sees" says so.
-- **`SpaceType.DefaultInheritsMembership` is a column,** like `DefaultAllowParentAssignees`.
+- ~~**`SpaceType.DefaultInheritsMembership` is a column,** like `DefaultAllowParentAssignees`.~~ Superseded by D22: no type-level default.
 - **Lifecycle subscribers run after the commit,** through `provider.RunAfterCommit`, so a subscriber never sees a change that's rolled back. Refusing a change stays with the type's Validate hooks (the extensibility plan's § 5).
 - **Knowledge bindings are rows,** proposed as `SpaceKnowledgeSource`, by the extensibility plan's own rule: a setting that points at a record that can be deleted is a row with a foreign key.
 - **A12.13 is in stage 1,** as urgent.
@@ -790,7 +830,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 **Settled since v0.2:**
 - Its decision 2 (do `MJ: Artifact Uses` cover plain files?): Collaboration records its own `ItemUse` rows.
 - Its decision 4 (Committees adopting Space): Committees is a plug-in, extending Space through IsA (D9).
-- Its decision 6 (the deliverable agent after the engagement): `PostCloseAccess = ReadOnlyWithAgent` (B8.2); the defaults are decision 8 above.
+- Its decision 6 (the deliverable agent after the engagement): `PostCloseAccess = ReadOnlyWithAgent` (B8.2), a setting (D21).
 - Its decision 7 (the identity door): invite-based (B9).
 - v0.4's proposal that the UX slices continue right away: no. The UI comes last (D16), where v0.3's stage 5 had it.
 

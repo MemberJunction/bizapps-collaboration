@@ -4,7 +4,7 @@ This plan makes Collaboration a base that other apps build on without Collaborat
 
 It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-for-apps-on-top), and it settles the chat and agent rules of round 94's task 6, which moved to the next pull request.
 
-**Status:** agreed with Amith on 2026-09-26, and amended the same day by the decisions in [the plan](../plans/plan.md) (its D1, D2 and D8 to D11). It's built in the next pull request, after PR #3 merges ([§ 13](#13-order-of-work)). Where this document and the plan disagree, the plan wins.
+**Status:** agreed with Amith on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, and D16 to D23 on 2026-09-27. It's built in the next pull request, after PR #3 merges ([§ 13](#13-order-of-work)). Where this document and the plan disagree, the plan wins.
 
 ## Contents
 
@@ -39,15 +39,18 @@ It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-fo
 | 10 | Allowed agents resolve top-down: the app's default, the space's type, the root space, down to the space. Each level extends or replaces the list above, and a level without its own rows inherits it. MJ's agent Run permission stays the security boundary. An app supplies its own agent the same way, through its type's rows, with `IsDefault`. | [8](#8-chats-history-and-agents) |
 | 11 | The chat stays MJ's `mj-conversation-chat-area`. Collaboration never forks it. `ng-conversations` gains the inputs, events and slots these rules need, in an MJ pull request. | [9](#9-mj-changes) |
 | 12 | Committees keeps its membership records, and its server driver keeps the seats in step. | [10](#10-examples) |
-| 13 | A type can name roles that administer its spaces, beside Collaboration's staff roles. | [4](#4-configuration-one-bag-per-type-and-per-space) |
+| 13 | Settings rights are an MJ Authorization tree rooted at *Collaboration*. An app grants them to its own admin roles, beside Collaboration's staff roles (the plan's D23). | [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 14 | A chat's people are MJ core's conversation participants (the plan's A5 and D10), and core's row-level security enforces each one's `HistoryFrom` for everyone, staff included. Inside that window, an AI message whose sources the newcomer can't read is sealed for them (the plan's D4 and A7). The chat area needs no cutoff of its own. | [8](#8-chats-history-and-agents) |
 | 15 | A space can be anchored to a record in another app (`Space.AnchorEntityID` and `AnchorRecordID`), and one call finds or creates it. So an app can open a space for its own record, such as a room for a deal, from its own screens. | [3](#3-data), [5](#5-server-drivers), [10](#10-examples) |
 | 16 | Seats can be synced from an app's own roster (`SpaceMember.SyncSource`), beside the seats people invite. A sync changes only its own seats. | [3](#3-data), [5](#5-server-drivers) |
 | 17 | A space shows data it doesn't own only through its subtype's own columns, kept in step by its driver and filtered like the space. Never through a privileged read. | [10](#10-examples), [11](#11-security-rules-for-plug-ins) |
-| 18 | A type can default its spaces to sealed: `SpaceType.DefaultInheritsMembership`, a column like `DefaultAllowParentAssignees` (the plan's D1). | [3](#3-data) |
-| 19 | Access after a space closes is `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, on the type and overridable per space. They replace what `DefaultRetention` and `Space.Retention` meant. | [3](#3-data) |
+| 18 | A new sub-space is sealed unless its creator asks for its parent's members: `Space.InheritsMembership` defaults to 0, and no type sets a default (the plan's D22). | [3](#3-data) |
+| 19 | Access after a space closes is `PostCloseAccess` (`ReadOnly`, `ReadOnlyWithAgent` or `None`) and `PostCloseAccessDays`: settings, whose app default is `ReadOnly` with no end, stamped on the space when it closes (the plan's D21). They replace what `DefaultRetention` and `Space.Retention` meant. | [3](#3-data), [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 20 | A type or a space can bind Content Sources that its agents may use beyond the space's own items. | [3](#3-data), [8](#8-chats-history-and-agents) |
 | 21 | Any app can subscribe to a space's lifecycle events (`AfterSpaceClosed`, `AfterMemberAdded`, `AfterMemberRemoved` and `AfterItemPromoted`) and register signal providers (`SpaceSignalProvider`), beside the type's own driver hooks. | [5](#5-server-drivers) |
+| 22 | One settings shape at every level: the Collaboration app's default in MJ's Application Settings, and overrides in a type's and a space's `Configuration`, resolved sub-space, parents, type, then app (the plan's D20). Where files are stored is a setting (the plan's D17). | [4](#4-configuration-one-bag-per-type-and-per-space) |
+| 23 | `CollaborationEngineBase`, with the server's `CollaborationEngine`, caches Collaboration's metadata (the plan's D19). | [5](#5-server-drivers), [6](#6-ui-drivers-and-contributions) |
+| 24 | Collaboration ships seven generic space types. Professional-services types belong to the layer that needs them (the plan's D18). | [10](#103-examples-in-collaboration-itself) |
 
 ## 2. The model
 
@@ -94,12 +97,9 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 | `UIDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeUIDriver`. Empty means the base driver. |
 | `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Committees: Committees`. Empty means a plain space. The server checks on save that it names a declared IsA child of Spaces. |
 | `Configuration` | `NVARCHAR(MAX) NULL` | The type's rules and defaults, as `ISpaceTypeConfiguration` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)). |
-| `DefaultInheritsMembership` | `BIT NOT NULL DEFAULT 1` | Whether a new space of this type inherits its parent's seats. A type such as Compensation or Audit sets 0, so its spaces start sealed (the plan's D1). Today `Space.InheritsMembership` defaults to 1, and nothing on the type overrides it. |
-| `PostCloseAccess` | `NVARCHAR(20) NOT NULL` | What happens once a space of this type closes: `None`, `ReadOnly` or `ReadOnlyWithAgent`. `ReadOnlyWithAgent` keeps the library readable and the agent answering, for former clients. Each starter type's default is still to be decided (the plan's § 11, decision 8). |
-| `PostCloseAccessDays` | `INT NULL` | How long that access lasts after `ClosedAt`. Empty means indefinitely. |
-| `DefaultStorageAccountID` | `UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts` | Where new files in spaces of this type are stored, unless a space or one of its parents names an account (the plan's D17). Empty falls back to the host's single active account. |
 
 - **Removed:** `GovernancePanel`, and the `committee` seed row. PR #3 removes both (the plan's B0.11), and Committees ships its own type.
+- **Settings, not columns** (the plan's D20 to D22): where files are stored and access after close are keys of the settings shape ([§ 4](#4-configuration-one-bag-per-type-and-per-space)), and there's no type-level inheritance default, since every new sub-space is sealed unless its creator asks.
 - **Replaced:** `PostCloseAccess` and `PostCloseAccessDays` replace what `DefaultRetention` and `Space.Retention` meant. Nothing enforces those today. The schema step's pull request comment says whether the old columns are dropped.
 - **Kept as they are:** the other columns. SQL reads `Discoverability`, `JoinMode`, `DefaultAgentRetrieval`, `DefaultBand`, `DefaultAllowParentAssignees`, `InviteApproval` and `MemberCap`. The panel flags become the base UI driver's defaults.
 
@@ -110,11 +110,15 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 | `Configuration` | `NVARCHAR(MAX) NULL` | The space's overrides, as `ISpaceConfiguration` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)). |
 | `AnchorEntityID` | `UNIQUEIDENTIFIER NULL`, FK to `__mj.Entity` | The entity of the record this space belongs to, for a space another app opens for its own record ([§ 5](#5-server-drivers)). |
 | `AnchorRecordID` | `NVARCHAR(450) NULL` | That record's key, the same shape as `SpaceItem.RecordID`. Unique per type and entity when set. |
-| `PostCloseAccess` | `NVARCHAR(20) NULL` | Overrides the type's value. Empty means the type's. |
-| `PostCloseAccessDays` | `INT NULL` | Overrides the type's value, when `PostCloseAccess` is set here. |
-| `DefaultStorageAccountID` | `UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts` | Where new files in this space and the spaces under it are stored (the plan's D17). Empty means the nearest parent space's, then the type's. |
+| `PostCloseAccess` | `NVARCHAR(20) NULL` | `ReadOnly`, `ReadOnlyWithAgent` or `None`. Written by the server when the space closes, from the resolved setting ([§ 4](#4-configuration-one-bag-per-type-and-per-space), the plan's D21), because SQL reads it. An admin can change it later through the same write. Empty while the space is open. |
+| `PostCloseAccessDays` | `INT NULL` | How long that access lasts after `ClosedAt`, stamped with it. Empty means no end. |
 
 `PlannedCloseAt` is already in. `fnCollaborationAccess` applies `PostCloseAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` reads `ClosedAt`, and the access function is brought into line in the same step.
+
+`Space.InheritsMembership` stays, and its default becomes 0 (the plan's D22). A sub-space's creator chooses; the UI asks, with no preselected answer.
+
+**`SpaceItem`**, added:
+- `StorageAccountID UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts`: for an item that is a stored file, the account the file went to. Reads and deletes use it, so a later change to the setting applies to new uploads only (the plan's D17).
 
 **`SpaceMember`**, added:
 - `SyncSource NVARCHAR(100) NULL`. Empty means a person invited this seat. A value names the roster that manages it, for example `committees:membership`, and only that roster's sync changes or removes it.
@@ -184,37 +188,60 @@ export interface ISpaceRules {
     Extensions?: Record<string, Record<string, ConfigurationValue>>;
 }
 
-export interface ISpaceTypeConfiguration extends ISpaceRules {
+/**
+ * The settings every level can hold: the Collaboration app, a type, a space (the plan's D20).
+ * Each level stores only the keys it sets. The app's row sets them all.
+ */
+export interface CollaborationSettings extends ISpaceRules {
+    /** Where new files are stored: an MJ: File Storage Accounts ID (the plan's D17). */
+    StorageAccountID?: string;
+    /** What happens once a space closes (the plan's D21). The app's default is 'ReadOnly'. */
+    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
+    /** How long that access lasts after ClosedAt, in days. Absent means no end. */
+    PostCloseAccessDays?: number;
+    /** Words shown instead of Collaboration's, for example { Tabs: { Library: 'Papers' }, Bands: { Shared: 'Members' } }. */
+    Labels?: { Tabs?: Record<string, string>; Bands?: Record<string, { Name: string; Description?: string }> };
+}
+
+export interface ISpaceTypeConfiguration extends CollaborationSettings {
     /** Types that may be created under a space of this type, by SpaceType.Code. Absent means any. */
     Children?: { AllowedTypeCodes?: string[]; MaxOpen?: number };
-    /** Roles that administer spaces of this type, beside Collaboration's staff roles. */
-    Admin?: { RoleNames?: string[] };
-    /** Words this type shows instead of Collaboration's, for example { Tabs: { Library: 'Papers', People: 'Members' } }. */
-    Labels?: { Tabs?: Record<string, string> };
     /** Dotted keys a space may override, for example 'Chats.WhoCanStart'. Absent means none. */
     SpaceOverridable?: string[];
 }
 
-export interface ISpaceConfiguration extends ISpaceRules {}
+export interface ISpaceConfiguration extends CollaborationSettings {}
 ```
 
-**The effective rules** come from one pure function in `collaboration-core`, used by the server and the browser alike:
+**Where each level's settings live:**
+- **The Collaboration app:** one row in MJ's Application Settings (`ApplicationID`, `Name`, `Value`), whose value is a `CollaborationSettings`. It ships as metadata, so the defaults are data, not code.
+- **A type and a space:** their `Configuration`.
+- `StorageAccountID` points at a record, which [§ 3](#3-data)'s rule would make a row. It's a setting anyway (the plan's D20): storage accounts are few and rarely deleted. A save checks that the account exists and is active, and an upload that resolves to a missing or inactive account is refused with a message, never sent somewhere else.
+
+**The effective settings** come from one pure function in `collaboration-core`, used by the server and the browser alike:
 
 ```ts
-ResolveSpaceRules(type: ISpaceTypeConfiguration | null, space: ISpaceConfiguration | null): EffectiveSpaceRules
+ResolveSettings(app: CollaborationSettings, type: ISpaceTypeConfiguration, spaces: ISpaceConfiguration[]): EffectiveSettings
 ```
 
-1. It starts from Collaboration's defaults.
-2. It applies the type's values.
-3. It applies the space's values for the keys in `SpaceOverridable`. Validation refuses any other key a space sets, so nothing is ignored silently.
+`spaces` is the space and then its parents up the tree, nearest first. For each key, the first value set wins:
+1. If the space's type lists the key in `SpaceOverridable`: the space's own value, then each parent's.
+2. Then the type's value.
+3. Then the app's, which sets every key.
 4. The type's server driver can then narrow the result, through `AdjustRules` ([§ 5](#5-server-drivers)).
+
+Validation refuses any key a space sets that its type doesn't allow, so nothing is ignored silently.
+
+**Stamped where it's used.** A value SQL or history needs is written where it's used: when a space closes, the server stamps the resolved `PostCloseAccess` and `PostCloseAccessDays` on the space ([§ 3](#3-data)), and each stored file records its account on its item.
 
 **Validation,** in the entity server classes:
 
-- the JSON must parse and match the interface;
+- the JSON must parse and match the interface. One that doesn't is refused, and at read time it fails closed; it's never ignored;
 - every `AllowedTypeCodes` entry must be an existing type code;
 - a space may set only the keys its type allows;
-- only the space's owners, staff and the type's admin roles may change `Space.Configuration`. The type decides which keys they can change.
+- a `StorageAccountID` must name an active storage account;
+- the app's row must set every key. With no app row, what depends on it is refused, with a message saying where to fix it;
+- **only users with Collaboration's settings authorizations write settings** (the plan's D23): *Configure Space Types* for the app's and a type's, and *Configure Spaces* for a space's, on spaces where the user's role type allows configuring. They're an MJ Authorization tree rooted at *Collaboration*, and the server checks `UserCanExecute` on every write. Staff admin roles get them, an app grants them to its own admin roles, and Space Participant gets none. The type decides which keys a space can change.
 
 **A space-level driver override** isn't in v1. If one is ever needed, it's a key in `ISpaceConfiguration`, with no schema change.
 
@@ -446,7 +473,7 @@ This section is round 94's task 6, rewritten; it moved to the next pull request.
 ### One Assistant, set per space
 
 - **Collaboration ships one common agent,** the Assistant, with the `DriverClass` `CollaborationSpaceAgent`. It runs only on the server path, with its own search scope and memory off.
-- **Per-space instructions** are MJ Scoped Prompt Parts keyed to the space, inherited down the tree through a `PromptComponentResolver` subclass. Only staff and the type's admin roles set them.
+- **Per-space instructions** are MJ Scoped Prompt Parts keyed to the space, inherited down the tree through a `PromptComponentResolver` subclass. Only users with the settings authorizations set them (the plan's D23).
 - **Knowledge** is the space's library, through the bounded search above, plus the Content Sources bound to the type or the space.
 - **Skills** come from `SpaceAgentSkill` rows and the type's defaults.
 - **Other agents** can join a chat when they're on the allowed list, and every agent turn gets the trimmed conversation.
@@ -553,7 +580,19 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 
 ### 10.3 Examples in Collaboration itself
 
-- **The starter types ship as configuration only.** They're the storyboard's Client relationship, Engagement, Cohort and Workshop, plus Workspace. Each is a type row with a `Configuration`: which types it allows under it, tab labels and chat rules. None names a driver, since most types don't need one.
+- **Seven generic types ship, as configuration only** (the plan's D18). Professional-services types, such as the storyboard's Client relationship, Engagement and Workshop, belong to the layer that needs them, built on these extension points:
+
+  | Type | For | `JoinMode` | `Discoverability` | `DefaultBand` | Can contain |
+  |---|---|---|---|---|---|
+  | Workspace | General purpose; the default | `InviteOnly` | `Hidden` | `Team` | any type |
+  | Team | A standing internal group or department | `InviteOnly` | `Hidden` | `Team` | Project, Working Group, Workspace |
+  | Project | Work with a goal and an end date | `InviteOnly` | `Hidden` | `Team` | Working Group, Workspace |
+  | Working Group | A charge carried by staff and outside members: task forces, advisory groups, volunteer crews | `RequestToJoin` | `Listed` | `Shared` | none |
+  | Event | Planning an event with speakers, sponsors and vendors | `InviteOnly` | `Hidden` | `Team` | Working Group |
+  | Community | An open community of interest, or a chapter | `SelfServe` | `Listed` | `Shared` | Working Group, Cohort |
+  | Cohort | A learning cohort or peer group | `RequestToJoin` | `Listed` | `Shared` | none |
+
+  Each is a type row with a `Configuration`: which types it allows under it, generic labels and chat rules. None sets any other setting, so the app's defaults apply, and none names a driver. The sample world keeps its own copies of any type its checks need.
 - **Two example plug-ins,** in a private `packages/ExampleSpaceTypes` that ships nowhere, use every hook between them:
   - `example-board`, shaped like Committees: its own subtype table, rules for sub-spaces, a synced roster, tabs, cards and chips. It draws frame 08 in the gallery.
   - `example-room`, shaped like the deal room: a space opened for a record through `EnsureSpaceForRecord`, two synced rosters and a copied card.
@@ -569,7 +608,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
   - each app attaches it to every role's read permission on its subtype, as metadata;
   - when a type names an extension entity, Collaboration's server refuses the type row unless the subtype's permissions match Space's: the same roles, with the space filter wherever Space has one.
 - **Data a space shows but doesn't own** is copied into its subtype's own columns by its driver, and read under that filter (decision 17).
-- **Configuration changes are privileged.** Only the space's owners, staff and the type's admin roles change `Space.Configuration`, and only the keys the type allows.
+- **Configuration changes are privileged.** Only users with Collaboration's settings authorizations change settings, at any level (the plan's D23), and a space only the keys its type allows. External participants get none.
 - **A failing driver fails closed.** A driver that throws, or is named and missing, refuses the write. Nothing is saved without the type's rules.
 - **Agent lists narrow, never grant.** An allowed-agent list only filters what's offered and what the server runs. A person still needs MJ's Run permission on the agent.
 - **Known MJ gaps**, in the plan's A13.3: subtype discovery over GraphQL isn't permission-checked (it reveals only a record's subtype entity name), and a parent's read filter doesn't reach its subtypes' views.
@@ -577,7 +616,8 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 ## 12. Tests
 
 - **Unit tests,** in `collaboration-core` and the server package:
-  - `ResolveSpaceRules`: defaults, type values, allowed and refused space overrides, `AdjustRules`;
+  - `ResolveSettings`: the chain in order (the space, its parents, the type, the app), allowed and refused space overrides, a missing app row refused, `AdjustRules`;
+  - settings rights: a write refused without the authorization, allowed with it, and refused for a space owner who lacks it;
   - driver resolution: empty key, registered key, missing key refusing writes;
   - hook order in an IsA save (space hooks before the subtype's own validation), and the type/subtype pairing both ways;
   - the allowed-agent chain: `Extend`, `Replace` and a level without rows, down a three-level tree;
@@ -606,7 +646,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
    2. the server drivers, the registry and the calls in every entity server class and operation, with the lifecycle subscribers and signal providers;
    3. the UI drivers and contributions, replacing the scaffold's `BaseSpaceTab`, `BaseSpaceOverviewCard` and three provider classes, with slice D's needs-you and agenda rows moved onto the providers;
    4. chats, history and agents, which is task 6 rewritten from [§ 8](#8-chats-history-and-agents), with slice G (frame 09). It needs MJ core's conversation participants (A5), audience-bounded agent runs (A6) and sealing (A7), and the chat area needs the `ng-conversations` change, each in a released MJ. Where one isn't out yet, build the parts that don't need it first, and wire the rest when it lands;
-   5. the starter types' configuration ([§ 10](#103-examples-in-collaboration-itself));
+   5. the seven generic types' configuration ([§ 10](#103-examples-in-collaboration-itself), the plan's D18);
    6. the example plug-ins, and slice I (frame 08) through `example-board`.
 3. **Committees moves in the plan's stages,** in bizapps-committees: its fixes first, then 1.5, 1.6 and 2.0 ([the plan's § 8](../plans/plan.md#8-workstream-c-committees-on-collaboration)).
 4. **Then the deal room** ([§ 10](#102-a-deal-room-the-space-belongs-to-another-apps-record)), in Sales or a bridge app.
