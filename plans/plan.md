@@ -351,10 +351,18 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **The screens are reviewed for function and completeness** (D16). The gallery's comparisons with the mockups are retired or re-baselined on the new design, and its functional tests stay.
 - D14 (nothing typed in) and D15 (MJ's components as they are) still hold.
 
-**D25. Discussions & AI: standard `ng-conversations` is the sole chat area; custom chat widgets are retired and forbidden.**
-- **No custom chat message or composer widgets:** Collaboration space chats must strictly host `<mj-conversation-chat-area>` from `@memberjunction/ng-conversations`. Custom message feed renderers, manual message scrolling, and ad-hoc chat composers in `AngularWidgets` are retired and prohibited to eliminate regression risk and ensure full platform convergence.
-- **Wiring to A13.1 features:** `<mj-conversation-chat-area>` is integrated directly with the conversation floor (`AgentHistoryFrom`), reply mode (`AgentReplyMode`), allowed agents (`AllowedAgentIDs`), and server-turn moderation (`AgentTurnHandler`), preserving audience isolation while delegating conversation state, streaming, attachments, and mentions to core.
-- **Conversation creation flow:** Multi-conversation spaces allow creating new conversations via the space rail and chat area empty states. New conversations create an underlying `MJ: Conversations` record, bind a `MJ_BizApps_Collaboration: Space Chats` record, and select the newly created conversation seamlessly.
+**D25. The chat is MJ's chat area, as merged to MJ `next`** (Amith, 09-27).
+- **One chat UI.** A space's chat is `<mj-conversation-chat-area>` from `@memberjunction/ng-conversations`, with the host rules for chats with several people that [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788) added to it on MJ `next`. There's no custom message feed or composer. If the Overview keeps its ask box, the box hands its message to the chat area rather than posting on its own, so every message and every agent turn goes through the component.
+- **The host rules are set from the server's view of the space:**
+  - `AgentReplyMode`: the space's `Chats.AgentReplyMode`, where `MentionOrOneToOne` and `MentionOnly` become `'MentionOnly'` in the room, and `Always` stays `'Always'`;
+  - `AllowedAgentIDs`: the space's allowed agents;
+  - `MentionPeople`: the room's members;
+  - `AgentHistoryFrom`: the viewer's floor from `Chats.HistoryOnAdd`;
+  - `AutoNameConversation` off, since the room is named for its space;
+  - `AgentTurnHandler`: a call to Collaboration's turn operation. From the saved message it checks everything again on the server: that the caller can contribute, that the conversation is the space's room, that the agent is allowed and, where the mode needs it, tagged in the stored message, and the history floor. It then runs the agent under the audience rule and writes the reply as the system user.
+- **People post as themselves.** A contributing seat has Edit on its space's room: an `MJ: Resource Permissions` grant the server writes and revokes with the seat and with the space's closure. Space Participant has Create on Conversation Details, limited by a create filter to rooms its user can contribute to; the permission and its filter are metadata, under `metadata/`.
+- **One room per space in #7.** Chats with their own people are B3's, in #8. `PostSpaceMessage`'s `ExecuteAgent` switch and its mention regex go.
+- **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 pins the first edge release that carries it, so #7's CI can pass only once that release is out.
 
 
 ## 4. The model
