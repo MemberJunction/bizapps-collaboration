@@ -1848,7 +1848,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                     const roleType = m.SpaceRoleTypeID
                         ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID)
-                        : null;
+                        : (m.SpaceRoleType
+                            ? CollaborationEngineBase.Instance.SpaceRoleTypes.find(
+                                rt => rt.Name.toLowerCase() === m.SpaceRoleType?.toLowerCase() ||
+                                      rt.Code.toLowerCase() === m.SpaceRoleType?.toLowerCase()
+                              ) ?? null
+                            : null);
                     const roleCode = roleType?.Code || (m.SpaceRoleType ? m.SpaceRoleType.toLowerCase().replace(/\s+/g, '-') : 'member');
                     const canContribute = roleType ? roleType.CanContribute : false;
                     return {
