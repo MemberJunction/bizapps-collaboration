@@ -3,7 +3,8 @@ import { NormalizeUUID } from '@memberjunction/global';
 
 /** ProviderBase is an IMetadataProvider. Its declared type is not. */
 export function asMetadata(provider: object): IMetadataProvider | null {
-    const candidate = provider as unknown as Partial<IMetadataProvider>;
+    if (!provider) return null;
+    const candidate = provider as Partial<IMetadataProvider>;
     if (typeof candidate.GetEntityObject !== 'function' || typeof candidate.EntityByID !== 'function') {
         return null;
     }

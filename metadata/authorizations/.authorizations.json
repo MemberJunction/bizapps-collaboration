@@ -1,0 +1,38 @@
+[
+  {
+    "primaryKey": {
+      "ID": "1AB4325C-EBD6-44D3-BA0D-2916DCD3320E"
+    },
+    "fields": {
+      "Name": "Collaboration",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for BizApps Collaboration."
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "07405A55-52C0-452E-BBB5-36923CA7B908"
+    },
+    "fields": {
+      "Name": "Configure Space Types",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Collaboration",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Configure space types and the collaboration app's settings."
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1EF73781-9C37-45B7-A56C-22A99CA781F5"
+    },
+    "fields": {
+      "Name": "Configure Spaces",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Collaboration",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Configure a space's settings, on spaces where the user's role allows configuring."
+    }
+  }
+]

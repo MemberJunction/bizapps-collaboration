@@ -100,7 +100,8 @@ test.describe('Frame 03 — Space Library', () => {
         saveTestResultScreenshot('03-dark.png', screenshot);
     });
 
-    test('visual regression: matches 03-library.png within budget (§ 10 topbar mask)', async ({ page }) => {
+    // Retired per D24 & Item 2: Mockups are retired as reference; local builder owns UI with Amith
+    test.skip('visual regression: matches 03-library.png within budget (§ 10 topbar mask) [Retired per D24]', async ({ page }) => {
         await page.goto('/frame/03');
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-library .lib');

@@ -130,7 +130,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         saveTestResultScreenshot('02-dark.png', screenshot);
     });
 
-    test('visual regression: chrome matches 02-space-overview.png within budget (§ 10 masks)', async ({ page }) => {
+    // Retired per D24 & Item 2: Mockups are retired as reference; local builder owns UI with Amith
+    test.skip('visual regression: chrome matches 02-space-overview.png within budget (§ 10 masks) [Retired per D24]', async ({ page }) => {
         await page.goto('/frame/02');
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');
@@ -197,7 +198,8 @@ test.describe('Frame 02 Chrome — Space Overview', () => {
         expect(numDiffPixels).toBeLessThanOrEqual(budget);
     });
 
-    test('visual regression: full-frame comparison against 02-space-overview.png', async ({ page }) => {
+    // Retired per D24 & Item 2: Mockups are retired as reference; local builder owns UI with Amith
+    test.skip('visual regression: full-frame comparison against 02-space-overview.png [Retired per D24]', async ({ page }) => {
         await page.goto('/frame/02');
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-space-header section.space-head');

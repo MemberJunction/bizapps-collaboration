@@ -108,6 +108,13 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
 
                 return { Success: true, Results: [] };
             },
+            async RunViews(paramsList: Array<{ EntityName: string; ExtraFilter?: string }>) {
+                const results = [];
+                for (const p of paramsList) {
+                    results.push(await (this as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> }).RunView(p));
+                }
+                return results;
+            },
         };
 
         return provider as unknown as IMetadataProvider;

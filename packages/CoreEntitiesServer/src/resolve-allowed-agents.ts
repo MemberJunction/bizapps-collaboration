@@ -1,11 +1,12 @@
 import type { IMetadataProvider } from '@memberjunction/core';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
 import type {
     mjBizAppsCollaborationSpaceAgentEntity,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationEngine } from './CollaborationEngine.js';
 
 export const COLLABORATION_DEFAULT_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 
@@ -80,46 +81,25 @@ export async function resolveAllowedAgents(
         }
     }
 
-    // Load SpaceType configuration
+    // Load SpaceType configuration from CollaborationEngine
+    if (provider && (!CollaborationEngine.Instance.Loaded || provider !== Metadata.Provider)) {
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+    } else {
+        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
+    }
+    const spaceType = spaceTypeId ? CollaborationEngine.Instance.SpaceTypeById(spaceTypeId) : undefined;
+
     let typeConfig: ISpaceTypeConfiguration | null = null;
-    if (spaceTypeId) {
-        const typeRes = await rv.RunView<mjBizAppsCollaborationSpaceTypeEntity>(
-            {
-                EntityName: 'MJ_BizApps_Collaboration: Space Types',
-                ExtraFilter: `ID = '${spaceTypeId}'`,
-                ResultType: 'entity_object',
-            }
-        );
-        if (typeRes.Success && typeRes.Results && typeRes.Results.length > 0) {
-            const rawConfig = typeRes.Results[0].Configuration;
-            if (rawConfig) {
-                try {
-                    typeConfig = JSON.parse(rawConfig) as ISpaceTypeConfiguration;
-                } catch {
-                    typeConfig = null;
-                }
-            }
+    if (spaceType?.Configuration) {
+        try {
+            typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
+        } catch {
+            typeConfig = null;
         }
     }
 
-    // 2. Query all SpaceAgent rows relevant to app, type, or any space in chain
-    const chainIdsSql = spaceChain.map((s) => `'${s.ID}'`).join(',');
-    const extraFilter = spaceTypeId
-        ? `(SpaceTypeID IS NULL AND SpaceID IS NULL) OR (SpaceTypeID = '${spaceTypeId}' AND SpaceID IS NULL) OR (SpaceID IN (${chainIdsSql}))`
-        : `(SpaceTypeID IS NULL AND SpaceID IS NULL) OR (SpaceID IN (${chainIdsSql}))`;
-
-    const agentsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentEntity>(
-        {
-            EntityName: 'MJ_BizApps_Collaboration: Space Agents',
-            ExtraFilter: extraFilter,
-            ResultType: 'entity_object',
-        }
-    );
-
-    const allAgentRows = agentsRes.Success && agentsRes.Results ? agentsRes.Results : [];
-
-    // App-wide level
-    const appRows = allAgentRows.filter((r) => !r.SpaceTypeID && !r.SpaceID);
+    // App-wide level from CollaborationEngine
+    const appRows = CollaborationEngine.Instance.AppSpaceAgents;
     let currentList: SpaceAgentItem[] = [];
 
     if (appRows.length > 0) {
@@ -139,11 +119,9 @@ export async function resolveAllowedAgents(
         ];
     }
 
-    // Type level
+    // Type level from CollaborationEngine
     if (spaceTypeId) {
-        const typeRows = allAgentRows.filter(
-            (r) => r.SpaceTypeID && normalizeId(r.SpaceTypeID) === normalizeId(spaceTypeId) && !r.SpaceID
-        );
+        const typeRows = CollaborationEngine.Instance.SpaceAgentsForType(spaceTypeId);
         if (typeRows.length > 0) {
             const typeListMode = typeConfig?.Agents?.ListMode ?? 'Extend';
             const mappedType: SpaceAgentItem[] = typeRows.map((r) => ({
@@ -163,10 +141,22 @@ export async function resolveAllowedAgents(
         }
     }
 
+    // 2. Query only space-level SpaceAgent rows for any space in chain
+    const chainIdsSql = spaceChain.map((s) => `'${s.ID}'`).join(',');
+    const agentsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentEntity>(
+        {
+            EntityName: 'MJ_BizApps_Collaboration: Space Agents',
+            ExtraFilter: `SpaceID IN (${chainIdsSql})`,
+            ResultType: 'entity_object',
+        }
+    );
+
+    const spaceAgentRows = agentsRes.Success && agentsRes.Results ? agentsRes.Results : [];
+
     // Space levels (top-down from root to target space)
     for (const sp of spaceChain) {
         const normSpId = normalizeId(sp.ID);
-        const spRows = allAgentRows.filter((r) => r.SpaceID && normalizeId(r.SpaceID) === normSpId);
+        const spRows = spaceAgentRows.filter((r) => r.SpaceID && normalizeId(r.SpaceID) === normSpId);
         if (spRows.length > 0) {
             let spaceConfig: ISpaceConfiguration | null = null;
             if (sp.Configuration) {

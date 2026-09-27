@@ -766,15 +766,18 @@ describe('CollabSpaceWorkComponent', () => {
 describe('CollabSpaceChatComponent', () => {
   it('emits SendMessageRequested on non-empty message and clears text', () => {
     const comp = new CollabSpaceChatComponent();
-    let sentMessage = '';
-    comp.SendMessageRequested.subscribe(msg => {
-      sentMessage = msg;
+    let sentPayload: { text: string; executeAgent: boolean } | null = null;
+    comp.SendMessageRequested.subscribe(payload => {
+      sentPayload = payload;
     });
 
     comp.newMessageText = '  Hello everyone in the space room!  ';
     comp.sendMessage();
 
-    expect(sentMessage).toBe('Hello everyone in the space room!');
+    expect(sentPayload).toEqual({
+      text: 'Hello everyone in the space room!',
+      executeAgent: false,
+    });
     expect(comp.newMessageText).toBe('');
   });
 

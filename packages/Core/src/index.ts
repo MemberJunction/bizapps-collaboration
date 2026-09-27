@@ -73,16 +73,23 @@ export type {
 } from './view-models.js';
 export {
     DEFAULT_SPACE_RULES,
+    DEFAULT_COLLABORATION_SETTINGS,
+    MissingAppSettingsError,
+    ResolveCollaborationSettings,
     ResolveSpaceRules,
+    ValidateCollaborationSettings,
     validateSpaceConfiguration,
     validateSpaceTypeConfiguration,
 } from './configuration.js';
 export type {
+    CollaborationSettings,
     ConfigurationValue,
     EffectiveSpaceRules,
     ISpaceConfiguration,
     ISpaceRules,
     ISpaceTypeConfiguration,
+    ResolveCollaborationSettingsParams,
+    ResolvedCollaborationSettings,
 } from './configuration.js';
 export {
     effectiveRetrievalScope,

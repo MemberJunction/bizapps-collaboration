@@ -458,20 +458,14 @@ export interface LibrarySmartView {
   `],
 })
 export class CollabSpaceLibraryComponent {
-  @Input() public TotalCount = 24;
-  @Input() public SharedCount = 9;
-  @Input() public TeamCount = 15;
+  @Input() public TotalCount = 0;
+  @Input() public SharedCount = 0;
+  @Input() public TeamCount = 0;
 
   @Input() public ActiveFolderId = 'all';
   @Input() public ActiveBandFilter: 'All' | 'Shared' | 'Team' = 'All';
 
-  @Input() public Collections: LibraryCollection[] = [
-    { id: 'deliv', name: 'Deliverables', band: 'Shared', count: 5 },
-    { id: 'proc', name: 'Process maps', band: 'Shared', count: 3 },
-    { id: 'int', name: 'Interviews', band: 'Team', count: 9 },
-    { id: 'vendor', name: 'Vendor scoring', band: 'Team', count: 3 },
-    { id: 'contracts', name: 'Contracts', band: 'Team', count: 2 },
-  ];
+  @Input() public Collections: LibraryCollection[] = [];
 
   @Input() public SmartViews: LibrarySmartView[] = [];
 

@@ -2,7 +2,7 @@ import { Component, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity, MJConversationEntity } from '@memberjunction/core-entities';
@@ -14,9 +14,10 @@ import {
     mjBizAppsCollaborationSpaceChatEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
+import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
 import {
-    TaskKanbanComponent,
-    TaskGanttComponent,
+    TaskPanelComponent,
+    type TaskViewMode,
     MyTasksComponent,
     ApprovalInboxComponent,
 } from '@mj-biz-apps/tasks-ng';
@@ -29,7 +30,6 @@ import {
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
     CollabUploadDialogComponent,
-    CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
     CollabSpacePeopleComponent,
     CollabSpaceSettingsComponent,
@@ -73,6 +73,7 @@ interface RawSpaceRecord {
     InheritsMembership?: boolean;
     AgentRetrieval?: string;
     Retention?: string | null;
+    ClosedAt?: string | null;
 }
 
 interface RawSpaceTypeRecord {
@@ -81,6 +82,11 @@ interface RawSpaceTypeRecord {
     Code?: string;
     IconClass?: string | null;
     Color?: string | null;
+}
+
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+function isValidUuid(id?: string | null): boolean {
+    return !!id && UUID_REGEX.test(id.trim());
 }
 
 /**
@@ -104,13 +110,11 @@ interface RawSpaceTypeRecord {
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
         CollabUploadDialogComponent,
-        CollabSpaceWorkComponent,
         CollabSpaceChatComponent,
         CollabSpacePeopleComponent,
         CollabSpaceSettingsComponent,
         CollaborationNoAccessComponent,
-        TaskKanbanComponent,
-        TaskGanttComponent,
+        TaskPanelComponent,
         MyTasksComponent,
         ApprovalInboxComponent,
     ],
@@ -628,11 +632,26 @@ interface RawSpaceTypeRecord {
         .btn-primary:not(:disabled):hover {
             background: var(--mj-brand-primary-hover, #005a8c);
         }
+        .collab-loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 100%;
+            min-height: 400px;
+            color: var(--mj-text-secondary, #64748b);
+            font-size: 14px;
+        }
     `],
     template: `
         <mj-page-layout>
             <mj-page-body [Padding]="false">
-                @if (!hasAccess) {
+                @if (isLoading) {
+                    <div class="collab-loading-state">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Loading workspace...</span>
+                    </div>
+                } @else if (!hasAccess) {
                     <mjc-no-access [Seats]="seats" />
                 } @else {
                     <div class="mjc-shell">
@@ -656,7 +675,6 @@ interface RawSpaceTypeRecord {
                             (NavSelectRequested)="onNavSelectRequested($event)"
                             (TabSelectRequested)="onTabSelectRequested($event)"
                             (ConversationSelectRequested)="onSpaceConversationSelected($event)"
-                            (NewConversationRequested)="openNewConversationDialog()"
                             (BackToSpacesRequested)="onBackToSpacesRequested()"
                         />
 
@@ -671,12 +689,12 @@ interface RawSpaceTypeRecord {
                                                 </div>
                                                 <div class="home-hero-text">
                                                     <h1 class="home-title">Welcome to Collaboration</h1>
-                                                    <p class="home-subtitle">Unified spaces, documents, tasks, and communications for your team and clients.</p>
+                                                    <p class="home-subtitle">Unified spaces, documents, tasks, and communications across your teams and collaborators.</p>
                                                 </div>
                                             </div>
                                             <div class="home-quick-stats">
                                                 <div class="stat-pill" (click)="activeTab = 'Overview'; activeView = 'space'">
-                                                    <span class="stat-val">{{ rawSpaces.length }}</span>
+                                                    <span class="stat-val">{{ activeSpacesCount }}</span>
                                                     <span class="stat-lbl">Active Spaces</span>
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('tasks')">
@@ -727,7 +745,9 @@ interface RawSpaceTypeRecord {
                                                                 </div>
                                                             </div>
                                                             <h3 class="space-name">{{ space.name }}</h3>
-                                                            <p class="space-desc">{{ space.description || 'Dedicated workspace for collaboration and coordination.' }}</p>
+                                                            @if (space.description) {
+                                                                <p class="space-desc">{{ space.description }}</p>
+                                                            }
                                                             <div class="space-footer">
                                                                 <span class="open-link">
                                                                     <span>Open Space</span>
@@ -796,6 +816,8 @@ interface RawSpaceTypeRecord {
                                         <div class="files-content">
                                             <mjc-space-library
                                                 [TotalCount]="libraryTotalCount"
+                                                [SharedCount]="librarySharedCount"
+                                                [TeamCount]="libraryTeamCount"
                                                 [Collections]="libraryCollections"
                                                 [SmartViews]="librarySmartViews"
                                                 [Rows]="libraryRows"
@@ -879,6 +901,8 @@ interface RawSpaceTypeRecord {
                                             @case ('Library') {
                                                 <mjc-space-library
                                                     [TotalCount]="libraryTotalCount"
+                                                    [SharedCount]="librarySharedCount"
+                                                    [TeamCount]="libraryTeamCount"
                                                     [Collections]="libraryCollections"
                                                     [SmartViews]="librarySmartViews"
                                                     [Rows]="libraryRows"
@@ -898,75 +922,19 @@ interface RawSpaceTypeRecord {
                                                 />
                                             }
                                             @case ('Work') {
-                                                <div class="work-tab-container">
-                                                    <div class="work-view-toolbar">
-                                                        <div class="view-switch-group" role="group" aria-label="Task view mode">
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'list'"
-                                                                (click)="onWorkViewModeChanged('list')"
-                                                                title="List View"
-                                                            >
-                                                                <i class="fa-solid fa-list"></i>
-                                                                <span>List</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'kanban'"
-                                                                (click)="onWorkViewModeChanged('kanban')"
-                                                                title="Kanban Board View"
-                                                            >
-                                                                <i class="fa-solid fa-table-columns"></i>
-                                                                <span>Board</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'gantt'"
-                                                                (click)="onWorkViewModeChanged('gantt')"
-                                                                title="Timeline / Gantt View"
-                                                            >
-                                                                <i class="fa-solid fa-chart-gantt"></i>
-                                                                <span>Timeline</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div class="work-view-body">
-                                                        @switch (workViewMode) {
-                                                            @case ('list') {
-                                                                <mjc-space-work
-                                                                    [Tasks]="spaceTasks"
-                                                                    [SpaceName]="spaceTitle"
-                                                                    [CanCreateTask]="true"
-                                                                    (TaskSelectRequested)="onTaskSelected($event)"
-                                                                    (TaskToggleRequested)="onTaskToggled($event)"
-                                                                    (CreateTaskRequested)="onCreateTask($event)"
-                                                                />
-                                                            }
-                                                            @case ('kanban') {
-                                                                <div class="work-kanban-pane">
-                                                                    <bizapps-task-kanban
-                                                                        [ExtraFilter]="taskScopeFilter"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                    />
-                                                                </div>
-                                                            }
-                                                            @case ('gantt') {
-                                                                <div class="work-gantt-pane">
-                                                                    <bizapps-task-gantt
-                                                                        [ExtraFilter]="taskScopeFilter"
-                                                                        [Height]="'620px'"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                    />
-                                                                </div>
-                                                            }
-                                                        }
-                                                    </div>
-                                                </div>
+                                                 <div class="work-tab-container">
+                                                     <bizapps-task-panel
+                                                         [ExtraFilter]="taskScopeFilter"
+                                                         [AllowedViewModes]="['list', 'kanban', 'gantt']"
+                                                         [ViewMode]="workViewMode"
+                                                         (ViewModeChange)="onWorkViewModeChanged($event)"
+                                                         [ShowCreateButton]="true"
+                                                         [GanttHeight]="'620px'"
+                                                         (AfterTaskCreated)="onTaskSavedOrCreated($event)"
+                                                         (AfterTaskSaved)="onTaskSavedOrCreated($event)"
+                                                         (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                     />
+                                                 </div>
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
@@ -979,8 +947,6 @@ interface RawSpaceTypeRecord {
                                                     [AudienceBand]="spaceAudienceBand"
                                                     [ParticipantCount]="headerTotalPeople"
                                                     [Messages]="spaceRoomMessages"
-                                                    (ConversationCreated)="onConversationCreated($event)"
-                                                    (NewConversationRequested)="openNewConversationDialog()"
                                                     (SendMessageRequested)="onSendChatMessage($event)"
                                                 />
                                             }
@@ -1038,71 +1004,6 @@ interface RawSpaceTypeRecord {
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
                         }
-
-                        @if (isNewConversationDialogOpen) {
-                            <div class="modal-backdrop" (click)="closeNewConversationDialog()">
-                                <div class="modal-dialog" (click)="$event.stopPropagation()">
-                                    <div class="modal-header">
-                                        <div class="modal-title">
-                                            <i class="fa-solid fa-plus-circle"></i>
-                                            <span>New Space Conversation</span>
-                                        </div>
-                                        <button type="button" class="btn-modal-close" (click)="closeNewConversationDialog()">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="form-group">
-                                            <label class="form-label" for="channel-input-name">Channel Name</label>
-                                            <div class="input-prefix-wrap">
-                                                <span class="prefix">#</span>
-                                                <input
-                                                    id="channel-input-name"
-                                                    type="text"
-                                                    class="form-control prefix-input"
-                                                    [(ngModel)]="newConversationName"
-                                                    placeholder="e.g. deliverable-reviews, tax-planning"
-                                                    (keydown.enter)="submitNewConversation()"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">Channel Type</label>
-                                            <div class="channel-kind-options">
-                                                <label class="radio-label">
-                                                    <input type="radio" name="convoKind" value="Room" [(ngModel)]="newConversationKind" />
-                                                    <span>Room (Collaborative discussion)</span>
-                                                </label>
-                                                <label class="radio-label">
-                                                    <input type="radio" name="convoKind" value="Topic" [(ngModel)]="newConversationKind" />
-                                                    <span>Topic (Focused thread)</span>
-                                                </label>
-                                                <label class="radio-label">
-                                                    <input type="radio" name="convoKind" value="Private" [(ngModel)]="newConversationKind" />
-                                                    <span>Private (Internal team only)</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn-secondary" (click)="closeNewConversationDialog()">Cancel</button>
-                                        <button
-                                            type="button"
-                                            class="btn-primary"
-                                            [disabled]="!newConversationName.trim() || isCreatingConversation"
-                                            (click)="submitNewConversation()"
-                                        >
-                                            @if (isCreatingConversation) {
-                                                <i class="fa-solid fa-spinner fa-spin"></i>
-                                                <span>Creating...</span>
-                                            } @else {
-                                                <span>Create Channel</span>
-                                            }
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        }
                     </div>
                 }
             </mj-page-body>
@@ -1111,6 +1012,7 @@ interface RawSpaceTypeRecord {
 })
 @RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')
 export class CollaborationSectionResource extends BaseResourceComponent implements OnInit, OnDestroy {
+    public isLoading = true;
     public hasAccess = false;
     public seats: { spaceName: string; status: string }[] = [];
 
@@ -1158,6 +1060,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public rawSpaces: RawSpaceRecord[] = [];
     private spaceTypeMap = new Map<string, { icon: string; color: string; name: string }>();
 
+    public get activeSpacesCount(): number {
+        return this.rawSpaces.filter(s => !s.ClosedAt && (s.Status ?? 'Active').toLowerCase() === 'active').length;
+    }
+
+    public get librarySharedCount(): number {
+        return this.overviewSharedItems.length;
+    }
+
+    public get libraryTeamCount(): number {
+        return this.overviewTeamItems.length;
+    }
+
     // Overview state data
     public overviewNeedsYou: NeedsYouItemModel[] = [];
     public overviewSharedItems: ItemCardModel[] = [];
@@ -1198,7 +1112,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Work tab state
     public spaceTasks: TaskItemModel[] = [];
-    public workViewMode: 'list' | 'kanban' | 'gantt' = 'list';
+    public workViewMode: TaskViewMode = 'list';
 
     public currentPersonId = '';
 
@@ -1215,11 +1129,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             .filter(s => !s.ParentID)
             .map(s => {
                 const t = this.spaceTypeMap.get(s.SpaceTypeID);
+                const typeName = s.SpaceType || t?.name;
+                if (!typeName) {
+                    LogError(`Missing space type for space ID: ${s.ID}`);
+                }
                 return {
                     id: s.ID,
                     name: s.Name,
                     description: s.Description || '',
-                    type: s.SpaceType || t?.name || 'Workspace',
+                    type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '#0076b6',
                 };
@@ -1228,7 +1146,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Current signed-in user and space entity ID
     public currentUser: UserInfo | null = null;
-    public spaceEntityId = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
+    public spaceEntityId = '';
 
     // Conversations state
     public spaceConversations: SpaceConversationItem[] = [];
@@ -1238,15 +1156,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     // Home spaces search
     public spaceSearchQuery = '';
 
-    // New conversation modal state
-    public isNewConversationDialogOpen = false;
-    public newConversationName = '';
-    public newConversationKind: 'General' | 'Room' | 'Topic' | 'Private' = 'Room';
-    public isCreatingConversation = false;
-
     public get activeConversationName(): string {
         const found = this.spaceConversations.find(c => c.id === this.activeConversationId);
-        return found ? found.name : 'general-room';
+        return found ? found.name : '';
     }
 
     public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string }[] {
@@ -1265,11 +1177,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             .map(s => {
                 const t = this.spaceTypeMap.get(s.SpaceTypeID);
                 const parent = s.ParentID ? spaceMap.get(s.ParentID) : undefined;
+                const typeName = s.SpaceType || t?.name;
+                if (!typeName) {
+                    LogError(`Missing space type for space ID: ${s.ID}`);
+                }
                 return {
                     id: s.ID,
                     name: s.Name,
                     description: s.Description || '',
-                    type: s.SpaceType || t?.name || 'Workspace',
+                    type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '#0076b6',
                     parentName: parent?.Name,
@@ -1290,7 +1206,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         id: '',
         name: '',
         description: '',
-        spaceType: 'Workspace',
+        spaceType: '',
         spaceTypeId: '',
         iconClass: 'fa-solid fa-compass',
         color: '#0076b6',
@@ -1310,49 +1226,47 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (CollaborationClient.isAvailable()) {
                 this.client = new CollaborationClient();
             }
-            const rv = new RunView();
-            const md = new Metadata();
-            const personEntity = md.Entities.find(e => e.Name === 'Persons' || e.Name.endsWith(': Persons') || e.Name.endsWith(': People'));
-            if (personEntity && md.CurrentUser?.Email) {
+            const md = this.ProviderToUse;
+            const rv = new RunView(this.RunViewToUse);
+            const peopleEntity = md.EntityByName('MJ_BizApps_Common: People');
+            if (peopleEntity && md.CurrentUser?.ID) {
                 try {
                     const personRes = await rv.RunView<{ ID: string }>({
-                        EntityName: personEntity.Name,
-                        ExtraFilter: `Email = '${md.CurrentUser.Email.replace(/'/g, "''")}'`,
+                        EntityName: 'MJ_BizApps_Common: People',
+                        ExtraFilter: `LinkedUserID = '${md.CurrentUser.ID}'`,
                         ResultType: 'simple',
                         MaxRows: 1,
                     });
                     if (personRes?.Success && personRes.Results?.[0]) {
                         this.currentPersonId = personRes.Results[0].ID;
                     } else {
-                        this.currentPersonId = md.CurrentUser.ID;
+                        this.currentPersonId = '';
                     }
-                } catch {
-                    this.currentPersonId = md.CurrentUser?.ID || '';
+                } catch (err) {
+                    LogError('Failed to load Person for CurrentUser: ' + (err instanceof Error ? err.message : String(err)));
+                    this.currentPersonId = '';
                 }
-            } else if (md.CurrentUser?.ID) {
-                this.currentPersonId = md.CurrentUser.ID;
+            } else {
+                this.currentPersonId = '';
             }
 
             const spEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            if (spEntity) {
-                this.spaceEntityId = spEntity.ID;
+            if (!spEntity) {
+                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
+                this.hasAccess = false;
+                return;
             }
+            this.spaceEntityId = spEntity.ID;
             this.currentUser = md.CurrentUser || null;
 
-            // Load SpaceTypes to get icons and colors
-            const typesRes = await rv.RunView<RawSpaceTypeRecord>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Types',
-                ResultType: 'simple',
-                MaxRows: 50,
-            });
-            if (typesRes?.Success && typesRes.Results) {
-                for (const t of typesRes.Results) {
-                    this.spaceTypeMap.set(t.ID, {
-                        icon: t.IconClass || 'fa-solid fa-compass',
-                        color: t.Color || '#0076b6',
-                        name: t.Name,
-                    });
-                }
+            // Load SpaceTypes from CollaborationEngineBase (punch list item 54)
+            await CollaborationEngineBase.Instance.Config(false, md.CurrentUser, this.ProviderToUse);
+            for (const t of CollaborationEngineBase.Instance.SpaceTypes) {
+                this.spaceTypeMap.set(t.ID, {
+                    icon: t.IconClass || 'fa-solid fa-compass',
+                    color: t.Color || '#0076b6',
+                    name: t.Name,
+                });
             }
 
             // Load Spaces
@@ -1374,10 +1288,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.hasAccess = false;
             }
         } catch (err) {
-            console.error('Error loading collaboration data:', err);
+            LogError('Error loading collaboration data: ' + (err instanceof Error ? err.message : String(err)));
             this.hasAccess = false;
+        } finally {
+            this.isLoading = false;
+            this.NotifyLoadComplete();
+            this.RefreshView();
         }
-        this.RefreshView();
     }
 
     private buildSpaceRailNodes(rawSpaces: RawSpaceRecord[]): RailSpaceNode[] {
@@ -1419,10 +1336,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!space) return;
 
         const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
+        const resolvedType = space.SpaceType || typeDef?.name;
+        if (!resolvedType) {
+            LogError(`Missing space type for space ID: ${space.ID}`);
+        }
         this.spaceTitle = space.Name;
         this.spaceSubtitle = space.Description || '';
         this.spaceStatus = space.Status || 'Active';
-        this.spaceTypeName = space.SpaceType || typeDef?.name || 'Workspace';
+        this.spaceTypeName = resolvedType || 'Unknown Type';
         this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
         this.headerTypeColor = space.Color || typeDef?.color || '#0076b6';
         this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
@@ -1440,10 +1361,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const children = this.rawSpaces.filter(s => s.ParentID === spaceId);
         this.overviewSubSpaces = children.map(c => {
             const cType = this.spaceTypeMap.get(c.SpaceTypeID);
+            const subType = c.SpaceType || cType?.name;
+            if (!subType) {
+                LogError(`Missing space type for sub-space ID: ${c.ID}`);
+            }
             return {
                 id: c.ID,
                 name: c.Name,
-                type: c.SpaceType || cType?.name || 'Workspace',
+                type: subType || 'Unknown Type',
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
                 color: c.Color || cType?.color || '#0076b6',
                 description: c.Description || '',
@@ -1455,7 +1380,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             id: space.ID,
             name: space.Name,
             description: space.Description || '',
-            spaceType: space.SpaceType || typeDef?.name || 'Workspace',
+            spaceType: resolvedType || 'Unknown Type',
             spaceTypeId: space.SpaceTypeID,
             iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
             color: space.Color || typeDef?.color || '#0076b6',
@@ -1478,8 +1403,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     private async loadSpaceItems(spaceId: string): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
         try {
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewToUse);
             const itemsRes = await rv.RunView<{
                 ID: string;
                 SpaceID: string;
@@ -1514,8 +1440,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             for (const item of itemsRes.Results) {
                 if (item.EntityID === fileEntityId || item.Entity === 'MJ: Files') {
                     const fileId = item.RecordID.replace(/^ID\|/, '');
-                    fileIds.push(fileId);
-                    fileItemMap.set(fileId, item);
+                    if (isValidUuid(fileId)) {
+                        fileIds.push(fileId);
+                        fileItemMap.set(fileId, item);
+                    }
                 }
             }
 
@@ -1546,7 +1474,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             for (const item of itemsRes.Results) {
                 const fileId = item.RecordID.replace(/^ID\|/, '');
                 const file = filesMap.get(fileId);
-                const name = file?.Name || 'Document ' + item.ID.slice(0, 6);
+                if (!file?.Name) {
+                    LogError(`File record could not be read for item ID ${item.ID} (fileId ${fileId})`);
+                }
+                const name = file?.Name || '[Untitled Document]';
                 const folder = item.Folder || 'General';
                 const kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
                 const dateStr = this.formatDate(item.__mj_CreatedAt);
@@ -1567,7 +1498,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         id: item.ID,
                         kind,
                         title: name,
-                        meta: `${folder} · Shared with Client`,
+                        meta: `${folder} · Shared`,
                         stamp: dateStr,
                     });
                 } else {
@@ -1600,20 +1531,25 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             this.librarySmartViews = [
                 { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
-                { id: 'shared', name: 'Shared with Client', iconClass: 'fa-solid fa-eye', count: shared.length },
+                { id: 'shared', name: 'Shared', iconClass: 'fa-solid fa-eye', count: shared.length },
                 { id: 'team', name: 'Staff internal', iconClass: 'fa-solid fa-lock', count: team.length },
             ];
         } catch (err) {
-            console.error('Error loading space items:', err);
+            LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     private async loadSpaceConversations(spaceId: string, preferredConvId?: string): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
         try {
-            const rv = new RunView();
-            const md = new Metadata();
+            const rv = new RunView(this.RunViewToUse);
+            const md = this.ProviderToUse;
             const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            const spaceEntityId = spaceEntity?.ID || this.spaceEntityId;
+            if (!spaceEntity) {
+                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
+                return;
+            }
+            const spaceEntityId = spaceEntity.ID;
 
             const spaceChatsRes = await rv.RunView<{
                 ID: string;
@@ -1701,15 +1637,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 await this.loadOverviewMessages(this.activeConversationId);
             }
         } catch (err) {
-            console.error('Error loading space conversations:', err);
+            LogError('Error loading space conversations: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     private async ensureDefaultSpaceConversation(spaceId: string): Promise<string | null> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            const spaceEntityId = spaceEntity?.ID || this.spaceEntityId;
+            if (!spaceEntity) {
+                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
+                return null;
+            }
+            const spaceEntityId = spaceEntity.ID;
             const currentUser = md.CurrentUser;
             if (!currentUser) return null;
 
@@ -1730,21 +1670,22 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     chat.Kind = 'General';
                     chat.Status = 'Active';
                     await chat.Save();
-                } catch {
-                    // non-fatal
+                } catch (chatErr) {
+                    LogError('Failed to save Space Chat record: ' + (chatErr instanceof Error ? chatErr.message : String(chatErr)));
                 }
                 return conv.ID;
             }
             return null;
         } catch (err) {
-            console.error('Error ensuring default space conversation:', err);
+            LogError('Error ensuring default space conversation: ' + (err instanceof Error ? err.message : String(err)));
             return null;
         }
     }
 
     private async loadOverviewMessages(convId: string): Promise<void> {
+        if (!isValidUuid(convId)) return;
         try {
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewToUse);
             const detailRes = await rv.RunView<{
                 ID: string;
                 Role: string;
@@ -1754,12 +1695,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }>({
                 EntityName: 'MJ: Conversation Details',
                 ExtraFilter: `ConversationID = '${convId}'`,
-                OrderBy: '__mj_CreatedAt ASC',
+                OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'simple',
                 MaxRows: 25,
             });
             if (detailRes?.Success && detailRes.Results) {
-                const mapped: RoomMessageItem[] = detailRes.Results.map(d => ({
+                const chronological = [...detailRes.Results].reverse();
+                const mapped: RoomMessageItem[] = chronological.map(d => ({
                     id: d.ID,
                     senderName: d.Role === 'AI' ? 'Assistant' : (d.User || 'Team Member'),
                     senderInitials: d.Role === 'AI' ? 'AI' : (d.User ? d.User.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'TM'),
@@ -1773,14 +1715,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.overviewRoomMessages = mapped.slice(-5);
             }
         } catch (err) {
-            console.error('Error loading overview messages:', err);
+            LogError('Error loading overview messages: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     private async loadSpaceTasks(spaceId: string): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
         try {
-            const rv = new RunView();
-            const md = new Metadata();
+            const rv = new RunView(this.RunViewToUse);
+            const md = this.ProviderToUse;
             const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
             if (!tasksEntityInfo) return;
 
@@ -1808,7 +1751,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const taskIds: string[] = [];
             for (const item of itemsRes.Results) {
                 const rawId = (item.RecordID ?? '').replace(/^ID\|/i, '');
-                if (rawId) {
+                if (rawId && isValidUuid(rawId)) {
                     taskIds.push(rawId);
                     taskItemMap.set(rawId.toLowerCase(), item);
                 }
@@ -1856,13 +1799,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
             }
         } catch (err) {
-            console.error('Error loading space tasks:', err);
+            LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     private async loadSpaceMembers(spaceId: string): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
         try {
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewToUse);
             const membersRes = await rv.RunView<{
                 ID: string;
                 SpaceID: string;
@@ -1889,7 +1833,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         id: m.ID,
                         userId: m.UserID,
                         name,
-                        email: m.UserEmail || (name.toLowerCase().replace(/\s+/g, '.') + '@example.com'),
+                        email: m.UserEmail || '',
                         initials,
                         roleName: m.SpaceRoleType || 'Member',
                         roleCode: (m.SpaceRoleType || 'member').toLowerCase().replace(/\s+/g, '-'),
@@ -1906,10 +1850,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.headerOutsideAvatars = this.spaceMembers
                     .filter(m => m.band === 'Shared')
                     .map(m => ({ initials: m.initials, name: m.name, isOutside: true, colorClass: 'c2' }));
-                this.headerAudienceSummary = `${this.headerStaffAvatars.length} Team Staff · ${this.headerOutsideAvatars.length} Client`;
+                this.headerAudienceSummary = `${this.headerStaffAvatars.length} Team Staff · ${this.headerOutsideAvatars.length} Outside`;
             }
         } catch (err) {
-            console.error('Error loading space members:', err);
+            LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
@@ -1961,7 +1905,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         this.syncStateWithAgent();
         void this.loadRealData();
-        this.NotifyLoadComplete();
     }
 
     public override ngOnDestroy(): void {
@@ -2015,7 +1958,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         }
 
-        if (params['conv']) {
+        if (params['conv'] && isValidUuid(params['conv'])) {
             this._pendingConvId = params['conv'];
             if (this.spaceConversations.some(c => c.id === params['conv'])) {
                 this.activeConversationId = params['conv'];
@@ -2023,8 +1966,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         }
 
-        const targetSpaceId = params['space'] && this.rawSpaces.some(s => s.ID === params['space'])
-            ? params['space']
+        const requestedSpace = params['space'] && isValidUuid(params['space']) ? params['space'] : null;
+        const targetSpaceId = requestedSpace && this.rawSpaces.some(s => s.ID === requestedSpace)
+            ? requestedSpace
             : (this._loadedSpaceId && this.rawSpaces.some(s => s.ID === this._loadedSpaceId)
                 ? this._loadedSpaceId
                 : this.rawSpaces[0]?.ID);
@@ -2033,7 +1977,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await this.selectSpaceInternal(targetSpaceId);
         }
 
-        if (params['item']) {
+        if (params['item'] && isValidUuid(params['item'])) {
             this.selectedItemId = params['item'];
             this.isDrawerOpen = true;
         }
@@ -2049,7 +1993,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public onWorkViewModeChanged(mode: 'list' | 'kanban' | 'gantt'): void {
+    public onWorkViewModeChanged(mode: TaskViewMode): void {
         this.workViewMode = mode;
         this.UpdateQueryParams({ workView: mode });
         this.RefreshView();
@@ -2058,6 +2002,43 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onTaskDoubleClicked(taskId: string): void {
         if (!taskId) return;
         SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Tasks', CompositeKey.FromID(taskId));
+    }
+
+    public async onTaskSavedOrCreated(taskId: string): Promise<void> {
+        try {
+            if (!this.activeSpaceId || !taskId || !isValidUuid(this.activeSpaceId) || !isValidUuid(taskId)) return;
+            const md = this.ProviderToUse;
+            const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
+            if (!tasksEntityInfo) return;
+
+            const rv = new RunView(this.RunViewToUse);
+            const existingRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `SpaceID = '${this.activeSpaceId}' AND (RecordID = 'ID|${taskId}' OR RecordID = '${taskId}')`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+
+            if (!existingRes?.Success || !existingRes.Results || existingRes.Results.length === 0) {
+                const spaceItem = await md.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items');
+                spaceItem.NewRecord();
+                spaceItem.SpaceID = this.activeSpaceId;
+                spaceItem.EntityID = tasksEntityInfo.ID;
+                spaceItem.RecordID = 'ID|' + taskId;
+                spaceItem.Band = 'Shared';
+                spaceItem.PromotedAt = new Date();
+                spaceItem.PromotedByUserID = md.CurrentUser?.ID || null;
+                const saved = await spaceItem.Save();
+                if (!saved) {
+                    LogError('Failed to link task to space item: ' + (spaceItem.LatestResult?.CompleteMessage ?? ''));
+                }
+            }
+
+            await this.loadSpaceTasks(this.activeSpaceId);
+            this.RefreshView();
+        } catch (err) {
+            LogError('Error linking task to space: ' + (err instanceof Error ? err.message : String(err)));
+        }
     }
 
     public onSpaceOpenRequested(spaceId: string): void {
@@ -2114,103 +2095,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeView = 'home';
         this.UpdateQueryParams({ view: 'home', conv: null });
         this.syncStateWithAgent();
-        this.RefreshView();
-    }
-
-    public openNewConversationDialog(): void {
-        this.newConversationName = '';
-        this.newConversationKind = 'Room';
-        this.isNewConversationDialogOpen = true;
-        this.RefreshView();
-    }
-
-    public closeNewConversationDialog(): void {
-        this.isNewConversationDialogOpen = false;
-        this.RefreshView();
-    }
-
-    public async submitNewConversation(): Promise<void> {
-        const name = this.newConversationName.trim();
-        if (!name || this.isCreatingConversation) return;
-        this.isCreatingConversation = true;
-        this.RefreshView();
-        try {
-            await this.createSpaceConversation(name, this.newConversationKind);
-            this.isNewConversationDialogOpen = false;
-        } finally {
-            this.isCreatingConversation = false;
-            this.RefreshView();
-        }
-    }
-
-    public async createSpaceConversation(name: string, kind: 'General' | 'Room' | 'Topic' | 'Private' = 'Room'): Promise<string | null> {
-        try {
-            const md = new Metadata();
-            const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            const spaceEntityId = spaceEntity?.ID || this.spaceEntityId;
-            const currentUser = md.CurrentUser;
-            if (!currentUser) return null;
-
-            const cleanName = name.startsWith('#') ? name.slice(1).trim() : name.trim();
-
-            const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
-            conv.NewRecord();
-            conv.Name = cleanName;
-            conv.UserID = currentUser.ID;
-            conv.LinkedEntityID = spaceEntityId;
-            conv.LinkedRecordID = this.activeSpaceId;
-            const saved = await conv.Save();
-            if (!saved || !conv.ID) {
-                console.error('Failed to create MJ: Conversations record:', conv.LatestResult?.Message);
-                return null;
-            }
-
-            try {
-                const chat = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats');
-                chat.NewRecord();
-                chat.SpaceID = this.activeSpaceId;
-                chat.ConversationID = conv.ID;
-                chat.Name = cleanName;
-                chat.Kind = kind;
-                chat.Status = 'Active';
-                await chat.Save();
-            } catch (chatErr) {
-                console.warn('Could not create Space Chats link record:', chatErr);
-            }
-
-            await this.loadSpaceConversations(this.activeSpaceId, conv.ID);
-            this.activeConversationId = conv.ID;
-            this.activeRoomConvId = conv.ID;
-            this.activeTab = 'Chat';
-            this.UpdateQueryParams({ tab: 'chat', conv: conv.ID });
-            this.syncStateWithAgent();
-            this.RefreshView();
-            return conv.ID;
-        } catch (err) {
-            console.error('Error creating space conversation:', err);
-            return null;
-        }
-    }
-
-    public async onConversationCreated(event: { conversationId: string; name?: string }): Promise<void> {
-        try {
-            const md = new Metadata();
-            const chat = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats');
-            chat.NewRecord();
-            chat.SpaceID = this.activeSpaceId;
-            chat.ConversationID = event.conversationId;
-            chat.Name = event.name || 'general-room';
-            chat.Kind = 'Room';
-            chat.Status = 'Active';
-            await chat.Save();
-        } catch (err) {
-            console.error('Error linking newly created conversation:', err);
-        }
-        await this.loadSpaceConversations(this.activeSpaceId, event.conversationId);
-        this.activeConversationId = event.conversationId;
-        this.activeRoomConvId = event.conversationId;
-        this.activeTab = 'Chat';
-        this.UpdateQueryParams({ tab: 'chat', conv: event.conversationId });
         this.RefreshView();
     }
 
@@ -2280,7 +2164,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isUploading = true;
         this.RefreshView();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const filesEntity = md.EntityByName('MJ: Files');
             if (!filesEntity) throw new Error('MJ: Files entity not found in metadata');
 
@@ -2320,7 +2204,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
                 const fileSaved = await fileRecord.Save();
                 if (!fileSaved) {
-                    throw new Error('Failed to save file record: ' + (fileRecord.LatestResult?.Message || 'Unknown error'));
+                    throw new Error('Failed to save file record: ' + (fileRecord.LatestResult?.CompleteMessage || 'Unknown error'));
                 }
 
                 const itemRecord = await md.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items');
@@ -2340,14 +2224,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
                 const itemSaved = await itemRecord.Save();
                 if (!itemSaved) {
-                    throw new Error('Failed to save space item: ' + (itemRecord.LatestResult?.Message || 'Unknown error'));
+                    throw new Error('Failed to save space item: ' + (itemRecord.LatestResult?.CompleteMessage || 'Unknown error'));
                 }
             }
 
             await this.loadSpaceItems(this.activeSpaceId);
             this.isUploadDialogOpen = false;
         } catch (err) {
-            console.error('Error submitting upload:', err);
+            LogError('Error submitting upload: ' + (err instanceof Error ? err.message : String(err)));
         } finally {
             this.isUploading = false;
             this.RefreshView();
@@ -2364,7 +2248,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         task.status = isCompleted ? 'In Progress' : 'Completed';
         this.RefreshView();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const taskEntity = await md.GetEntityObject<TaskEntity>('MJ_BizApps_Tasks: Tasks');
             if (await taskEntity.Load(task.id)) {
                 taskEntity.Status = newEntityStatus;
@@ -2374,13 +2258,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 await taskEntity.Save();
             }
         } catch (err) {
-            console.error('Error toggling task:', err);
+            LogError('Error toggling task: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     public async onCreateTask(payload: { name: string; band: SpaceBand; priority: string }): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const taskEntity = await md.GetEntityObject<TaskEntity>('MJ_BizApps_Tasks: Tasks');
             taskEntity.NewRecord();
             taskEntity.Name = payload.name;
@@ -2396,7 +2280,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             taskEntity.PercentComplete = 0;
             taskEntity.Sequence = this.spaceTasks.length + 1;
 
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewToUse);
             const typeRes = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ_BizApps_Tasks: Task Types',
                 ResultType: 'simple',
@@ -2407,7 +2291,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             const saved = await taskEntity.Save();
             if (!saved) {
-                console.error('Failed to save task:', taskEntity.LatestResult?.CompleteMessage);
+                LogError('Failed to save task: ' + (taskEntity.LatestResult?.CompleteMessage ?? ''));
                 return;
             }
 
@@ -2429,15 +2313,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await this.loadSpaceTasks(this.activeSpaceId);
             this.RefreshView();
         } catch (err) {
-            console.error('Error creating task:', err);
+            LogError('Error creating task: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     public async onSendChatMessage(payload: string | { text: string; executeAgent?: boolean }): Promise<void> {
         const text = typeof payload === 'string' ? payload : payload.text;
         const executeAgent = typeof payload === 'string'
-            ? /(@assistant|@agent|^\/ask|\?)/i.test(payload)
-            : (payload.executeAgent ?? /(@assistant|@agent|^\/ask|\?)/i.test(payload.text));
+            ? /(@(assistant|agent)|^\/ask)/i.test(payload)
+            : (payload.executeAgent ?? /(@(assistant|agent)|^\/ask)/i.test(payload.text));
         try {
             const client = new CollaborationClient();
             const res = await client.PostSpaceMessage({
@@ -2446,19 +2330,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ExecuteAgent: executeAgent,
             });
             if (!res.Success) {
-                console.error('Failed to post space message:', res.ErrorMessage);
+                LogError('Failed to post space message: ' + (res.ErrorMessage ?? ''));
             }
             await this.loadSpaceConversations(this.activeSpaceId, this.activeConversationId);
             this.RefreshView();
         } catch (err) {
-            console.error('Error sending message:', err);
+            LogError('Error sending message: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
     public async onInviteMember(payload: { email: string; role: string; band: SpaceBand }): Promise<void> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = this.ProviderToUse;
+            const rv = new RunView(this.RunViewToUse);
             let userId: string | null = null;
             const userRes = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ: Users',
@@ -2469,7 +2353,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (userRes?.Success && userRes.Results?.[0]) {
                 userId = userRes.Results[0].ID;
             } else {
-                console.warn('User not found in system with email:', payload.email);
+                LogError('User not found in system with email: ' + payload.email);
                 return;
             }
 
@@ -2480,7 +2364,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 MaxRows: 1,
             });
             if (existingMember?.Success && existingMember.Results?.[0]) {
-                console.log('User is already a member of this space');
                 return;
             }
 
@@ -2505,7 +2388,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await this.loadSpaceMembers(this.activeSpaceId);
             this.RefreshView();
         } catch (err) {
-            console.error('Error inviting member:', err);
+            LogError('Error inviting member: ' + (err instanceof Error ? err.message : String(err)));
         }
     }
 
@@ -2515,12 +2398,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             const targetId = settings.id || this.activeSpaceId;
-            if (!targetId) {
-                console.error('Cannot save space settings: missing space ID');
+            if (!targetId || !isValidUuid(targetId)) {
+                LogError('Cannot save space settings: invalid or missing space ID');
                 this.isSavingSettings = false;
                 return;
             }
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const spaceEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
             if (await spaceEntity.Load(targetId)) {
                 spaceEntity.Name = settings.name;
@@ -2555,7 +2438,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.settingsSaveSuccess = 'Space settings saved successfully.';
             }
         } catch (err) {
-            console.error('Error saving settings:', err);
+            LogError('Error saving settings: ' + (err instanceof Error ? err.message : String(err)));
         } finally {
             this.isSavingSettings = false;
             this.RefreshView();

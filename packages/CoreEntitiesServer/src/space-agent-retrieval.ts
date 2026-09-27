@@ -272,18 +272,7 @@ export async function resolveSpaceAgentRetrieval(
 
     // Determine caller's reaching role in the asked space
     const reach = membershipReaches(spaceNodes, memberSnapshots, cleanUserId, cleanSpaceId);
-    let isInstanceOwner = user?.Type?.trim() === 'Owner';
-    if (!isInstanceOwner) {
-        const userRow = await rvSystem.RunView<{ Type: string }>({
-            EntityName: 'MJ: Users',
-            ExtraFilter: `ID = '${cleanUserId}'`,
-            Fields: ['Type'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        isInstanceOwner = userRow.Results?.[0]?.Type?.trim() === 'Owner';
-    }
-    if (!reach && !isInstanceOwner) {
+    if (!reach) {
         // Caller cannot even reach this space
         return {
             spaceId: cleanSpaceId,
@@ -296,12 +285,12 @@ export async function resolveSpaceAgentRetrieval(
         };
     }
 
-    const callerCanSeeTeam = reach ? reach.role.canSeeTeamBand : isInstanceOwner;
+    const callerCanSeeTeam = reach.role.canSeeTeamBand;
 
     // Filter to reachable subtree spaces in SQL rather than fetching all items and filtering in memory
     const subtreeSpaceIds = getReachableSubtreeSpaceIds(spaceNodes, cleanSpaceId);
     const searchedSpaceIds = subtreeSpaceIds.filter((spaceId) =>
-        isInstanceOwner || !!membershipReaches(spaceNodes, memberSnapshots, cleanUserId, spaceId)
+        !!membershipReaches(spaceNodes, memberSnapshots, cleanUserId, spaceId)
     );
     if (searchedSpaceIds.length === 0) {
         return {

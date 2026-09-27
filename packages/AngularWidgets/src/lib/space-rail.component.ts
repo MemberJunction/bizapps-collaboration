@@ -130,6 +130,18 @@ interface SpaceNavPref {
               <button
                 type="button"
                 class="space-nav-link"
+                [class.active]="ActiveTab === 'Chat'"
+                (click)="onTabClick('Chat')"
+                [title]="isCollapsed ? 'Discussion & AI' : ''">
+                <i class="fa-solid fa-comments link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">Discussion &amp; AI</span>
+                }
+              </button>
+
+              <button
+                type="button"
+                class="space-nav-link"
                 [class.active]="ActiveTab === 'People'"
                 (click)="onTabClick('People')"
                 [title]="isCollapsed ? 'People & Access' : ''">
@@ -174,23 +186,16 @@ interface SpaceNavPref {
             </div>
           </div>
 
-          <!-- Space Conversations Section -->
-          <div class="nav-section-group">
-            @if (!isCollapsed) {
-              <div class="section-title-row">
-                <span class="section-title">CONVERSATIONS</span>
-                <button
-                  type="button"
-                  class="btn-add-convo-inline"
-                  (click)="onNewConversation()"
-                  title="Create new conversation">
-                  <i class="fa-solid fa-plus"></i>
-                </button>
-              </div>
-            }
+          <!-- Space Conversations Section (only if conversations exist) -->
+          @if (Conversations && Conversations.length > 0) {
+            <div class="nav-section-group">
+              @if (!isCollapsed) {
+                <div class="section-title-row">
+                  <span class="section-title">CONVERSATIONS</span>
+                </div>
+              }
 
-            <div class="nav-links-list">
-              @if (Conversations && Conversations.length > 0) {
+              <div class="nav-links-list">
                 @for (c of Conversations; track c.id) {
                   <button
                     type="button"
@@ -215,37 +220,14 @@ interface SpaceNavPref {
                         class="band-dot"
                         [class.shared]="c.band === 'Shared'"
                         [class.team]="c.band === 'Team'"
-                        [title]="c.band === 'Shared' ? 'Shared with client' : 'Internal team only'">
+                        [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
                       </span>
                     }
                   </button>
                 }
-              } @else {
-                <button
-                  type="button"
-                  class="space-nav-link convo-link"
-                  [class.active]="ActiveTab === 'Chat'"
-                  (click)="onTabClick('Chat')"
-                  title="Space Chat Room">
-                  <span class="convo-hash-prefix">#</span>
-                  @if (!isCollapsed) {
-                    <span class="link-label">general-room</span>
-                    <span class="band-dot shared" title="Shared with client"></span>
-                  }
-                </button>
-              }
-
-              @if (!isCollapsed) {
-                <button
-                  type="button"
-                  class="btn-new-convo-row"
-                  (click)="onNewConversation()">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>New Conversation...</span>
-                </button>
-              }
+              </div>
             </div>
-          </div>
+          }
 
         </div>
 

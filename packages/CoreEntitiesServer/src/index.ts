@@ -1,4 +1,5 @@
 export { LoadSpaceEntityServer, SpaceEntityServer } from './SpaceEntityServer.js';
+export { CollaborationEngine } from './CollaborationEngine.js';
 export { LoadSpaceItemEntityServer, releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
 export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMemberEntityServer.js';
 export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEntityServer.js';

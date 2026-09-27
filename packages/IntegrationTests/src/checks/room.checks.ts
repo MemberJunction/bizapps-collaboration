@@ -358,6 +358,19 @@ const checks: NamedCheck[] = [
                 text: 'Message from removed user',
             });
             Assert(!remyRes.ok, 'Message from removed user must be refused');
+
+            // 5. Item 3: Owner-type user with no seat must be refused
+            const origType = remy.Type;
+            try {
+                remy.Type = 'Owner';
+                const ownerOutsiderRes = await postSpaceMessage(ctx.Provider, remy, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    text: 'Message from Owner with no seat',
+                });
+                Assert(!ownerOutsiderRes.ok, 'Owner-type user with no seat must be refused a post');
+            } finally {
+                remy.Type = origType;
+            }
         },
     },
 ];
