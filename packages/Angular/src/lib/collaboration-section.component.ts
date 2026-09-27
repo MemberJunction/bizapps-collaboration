@@ -10,10 +10,10 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import {
     CollaborationClient,
+    type GraphQLExecutor,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceItemEntity,
-    mjBizAppsCollaborationSpaceChatEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
@@ -921,7 +921,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [NotifyRecipients]="true"
                                 [AuthorName]="shareAuthorName"
                                 [Timestamp]="shareTimestamp"
-                                (ApplyFixRequested)="onApplyFix($event)"
                                 (ShareRequested)="onShareCompleted($event)"
                                 (CancelRequested)="onShareDialogCancel()"
                             />
@@ -985,16 +984,22 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.canConfigureCurrentSpace = false;
             return;
         }
+        const spaceIdAtStart = this.activeSpaceId;
+        let canConfig = false;
         try {
-            this.canConfigureCurrentSpace = await CollaborationEngineBase.Instance.UserCanConfigureSpaces(
+            canConfig = await CollaborationEngineBase.Instance.UserCanConfigureSpaces(
                 this.currentUser,
-                this.activeSpaceId,
+                spaceIdAtStart,
                 this.ProviderToUse
             );
         } catch (e) {
             LogError('Error checking space configuration authorization: ' + (e instanceof Error ? e.message : String(e)));
-            this.canConfigureCurrentSpace = false;
+            canConfig = false;
         }
+        if (!UUIDsEqual(this.activeSpaceId, spaceIdAtStart)) {
+            return;
+        }
+        this.canConfigureCurrentSpace = canConfig;
         if (!this.canConfigureCurrentSpace && this.activeTab === 'Settings') {
             this.activeTab = 'Overview';
             this.UpdateQueryParams({ tab: 'overview' });
@@ -1158,7 +1163,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceSearchQuery = '';
 
     public get activeConversationName(): string {
-        const found = this.spaceConversations.find(c => c.id === this.activeConversationId);
+        const found = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
         return found ? found.name : '';
     }
 
@@ -1224,13 +1229,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isSavingSettings = false;
     public settingsSaveSuccess = '';
 
-    private client: CollaborationClient | null = null;
+    private get graphQLExecutor(): GraphQLExecutor {
+        const p = this.ProviderToUse;
+        if (CollaborationClient.isAvailable(p)) {
+            return p;
+        }
+        throw new Error('Current provider does not implement GraphQLExecutor (missing ExecuteGQL)');
+    }
 
     protected async loadRealData(): Promise<void> {
         try {
-            if (CollaborationClient.isAvailable(this.ProviderToUse)) {
-                this.client = new CollaborationClient(this.ProviderToUse);
-            }
             const md = this.ProviderToUse;
             const rv = new RunView(this.RunViewToUse);
             const peopleEntity = md.EntityByName('MJ_BizApps_Common: People');
@@ -1661,7 +1669,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             this.spaceConversations = items;
 
-            if (preferredConvId && items.some(i => i.id === preferredConvId)) {
+            if (preferredConvId && items.some(i => UUIDsEqual(i.id, preferredConvId))) {
                 this.activeConversationId = preferredConvId;
             } else if (items.length > 0) {
                 this.activeConversationId = items[0].id;
@@ -1848,13 +1856,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                     const roleType = m.SpaceRoleTypeID
                         ? CollaborationEngineBase.Instance.SpaceRoleTypeById(m.SpaceRoleTypeID)
-                        : (m.SpaceRoleType
-                            ? CollaborationEngineBase.Instance.SpaceRoleTypes.find(
-                                rt => rt.Name.toLowerCase() === m.SpaceRoleType?.toLowerCase() ||
-                                      rt.Code.toLowerCase() === m.SpaceRoleType?.toLowerCase()
-                              ) ?? null
-                            : null);
-                    const roleCode = roleType?.Code || (m.SpaceRoleType ? m.SpaceRoleType.toLowerCase().replace(/\s+/g, '-') : 'member');
+                        : null;
+                    const roleCode = roleType?.Code || 'member';
                     const canContribute = roleType ? roleType.CanContribute : false;
                     return {
                         id: m.ID,
@@ -1991,7 +1994,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         if (params['conv'] && isValidUuid(params['conv'])) {
             this._pendingConvId = params['conv'];
-            if (this.spaceConversations.some(c => c.id === params['conv'])) {
+            if (this.spaceConversations.some(c => UUIDsEqual(c.id, params['conv']))) {
                 this.activeConversationId = params['conv'];
             }
         }
@@ -2061,7 +2064,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onSpaceToggleRequested(node: RailSpaceNode): void {
-        const found = this.spaces.find(s => s.id === node.id);
+        const found = this.spaces.find(s => UUIDsEqual(s.id, node.id));
         if (found) {
             found.isExpanded = !found.isExpanded;
             this.RefreshView();
@@ -2104,7 +2107,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onItemSelected(item: ItemCardModel | ItemRowModel): void {
         this.selectedItemId = item.id;
         this.isDrawerOpen = true;
-        this.UpdateQueryParams({ item: item.id });
+        this.activeTab = 'Library';
+        this.UpdateQueryParams({ tab: 'library', item: item.id });
         this.RefreshView();
     }
 
@@ -2116,11 +2120,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
-        const targetItemId = this.libraryRows.find(r => (fileId && (UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId))))?.id || this.selectedItemId;
-        if (!targetItemId) return;
+        if (!fileId) return;
+        const targetItemId = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId))?.id;
+        if (!targetItemId) {
+            SharedService.Instance.CreateSimpleNotification('File not found in this space library.', 'error', 5000);
+            return;
+        }
 
         try {
-            const client = new CollaborationClient(this.ProviderToUse);
+            const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.OpenSpaceFile(targetItemId);
             if (!res.Success || !res.Base64) {
                 const msg = res.ErrorMessage || 'Failed to open file';
@@ -2140,9 +2148,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const blob = new Blob([byteArray], { type: mimeType });
             const url = URL.createObjectURL(blob);
 
-            const isInline = mimeType.startsWith('image/') || mimeType === 'application/pdf';
+            const isInline = res.Mode === 'inline' || (res.Mode !== 'download' && (mimeType.startsWith('image/') || mimeType === 'application/pdf' || mimeType.startsWith('text/')));
             if (isInline) {
-                window.open(url, '_blank');
+                const newWin = window.open(url, '_blank');
+                if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
             } else {
                 const a = document.createElement('a');
                 a.href = url;
@@ -2182,6 +2198,30 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             SharedService.Instance.CreateSimpleNotification('No item selected to share.', 'warning', 3000);
             return;
         }
+        this.shareDialogTitle = 'Share with Shared Band';
+        const outsideMembers = this.spaceMembers.filter(m => m.band === 'Shared');
+        this.shareAudienceHeader = 'Participants who will gain access';
+        this.shareAudienceStaffSub = outsideMembers.length > 0
+            ? `${outsideMembers.length} outside participant${outsideMembers.length === 1 ? '' : 's'}`
+            : `${this.spaceMembers.length} space participant${this.spaceMembers.length === 1 ? '' : 's'}`;
+        this.shareRecipients = (outsideMembers.length > 0 ? outsideMembers : this.spaceMembers).map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.roleName || m.roleCode || '',
+            avatar: {
+                id: m.id,
+                initials: m.initials || m.name?.slice(0, 2).toUpperCase() || '??',
+                name: m.name,
+                avatarUrl: m.avatarUrl,
+                colorClass: m.colorClass,
+            },
+        }));
+        this.shareRecipientCount = this.shareRecipients.length;
+        this.shareAuthorName = this.currentUser?.FirstLast || this.currentUser?.Name || 'Current User';
+        this.shareTimestamp = new Date().toISOString();
+        this.shareReviewHeader = 'Policy Review';
+        this.shareReviewSub = 'Automated policy check on shared items';
+        this.shareFindings = [];
         this.isShareDialogOpen = true;
         this.RefreshView();
     }
@@ -2191,14 +2231,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public onApplyFix(finding: FindingModel): void {
-        finding.status = 'Applied';
-        this.RefreshView();
-    }
-
     public async onShareCompleted(_result: { applyFixes: boolean; note: string; notify: boolean }): Promise<void> {
         this.isShareDialogOpen = false;
-        const targetItemId = this.shareDialogItemId || this.selectedItemId;
+        const targetItemId = this.shareDialogItemId;
         if (!targetItemId) {
             this.RefreshView();
             return;
@@ -2265,7 +2300,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     reader.readAsDataURL(payload.file!);
                 });
 
-                const client = new CollaborationClient(this.ProviderToUse);
+                const client = new CollaborationClient(this.graphQLExecutor);
                 const uploadRes = await client.UploadSpaceFile({
                     SpaceID: this.activeSpaceId,
                     FileName: payload.fileName || payload.title,
@@ -2331,7 +2366,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onCreateTask(payload: { name: string; band: SpaceBand; priority: string }): Promise<void> {
         try {
-            const client = new CollaborationClient(this.ProviderToUse);
+            const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.CreateSpaceTask({
                 SpaceID: this.activeSpaceId,
                 Name: payload.name,
@@ -2376,13 +2411,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public async onSendChatMessage(payload: string | { text: string; executeAgent?: boolean }): Promise<void> {
-        const text = typeof payload === 'string' ? payload : payload.text;
-        const executeAgent = typeof payload === 'string'
-            ? /(@(assistant|agent)|^\/ask)/i.test(payload)
-            : (payload.executeAgent ?? /(@(assistant|agent)|^\/ask)/i.test(payload.text));
+    public async onSendChatMessage(payload: { text: string; executeAgent?: boolean }): Promise<void> {
+        const text = payload.text;
+        const executeAgent = payload.executeAgent ?? /(@(assistant|agent)|^\/ask)/i.test(payload.text);
         try {
-            const client = new CollaborationClient(this.ProviderToUse);
+            const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.PostSpaceMessage({
                 SpaceID: this.activeSpaceId,
                 Text: text,
@@ -2406,11 +2439,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onOverviewAskRequested(query: string): Promise<void> {
-        const room = this.spaceConversations.find(c => c.kind === 'Room') || this.spaceConversations[0];
+        const room = this.spaceConversations.find(c => c.kind === 'Room');
         if (room) {
             this.activeConversationId = room.id;
             this.UpdateQueryParams({ tab: 'chat', conv: room.id });
         } else {
+            this.activeConversationId = '';
             this.UpdateQueryParams({ tab: 'chat' });
         }
         this.activeTab = 'Chat';

@@ -2,6 +2,7 @@ Space,Person,Role,Band,Status
 northwind,ada,owner,Team,Active
 northwind,sam,member,Team,Active
 northwind,casey,client-admin,Shared,Active
+discovery,dev,owner,Team,Active
 discovery,bea,client-member,Shared,Active
 discovery,remy,guest,Shared,Removed
 delivery,ada,owner,Team,Active

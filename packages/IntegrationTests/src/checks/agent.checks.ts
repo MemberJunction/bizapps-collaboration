@@ -37,8 +37,6 @@ const EXPECTED_ADA_NORTHWIND_SPACES = new Set([
     NORTHWIND_SPACE_ID.toLowerCase(),
     DISCOVERY_SPACE_ID.toLowerCase(),
     FIELD_NOTES_SPACE_ID.toLowerCase(),
-    CLOSED_RECENT_SPACE_ID.toLowerCase(),
-    CLOSED_OPEN_SPACE_ID.toLowerCase(),
     SEALED_CHILD_SPACE_ID.toLowerCase(),
 ]);
 

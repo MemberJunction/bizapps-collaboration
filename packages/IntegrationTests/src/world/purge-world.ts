@@ -16,7 +16,7 @@ import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
-import { COLLABORATION_BOX_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
+import { COLLABORATION_BOX_PROVIDER_ID, COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
 
 function storedObjectPath(root: string, providerKey: string | null): string | null {
     const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
@@ -130,7 +130,9 @@ export async function purgeWorld(): Promise<void> {
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
-            UPDATE [${core}].FileStorageProvider SET IsActive = 0 WHERE ID = '${COLLABORATION_BOX_PROVIDER_ID}';
+            DELETE FROM [${core}].FileStorageAccount WHERE ID = '${COLLABORATION_STORAGE_ACCOUNT_ID}';
+            DELETE FROM [${core}].Credential WHERE Name IN ('Collaboration local directory', 'Collaboration Box Storage');
+            DELETE FROM [${core}].FileStorageProvider WHERE ID = '${COLLABORATION_STORAGE_PROVIDER_ID}';
 
             SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
             SELECT ID INTO #details FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});

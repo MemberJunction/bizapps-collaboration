@@ -143,7 +143,7 @@ export interface CollabUploadSubmitPayload {
               id="doc-title-input"
               type="text"
               class="mj-input"
-              placeholder="e.g. Engagement Kickoff Brief"
+              placeholder="e.g. Project Kickoff Brief"
               [(ngModel)]="docTitle"
             />
           </div>

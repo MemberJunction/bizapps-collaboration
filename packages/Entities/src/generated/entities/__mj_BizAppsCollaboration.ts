@@ -820,7 +820,7 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Field Name: InheritsMembership
         * * Display Name: Inherits Membership
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Default Value: 0
         * * Description: 1: members of this space are members of its descendants. 0: this sub-space keeps its own roster.`),
     AgentRetrieval: z.union([z.literal('ExcludedEntirely'), z.literal('ExcludedFromParentScope'), z.literal('Included')]).describe(`
         * * Field Name: AgentRetrieval
@@ -2969,7 +2969,7 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Field Name: InheritsMembership
     * * Display Name: Inherits Membership
     * * SQL Data Type: bit
-    * * Default Value: 1
+    * * Default Value: 0
     * * Description: 1: members of this space are members of its descendants. 0: this sub-space keeps its own roster.
     */
     get InheritsMembership(): boolean {

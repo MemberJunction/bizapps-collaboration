@@ -54,9 +54,13 @@ A seat that already exists is not rewritten. If Pat were left Active by an earli
 
 ## Files
 
-`files.csv` is the library. The loader stores each one through `uploadSpaceFile` and passes the sample account id. Every other upload leaves the account to MemberJunction, which picks the host's active account. The sample provider is inactive, so a host that also has a cloud account does not pick this directory.
+`files.csv` is the library. The loader stores each one through `uploadSpaceFile` and passes the sample account id. When configured with real Box cloud storage via four environment variables, the integration tests store files directly in a dedicated Box test folder:
+- `STORAGE_BOX_CLIENT_ID`
+- `STORAGE_BOX_CLIENT_SECRET`
+- `STORAGE_BOX_ENTERPRISE_ID`
+- `STORAGE_BOX_ROOT_FOLDER_ID`
 
-The bytes live in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. The credential is not a default API key. A purge deletes the storage paths on the world's file rows, and leaves the rest of that directory alone. The suite's host keeps only this sample account, so those paths are the files. A host that also has a cloud account is outside this suite: the purge does not delete objects in that bucket.
+When Box credentials are not set, tests fall back to local directory storage. For local directory storage, the bytes live in `.local-storage` at the repo root unless `COLLAB_STORAGE_ROOT` is set. The credential is not a default API key. A purge cleans up world sample files (in Box storage or the local directory) and deletes the test account and credentials, leaving the Box provider active.
 
 The driver is in the integration package, not the published server. Build it, then start the private API from `MJ/packages/MJAPI` with that file imported:
 

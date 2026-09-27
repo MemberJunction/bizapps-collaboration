@@ -484,7 +484,6 @@ export class CollabSpaceLibraryComponent {
   @Input() public PreviewFlagDescription = '';
   @Input() public PreviewShareButtonLabel = '';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
-  @Input() public SharedBandLegend = '';
   @Input() public TeamBandLegend = '';
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();

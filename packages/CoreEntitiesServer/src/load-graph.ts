@@ -117,7 +117,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const owners = ownerIds
         ? await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status = 'Active' AND SpaceRoleTypeID IN (${ownerIds})`, system)
         : [];
-    const walked = await chain(rv, space, user);
+    const walked = await chain(rv, space, system);
     const spaces = walked.nodes;
     const typeId = walked.typeId;
     const typeRows = typeId && parseUuid(typeId)

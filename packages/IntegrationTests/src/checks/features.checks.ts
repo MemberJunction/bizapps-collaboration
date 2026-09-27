@@ -29,23 +29,28 @@ const checks: NamedCheck[] = [
             }>(
                 ctx,
                 SPACE_ENTITY,
-                'ID IS NOT NULL',
+                "ID LIKE 'C1000001-0000-4000-8000-%'",
                 ['ID', 'Name', 'IconClass', 'Color', 'BackgroundImageURL'],
             );
-            Assert(spaces.length > 0, 'Spaces exist in the database');
+            Assert(spaces.length === 15, `Expected 15 world spaces, found ${spaces.length}`);
 
-            const withIcon = spaces.filter((s) => s.IconClass && s.IconClass.trim().length > 0);
-            const withColor = spaces.filter((s) => s.Color && s.Color.trim().length > 0);
-            const withBackground = spaces.filter((s) => s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0);
+            const icons = new Set<string>();
+            const colors = new Set<string>();
+            const backdrops = new Set<string>();
 
-            Assert(withIcon.length > 0, 'At least one space has an IconClass');
-            Assert(withColor.length > 0, 'At least one space has a Color');
-            Assert(withBackground.length > 0, 'At least one space has a BackgroundImageURL');
+            for (const s of spaces) {
+                Assert(!!s.IconClass && s.IconClass.trim().length > 0, `Space ${s.Name} must have an IconClass`);
+                Assert(!!s.Color && s.Color.trim().length > 0, `Space ${s.Name} must have a Color`);
+                Assert(!!s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0, `Space ${s.Name} must have a BackgroundImageURL`);
 
-            const uniqueIcons = new Set(withIcon.map((s) => s.IconClass));
-            const uniqueColors = new Set(withColor.map((s) => s.Color));
-            Assert(uniqueIcons.size > 1, 'Spaces have distinct IconClass values');
-            Assert(uniqueColors.size > 1, 'Spaces have distinct Color values');
+                icons.add(s.IconClass!.trim());
+                colors.add(s.Color!.trim().toLowerCase());
+                backdrops.add(s.BackgroundImageURL!.trim());
+            }
+
+            Assert(icons.size === 15, `World spaces must have pairwise-distinct IconClass values: expected 15, got ${icons.size}`);
+            Assert(colors.size === 15, `World spaces must have pairwise-distinct Color values: expected 15, got ${colors.size}`);
+            Assert(backdrops.size === 15, `World spaces must have pairwise-distinct BackgroundImageURL values: expected 15, got ${backdrops.size}`);
         },
     },
     {

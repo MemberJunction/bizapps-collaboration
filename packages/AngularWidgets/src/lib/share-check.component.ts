@@ -247,20 +247,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         background: var(--mj-bg-surface);
         border-style: dashed;
       }
+    }
+
     .no-findings-banner {
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: var(--mj-bg-surface-sunken, #f8fafc);
-      border: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       margin-bottom: 16px;
 
       i {
-        color: var(--mj-status-success, #16a34a);
+        color: var(--mj-status-success);
         font-size: 15px;
       }
     }

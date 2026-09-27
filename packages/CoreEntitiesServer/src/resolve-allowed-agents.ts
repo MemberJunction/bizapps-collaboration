@@ -1,5 +1,4 @@
-import type { IMetadataProvider } from '@memberjunction/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
 import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
 import type {
     mjBizAppsCollaborationSpaceAgentEntity,
@@ -82,7 +81,8 @@ export async function resolveAllowedAgents(
     }
 
     // Load SpaceType configuration from CollaborationEngine once without per-request full reload
-    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
+    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
+    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
     const spaceType = spaceTypeId ? CollaborationEngine.Instance.SpaceTypeById(spaceTypeId) : undefined;
 
     let typeConfig: ISpaceTypeConfiguration | null = null;

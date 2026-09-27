@@ -1,7 +1,5 @@
-import { Metadata } from '@memberjunction/core';
-
 export interface GraphQLExecutor {
-    ExecuteGQL: (query: string, variables?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    ExecuteGQL: (query: string, variables?: Record<string, string | number | boolean | null | undefined | object>) => Promise<Record<string, object | null | undefined>>;
 }
 
 export interface MintSpaceLinkInput {
@@ -64,6 +62,7 @@ export interface OpenSpaceFilePayload {
     Base64?: string;
     MimeType?: string;
     Name?: string;
+    Mode?: string;
     ErrorMessage?: string;
 }
 
@@ -118,20 +117,14 @@ mutation OpenSpaceFile($itemId: String!) {
         Base64
         MimeType
         Name
+        Mode
         ErrorMessage
     }
 }
 `;
 
-function hasExecuteGQL(target: object | null | undefined): target is GraphQLExecutor {
-    return target != null && 'ExecuteGQL' in target && typeof target.ExecuteGQL === 'function';
-}
-
-function resolveExecutor(executor?: GraphQLExecutor | object | null): GraphQLExecutor {
-    if (executor && hasExecuteGQL(executor)) return executor;
-    const provider = Metadata.Provider;
-    if (hasExecuteGQL(provider)) return provider;
-    throw new Error('GraphQL execution requires a provider with ExecuteGQL configured.');
+export function hasExecuteGQL(target: object | null | undefined): target is GraphQLExecutor {
+    return target != null && 'ExecuteGQL' in target && typeof (target as { ExecuteGQL?: () => Promise<Record<string, object | null | undefined>> }).ExecuteGQL === 'function';
 }
 
 /**
@@ -139,14 +132,18 @@ function resolveExecutor(executor?: GraphQLExecutor | object | null): GraphQLExe
  * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage, OpenSpaceFile.
  */
 export class CollaborationClient {
-    constructor(private readonly executor?: GraphQLExecutor | object | null) {}
+    constructor(private readonly executor: GraphQLExecutor) {
+        if (!hasExecuteGQL(executor)) {
+            throw new Error('GraphQL execution requires a provider with ExecuteGQL configured.');
+        }
+    }
 
-    static isAvailable(target?: object | null): boolean {
-        return hasExecuteGQL(target ?? Metadata.Provider);
+    static isAvailable(target: object | null | undefined): target is GraphQLExecutor {
+        return hasExecuteGQL(target);
     }
 
     private get activeExecutor(): GraphQLExecutor {
-        return resolveExecutor(this.executor);
+        return this.executor;
     }
 
     async MintSpaceLink(input: MintSpaceLinkInput): Promise<MintSpaceLinkPayload> {

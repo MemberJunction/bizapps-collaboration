@@ -34,8 +34,21 @@ export function getBoxStorageConfig(): BoxStorageConfig | null {
     const clientSecret = process.env.STORAGE_BOX_CLIENT_SECRET?.trim();
     const enterpriseID = process.env.STORAGE_BOX_ENTERPRISE_ID?.trim();
     const rootFolderID = process.env.STORAGE_BOX_ROOT_FOLDER_ID?.trim();
-    if (!clientID || !clientSecret || !enterpriseID || !rootFolderID) return null;
-    return { clientID, clientSecret, enterpriseID, rootFolderID };
+
+    const anySet = Boolean(clientID || clientSecret || enterpriseID || rootFolderID);
+    const allSet = Boolean(clientID && clientSecret && enterpriseID && rootFolderID);
+
+    if (anySet && !allSet) {
+        const missing: string[] = [];
+        if (!clientID) missing.push('STORAGE_BOX_CLIENT_ID');
+        if (!clientSecret) missing.push('STORAGE_BOX_CLIENT_SECRET');
+        if (!enterpriseID) missing.push('STORAGE_BOX_ENTERPRISE_ID');
+        if (!rootFolderID) missing.push('STORAGE_BOX_ROOT_FOLDER_ID');
+        throw new Error(`Partial Box storage configuration detected. Missing variables: ${missing.join(', ')}`);
+    }
+
+    if (!allSet) return null;
+    return { clientID: clientID!, clientSecret: clientSecret!, enterpriseID: enterpriseID!, rootFolderID: rootFolderID! };
 }
 
 export async function ensureLocalStorageAccount(provider: IMetadataProvider, system: UserInfo, rootDir: string): Promise<string> {

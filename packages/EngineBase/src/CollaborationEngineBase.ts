@@ -62,7 +62,6 @@ export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
-    private _taskTypes: BaseEntity[] = [];
     private _applicationSettings: MJApplicationSettingEntity[] = [];
     private _authorizations: MJAuthorizationEntity[] = [];
     private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
@@ -524,12 +523,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                         canPromoteBand: !!roleType?.CanPromoteBand,
                         canSeeTeamBand: !!roleType?.CanSeeTeamBand,
                         isOwnerRole: !!roleType?.IsOwnerRole,
-                        canContribute: true,
+                        canContribute: !!roleType?.CanContribute,
                     },
                 };
             });
 
-            const reached = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), true);
+            const reached = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
             return !!reached?.role.isOwnerRole;
         } catch (e) {
             LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);

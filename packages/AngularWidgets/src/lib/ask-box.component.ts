@@ -174,7 +174,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 export class CollabAskBoxComponent {
   @Input() public Title = '';
   @Input() public Subtitle = 'One assistant, bounded by who’s asking';
-  @Input() public Placeholder = 'Ask anything about this engagement…';
+  @Input() public Placeholder = 'Ask anything about this space…';
   @Input() public Suggestions: string[] = [];
 
   @Input() public Query = '';

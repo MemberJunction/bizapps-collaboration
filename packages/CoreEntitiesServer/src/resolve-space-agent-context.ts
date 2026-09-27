@@ -1,5 +1,4 @@
-import type { IMetadataProvider } from '@memberjunction/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
 import type {
     mjBizAppsCollaborationSpaceAgentSkillEntity,
     mjBizAppsCollaborationSpaceEntity,
@@ -67,7 +66,8 @@ export async function resolveSpaceKnowledgeSources(
     const target = chain[chain.length - 1];
     const spaceTypeId = target.SpaceTypeID;
 
-    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
+    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
+    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
     const sourceIds = new Set<string>();
 
     for (const ks of CollaborationEngine.Instance.AppSpaceKnowledgeSources) {
@@ -116,7 +116,8 @@ export async function resolveSpaceAgentSkills(
     const target = chain[chain.length - 1];
     const spaceTypeId = target.SpaceTypeID;
 
-    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
+    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
+    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
     const skillIds = new Set<string>();
 
     for (const sk of CollaborationEngine.Instance.AppSpaceAgentSkills) {

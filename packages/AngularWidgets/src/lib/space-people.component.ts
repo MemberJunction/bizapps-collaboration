@@ -396,7 +396,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .role-chip.owner { background: #ede9fe; color: #6d28d9; }
       .role-chip.admin { background: #e0f2fe; color: #0284c7; }
       .role-chip.member { background: #f1f5f9; color: #475569; }
-      .role-chip.client-member, .role-chip.client-admin, .role-chip.outside-member, .role-chip.outside-admin { background: #fef3c7; color: #b45309; }
+      .role-chip.client-member, .role-chip.client-admin { background: #fef3c7; color: #b45309; }
       .role-chip.guest { background: #f3f4f6; color: #6b7280; }
 
       .status-pill {
@@ -507,9 +507,6 @@ export class CollabSpacePeopleComponent {
   }
 
   public formatRoleClass(roleCode: string): string {
-    const code = (roleCode || 'member').toLowerCase().replace(/\s+/g, '-');
-    if (code === 'outside-admin' || code === 'client-admin') return 'client-admin outside-admin';
-    if (code === 'outside-member' || code === 'client-member') return 'client-member outside-member';
-    return code;
+    return (roleCode || 'member').toLowerCase().replace(/\s+/g, '-');
   }
 }

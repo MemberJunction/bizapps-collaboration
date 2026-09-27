@@ -211,6 +211,7 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
             ProviderToUse: { value: provider, writable: true },
             RunViewProviderToUse: { value: provider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
+            _resultHistory: { value: [], writable: true },
         });
         return task;
     }
@@ -323,6 +324,116 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
             const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'Status');
             assert.ok(err, 'Expected error on Status');
             assert.equal(err?.Message, 'Task refused: you do not have permission to update task status in this space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('permits TaskTypeStatusID update when user has canContribute in an open space', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: null, canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user, [{ Name: 'TaskTypeStatusID', Dirty: true }]);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, true);
+            assert.equal(res.Errors.length, 0);
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses TaskTypeStatusID update when user lacks canContribute', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: null, canContribute: false });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user, [{ Name: 'TaskTypeStatusID', Dirty: true }]);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, false);
+            const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'TaskTypeStatusID');
+            assert.ok(err, 'Expected error on TaskTypeStatusID');
+            assert.equal(err?.Message, 'Task refused: you do not have permission to update task status in this space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses TaskTypeStatusID update when the space is closed', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: '2026-09-01', canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user, [{ Name: 'TaskTypeStatusID', Dirty: true }]);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, false);
+            const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'TaskTypeStatusID');
+            assert.ok(err, 'Expected error on TaskTypeStatusID');
+            assert.equal(err?.Message, 'Task refused: cannot update a task in a closed space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses new subtask creation when parent task is in a closed space', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: '2026-09-01', canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = Object.create(CollaborationTaskEntityServer.prototype) as CollaborationTaskEntityServer;
+            Object.defineProperties(task, {
+                ID: { value: '99999999-9999-4999-8999-999999999999', writable: true },
+                ParentID: { value: TASK_ID, writable: true },
+                IsSaved: { value: false, writable: true },
+                Fields: { value: [{ Name: 'Name', Dirty: true }, { Name: 'ParentID', Dirty: true }], writable: true },
+                ProviderToUse: { value: provider, writable: true },
+                RunViewProviderToUse: { value: provider, writable: true },
+                ContextCurrentUser: { value: user, writable: true },
+            });
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, false);
+            const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'ParentID');
+            assert.ok(err, 'Expected error on ParentID');
+            assert.equal(err?.Message, 'Task refused: cannot create a task in a closed space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses task delete when the space is closed', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: '2026-09-01', canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user);
+            const deleted = await CollaborationTaskEntityServer.prototype.Delete.call(task);
+            assert.equal(deleted, false);
+            assert.equal(task.LatestResult?.Message, 'Task delete refused: cannot delete a task in a closed space.');
         } finally {
             source.GetSystemUser = orig;
         }

@@ -1,6 +1,6 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { membershipReaches, ResolveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from './space-agent-retrieval.js';
@@ -97,6 +97,47 @@ export async function postSpaceMessage(
         if (!conversationId) return { ok: false, message: 'This space does not have an active room yet.' };
     }
 
+    await CollaborationEngine.Instance.EnsureLoaded(system, provider);
+
+    let spaceConfig: CollaborationSettings | null = null;
+    if (targetSpace?.Configuration) {
+        try {
+            const parsed: unknown = JSON.parse(targetSpace.Configuration);
+            const val = ValidateCollaborationSettings(parsed, 'space');
+            if (val.valid) {
+                spaceConfig = parsed as CollaborationSettings;
+            } else {
+                LogError(`Invalid space configuration for ${spaceId}: ${val.errors.join(', ')}`);
+            }
+        } catch (err) {
+            LogError(`Error parsing space configuration for ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    if (targetSpace?.SpaceTypeID) {
+        const spaceType = CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID);
+        if (spaceType?.Configuration) {
+            try {
+                const parsed: unknown = JSON.parse(spaceType.Configuration);
+                const val = ValidateCollaborationSettings(parsed, 'type');
+                if (!val.valid) {
+                    LogError(`Invalid space type configuration for ${targetSpace.SpaceTypeID}: ${val.errors.join(', ')}`);
+                }
+            } catch (err) {
+                LogError(`Error parsing space type configuration for ${targetSpace.SpaceTypeID}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+    }
+
+    const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
+        spaceConfig ? [spaceConfig] : [],
+        targetSpace?.SpaceTypeID
+    );
+    const hasMention = /(@(assistant|agent)|^\/ask)/i.test(text);
+    const shouldExecuteAgent = resolvedSettings.Chats.AgentReplyMode === 'Always'
+        ? true
+        : Boolean(input.executeAgent || hasMention);
+
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
     detail.ConversationID = conversationId;
@@ -113,32 +154,6 @@ export async function postSpaceMessage(
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
-
-    let typeConfig: ISpaceTypeConfiguration | null = null;
-    if (targetSpace?.SpaceTypeID) {
-        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
-        const spaceType = CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID);
-        if (spaceType?.Configuration) {
-            try {
-                typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
-            } catch {
-                typeConfig = null;
-            }
-        }
-    }
-    let spaceConfig: ISpaceConfiguration | null = null;
-    if (targetSpace?.Configuration) {
-        try {
-            spaceConfig = JSON.parse(targetSpace.Configuration) as ISpaceConfiguration;
-        } catch {
-            spaceConfig = null;
-        }
-    }
-    const rules = ResolveSpaceRules(typeConfig, spaceConfig);
-    const hasMention = /(@(assistant|agent)|^\/ask)/i.test(text);
-    const shouldExecuteAgent = rules.Chats.AgentReplyMode === 'Always'
-        ? true
-        : Boolean(input.executeAgent || hasMention);
 
     if (shouldExecuteAgent) {
         try {

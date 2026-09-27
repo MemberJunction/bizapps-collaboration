@@ -1,4 +1,4 @@
-import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { TaskEntityServer } from '@mj-biz-apps/tasks-entities-server';
@@ -24,6 +24,21 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
             if (!personId) return refuse(result, 'CreatedByPersonID', 'Task refused: the signer has no person record.');
             this.CreatedByPersonID = personId;
         }
+        if (!this.IsSaved && this.ParentID) {
+            const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
+            if (provider?.EntityByName) {
+                try {
+                    const system = await requireSystemUser(this);
+                    const parentPlace = await filedTask(provider, system, this.ParentID);
+                    if (parentPlace?.closedAt) {
+                        return refuse(result, 'ParentID', 'Task refused: cannot create a task in a closed space.');
+                    }
+                } catch (error) {
+                    LogError(`Space task check for new task parent ${this.ParentID}: ${error instanceof Error ? error.message : String(error)}`);
+                    return refuse(result, 'ParentID', 'Task refused: the space could not be read.');
+                }
+            }
+        }
         const anyFieldChanged = this.IsSaved && this.Fields.some((field) => field.Dirty);
         if (anyFieldChanged) {
             const statusDirty = !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
@@ -38,12 +53,11 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                 const system = await requireSystemUser(this);
                 const place = await filedTask(provider, system, this.ID);
                 if (place) {
-                    const context = await loadWriteContext(this, user, place.spaceId, null);
-                    const space = context.spaces.find((s) => s.id.toLowerCase() === place.spaceId.toLowerCase());
-                    if (space?.closedAt) {
+                    if (place.closedAt) {
                         return refuse(result, dirtyField, 'Task refused: cannot update a task in a closed space.');
                     }
                     if (statusChanged) {
+                        const context = await loadWriteContext(this, user, place.spaceId, null);
                         const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
                         if (!reach?.role.canContribute) {
                             return refuse(result, dirtyStatusField, 'Task refused: you do not have permission to update task status in this space.');
@@ -72,6 +86,34 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
             }
         }
         return result;
+    }
+
+    private failDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
+        if (provider?.EntityByName && this.ID) {
+            try {
+                const system = await requireSystemUser(this);
+                const place = await filedTask(provider, system, this.ID);
+                if (place?.closedAt) {
+                    const msg = 'Task delete refused: cannot delete a task in a closed space.';
+                    LogError(msg);
+                    return this.failDelete(msg);
+                }
+            } catch (error) {
+                LogError(`Space task check on delete for task ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+                return this.failDelete('Task delete refused: the space could not be read.');
+            }
+        }
+        return super.Delete(options);
     }
 }
 

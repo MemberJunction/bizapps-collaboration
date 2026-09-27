@@ -1,8 +1,8 @@
-import { BaseEntity, BaseEntityEvent, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, BaseEntityResult, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { MJEventType, MJGlobal, RegisterClass, type MJEvent } from '@memberjunction/global';
 import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser } from './load-graph.js';
-import { assigneeSeatMessage } from './task-space.js';
+import { assigneeSeatMessage, filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -67,6 +67,34 @@ export class TaskAssignmentEntityServer extends mjBizAppsTasksTaskAssignmentEnti
         const seat = await assigneeSeatMessage(this);
         if (seat) return refuse(result, seat);
         return result;
+    }
+
+    private failDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
+        if (provider?.EntityByName && this.TaskID) {
+            try {
+                const system = await requireSystemUser(this);
+                const place = await filedTask(provider, system, this.TaskID);
+                if (place?.closedAt) {
+                    const msg = 'Assignment delete refused: cannot delete assignments in a closed space.';
+                    LogError(msg);
+                    return this.failDelete(msg);
+                }
+            } catch (error) {
+                LogError(`Assignment delete check for task ${this.TaskID}: ${error instanceof Error ? error.message : String(error)}`);
+                return this.failDelete('Assignment delete refused: the space could not be read.');
+            }
+        }
+        return super.Delete(options);
     }
 }
 

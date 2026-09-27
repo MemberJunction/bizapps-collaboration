@@ -112,6 +112,30 @@ export function isPostCloseAccessPermitted(
     return true;
 }
 
+export function isAgentPostCloseAccessPermitted(
+    space: SpaceNode,
+    now: Date = new Date()
+): boolean {
+    if (!space.closedAt) {
+        return true;
+    }
+    const mode = space.postCloseAccess ?? space.spaceTypePostCloseAccess ?? 'None';
+    if (mode !== 'ReadOnlyWithAgent') {
+        return false;
+    }
+    const days = space.postCloseAccessDays !== undefined && space.postCloseAccessDays !== null
+        ? space.postCloseAccessDays
+        : (space.spaceTypePostCloseAccessDays ?? null);
+    if (days !== null && days !== undefined) {
+        const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
+        const diffDays = utcCalendarDaysBetween(closedDate, now);
+        if (diffDays > days) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /**
  * The membership that governs `targetId` for this person.
  *
@@ -791,6 +815,7 @@ export function agentMayQuote(input: {
     itemSpaceId: string;
     askedFromSpaceId: string;
     spaces: readonly SpaceNode[];
+    now?: Date;
 }): boolean {
     if (!input.callerCanRead) {
         return false;
@@ -801,6 +826,9 @@ export function agentMayQuote(input: {
     const index = byId(input.spaces);
     const itemSpace = index.get(idKey(input.itemSpaceId));
     if (!itemSpace) {
+        return false;
+    }
+    if (itemSpace.closedAt && !isAgentPostCloseAccessPermitted(itemSpace, input.now ?? new Date())) {
         return false;
     }
     if (!isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId)) {

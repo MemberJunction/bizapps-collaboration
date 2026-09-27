@@ -12,11 +12,8 @@
  */
 
 import {
-    AuthorizationEvaluator,
     type AuthorizationInfo,
-    type BaseEntity,
     type IMetadataProvider,
-    LogError,
     Metadata,
     RunView,
     type RunViewResult,
@@ -176,26 +173,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
 
     // ─── Server-Only: Authorization Rights ─────────────────────────────────────
 
-    /**
-     * Looks up an authorization specifically under the "Collaboration" root authorization.
-     * In MemberJunction, Authorizations are shared across apps, so sub-authorizations
-     * must be resolved via ParentID under the "Collaboration" root authorization.
-     */
-    public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
-        const md = provider ?? Metadata.Provider;
-        const auths = md.Authorizations ?? [];
-        const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
-        if (root) {
-            const child = auths.find(a =>
-                (a.Name ?? '').trim().toLowerCase() === subAuthName.trim().toLowerCase() &&
-                UUIDsEqual(a.ParentID, root.ID)
-            );
-            if (child) {
-                return child;
-            }
-        }
-        return null;
-    }
 
     /**
      * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.

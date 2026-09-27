@@ -5,6 +5,7 @@ import { before, describe, it } from 'node:test';
 import { AuthorizationInfo, type EntityInfo, EntityUserPermissionInfo, type IMetadataProvider, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceRoleTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { SpaceTypeEntityServer } from '../dist/SpaceTypeEntityServer.js';
 import { toNode, type SpaceRow } from '../dist/load-graph.js';
@@ -154,11 +155,12 @@ describe('CollaborationEngine authorization checks', () => {
     before(async () => {
         const setupProvider = createMockProvider({ authorizations: auths });
         await CollaborationEngine.Instance.Config(true, adminUser, setupProvider);
+        await CollaborationEngineBase.Instance.Config(true, adminUser, setupProvider);
     });
 
     it('FindCollaborationAuthorization resolves child authorizations under Collaboration root', () => {
         const provider = createMockProvider({ authorizations: auths });
-        const engine = CollaborationEngine.Instance;
+        const engine = CollaborationEngineBase.Instance;
         const typesAuth = engine.FindCollaborationAuthorization('Configure Space Types', provider);
         assert.ok(typesAuth, 'Configure Space Types must be found');
         assert.equal(typesAuth?.ID, TYPES_AUTH_ID);
@@ -361,17 +363,13 @@ describe('Metadata Role Lookups Static Check', () => {
         if (fs.existsSync(rolesDir)) {
             const roleFiles = scanDir(rolesDir);
             for (const rf of roleFiles) {
-                try {
-                    const parsed = JSON.parse(fs.readFileSync(rf, 'utf-8'));
-                    if (Array.isArray(parsed)) {
-                        for (const item of parsed) {
-                            if (item.fields?.Name) {
-                                allowedRoles.add(item.fields.Name);
-                            }
+                const parsed = JSON.parse(fs.readFileSync(rf, 'utf-8'));
+                if (Array.isArray(parsed)) {
+                    for (const item of parsed) {
+                        if (item.fields?.Name) {
+                            allowedRoles.add(item.fields.Name);
                         }
                     }
-                } catch {
-                    // Ignore parse errors
                 }
             }
         }

@@ -226,12 +226,10 @@ const checks: NamedCheck[] = [
             } finally {
                 if (createdUseId) {
                     const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    if (await use.Load(createdUseId)) {
-                        const deleted = await use.Delete();
-                        if (!deleted) {
-                            throw new Error(`client LB5 cleanup failed to delete Item Use ${createdUseId}: ${use.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
+                    const loaded = await use.Load(createdUseId);
+                    Assert(loaded === true, `client LB5 cleanup: loading Item Use ${createdUseId} must succeed`);
+                    const deleted = await use.Delete();
+                    Assert(deleted === true, `client LB5 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
                 }
             }
         },

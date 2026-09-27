@@ -67,7 +67,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <span>{{ ShareButtonLabel }}</span>
           </button>
           @if (FileId) {
-            <button mjButton variant="secondary" class="btn secondary open-file-btn" (click)="onOpenFile()" title="Open file record in MemberJunction">
+            <button mjButton variant="secondary" class="btn secondary open-file-btn" (click)="onOpenFile()" title="Open Document">
               <i class="fa-solid fa-arrow-up-right-from-square"></i>
               <span>Open Document</span>
             </button>

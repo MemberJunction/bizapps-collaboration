@@ -135,6 +135,20 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
         const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
 
+        if (isClosing) {
+            const closedDate = new Date(this.ClosedAt!).getTime();
+            if (closedDate > Date.now()) {
+                return fail(result, 'ClosedAt', 'Space change refused: ClosedAt cannot be in the future.');
+            }
+        }
+
+        if (isReopening) {
+            const otherDirty = this.Fields.filter((f) => f.Dirty && f.Name !== 'ClosedAt' && !f.Name.startsWith('__mj_'));
+            if (otherDirty.length > 0) {
+                return fail(result, otherDirty[0].Name, 'Space change refused: reopening a space cannot modify other fields simultaneously.');
+            }
+        }
+
         if (configDirty || (closeFieldsDirty && !isClosing)) {
             const canConfig = await CollaborationEngine.Instance.UserCanConfigureSpaces(
                 user,
@@ -405,6 +419,8 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
                 if (!chatSaved) {
                     LogError(`Space chat room status was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
                 }
+            } else {
+                LogError(`Space chat room load failed for ID ${foundChat.ID}`);
             }
         }
         return;
@@ -438,6 +454,7 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     const chatSaved = await spaceChat.Save();
     if (!chatSaved) {
         LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+        await conversation.Delete();
     }
 }
 

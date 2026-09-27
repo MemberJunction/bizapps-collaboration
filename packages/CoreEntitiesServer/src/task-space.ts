@@ -60,7 +60,6 @@ export async function filedTask(provider: IMetadataProvider, reader: UserInfo, t
 }
 
 export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignmentEntity): Promise<string | null> {
-    if (!relevantFieldsChanged(assignment, SEAT_FIELDS)) return null;
     const provider = assignment.ProviderToUse ? asMetadata(assignment.ProviderToUse) : null;
     const user = assignment.ContextCurrentUser;
     if (!provider?.EntityByName || !user || !assignment.TaskID) return null;
@@ -71,6 +70,7 @@ export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignme
         if (place.closedAt) {
             return 'Assignment refused: cannot update assignments in a closed space.';
         }
+        if (!relevantFieldsChanged(assignment, SEAT_FIELDS)) return null;
         const assigneeUserId = await assigneeUser(provider, system, assignment.AssigneeEntityID, assignment.AssigneeRecordID);
         if (!assigneeUserId) return 'Assignment refused: the assignee is not a person in this space.';
         const reach = await loadMemberReach(assignment, system, assigneeUserId, place.spaceId);

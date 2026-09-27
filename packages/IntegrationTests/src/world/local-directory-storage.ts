@@ -62,8 +62,10 @@ export class LocalDirectoryStorage extends FileStorageBase {
         try {
             const sidecar = JSON.parse(await readFile(`${file}.mjmeta.json`, 'utf8')) as { contentType?: string };
             if (sidecar.contentType) contentType = sidecar.contentType;
-        } catch {
-            // A file written without a sidecar still has a size and a name.
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                throw error;
+            }
         }
         return this.metadata(name, info.size, info.mtime, contentType, info.isDirectory());
     }
@@ -98,7 +100,13 @@ export class LocalDirectoryStorage extends FileStorageBase {
         const to = this.inside(newObjectName);
         await mkdir(dirname(to), { recursive: true });
         await rename(from, to);
-        await rename(`${from}.mjmeta.json`, `${to}.mjmeta.json`).catch(() => undefined);
+        try {
+            await rename(`${from}.mjmeta.json`, `${to}.mjmeta.json`);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                throw error;
+            }
+        }
         return true;
     }
 
