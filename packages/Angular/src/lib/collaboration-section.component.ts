@@ -4,14 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import type {
-    AgentReplyMode,
-    AgentTurnHandler,
-    AgentTurnRequest,
-    AgentTurnResult,
-} from '@memberjunction/ng-conversations';
+
 import {
     CollaborationClient,
     mjBizAppsCollaborationSpaceEntity,
@@ -26,6 +21,7 @@ import {
     TaskGanttComponent,
     MyTasksComponent,
     ApprovalInboxComponent,
+    type BeforeKanbanStatusChangeEvent,
 } from '@mj-biz-apps/tasks-ng';
 import {
     CollabSpaceRailComponent,
@@ -63,6 +59,10 @@ import {
     type SpaceSettingsModel,
     type RoomMessageItem,
     type SpaceConversationItem,
+    type SpaceChatAgentReplyMode,
+    type SpaceChatAgentTurnHandler,
+    type SpaceChatAgentTurnRequest,
+    type SpaceChatAgentTurnResult,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { CollaborationNoAccessComponent } from './no-access.component';
 
@@ -81,6 +81,7 @@ interface RawSpaceRecord {
     AgentRetrieval?: string;
     Retention?: string | null;
     ClosedAt?: string | null;
+    OwnerID?: string | null;
 }
 
 interface RawSpaceTypeRecord {
@@ -111,6 +112,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
+        MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
         CollabSpaceTabsComponent,
@@ -417,34 +419,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             padding: 8px 16px;
             border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
             background: var(--mj-bg-surface, #ffffff);
-        }
-        .view-switch-group {
-            display: inline-flex;
-            border: 1px solid var(--mj-border-default, #cbd5e1);
-            border-radius: 6px;
-            overflow: hidden;
-            background: var(--mj-bg-surface-sunken, #f8fafc);
-        }
-        .view-switch-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border: none;
-            background: transparent;
-            font-size: 12.5px;
-            font-weight: 500;
-            color: var(--mj-text-secondary, #64748b);
-            cursor: pointer;
-            transition: all 0.12s ease;
-        }
-        .view-switch-btn:hover {
-            color: var(--mj-text-primary, #0f172a);
-            background: var(--mj-bg-surface-hover, #f1f5f9);
-        }
-        .view-switch-btn.active {
-            background: var(--mj-brand-primary, #0284c7);
-            color: #ffffff;
         }
         .work-view-body {
             flex: 1 1 auto;
@@ -936,38 +910,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @case ('Work') {
                                                 <div class="work-tab-container">
                                                     <div class="work-view-toolbar">
-                                                        <div class="view-switch-group" role="group" aria-label="Task view mode">
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'list'"
-                                                                (click)="onWorkViewModeChanged('list')"
-                                                                title="List View"
-                                                            >
-                                                                <i class="fa-solid fa-list"></i>
-                                                                <span>List</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'kanban'"
-                                                                (click)="onWorkViewModeChanged('kanban')"
-                                                                title="Kanban Board View"
-                                                            >
-                                                                <i class="fa-solid fa-table-columns"></i>
-                                                                <span>Board</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                class="view-switch-btn"
-                                                                [class.active]="workViewMode === 'gantt'"
-                                                                (click)="onWorkViewModeChanged('gantt')"
-                                                                title="Timeline / Gantt View"
-                                                            >
-                                                                <i class="fa-solid fa-chart-gantt"></i>
-                                                                <span>Timeline</span>
-                                                            </button>
-                                                        </div>
+                                                        <mj-view-toggle
+                                                            [Options]="workViewOptions"
+                                                            [ActiveKey]="workViewMode"
+                                                            (KeyChange)="onWorkViewModeChanged($event)"
+                                                        />
                                                     </div>
                                                     <div class="work-view-body">
                                                         @switch (workViewMode) {
@@ -975,7 +922,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                 <mjc-space-work
                                                                     [Tasks]="spaceTasks"
                                                                     [SpaceName]="spaceTitle"
-                                                                    [CanCreateTask]="true"
+                                                                    [CanCreateTask]="!isSpaceClosed && canContribute"
                                                                     (TaskSelectRequested)="onTaskSelected($event)"
                                                                     (TaskToggleRequested)="onTaskToggled($event)"
                                                                     (CreateTaskRequested)="onCreateTask($event)"
@@ -985,6 +932,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                 <div class="work-kanban-pane">
                                                                     <bizapps-task-kanban
                                                                         [ExtraFilter]="taskScopeFilter"
+                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                        (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
                                                                         (TaskClicked)="onTaskDoubleClicked($event)"
                                                                         (TaskDoubleClicked)="onTaskDoubleClicked($event)"
                                                                     />
@@ -995,6 +944,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                     <bizapps-task-gantt
                                                                         [ExtraFilter]="taskScopeFilter"
                                                                         [Height]="'620px'"
+                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
                                                                         (TaskClicked)="onTaskDoubleClicked($event)"
                                                                         (TaskDoubleClicked)="onTaskDoubleClicked($event)"
                                                                     />
@@ -1250,6 +1200,49 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     // Work tab state
     public spaceTasks: TaskItemModel[] = [];
     public workViewMode: WorkViewMode = 'list';
+    public workViewOptions: ViewToggleOption[] = [
+        { key: 'list', icon: 'fa-solid fa-list', label: 'List', title: 'List View' },
+        { key: 'kanban', icon: 'fa-solid fa-table-columns', label: 'Board', title: 'Kanban Board View' },
+        { key: 'gantt', icon: 'fa-solid fa-chart-gantt', label: 'Timeline', title: 'Timeline / Gantt View' },
+    ];
+
+    public get activeSpaceRecord(): RawSpaceRecord | undefined {
+        return this.rawSpaces.find(s => s.ID.toLowerCase() === this.activeSpaceId.toLowerCase());
+    }
+
+    public get isSpaceClosed(): boolean {
+        const space = this.activeSpaceRecord;
+        return !!(space?.ClosedAt || (space?.Status && space.Status.toLowerCase() !== 'active'));
+    }
+
+    public get canContribute(): boolean {
+        if (!this.currentUser) return false;
+        // Staff users can contribute
+        if (this.currentUser.UserRoles?.some(r => r.Role && (r.Role === 'UI' || r.Role === 'Developer' || r.Role === 'Integration' || r.Role === 'Owner'))) {
+            return true;
+        }
+        // Space owner can contribute
+        if (this.activeSpaceRecord?.OwnerID && this.currentUser.ID && this.activeSpaceRecord.OwnerID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
+            return true;
+        }
+        // Check active membership
+        const member = this.spaceMembers.find(m => m.userId.toLowerCase() === this.currentUser?.ID?.toLowerCase());
+        if (member && member.status === 'Active') {
+            return member.roleCode !== 'guest';
+        }
+        return false;
+    }
+
+    public onBeforeKanbanStatusChange(event: BeforeKanbanStatusChangeEvent): void {
+        if (this.isSpaceClosed) {
+            event.Cancel = true;
+            return;
+        }
+        if (!this.canContribute) {
+            event.Cancel = true;
+            return;
+        }
+    }
 
     public currentPersonId = '';
 
@@ -1342,7 +1335,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isCreatingConversation = false;
 
     // Agent turn host rules
-    public spaceAgentReplyMode: AgentReplyMode = 'MentionOnly';
+    public spaceAgentReplyMode: SpaceChatAgentReplyMode = 'OnMention';
     public spaceAllowedAgentIds: string[] | null = null;
     public spaceAgentHistoryFloor: Date | null = null;
 
@@ -1996,6 +1989,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 library: 'Library',
                 work: 'Work',
                 chat: 'Chat',
+                discussions: 'Chat',
                 people: 'People',
                 settings: 'Settings',
             };
@@ -2050,6 +2044,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 library: 'Library',
                 work: 'Work',
                 chat: 'Chat',
+                discussions: 'Chat',
                 people: 'People',
                 settings: 'Settings',
             };
@@ -2093,10 +2088,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public onWorkViewModeChanged(mode: WorkViewMode): void {
-        this.workViewMode = mode;
-        this.UpdateQueryParams({ workView: mode });
-        this.RefreshView();
+    public onWorkViewModeChanged(mode: string): void {
+        if (mode === 'list' || mode === 'kanban' || mode === 'gantt') {
+            this.workViewMode = mode;
+            this.UpdateQueryParams({ workView: mode });
+            this.RefreshView();
+        }
     }
 
     public onTaskDoubleClicked(taskId: string): void {
@@ -2295,7 +2292,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
+    public handleAgentTurn: SpaceChatAgentTurnHandler = async (request: SpaceChatAgentTurnRequest): Promise<SpaceChatAgentTurnResult> => {
         try {
             const client = new CollaborationClient();
             const res = await client.PostSpaceMessage({

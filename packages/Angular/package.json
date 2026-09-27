@@ -30,8 +30,8 @@
     "@memberjunction/ng-conversations": "^6.1.2",
     "@memberjunction/ng-shared": "^6.1.2",
     "@memberjunction/ng-ui-components": "^6.1.2",
-    "@mj-biz-apps/tasks-entities": ">=1.5.0",
-    "@mj-biz-apps/tasks-ng": ">=1.5.0"
+    "@mj-biz-apps/tasks-entities": "^1.5.0",
+    "@mj-biz-apps/tasks-ng": "^1.5.0"
   },
   "devDependencies": {
     "@angular/compiler": "21.2.23",

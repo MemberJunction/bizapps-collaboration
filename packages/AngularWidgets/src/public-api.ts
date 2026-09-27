@@ -47,7 +47,14 @@ export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
-export { CollabSpaceChatComponent, RoomMessageItem } from './lib/space-chat.component';
+export {
+    CollabSpaceChatComponent,
+    RoomMessageItem,
+    type SpaceChatAgentReplyMode,
+    type SpaceChatAgentTurnHandler,
+    type SpaceChatAgentTurnRequest,
+    type SpaceChatAgentTurnResult,
+} from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

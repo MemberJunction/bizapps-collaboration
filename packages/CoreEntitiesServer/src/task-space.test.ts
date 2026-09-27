@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import type { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
+import { CollaborationTaskEntityServer } from '../dist/task-entity-server.js';
 import { assigneeSeatMessage, relevantFieldsChanged } from '../dist/task-space.js';
 
 describe('relevantFieldsChanged', () => {
@@ -132,6 +133,138 @@ describe('assigneeSeatMessage', () => {
 
             const msg = await assigneeSeatMessage(assignment);
             assert.equal(msg, null);
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+});
+
+describe('CollaborationTaskEntityServer status guardrails', () => {
+    function createMockStatusProvider(options: { closedAt: string | null; canContribute: boolean }) {
+        const provider = {
+            EntityByName(name: string) {
+                if (name === 'MJ_BizApps_Tasks: Tasks') return { ID: TASKS_ENTITY_ID, Name: name };
+                return { ID: '88888888-8888-4888-8888-888888888888', Name: name };
+            },
+            GetEntityObject() { return undefined; },
+            EntityByID() { return { Name: 'x' }; },
+            async RunView(params: { EntityName: string; ExtraFilter?: string }) {
+                const { EntityName } = params;
+                if (EntityName === 'MJ_BizApps_Tasks: Tasks') {
+                    return { Success: true, Results: [{ RootParentID: TASK_ID }] };
+                }
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    return { Success: true, Results: [{ SpaceID: CHILD_SPACE_ID, Band: 'Shared' }] };
+                }
+                if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                    return { Success: true, Results: [{ ID: CHILD_SPACE_ID, ParentID: null, InheritsMembership: false, ClosedAt: options.closedAt, OwnerID: '88888888-8888-4888-8888-888888888888', AgentRetrieval: 'Included', SpaceTypeID: '88888888-8888-4888-8888-888888888888' }] };
+                }
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    return { Success: true, Results: [{ SpaceID: CHILD_SPACE_ID, UserID: ASSIGNEE_USER_ID, Status: 'Active', Band: 'Shared', SpaceRoleTypeID: ROLE_ID }] };
+                }
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
+                    return { Success: true, Results: [{ ID: ROLE_ID, Level: 10, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: options.canContribute }] };
+                }
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+                    return { Success: true, Results: [{ ID: '88888888-8888-4888-8888-888888888888', DriverKey: null }] };
+                }
+                return { Success: true, Results: [] };
+            },
+            async RunViews(queries: Array<{ EntityName: string; ExtraFilter?: string }>) {
+                return Promise.all(queries.map(q => provider.RunView(q)));
+            },
+        };
+        return provider;
+    }
+
+    function makeTask(provider: object, user: UserInfo) {
+        const task = Object.create(CollaborationTaskEntityServer.prototype) as CollaborationTaskEntityServer;
+        Object.defineProperties(task, {
+            ID: { value: TASK_ID, writable: true },
+            IsSaved: { value: true, writable: true },
+            Fields: { value: [{ Name: 'Status', Dirty: true }], writable: true },
+            ProviderToUse: { value: provider, writable: true },
+            RunViewProviderToUse: { value: provider, writable: true },
+            ContextCurrentUser: { value: user, writable: true },
+        });
+        return task;
+    }
+
+    it('refuses status update when the space is closed', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: '2026-09-01', canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, false);
+            const err = res.Errors.find((e) => e.Source === 'Status');
+            assert.ok(err, 'Expected error on Status');
+            assert.equal(err?.Message, 'Task refused: cannot update a task in a closed space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses status update when user lacks canContribute', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: null, canContribute: false });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, false);
+            const err = res.Errors.find((e) => e.Source === 'Status');
+            assert.ok(err, 'Expected error on Status');
+            assert.equal(err?.Message, 'Task refused: you do not have permission to update task status in this space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('permits status update when user has canContribute in an open space', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: null, canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, true);
+            assert.equal(res.Errors.length, 0);
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('permits status update for staff users even if space role lacks canContribute', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: null, canContribute: false });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+            const task = makeTask(provider, user);
+            const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
+            assert.equal(res.Success, true);
+            assert.equal(res.Errors.length, 0);
         } finally {
             source.GetSystemUser = orig;
         }

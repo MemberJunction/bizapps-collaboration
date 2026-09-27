@@ -43,7 +43,7 @@ export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRe
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
 export { LoadTaskAttributionEntityServer } from './task-attribution.js';
-export { LoadCollaborationTaskEntityServer } from './task-entity-server.js';
+export { CollaborationTaskEntityServer, LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
 export { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';

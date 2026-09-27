@@ -186,48 +186,64 @@ interface SpaceNavPref {
             </div>
           </div>
 
-          <!-- Space Conversations Section (only if conversations exist) -->
-          @if (Conversations && Conversations.length > 0) {
-            <div class="nav-section-group">
-              @if (!isCollapsed) {
-                <div class="section-title-row">
-                  <span class="section-title">CONVERSATIONS</span>
-                </div>
+          <!-- Space Conversations Section -->
+          <div class="nav-section-group">
+            @if (!isCollapsed) {
+              <div class="section-title-row">
+                <span class="section-title">CONVERSATIONS</span>
+                <button
+                  type="button"
+                  class="btn-add-convo-inline"
+                  title="New conversation"
+                  aria-label="New conversation"
+                  (click)="onNewConversation()">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            }
+
+            <div class="nav-links-list">
+              @for (c of Conversations; track c.id) {
+                <button
+                  type="button"
+                  class="space-nav-link convo-link"
+                  [class.active]="ActiveTab === 'Chat' && ActiveConversationId === c.id"
+                  (click)="onConversationClick(c.id)"
+                  [title]="c.name">
+                  @if (c.kind === 'Private') {
+                    <i class="fa-solid fa-lock link-icon lock-ic"></i>
+                  } @else if (c.kind === 'Agent') {
+                    <i class="fa-solid fa-robot link-icon robot-ic"></i>
+                  } @else {
+                    <span class="convo-hash-prefix">#</span>
+                  }
+
+                  @if (!isCollapsed) {
+                    <span class="link-label">{{ c.name }}</span>
+                    @if (c.unreadCount) {
+                      <span class="link-badge unread">{{ c.unreadCount }}</span>
+                    }
+                    <span
+                      class="band-dot"
+                      [class.shared]="c.band === 'Shared'"
+                      [class.team]="c.band === 'Team'"
+                      [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
+                    </span>
+                  }
+                </button>
               }
 
-              <div class="nav-links-list">
-                @for (c of Conversations; track c.id) {
-                  <button
-                    type="button"
-                    class="space-nav-link convo-link"
-                    [class.active]="ActiveTab === 'Chat' && ActiveConversationId === c.id"
-                    (click)="onConversationClick(c.id)"
-                    [title]="c.name">
-                    @if (c.kind === 'Private') {
-                      <i class="fa-solid fa-lock link-icon lock-ic"></i>
-                    } @else if (c.kind === 'Agent') {
-                      <i class="fa-solid fa-robot link-icon robot-ic"></i>
-                    } @else {
-                      <span class="convo-hash-prefix">#</span>
-                    }
-
-                    @if (!isCollapsed) {
-                      <span class="link-label">{{ c.name }}</span>
-                      @if (c.unreadCount) {
-                        <span class="link-badge unread">{{ c.unreadCount }}</span>
-                      }
-                      <span
-                        class="band-dot"
-                        [class.shared]="c.band === 'Shared'"
-                        [class.team]="c.band === 'Team'"
-                        [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
-                      </span>
-                    }
-                  </button>
-                }
-              </div>
+              @if (!isCollapsed) {
+                <button
+                  type="button"
+                  class="btn-new-convo-row"
+                  (click)="onNewConversation()">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>New Conversation</span>
+                </button>
+              }
             </div>
-          }
+          </div>
 
         </div>
 
