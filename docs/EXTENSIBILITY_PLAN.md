@@ -372,8 +372,10 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 **Declaring.** A downstream app declares its table as an IsA child of `Space` in its own `codegen-schema-info.json`, disjoint (MJ's default). Collaboration changes nothing to allow it; bizapps-sales already subtypes bizapps-common's entities across schemas the same way.
 
 **Creating.**
-- Collaboration registers an `EntitySubtypeResolver` for Spaces in `collaboration-entities`, so the server and the browser both load it. It reads the type's `SpaceExtensionEntity` from Collaboration's cached types.
-- The Spaces entity also declares `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}`, as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does.
+- Collaboration registers an `EntitySubtypeResolver` for Spaces in `collaboration-entities`, so the server and the browser both load it. It reads the type's `SpaceExtensionEntity` from Collaboration's cached types, and answers MJ's two questions with its two methods ([§ 9.2](#92-mj-core-knowing-a-subtype-on-load)):
+  - `Resolve()`, for a new space, may await the space type engine's `Config()`, since its answer has to be right.
+  - `ResolveLoadHint()`, for a loaded space, reads the cached type only once that engine is loaded, and returns `null` (no hint) until then. It never queries.
+- The Spaces entity also declares `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}`, as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does. It doesn't set `UseForLoadedRecords`: where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load, and doesn't consult the selector.
 - The selector reaches a host only through Collaboration's release seed. The resolver doesn't depend on it.
 - The New Space flow creates a `SpaceEntity`, sets its fields, and calls `EnsureISAChild()`. MJ builds the subtype record, and one `Save()` writes both rows in one transaction.
 - The resolver answers "none" for plain types. Without it, `EnsureISAChild()` falls back to "the only subtype", so once Committee were Space's only subtype, every new space would become a committee.
@@ -388,8 +390,8 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 - **Space loads probe for the subtype.** Once Space has subtypes, every load of a space as an entity runs a query across the subtype views, then loads the subtype row. A `RunView` of entity objects does it once per row: in the browser, one round trip per space.
   - Collaboration's lists and the tree read plain rows (`ResultType: 'simple'`), and only the open space loads as an entity.
   - An engine that caches spaces caches them as plain rows. `BaseEngine` defaults to entity objects, which would pay the probe on every load and refresh.
-  - The space type engine does cache entity objects, since MJ's selector reads the cached type.
-  - [§ 9](#9-mj-changes) removes the probe when the type already says what the subtype is.
+  - The space type engine caches the types, and the resolver reads them for both of its answers.
+  - [§ 9.2](#92-mj-core-knowing-a-subtype-on-load) removes the probe when the cached type already says what the subtype is, through the resolver's `ResolveLoadHint()`.
 - **Security isn't inherited.** Space's read filter doesn't filter the subtype's views. Each downstream app writes its own filters with `fnCollaborationAccess`, which becomes a published contract ([§ 11](#11-security-rules-for-plug-ins)).
 - **Space's column names are shared** with every subtype. If a subtype has a column with the same name as a Space column, CodeGen logs a field collision and skips the subtype's inherited fields altogether. So:
   - a subtype never reuses a Space column's name: `Name`, `Description`, `ParentID`, `StartedAt`, `ClosedAt` and the rest, as the Space table defines them;
@@ -540,14 +542,16 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
   - Opening one space with a subtype takes three round trips in the browser.
   - A `RunView` of entity objects does it for every row: 201 round trips for 100 spaces.
   - Nothing caches the answer, and no option skips it. The `EntitySubtypeResolver` and `SubtypeSelector` are read only when a record is created.
-- **The change:** on load, MJ asks the resolver or the selector first.
+- **The change:** on load, MJ asks the entity's rule for a hint first, where the rule opts in.
   - The child load that happens anyway checks the answer. On a miss, MJ runs today's query.
-  - A selector answer comes only from rows already in a `BaseEngine` cache, so a hint never costs a query. This is the engine approach Amith suggested.
-  - A resolver opts in with `UseForLoadedRecords`, since resolvers written for create time may query.
-  - Overlapping hierarchies, entities with no rule, and records whose rule says "no subtype" load as today.
+  - A resolver answers two questions with two methods. `Resolve()` stays the create-time question: it may query or await an engine's `Config()`, and `null` means "no subtype". The new `ResolveLoadHint()` answers from memory only, and `null` means "no hint". Its base returns `null`, so overriding it is a resolver's opt-in.
+  - A selector opts in with `"UseForLoadedRecords": true`. Its answer comes only from rows already in a `BaseEngine` cache, so a hint never costs a query. This is the engine approach Amith suggested.
+  - A registered resolver owns the rule. While one is registered, MJ doesn't consult the selector, on create or on load.
+  - Overlapping hierarchies, entities with no rule, and records for which the rule gives no hint load as today.
 - **Effect:** opening a space goes from three round trips to two, and 100 spaces from 201 to 101. A later pull request could batch the rest.
-- **Tests:** a new `baseEntity.isa.loadHint.test.ts`, covering a right hint, a wrong hint, a null hint, a failing resolver, a hop missing from the cache, overlapping parents, and a user who can't read the child. Plus an IsA case in the entity-object `RunView` tests.
-- **Changeset:** patch.
+- **Tests:** a new `baseEntity.isa.loadHint.test.ts`, covering a right hint, a wrong hint, a null hint, a failing resolver, a hop missing from the cache, overlapping parents, and a user who can't read the child. Plus an IsA case in the entity-object `RunView` tests, and `entityInfo.subtypeSelector.test.ts` for the selector's flag.
+- **Changeset:** minor, since the flag is a field on a JSON type under MJ's `metadata/`.
+- **Where it is:** [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), in review.
 
 ### 9.3 On the MJ list, outside these pull requests
 
