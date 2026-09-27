@@ -6,7 +6,7 @@
 
 import type { Band, SpaceNode } from './rules.js';
 
-export type RetrievalMode = 'Private' | 'Shared' | 'Caller' | 'Intersection' | 'Union';
+export type RetrievalMode = 'Private' | 'Shared' | 'Caller' | 'Intersection';
 
 export type ScopeNarrowing = 'ThisSpace' | 'ThisSpaceAndSubspaces' | 'Everything';
 
@@ -137,11 +137,15 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
 
     const allInternalOrg = validPrincipals.every((p) => p.isInternalOrg === true);
 
+    const mode = audience.mode;
+    if ((mode === 'Private' || mode === 'Caller') && validPrincipals.length !== 1) {
+        return emptyResult;
+    }
+
     const isPrivate =
-        audience.mode === 'Private' ||
-        audience.mode === 'Caller' ||
-        audience.mode === 'Union' ||
-        (audience.mode === undefined && validPrincipals.length === 1);
+        mode === 'Private' ||
+        mode === 'Caller' ||
+        (mode === undefined && validPrincipals.length === 1);
 
     let candidateSpaceIds: Set<string>;
 
@@ -203,8 +207,8 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
             continue;
         }
 
-        // Excluded from parent scope (when queried from an ancestor, not the space itself)
-        if (spaceNode.agentRetrieval === 'ExcludedFromParentScope' && anchorId && anchorId !== spId) {
+        // Excluded from parent scope (search only when question originates from that space)
+        if (spaceNode.agentRetrieval === 'ExcludedFromParentScope' && anchorId !== spId) {
             continue;
         }
 

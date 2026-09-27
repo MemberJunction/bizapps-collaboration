@@ -14,12 +14,16 @@
  */
 
 import {
+    AuthorizationEvaluator,
+    type AuthorizationInfo,
     type BaseEntity,
     BaseEngine,
     type BaseEnginePropertyConfig,
     type IMetadataProvider,
+    LogError,
     Metadata,
     RegisterForStartup,
+    RunView,
     type UserInfo,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -368,4 +372,91 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         }
         return this._authorizationsByName.get(normalizeKey(name));
     }
+
+    /**
+     * Resolves a child authorization under the "Collaboration" root authorization strictly.
+     * Refuses name-only matches outside the Collaboration hierarchy.
+     */
+    public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
+        const md = provider ?? Metadata.Provider;
+        const auths = md.Authorizations ?? [];
+        const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
+        if (root) {
+            const child = auths.find(a =>
+                (a.Name ?? '').trim().toLowerCase() === subAuthName.trim().toLowerCase() &&
+                UUIDsEqual(a.ParentID, root.ID)
+            );
+            if (child) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.
+     */
+    public UserCanConfigureSpaceTypes(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Configure Space Types', md);
+        if (!auth) {
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /**
+     * Checks if a user has the "Configure Spaces" authorization under the "Collaboration" root AND
+     * holds a role with IsOwnerRole on the specified space.
+     * If spaceId is null/undefined, authorization alone suffices.
+     */
+    public async UserCanConfigureSpaces(
+        user: UserInfo,
+        spaceId?: string | null,
+        provider?: IMetadataProvider
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
+        if (!auth || !new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? [])) {
+            return false;
+        }
+
+        if (!spaceId) {
+            return true;
+        }
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
+            return false;
+        }
+
+        try {
+            const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
+            if (!memberEntity) return false;
+
+            const rv = RunView.FromMetadataProvider(md);
+            const memberRes = await rv.RunView<{ SpaceRoleTypeID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${user.ID}' AND Status = 'Active'`,
+                Fields: ['SpaceRoleTypeID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            }, user);
+
+            if (!memberRes.Success || !memberRes.Results?.[0]?.SpaceRoleTypeID) {
+                return false;
+            }
+
+            const roleTypeId = memberRes.Results[0].SpaceRoleTypeID;
+            const roleType = this.SpaceRoleTypeById(roleTypeId);
+            if (roleType) {
+                return !!roleType.IsOwnerRole;
+            }
+            return false;
+        } catch (e) {
+            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
+    }
 }
+

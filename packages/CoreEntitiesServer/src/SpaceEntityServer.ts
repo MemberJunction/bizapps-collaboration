@@ -69,38 +69,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (effectiveMd && typeof effectiveMd.EntityByName === 'function') {
                 try {
                     await CollaborationEngine.Instance.EnsureLoaded(user, effectiveMd);
-                } catch {
-                    // If engine cannot be loaded (e.g. mock test environment), fallback to RunViewProviderToUse below
+                } catch (e) {
+                    LogError(`Space change refused: failed to load CollaborationEngine: ${e instanceof Error ? e.message : String(e)}`);
+                    return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
                 }
             }
-            let found = CollaborationEngine.Instance.SpaceTypeById(typeId);
+            const found = CollaborationEngine.Instance.SpaceTypeById(typeId);
             if (!found) {
-                // If not found in engine cache (e.g. mock test environment), attempt read through RunViewProviderToUse
-                try {
-                    const system = await requireSystemUser(this);
-                    const direct = this.RunViewProviderToUse as { RunView?: (params: RunViewParams, user?: UserInfo) => Promise<RunViewResult<mjBizAppsCollaborationSpaceTypeEntity>> };
-                    const typeRows = typeof direct?.RunView === 'function' && !(direct instanceof Metadata)
-                        ? await direct.RunView({
-                            EntityName: 'MJ_BizApps_Collaboration: Space Types',
-                            ExtraFilter: `ID = '${typeId}'`,
-                            MaxRows: 1,
-                            ResultType: 'simple',
-                        }, system)
-                        : await (new RunView(this.RunViewProviderToUse)).RunView<mjBizAppsCollaborationSpaceTypeEntity>({
-                            EntityName: 'MJ_BizApps_Collaboration: Space Types',
-                            ExtraFilter: `ID = '${typeId}'`,
-                            MaxRows: 1,
-                            ResultType: 'simple',
-                        }, system);
-                    if (typeRows.Success && typeRows.Results?.[0]) {
-                        found = typeRows.Results[0];
-                    }
-                } catch {
-                    // Ignore transient error
-                }
-            }
-            if (!found) {
-                LogError(`Space change refused: space type ${typeId} could not be read`);
+                LogError(`Space change refused: space type ${typeId} could not be read from engine`);
                 return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
             }
             spaceType = found;
@@ -199,15 +175,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     if (currentAgent !== undefined && currentAgent !== defaultAgent) {
                         return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
                     }
-                }
-            }
-
-            const currentInherits = getFieldVal<boolean>(this, 'InheritsMembership');
-            if (!inheritsDirty && currentInherits === undefined) {
-                try {
-                    this.InheritsMembership = false;
-                } catch {
-                    Object.defineProperty(this, 'InheritsMembership', { value: false, writable: true, configurable: true });
                 }
             }
         }
@@ -458,6 +425,7 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     }
 
     const foundChat = chatExisting.Results?.[0];
+    const targetStatus: mjBizAppsCollaborationSpaceChatEntity['Status'] = space.ClosedAt ? 'Archived' : 'Active';
     if (!foundChat) {
         const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
         spaceChat.NewRecord();
@@ -465,17 +433,17 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         spaceChat.ConversationID = convId;
         spaceChat.Name = space.Name;
         spaceChat.Kind = 'Room';
-        spaceChat.Status = 'Active';
+        spaceChat.Status = targetStatus;
         const chatSaved = await spaceChat.Save();
         if (!chatSaved) {
             LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
         }
-    } else if (foundChat.Name !== space.Name || foundChat.Kind !== 'Room' || foundChat.Status !== 'Active') {
+    } else if (foundChat.Name !== space.Name || foundChat.Kind !== 'Room' || foundChat.Status !== targetStatus) {
         const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
         if (await spaceChat.Load(foundChat.ID)) {
             spaceChat.Name = space.Name;
             spaceChat.Kind = 'Room';
-            spaceChat.Status = 'Active';
+            spaceChat.Status = targetStatus;
             const chatSaved = await spaceChat.Save();
             if (!chatSaved) {
                 LogError(`Space chat room was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);

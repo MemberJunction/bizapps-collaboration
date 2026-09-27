@@ -81,12 +81,8 @@ export async function resolveAllowedAgents(
         }
     }
 
-    // Load SpaceType configuration from CollaborationEngine
-    if (provider && (!CollaborationEngine.Instance.Loaded || provider !== Metadata.Provider)) {
-        await CollaborationEngine.Instance.Config(true, undefined, provider);
-    } else {
-        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
-    }
+    // Load SpaceType configuration from CollaborationEngine once without per-request full reload
+    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
     const spaceType = spaceTypeId ? CollaborationEngine.Instance.SpaceTypeById(spaceTypeId) : undefined;
 
     let typeConfig: ISpaceTypeConfiguration | null = null;

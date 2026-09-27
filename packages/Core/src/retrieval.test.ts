@@ -370,4 +370,80 @@ describe('Audience-Bounded Retrieval & Verification Matrix (§ 10)', () => {
 
         assert.deepEqual(scopeDirect.allowedSpaceIds, ['space-isolated']);
     });
+
+    it('refuses Private or Caller mode if audience has multiple principals', () => {
+        const userA: PrincipalReach = {
+            userId: 'user-a',
+            reachableSpaceIds: ['space-board'],
+            canSeeTeamSpaceIds: ['space-board'],
+            isInternalOrg: true,
+        };
+        const userB: PrincipalReach = {
+            userId: 'user-b',
+            reachableSpaceIds: ['space-board'],
+            canSeeTeamSpaceIds: ['space-board'],
+            isInternalOrg: true,
+        };
+
+        const scopePrivateMulti = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a', 'user-b'],
+                mode: 'Private',
+            },
+            spaces: [boardSpace],
+            principalReaches: [userA, userB],
+        });
+        assert.deepEqual(scopePrivateMulti.allowedSpaceIds, [], 'Private mode with >1 principal must return empty allowedSpaceIds');
+
+        const scopeCallerMulti = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a', 'user-b'],
+                mode: 'Caller',
+            },
+            spaces: [boardSpace],
+            principalReaches: [userA, userB],
+        });
+        assert.deepEqual(scopeCallerMulti.allowedSpaceIds, [], 'Caller mode with >1 principal must return empty allowedSpaceIds');
+    });
+
+    it('excludes ExcludedFromParentScope space when question does not originate from that space', () => {
+        const isolatedSpace: SpaceNode = {
+            id: 'space-isolated-only',
+            parentId: null,
+            inheritsMembership: false,
+            ownerId: 'user-admin',
+            agentRetrieval: 'ExcludedFromParentScope',
+        };
+        const user: PrincipalReach = {
+            userId: 'user-a',
+            reachableSpaceIds: ['space-isolated-only'],
+            canSeeTeamSpaceIds: ['space-isolated-only'],
+            isInternalOrg: true,
+        };
+
+        // Queried without an anchor (e.g. cross-space chat): must NOT include isolated space
+        const scopeNoAnchor = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a'],
+                mode: 'Private',
+                anchorSpaceId: null,
+            },
+            spaces: [isolatedSpace],
+            principalReaches: [user],
+        });
+        assert.deepEqual(scopeNoAnchor.allowedSpaceIds, [], 'ExcludedFromParentScope without matching anchor must be excluded');
+
+        // Queried with anchor matching the space: MUST include isolated space
+        const scopeMatchingAnchor = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a'],
+                mode: 'Private',
+                anchorSpaceId: 'space-isolated-only',
+            },
+            spaces: [isolatedSpace],
+            principalReaches: [user],
+        });
+        assert.deepEqual(scopeMatchingAnchor.allowedSpaceIds, ['space-isolated-only'], 'ExcludedFromParentScope with matching anchor must be included');
+    });
 });
+

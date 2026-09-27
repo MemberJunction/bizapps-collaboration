@@ -113,8 +113,6 @@ export async function EnsureSpaceForRecord(
     newSpace.AnchorEntityID = entityId;
     newSpace.AnchorRecordID = params.recordId;
     newSpace.InheritsMembership = spaceType.DefaultInheritsMembership ?? true;
-    newSpace.PostCloseAccess = spaceType.PostCloseAccess ?? 'None';
-    newSpace.PostCloseAccessDays = spaceType.PostCloseAccessDays ?? null;
 
     const saved = await newSpace.Save();
     if (!saved) {

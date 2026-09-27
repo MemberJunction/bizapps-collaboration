@@ -4,7 +4,7 @@
  * Follows extensibility plan § 4, § 5, § 7.
  */
 
-import { BaseEntity, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
@@ -20,17 +20,28 @@ export class SpaceTypeEntityServer extends mjBizAppsCollaborationSpaceTypeEntity
         return false;
     }
 
+    private failDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         const user = this.ContextCurrentUser;
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
         if (!user) {
-            LogError('Space type delete refused: no signed-in user.');
-            return false;
+            const msg = 'Space type delete refused: no signed-in user.';
+            LogError(msg);
+            return this.failDelete(msg);
         }
         const canConfig = CollaborationEngine.Instance.UserCanConfigureSpaceTypes(user, md);
         if (!canConfig) {
-            LogError("Space type delete refused: user lacks 'Configure Space Types' authorization.");
-            return false;
+            const msg = "Space type delete refused: user lacks 'Configure Space Types' authorization.";
+            LogError(msg);
+            return this.failDelete(msg);
         }
         return super.Delete(options);
     }

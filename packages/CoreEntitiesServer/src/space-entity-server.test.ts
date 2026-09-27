@@ -3,6 +3,8 @@ import { after, before, describe, it } from 'node:test';
 import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import { isStaffUser, STAFF_ROLES } from '../dist/load-graph.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
+import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
 describe('isStaffUser', () => {
     it('returns true for UI, Developer, and Integration roles', () => {
@@ -95,6 +97,9 @@ describe('SpaceEntityServer create path validation', () => {
 
     const TYPE_ID = '44444444-4444-4444-8444-444444444444';
 
+    let origSpaceTypeById: typeof CollaborationEngine.Instance.SpaceTypeById;
+    let currentMockType: mjBizAppsCollaborationSpaceTypeEntity | undefined;
+
     function mockCreateSpace(options: {
         user: UserInfo;
         allowParentAssignees?: boolean;
@@ -105,6 +110,17 @@ describe('SpaceEntityServer create path validation', () => {
         defaultAllow?: boolean;
         defaultAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
     }) {
+        if (options.typeLookupSuccess === false) {
+            currentMockType = undefined;
+        } else {
+            currentMockType = {
+                ID: TYPE_ID,
+                Name: 'Standard',
+                DefaultAllowParentAssignees: options.defaultAllow ?? true,
+                DefaultAgentRetrieval: options.defaultAgent ?? 'Included',
+            } as Partial<mjBizAppsCollaborationSpaceTypeEntity> as mjBizAppsCollaborationSpaceTypeEntity;
+        }
+
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
         const fields: Array<{ Name: string; Dirty: boolean; OldValue?: string | number | boolean | null; Value?: string | number | boolean | null }> = [
             { Name: 'OwnerID', Dirty: false },
@@ -156,11 +172,20 @@ describe('SpaceEntityServer create path validation', () => {
 
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
     before(() => {
+        const engine = CollaborationEngine.Instance;
+        origSpaceTypeById = engine.SpaceTypeById.bind(engine);
+        engine.SpaceTypeById = (id: string | null | undefined) => {
+            if (id === TYPE_ID) {
+                return currentMockType;
+            }
+            return origSpaceTypeById(id);
+        };
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
     });
     after(() => {
+        CollaborationEngine.Instance.SpaceTypeById = origSpaceTypeById;
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
     });
 

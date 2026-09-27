@@ -104,7 +104,7 @@ function createMockProvider(options: {
 describe('CollaborationEngine authorization checks (Item 56)', () => {
     const adminUser = {
         ID: USER_ID,
-        UserRoles: [{ Role: 'Owner' } as Partial<UserRoleInfo> as UserRoleInfo],
+        UserRoles: [{ Role: 'Developer' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
     const staffUser = {
@@ -118,8 +118,8 @@ describe('CollaborationEngine authorization checks (Item 56)', () => {
     } as Partial<UserInfo> as UserInfo;
 
     const auths = createMockAuthorizations({
-        typesAllowedRoles: ['Owner', 'Developer'],
-        spacesAllowedRoles: ['Owner', 'Developer'],
+        typesAllowedRoles: ['Developer'],
+        spacesAllowedRoles: ['Developer'],
     });
 
     it('FindCollaborationAuthorization resolves child authorizations under Collaboration root', () => {
@@ -175,13 +175,13 @@ describe('CollaborationEngine authorization checks (Item 56)', () => {
 
 describe('SpaceTypeEntityServer Configure Space Types enforcement (Item 56)', () => {
     const auths = createMockAuthorizations({
-        typesAllowedRoles: ['Owner', 'Developer'],
-        spacesAllowedRoles: ['Owner', 'Developer'],
+        typesAllowedRoles: ['Developer'],
+        spacesAllowedRoles: ['Developer'],
     });
 
     const adminUser = {
         ID: USER_ID,
-        UserRoles: [{ Role: 'Owner' } as Partial<UserRoleInfo> as UserRoleInfo],
+        UserRoles: [{ Role: 'Developer' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
     const staffUser = {
@@ -202,6 +202,7 @@ describe('SpaceTypeEntityServer Configure Space Types enforcement (Item 56)', ()
             ProviderToUse: { value: provider, writable: true },
             RunViewProviderToUse: { value: provider, writable: true },
             _fieldCache: { value: new Map(), writable: true },
+            _resultHistory: { value: [], writable: true },
         });
         return type;
     }
@@ -230,18 +231,19 @@ describe('SpaceTypeEntityServer Configure Space Types enforcement (Item 56)', ()
         const type = mockSpaceType(staffUser, true);
         const deleted = await SpaceTypeEntityServer.prototype.Delete.call(type);
         assert.equal(deleted, false);
+        assert.ok(type.LatestResult?.CompleteMessage?.includes('Configure Space Types'));
     });
 });
 
 describe('SpaceEntityServer PostCloseAccess direct write guardrails (Item 56 / Item 12)', () => {
     const auths = createMockAuthorizations({
-        typesAllowedRoles: ['Owner', 'Developer'],
-        spacesAllowedRoles: ['Owner', 'Developer'],
+        typesAllowedRoles: ['Developer'],
+        spacesAllowedRoles: ['Developer'],
     });
 
     const adminUser = {
         ID: USER_ID,
-        UserRoles: [{ Role: 'Owner' } as Partial<UserRoleInfo> as UserRoleInfo],
+        UserRoles: [{ Role: 'Developer' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
     const staffUser = {
@@ -289,4 +291,55 @@ describe('SpaceEntityServer PostCloseAccess direct write guardrails (Item 56 / I
         const err = res.Errors.find((e) => e.Source === 'PostCloseAccess');
         assert.equal(err, undefined, 'Admin space owner should not be refused on PostCloseAccess');
     });
+
+    it('allows PostCloseAccess write during space close even without Configure Spaces', async () => {
+        const space = mockSpaceWithCloseWrite(staffUser, true, true);
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        const err = res.Errors.find((e) => e.Source === 'PostCloseAccess');
+        assert.equal(err, undefined, 'PostCloseAccess write during space close should be allowed');
+    });
 });
+
+describe('Metadata Role Lookups Static Check (Item 56)', () => {
+    it('verifies that every @lookup:MJ: Roles.Name=... names a valid MJ core role or role in metadata/roles', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const allowedRoles = new Set(['UI', 'Developer', 'Integration', 'Agent Administrator', 'Space Participant']);
+
+        let dir = process.cwd();
+        while (!fs.existsSync(path.join(dir, 'metadata')) && path.dirname(dir) !== dir) {
+            dir = path.dirname(dir);
+        }
+        const metadataDir = path.join(dir, 'metadata');
+
+        function scanDir(d: string): string[] {
+            const results: string[] = [];
+            const entries = fs.readdirSync(d, { withFileTypes: true });
+            for (const entry of entries) {
+                const full = path.join(d, entry.name);
+                if (entry.isDirectory()) {
+                    results.push(...scanDir(full));
+                } else if (entry.isFile() && entry.name.endsWith('.json')) {
+                    results.push(full);
+                }
+            }
+            return results;
+        }
+
+        const files = scanDir(metadataDir);
+        const lookupRegex = /@lookup:MJ:\s*Roles\.Name=([^"&}]+)/g;
+
+        for (const file of files) {
+            const content = fs.readFileSync(file, 'utf-8');
+            let match;
+            while ((match = lookupRegex.exec(content)) !== null) {
+                const roleName = match[1].trim();
+                assert.ok(
+                    allowedRoles.has(roleName),
+                    `File ${file} references invalid role '${roleName}'. Allowed roles are: ${Array.from(allowedRoles).join(', ')}`
+                );
+            }
+        }
+    });
+});
+

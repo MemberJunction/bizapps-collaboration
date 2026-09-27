@@ -41,7 +41,7 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                     }
                     if (statusChanged) {
                         const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
-                        if (!reach?.role.canContribute && !isStaffUser(user)) {
+                        if (!reach?.role.canContribute) {
                             return refuse(result, 'Status', 'Task refused: you do not have permission to update task status in this space.');
                         }
                     }

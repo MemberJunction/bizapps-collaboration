@@ -67,11 +67,7 @@ export async function resolveSpaceKnowledgeSources(
     const target = chain[chain.length - 1];
     const spaceTypeId = target.SpaceTypeID;
 
-    if (provider && (!CollaborationEngine.Instance.Loaded || provider !== Metadata.Provider)) {
-        await CollaborationEngine.Instance.Config(true, undefined, provider);
-    } else {
-        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
-    }
+    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
     const sourceIds = new Set<string>();
 
     for (const ks of CollaborationEngine.Instance.AppSpaceKnowledgeSources) {
@@ -120,11 +116,7 @@ export async function resolveSpaceAgentSkills(
     const target = chain[chain.length - 1];
     const spaceTypeId = target.SpaceTypeID;
 
-    if (provider && (!CollaborationEngine.Instance.Loaded || provider !== Metadata.Provider)) {
-        await CollaborationEngine.Instance.Config(true, undefined, provider);
-    } else {
-        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
-    }
+    await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
     const skillIds = new Set<string>();
 
     for (const sk of CollaborationEngine.Instance.AppSpaceAgentSkills) {

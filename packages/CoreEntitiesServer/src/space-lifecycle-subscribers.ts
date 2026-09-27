@@ -17,7 +17,7 @@ export interface SpaceLifecyclePayload {
     actingUserId: string;
     event: SpaceLifecycleEvent;
     timestamp: Date;
-    data?: Record<string, unknown>;
+    data?: Record<string, string | number | boolean | null | undefined | object>;
 }
 
 export abstract class BaseSpaceLifecycleSubscriber {
@@ -26,6 +26,10 @@ export abstract class BaseSpaceLifecycleSubscriber {
 
 interface ProviderWithRunAfterCommit {
     RunAfterCommit(task: () => Promise<void> | void, description?: string): void;
+}
+
+function hasRunAfterCommit(provider: object | null | undefined): provider is ProviderWithRunAfterCommit {
+    return !!provider && typeof (provider as Partial<ProviderWithRunAfterCommit>).RunAfterCommit === 'function';
 }
 
 /**
@@ -57,11 +61,9 @@ export function notifySpaceLifecycleSubscribers(
         }
     };
 
-    if (provider && typeof (provider as unknown as ProviderWithRunAfterCommit).RunAfterCommit === 'function') {
-        (provider as unknown as ProviderWithRunAfterCommit).RunAfterCommit(task, `SpaceLifecycle:${payload.event}:${payload.spaceId}`);
+    if (hasRunAfterCommit(provider)) {
+        provider.RunAfterCommit(task, `SpaceLifecycle:${payload.event}:${payload.spaceId}`);
     } else {
-        queueMicrotask(() => {
-            void task();
-        });
+        LogError(`Cannot dispatch space lifecycle subscribers for ${payload.event}: provider does not support RunAfterCommit`);
     }
 }

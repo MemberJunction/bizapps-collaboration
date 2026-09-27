@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
+import type { ValidationErrorInfo } from '@memberjunction/global';
 import type { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationTaskEntityServer } from '../dist/task-entity-server.js';
 import { assigneeSeatMessage, relevantFieldsChanged } from '../dist/task-space.js';
@@ -251,7 +252,7 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
         }
     });
 
-    it('permits status update for staff users even if space role lacks canContribute', async () => {
+    it('refuses status update for staff users without contributing seat', async () => {
         const source = WellKnownUserSource.Instance;
         const orig = source.GetSystemUser.bind(source);
         source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
@@ -263,8 +264,8 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
             } as Partial<UserInfo> as UserInfo;
             const task = makeTask(provider, user);
             const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
-            assert.equal(res.Success, true);
-            assert.equal(res.Errors.length, 0);
+            assert.equal(res.Success, false);
+            assert.ok(res.Errors.some((e: ValidationErrorInfo) => e.Source === 'Status'));
         } finally {
             source.GetSystemUser = orig;
         }

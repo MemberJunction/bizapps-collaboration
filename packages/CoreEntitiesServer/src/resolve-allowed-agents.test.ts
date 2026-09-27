@@ -9,6 +9,7 @@ import {
     resolveSpaceKnowledgeSources,
     resolveSpaceAgentSkills,
 } from '../dist/resolve-space-agent-context.js';
+import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 
 describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hierarchy', () => {
     const APP_AGENT_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
@@ -122,6 +123,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
 
     it('returns built-in default agent when no SpaceAgent rows exist', async () => {
         const provider = createMockProvider({});
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
         assert.deepEqual(result.allowedAgentIds, [COLLABORATION_DEFAULT_AGENT_ID]);
@@ -135,6 +137,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
         assert.deepEqual(result.allowedAgentIds, [APP_AGENT_ID]);
@@ -150,6 +153,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
         assert.deepEqual(result.allowedAgentIds, [APP_AGENT_ID, TYPE_AGENT_ID]);
@@ -164,6 +168,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
         assert.deepEqual(result.allowedAgentIds, [TYPE_AGENT_ID]);
@@ -185,6 +190,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
         assert.deepEqual(result.allowedAgentIds, [CHILD_AGENT_ID]);
@@ -199,6 +205,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { ContentSourceID: SOURCE_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const sources = await resolveSpaceKnowledgeSources(provider, CHILD_SPACE_ID);
 
         assert.equal(sources.length, 2);
@@ -213,6 +220,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { SkillID: SKILL_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
             ],
         });
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
         const skills = await resolveSpaceAgentSkills(provider, CHILD_SPACE_ID);
 
         assert.equal(skills.length, 2);
