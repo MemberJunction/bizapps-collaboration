@@ -18,25 +18,6 @@
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
     }
-  },
-  {
-    "primaryKey": {
-      "ID": "B8380182-1D5B-46C2-9E56-43B63CA09F1A"
-    },
-    "fields": {
-      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Space Types",
-      "RoleID": "@lookup:MJ: Roles.Name=Owner",
-      "Type": "Allow"
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "2D7D06E3-3B48-4228-B4C1-3091FF31CD9E"
-    },
-    "fields": {
-      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Spaces",
-      "RoleID": "@lookup:MJ: Roles.Name=Owner",
-      "Type": "Allow"
-    }
   }
 ]
+

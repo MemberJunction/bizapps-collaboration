@@ -14,8 +14,8 @@ A space is a tree. The root is a relationship: a client, a board, a cohort. The 
 - **A person reads the union of what their seats reach (D1). Built.** That's everything any of their seats reaches, anywhere in the tree, not the subtree of the page they're on. So sub-spaces don't only narrow: a director seated on a board and on its sealed compensation committee reads both, and a director seated only on the board doesn't reach the committee.
 - **The nearest seat governs. Built.** When several seats reach the same space, the one the fewest steps above it decides the role's flags there.
 - **One walk, in three places. Built.** `membershipReaches` in `packages/Core/src/rules.ts`, the server's write gates, and `fnCollaborationAccess` in the database. `fnCollaborationTasks` and `fnCollaborationAncestorMembers` build on the same walk. `Space.ParentID` doesn't carry MJ's `IsHierarchy` flag, so CodeGen emits no path columns or traversal functions for it.
-- **A type can default to sealed (D1). Planned: B8.2.** `SpaceType.DefaultInheritsMembership` is a column like `DefaultAllowParentAssignees`, so a type such as Compensation or Audit starts sealed. Today `Space.InheritsMembership` defaults to 1, and nothing on the type overrides it.
-- **Access after close. Planned: B8.2.** Today closing a space only stops new room messages: `fnCollaborationAccess` doesn't read `ClosedAt`, so everyone who reached the space still reads it (only `fnCollaborationAncestorMembers` honors `ClosedAt`). `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, on the type and overridable per space, replace what `Retention` meant, and `fnCollaborationAccess` enforces them.
+- **A type can default to sealed (D1). Built.** `SpaceType.DefaultInheritsMembership` is a column like `DefaultAllowParentAssignees`, so a type such as Compensation or Audit starts sealed. `Space.InheritsMembership` defaults to 0 (sealed) unless explicitly set or defaulted from type.
+- **Access after close. Built.** `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, on the type and overridable per space, replace what `Retention` meant, and `fnCollaborationAccess` enforces them.
 
 ## Bands
 
@@ -68,7 +68,7 @@ The engine reads role flags. It never compares role names.
 - **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
 - **No model runs yet.** The room's reply is a fixed sentence that names the items the asker may quote, and everyone in the room reads it. Since `002c2c5` (B0.2) it names only the room space's own Shared items, so it can't name a Team item, or an item in a sub-space with its own audience, to people who can't open it; a failed reply comes back as `AssistantError`. The module's loads refuse when a load comes back full (2,000 rows).
 
-**Planned: the audience of an answer decides what the agent may use (D2; A6, B2).**
+**Built: the audience of an answer decides what the agent may use (D2; A6, B2).**
 - **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
 - **In a shared conversation** (two or more people), it uses the intersection of what every current participant can read, with each participant's band. Nobody can change it, the asker included.
 - In both, the agent runs as the asking user, never as a service account, and the space's `AgentRetrieval` still applies. Its own memory follows the same rule.

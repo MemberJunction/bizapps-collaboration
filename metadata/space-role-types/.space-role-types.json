@@ -73,7 +73,7 @@
     },
     "fields": {
       "Code": "client-admin",
-      "Name": "Client admin",
+      "Name": "Outside admin",
       "Level": 20,
       "MaxGrantableLevel": 10,
       "CanInvite": true,
@@ -90,7 +90,7 @@
     },
     "fields": {
       "Code": "client-member",
-      "Name": "Client member",
+      "Name": "Outside member",
       "Level": 10,
       "MaxGrantableLevel": 0,
       "CanInvite": false,

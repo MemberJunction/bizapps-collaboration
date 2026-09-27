@@ -61,7 +61,7 @@
   },
   {
     "primaryKey": {
-      "ID": "9A0B1C2D-3E4F-4506-8A7B-1C2D3E4F5061"
+      "ID": "AAAFE023-798F-4A1A-94CD-04805B209379"
     },
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Role Types",
