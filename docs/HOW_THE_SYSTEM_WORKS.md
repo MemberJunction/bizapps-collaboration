@@ -88,7 +88,7 @@ The engine reads role flags. It never compares role names.
 
 ## Data a space doesn't own, and what it grants
 
-**Planned: PR #8** (the plan's D26 to D34; B14 to B20, A14 to A17).
+**Planned: PR #8** (the plan's D26 to D34; B14 to B20). The parts that need MJ's A14 to A17 open in a follow-up, once an MJ release carries them (D36). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
 - **Anchors (D26; B14).** A space can be anchored to one or more records it's about, each with a role, at most one primary. An anchor grants nothing by itself.
 - **Data reach (D28; B18).** A type declares which other apps' entities its participants may read, by a path to an anchor role, with a band and a field allow-list. A script turns the declarations into the Space Participant role's row-level security filters, one per entity, reviewed in `metadata/`. Reads stay in SQL, and a type that declares no reach on an entity gives its participants nothing from it.
 - **Grants (D27, D31; B15, B20).** A type, a space or a sub-space grants agents, actions, queries, views, dashboards, components and knowledge sources. A grant's bindings are filled in by the server from the space, its anchors and the caller: the model never sees a bound parameter, a client value for one is refused and logged, and a binding that doesn't resolve refuses the run. A grant on the Team band isn't offered in a chat where anyone can't see Team.

@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8.
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -82,7 +82,7 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
 - **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
   - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. The builder takes it over once #7 merges, and it's retargeted to `next` then, as #7 was when PR #3 merged.
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
-- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, and A18's. The builder implements it; Amith and MJ's reviewers review it. PR #8 pins the MJ release that carries it.
+- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, and A18's. Amith and MJ's reviewers review it now, and the builder builds it after #7 and PR #8 (D36). PR #8 builds on MemberJunction as released, and a follow-up pins the release that carries it.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
 ### 2.2 What PR #3 delivered
@@ -457,6 +457,12 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 - **v0.3's staged Committees path is withdrawn:** C1 to C3 give way to C4. It amends D9's stages; the IsA stays.
 - **A published package still takes a major version** for a breaking change, under MJ's publish-then-no-breaking-changes policy, as [§ 8](#8-workstream-c-committees-on-collaboration) already says.
 
+**D36. MJ's part comes after #7 and PR #8.** Amith, reviewing [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) on 09-27: the builder builds it once #7 and PR #8 are done. It amends [§ 9](#9-sequencing), which ran it beside them.
+- **PR #8 builds on MemberJunction as released,** and merges with [its plan's § 4](pr8-plan.md#4-what-it-depends-on) in force: no view grant with a binding (A14), no dashboard grant (A15), no action with a bound parameter given to an agent (A16), and no query, view, dashboard or component granted to a type that seats participants (A17's approval status, D34).
+- **So until the follow-up, participants reach other apps' data only through their type's data reach** (B18), with its generated filters.
+- **[§ 10](#10-verification)'s rows 13, 15, 16 and 19 are checked closed** in PR #8: what they need is refused. They pass open in the follow-up, with row 23's approved side and row 24 on a view.
+- **The follow-up** pins the MJ release that carries A14 to A17, and opens those grants. A18, and workstream T's calendar sync (T2), come with or after it.
+
 ## 4. The model
 
 **What Collaboration composes.** It adds the container and uses what MemberJunction and the sibling apps already have:
@@ -732,7 +738,7 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 
 **Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 is [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), in review. Collaboration builds against them once an MJ release carries them.
 
-**A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)), and the builder implements it. PR #8 needs A14 to A17; A18 serves workstream T.
+**A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
 
 ### A14. Properties on user views
 
@@ -1124,16 +1130,17 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 
 | When | MJ core (A) | Collaboration (B) | bizapps-tasks (T) | Committees (C) |
 |---|---|---|---|---|
-| **Now, beside #7** | The MJ pull request: A16, A14, A15, then A17 | PR #8's plan, as a draft | T1's schema, proposed for review | C0 |
+| **Now, beside #7** | The MJ pull request's plan, in review (D36) | PR #8's plan, as a draft | T1's schema, proposed for review | C0 |
 | **PR #8, stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
-| **PR #8, stage 2: the server** | An MJ release carries A14 to A17, and PR #8 pins it | B16, B17, B18, and B24's example type | T1 | |
-| **PR #8, stage 3: agents** | A18 | B20 | T2 with A18, and T3 | |
+| **PR #8, stage 2: the server** | | B16, B17, B18, and B24's example type, with PR #8's § 4 grants closed | T1 | |
+| **PR #8, stage 3: agents** | | B20 | T3 | |
 | **PR #8, stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
+| **After PR #8** | The MJ pull request: A16, A14, A15, A17, then A18, and a release | A follow-up that pins the release and opens § 4's grants | T2, on A18 | |
 | **After T ships** | | B23, in a later pull request | | C4, in a major version |
 
 - **PR #8 starts when #7 merges.** Its plan starts from the app as #7 leaves it, and takes the items #7 moved to it ([its § 1](pr8-plan.md#what-7-moved-here)).
-- **The MJ pull request runs beside #7 and PR #8.** Nothing in PR #8 that needs A14 to A17 merges before an MJ release carries them. Where one isn't out yet, the builder builds the parts that don't need it first, and wires the rest when it lands.
-- **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass.
+- **The MJ pull request comes after PR #8** (D36). PR #8 merges with the grants that need A14 to A17 closed, and the follow-up opens them once an MJ release carries them.
+- **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass. Under D36, rows 13, 15, 16 and 19 pass closed in PR #8.
 
 ## 10. Verification
 
@@ -1181,6 +1188,8 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | 22 | A meeting is created in a space (after workstream T) | It appears in the organizer's Outlook with the attendees, and an RSVP updates the attendee |
 | 23 | A query that isn't Canon-approved is granted to a type that seats participants | The grant is refused on save |
 | 24 | A binding's anchor role is missing | The run is refused; it never runs unbound |
+
+Under D36, PR #8 checks rows 13, 15, 16 and 19 closed, since what they need waits for the MJ release. They pass open in the follow-up, with row 23's approved side and row 24 on a view.
 
 **KPIs that must be measurable** once A2 and A4 land: zero cross-band retrievals in audit; zero sealed-source quotes; every AI message has an `AgentRunID` and source rows.
 

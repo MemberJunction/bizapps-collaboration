@@ -2,13 +2,13 @@
 
 **What this is.** The build plan for PR #8, the pull request after #7. It's a differential plan: it starts from the app as #7 leaves it, and lists what #8 changes, in order, with each change's acceptance checks. The reasons and the rules are in [the plan](plan.md), v0.5: its decisions D26 to D35 ([§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)) and its items B14 to B24 and A14 to A18. This document is the how and the order.
 
-**Version:** 2026-09-27, at #7's head `37e290b`. Amith then decided to finish #7 where it is: [its punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is #7's finish line, and moved #7's other open items here ([§ 1](#what-7-moved-here)) or to after this pull request. Stage 0 checks this plan against #7's final head.
+**Version:** 2026-09-27, at #7's head `37e290b`. Amith then decided to finish #7 where it is: [its punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is #7's finish line, and moved #7's other open items here ([§ 1](#what-7-moved-here)) or to after this pull request. Stage 0 checks this plan against #7's final head. The same day, the plan's D36 moved MJ's part after this pull request.
 
 **Who does what.**
 - **The builder builds it,** on `claude/hopeful-bell-6ldk4v-pr8`, once #7 merges. Until then it's a draft stacked on #7, holding this plan, the plan's v0.5 and the new README.
 - **The plan's author reviews it,** with one numbered punch list per push, as for #7, and pushes only document updates. Both sides merge the remote branch before pushing; nobody rebases or force-pushes.
 - **It merges once, when it's 100% done,** as #7 does (D12).
-- **MJ's part is its own pull request,** [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), which the builder implements too. PR #8 pins the MJ release that carries it.
+- **MJ's part is its own pull request,** [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), which the builder builds after this one (the plan's D36). PR #8 builds on MemberJunction as released, with [§ 4](#4-what-it-depends-on)'s grants closed, and a follow-up opens them once a release carries MJ#4789.
 
 ## Contents
 
@@ -127,12 +127,12 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 ## 4. What it depends on
 
 - **#7, merged.**
-- **The MJ pull request** ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)), in an MJ release PR #8 pins:
+- **Not the MJ pull request** ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)): the builder builds it after this one (the plan's D36). It brings:
   - **A14,** properties on user views, for `RunSpaceView` and every view grant with a binding;
   - **A15,** properties on dashboards and the component part, for `GetSpaceDashboard` and the data surface;
   - **A16,** bound, hidden action parameters, for B20's granted actions;
   - **A17,** locked query parameters, the server-set context variable, and the approval status D34 reads.
-- **Until a release carries one, fail closed:**
+- **So PR #8 merges with these closed,** and a follow-up opens them once an MJ release carries MJ#4789:
   - a view grant with a binding isn't offered before A14, and a view grant with none runs;
   - a dashboard grant isn't offered before A15;
   - an action grant with a bound parameter isn't given to an agent before A16, and one with none is;
@@ -262,6 +262,7 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
   - **`RunSpaceView(spaceId, grantId, properties?)`** runs the view as the caller, with the bound properties set through A14, so row-level security applies on top.
   - **`RunSpaceQuery(spaceId, grantId, parameters?)`** is D29's door. It runs the query with the bound values, as the system user, the way a stored procedure runs with its owner's rights, and passes the caller as the server-set context (A17), so the query's own SQL can check who asked. It records the caller and the values in the log.
   - **`GetSpaceDashboard(spaceId, grantId)`** returns the dashboard and its bound property values (A15). How its query parts and components run their queries is a design point ([§ 13](#13-design-points-to-settle-in-stage-1s-comment)).
+  - **Until the MJ release** (the plan's D36), each runs only what [§ 4](#4-what-it-depends-on) allows: `RunSpaceView` runs view grants with no binding, `RunSpaceQuery` runs without the server-set context, and `GetSpaceDashboard` has no grant to return.
 - **Every operation:**
   - parses its IDs before they reach a filter;
   - checks that the caller reaches the space, and that the grant is in force there for their band;
@@ -284,8 +285,9 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 - a `Chapter` entity and a `Member` entity with a `ChapterID`;
 - the type, with a data reach on Members, and its grants: a *Members* view with a bound `Chapter` property, an aggregate query (*renewals by month*) with a bound `ChapterID`, a dashboard with a bound `Chapter` property, and an action with a bound `ChapterID`;
 - the world's chapters 12 and 40, their spaces with a primary anchor each, a same-type sub-space and a sub-space of another type under chapter 12, and the personas L, M and N of the plan's § 10.
+- **under the plan's D36,** the chapter type's view, query and dashboard grants are refused on save until the follow-up, which is row 23's refusal. So the example also has a staff-only type, *Chapter staff*, anchored to a chapter the same way, whose space for chapter 12 holds the query with its bound `ChapterID`. The follow-up moves the grants back to the chapter type.
 
-**Accept:** B16's unit tests; the binding resolver's tests, with every source and each refusal; the generator's output for each declaration shape, and its `--check`; and the plan's § 10 rows 13, 14, 16, 17, 18, 21, 23 and 24 on both harnesses.
+**Accept:** B16's unit tests; the binding resolver's tests, with every source and each refusal; the generator's output for each declaration shape, and its `--check`; and, on both harnesses, the plan's § 10 rows 14, 17, 18 and 21, row 23's refusal, and row 24 on the *Chapter staff* query's binding. Rows 13 and 16 are checked closed: a view grant with a binding, and any query or view granted to L's type, are refused (§ 4).
 
 ## 8. Stage 3: agents
 
@@ -303,7 +305,7 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 4. **Knowledge:** the granted knowledge sources join the bounded search, under A10's classification.
 5. **The chat area** stays MJ's (D25). The allowed agents it shows come from the configuration's agent grants.
 
-**Accept:** the plan's § 10 rows 15, 19 and 20 on both harnesses; a unit test that the tool list for a turn with an outsider holds no Team grant; and a check that a model's value for a bound parameter is discarded and logged, once A16 is in a release.
+**Accept:** the plan's § 10 row 20 on both harnesses; a unit test that the tool list for a turn with an outsider holds no Team grant; and rows 15 and 19 checked closed: an action with a bound parameter isn't given to an agent, and a dashboard grant isn't offered (§ 4). The check that a model's value for a bound parameter is discarded and logged waits for the follow-up.
 
 ## 9. Stage 4: the screens
 
@@ -320,7 +322,7 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 
 ## 10. Verification
 
-- **The plan's § 10 matrix,** rows 13 to 21, 23 and 24, on both harnesses. Row 22 is B23's, after workstream T.
+- **The plan's § 10 matrix** on both harnesses: rows 14, 17, 18, 20 and 21, row 23's refusal and row 24 on the *Chapter staff* query's binding; and rows 13, 15, 16 and 19 checked closed (§ 4). Their open side, row 23's approved side and row 24 on a view are the follow-up's (the plan's D36). Row 22 is B23's, after workstream T.
 - **Unit tests** for every new rule, resolver and generator, in the packages they live in, run by the root `test` script.
 - **`persona-check.sql`** for the new tables and every declared entity.
 - **CI:** the build, the unit tests, the token and standards checks, the gallery, the generator's `--check`, and the database job from #7's B0.5 with both harnesses.
@@ -328,6 +330,7 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 
 ## 11. What isn't in PR #8
 
+- **The MJ pull request, and opening the grants [§ 4](#4-what-it-depends-on) holds closed.** Both come after this pull request (the plan's D36).
 - **Meetings in spaces (B23),** which wait for workstream T in bizapps-tasks and for A18.
 - **Workstream T and C4,** in their own repos.
 - **An approval workflow for the Canon** (the plan's open decision 12). PR #8 reads the approval status A17 adds; it doesn't build the screens that set it.
@@ -339,7 +342,7 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 - **Punch lists.** Each push gets one numbered list, with the same numbers each time. Put item numbers in commit messages (`feat(B15): …`), and keep them out of code comments.
 - **Metadata never goes in a migration.** A migration is DDL, extended properties and the appended CodeGen output. Rows are JSON under `metadata/`, with `uuidgen` IDs and no `sync` blocks. The release's metadata migration is the build engineer's.
 - **Data changes are proposed first,** in a comment, before their migration.
-- **Nothing that needs an unreleased MJ merges.** Build it behind the fail-closed rules of [§ 4](#4-what-it-depends-on), and wire it when the release lands.
+- **Nothing that needs an unreleased MJ merges.** [§ 4](#4-what-it-depends-on)'s rules keep those grants refused, and the follow-up wires them once the release lands (the plan's D36).
 - **Server first, screens last** (D16), and the screens are reviewed for function and completeness (D24).
 - **Everything on the provider you were given:** `ProviderToUse` and `RunViewToUse`, never `new Metadata()` or a zero-argument `new RunView()`; `.Success` checked; `Save()` and `Delete()` checked; no empty `catch`.
 
@@ -349,4 +352,4 @@ In `packages/ExampleSpaceTypes`, with its test-only migration:
 2. **Skills by ID in a grant's settings.** The extensibility plan's rule makes a pointer to a record that can be deleted a row. An agent's skills sit in its grant's settings instead, since they only narrow an agent that exists. The resolver drops a skill that's gone or outside `AcceptsSkills`, with a log. Confirm, or keep a skills table.
 3. **`SpaceTypeID` on `SpaceAnchor`.** Denormalized, it lets the database enforce one primary anchor per type, entity and record; the server keeps it in step when a space's type changes. Or drop it and enforce the key in the server class only.
 4. **Field-level flags on other apps' entities.** The generator can't turn on another app's entity's field-level flag. Say who does, for the example and for a real deployment.
-5. **The approval status before A17.** Until MJ has it, a grant to a type that seats participants is refused (§ 4). Confirm that's the rule, rather than a status of Collaboration's own.
+5. **The approval status before A17.** Until MJ has it, a grant to a type that seats participants is refused (§ 4), which under the plan's D36 holds for all of PR #8. Confirm that's the rule, rather than a status of Collaboration's own.
