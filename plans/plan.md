@@ -467,7 +467,7 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 **D37. #7's chat builds on MJ `next`.** Amith, answering punch list 6's chat call on 09-27: the team develops against MJ `next`, which carries A13.1 ([MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)), and MJ's next edge releases go out the week of 09-28. It's the call's option A, without cutting a 6.1.5 from `lts/6.1`.
 - **#7 finishes A:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its room. An outside participant also needs Create on Conversation Details, limited to the rooms they reach.
 - **#7 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
-- **D25 is still Amith's to confirm** (punch list item 62).
+- **D25 is settled** (Amith, 09-27): the chat is MJ's chat area as merged to MJ `next`, with MJ#4788's host rules set from the server. #7's plan carries the rewritten D25 (`455b88c`), and this plan takes it when #7 merges.
 
 ## 4. The model
 
