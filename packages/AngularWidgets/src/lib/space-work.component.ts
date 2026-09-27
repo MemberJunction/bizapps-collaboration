@@ -280,7 +280,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .filter-group {
         display: flex;
-        background: var(--mj-bg-subtle, #f1f5f9);
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
         padding: 3px;
         border-radius: 6px;
         gap: 2px;
@@ -378,7 +378,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         padding: 10px 16px;
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-card, #f8fafc);
         border-bottom: 1px solid var(--mj-border-subtle, #e2e8f0);
         font-size: 12px;
         font-weight: 600;
@@ -408,7 +408,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .task-row:last-child { border-bottom: none; }
       .task-row:hover {
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-hover, #f8fafc);
       }
       .task-row.is-done {
         opacity: 0.65;

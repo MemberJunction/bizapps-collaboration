@@ -198,7 +198,7 @@ export interface RoomMessageItem {
         gap: 6px;
         font-size: 12px;
         color: var(--mj-text-secondary, #64748b);
-        background: var(--mj-bg-subtle, #f1f5f9);
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
         padding: 4px 10px;
         border-radius: 6px;
       }
@@ -298,7 +298,7 @@ export interface RoomMessageItem {
         max-width: 400px;
         padding: 32px 24px;
         border-radius: 12px;
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-card, #f8fafc);
         border: 1px dashed var(--mj-border-strong, #cbd5e1);
         display: flex;
         flex-direction: column;
