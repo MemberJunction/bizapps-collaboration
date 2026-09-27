@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AuthorizationInfo, type EntityInfo, EntityUserPermissionInfo, type IMetadataProvider, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
+import type { mjBizAppsCollaborationSpaceRoleTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { SpaceTypeEntityServer } from '../dist/SpaceTypeEntityServer.js';
@@ -121,6 +122,11 @@ describe('CollaborationEngine authorization checks (Item 56)', () => {
         typesAllowedRoles: ['Developer'],
         spacesAllowedRoles: ['Developer'],
     });
+
+    CollaborationEngine.Instance.SetSpaceRoleTypesForTesting([
+        { ID: OWNER_ROLE_ID, Code: 'owner', Name: 'Owner', IsOwnerRole: true } as Partial<mjBizAppsCollaborationSpaceRoleTypeEntity> as mjBizAppsCollaborationSpaceRoleTypeEntity,
+        { ID: MEMBER_ROLE_ID, Code: 'member', Name: 'Member', IsOwnerRole: false } as Partial<mjBizAppsCollaborationSpaceRoleTypeEntity> as mjBizAppsCollaborationSpaceRoleTypeEntity,
+    ]);
 
     it('FindCollaborationAuthorization resolves child authorizations under Collaboration root', () => {
         const provider = createMockProvider({ authorizations: auths });

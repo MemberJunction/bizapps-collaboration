@@ -246,6 +246,15 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return this._spaceRoleTypesByCode?.get(normalizeKey(code));
     }
 
+    /**
+     * Testing hook: populates in-memory space role types without running a full database config (D19).
+     */
+    public SetSpaceRoleTypesForTesting(roleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[]): void {
+        this._spaceRoleTypes = roleTypes;
+        this._spaceRoleTypesById = null;
+        this._spaceRoleTypesByCode = null;
+    }
+
     // ─── Settings ──────────────────────────────────────────────────────────────
 
     public GetApplicationSetting(name: string): string | undefined {
@@ -454,22 +463,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }, user);
 
                 if (memberRes.Success && memberRes.Results?.[0]?.SpaceRoleTypeID) {
-                    const roleTypeId = memberRes.Results[0].SpaceRoleTypeID;
-                    const roleType = this.SpaceRoleTypeById(roleTypeId);
-                    if (roleType) {
-                        return !!roleType.IsOwnerRole;
-                    }
-                    const roleRes = await rv.RunView<{ ID: string; IsOwnerRole: boolean }>({
-                        EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
-                        ExtraFilter: `ID = '${roleTypeId}'`,
-                        Fields: ['ID', 'IsOwnerRole'],
-                        ResultType: 'simple',
-                        MaxRows: 1,
-                    }, user);
-                    if (roleRes.Success && roleRes.Results?.[0]) {
-                        return !!roleRes.Results[0].IsOwnerRole;
-                    }
-                    return false;
+                    const roleType = this.SpaceRoleTypeById(memberRes.Results[0].SpaceRoleTypeID);
+                    return !!roleType?.IsOwnerRole;
                 }
 
                 const spaceRes: RunViewResult<{ ParentID: string | null; InheritsMembership: boolean }> = await rv.RunView<{ ParentID: string | null; InheritsMembership: boolean }>({
