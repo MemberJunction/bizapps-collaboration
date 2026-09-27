@@ -1071,7 +1071,7 @@ Add to `__mj_BizAppsTasks`:
 | Entity | Contents |
 |---|---|
 | `MeetingType` | A lookup, with a default duration and an agenda template |
-| `Meeting` | Committees' fields, with no committee column |
+| `Meeting` | Committees' fields, with no committee column and no `CalendarEventID`: a meeting's event is its row in `MJ: Calendar Event Links` |
 | `MeetingLink` | `EntityID` and `RecordID`, the way `TaskLink` ties a task to any record: how a meeting belongs to a space, a committee or a deal |
 | `AgendaItem` | As in Committees, with `ItemType` a lookup table, since *Vote* is governance |
 | `MeetingAttendee` | An attendee with an RSVP and an attendance status. `TaskAssignment`'s columns allow any entity, but every consumer reads a Person, so say which kinds of attendee are supported: a Person, and a guest by email |
@@ -1083,6 +1083,7 @@ Add to `__mj_BizAppsTasks`:
 ### T2. Calendar sync
 
 - Create and sync meetings through A18, from the organizer's calendar, and keep the event's link in `MJ: Calendar Event Links`.
+- **The steps, and the rule with bizapps-common,** are in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)'s plan, § 6.1. bizapps-common's activity sync already imports Outlook events as *Meeting* activities. So only bizapps-tasks writes to calendars, both sides keep the event's iCalendar UID, and common links the activity to the meeting through that UID, without naming bizapps-tasks.
 - Keep an `.ics` download as a fallback, built on the server with a `DTSTAMP`. Committees builds its `.ics` in the browser, for the member's next meeting only, without the `DTSTAMP` RFC 5545 requires.
 - Finish the Teams and Meet invitation stubs, Meet's delete, and Meet's create, which ignores its input. Call delete when a meeting is cancelled, and seed the providers.
 
@@ -1098,7 +1099,7 @@ Approving minutes is a governance act, and stays in Committees.
 
 - **Components:** a meetings list, a calendar view, a meeting page with an agenda builder, and Committees' live-meeting screen made generic.
 - **Split `tasks-ng`.** It depends on Explorer's `ng-shared`, so Collaboration's widgets can't use it (the UX plan's § 3). The peer is imported in three files (`open-task-record.ts`, `task-overview.component.ts` and `tasks-sections.component.ts`), and the package's one entry point loads them all. Split out a `tasks-ng-widgets` package now, while adding the meeting components, so Collaboration composes meetings and tasks at the widget layer. MJ's `RecordNavigationAdapter`, in `ng-base-types` since 6.1.0, replaces the record-open use.
-- **View types:** a Calendar view type, and Gantt if wanted. View types are MJ core's, so that part is MJ work, with the MJ pull request or after it.
+- **View types:** the Calendar view type is MJ core's, in A18 ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). A Gantt view, if wanted, is MJ work after it.
 
 **Accept:** a meeting created from a space appears in the organizer's Outlook with its attendees; its agenda is built in the app; its transcript produces notes and proposed tasks; and all of it works with no Committees package installed.
 
