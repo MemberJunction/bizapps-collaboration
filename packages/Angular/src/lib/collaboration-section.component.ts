@@ -1995,6 +1995,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 library: 'Library',
                 work: 'Work',
                 chat: 'Chat',
+                discussions: 'Chat',
                 people: 'People',
                 settings: 'Settings',
             };
@@ -2049,6 +2050,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 library: 'Library',
                 work: 'Work',
                 chat: 'Chat',
+                discussions: 'Chat',
                 people: 'People',
                 settings: 'Settings',
             };
