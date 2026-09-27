@@ -142,14 +142,18 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
 
         const configDirty = this.Fields.some((f) => f.Name === 'Configuration' && f.Dirty);
-        if (configDirty) {
+        const closeFieldsDirty = this.Fields.some((f) => (f.Name === 'PostCloseAccess' || f.Name === 'PostCloseAccessDays') && f.Dirty);
+        const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
+
+        if (configDirty || (closeFieldsDirty && !isClosing)) {
             const canConfig = await CollaborationEngine.Instance.UserCanConfigureSpaces(
                 user,
                 this.IsSaved ? this.ID : null,
                 asMetadata(this.ProviderToUse) ?? Metadata.Provider
             );
             if (!canConfig) {
-                return fail(result, 'Configuration', "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
+                const errorField = closeFieldsDirty && !isClosing ? 'PostCloseAccess' : 'Configuration';
+                return fail(result, errorField, "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
             }
         }
 
@@ -271,7 +275,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
 
         const isNew = !this.IsSaved;
-        const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
         const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
         const isMoving = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
 

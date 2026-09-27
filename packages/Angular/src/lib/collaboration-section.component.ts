@@ -1,8 +1,8 @@
 import { Component, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { AuthorizationEvaluator, CompositeKey, LogError, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity, MJConversationEntity } from '@memberjunction/core-entities';
@@ -1131,14 +1131,44 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public breadcrumbs: BreadcrumbItem[] = [];
 
-    public tabs: TabItem[] = [
-        { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
-        { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open' },
-        { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check' },
-        { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' },
-        { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group' },
-        { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' },
-    ];
+    public get canConfigureCurrentSpace(): boolean {
+        if (!this.currentUser) return false;
+        const md = Metadata.Provider;
+        const auths = md.Authorizations ?? [];
+        const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
+        const auth = auths.find(a =>
+            (a.Name ?? '').trim().toLowerCase() === 'configure spaces' &&
+            (!root || UUIDsEqual(a.ParentID, root.ID))
+        );
+        if (!auth) return false;
+        const hasAuth = new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, this.currentUser, auths);
+        if (!hasAuth) return false;
+
+        // User must hold an owner role on the space, or be the space owner, or be a staff admin
+        if (this.activeSpaceRecord?.OwnerID && this.currentUser.ID && UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID)) {
+            return true;
+        }
+        const member = this.spaceMembers.find(m => UUIDsEqual(m.userId, this.currentUser?.ID));
+        if (member && member.status === 'Active' && (member.roleCode === 'owner' || member.roleName.toLowerCase().includes('owner'))) {
+            return true;
+        }
+        const isStaffAdmin = this.currentUser.UserRoles?.some(r => r.Role && (r.Role === 'Owner' || r.Role === 'Developer'));
+        return !!isStaffAdmin;
+    }
+
+    public get tabs(): TabItem[] {
+        const list: TabItem[] = [
+            { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
+            { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open' },
+            { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check' },
+            { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' },
+            { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group' },
+        ];
+        if (this.canConfigureCurrentSpace) {
+            list.push({ id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' });
+        }
+        return list;
+    }
 
     // Navigation Rail data
     public inboxCount = 0;
@@ -2082,6 +2112,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onTabSelectRequested(tabId: string): void {
+        if (tabId === 'Settings' && !this.canConfigureCurrentSpace) {
+            tabId = 'Overview';
+        }
         this.activeTab = tabId;
         this.UpdateQueryParams({ tab: tabId.toLowerCase() });
         this.syncStateWithAgent();
@@ -2625,6 +2658,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onSaveSettings(settings: SpaceSettingsModel): Promise<void> {
+        if (!this.canConfigureCurrentSpace) {
+            LogError('Cannot save space settings: user lacks Configure Spaces authorization');
+            return;
+        }
         this.isSavingSettings = true;
         this.settingsSaveSuccess = '';
         this.RefreshView();
@@ -2646,7 +2683,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 spaceEntity.InheritsMembership = settings.inheritsMembership;
                 spaceEntity.AgentRetrieval = settings.agentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
                 spaceEntity.Retention = (settings.retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
-                await spaceEntity.Save();
+                const saveOk = await spaceEntity.Save();
+                if (!saveOk) {
+                    const errMsg = spaceEntity.LatestResult?.CompleteMessage || 'Failed to save space settings.';
+                    LogError('Failed to save space settings: ' + errMsg);
+                    this.isSavingSettings = false;
+                    this.RefreshView();
+                    return;
+                }
 
                 this.spaceTitle = settings.name;
                 this.spaceSubtitle = settings.description;

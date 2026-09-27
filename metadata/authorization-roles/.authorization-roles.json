@@ -25,7 +25,7 @@
     },
     "fields": {
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Space Types",
-      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "RoleID": "@lookup:MJ: Roles.Name=Owner",
       "Type": "Allow"
     }
   },
@@ -35,7 +35,7 @@
     },
     "fields": {
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Spaces",
-      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "RoleID": "@lookup:MJ: Roles.Name=Owner",
       "Type": "Allow"
     }
   }
