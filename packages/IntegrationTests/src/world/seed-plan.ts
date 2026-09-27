@@ -46,6 +46,89 @@ export async function seedWorldPlan(input: {
     const visible = await taskIds(input.provider, bea, `(ID IN ('${plan}', '${visit}', '${audit}', '${prep}'))`);
     if (!visible.has(plan.toLowerCase()) || !visible.has(visit.toLowerCase())) throw new Error('Bea cannot see the Discovery plan.');
     if (visible.has(audit.toLowerCase()) || visible.has(prep.toLowerCase())) throw new Error('Bea can see a task outside Discovery Shared.');
+
+    // Enrich with additional realistic tasks across spaces for Kanban and Gantt views
+    const northwind = input.spaceId('northwind');
+    const delivery = input.spaceId('delivery');
+
+    // Committee tasks
+    const riskTask = await filedRoot(input.provider, ada, committee, 'Risk Assessment Matrix', 'Shared');
+    await updateTaskDetails(input.provider, ada, riskTask, {
+        Status: 'InProgress',
+        Priority: 'High',
+        StartedAt: new Date(Date.now() - 3 * 86400000),
+        DueAt: new Date(Date.now() + 5 * 86400000),
+        Description: 'Review operational and financial risks for Q3/Q4 reporting.',
+    });
+
+    const controlsTask = await filedRoot(input.provider, ada, committee, 'Quarterly Controls Sign-off', 'Team');
+    await updateTaskDetails(input.provider, ada, controlsTask, {
+        Status: 'Open',
+        Priority: 'Critical',
+        StartedAt: new Date(Date.now() + 2 * 86400000),
+        DueAt: new Date(Date.now() + 10 * 86400000),
+        Description: 'Sign off internal control certifications across business units.',
+    });
+
+    // Northwind tasks
+    const execReview = await filedRoot(input.provider, ada, northwind, 'Executive Steering Review', 'Shared');
+    await updateTaskDetails(input.provider, ada, execReview, {
+        Status: 'Completed',
+        Priority: 'Medium',
+        StartedAt: new Date(Date.now() - 14 * 86400000),
+        DueAt: new Date(Date.now() - 2 * 86400000),
+        Description: 'Bi-weekly executive steering committee review with Northwind stakeholders.',
+    });
+
+    const sowExtension = await filedRoot(input.provider, ada, northwind, 'SOW 2026 Extension', 'Team');
+    await updateTaskDetails(input.provider, ada, sowExtension, {
+        Status: 'InProgress',
+        Priority: 'High',
+        StartedAt: new Date(Date.now() - 5 * 86400000),
+        DueAt: new Date(Date.now() + 12 * 86400000),
+        Description: 'Draft and review statement of work extension for FY2026 deliverables.',
+    });
+
+    // Delivery tasks
+    const apiMigration = await filedRoot(input.provider, ada, delivery, 'API Gateway Migration', 'Shared');
+    await updateTaskDetails(input.provider, ada, apiMigration, {
+        Status: 'InProgress',
+        Priority: 'Critical',
+        StartedAt: new Date(Date.now() - 7 * 86400000),
+        DueAt: new Date(Date.now() + 7 * 86400000),
+        Description: 'Migrate legacy REST routes to MemberJunction GraphQL and OpenApp engine.',
+    });
+
+    const smokeTests = await filedRoot(input.provider, ada, delivery, 'Automated Smoke Tests', 'Shared');
+    await updateTaskDetails(input.provider, ada, smokeTests, {
+        Status: 'Open',
+        Priority: 'Medium',
+        StartedAt: new Date(Date.now() + 4 * 86400000),
+        DueAt: new Date(Date.now() + 14 * 86400000),
+        Description: 'End-to-end integration and smoke test coverage across all delivery tiers.',
+    });
+}
+
+async function updateTaskDetails(
+    provider: IMetadataProvider,
+    actor: UserInfo,
+    taskId: string,
+    details: {
+        Status?: mjBizAppsTasksTaskEntity['Status'];
+        Priority?: mjBizAppsTasksTaskEntity['Priority'];
+        StartedAt?: Date;
+        DueAt?: Date;
+        Description?: string;
+    }
+): Promise<void> {
+    const task = await new Metadata().GetEntityObject<mjBizAppsTasksTaskEntity>(TASKS, actor);
+    if (!await task.Load(taskId)) return;
+    if (details.Status) task.Status = details.Status;
+    if (details.Priority) task.Priority = details.Priority;
+    if (details.StartedAt) task.StartedAt = details.StartedAt;
+    if (details.DueAt) task.DueAt = details.DueAt;
+    if (details.Description) task.Description = details.Description;
+    await task.Save();
 }
 
 async function whenAllowed(provider: IMetadataProvider, preferred: UserInfo, entityName: string, write: (actor: UserInfo) => Promise<void>): Promise<void> {

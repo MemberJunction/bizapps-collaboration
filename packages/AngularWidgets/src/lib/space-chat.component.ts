@@ -119,8 +119,20 @@ export interface RoomMessageItem {
           ></textarea>
 
           <div class="composer-actions">
-            <div class="composer-hint">
-              <span><strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline</span>
+            <div class="composer-left-actions">
+              <button
+                type="button"
+                class="assistant-toggle-btn"
+                [class.active]="askAssistant"
+                (click)="askAssistant = !askAssistant"
+                title="Toggle Space Assistant response"
+              >
+                <i class="fa-solid fa-sparkles"></i>
+                <span>Ask Assistant</span>
+              </button>
+              <div class="composer-hint">
+                <span><strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline</span>
+              </div>
             </div>
 
             <button
@@ -345,6 +357,40 @@ export interface RoomMessageItem {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 12px;
+      }
+      .composer-left-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .assistant-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        color: var(--mj-text-secondary, #475569);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .assistant-toggle-btn:hover {
+        background: var(--mj-bg-surface-card, #e2e8f0);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .assistant-toggle-btn.active {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
+        font-weight: 600;
+      }
+      .assistant-toggle-btn.active i {
+        color: var(--mj-brand-primary, #0076b6);
       }
       .composer-hint {
         font-size: 11px;
@@ -380,11 +426,12 @@ export class CollabSpaceChatComponent implements AfterViewChecked {
   @Input() AudienceBand: SpaceBand = 'Shared';
   @Input() ParticipantCount = 0;
 
-  @Output() SendMessageRequested = new EventEmitter<string>();
+  @Output() SendMessageRequested = new EventEmitter<string | { text: string; executeAgent?: boolean }>();
 
   @ViewChild('messagesContainer') private messagesContainer?: ElementRef<HTMLDivElement>;
 
   public newMessageText = '';
+  public askAssistant = false;
   private shouldScroll = false;
 
   public ngAfterViewChecked(): void {
@@ -404,7 +451,12 @@ export class CollabSpaceChatComponent implements AfterViewChecked {
   public sendMessage(): void {
     const text = this.newMessageText.trim();
     if (!text) return;
-    this.SendMessageRequested.emit(text);
+    const shouldExecute = this.askAssistant || /(@assistant|@agent|^\/ask|\?)/i.test(text);
+    if (shouldExecute) {
+      this.SendMessageRequested.emit({ text, executeAgent: true });
+    } else {
+      this.SendMessageRequested.emit(text);
+    }
     this.newMessageText = '';
     this.shouldScroll = true;
   }

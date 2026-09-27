@@ -1,8 +1,8 @@
 import { Component, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity } from '@memberjunction/core-entities';
 import {
@@ -12,6 +12,12 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
+import {
+    TaskKanbanComponent,
+    TaskGanttComponent,
+    MyTasksComponent,
+    ApprovalInboxComponent,
+} from '@mj-biz-apps/tasks-ng';
 import {
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
@@ -99,6 +105,10 @@ interface RawSpaceTypeRecord {
         CollabSpacePeopleComponent,
         CollabSpaceSettingsComponent,
         CollaborationNoAccessComponent,
+        TaskKanbanComponent,
+        TaskGanttComponent,
+        MyTasksComponent,
+        ApprovalInboxComponent,
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
     styles: [`
@@ -144,6 +154,291 @@ interface RawSpaceTypeRecord {
         }
         .row { display: flex; align-items: center; }
         .gap8 { gap: 8px; }
+
+        .collab-home-view {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow-y: auto;
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        .home-header {
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .home-greeting {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .home-hero-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+        }
+        .home-title {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .home-subtitle {
+            margin: 4px 0 0;
+            font-size: 13.5px;
+            color: var(--mj-text-secondary, #64748b);
+        }
+        .home-quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        .stat-pill {
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .stat-pill:hover {
+            background: var(--mj-bg-surface-hover, #f1f5f9);
+            border-color: var(--mj-brand-primary, #0284c7);
+            transform: translateY(-1px);
+        }
+        .stat-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--mj-brand-primary, #0284c7);
+        }
+        .stat-lbl {
+            font-size: 12px;
+            color: var(--mj-text-secondary, #64748b);
+            font-weight: 500;
+        }
+        .spaces-directory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .space-directory-card {
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 10px;
+            padding: 18px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .space-directory-card:hover {
+            border-color: var(--mj-brand-primary, #0284c7);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+            transform: translateY(-2px);
+        }
+        .card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .space-icon-box {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .space-type-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--mj-bg-surface-sunken, #f1f5f9);
+            color: var(--mj-text-secondary, #475569);
+        }
+        .space-name {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .space-desc {
+            margin: 0;
+            font-size: 12.5px;
+            color: var(--mj-text-secondary, #64748b);
+            line-height: 1.4;
+            flex: 1;
+        }
+        .space-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            border-top: 1px solid var(--mj-border-default, #f1f5f9);
+            padding-top: 8px;
+        }
+        .open-link {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--mj-brand-primary, #0284c7);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .section-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .section-badge {
+            font-size: 12px;
+            color: var(--mj-text-muted, #64748b);
+        }
+        .collab-inbox-view, .collab-tasks-view, .collab-files-view {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px 24px;
+            box-sizing: border-box;
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+            gap: 16px;
+        }
+        .section-view-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .header-icon-box {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ffffff;
+            flex-shrink: 0;
+        }
+        .header-icon-box.inbox {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+        .header-icon-box.tasks {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .header-icon-box.files {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        }
+        .view-title {
+            margin: 0;
+            font-size: 19px;
+            font-weight: 700;
+            color: var(--mj-text-primary, #0f172a);
+        }
+        .view-subtitle {
+            margin: 3px 0 0;
+            font-size: 13px;
+            color: var(--mj-text-secondary, #64748b);
+        }
+        .inbox-content, .tasks-content, .files-content {
+            background: var(--mj-bg-surface-card, #ffffff);
+            border: 1px solid var(--mj-border-default, #e2e8f0);
+            border-radius: 10px;
+            padding: 16px;
+            min-height: 480px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            flex: 1;
+        }
+        .work-tab-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+            flex: 1;
+        }
+        .work-view-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface, #ffffff);
+        }
+        .view-switch-group {
+            display: inline-flex;
+            border: 1px solid var(--mj-border-default, #cbd5e1);
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--mj-bg-surface-sunken, #f8fafc);
+        }
+        .view-switch-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border: none;
+            background: transparent;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--mj-text-secondary, #64748b);
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+        .view-switch-btn:hover {
+            color: var(--mj-text-primary, #0f172a);
+            background: var(--mj-bg-surface-hover, #f1f5f9);
+        }
+        .view-switch-btn.active {
+            background: var(--mj-brand-primary, #0284c7);
+            color: #ffffff;
+        }
+        .work-view-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .work-kanban-pane, .work-gantt-pane {
+            padding: 16px;
+            height: 100%;
+            box-sizing: border-box;
+            flex: 1;
+        }
     `],
     template: `
         <mj-page-layout>
@@ -153,6 +448,7 @@ interface RawSpaceTypeRecord {
                 } @else {
                     <div class="mjc-shell">
                         <mjc-space-rail
+                            [ActiveNav]="activeView"
                             [Spaces]="spaces"
                             [ActiveSpaceId]="activeSpaceId"
                             [InboxCount]="inboxCount"
@@ -163,121 +459,327 @@ interface RawSpaceTypeRecord {
                         />
 
                         <main class="main">
-                            <mjc-space-header
-                                [Breadcrumbs]="breadcrumbs"
-                                [TypeColor]="headerTypeColor"
-                                [TypeIconClass]="headerTypeIcon"
-                                [Title]="spaceTitle"
-                                [TypeName]="spaceTypeName"
-                                [Status]="spaceStatus"
-                                [Subtitle]="spaceSubtitle"
-                                [BackgroundImageUrl]="headerBackgroundImageUrl"
-                                (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
-                            >
-                                <div actions class="row gap8">
-                                    <mjc-audience-pill
-                                        [StaffAvatars]="headerStaffAvatars"
-                                        [OutsideAvatars]="headerOutsideAvatars"
-                                        [TotalPeople]="headerTotalPeople"
-                                        [Summary]="headerAudienceSummary"
-                                    />
-                                    @if (activeTab === 'Overview') {
-                                        <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
-                                            <i class="fa-solid fa-user-plus"></i>Invite
-                                        </button>
-                                        <button mjButton variant="primary" size="md" (click)="onNewClicked()">
-                                            <i class="fa-solid fa-plus"></i>New
-                                        </button>
-                                    } @else {
-                                        <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
-                                            <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
-                                        </button>
-                                    }
-                                </div>
-                                <mjc-space-tabs
-                                    [Tabs]="tabs"
-                                    [ActiveTab]="activeTab"
-                                    (TabSelectRequested)="onTabSelectRequested($event)"
-                                />
-                            </mjc-space-header>
+                            @switch (activeView) {
+                                @case ('home') {
+                                    <div class="collab-home-view">
+                                        <header class="home-header">
+                                            <div class="home-greeting">
+                                                <div class="home-hero-icon">
+                                                    <i class="fa-solid fa-shapes"></i>
+                                                </div>
+                                                <div class="home-hero-text">
+                                                    <h1 class="home-title">Welcome to Collaboration</h1>
+                                                    <p class="home-subtitle">Unified spaces, documents, tasks, and communications for your team and clients.</p>
+                                                </div>
+                                            </div>
+                                            <div class="home-quick-stats">
+                                                <div class="stat-pill" (click)="activeTab = 'Overview'; activeView = 'space'">
+                                                    <span class="stat-val">{{ rawSpaces.length }}</span>
+                                                    <span class="stat-lbl">Active Spaces</span>
+                                                </div>
+                                                <div class="stat-pill" (click)="onNavSelectRequested('tasks')">
+                                                    <span class="stat-val">{{ taskCount }}</span>
+                                                    <span class="stat-lbl">My Tasks</span>
+                                                </div>
+                                                <div class="stat-pill" (click)="onNavSelectRequested('inbox')">
+                                                    <span class="stat-val">{{ inboxCount }}</span>
+                                                    <span class="stat-lbl">Pending Approvals</span>
+                                                </div>
+                                                <div class="stat-pill" (click)="onNavSelectRequested('files')">
+                                                    <span class="stat-val">{{ libraryTotalCount }}</span>
+                                                    <span class="stat-lbl">Shared Files</span>
+                                                </div>
+                                            </div>
+                                        </header>
 
-                            <div class="content-area">
-                                @switch (activeTab) {
-                                    @case ('Overview') {
-                                        <mjc-space-overview
-                                            [SpaceName]="spaceTitle"
-                                            [FirmName]="firmName"
-                                            [ClientOrgName]="clientOrgName"
-                                            [AudienceCount]="headerTotalPeople"
-                                            [NeedsYouItems]="overviewNeedsYou"
-                                            [SharedItems]="overviewSharedItems"
-                                            [TeamItems]="overviewTeamItems"
-                                            [RoomMessages]="overviewRoomMessages"
-                                            [SubSpaces]="overviewSubSpaces"
-                                            (OpenLibraryRequested)="onOpenLibraryRequested()"
-                                            (OpenChatRequested)="onOpenChatRequested()"
-                                            (ItemSelectRequested)="onItemSelected($event)"
-                                            (ShareRequested)="onShareRequested($event)"
-                                            (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
-                                        />
-                                    }
-                                    @case ('Library') {
-                                        <mjc-space-library
-                                            [TotalCount]="libraryTotalCount"
-                                            [Collections]="libraryCollections"
-                                            [SmartViews]="librarySmartViews"
-                                            [Rows]="libraryRows"
-                                            [SelectedRowId]="selectedItemId || ''"
-                                            [ShowDrawer]="isDrawerOpen"
-                                            [PreviewMeta]="previewMeta"
-                                            [PreviewParagraphs]="previewParagraphs"
-                                            [PreviewBandLabel]="previewBandLabel"
-                                            [PreviewAudienceSub]="previewAudienceSub"
-                                            [PreviewStaffAvatars]="previewStaffAvatars"
-                                            [PreviewFlagTitle]="previewFlagTitle"
-                                            [PreviewFlagDescription]="previewFlagDescription"
-                                            [PreviewRecentUses]="previewRecentUses"
-                                            (RowSelectRequested)="onRowSelected($event)"
-                                            (ShareRequested)="onShareRequested($event)"
-                                            (CloseDrawerRequested)="onCloseDrawerRequested()"
-                                        />
-                                    }
-                                    @case ('Work') {
-                                        <mjc-space-work
-                                            [Tasks]="spaceTasks"
-                                            [SpaceName]="spaceTitle"
-                                            [CanCreateTask]="true"
-                                            (TaskSelectRequested)="onTaskSelected($event)"
-                                            (TaskToggleRequested)="onTaskToggled($event)"
-                                            (CreateTaskRequested)="onCreateTask($event)"
-                                        />
-                                    }
-                                    @case ('Chat') {
-                                        <mjc-space-chat
-                                            [Messages]="spaceRoomMessages"
-                                            [SpaceName]="spaceTitle"
-                                            [AudienceBand]="spaceAudienceBand"
-                                            [ParticipantCount]="headerTotalPeople"
-                                            (SendMessageRequested)="onSendChatMessage($event)"
-                                        />
-                                    }
-                                    @case ('People') {
-                                        <mjc-space-people
-                                            [Members]="spaceMembers"
-                                            [SpaceName]="spaceTitle"
-                                            (InviteMemberRequested)="onInviteMember($event)"
-                                        />
-                                    }
-                                    @case ('Settings') {
-                                        <mjc-space-settings
-                                            [Settings]="spaceSettings"
-                                            [isSaving]="isSavingSettings"
-                                            [saveSuccessMessage]="settingsSaveSuccess"
-                                            (SaveSettingsRequested)="onSaveSettings($event)"
-                                        />
-                                    }
+                                        <div class="home-body">
+                                            <section class="home-section">
+                                                <div class="section-title-row">
+                                                    <div class="section-title">
+                                                        <i class="fa-solid fa-layer-group"></i>
+                                                        <span>Spaces Directory</span>
+                                                    </div>
+                                                    <span class="section-badge">{{ rootSpaces.length }} Top-level spaces</span>
+                                                </div>
+                                                <div class="spaces-directory-grid">
+                                                    @for (space of rootSpaces; track space.id) {
+                                                        <div class="space-directory-card" (click)="onSpaceOpenRequested(space.id)">
+                                                            <div class="card-top">
+                                                                <div class="space-icon-box" [style.background-color]="space.color">
+                                                                    <i [class]="space.iconClass"></i>
+                                                                </div>
+                                                                <div class="space-type-badge">{{ space.type }}</div>
+                                                            </div>
+                                                            <h3 class="space-name">{{ space.name }}</h3>
+                                                            <p class="space-desc">{{ space.description || 'Dedicated workspace for collaboration and coordination.' }}</p>
+                                                            <div class="space-footer">
+                                                                <span class="open-link">
+                                                                    <span>Open Space</span>
+                                                                    <i class="fa-solid fa-arrow-right"></i>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </section>
+                                        </div>
+                                    </div>
                                 }
-                            </div>
+
+                                @case ('inbox') {
+                                    <div class="collab-inbox-view">
+                                        <header class="section-view-header">
+                                            <div class="header-icon-box inbox">
+                                                <i class="fa-solid fa-inbox"></i>
+                                            </div>
+                                            <div>
+                                                <h1 class="view-title">Approval Inbox</h1>
+                                                <p class="view-subtitle">Review and sign off on tasks and deliverables awaiting your approval.</p>
+                                            </div>
+                                        </header>
+                                        <div class="inbox-content">
+                                            <bizapps-approval-inbox
+                                                [ApproverPersonID]="currentPersonId"
+                                            />
+                                        </div>
+                                    </div>
+                                }
+
+                                @case ('tasks') {
+                                    <div class="collab-tasks-view">
+                                        <header class="section-view-header">
+                                            <div class="header-icon-box tasks">
+                                                <i class="fa-solid fa-list-check"></i>
+                                            </div>
+                                            <div>
+                                                <h1 class="view-title">My Tasks &amp; Deliverables</h1>
+                                                <p class="view-subtitle">Tasks assigned to you across all collaboration spaces and projects.</p>
+                                            </div>
+                                        </header>
+                                        <div class="tasks-content">
+                                            <bizapps-my-tasks
+                                                [PersonID]="currentPersonId"
+                                                [ShowCreateButton]="true"
+                                                (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
+                                            />
+                                        </div>
+                                    </div>
+                                }
+
+                                @case ('files') {
+                                    <div class="collab-files-view">
+                                        <header class="section-view-header">
+                                            <div class="header-icon-box files">
+                                                <i class="fa-solid fa-folder-open"></i>
+                                            </div>
+                                            <div>
+                                                <h1 class="view-title">Recent Files &amp; Documents</h1>
+                                                <p class="view-subtitle">Access files, working papers, and reports shared across all spaces.</p>
+                                            </div>
+                                        </header>
+                                        <div class="files-content">
+                                            <mjc-space-library
+                                                [TotalCount]="libraryTotalCount"
+                                                [Collections]="libraryCollections"
+                                                [SmartViews]="librarySmartViews"
+                                                [Rows]="libraryRows"
+                                                [SelectedRowId]="selectedItemId || ''"
+                                                [ShowDrawer]="isDrawerOpen"
+                                                [PreviewMeta]="previewMeta"
+                                                [PreviewParagraphs]="previewParagraphs"
+                                                [PreviewBandLabel]="previewBandLabel"
+                                                [PreviewAudienceSub]="previewAudienceSub"
+                                                [PreviewStaffAvatars]="previewStaffAvatars"
+                                                [PreviewFlagTitle]="previewFlagTitle"
+                                                [PreviewFlagDescription]="previewFlagDescription"
+                                                [PreviewRecentUses]="previewRecentUses"
+                                                (RowSelectRequested)="onRowSelected($event)"
+                                                (ShareRequested)="onShareRequested($event)"
+                                                (CloseDrawerRequested)="onCloseDrawerRequested()"
+                                            />
+                                        </div>
+                                    </div>
+                                }
+
+                                @default {
+                                    <mjc-space-header
+                                        [Breadcrumbs]="breadcrumbs"
+                                        [TypeColor]="headerTypeColor"
+                                        [TypeIconClass]="headerTypeIcon"
+                                        [Title]="spaceTitle"
+                                        [TypeName]="spaceTypeName"
+                                        [Status]="spaceStatus"
+                                        [Subtitle]="spaceSubtitle"
+                                        [BackgroundImageUrl]="headerBackgroundImageUrl"
+                                        (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
+                                    >
+                                        <div actions class="row gap8">
+                                            <mjc-audience-pill
+                                                [StaffAvatars]="headerStaffAvatars"
+                                                [OutsideAvatars]="headerOutsideAvatars"
+                                                [TotalPeople]="headerTotalPeople"
+                                                [Summary]="headerAudienceSummary"
+                                            />
+                                            @if (activeTab === 'Overview') {
+                                                <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
+                                                    <i class="fa-solid fa-user-plus"></i>Invite
+                                                </button>
+                                                <button mjButton variant="primary" size="md" (click)="onNewClicked()">
+                                                    <i class="fa-solid fa-plus"></i>New
+                                                </button>
+                                            } @else {
+                                                <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
+                                                    <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
+                                                </button>
+                                            }
+                                        </div>
+                                        <mjc-space-tabs
+                                            [Tabs]="tabs"
+                                            [ActiveTab]="activeTab"
+                                            (TabSelectRequested)="onTabSelectRequested($event)"
+                                        />
+                                    </mjc-space-header>
+
+                                    <div class="content-area">
+                                        @switch (activeTab) {
+                                            @case ('Overview') {
+                                                <mjc-space-overview
+                                                    [SpaceName]="spaceTitle"
+                                                    [FirmName]="firmName"
+                                                    [ClientOrgName]="clientOrgName"
+                                                    [AudienceCount]="headerTotalPeople"
+                                                    [NeedsYouItems]="overviewNeedsYou"
+                                                    [SharedItems]="overviewSharedItems"
+                                                    [TeamItems]="overviewTeamItems"
+                                                    [RoomMessages]="overviewRoomMessages"
+                                                    [SubSpaces]="overviewSubSpaces"
+                                                    (OpenLibraryRequested)="onOpenLibraryRequested()"
+                                                    (OpenChatRequested)="onOpenChatRequested()"
+                                                    (ItemSelectRequested)="onItemSelected($event)"
+                                                    (ShareRequested)="onShareRequested($event)"
+                                                    (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                                />
+                                            }
+                                            @case ('Library') {
+                                                <mjc-space-library
+                                                    [TotalCount]="libraryTotalCount"
+                                                    [Collections]="libraryCollections"
+                                                    [SmartViews]="librarySmartViews"
+                                                    [Rows]="libraryRows"
+                                                    [SelectedRowId]="selectedItemId || ''"
+                                                    [ShowDrawer]="isDrawerOpen"
+                                                    [PreviewMeta]="previewMeta"
+                                                    [PreviewParagraphs]="previewParagraphs"
+                                                    [PreviewBandLabel]="previewBandLabel"
+                                                    [PreviewAudienceSub]="previewAudienceSub"
+                                                    [PreviewStaffAvatars]="previewStaffAvatars"
+                                                    [PreviewFlagTitle]="previewFlagTitle"
+                                                    [PreviewFlagDescription]="previewFlagDescription"
+                                                    [PreviewRecentUses]="previewRecentUses"
+                                                    (RowSelectRequested)="onRowSelected($event)"
+                                                    (ShareRequested)="onShareRequested($event)"
+                                                    (CloseDrawerRequested)="onCloseDrawerRequested()"
+                                                />
+                                            }
+                                            @case ('Work') {
+                                                <div class="work-tab-container">
+                                                    <div class="work-view-toolbar">
+                                                        <div class="view-switch-group" role="group" aria-label="Task view mode">
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'list'"
+                                                                (click)="onWorkViewModeChanged('list')"
+                                                                title="List View"
+                                                            >
+                                                                <i class="fa-solid fa-list"></i>
+                                                                <span>List</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'kanban'"
+                                                                (click)="onWorkViewModeChanged('kanban')"
+                                                                title="Kanban Board View"
+                                                            >
+                                                                <i class="fa-solid fa-table-columns"></i>
+                                                                <span>Board</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="view-switch-btn"
+                                                                [class.active]="workViewMode === 'gantt'"
+                                                                (click)="onWorkViewModeChanged('gantt')"
+                                                                title="Timeline / Gantt View"
+                                                            >
+                                                                <i class="fa-solid fa-chart-gantt"></i>
+                                                                <span>Timeline</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="work-view-body">
+                                                        @switch (workViewMode) {
+                                                            @case ('list') {
+                                                                <mjc-space-work
+                                                                    [Tasks]="spaceTasks"
+                                                                    [SpaceName]="spaceTitle"
+                                                                    [CanCreateTask]="true"
+                                                                    (TaskSelectRequested)="onTaskSelected($event)"
+                                                                    (TaskToggleRequested)="onTaskToggled($event)"
+                                                                    (CreateTaskRequested)="onCreateTask($event)"
+                                                                />
+                                                            }
+                                                            @case ('kanban') {
+                                                                <div class="work-kanban-pane">
+                                                                    <bizapps-task-kanban
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                            @case ('gantt') {
+                                                                <div class="work-gantt-pane">
+                                                                    <bizapps-task-gantt
+                                                                        [ExtraFilter]="taskScopeFilter"
+                                                                        [Height]="'620px'"
+                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                    />
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                            @case ('Chat') {
+                                                <mjc-space-chat
+                                                    [Messages]="spaceRoomMessages"
+                                                    [SpaceName]="spaceTitle"
+                                                    [AudienceBand]="spaceAudienceBand"
+                                                    [ParticipantCount]="headerTotalPeople"
+                                                    (SendMessageRequested)="onSendChatMessage($event)"
+                                                />
+                                            }
+                                            @case ('People') {
+                                                <mjc-space-people
+                                                    [Members]="spaceMembers"
+                                                    [SpaceName]="spaceTitle"
+                                                    (InviteMemberRequested)="onInviteMember($event)"
+                                                />
+                                            }
+                                            @case ('Settings') {
+                                                <mjc-space-settings
+                                                    [Settings]="spaceSettings"
+                                                    [isSaving]="isSavingSettings"
+                                                    [saveSuccessMessage]="settingsSaveSuccess"
+                                                    (SaveSettingsRequested)="onSaveSettings($event)"
+                                                />
+                                            }
+                                        }
+                                    </div>
+                                }
+                            }
                         </main>
 
                         @if (isShareDialogOpen) {
@@ -408,6 +910,33 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Work tab state
     public spaceTasks: TaskItemModel[] = [];
+    public workViewMode: 'list' | 'kanban' | 'gantt' = 'list';
+
+    public currentPersonId = '';
+
+    public get taskScopeFilter(): string {
+        if (!this.spaceTasks || this.spaceTasks.length === 0) {
+            return '1 = 0';
+        }
+        const ids = this.spaceTasks.map(t => `'${t.id}'`).join(',');
+        return `(ID IN (${ids}) OR RootParentID IN (${ids}))`;
+    }
+
+    public get rootSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string }[] {
+        return this.rawSpaces
+            .filter(s => !s.ParentID)
+            .map(s => {
+                const t = this.spaceTypeMap.get(s.SpaceTypeID);
+                return {
+                    id: s.ID,
+                    name: s.Name,
+                    description: s.Description || '',
+                    type: s.SpaceType || t?.name || 'Workspace',
+                    iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
+                    color: s.Color || t?.color || '#0076b6',
+                };
+            });
+    }
 
     // Chat tab state
     public spaceRoomMessages: RoomMessageItem[] = [];
@@ -443,6 +972,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.client = new CollaborationClient();
             }
             const rv = new RunView();
+            const md = new Metadata();
+            const personEntity = md.Entities.find(e => e.Name === 'Persons' || e.Name.endsWith(': Persons') || e.Name.endsWith(': People'));
+            if (personEntity && md.CurrentUser?.Email) {
+                try {
+                    const personRes = await rv.RunView<{ ID: string }>({
+                        EntityName: personEntity.Name,
+                        ExtraFilter: `Email = '${md.CurrentUser.Email.replace(/'/g, "''")}'`,
+                        ResultType: 'simple',
+                        MaxRows: 1,
+                    });
+                    if (personRes?.Success && personRes.Results?.[0]) {
+                        this.currentPersonId = personRes.Results[0].ID;
+                    } else {
+                        this.currentPersonId = md.CurrentUser.ID;
+                    }
+                } catch {
+                    this.currentPersonId = md.CurrentUser?.ID || '';
+                }
+            } else if (md.CurrentUser?.ID) {
+                this.currentPersonId = md.CurrentUser.ID;
+            }
 
             // Load SpaceTypes to get icons and colors
             const typesRes = await rv.RunView<RawSpaceTypeRecord>({
@@ -980,6 +1530,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.activeView = params['view'];
         }
 
+        if (params['workView'] === 'list' || params['workView'] === 'kanban' || params['workView'] === 'gantt') {
+            this.workViewMode = params['workView'];
+        }
+
         if (params['tab']) {
             const rawTab = params['tab'].toLowerCase();
             const tabMap: Record<string, string> = {
@@ -1021,10 +1575,22 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
+    public onWorkViewModeChanged(mode: 'list' | 'kanban' | 'gantt'): void {
+        this.workViewMode = mode;
+        this.UpdateQueryParams({ workView: mode });
+        this.RefreshView();
+    }
+
+    public onTaskDoubleClicked(taskId: string): void {
+        if (!taskId) return;
+        SharedService.Instance.OpenEntityRecord('MJ_BizApps_Tasks: Tasks', CompositeKey.FromID(taskId));
+    }
+
     public onSpaceOpenRequested(spaceId: string): void {
-        void this.selectSpaceInternal(spaceId);
+        this.activeView = 'space';
         this.activeTab = 'Overview';
-        this.UpdateQueryParams({ space: spaceId, tab: 'overview' });
+        void this.selectSpaceInternal(spaceId);
+        this.UpdateQueryParams({ view: 'space', space: spaceId, tab: 'overview' });
     }
 
     public onBreadcrumbSelected(crumb: BreadcrumbItem): void {
@@ -1048,7 +1614,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public onNavSelectRequested(view: string): void {
         this.activeView = view;
-        this.UpdateQueryParams({ view });
+        this.UpdateQueryParams({ view, space: view === 'space' ? this.activeSpaceId : null });
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -1280,13 +1846,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public async onSendChatMessage(text: string): Promise<void> {
+    public async onSendChatMessage(payload: string | { text: string; executeAgent?: boolean }): Promise<void> {
+        const text = typeof payload === 'string' ? payload : payload.text;
+        const executeAgent = typeof payload === 'string'
+            ? /(@assistant|@agent|^\/ask|\?)/i.test(payload)
+            : (payload.executeAgent ?? /(@assistant|@agent|^\/ask|\?)/i.test(payload.text));
         try {
             const client = new CollaborationClient();
             const res = await client.PostSpaceMessage({
                 SpaceID: this.activeSpaceId,
                 Text: text,
-                ExecuteAgent: false,
+                ExecuteAgent: executeAgent,
             });
             if (!res.Success) {
                 console.error('Failed to post space message:', res.ErrorMessage);

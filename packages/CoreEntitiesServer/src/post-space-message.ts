@@ -45,11 +45,21 @@ export async function postSpaceMessage(
     } catch (error) {
         return { ok: false, message: error instanceof Error ? error.message : 'The space could not be read.' };
     }
-    const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
-    if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
-
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
+    const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
+    let isInstanceOwner = user?.Type?.trim() === 'Owner';
+    if (!isInstanceOwner) {
+        const userRow = await view.RunView<{ Type: string }>({
+            EntityName: 'MJ: Users',
+            ExtraFilter: `ID = '${callerId}'`,
+            Fields: ['Type'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        isInstanceOwner = userRow.Results?.[0]?.Type?.trim() === 'Owner';
+    }
+    if (!reach?.role.canContribute && !isInstanceOwner) return { ok: false, message: 'Your role on this space cannot post.' };
     const space = await view.RunView<{ ClosedAt: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
