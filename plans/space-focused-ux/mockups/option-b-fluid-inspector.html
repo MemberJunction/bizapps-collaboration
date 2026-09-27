@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option B: Hub & Deep Inspector (3-Column Fluid) — MJ Collaboration UX</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.3.0/files/inter-latin-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+
+:root {
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+  /* Light Theme Tokens */
+  --mj-bg-page: #f8fafc;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #ffffff;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+
+  --mj-text-primary: #0f172a;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #94a3b8;
+  --mj-text-link: #0076b6;
+
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #005a8c;
+  --mj-brand-on-primary: #ffffff;
+  --mj-brand-secondary: #0891b2;
+  --mj-brand-tertiary: #6366f1;
+
+  --mj-status-success: #15803d;
+  --mj-status-success-bg: #f0fdf4;
+  --mj-status-warning: #b45309;
+  --mj-status-warning-bg: #fffbeb;
+  --mj-status-error: #b91c1c;
+
+  --mj-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  --mjc-shared-brand: #0076b6;
+  --mjc-team-brand: #7c3aed;
+  --mjc-shared-bg: rgba(0, 118, 182, 0.06);
+  --mjc-team-bg: rgba(124, 58, 237, 0.06);
+  --mjc-shared-border: rgba(0, 118, 182, 0.2);
+  --mjc-team-border: rgba(124, 58, 237, 0.2);
+}
+
+html[data-theme="dark"] {
+  --mj-bg-page: #090d16;
+  --mj-bg-surface: #0f172a;
+  --mj-bg-surface-card: #131d31;
+  --mj-bg-surface-sunken: #090e1a;
+  --mj-bg-surface-hover: #1e293b;
+  --mj-bg-surface-active: #334155;
+
+  --mj-text-primary: #f8fafc;
+  --mj-text-secondary: #cbd5e1;
+  --mj-text-muted: #64748b;
+  --mj-text-link: #38bdf8;
+
+  --mj-border-subtle: #1e293b;
+  --mj-border-default: #243247;
+  --mj-border-strong: #334155;
+
+  --mj-brand-primary: #38bdf8;
+  --mj-brand-primary-hover: #0284c7;
+  --mj-brand-on-primary: #090d16;
+
+  --mj-status-success-bg: rgba(34, 197, 94, 0.12);
+  --mj-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --mj-status-error-bg: rgba(239, 68, 68, 0.12);
+
+  --mjc-shared-bg: rgba(56, 189, 248, 0.08);
+  --mjc-team-bg: rgba(167, 139, 250, 0.08);
+  --mjc-shared-border: rgba(56, 189, 248, 0.25);
+  --mjc-team-border: rgba(167, 139, 250, 0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--mj-font-family);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Option Thesis Top Banner                                    */
+/* ─────────────────────────────────────────────────────────── */
+.thesis-banner {
+  background: linear-gradient(90deg, #064e3b 0%, #0f172a 100%);
+  color: #ffffff;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  z-index: 100;
+}
+.thesis-badge {
+  background: #34d399;
+  color: #064e3b;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 12px;
+}
+.thesis-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.thesis-tag {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.thesis-tag b { color: #e2e8f0; }
+.thesis-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-toggle-theme, .btn-switch-option {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.btn-toggle-theme:hover, .btn-switch-option:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* App Header */
+.app-header {
+  height: 48px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.breadcrumbs-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.breadcrumb-item {
+  color: var(--mj-text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.breadcrumb-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.breadcrumb-item.active {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* 3-Column Fluid Layout                                      */
+/* ─────────────────────────────────────────────────────────── */
+.three-column-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Column 1: Compact Space Navigation Rail (Icons + Key Sections) */
+.col-space-rail {
+  width: 210px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+}
+.space-switcher-card {
+  padding: 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.space-switcher-card:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.space-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-tertiary));
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+.space-meta-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  line-height: 1.2;
+}
+.space-meta-info b {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.space-meta-info span {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.rail-section-list {
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rail-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.rail-btn.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+.rail-btn-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rail-count-badge {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-family: var(--mj-font-family-mono);
+}
+.rail-btn.active .rail-count-badge {
+  background: var(--mj-brand-primary);
+  color: #ffffff;
+}
+
+/* Column 2: Dynamic Context Stream (mj-conversation-list / files tree) */
+.col-context-stream {
+  width: 320px;
+  min-width: 240px;
+  max-width: 520px;
+  background: var(--mj-bg-surface-sunken);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  transition: width 0.05s linear;
+}
+.col-context-stream.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* Stream Resizer Handle */
+.stream-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  bottom: 0;
+  cursor: col-resize;
+  z-index: 20;
+}
+.stream-resizer:hover, .stream-resizer.dragging {
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+/* Stream Header (Replicating mj-conversation-list header) */
+.stream-header {
+  padding: 12px 14px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stream-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stream-header-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+}
+.btn-new-convo {
+  background: var(--mj-brand-primary);
+  color: #ffffff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.stream-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.stream-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  width: 100%;
+}
+
+/* Stream Conversation Cards */
+.stream-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stream-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stream-card:hover {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.stream-card.active {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+  box-shadow: 0 0 0 1px var(--mj-brand-primary);
+}
+.stream-card-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stream-card-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--mj-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stream-card-time {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.stream-card-snippet {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stream-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.card-band-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.card-band-pill.shared {
+  background: var(--mjc-shared-bg);
+  color: var(--mjc-shared-brand);
+}
+.card-band-pill.team {
+  background: var(--mjc-team-bg);
+  color: var(--mjc-team-brand);
+}
+
+/* Column 3: Expansive Stage (Chat Canvas) */
+.col-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+  position: relative;
+}
+
+/* Stage Header */
+.stage-top-bar {
+  height: 56px;
+  border-bottom: 1px solid var(--mj-border-default);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.stage-left-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-toggle-stream {
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.btn-toggle-stream:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.stage-convo-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Transcript & Composer (mj-conversation-chat-area) */
+.stage-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.stage-composer-dock {
+  padding: 16px 32px 24px;
+  background: var(--mj-bg-surface);
+  border-top: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.composer-box {
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 10px;
+  background: var(--mj-bg-surface);
+  display: flex;
+  flex-direction: column;
+}
+.composer-textarea {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  resize: none;
+  min-height: 48px;
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+</style>
+</head>
+<body>
+
+<!-- Design Thesis Banner -->
+<div class="thesis-banner">
+  <div class="thesis-text">
+    <span class="thesis-badge">Option B: Hub &amp; Deep Inspector (3-Column Fluid)</span>
+    <span class="thesis-tag"><b>Philosophy:</b> 3-Pane Workstation embedding stock <code style="color:#a7f3d0">mj-conversation-list</code> as the middle stream.</span>
+    <span class="thesis-tag"><b>Best for:</b> High-volume messaging where users scan and jump between many conversations while keeping full chat open.</span>
+  </div>
+  <div class="thesis-controls">
+    <button class="btn-toggle-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Toggle Dark/Light</button>
+    <button class="btn-switch-option" onclick="location.href='option-c-unified-cockpit.html'">View Option C &rarr;</button>
+  </div>
+</div>
+
+<!-- App Header -->
+<header class="app-header">
+  <div class="breadcrumbs-group">
+    <span class="breadcrumb-item" onclick="location.href='option-a-workspace-rail.html'"><i class="fa-solid fa-house"></i> All Spaces</span>
+    <span style="color:var(--mj-text-muted)">/</span>
+    <span class="breadcrumb-item active"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i> Acme Corp Rebrand</span>
+    <span style="color:var(--mj-text-muted)">/</span>
+    <span class="breadcrumb-item" id="crumbTrail">Conversations</span>
+  </div>
+  <div style="font-size:12px;color:var(--mj-text-muted)">
+    <kbd style="border:1px solid var(--mj-border-strong);padding:2px 6px;border-radius:4px;">&cmd;B</kbd> toggles stream panel
+  </div>
+</header>
+
+<!-- 3-Column Workstation Shell -->
+<div class="three-column-shell">
+
+  <!-- Column 1: Space Rail (Leftmost) -->
+  <aside class="col-space-rail">
+    <div class="space-switcher-card">
+      <div class="space-icon-box"><i class="fa-solid fa-shapes"></i></div>
+      <div class="space-meta-info">
+        <b>Acme Rebrand</b>
+        <span>Shared Workspace</span>
+      </div>
+    </div>
+
+    <div class="rail-section-list">
+      <div class="rail-btn" onclick="switchSection('Overview')">
+        <div class="rail-btn-left"><i class="fa-solid fa-chart-pie"></i> Overview</div>
+      </div>
+      <div class="rail-btn active" onclick="switchSection('Conversations')">
+        <div class="rail-btn-left"><i class="fa-solid fa-comments"></i> Conversations</div>
+        <span class="rail-count-badge">4</span>
+      </div>
+      <div class="rail-btn" onclick="switchSection('Documents')">
+        <div class="rail-btn-left"><i class="fa-solid fa-folder-open"></i> Documents</div>
+        <span class="rail-count-badge">14</span>
+      </div>
+      <div class="rail-btn" onclick="switchSection('Tasks')">
+        <div class="rail-btn-left"><i class="fa-solid fa-list-check"></i> Tasks</div>
+        <span class="rail-count-badge">8</span>
+      </div>
+      <div class="rail-btn" onclick="switchSection('People')">
+        <div class="rail-btn-left"><i class="fa-solid fa-user-group"></i> People</div>
+        <span class="rail-count-badge">6</span>
+      </div>
+      <div class="rail-btn" onclick="switchSection('Settings')">
+        <div class="rail-btn-left"><i class="fa-solid fa-sliders"></i> Settings</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Column 2: Context Stream (mj-conversation-list) -->
+  <aside class="col-context-stream" id="contextStream">
+    
+    <!-- Resizer Handle -->
+    <div class="stream-resizer" id="streamResizer" title="Drag to resize stream"></div>
+
+    <div class="stream-header">
+      <div class="stream-header-top">
+        <span class="stream-header-title">Conversations</span>
+        <button class="btn-new-convo" onclick="createNewConvo()"><i class="fa-solid fa-plus"></i> New</button>
+      </div>
+      <div class="stream-search-box">
+        <i class="fa-solid fa-magnifying-glass" style="font-size:12px;color:var(--mj-text-muted)"></i>
+        <input type="text" class="stream-search-input" placeholder="Search conversations...">
+      </div>
+    </div>
+
+    <div class="stream-list">
+      
+      <!-- Card 1 -->
+      <div class="stream-card active" onclick="selectConvo(this, '#general-room', 'Shared')">
+        <div class="stream-card-row1">
+          <span class="stream-card-title"><i class="fa-solid fa-hashtag" style="color:var(--mj-brand-primary)"></i> general-room</span>
+          <span class="stream-card-time">10:20 AM</span>
+        </div>
+        <span class="stream-card-snippet">Amith: Looks good! I've also linked the revised print specs...</span>
+        <div class="stream-card-footer">
+          <span class="card-band-pill shared">Shared &middot; Client</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><i class="fa-solid fa-user"></i> 6</span>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="stream-card" onclick="selectConvo(this, '#deliverables-review', 'Shared')">
+        <div class="stream-card-row1">
+          <span class="stream-card-title"><i class="fa-solid fa-hashtag" style="color:var(--mj-text-muted)"></i> deliverables-review</span>
+          <span class="stream-card-time">Yesterday</span>
+        </div>
+        <span class="stream-card-snippet">Casey Miller: Packaging guidelines draft v2 ready for sign-off</span>
+        <div class="stream-card-footer">
+          <span class="card-band-pill shared">Shared &middot; Client</span>
+          <span style="background:var(--mj-brand-primary);color:#fff;border-radius:99px;font-size:10px;padding:1px 6px;font-weight:700">3</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="stream-card" onclick="selectConvo(this, '#team-strategy-only', 'Team')">
+        <div class="stream-card-row1">
+          <span class="stream-card-title"><i class="fa-solid fa-lock" style="color:var(--mjc-team-brand)"></i> team-strategy-only</span>
+          <span class="stream-card-time">Sep 25</span>
+        </div>
+        <span class="stream-card-snippet">Internal pricing floor and margins for FY2026 contract</span>
+        <div class="stream-card-footer">
+          <span class="card-band-pill team">Team Only</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><i class="fa-solid fa-user"></i> 4</span>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="stream-card" onclick="selectConvo(this, '🤖 Assistant Strategy Desk', 'Shared')">
+        <div class="stream-card-row1">
+          <span class="stream-card-title"><i class="fa-solid fa-robot" style="color:var(--mj-brand-tertiary)"></i> Strategy Desk</span>
+          <span class="stream-card-time">Sep 24</span>
+        </div>
+        <span class="stream-card-snippet">Assistant: Analysis of competitive brand positioning across EMEA</span>
+        <div class="stream-card-footer">
+          <span class="card-band-pill shared">Agent 1:1</span>
+        </div>
+      </div>
+
+    </div>
+
+  </aside>
+
+  <!-- Column 3: Large Edge-to-Edge Stage -->
+  <main class="col-stage">
+
+    <div class="stage-top-bar">
+      <div class="stage-left-info">
+        <button class="btn-toggle-stream" onclick="toggleStreamCollapse()" title="Toggle conversation list (Cmd+B)">
+          <i class="fa-solid fa-bars-staggered"></i>
+        </button>
+        <span class="stage-convo-title" id="stageTitle">#general-room</span>
+        <span id="stagePill" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--mjc-shared-bg);color:var(--mjc-shared-brand);border:1px solid var(--mjc-shared-border)">
+          <i class="fa-solid fa-shield-halved"></i> Shared &middot; 4 Team, 2 Outside
+        </span>
+      </div>
+      <div class="stage-actions">
+        <button class="btn-toggle-stream" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button class="btn-toggle-stream" title="Pin items"><i class="fa-solid fa-thumbtack"></i></button>
+        <button class="btn-toggle-stream" title="Settings"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+      </div>
+    </div>
+
+    <!-- Transcript Area -->
+    <div class="stage-transcript" id="stageTranscript">
+      <div style="display:flex;gap:14px;max-width:900px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fef3c7;color:#b45309;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;">CM</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+            <b style="color:var(--mj-text-primary)">Casey Miller</b>
+            <span style="font-size:10px;background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:4px;font-weight:700">Outside Director</span>
+            <span style="font-size:11px;color:var(--mj-text-muted)">10:14 AM</span>
+          </div>
+          <div style="background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-default);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">
+            Hi team! Could the assistant summarize our approved FY2026 brand positioning pillars and confirm if the packaging guidelines are finalized?
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:14px;max-width:900px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-tertiary));color:#fff;display:grid;place-items:center;font-size:15px;flex-shrink:0;">
+          <i class="fa-solid fa-sparkles"></i>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+            <b style="color:var(--mj-text-primary)">Assistant</b>
+            <span style="font-size:10px;background:rgba(99,102,241,0.1);color:var(--mj-brand-tertiary);padding:1px 6px;border-radius:4px;font-weight:700">AI Agent</span>
+            <span style="font-size:11px;color:var(--mj-text-muted)">10:14 AM</span>
+          </div>
+          <div style="background:color-mix(in srgb, var(--mjc-shared-brand) 3%, var(--mj-bg-surface));border:1px solid var(--mjc-shared-border);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">
+            Here is the approved summary from your space documents:
+            <br><br>
+            1. <b>Core Pillars:</b> Sustainable luxury, digital-first retail, and cross-channel personalization.
+            <br>
+            2. <b>Packaging Guidelines:</b> Status is <i>Approved</i> as of yesterday's committee review. The primary color palette adheres to the 60-30-10 rule.
+            
+            <div style="margin-top:8px;padding:8px 12px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:8px;display:flex;align-items:center;gap:10px;font-size:12px;">
+              <span style="color:var(--mj-status-success);font-weight:600;"><i class="fa-solid fa-circle-check"></i> Bounded to Shared Band:</span>
+              <span>Used 2 files:</span>
+              <span style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-strong);padding:2px 8px;border-radius:6px;font-size:11.5px;color:var(--mj-brand-primary)"><i class="fa-solid fa-file-pdf"></i> Brand-Guidelines-v2.pdf</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Composer Dock -->
+    <div class="stage-composer-dock">
+      <div class="composer-box">
+        <textarea class="composer-textarea" id="composerInput" placeholder="Message #general-room... (@ to mention agents, # for space items)"></textarea>
+        <div class="composer-bar">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;font-size:11px;background:rgba(99,102,241,0.1);color:var(--mj-brand-tertiary);font-weight:600;">
+              <i class="fa-solid fa-robot"></i> Assistant ready
+            </span>
+            <button class="btn-toggle-stream" style="width:28px;height:28px;"><i class="fa-solid fa-at"></i></button>
+            <button class="btn-toggle-stream" style="width:28px;height:28px;"><i class="fa-solid fa-hashtag"></i></button>
+            <button class="btn-toggle-stream" style="width:28px;height:28px;"><i class="fa-solid fa-paperclip"></i></button>
+          </div>
+          <button class="btn-new-convo" style="padding:6px 16px;" onclick="sendMock()">Send <i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+const stream = document.getElementById('contextStream');
+const resizer = document.getElementById('streamResizer');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', () => {
+  isResizing = true;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const newWidth = e.clientX - 210; // offset column 1
+  if (newWidth >= 220 && newWidth <= 520) {
+    stream.style.width = newWidth + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    console.log('[UserInfoEngine] Persisted setting mjc.streamCol.width =', stream.style.width);
+  }
+});
+
+function toggleStreamCollapse() {
+  stream.classList.toggle('collapsed');
+  console.log('[UserInfoEngine] Persisted setting mjc.streamCol.collapsed =', stream.classList.contains('collapsed'));
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    toggleStreamCollapse();
+  }
+});
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+}
+
+function selectConvo(el, title, band) {
+  document.querySelectorAll('.stream-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('stageTitle').innerText = title;
+  document.getElementById('crumbTrail').innerText = 'Conversations · ' + title;
+
+  const pill = document.getElementById('stagePill');
+  if (band === 'Team') {
+    pill.style.background = 'var(--mjc-team-bg)';
+    pill.style.color = 'var(--mjc-team-brand)';
+    pill.style.borderColor = 'var(--mjc-team-border)';
+    pill.innerHTML = '<i class="fa-solid fa-lock"></i> Internal Team Only';
+  } else {
+    pill.style.background = 'var(--mjc-shared-bg)';
+    pill.style.color = 'var(--mjc-shared-brand)';
+    pill.style.borderColor = 'var(--mjc-shared-border)';
+    pill.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Shared · Client & Team';
+  }
+}
+
+function switchSection(name) {
+  document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('crumbTrail').innerText = name;
+}
+
+function sendMock() {
+  const input = document.getElementById('composerInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const transcript = document.getElementById('stageTranscript');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:14px;max-width:900px;';
+  row.innerHTML = `
+    <div style="width:36px;height:36px;border-radius:50%;background:#dbeafe;color:#1e40af;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;">AN</div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+        <b style="color:var(--mj-text-primary)">Amith Nagarajan</b>
+        <span style="font-size:11px;color:var(--mj-text-muted)">Just now</span>
+      </div>
+      <div style="background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-default);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">${text}</div>
+    </div>
+  `;
+  transcript.appendChild(row);
+  input.value = '';
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function createNewConvo() {
+  const name = prompt('New conversation title:');
+  if (!name) return;
+  alert('Created new conversation: ' + name);
+}
+</script>
+</body>
+</html>

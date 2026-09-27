@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option C: Unified Cockpit & Segmented Studio — MJ Collaboration UX</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.3.0/files/inter-latin-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+
+:root {
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+  /* Light Theme Tokens */
+  --mj-bg-page: #f8fafc;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #ffffff;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+
+  --mj-text-primary: #0f172a;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #94a3b8;
+  --mj-text-link: #0076b6;
+
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #005a8c;
+  --mj-brand-on-primary: #ffffff;
+  --mj-brand-secondary: #0891b2;
+  --mj-brand-tertiary: #6366f1;
+
+  --mj-status-success: #15803d;
+  --mj-status-success-bg: #f0fdf4;
+  --mj-status-warning: #b45309;
+  --mj-status-warning-bg: #fffbeb;
+  --mj-status-error: #b91c1c;
+
+  --mj-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  --mjc-shared-brand: #0076b6;
+  --mjc-team-brand: #7c3aed;
+  --mjc-shared-bg: rgba(0, 118, 182, 0.06);
+  --mjc-team-bg: rgba(124, 58, 237, 0.06);
+  --mjc-shared-border: rgba(0, 118, 182, 0.2);
+  --mjc-team-border: rgba(124, 58, 237, 0.2);
+}
+
+html[data-theme="dark"] {
+  --mj-bg-page: #090d16;
+  --mj-bg-surface: #0f172a;
+  --mj-bg-surface-card: #131d31;
+  --mj-bg-surface-sunken: #090e1a;
+  --mj-bg-surface-hover: #1e293b;
+  --mj-bg-surface-active: #334155;
+
+  --mj-text-primary: #f8fafc;
+  --mj-text-secondary: #cbd5e1;
+  --mj-text-muted: #64748b;
+  --mj-text-link: #38bdf8;
+
+  --mj-border-subtle: #1e293b;
+  --mj-border-default: #243247;
+  --mj-border-strong: #334155;
+
+  --mj-brand-primary: #38bdf8;
+  --mj-brand-primary-hover: #0284c7;
+  --mj-brand-on-primary: #090d16;
+
+  --mj-status-success-bg: rgba(34, 197, 94, 0.12);
+  --mj-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --mj-status-error-bg: rgba(239, 68, 68, 0.12);
+
+  --mjc-shared-bg: rgba(56, 189, 248, 0.08);
+  --mjc-team-bg: rgba(167, 139, 250, 0.08);
+  --mjc-shared-border: rgba(56, 189, 248, 0.25);
+  --mjc-team-border: rgba(167, 139, 250, 0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--mj-font-family);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Option Thesis Top Banner                                    */
+/* ─────────────────────────────────────────────────────────── */
+.thesis-banner {
+  background: linear-gradient(90deg, #312e81 0%, #0f172a 100%);
+  color: #ffffff;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  z-index: 100;
+}
+.thesis-badge {
+  background: #818cf8;
+  color: #1e1b4b;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 12px;
+}
+.thesis-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.thesis-tag {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.thesis-tag b { color: #e2e8f0; }
+.thesis-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-toggle-theme, .btn-switch-option {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.btn-toggle-theme:hover, .btn-switch-option:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* App Header */
+.app-header {
+  height: 48px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.breadcrumbs-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.breadcrumb-item {
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.breadcrumb-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.breadcrumb-item.active {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Cockpit Shell: Slim Space Bar + Segmented Stage + Split Pane */
+/* ─────────────────────────────────────────────────────────── */
+.cockpit-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Slim Space Rail */
+.cockpit-space-rail {
+  width: 220px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+  position: relative;
+  transition: width 0.05s linear;
+}
+.cockpit-space-rail.collapsed {
+  width: 60px !important;
+}
+
+/* Drag resizer */
+.rail-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  bottom: 0;
+  cursor: col-resize;
+  z-index: 20;
+}
+.rail-resizer:hover, .rail-resizer.dragging {
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.cockpit-space-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cockpit-space-rail.collapsed .cockpit-space-header {
+  padding: 12px 10px;
+  justify-content: center;
+}
+.space-hero-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.space-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.space-name-stack {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  line-height: 1.2;
+}
+.space-main-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.space-sub-badge {
+  font-size: 11px;
+  color: var(--mjc-shared-brand);
+}
+
+.cockpit-nav-list {
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.cockpit-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cockpit-nav-link:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.cockpit-nav-link.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+.cockpit-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cockpit-badge {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-family: var(--mj-font-family-mono);
+}
+.cockpit-nav-link.active .cockpit-badge {
+  background: var(--mj-brand-primary);
+  color: #fff;
+}
+
+/* Stage Studio Canvas */
+.cockpit-studio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+}
+
+/* Channel Strip Bar (Top of Chat Module) */
+.channel-strip-bar {
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.channel-pill-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.channel-pill-btn {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.channel-pill-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.channel-pill-btn.active {
+  background: var(--mj-brand-primary);
+  color: #ffffff;
+  border-color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+.btn-add-channel {
+  background: transparent;
+  border: 1px dashed var(--mj-border-strong);
+  color: var(--mj-text-muted);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-add-channel:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.studio-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-split-toggle {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-split-toggle.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+/* Studio Workbody (Chat + Optional Side-by-Side Split Drawer) */
+.studio-workbody {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+/* Chat Main View (mj-conversation-chat-area) */
+.studio-chat-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+}
+.studio-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.studio-composer-dock {
+  padding: 16px 32px 24px;
+  background: var(--mj-bg-surface);
+  border-top: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.composer-box {
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 10px;
+  background: var(--mj-bg-surface);
+  display: flex;
+  flex-direction: column;
+}
+.composer-textarea {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  resize: none;
+  min-height: 48px;
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+/* Side-by-Side Split Drawer (Documents / Tasks side inspector) */
+.studio-split-drawer {
+  width: 380px;
+  background: var(--mj-bg-surface-sunken);
+  border-left: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+.studio-split-drawer.hidden {
+  display: none;
+}
+.drawer-header {
+  padding: 12px 16px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.drawer-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.side-doc-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.side-doc-card:hover {
+  border-color: var(--mj-brand-primary);
+  transform: translateY(-1px);
+}
+</style>
+</head>
+<body>
+
+<!-- Design Thesis Banner -->
+<div class="thesis-banner">
+  <div class="thesis-text">
+    <span class="thesis-badge">Option C: Unified Cockpit &amp; Segmented Studio</span>
+    <span class="thesis-tag"><b>Philosophy:</b> Minimalist Space App Bar + Top Channel Segmenter with Side-by-Side Document/Chat Split.</span>
+    <span class="thesis-tag"><b>Best for:</b> High-productivity multitasking—consultants and clients reviewing deliverables while actively chatting with the assistant.</span>
+  </div>
+  <div class="thesis-controls">
+    <button class="btn-toggle-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Toggle Dark/Light</button>
+    <button class="btn-switch-option" onclick="location.href='option-a-workspace-rail.html'">View Option A &rarr;</button>
+  </div>
+</div>
+
+<!-- App Header -->
+<header class="app-header">
+  <div class="breadcrumbs-group">
+    <span class="breadcrumb-item" onclick="location.href='option-a-workspace-rail.html'"><i class="fa-solid fa-house"></i> All Spaces</span>
+    <span style="color:var(--mj-text-muted)">/</span>
+    <span class="breadcrumb-item active"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i> Acme Corp Rebrand</span>
+    <span style="color:var(--mj-text-muted)">/</span>
+    <span class="breadcrumb-item" id="topNavCrumb">Discussions</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="font-size:12px;color:var(--mj-text-muted);"><i class="fa-solid fa-cloud-check" style="color:var(--mj-status-success)"></i> UserInfoEngine Synced</div>
+    <div style="width:30px;height:30px;border-radius:50%;background:#dbeafe;color:#1e40af;display:grid;place-items:center;font-weight:700;font-size:11px;">AN</div>
+  </div>
+</header>
+
+<!-- Cockpit Shell -->
+<div class="cockpit-shell">
+
+  <!-- Slim Space Rail -->
+  <aside class="cockpit-space-rail" id="cockpitRail">
+    <div class="rail-resizer" id="railResizer" title="Drag to resize"></div>
+
+    <div class="cockpit-space-header">
+      <div class="space-hero-pill" onclick="location.href='option-a-workspace-rail.html'">
+        <div class="space-avatar-circle">AR</div>
+        <div class="space-name-stack">
+          <span class="space-main-title">Acme Rebrand</span>
+          <span class="space-sub-badge"><i class="fa-solid fa-users"></i> Shared</span>
+        </div>
+      </div>
+      <button class="btn-split-toggle" style="padding:2px 6px;" onclick="toggleRailCollapse()" title="Collapse navigation">
+        <i class="fa-solid fa-chevron-left" id="railCollapseIcon"></i>
+      </button>
+    </div>
+
+    <div class="cockpit-nav-list">
+      <div class="cockpit-nav-link" onclick="selectNav('Overview')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-chart-pie"></i> Overview</div>
+      </div>
+      <div class="cockpit-nav-link active" onclick="selectNav('Discussions')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-comments"></i> Discussions</div>
+        <span class="cockpit-badge">4</span>
+      </div>
+      <div class="cockpit-nav-link" onclick="selectNav('Files')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-folder-open"></i> Documents</div>
+        <span class="cockpit-badge">14</span>
+      </div>
+      <div class="cockpit-nav-link" onclick="selectNav('Work')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-list-check"></i> Tasks</div>
+        <span class="cockpit-badge">8</span>
+      </div>
+      <div class="cockpit-nav-link" onclick="selectNav('Team')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-user-group"></i> People</div>
+        <span class="cockpit-badge">6</span>
+      </div>
+      <div class="cockpit-nav-link" onclick="selectNav('Settings')">
+        <div class="cockpit-nav-left"><i class="fa-solid fa-sliders"></i> Settings</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Studio Canvas -->
+  <main class="cockpit-studio">
+
+    <!-- Channel Strip (Top of Discussions) -->
+    <div class="channel-strip-bar">
+      <div class="channel-pill-group">
+        <button class="channel-pill-btn active" onclick="selectChannel(this, '#general-room', 'Shared')">
+          <i class="fa-solid fa-hashtag"></i> general-room
+        </button>
+        <button class="channel-pill-btn" onclick="selectChannel(this, '#deliverables-review', 'Shared')">
+          <i class="fa-solid fa-hashtag"></i> deliverables-review
+          <span style="background:var(--mj-brand-primary);color:#fff;border-radius:99px;font-size:10px;padding:0 5px;">3</span>
+        </button>
+        <button class="channel-pill-btn" onclick="selectChannel(this, '#team-strategy-only', 'Team')">
+          <i class="fa-solid fa-lock" style="color:var(--mjc-team-brand)"></i> team-strategy-only
+        </button>
+        <button class="channel-pill-btn" onclick="selectChannel(this, '🤖 Assistant Desk', 'Shared')">
+          <i class="fa-solid fa-robot" style="color:var(--mj-brand-tertiary)"></i> Assistant Desk
+        </button>
+        <button class="btn-add-channel" onclick="addChannel()"><i class="fa-solid fa-plus"></i> New Channel</button>
+      </div>
+
+      <div class="studio-actions-right">
+        <button class="btn-split-toggle active" id="splitToggleBtn" onclick="toggleSplitDrawer()">
+          <i class="fa-solid fa-table-columns"></i> Side-by-Side Docs
+        </button>
+      </div>
+    </div>
+
+    <!-- Workbody with Optional Split Drawer -->
+    <div class="studio-workbody">
+      
+      <!-- Chat Pane (mj-conversation-chat-area) -->
+      <div class="studio-chat-pane">
+        
+        <div class="studio-transcript" id="studioTranscript">
+          <div style="display:flex;gap:14px;max-width:850px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:#fef3c7;color:#b45309;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;">CM</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+                <b style="color:var(--mj-text-primary)">Casey Miller</b>
+                <span style="font-size:10px;background:#fef3c7;color:#b45309;padding:1px 6px;border-radius:4px;font-weight:700">Outside Director</span>
+                <span style="font-size:11px;color:var(--mj-text-muted)">10:14 AM</span>
+              </div>
+              <div style="background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-default);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">
+                Could the assistant summarize our approved FY2026 brand positioning pillars and confirm if the packaging guidelines are finalized?
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:14px;max-width:850px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-tertiary));color:#fff;display:grid;place-items:center;font-size:15px;flex-shrink:0;">
+              <i class="fa-solid fa-sparkles"></i>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+                <b style="color:var(--mj-text-primary)">Assistant</b>
+                <span style="font-size:10px;background:rgba(99,102,241,0.1);color:var(--mj-brand-tertiary);padding:1px 6px;border-radius:4px;font-weight:700">AI Agent</span>
+                <span style="font-size:11px;color:var(--mj-text-muted)">10:14 AM</span>
+              </div>
+              <div style="background:color-mix(in srgb, var(--mjc-shared-brand) 3%, var(--mj-bg-surface));border:1px solid var(--mjc-shared-border);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">
+                Here is the approved summary from your space documents:
+                <br><br>
+                1. <b>Core Pillars:</b> Sustainable luxury, digital-first retail, and cross-channel personalization.
+                <br>
+                2. <b>Packaging Guidelines:</b> Status is <i>Approved</i> as of yesterday's committee review. The primary color palette adheres to the 60-30-10 rule.
+                
+                <div style="margin-top:8px;padding:8px 12px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:8px;display:flex;align-items:center;gap:10px;font-size:12px;">
+                  <span style="color:var(--mj-status-success);font-weight:600;"><i class="fa-solid fa-circle-check"></i> Bounded to Shared Band:</span>
+                  <span>Used 2 files:</span>
+                  <span style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-strong);padding:2px 8px;border-radius:6px;font-size:11.5px;color:var(--mj-brand-primary)"><i class="fa-solid fa-file-pdf"></i> Brand-Guidelines-v2.pdf</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="studio-composer-dock">
+          <div class="composer-box">
+            <textarea class="composer-textarea" id="studioInput" placeholder="Message active channel... (@ to mention agents, # for space items)"></textarea>
+            <div class="composer-bar">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;font-size:11px;background:rgba(99,102,241,0.1);color:var(--mj-brand-tertiary);font-weight:600;">
+                  <i class="fa-solid fa-robot"></i> Assistant ready
+                </span>
+                <button class="btn-split-toggle" style="padding:2px 6px;"><i class="fa-solid fa-at"></i></button>
+                <button class="btn-split-toggle" style="padding:2px 6px;"><i class="fa-solid fa-hashtag"></i></button>
+                <button class="btn-split-toggle" style="padding:2px 6px;"><i class="fa-solid fa-paperclip"></i></button>
+              </div>
+              <button class="channel-pill-btn active" style="border-radius:6px;" onclick="sendStudioMsg()">Send <i class="fa-solid fa-arrow-up"></i></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Side-by-Side Split Drawer (Space Documents & References) -->
+      <aside class="studio-split-drawer" id="splitDrawer">
+        <div class="drawer-header">
+          <span><i class="fa-solid fa-folder-open" style="color:var(--mj-brand-primary)"></i> Space Documents</span>
+          <button class="btn-split-toggle" style="padding:2px 6px;" onclick="toggleSplitDrawer()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-body">
+          <div style="font-size:12px;color:var(--mj-text-secondary);margin-bottom:4px;">
+            Click a document to review alongside your conversation with the assistant:
+          </div>
+
+          <div class="side-doc-card">
+            <i class="fa-solid fa-file-pdf" style="font-size:20px;color:#ef4444;"></i>
+            <div style="flex:1;overflow:hidden;line-height:1.25;">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Brand-Guidelines-v2.pdf</div>
+              <div style="font-size:11px;color:var(--mj-text-muted);">Shared &middot; 4.2 MB &middot; Updated today</div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;color:var(--mj-text-muted);"></i>
+          </div>
+
+          <div class="side-doc-card">
+            <i class="fa-solid fa-file-word" style="font-size:20px;color:#2563eb;"></i>
+            <div style="flex:1;overflow:hidden;line-height:1.25;">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Committee-Minutes-Sep25.docx</div>
+              <div style="font-size:11px;color:var(--mj-text-muted);">Shared &middot; 420 KB &middot; Approved</div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;color:var(--mj-text-muted);"></i>
+          </div>
+
+          <div class="side-doc-card">
+            <i class="fa-solid fa-file-excel" style="font-size:20px;color:#16a34a;"></i>
+            <div style="flex:1;overflow:hidden;line-height:1.25;">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">FY2026-Packaging-Unit-Economics.xlsx</div>
+              <div style="font-size:11px;color:var(--mjc-team-brand);font-weight:600;">Team Only &middot; 1.8 MB</div>
+            </div>
+            <i class="fa-solid fa-lock" style="font-size:11px;color:var(--mjc-team-brand);"></i>
+          </div>
+
+          <div class="side-doc-card">
+            <i class="fa-solid fa-file-lines" style="font-size:20px;color:#64748b;"></i>
+            <div style="flex:1;overflow:hidden;line-height:1.25;">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Retail-Signage-Matrix.pdf</div>
+              <div style="font-size:11px;color:var(--mj-text-muted);">Shared &middot; 890 KB</div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:11px;color:var(--mj-text-muted);"></i>
+          </div>
+
+        </div>
+      </aside>
+
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+const rail = document.getElementById('cockpitRail');
+const resizer = document.getElementById('railResizer');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', () => {
+  isResizing = true;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const newWidth = e.clientX;
+  if (newWidth >= 160 && newWidth <= 420) {
+    rail.style.width = newWidth + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    console.log('[UserInfoEngine] Persisted setting mjc.cockpitRail.width =', rail.style.width);
+  }
+});
+
+function toggleRailCollapse() {
+  rail.classList.toggle('collapsed');
+  const icon = document.getElementById('railCollapseIcon');
+  if (rail.classList.contains('collapsed')) {
+    icon.className = 'fa-solid fa-chevron-right';
+    console.log('[UserInfoEngine] Persisted setting mjc.cockpitRail.collapsed = true');
+  } else {
+    icon.className = 'fa-solid fa-chevron-left';
+    console.log('[UserInfoEngine] Persisted setting mjc.cockpitRail.collapsed = false');
+  }
+}
+
+function toggleSplitDrawer() {
+  const drawer = document.getElementById('splitDrawer');
+  const btn = document.getElementById('splitToggleBtn');
+  drawer.classList.toggle('hidden');
+  btn.classList.toggle('active');
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+}
+
+function selectChannel(btn, title, band) {
+  document.querySelectorAll('.channel-pill-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('topNavCrumb').innerText = 'Discussions · ' + title;
+}
+
+function selectNav(name) {
+  document.querySelectorAll('.cockpit-nav-link').forEach(l => l.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('topNavCrumb').innerText = name;
+}
+
+function sendStudioMsg() {
+  const input = document.getElementById('studioInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const transcript = document.getElementById('studioTranscript');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:14px;max-width:850px;';
+  row.innerHTML = `
+    <div style="width:36px;height:36px;border-radius:50%;background:#dbeafe;color:#1e40af;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;">AN</div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;">
+        <b style="color:var(--mj-text-primary)">Amith Nagarajan</b>
+        <span style="font-size:11px;color:var(--mj-text-muted)">Just now</span>
+      </div>
+      <div style="background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-default);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5;">${text}</div>
+    </div>
+  `;
+  transcript.appendChild(row);
+  input.value = '';
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function addChannel() {
+  const name = prompt('New channel name (e.g. #packaging-design):', '#');
+  if (!name) return;
+  alert('Created new channel: ' + name);
+}
+</script>
+</body>
+</html>

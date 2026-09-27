@@ -1,152 +1,717 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabTypeTileComponent } from './type-tile.component';
-import { RailSpaceNode } from './types';
+import { CollabBandChipComponent } from './band-chip.component';
+import { RailSpaceNode, SpaceBand, TabItem, SpaceConversationItem } from './types';
+import { COLLAB_TOKENS_CSS } from './tokens';
+
+interface SpaceNavPref {
+  width: number;
+  collapsed: boolean;
+}
 
 @Component({
   selector: 'mjc-space-rail',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent, MJClickableDirective],
+  imports: [CommonModule, CollabTypeTileComponent, CollabBandChipComponent, MJClickableDirective],
   template: `
-    <nav class="appnav" aria-label="Collaboration Navigation">
-      <div class="jump" [mjClickable]="'Jump to a space'" (click)="onJumpClick()">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <span>Jump to a space</span>
-        <span class="kbd">⌘J</span>
-      </div>
+    @if (Mode === 'space') {
+      <!-- Space-Dedicated Workspace Rail (Option A) -->
+      <nav
+        class="space-nav"
+        [class.collapsed]="isCollapsed"
+        [style.width.px]="isCollapsed ? 58 : navWidth"
+        aria-label="Space Workspace Navigation">
 
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="ActiveNav === 'home'"
-        (click)="selectNav('home')">
-        <i class="fa-solid fa-house"></i>
-        <span>Home</span>
-      </button>
-
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="ActiveNav === 'inbox'"
-        (click)="selectNav('inbox')">
-        <i class="fa-solid fa-inbox"></i>
-        <span>Inbox</span>
-        @if (InboxCount > 0) {
-          <span class="count hot">{{ InboxCount }}</span>
-        }
-      </button>
-
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="ActiveNav === 'tasks'"
-        (click)="selectNav('tasks')">
-        <i class="fa-solid fa-list-check"></i>
-        <span>My tasks</span>
-        @if (TaskCount > 0) {
-          <span class="count">{{ TaskCount }}</span>
-        }
-      </button>
-
-      <button
-        type="button"
-        class="nav-item"
-        [class.active]="ActiveNav === 'files'"
-        (click)="selectNav('files')">
-        <i class="fa-solid fa-folder-open"></i>
-        <span>Recent files</span>
-      </button>
-
-      <div class="nav-section">
-        <span>Spaces</span>
-        <button
-          type="button"
-          class="icon-btn-inline"
-          (click)="SpaceCreateRequested.emit()"
-          title="New Space"
-          aria-label="New Space">
-          <i class="fa-solid fa-plus"></i>
-        </button>
-      </div>
-
-      <div class="tree-list">
-        @for (s of visibleSpaces; track s.id) {
+        <!-- Drag Resizer -->
+        @if (!isCollapsed) {
           <div
-            class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
-            [mjClickable]="s.name"
-            [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
-            (keydown.arrowright)="onArrowRight(s, $event)"
-            (keydown.arrowleft)="onArrowLeft(s, $event)"
-            (click)="selectSpace(s.id)">
-            <span
-              class="chev"
-              aria-hidden="true"
-              (click)="toggleSpace(s, $event)">
-              @if (s.hasChildren) {
-                <i [class]="isNodeExpanded(s) ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
-              }
-            </span>
-            <mjc-type-tile
-              [IconClass]="s.iconClass"
-              [Color]="s.color || ''"
-              Size="sm">
-            </mjc-type-tile>
-            <span class="ellipsis">{{ s.name }}</span>
-            @if (s.unread) {
-              <span class="unread"></span>
-            } @else if (s.isLocked) {
-              <span class="meta"><i class="fa-solid fa-lock"></i></span>
-            } @else if (s.meta !== undefined && s.meta !== null && s.meta !== '') {
-              <span class="meta">{{ s.meta }}</span>
-            }
+            class="nav-resizer"
+            (mousedown)="onResizerMouseDown($event)"
+            title="Drag to resize navigation">
           </div>
         }
-      </div>
 
-      <div class="nav-footer">
+        <!-- Space Identity Cluster -->
+        <div class="space-identity-box">
+          @if (!isCollapsed) {
+            <div class="space-identity-left">
+              <button
+                type="button"
+                class="btn-back-spaces"
+                (click)="onBackToSpaces()"
+                title="Return to Spaces Directory">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>All Spaces</span>
+              </button>
+
+              <div class="space-title-row">
+                <div class="space-avatar-tile">
+                  <i class="fa-solid" [class]="SpaceIcon || 'fa-shapes'"></i>
+                </div>
+                <div class="space-names">
+                  <span class="space-name-text" [title]="SpaceTitle">{{ SpaceTitle || 'Active Space' }}</span>
+                  <mjc-band-chip [Band]="SpaceBand" />
+                </div>
+              </div>
+            </div>
+          } @else {
+            <div
+              class="space-avatar-tile collapsed-tile"
+              (click)="onBackToSpaces()"
+              [title]="SpaceTitle + ' - Click to return to All Spaces'">
+              <i class="fa-solid" [class]="SpaceIcon || 'fa-shapes'"></i>
+            </div>
+          }
+
+          <button
+            type="button"
+            class="btn-nav-toggle"
+            (click)="toggleCollapse()"
+            [title]="isCollapsed ? 'Expand navigation' : 'Collapse navigation'">
+            <i class="fa-solid" [class]="isCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
+          </button>
+        </div>
+
+        <!-- Space Navigation Body -->
+        <div class="space-nav-body">
+
+          <!-- Core Space Modules -->
+          <div class="nav-section-group">
+            @if (!isCollapsed) {
+              <div class="section-title">WORKSPACE</div>
+            }
+
+            <div class="nav-links-list">
+              <button
+                type="button"
+                class="space-nav-link"
+                [class.active]="ActiveTab === 'Overview'"
+                (click)="onTabClick('Overview')"
+                [title]="isCollapsed ? 'Overview' : ''">
+                <i class="fa-solid fa-chart-pie link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">Overview</span>
+                }
+              </button>
+
+              <button
+                type="button"
+                class="space-nav-link"
+                [class.active]="ActiveTab === 'Library'"
+                (click)="onTabClick('Library')"
+                [title]="isCollapsed ? 'Documents' : ''">
+                <i class="fa-solid fa-folder-open link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">Documents</span>
+                  @if (LibraryCount > 0) {
+                    <span class="link-badge">{{ LibraryCount }}</span>
+                  }
+                }
+              </button>
+
+              <button
+                type="button"
+                class="space-nav-link"
+                [class.active]="ActiveTab === 'Work'"
+                (click)="onTabClick('Work')"
+                [title]="isCollapsed ? 'Work & Tasks' : ''">
+                <i class="fa-solid fa-list-check link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">Work &amp; Tasks</span>
+                  @if (TaskCount > 0) {
+                    <span class="link-badge">{{ TaskCount }}</span>
+                  }
+                }
+              </button>
+
+              <button
+                type="button"
+                class="space-nav-link"
+                [class.active]="ActiveTab === 'People'"
+                (click)="onTabClick('People')"
+                [title]="isCollapsed ? 'People & Access' : ''">
+                <i class="fa-solid fa-user-group link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">People &amp; Access</span>
+                  @if (MemberCount > 0) {
+                    <span class="link-badge">{{ MemberCount }}</span>
+                  }
+                }
+              </button>
+
+              <button
+                type="button"
+                class="space-nav-link"
+                [class.active]="ActiveTab === 'Settings'"
+                (click)="onTabClick('Settings')"
+                [title]="isCollapsed ? 'Settings & Assistant' : ''">
+                <i class="fa-solid fa-sliders link-icon"></i>
+                @if (!isCollapsed) {
+                  <span class="link-label">Settings &amp; Assistant</span>
+                }
+              </button>
+
+              <!-- Dynamic Plugin Tabs (from drivers e.g. Meetings, Papers, Motions) -->
+              @for (tab of ExtraTabs; track tab.id) {
+                <button
+                  type="button"
+                  class="space-nav-link"
+                  [class.active]="ActiveTab === tab.id"
+                  (click)="onTabClick(tab.id)"
+                  [title]="isCollapsed ? tab.label : ''">
+                  <i class="fa-solid link-icon" [class]="tab.iconClass || 'fa-layer-group'"></i>
+                  @if (!isCollapsed) {
+                    <span class="link-label">{{ tab.label }}</span>
+                    @if (tab.count) {
+                      <span class="link-badge">{{ tab.count }}</span>
+                    }
+                  }
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Space Conversations Section -->
+          <div class="nav-section-group">
+            @if (!isCollapsed) {
+              <div class="section-title-row">
+                <span class="section-title">CONVERSATIONS</span>
+                <button
+                  type="button"
+                  class="btn-add-convo-inline"
+                  (click)="onNewConversation()"
+                  title="Create new conversation">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            }
+
+            <div class="nav-links-list">
+              @if (Conversations && Conversations.length > 0) {
+                @for (c of Conversations; track c.id) {
+                  <button
+                    type="button"
+                    class="space-nav-link convo-link"
+                    [class.active]="ActiveTab === 'Chat' && ActiveConversationId === c.id"
+                    (click)="onConversationClick(c.id)"
+                    [title]="c.name">
+                    @if (c.kind === 'Private') {
+                      <i class="fa-solid fa-lock link-icon lock-ic"></i>
+                    } @else if (c.kind === 'Agent') {
+                      <i class="fa-solid fa-robot link-icon robot-ic"></i>
+                    } @else {
+                      <span class="convo-hash-prefix">#</span>
+                    }
+
+                    @if (!isCollapsed) {
+                      <span class="link-label">{{ c.name }}</span>
+                      @if (c.unreadCount) {
+                        <span class="link-badge unread">{{ c.unreadCount }}</span>
+                      }
+                      <span
+                        class="band-dot"
+                        [class.shared]="c.band === 'Shared'"
+                        [class.team]="c.band === 'Team'"
+                        [title]="c.band === 'Shared' ? 'Shared with client' : 'Internal team only'">
+                      </span>
+                    }
+                  </button>
+                }
+              } @else {
+                <button
+                  type="button"
+                  class="space-nav-link convo-link"
+                  [class.active]="ActiveTab === 'Chat'"
+                  (click)="onTabClick('Chat')"
+                  title="Space Chat Room">
+                  <span class="convo-hash-prefix">#</span>
+                  @if (!isCollapsed) {
+                    <span class="link-label">general-room</span>
+                    <span class="band-dot shared" title="Shared with client"></span>
+                  }
+                </button>
+              }
+
+              @if (!isCollapsed) {
+                <button
+                  type="button"
+                  class="btn-new-convo-row"
+                  (click)="onNewConversation()">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>New Conversation...</span>
+                </button>
+              }
+            </div>
+          </div>
+
+        </div>
+
+        @if (!isCollapsed) {
+          <div class="space-nav-footer">
+            <span class="footer-sync"><i class="fa-solid fa-cloud-check"></i> Preferences synced</span>
+          </div>
+        }
+
+      </nav>
+    } @else {
+      <!-- Default Collab Home Rail (Global Directory & Tools) -->
+      <nav class="appnav" aria-label="Collaboration Navigation">
+        <div class="jump" [mjClickable]="'Jump to a space'" (click)="onJumpClick()">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>Jump to a space</span>
+          <span class="kbd">⌘J</span>
+        </div>
+
         <button
           type="button"
           class="nav-item"
-          [class.active]="ActiveNav === 'assistant'"
-          (click)="selectNav('assistant')">
-          <i class="fa-solid fa-wand-magic-sparkles"></i>
-          <span>Assistant</span>
+          [class.active]="ActiveNav === 'home'"
+          (click)="selectNav('home')">
+          <i class="fa-solid fa-house"></i>
+          <span>Home</span>
         </button>
+
         <button
           type="button"
           class="nav-item"
-          [class.active]="ActiveNav === 'settings'"
-          (click)="selectNav('settings')">
-          <i class="fa-solid fa-gear"></i>
-          <span>Space types & settings</span>
+          [class.active]="ActiveNav === 'inbox'"
+          (click)="selectNav('inbox')">
+          <i class="fa-solid fa-inbox"></i>
+          <span>Inbox</span>
+          @if (InboxCount > 0) {
+            <span class="count hot">{{ InboxCount }}</span>
+          }
         </button>
-      </div>
-    </nav>
+
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="ActiveNav === 'tasks'"
+          (click)="selectNav('tasks')">
+          <i class="fa-solid fa-list-check"></i>
+          <span>My tasks</span>
+          @if (TaskCount > 0) {
+            <span class="count">{{ TaskCount }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="ActiveNav === 'files'"
+          (click)="selectNav('files')">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>Recent files</span>
+        </button>
+
+        <div class="nav-section">
+          <span>Spaces</span>
+          <button
+            type="button"
+            class="icon-btn-inline"
+            (click)="SpaceCreateRequested.emit()"
+            title="New Space"
+            aria-label="New Space">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </div>
+
+        <div class="tree-list">
+          @for (s of visibleSpaces; track s.id) {
+            <div
+              class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
+              [mjClickable]="s.name"
+              [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
+              (keydown.arrowright)="onArrowRight(s, $event)"
+              (keydown.arrowleft)="onArrowLeft(s, $event)"
+              (click)="selectSpace(s.id)">
+              <span
+                class="chev"
+                aria-hidden="true"
+                (click)="toggleSpace(s, $event)">
+                @if (s.hasChildren) {
+                  <i [class]="isNodeExpanded(s) ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+                }
+              </span>
+              <mjc-type-tile
+                [IconClass]="s.iconClass"
+                [Color]="s.color || ''"
+                Size="sm">
+              </mjc-type-tile>
+              <span class="ellipsis">{{ s.name }}</span>
+              @if (s.unread) {
+                <span class="unread"></span>
+              } @else if (s.isLocked) {
+                <span class="meta"><i class="fa-solid fa-lock"></i></span>
+              } @else if (s.meta !== undefined && s.meta !== null && s.meta !== '') {
+                <span class="meta">{{ s.meta }}</span>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="nav-footer">
+          <button
+            type="button"
+            class="nav-item"
+            [class.active]="ActiveNav === 'assistant'"
+            (click)="selectNav('assistant')">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Assistant</span>
+          </button>
+          <button
+            type="button"
+            class="nav-item"
+            [class.active]="ActiveNav === 'settings'"
+            (click)="selectNav('settings')">
+            <i class="fa-solid fa-gear"></i>
+            <span>Settings</span>
+          </button>
+        </div>
+      </nav>
+    }
   `,
-  styles: [`
+  styles: [
+    COLLAB_TOKENS_CSS,
+    `
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
       height: 100%;
-      color: var(--mj-text-primary);
-      font-family: var(--mj-font-family, Inter, sans-serif);
-      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
-      line-height: var(--mjc-line-height, 1.45);
+      user-select: none;
+      position: relative;
     }
-    button {
-      font-family: inherit;
-      line-height: inherit;
+
+    /* ─── Mode: Space-Dedicated Workspace Rail ────────────────────────────── */
+    .space-nav {
+      height: 100%;
+      background: var(--mj-bg-surface, #ffffff);
+      border-right: 1px solid var(--mj-border-default, #e2e8f0);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: relative;
+      transition: width 0.05s linear;
+      box-sizing: border-box;
     }
-    .appnav {
-      background: var(--mj-bg-surface);
-      border-right: 1px solid var(--mj-border-default);
-      padding: 12px 10px;
+    .space-nav.collapsed {
+      width: 58px !important;
+    }
+
+    .nav-resizer {
+      position: absolute;
+      top: 0;
+      right: -4px;
+      width: 8px;
+      bottom: 0;
+      cursor: col-resize;
+      z-index: 50;
+      transition: background 0.15s ease;
+    }
+    .nav-resizer:hover, .nav-resizer:active {
+      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 35%, transparent);
+    }
+
+    .space-identity-box {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .space-nav.collapsed .space-identity-box {
+      padding: 12px 6px;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .space-identity-left {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .btn-back-spaces {
+      background: transparent;
+      border: none;
+      color: var(--mj-text-muted, #64748b);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+      text-align: left;
+      transition: color 0.15s ease;
+    }
+    .btn-back-spaces:hover {
+      color: var(--mj-brand-primary, #0076b6);
+    }
+
+    .space-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .space-avatar-tile {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--mj-brand-secondary, #0891b2), var(--mj-brand-primary, #0076b6));
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .space-avatar-tile.collapsed-tile {
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+    }
+
+    .space-names {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      min-height: 0;
+      min-width: 0;
+      line-height: 1.2;
+    }
+
+    .space-name-text {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--mj-text-primary, #0f172a);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn-nav-toggle {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--mj-text-muted, #94a3b8);
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      font-size: 11px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .btn-nav-toggle:hover {
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+      color: var(--mj-text-primary, #0f172a);
+      border-color: var(--mj-border-strong, #cbd5e1);
+    }
+
+    .space-nav-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .space-nav.collapsed .space-nav-body {
+      padding: 10px 4px;
+      align-items: center;
+    }
+
+    .nav-section-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--mj-text-muted, #94a3b8);
+      padding: 4px 10px 2px;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px 2px;
+    }
+
+    .btn-add-convo-inline {
+      background: transparent;
+      border: none;
+      color: var(--mj-text-muted, #94a3b8);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-add-convo-inline:hover {
+      color: var(--mj-brand-primary, #0076b6);
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+
+    .nav-links-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .space-nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--mj-text-secondary, #475569);
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
       box-sizing: border-box;
-      width: 252px;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .space-nav-link:hover {
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+      color: var(--mj-text-primary, #0f172a);
+    }
+    .space-nav-link.active {
+      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+      color: var(--mj-brand-primary, #0076b6);
+      font-weight: 600;
+    }
+    .space-nav-link.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      background: var(--mj-brand-primary, #0076b6);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .link-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 13.5px;
+      flex-shrink: 0;
+    }
+    .link-label {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .link-badge {
+      background: var(--mj-bg-surface-sunken, #f1f5f9);
+      color: var(--mj-text-secondary, #475569);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-family: var(--mj-font-family-mono, monospace);
+    }
+    .link-badge.unread {
+      background: var(--mj-brand-primary, #0076b6);
+      color: #ffffff;
+    }
+
+    .convo-link {
+      padding-left: 12px;
+    }
+    .convo-hash-prefix {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--mj-text-muted, #94a3b8);
+      width: 18px;
+      text-align: center;
+    }
+    .space-nav-link.active .convo-hash-prefix {
+      color: var(--mj-brand-primary, #0076b6);
+    }
+    .lock-ic {
+      color: var(--mjc-team, #7c3aed);
+      font-size: 11px;
+    }
+    .robot-ic {
+      color: var(--mj-brand-tertiary, #6366f1);
+      font-size: 12px;
+    }
+    .band-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .band-dot.shared { background: var(--mjc-shared, #0076b6); }
+    .band-dot.team { background: var(--mjc-team, #7c3aed); }
+
+    .btn-new-convo-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px dashed var(--mj-border-default, #e2e8f0);
+      border-radius: 6px;
+      color: var(--mj-text-muted, #94a3b8);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.15s ease;
+    }
+    .btn-new-convo-row:hover {
+      border-color: var(--mj-brand-primary, #0076b6);
+      color: var(--mj-brand-primary, #0076b6);
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+
+    .space-nav-footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--mj-border-default, #e2e8f0);
+      font-size: 11px;
+      color: var(--mj-text-muted, #94a3b8);
+    }
+    .footer-sync {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ─── Mode: Default Home Rail ─────────────────────────────────────────── */
+    .appnav {
+      width: 228px;
+      border-right: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      display: flex;
+      flex-direction: column;
+      padding: 8px 6px;
+      box-sizing: border-box;
+      gap: 2px;
       height: 100%;
       user-select: none;
     }
@@ -224,103 +789,124 @@ import { RailSpaceNode } from './types';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin: 14px 10px 4px;
+      padding: 14px 10px 6px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--mj-text-muted);
     }
-    .nav-section .icon-btn-inline {
-      background: none;
+    .icon-btn-inline {
       border: none;
+      background: none;
       color: var(--mj-text-muted);
       cursor: pointer;
       padding: 2px 4px;
-      margin: -2px -4px;
-      letter-spacing: inherit;
-      font-size: 12px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      border-radius: 4px;
     }
-    .nav-section .icon-btn-inline:hover {
-      color: var(--mj-text-primary, #0f172a);
+    .icon-btn-inline:hover {
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface-sunken);
     }
     .tree-list {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      overflow-y: auto;
-      flex: 1;
-      min-height: 0;
+      gap: 1px;
     }
     .tree-item {
       display: flex;
       align-items: center;
       gap: 8px;
       height: 32px;
-      padding: 0 8px;
+      padding: 0 8px 0 20px;
       border-radius: var(--mj-radius-md, 8px);
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-size: 13.5px;
-      font-weight: 500;
       cursor: pointer;
-      box-sizing: border-box;
+      position: relative;
     }
     .tree-item:hover {
-      background: var(--mj-bg-surface-card, #f8fafc);
-    }
-    .tree-item .chev {
-      width: 10px;
-      font-size: 9px;
-      color: var(--mj-text-disabled, #94a3b8);
+      background: var(--mj-bg-surface-card);
     }
     .tree-item.active {
-      background: var(--mj-bg-surface-sunken, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
+    .tree-item.dim {
+      opacity: 0.55;
+    }
+    .tree-item.l1 {
+      padding-left: 28px;
+    }
+    .tree-item.l2 {
+      padding-left: 44px;
+    }
+    .tree-item .chev {
+      position: absolute;
+      left: 4px;
+      width: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--mj-text-muted);
+    }
+    .tree-item.l1 .chev {
+      left: 12px;
+    }
+    .tree-item.l2 .chev {
+      left: 28px;
+    }
+    .tree-item .ellipsis {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1 1 auto;
+    }
     .tree-item .unread {
-      margin-left: auto;
       width: 7px;
       height: 7px;
       border-radius: 99px;
-      background: var(--mj-brand-primary, #0076b6);
+      background: var(--mj-brand-primary);
+      flex: none;
     }
     .tree-item .meta {
       margin-left: auto;
-      font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
-      font-weight: 500;
+      font-size: 11.5px;
+      color: var(--mj-text-muted);
     }
-    .tree-item.dim {
-      color: var(--mj-text-muted, #64748b);
-    }
-    .l1 { padding-left: 22px; }
-    .l2 { padding-left: 40px; }
     .nav-footer {
       margin-top: auto;
-      border-top: 1px solid var(--mj-border-default, #e2e8f0);
-      padding-top: 10px;
       display: flex;
       flex-direction: column;
-      gap: 0;
+      gap: 2px;
+      padding-top: 8px;
+      border-top: 1px solid var(--mj-border-default);
+      flex: none;
     }
-    .ellipsis {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-      min-width: 0;
-    }
-  `]
+    `
+  ]
 })
-export class CollabSpaceRailComponent {
+export class CollabSpaceRailComponent implements OnInit {
+  @Input() Mode: 'home' | 'space' = 'home';
   @Input() ActiveNav = '';
   @Input() ActiveSpaceId = '';
-  @Input() InboxCount = 0;
+  @Input() SpaceTitle = '';
+  @Input() SpaceIcon = 'fa-shapes';
+  @Input() SpaceBand: SpaceBand = 'Shared';
+  @Input() ActiveTab = 'Overview';
+  @Input() ExtraTabs: TabItem[] = [];
+  @Input() Conversations: SpaceConversationItem[] = [];
+  @Input() ActiveConversationId = '';
+  @Input() LibraryCount = 0;
   @Input() TaskCount = 0;
+  @Input() MemberCount = 0;
+  @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
 
   @Output() NavSelectRequested = new EventEmitter<string>();
@@ -329,7 +915,119 @@ export class CollabSpaceRailComponent {
   @Output() SpaceCreateRequested = new EventEmitter<void>();
   @Output() JumpOpenRequested = new EventEmitter<void>();
 
-  onArrowRight(s: RailSpaceNode, event: Event): void {
+  @Output() TabSelectRequested = new EventEmitter<string>();
+  @Output() ConversationSelectRequested = new EventEmitter<string>();
+  @Output() NewConversationRequested = new EventEmitter<void>();
+  @Output() BackToSpacesRequested = new EventEmitter<void>();
+
+  public navWidth = 280;
+  public isCollapsed = false;
+  private isDraggingResizer = false;
+  private startDragX = 0;
+  private startWidth = 280;
+
+  ngOnInit(): void {
+    this.loadLayoutPreference();
+  }
+
+  private loadLayoutPreference(): void {
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting('mjc.spaceNav.state');
+      if (raw) {
+        const parsed: SpaceNavPref = JSON.parse(raw);
+        if (typeof parsed.width === 'number') {
+          this.navWidth = Math.min(450, Math.max(180, parsed.width));
+        }
+        if (typeof parsed.collapsed === 'boolean') {
+          this.isCollapsed = parsed.collapsed;
+        }
+      }
+    } catch {
+      // ignore parsing error
+    }
+  }
+
+  private persistLayoutPreference(): void {
+    const pref: SpaceNavPref = {
+      width: this.navWidth,
+      collapsed: this.isCollapsed,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mjc.spaceNav.state', JSON.stringify(pref));
+  }
+
+  public toggleCollapse(): void {
+    this.isCollapsed = !this.isCollapsed;
+    this.persistLayoutPreference();
+  }
+
+  public onResizerMouseDown(event: MouseEvent): void {
+    event.preventDefault();
+    this.isDraggingResizer = true;
+    this.startDragX = event.clientX;
+    this.startWidth = this.navWidth;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDocumentMouseMove(event: MouseEvent): void {
+    if (!this.isDraggingResizer) return;
+    const delta = event.clientX - this.startDragX;
+    const newWidth = this.startWidth + delta;
+    if (newWidth >= 180 && newWidth <= 450) {
+      this.navWidth = newWidth;
+    }
+  }
+
+  @HostListener('document:mouseup')
+  onDocumentMouseUp(): void {
+    if (this.isDraggingResizer) {
+      this.isDraggingResizer = false;
+      this.persistLayoutPreference();
+    }
+  }
+
+  public onTabClick(tabId: string): void {
+    this.TabSelectRequested.emit(tabId);
+  }
+
+  public onConversationClick(conversationId: string): void {
+    this.ConversationSelectRequested.emit(conversationId);
+  }
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
+  }
+
+  public onBackToSpaces(): void {
+    this.BackToSpacesRequested.emit();
+  }
+
+  public selectNav(nav: string): void {
+    this.NavSelectRequested.emit(nav);
+  }
+
+  public selectSpace(id: string): void {
+    this.SpaceOpenRequested.emit(id);
+  }
+
+  public onJumpClick(): void {
+    this.JumpOpenRequested.emit();
+  }
+
+  public toggleSpace(s: RailSpaceNode, event: Event): void {
+    event.stopPropagation();
+    const current = this.isNodeExpanded(s);
+    this._expandedOverrides.set(s.id, !current);
+    this.SpaceToggleRequested.emit(s);
+  }
+
+  public isNodeExpanded(s: RailSpaceNode): boolean {
+    if (this._expandedOverrides.has(s.id)) {
+      return this._expandedOverrides.get(s.id)!;
+    }
+    return s.isExpanded ?? false;
+  }
+
+  public onArrowRight(s: RailSpaceNode, event: Event): void {
     if (s.hasChildren && !this.isNodeExpanded(s)) {
       event.preventDefault();
       this._expandedOverrides.set(s.id, true);
@@ -337,7 +1035,7 @@ export class CollabSpaceRailComponent {
     }
   }
 
-  onArrowLeft(s: RailSpaceNode, event: Event): void {
+  public onArrowLeft(s: RailSpaceNode, event: Event): void {
     if (s.hasChildren && this.isNodeExpanded(s)) {
       event.preventDefault();
       this._expandedOverrides.set(s.id, false);
@@ -368,33 +1066,5 @@ export class CollabSpaceRailComponent {
     }
 
     return result;
-  }
-
-  isNodeExpanded(s: RailSpaceNode): boolean {
-    if (this._expandedOverrides.has(s.id)) {
-      return this._expandedOverrides.get(s.id)!;
-    }
-    return !!s.isExpanded;
-  }
-
-  selectNav(nav: string): void {
-    this.NavSelectRequested.emit(nav);
-  }
-
-  selectSpace(spaceId: string): void {
-    this.SpaceOpenRequested.emit(spaceId);
-  }
-
-  toggleSpace(s: RailSpaceNode, event?: { stopPropagation?: () => void }): void {
-    event?.stopPropagation?.();
-    if (s.hasChildren) {
-      const next = !this.isNodeExpanded(s);
-      this._expandedOverrides.set(s.id, next);
-      this.SpaceToggleRequested.emit(s);
-    }
-  }
-
-  onJumpClick(): void {
-    this.JumpOpenRequested.emit();
   }
 }

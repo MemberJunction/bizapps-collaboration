@@ -131,6 +131,17 @@ export interface ChatSummaryModel {
   isActive?: boolean;
 }
 
+export interface SpaceConversationItem {
+  id: string;
+  name: string;
+  kind: 'General' | 'Room' | 'Topic' | 'Private' | string;
+  band: SpaceBand;
+  unreadCount?: number;
+  lastMessageSnippet?: string;
+  lastMessageTime?: string;
+  isActive?: boolean;
+}
+
 export interface ChatMessageCitation {
   id: string;
   label: string;
