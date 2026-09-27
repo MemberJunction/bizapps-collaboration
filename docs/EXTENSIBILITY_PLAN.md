@@ -97,6 +97,7 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 | `DefaultInheritsMembership` | `BIT NOT NULL DEFAULT 1` | Whether a new space of this type inherits its parent's seats. A type such as Compensation or Audit sets 0, so its spaces start sealed (the plan's D1). Today `Space.InheritsMembership` defaults to 1, and nothing on the type overrides it. |
 | `PostCloseAccess` | `NVARCHAR(20) NOT NULL` | What happens once a space of this type closes: `None`, `ReadOnly` or `ReadOnlyWithAgent`. `ReadOnlyWithAgent` keeps the library readable and the agent answering, for former clients. Each starter type's default is still to be decided (the plan's § 11, decision 8). |
 | `PostCloseAccessDays` | `INT NULL` | How long that access lasts after `ClosedAt`. Empty means indefinitely. |
+| `DefaultStorageAccountID` | `UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts` | Where new files in spaces of this type are stored, unless a space or one of its parents names an account (the plan's D17). Empty falls back to the host's single active account. |
 
 - **Removed:** `GovernancePanel`, and the `committee` seed row. PR #3 removes both (the plan's B0.11), and Committees ships its own type.
 - **Replaced:** `PostCloseAccess` and `PostCloseAccessDays` replace what `DefaultRetention` and `Space.Retention` meant. Nothing enforces those today. The schema step's pull request comment says whether the old columns are dropped.
@@ -111,6 +112,7 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 | `AnchorRecordID` | `NVARCHAR(450) NULL` | That record's key, the same shape as `SpaceItem.RecordID`. Unique per type and entity when set. |
 | `PostCloseAccess` | `NVARCHAR(20) NULL` | Overrides the type's value. Empty means the type's. |
 | `PostCloseAccessDays` | `INT NULL` | Overrides the type's value, when `PostCloseAccess` is set here. |
+| `DefaultStorageAccountID` | `UNIQUEIDENTIFIER NULL`, FK to `MJ: File Storage Accounts` | Where new files in this space and the spaces under it are stored (the plan's D17). Empty means the nearest parent space's, then the type's. |
 
 `PlannedCloseAt` is already in. `fnCollaborationAccess` applies `PostCloseAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` reads `ClosedAt`, and the access function is brought into line in the same step.
 

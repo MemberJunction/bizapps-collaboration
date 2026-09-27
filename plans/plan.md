@@ -301,6 +301,13 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **Reviewed as an outsider would:** the plan's author reviews the shots for completeness and quality. Does each screen do its job, on real data, and is its overall form right? Pixel parity with the frames isn't the bar. The frames still set layout and content, and D15 still holds.
 - **The gallery's pixel tests stay** as regression checks for the frames they cover. When a change is intended, move the budget to the new count and say why in the commit.
 
+**D17. Where a space's files are stored is configured, never typed in.**
+- A space type names a default storage account. A space can name its own, the spaces under it inherit it, and any level can override it.
+- **The first value set wins:** the space, then its parent spaces up the tree, then the space's type. With nothing set, the host's single active storage account is used when there's exactly one. With more than one, the upload is refused with a message saying where to set it. This is MJ's own rule for agent files (`DefaultStorageAccountID` on agents, their category tree and agent types, in `base-agent.ts`), so it reads the same way here.
+- **The setting names an MJ storage account** (`MJ: File Storage Accounts`), not a provider. An account carries its provider, its credentials and its container, and the upload already takes an account ID.
+- **No storage provider or account ID is typed into code,** linked documents included. A linked document isn't a stored file, so its shape is proposed before its migration.
+- **A change applies to new uploads.** `MJ: Files` records a file's provider but not its account, so each item records the account its file went to, and reads and deletes use that account.
+
 ## 4. The model
 
 **What Collaboration composes.** It adds the container and uses what MemberJunction and the sibling apps already have:
