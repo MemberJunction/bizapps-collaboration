@@ -795,10 +795,6 @@ describe('CollabSpaceChatComponent', () => {
 
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
-    expect(comp.AgentReplyMode).toBe('Always');
-    expect(comp.AllowedAgentIDs).toBeNull();
-    expect(comp.AgentHistoryFrom).toBeNull();
-    expect(comp.AgentTurnHandler).toBeNull();
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(true);
   });
@@ -808,7 +804,7 @@ describe('CollabSpaceChatComponent', () => {
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [
     { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active' },
-    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Client Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
+    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Outside Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
     { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
   ];
 

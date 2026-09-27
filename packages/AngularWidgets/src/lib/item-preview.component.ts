@@ -61,10 +61,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
         }
 
-        <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
-          <i class="fa-solid fa-share-from-square"></i>
-          <span>{{ ShareButtonLabel }}</span>
-        </button>
+        <div class="preview-actions">
+          <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
+            <i class="fa-solid fa-share-from-square"></i>
+            <span>{{ ShareButtonLabel }}</span>
+          </button>
+          @if (FileId) {
+            <button mjButton variant="secondary" class="btn secondary open-file-btn" (click)="onOpenFile()" title="Open file record in MemberJunction">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>Open Document</span>
+            </button>
+          }
+        </div>
       </div>
 
       @if (RecentUses && RecentUses.length > 0) {
@@ -243,6 +251,25 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
     }
 
+    .preview-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .open-file-btn {
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 14px;
+      font-weight: 600;
+      font-size: 13.5px;
+      border-radius: var(--mj-radius-md);
+      cursor: pointer;
+    }
+
     .eyebrow {
       font-size: 11px;
       font-weight: 650;
@@ -300,9 +327,11 @@ export class CollabItemPreviewComponent {
   @Input() public FlagDescription = '';
   @Input() public ShareButtonLabel = '';
   @Input() public RecentUses: RecentUseModel[] = [];
+  @Input() public FileId = '';
 
   @Output() public CloseRequested = new EventEmitter<void>();
   @Output() public ShareRequested = new EventEmitter<void>();
+  @Output() public OpenFileRequested = new EventEmitter<string>();
 
   public onClose(): void {
     this.CloseRequested.emit();
@@ -310,6 +339,12 @@ export class CollabItemPreviewComponent {
 
   public onShare(): void {
     this.ShareRequested.emit();
+  }
+
+  public onOpenFile(): void {
+    if (this.FileId) {
+      this.OpenFileRequested.emit(this.FileId);
+    }
   }
 
   public parseParagraph(p: string): Array<{ text: string; isMarked: boolean }> {

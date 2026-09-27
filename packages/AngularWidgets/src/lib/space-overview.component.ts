@@ -105,7 +105,7 @@ export interface SubSpaceSummary {
               </span>
               <div class="grow">
                 <div class="fw7 fs14">Team working set</div>
-                <div class="fs12 muted">Only {{ FirmName }} staff · {{ TeamTotalCount || 15 }} items · never quoted to {{ ClientOrgName }}</div>
+                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Internal team only' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
               </div>
               <a class="link fs12 open-lib-link" (click)="onOpenLibrary($event)">Open library</a>
             </div>

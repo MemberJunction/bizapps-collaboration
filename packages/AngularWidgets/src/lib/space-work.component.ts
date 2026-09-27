@@ -29,7 +29,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
         <div class="stat-card">
           <span class="stat-num shared">{{ SharedCount }}</span>
-          <span class="stat-lbl">Shared with Client</span>
+          <span class="stat-lbl">Shared with Outside</span>
         </div>
       </div>
 
@@ -83,14 +83,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="spacer"></div>
 
-        <button class="add-task-btn" (click)="isAddingTask = !isAddingTask">
-          <i class="fa-solid fa-plus"></i>
-          <span>Add task</span>
-        </button>
+        @if (CanCreateTask) {
+          <button class="add-task-btn" (click)="isAddingTask = !isAddingTask">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add task</span>
+          </button>
+        }
       </div>
 
       <!-- Inline Add Task Row -->
-      @if (isAddingTask) {
+      @if (isAddingTask && CanCreateTask) {
         <div class="add-task-row">
           <input
             type="text"
@@ -101,7 +103,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             autofocus
           />
           <select [(ngModel)]="newTaskBand" class="new-task-select">
-            <option value="Shared">Shared with Client</option>
+            <option value="Shared">Shared with Outside</option>
             <option value="Team">Team only</option>
           </select>
           <select [(ngModel)]="newTaskPriority" class="new-task-select">

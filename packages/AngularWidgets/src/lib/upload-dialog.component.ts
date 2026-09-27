@@ -45,30 +45,32 @@ export interface CollabUploadSubmitPayload {
         </header>
 
         <!-- Segmented Tab switcher -->
-        <div class="tab-strip" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            class="tab-btn"
-            [class.active]="activeMode === 'upload'"
-            [attr.aria-selected]="activeMode === 'upload'"
-            (click)="setMode('upload')"
-          >
-            <i class="fa-solid fa-arrow-up-from-bracket"></i>
-            <span>Upload file</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="tab-btn"
-            [class.active]="activeMode === 'link'"
-            [attr.aria-selected]="activeMode === 'link'"
-            (click)="setMode('link')"
-          >
-            <i class="fa-solid fa-link"></i>
-            <span>Link cloud doc</span>
-          </button>
-        </div>
+        @if (AllowLinks) {
+          <div class="tab-strip" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              [class.active]="activeMode === 'upload'"
+              [attr.aria-selected]="activeMode === 'upload'"
+              (click)="setMode('upload')"
+            >
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              <span>Upload file</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              [class.active]="activeMode === 'link'"
+              [attr.aria-selected]="activeMode === 'link'"
+              (click)="setMode('link')"
+            >
+              <i class="fa-solid fa-link"></i>
+              <span>Link cloud doc</span>
+            </button>
+          </div>
+        }
 
         <div class="d-body">
           @if (activeMode === 'upload') {
@@ -505,6 +507,7 @@ export class CollabUploadDialogComponent {
   @Input() SpaceId = '';
   @Input() ClientOrgName = '';
   @Input() IsSubmitting = false;
+  @Input() AllowLinks = false;
 
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() SubmitRequested = new EventEmitter<CollabUploadSubmitPayload>();

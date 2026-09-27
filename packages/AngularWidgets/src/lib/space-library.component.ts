@@ -184,8 +184,10 @@ export interface LibrarySmartView {
           [FlagDescription]="PreviewFlagDescription"
           [ShareButtonLabel]="PreviewShareButtonLabel"
           [RecentUses]="PreviewRecentUses"
+          [FileId]="SelectedRow?.fileId || SelectedRow?.id || ''"
           (CloseRequested)="onCloseDrawer()"
           (ShareRequested)="onShareFromPreview()"
+          (OpenFileRequested)="onOpenFile($event)"
         />
       }
     </div>
@@ -491,6 +493,11 @@ export class CollabSpaceLibraryComponent {
   @Output() public ShareRequested = new EventEmitter<LibraryRowModel>();
   @Output() public CloseDrawerRequested = new EventEmitter<void>();
   @Output() public FilterButtonClickRequested = new EventEmitter<void>();
+  @Output() public OpenFileRequested = new EventEmitter<string>();
+
+  public onOpenFile(fileId: string): void {
+    this.OpenFileRequested.emit(fileId);
+  }
 
   public get FilteredRows(): LibraryRowModel[] {
     if (this.ActiveBandFilter === 'All') {
