@@ -2,7 +2,7 @@
 
 **What this is.** The build plan for PR #8, the pull request after #7. It's a differential plan: it starts from the app as #7 leaves it, and lists what #8 changes, in order, with each change's acceptance checks. The reasons and the rules are in [the plan](plan.md), v0.5: its decisions D26 to D35 ([§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)) and its items B14 to B24 and A14 to A18. This document is the how and the order.
 
-**Version:** 2026-09-27, written while #7 is still open, at its head `c948cbf`. Stage 0 checks it against #7's final head.
+**Version:** 2026-09-27, at #7's head `37e290b`. Amith then decided to finish #7 where it is: [its punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is #7's finish line, and moved #7's other open items here ([§ 1](#what-7-moved-here)) or to after this pull request. Stage 0 checks this plan against #7's final head.
 
 **Who does what.**
 - **The builder builds it,** on `claude/hopeful-bell-6ldk4v-pr8`, once #7 merges. Until then it's a draft stacked on #7, holding this plan, the plan's v0.5 and the new README.
@@ -28,19 +28,66 @@
 
 ## 1. Where #7 leaves the app
 
-When #7 merges, every item on its punch list is done. The app then has:
+When #7 merges, its finish line (punch list 4) is done, and its other open items have moved here or later. The app then has:
 
 - **The container:** `SpaceType`, `Space`, `SpaceMember`, `SpaceRoleType`, `SpaceItem`, `ItemUse` and `ShareNotice`, with the access functions `fnCollaborationAccess`, `fnCollaborationTasks` and `fnCollaborationAncestorMembers`, and the Space Participant role with a row-level security filter on every read grant.
-- **The extensibility schema,** folded into one baseline by #7's item 14: the type's `ServerDriverClass`, `UIDriverClass`, `SpaceExtensionEntity` and `Configuration`; `Space.Configuration`, `AnchorEntityID`, `AnchorRecordID`, `PostCloseAccess` and `PostCloseAccessDays`; `SpaceMember.SyncSource` and `PersonID`; and the tables `SpaceChat`, `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`.
-- **The metadata engine** (D19): `CollaborationEngineBase`, in `collaboration-engine-base`, and the server's `CollaborationEngine`.
-- **One settings model** (D20 to D23): `CollaborationSettings`, resolved by `ResolveCollaborationSettings` (the sub-space, its parents, the type, then the app); the app's defaults as an Application Settings row; closing as a setting; sub-spaces sealed unless their creator asks; and the *Collaboration* authorization tree.
+- **The extensibility schema,** still as #7's migrations (folding them into one baseline is #7's item 14, now here): the type's `ServerDriverClass`, `UIDriverClass`, `SpaceExtensionEntity` and `Configuration`; `Space.Configuration`, `AnchorEntityID`, `AnchorRecordID`, `PostCloseAccess` and `PostCloseAccessDays`; `SpaceMember.SyncSource` and `PersonID`; and the tables `SpaceChat`, `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`.
+- **The metadata engine** (D19): `CollaborationEngineBase`, in `collaboration-engine-base`, loaded once per process, and the server's `CollaborationEngine`.
+- **Settings** (D20 to D23): `CollaborationSettings` and `ResolveCollaborationSettings`, used when a space closes, beside the older `ResolveSpaceRules` the drivers and gates still run on (#7's items 36 and 55, now here); the app's defaults as an Application Settings row; closing as a setting; sub-spaces sealed unless their creator asks; and the *Collaboration* authorization tree, held by MJ's `Owner` and `Developer` roles.
 - **Seven generic space types** (D18).
-- **The extension points** (B8): server and UI drivers, contributions, lifecycle subscribers, `EnsureSpaceForRecord`, `SyncSeats`, and the private example plug-ins `example-board` and `example-room`.
-- **Chats** on MJ's `mj-conversation-chat-area` (D25), with each space's room created by the server; the allowed-agent, skill and knowledge resolvers; and the agent run bounded by the chat's audience (B2), with whatever of A5 to A7 an MJ release carries by then.
-- **The screens** (D16, D24): Home, the space rail and tabs, the library, chat, people, work and settings, walked end to end in Explorer.
-- **The tests:** the unit tests, both integration harnesses, `persona-check.sql`, the gallery, and CI against a real database (B0.5).
+- **The extension points** (B8): server and UI drivers, contributions, lifecycle subscribers, a server-only `EnsureSpaceForRecord`, and the private example plug-ins `example-board` and `example-room`. `SyncSeats` is out until it's built.
+- **Chats:** one room per space, created by the server, on the chat Amith chose for #7 (punch list 4's A or B). No chats are created in the browser. The allowed-agent, skill and knowledge resolvers, and retrieval bounded by the room's audience (B2.1, B2.2).
+- **The screens** (D24): Home, the space rail and tabs, the library, chat, people, work and settings, with #7's wrong results and browser writes fixed. The walkthrough is here (#7's item 51).
+- **The tests:** the unit tests, both integration harnesses, `persona-check.sql` and the gallery. CI against a real database is here (#7's item 13).
 
 If #7's final head differs from this, stage 0 says how, and this plan follows the code.
+
+### What #7 moved here
+
+Punch list 4 moved these of #7's items here, by number. Each is done in the stage named, with the rest of that stage's work.
+
+| #7's item | What | Stage |
+|---|---|---|
+| 13 | CI against a real database (B0.5) | 1 |
+| 14 | One baseline, regenerated from a clean database, with #7's migrations folded in and D20 to D22's type columns not created | 1 |
+| 15 | The extensibility migration's fixes, in the baseline: no hand-written `__mj_` columns, `${mjSchema}`, extended properties, one room per space | 1 |
+| 18 | The committee specifics, with the baseline | 1 |
+| 19 | Rebuild from empty, and check the core-entity list on the screens as Bea | 1 |
+| 12 | The type dropped from `fnCollaborationAccess`'s fallback, with the type's close columns | 1 |
+| 38 | `EnsureSpaceForRecord` on the primary `SpaceAnchor` | 1, 2 |
+| 6 | Storage as a setting: uploads use the resolved account, a space can set it, each item records its account, and linked documents go through a server operation | 2 |
+| 12 | A space setting its own close values | 2 |
+| 20 | The fields a participant can read, the geocode columns, and what bizapps-common#186's release does to a host's roles | 2 |
+| 29 | Chats with their own people and audience (B3): started through a server operation that applies `Chats.WhoCanStart`, with their kinds recorded, and readable only by their people. Posting on A5 and sealing on A7 wait for those MJ items | 2, 4 |
+| 34 | The extension points' leftovers, with `example-chapter`: the examples' migration with its CodeGen output, frame 08 through the points, examples that read their own rows | 2 |
+| 35 | React hooks inside the save's transaction | 2 |
+| 36 | The drivers on the one configuration | 2 |
+| 37 | Subscribers found by metadata, run only after the commit | 2 |
+| 41 | The drivers' change kinds | 2 |
+| 42 | The resolvers' rules, carried into the grants: one chain loaded once, the context user on every read, fail closed, each parent under its own type, the default agent found by name | 2, 3 |
+| 47 | Tests for the driver registry, the subscribers and `EnsureSpaceForRecord` | 2 |
+| 53 | Types that set only what differs from the app, nesting enforced on the server, and band names and descriptions from the type | 2 |
+| 54 | The engine's unused sets, and its typed-in IDs and names | 2 |
+| 55 | The settings model's open points, settled by D30's one resolver | 2 |
+| 56 | The app settings row's editor | 2 |
+| 3 | A seat for the account the walkthrough drives | 4 |
+| 4 | The host's placeholders, list limits, made-up labels, metadata reads and typed-in IDs | 4 |
+| 16 | The READMEs and screenshots | 4 |
+| 17 | Tokens | 4 |
+| 22 | The accepting side of every other gate, with the plan's § 10 matrix | 4 |
+| 23 | The staff runs and the client harness, on the screens | 4 |
+| 25 | Uploads end to end | 4 |
+| 26 | A sample world with conversations and documents with real content | 4 |
+| 49 | The rest of the screens | 4 |
+| 50 | The widgets' text color in dark mode, and the controls that misbehaved in Explorer | 4 |
+| 51 | The walkthrough | 4 |
+| 53 | The tabs' labels from the type | 4 |
+| 57 | The chat's colors | 4 |
+| 58 | The Work tab on `<bizapps-task-panel>`, once bizapps-tasks 1.6.1 is published, with every bizapps-tasks version moved together | 4 |
+| 24 | The adversarial test, over #7 and this pull request together, before any release | End |
+| 52 | The wrap-up | End |
+
+**After this pull request,** in the plan's § 9 order: #7's items 30 to 33 (B4 to B7), 43 to 46 (B9 to B12), B2.3 to B2.6 from item 28, building `SyncSeats` (item 39), and slice A's data (item 50).
 
 ## 2. What PR #8 delivers
 
@@ -75,7 +122,7 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 | The app-wide default agent, as a `SpaceAgent` row or a typed-in ID | An app-wide `SpaceGrant` row, shipped as metadata that finds the agent by name |
 | `EnsureSpaceForRecord` on `Space`'s anchor columns | `EnsureSpaceForRecord` on the primary `SpaceAnchor` |
 
-**If #7's resolver already has D30's same-type restart** (it settles #7's item 55), B16 extends it rather than writing it again.
+**#7's item 55 moved here,** so B16 settles it: one resolver for every caller, with D30's same-type restart.
 
 ## 4. What it depends on
 
@@ -97,6 +144,7 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 1. When #7 merges, merge `next` into this branch, and retarget this pull request to `next`.
 2. Check [§ 1](#1-where-7-leaves-the-app) against #7's final head, and post what differs as this pull request's first comment.
 3. Build, test and run both harnesses on the merged head, and post the tallies. They're the baseline every later punch list compares against.
+4. Work the items #7 moved here ([§ 1](#what-7-moved-here)) in the stage each names, with that stage's own work.
 
 ## 6. Stage 1: the schema
 

@@ -76,7 +76,7 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
 - **The next pull request is #7**, on `claude/hopeful-bell-6ldk4v`. It carries everything new in this plan and in the extensibility plan, and what PR #3 left.
   - It was opened as a draft stacked on PR #3, and retargeted to `next` when PR #3 merged. `8c2845b` merged `next` into it.
   - The builder works directly on its branch (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work, slices B to I, comes last (D16).
-  - It merges once, when all of it is 100% done (D12).
+  - It merges once, when all of it is 100% done (D12). **Amith, 2026-09-27: it finishes where it is.** [Punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is its finish line; it moved #7's other open items to PR #8 ([its plan's § 1](pr8-plan.md#what-7-moved-here)) and to after #8.
   - Each review of it carries one numbered punch list, and each push gets a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
   - [§ 9](#9-sequencing) is its order.
 - **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
@@ -1130,7 +1130,7 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 | **PR #8, stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
 | **After T ships** | | B23, in a later pull request | | C4, in a major version |
 
-- **PR #8 starts when #7 merges.** Its plan starts from the app as #7 leaves it.
+- **PR #8 starts when #7 merges.** Its plan starts from the app as #7 leaves it, and takes the items #7 moved to it ([its § 1](pr8-plan.md#what-7-moved-here)).
 - **The MJ pull request runs beside #7 and PR #8.** Nothing in PR #8 that needs A14 to A17 merges before an MJ release carries them. Where one isn't out yet, the builder builds the parts that don't need it first, and wires the rest when it lands.
 - **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass.
 
