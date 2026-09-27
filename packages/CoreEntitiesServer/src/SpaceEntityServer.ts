@@ -74,7 +74,15 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
                 }
             }
-            const found = CollaborationEngine.Instance.SpaceTypeById(typeId);
+            let found = CollaborationEngine.Instance.SpaceTypeById(typeId);
+            if (!found && effectiveMd && typeof effectiveMd.EntityByName === 'function') {
+                try {
+                    await CollaborationEngine.Instance.Config(true, user, effectiveMd);
+                    found = CollaborationEngine.Instance.SpaceTypeById(typeId);
+                } catch (e) {
+                    LogError(`Space change refused: failed to refresh CollaborationEngine: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
             if (!found) {
                 LogError(`Space change refused: space type ${typeId} could not be read from engine`);
                 return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
@@ -153,26 +161,29 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (!this.IsSaved) {
             const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
             const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
-            const inheritsDirty = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
+            const currentAllow = getFieldVal<boolean>(this, 'AllowParentAssignees');
+            const currentAgent = getFieldVal<string>(this, 'AgentRetrieval');
+            const allowSpecified = allowDirty || (currentAllow !== undefined && currentAllow !== null);
+            const agentSpecified = agentDirty || (currentAgent !== undefined && currentAgent !== null && currentAgent !== '');
 
             if (spaceType) {
                 const defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
                 const defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
 
-                if (!allowDirty) {
+                if (!allowSpecified) {
                     this.AllowParentAssignees = defaultAllow;
                 }
-                if (!agentDirty) {
+                if (!agentSpecified) {
                     this.AgentRetrieval = defaultAgent;
                 }
 
                 if (!isStaffUser(user)) {
-                    const currentAllow = getFieldVal<boolean>(this, 'AllowParentAssignees');
-                    if (currentAllow !== undefined && currentAllow !== defaultAllow) {
+                    const finalAllow = getFieldVal<boolean>(this, 'AllowParentAssignees');
+                    if (finalAllow !== undefined && finalAllow !== defaultAllow) {
                         return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
                     }
-                    const currentAgent = getFieldVal<string>(this, 'AgentRetrieval');
-                    if (currentAgent !== undefined && currentAgent !== defaultAgent) {
+                    const finalAgent = getFieldVal<string>(this, 'AgentRetrieval');
+                    if (finalAgent !== undefined && finalAgent !== defaultAgent) {
                         return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
                     }
                 }
