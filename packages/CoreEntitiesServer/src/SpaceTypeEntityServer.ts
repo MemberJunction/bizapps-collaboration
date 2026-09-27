@@ -4,7 +4,7 @@
  * Follows extensibility plan § 4, § 5, § 7.
  */
 
-import { BaseEntity, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogError, Metadata, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
@@ -20,18 +20,34 @@ export class SpaceTypeEntityServer extends mjBizAppsCollaborationSpaceTypeEntity
         return false;
     }
 
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const user = this.ContextCurrentUser;
+        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        if (!user) {
+            LogError('Space type delete refused: no signed-in user.');
+            return false;
+        }
+        const canConfig = CollaborationEngine.Instance.UserCanConfigureSpaceTypes(user, md);
+        if (!canConfig) {
+            LogError("Space type delete refused: user lacks 'Configure Space Types' authorization.");
+            return false;
+        }
+        return super.Delete(options);
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
 
-        // Check settings authorization if configuration is dirty
-        const configDirty = this.Fields.some((f) => f.Name === 'Configuration' && f.Dirty);
-        if (configDirty && user) {
-            const canConfig = CollaborationEngine.Instance.UserCanConfigureSpaceTypes(user, md);
-            if (!canConfig) {
-                return fail(result, 'Configuration', "Space type change refused: user lacks 'Configure Space Types' authorization.");
-            }
+        // Configure Space Types covers the types themselves: check on every create and update
+        if (!user) {
+            return fail(result, 'Name', 'Space type change refused: no signed-in user.');
+        }
+
+        const canConfig = CollaborationEngine.Instance.UserCanConfigureSpaceTypes(user, md);
+        if (!canConfig) {
+            return fail(result, 'Name', "Space type change refused: user lacks 'Configure Space Types' authorization.");
         }
 
         // 1. Validate Configuration JSON if present
