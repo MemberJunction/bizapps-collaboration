@@ -6,6 +6,12 @@ import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type {
+    AgentReplyMode,
+    AgentTurnHandler,
+    AgentTurnRequest,
+    AgentTurnResult,
+} from '@memberjunction/ng-conversations';
 import {
     CollaborationClient,
     mjBizAppsCollaborationSpaceEntity,
@@ -680,6 +686,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             (NavSelectRequested)="onNavSelectRequested($event)"
                             (TabSelectRequested)="onTabSelectRequested($event)"
                             (ConversationSelectRequested)="onSpaceConversationSelected($event)"
+                            (NewConversationRequested)="openNewConversationDialog()"
                             (BackToSpacesRequested)="onBackToSpacesRequested()"
                         />
 
@@ -1007,8 +1014,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SpaceEntityId]="spaceEntityId"
                                                     [AudienceBand]="spaceAudienceBand"
                                                     [ParticipantCount]="headerTotalPeople"
-                                                    [Messages]="spaceRoomMessages"
-                                                    (SendMessageRequested)="onSendChatMessage($event)"
+                                                    [AgentReplyMode]="spaceAgentReplyMode"
+                                                    [AllowedAgentIDs]="spaceAllowedAgentIds"
+                                                    [AgentHistoryFrom]="spaceAgentHistoryFloor"
+                                                    [AgentTurnHandler]="handleAgentTurn"
+                                                    (ConversationCreated)="onConversationCreated($event)"
+                                                    (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
                                             @case ('People') {
@@ -1064,6 +1075,71 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 (CancelRequested)="onUploadDialogCancel()"
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
+                        }
+
+                        @if (isNewConversationDialogOpen) {
+                            <div class="modal-backdrop" (click)="closeNewConversationDialog()">
+                                <div class="modal-dialog" (click)="$event.stopPropagation()">
+                                    <div class="modal-header">
+                                        <div class="modal-title">
+                                            <i class="fa-solid fa-plus-circle"></i>
+                                            <span>New Space Conversation</span>
+                                        </div>
+                                        <button type="button" class="btn-modal-close" (click)="closeNewConversationDialog()">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="form-group">
+                                            <label class="form-label" for="channel-input-name">Channel Name</label>
+                                            <div class="input-prefix-wrap">
+                                                <span class="prefix">#</span>
+                                                <input
+                                                    id="channel-input-name"
+                                                    type="text"
+                                                    class="form-control prefix-input"
+                                                    [(ngModel)]="newConversationName"
+                                                    placeholder="e.g. deliverable-reviews, planning"
+                                                    (keydown.enter)="submitNewConversation()"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Channel Type</label>
+                                            <div class="channel-kind-options">
+                                                <label class="radio-label">
+                                                    <input type="radio" name="convoKind" value="Room" [(ngModel)]="newConversationKind" />
+                                                    <span>Room (Collaborative discussion)</span>
+                                                </label>
+                                                <label class="radio-label">
+                                                    <input type="radio" name="convoKind" value="Topic" [(ngModel)]="newConversationKind" />
+                                                    <span>Topic (Focused thread)</span>
+                                                </label>
+                                                <label class="radio-label">
+                                                    <input type="radio" name="convoKind" value="Private" [(ngModel)]="newConversationKind" />
+                                                    <span>Private (Internal team only)</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn-secondary" (click)="closeNewConversationDialog()">Cancel</button>
+                                        <button
+                                            type="button"
+                                            class="btn-primary"
+                                            [disabled]="!newConversationName.trim() || isCreatingConversation"
+                                            (click)="submitNewConversation()"
+                                        >
+                                            @if (isCreatingConversation) {
+                                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                                <span>Creating...</span>
+                                            } @else {
+                                                <span>Create Channel</span>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         }
                     </div>
                 }
@@ -1259,6 +1335,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public activeRoomConvId: string | null = null;
     public spaceAudienceBand: SpaceBand = 'Shared';
 
+    // New conversation modal state
+    public isNewConversationDialogOpen = false;
+    public newConversationName = '';
+    public newConversationKind: 'General' | 'Room' | 'Topic' | 'Private' = 'Room';
+    public isCreatingConversation = false;
+
+    // Agent turn host rules
+    public spaceAgentReplyMode: AgentReplyMode = 'MentionOnly';
+    public spaceAllowedAgentIds: string[] | null = null;
+    public spaceAgentHistoryFloor: Date | null = null;
+
     // People tab state
     public spaceMembers: SpaceMemberModel[] = [];
 
@@ -1393,6 +1480,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async selectSpaceInternal(spaceId: string): Promise<void> {
         this.activeSpaceId = spaceId;
         this._loadedSpaceId = spaceId;
+        this.activeConversationId = '';
+        this.activeRoomConvId = null;
+        this.overviewRoomMessages = [];
+        this.spaceConversations = [];
         const space = this.rawSpaces.find(s => s.ID === spaceId);
         if (!space) return;
 
@@ -1683,6 +1774,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (this.activeConversationId) {
                 await this.loadOverviewMessages(this.activeConversationId);
+            } else {
+                this.overviewRoomMessages = [];
             }
         } catch (err) {
             LogError('Error loading space conversations: ' + (err instanceof Error ? err.message : String(err)));
@@ -2097,6 +2190,141 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.syncStateWithAgent();
         this.RefreshView();
     }
+
+    public openNewConversationDialog(): void {
+        this.newConversationName = '';
+        this.newConversationKind = 'Room';
+        this.isNewConversationDialogOpen = true;
+        this.RefreshView();
+    }
+
+    public closeNewConversationDialog(): void {
+        this.isNewConversationDialogOpen = false;
+        this.RefreshView();
+    }
+
+    public async submitNewConversation(): Promise<void> {
+        const name = this.newConversationName.trim();
+        if (!name || this.isCreatingConversation) return;
+        this.isCreatingConversation = true;
+        this.RefreshView();
+        try {
+            await this.createSpaceConversation(name, this.newConversationKind);
+            this.isNewConversationDialogOpen = false;
+        } finally {
+            this.isCreatingConversation = false;
+            this.RefreshView();
+        }
+    }
+
+    public async createSpaceConversation(name: string, kind: 'General' | 'Room' | 'Topic' | 'Private' = 'Room'): Promise<string | null> {
+        try {
+            const md = this.ProviderToUse;
+            const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
+            const spaceEntityId = spaceEntity?.ID || this.spaceEntityId;
+            const currentUser = md.CurrentUser;
+            if (!currentUser) return null;
+
+            const cleanName = name.startsWith('#') ? name.slice(1).trim() : name.trim();
+
+            const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
+            conv.NewRecord();
+            conv.Name = cleanName;
+            conv.UserID = currentUser.ID;
+            conv.LinkedEntityID = spaceEntityId;
+            conv.LinkedRecordID = this.activeSpaceId;
+            const saved = await conv.Save();
+            if (!saved || !conv.ID) {
+                LogError('Failed to create MJ: Conversations record: ' + (conv.LatestResult?.CompleteMessage ?? 'Save returned false'));
+                return null;
+            }
+
+            try {
+                const chat = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats');
+                chat.NewRecord();
+                chat.SpaceID = this.activeSpaceId;
+                chat.ConversationID = conv.ID;
+                chat.Name = cleanName;
+                chat.Kind = kind;
+                chat.Status = 'Active';
+                const chatSaved = await chat.Save();
+                if (!chatSaved) {
+                    LogError('Failed to save Space Chat record: ' + (chat.LatestResult?.CompleteMessage ?? 'Save returned false'));
+                }
+            } catch (chatErr) {
+                LogError('Failed to save Space Chat record: ' + (chatErr instanceof Error ? chatErr.message : String(chatErr)));
+            }
+
+            const item: SpaceConversationItem = {
+                id: conv.ID,
+                name: cleanName,
+                kind,
+                band: kind === 'Private' ? 'Team' : this.spaceAudienceBand,
+                unreadCount: 0,
+            };
+            this.spaceConversations.push(item);
+            this.activeConversationId = conv.ID;
+            this.activeRoomConvId = conv.ID;
+            this.activeTab = 'Chat';
+            this.UpdateQueryParams({ tab: 'chat', conv: conv.ID });
+            this.syncStateWithAgent();
+            this.RefreshView();
+            return conv.ID;
+        } catch (err) {
+            LogError('Error creating space conversation: ' + (err instanceof Error ? err.message : String(err)));
+            return null;
+        }
+    }
+
+    public onConversationCreated(event: { conversationId: string; name?: string }): void {
+        const existing = this.spaceConversations.find(c => c.id === event.conversationId);
+        if (!existing) {
+            this.spaceConversations.push({
+                id: event.conversationId,
+                name: event.name || 'New Conversation',
+                kind: 'Room',
+                band: this.spaceAudienceBand,
+                unreadCount: 0,
+            });
+        }
+        this.activeConversationId = event.conversationId;
+        this.activeRoomConvId = event.conversationId;
+        this.activeTab = 'Chat';
+        this.UpdateQueryParams({ tab: 'chat', conv: event.conversationId });
+        this.syncStateWithAgent();
+        this.RefreshView();
+    }
+
+    public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
+        try {
+            const client = new CollaborationClient();
+            const res = await client.PostSpaceMessage({
+                SpaceID: this.activeSpaceId,
+                Text: request.MessageText,
+                ExecuteAgent: true,
+                ConversationID: request.ConversationId || this.activeConversationId || undefined,
+            });
+            if (!res.Success) {
+                return {
+                    Success: false,
+                    ErrorMessage: res.ErrorMessage ?? 'Failed to execute agent turn',
+                };
+            }
+            const replyIds: string[] = [];
+            if (res.AssistantDetailID) {
+                replyIds.push(res.AssistantDetailID);
+            }
+            return {
+                Success: true,
+                ReplyDetailIds: replyIds,
+            };
+        } catch (err) {
+            return {
+                Success: false,
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
+    };
 
     public onBackToSpacesRequested(): void {
         this.activeView = 'home';

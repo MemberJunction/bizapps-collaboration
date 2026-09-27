@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -764,35 +765,45 @@ describe('CollabSpaceWorkComponent', () => {
 });
 
 describe('CollabSpaceChatComponent', () => {
-  it('emits SendMessageRequested on non-empty message and clears text', () => {
+  it('emits NewConversationRequested when onNewConversationClick is called', () => {
     const comp = new CollabSpaceChatComponent();
-    let sentPayload: { text: string; executeAgent: boolean } | null = null;
-    comp.SendMessageRequested.subscribe(payload => {
-      sentPayload = payload;
+    let requested = false;
+    comp.NewConversationRequested.subscribe(() => {
+      requested = true;
     });
 
-    comp.newMessageText = '  Hello everyone in the space room!  ';
-    comp.sendMessage();
-
-    expect(sentPayload).toEqual({
-      text: 'Hello everyone in the space room!',
-      executeAgent: false,
-    });
-    expect(comp.newMessageText).toBe('');
+    comp.onNewConversationClick();
+    expect(requested).toBe(true);
   });
 
-  it('ignores empty or whitespace message send attempts', () => {
+  it('emits ConversationCreated when onConversationCreated is called', () => {
     const comp = new CollabSpaceChatComponent();
-    let emitted = false;
-    comp.SendMessageRequested.subscribe(() => {
-      emitted = true;
+    let createdPayload: { conversationId: string; name?: string } | null = null;
+    comp.ConversationCreated.subscribe(payload => {
+      createdPayload = payload;
     });
 
-    comp.newMessageText = '    ';
-    comp.sendMessage();
-    expect(emitted).toBe(false);
+    comp.onConversationCreated({
+      conversation: { ID: 'conv-123', Name: 'New Project Room' } as MJConversationEntity,
+    });
+
+    expect(createdPayload).toEqual({
+      conversationId: 'conv-123',
+      name: 'New Project Room',
+    });
+  });
+
+  it('initializes host inputs with proper defaults', () => {
+    const comp = new CollabSpaceChatComponent();
+    expect(comp.AgentReplyMode).toBe('Always');
+    expect(comp.AllowedAgentIDs).toBeNull();
+    expect(comp.AgentHistoryFrom).toBeNull();
+    expect(comp.AgentTurnHandler).toBeNull();
+    expect(comp.AllowMentions).toBe(true);
+    expect(comp.AllowAttachments).toBe(true);
   });
 });
+
 
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [

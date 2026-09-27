@@ -14,6 +14,7 @@ export interface PostSpaceMessageInput {
     spaceId: string;
     text: string;
     executeAgent?: boolean;
+    conversationId?: string;
 }
 
 export type PostSpaceMessageResult =
@@ -59,16 +60,38 @@ export async function postSpaceMessage(
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
     if (space.Results?.[0]?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
 
-    const conversation = await view.RunView<{ ID: string }>({
-        EntityName: 'MJ: Conversations',
-        ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    }, system);
-    if (!conversation.Success) return { ok: false, message: conversation.ErrorMessage || 'The conversation could not be read.' };
-    const conversationId = parseUuid(conversation.Results?.[0]?.ID);
-    if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
+    let conversationId: string | null = null;
+    if (input.conversationId) {
+        const parsedTarget = parseUuid(input.conversationId);
+        if (parsedTarget) {
+            const check = await view.RunView<{ ID: string }>({
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ID = '${parsedTarget}' AND LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            }, system);
+            if (!check.Success) return { ok: false, message: check.ErrorMessage || 'The conversation could not be read.' };
+            if (check.Results?.[0]?.ID) {
+                conversationId = parsedTarget;
+            } else {
+                return { ok: false, message: 'The conversation does not belong to this space.' };
+            }
+        }
+    }
+
+    if (!conversationId) {
+        const conversation = await view.RunView<{ ID: string }>({
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!conversation.Success) return { ok: false, message: conversation.ErrorMessage || 'The conversation could not be read.' };
+        conversationId = parseUuid(conversation.Results?.[0]?.ID);
+        if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
+    }
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();

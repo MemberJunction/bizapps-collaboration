@@ -13,6 +13,7 @@
 
 import {
     AuthorizationEvaluator,
+    type BaseEntity,
     type IMetadataProvider,
     LogError,
     Metadata,
@@ -81,7 +82,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.SpaceRoleTypes;
     }
 
-    public get TaskTypes(): unknown[] {
+    public get TaskTypes(): BaseEntity[] {
         return this.Base.TaskTypes;
     }
 
@@ -172,7 +173,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
-    ): Promise<unknown> {
+    ): Promise<void> {
         return await this.Base.Config(forceRefresh, contextUser, provider);
     }
 

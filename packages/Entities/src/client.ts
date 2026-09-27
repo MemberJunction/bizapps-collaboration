@@ -48,6 +48,7 @@ export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
     ExecuteAgent?: boolean;
+    ConversationID?: string;
 }
 
 export interface PostSpaceMessageGraphQLPayload {

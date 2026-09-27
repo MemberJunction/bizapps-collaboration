@@ -14,6 +14,7 @@
  */
 
 import {
+    type BaseEntity,
     BaseEngine,
     type BaseEnginePropertyConfig,
     type IMetadataProvider,
@@ -52,7 +53,7 @@ export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
-    private _taskTypes: unknown[] = [];
+    private _taskTypes: BaseEntity[] = [];
     private _applicationSettings: MJApplicationSettingEntity[] = [];
     private _authorizations: MJAuthorizationEntity[] = [];
     private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
@@ -76,7 +77,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
-    ): Promise<unknown> {
+    ): Promise<void> {
         if (provider) {
             Reflect.set(this, '_provider', provider);
         }
@@ -160,8 +161,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return this.GetConfigData<mjBizAppsCollaborationSpaceRoleTypeEntity>('_spaceRoleTypes');
     }
 
-    public get TaskTypes(): unknown[] {
-        return this.GetConfigData<unknown>('_taskTypes');
+    public get TaskTypes(): BaseEntity[] {
+        return this.GetConfigData<BaseEntity>('_taskTypes');
     }
 
     public get ApplicationSettings(): MJApplicationSettingEntity[] {

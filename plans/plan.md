@@ -351,6 +351,12 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **The screens are reviewed for function and completeness** (D16). The gallery's comparisons with the mockups are retired or re-baselined on the new design, and its functional tests stay.
 - D14 (nothing typed in) and D15 (MJ's components as they are) still hold.
 
+**D25. Discussions & AI: standard `ng-conversations` is the sole chat area; custom chat widgets are retired and forbidden.**
+- **No custom chat message or composer widgets:** Collaboration space chats must strictly host `<mj-conversation-chat-area>` from `@memberjunction/ng-conversations`. Custom message feed renderers, manual message scrolling, and ad-hoc chat composers in `AngularWidgets` are retired and prohibited to eliminate regression risk and ensure full platform convergence.
+- **Wiring to A13.1 features:** `<mj-conversation-chat-area>` is integrated directly with the conversation floor (`AgentHistoryFrom`), reply mode (`AgentReplyMode`), allowed agents (`AllowedAgentIDs`), and server-turn moderation (`AgentTurnHandler`), preserving audience isolation while delegating conversation state, streaming, attachments, and mentions to core.
+- **Conversation creation flow:** Multi-conversation spaces allow creating new conversations via the space rail and chat area empty states. New conversations create an underlying `MJ: Conversations` record, bind a `MJ_BizApps_Collaboration: Space Chats` record, and select the newly created conversation seamlessly.
+
+
 ## 4. The model
 
 **What Collaboration composes.** It adds the container and uses what MemberJunction and the sibling apps already have:

@@ -388,6 +388,15 @@ const checks: NamedCheck[] = [
             } finally {
                 remy.Type = origType;
             }
+
+            // 6. Conversation not belonging to this space
+            const foreignConvRes = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: 'Message with mismatched conversation ID',
+                conversationId: '00000000-0000-0000-0000-000000000001',
+            });
+            Assert(!foreignConvRes.ok, 'Conversation not belonging to space must be refused');
+            Assert(!foreignConvRes.ok && foreignConvRes.message === 'The conversation does not belong to this space.', 'Correct mismatched conversation error');
         },
     },
 ];
