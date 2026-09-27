@@ -447,7 +447,7 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 
 **D33. Notes live in Collaboration; meetings and agendas move to bizapps-tasks.** Amends the extensibility plan's § 10.1, which kept meetings in Committees.
 - **Notes** are light in-app notes, kept apart from documents: quick to write, part of the space, and readable by agents. A note is Shared, Team, or private to its author. An agent uses a private note only in its author's own one-to-one chat, never in a room or a group chat.
-- **Meetings and agendas are work,** so they move out of Committees into bizapps-tasks: meetings, agenda items, attendees, video providers, and notes drafted by AI from transcripts. Every app gets them: Collaboration, Committees, and Tasks on its own. Tasks and meetings link both ways.
+- **Meetings and agendas are work,** so they move out of Committees into bizapps-tasks: meetings, agenda items, attendees, video providers, and notes drafted by AI from transcripts. Every app gets them: Collaboration, Committees, and Tasks on its own. Tasks and meetings link both ways. Committees' own meeting tables are stripped out in its rebuild (C4), with no data carried over (Amith, 09-27).
 - **Calendar sync** with Outlook and Google Calendar is built once, in MJ's Communication layer (A18), and Tasks uses it.
 - **Committees keeps the governance:** motions, votes, ballots, quorum, and approving minutes.
 
@@ -1047,15 +1047,16 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ### C4. Rebuild Committees in one step (D35)
 
-It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes:
+It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes. That plan predates D33 and still lists meetings, agendas, attendance and video providers among Committees' tables; where the two differ, this section holds.
 - **`Committee` and `Term` stay IsA subtypes of `Space`.**
-- **Meetings, agenda items, attendance and video providers move to bizapps-tasks** (workstream T). Existing rows are copied with their IDs reused, as the ActionItem move did.
-- **Every link to them is re-pointed** at Tasks' `Meeting` and `AgendaItem`:
-  - the foreign keys to a meeting, from `AgendaItem`, `Attendance`, `Artifact`, `Minute` (both `MeetingID` and `ApprovedByMeetingID`), `Motion` and `Comment`;
-  - the foreign keys to an agenda item, from its own parent key, `Artifact`, `Motion` and `Comment`. Votes and ballots follow through their motion; they have no key of their own to either;
-  - the soft references: `TaskLink` rows, and the ML pipeline, models and weekly scoring job that target `Committees: Meetings`;
-  - the computed columns: 1.4.0's migration registers 12 computed `vwMeetings` columns as entity fields that the generated class doesn't carry, so the move settles which of them go with the meeting.
-- **Quorum** is computed in the UI today, with `Meeting.PredictedQuorumRisk…` the only stored quorum data; it stays with the governance.
+- **Committees' meeting tables are stripped out** (Amith, 09-27): `Meeting`, `AgendaItem`, `Attendance` and `VideoProvider`, with the code that serves only them, such as the video drivers, which move to Tasks (T1). Meetings live in bizapps-tasks (workstream T). Committees is being rebuilt on Collaboration anyway, so backward compatibility isn't a concern: no rows are copied, and no compatibility layer is kept.
+- **The governance points at Tasks' meetings instead,** `MJ_BizApps_Tasks: Meetings` and `MJ_BizApps_Tasks: Meeting Agenda Items`:
+  - the foreign keys to a meeting, from `Artifact`, `Minute` (both `MeetingID` and `ApprovedByMeetingID`), `Motion` and `Comment`;
+  - the foreign keys to an agenda item, from `Artifact`, `Motion` and `Comment`. Votes and ballots follow through their motion; they have no key of their own to either;
+  - the soft references: the ML pipeline, models and weekly scoring job that target `Committees: Meetings` move to Tasks' meetings or are dropped, and `TaskLink` rows that name a Committees meeting go with the table;
+  - the computed columns: 1.4.0's migration registers 12 computed `vwMeetings` columns as entity fields that the generated class doesn't carry. They go with the table, and C4 rebuilds on Tasks' meeting only those the governance screens still need.
+- **Quorum** stays with the governance. It's computed in the UI today; `Meeting.PredictedQuorumRisk…`, the only stored quorum data, goes with the table.
+- **A *Vote* agenda item** is Committees' own type in Tasks' agenda item type lookup (T1), which Committees seeds.
 - **A committee type grants its governance data** through B15: for example, the roster and term view to members, and a voting-record dashboard to officers.
 - **C0 still comes first:** ballot sealing enforced on the server, and the entity overrides registered under the wrong names fixed.
 - **It's a major version of Committees,** since it drops published tables.
@@ -1068,21 +1069,24 @@ Meetings and agendas are work, so they move out of Committees into bizapps-tasks
 - `Attendance`;
 - `VideoProvider`, with drivers in `bizapps-committees/packages/CoreEntitiesServer/src/drivers/`. Zoom creates the meeting and registers attendees; Teams creates the online meeting, and its invitations are a stub; Meet creates the meeting but ignores its input, and its invitations and delete are stubs. Nothing calls delete for any provider, and no provider rows are seeded.
 
+Tasks takes the design, not the data: T1's tables start empty, and Committees strips out its own in C4.
+
 It's its own pull request in bizapps-tasks, with a minor version, since it only adds. bizapps-tasks' `next` has bizapps-tasks#79 (the task panel's view modes, merged 2026-09-27), which ships as 1.6.1; 1.6.0 is the latest release.
 
 ### T1. Entities
 
-Add to `__mj_BizAppsTasks`:
+Add to `__mj_BizAppsTasks`. CodeGen names each entity from its table, with bizapps-tasks' `MJ_BizApps_Tasks: ` prefix (its `mj.config.cjs`). Every table but `VideoProvider` carries the `Meeting` stem, the way every Tasks table carries `Task`, so they sit together in Explorer's entity list:
 
-| Entity | Contents |
-|---|---|
-| `MeetingType` | A lookup, with a default duration and an agenda template |
-| `Meeting` | Committees' fields, with no committee column and no `CalendarEventID`: a meeting's event is its row in `MJ: Calendar Event Links` |
-| `MeetingLink` | `EntityID` and `RecordID`, the way `TaskLink` ties a task to any record: how a meeting belongs to a space, a committee or a deal |
-| `AgendaItem` | As in Committees, with `ItemType` a lookup table, since *Vote* is governance |
-| `MeetingAttendee` | An attendee with an RSVP and an attendance status. `TaskAssignment`'s columns allow any entity, but every consumer reads a Person, so say which kinds of attendee are supported: a Person, and a guest by email |
-| `VideoProvider` | Moved from Committees, with its drivers |
-| `MeetingNote` | Notes from a transcript, drafted by AI |
+| Table | Entity | Contents |
+|---|---|---|
+| `Meeting` | `MJ_BizApps_Tasks: Meetings` | Committees' fields, with no committee column and no `CalendarEventID`: a meeting's event is its row in `MJ: Calendar Event Links` |
+| `MeetingType` | `MJ_BizApps_Tasks: Meeting Types` | A lookup, with a default duration and an agenda template |
+| `MeetingLink` | `MJ_BizApps_Tasks: Meeting Links` | `EntityID` and `RecordID`, the way `TaskLink` ties a task to any record: how a meeting belongs to a space, a committee or a deal |
+| `MeetingAgendaItem` | `MJ_BizApps_Tasks: Meeting Agenda Items` | Committees' `AgendaItem`: nested, with a sequence, presenter, duration, type and status |
+| `MeetingAgendaItemType` | `MJ_BizApps_Tasks: Meeting Agenda Item Types` | The agenda item types, a lookup rather than a fixed list: Tasks ships the generic ones, and Committees adds *Vote*, since voting is governance |
+| `MeetingAttendee` | `MJ_BizApps_Tasks: Meeting Attendees` | Committees' `Attendance`, as an attendee with an RSVP and an attendance status. `TaskAssignment`'s columns allow any entity, but every consumer reads a Person, so say which kinds of attendee are supported: a Person, and a guest by email |
+| `MeetingNote` | `MJ_BizApps_Tasks: Meeting Notes` | Notes from a transcript, drafted by AI |
+| `VideoProvider` | `MJ_BizApps_Tasks: Video Providers` | Zoom, Teams and Meet, with the drivers from Committees. A list of providers rather than part of one meeting, so it keeps its name |
 
 `TaskLink` already lets a follow-up task point at a meeting or an agenda item.
 
@@ -1254,7 +1258,7 @@ Under D36, PR #8 checks rows 13, 15, 16 and 19 closed, since what they need wait
 | A generated data-reach filter is stale or wrong, and widens what a participant reads of another app's entity | High | The generator writes reviewed metadata; CI fails on stale output; `persona-check.sql` checks every declared entity (B18); matrix rows 13 and 14 |
 | A granted query returns more than its type should show | High | D29's door: only Canon-approved queries (D34), with every scope parameter bound and locked (A17); aggregate-only types get aggregates |
 | A model sets a scope parameter by writing it into a tool call | High | A16: a bound parameter is taken out of the tool description, and a value the model sends is discarded and logged |
-| Moving meetings out of Committees breaks its governance links | Medium | C4 copies the rows with their IDs reused and re-points motions, votes, ballots and minutes, in a major version |
+| Stripping meetings out of Committees breaks its governance links and loses its meeting data | Medium | Accepted: backward compatibility isn't a concern (Amith, 09-27). C4 re-points motions, votes, ballots and minutes at Tasks' meetings in a major version, and copies no rows |
 | A client's security review asks for SOC 2 evidence we don't have | Medium | Name an owner, and start collecting evidence before the first outside client |
 
 ## 13. Out of scope
