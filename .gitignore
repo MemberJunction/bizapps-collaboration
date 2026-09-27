@@ -1,3 +1,11 @@
 SQL Scripts/
+migrations/codegen/
+metadata/sql_logging/
+codegen.output.log
 node_modules/
 dist/
+.local-storage/
+integration-*.log
+e2e/test-results/
+playwright-report/
+scratch/

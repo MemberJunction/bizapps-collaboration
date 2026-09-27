@@ -1,26 +1,52 @@
 import { Component, Input } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { lockoutMessage } from '@mj-biz-apps/collaboration-core';
 
 /**
- * Shown before a space is locked down. A missing grant must read as
- * "you don't have this space", not as a broken application.
+ * Branded no-access empty state component shown when a signed-in user opens a space
+ * where they hold no active seat. Built using MemberJunction's canonical <mj-empty-state>.
  */
 @Component({
-    selector: 'mj-collaboration-no-access',
-    standalone: true,
-    template: `
-      <section class="gate">
-        <p class="eyebrow">Collaboration</p>
-        <h1>You don't have access to this space.</h1>
-        <p>{{ detail }}</p>
-      </section>
-    `,
-    styles: [`
-      :host { display: block; color: var(--mj-text-primary, inherit); }
-      .gate { max-width: 36rem; padding: 3rem 1.5rem; }
-      .eyebrow { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; color: var(--mj-text-secondary, inherit); }
-      h1 { font-size: 1.6rem; font-weight: 600; }
-    `],
+  selector: 'mjc-no-access',
+  standalone: true,
+  imports: [CommonModule, MJEmptyStateComponent],
+  template: `
+    <div class="no-access-container">
+      <mj-empty-state
+        [Icon]="'fa-solid fa-lock'"
+        [Title]="'Access Restricted'"
+        [Message]="message"
+      >
+      </mj-empty-state>
+    </div>
+  `,
+  styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      width: 100%;
+      height: 100%;
+      background: var(--mj-bg-surface, #ffffff);
+    }
+    .no-access-container {
+      max-width: 480px;
+      padding: var(--mj-space-6, 24px);
+    }
+  `]
 })
-export class NoAccessComponent {
-    @Input() detail = 'Ask a member of the space to invite your account. Signing in is not the same thing as being on the roster.';
+export class CollaborationNoAccessComponent {
+  @Input() Seats: readonly { spaceName: string; status: string }[] = [];
+  @Input() CustomMessage?: string;
+
+  get message(): string {
+    if (this.CustomMessage) {
+      return this.CustomMessage;
+    }
+    return lockoutMessage(this.Seats);
+  }
 }
+

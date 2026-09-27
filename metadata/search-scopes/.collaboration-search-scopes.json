@@ -1,0 +1,106 @@
+[
+  {
+    "primaryKey": {
+      "ID": "6E5187CF-7E5B-447F-893D-D291994083C0"
+    },
+    "fields": {
+      "Name": "Collaboration Space Scope",
+      "Description": "Search scope restricting queries to materials within a collaboration space.",
+      "Icon": "fa-solid fa-folder-tree",
+      "Status": "Active",
+      "IsGlobal": false,
+      "IsDefault": false,
+      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true}],\"strictValidation\":true}"
+    },
+    "relatedEntities": {
+      "MJ: Search Scope Entities": [
+        {
+          "primaryKey": {
+            "ID": "3AA70B8D-C82C-4C04-BA4C-5714F842850E"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}",
+            "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "3F41A6EC-686C-4B9E-9F9E-4653E927B80A"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'){% else %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IS NULL AND 1 = 0 AND Entity = 'MJ_BizApps_Tasks: Tasks'){% endif %}",
+            "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
+        }
+      ],
+      "MJ: Search Scope Providers": [
+        {
+          "primaryKey": {
+            "ID": "79B8CA6C-DC97-402F-878A-3542971D2578"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database",
+            "Enabled": true
+          }
+        }
+      ],
+      "MJ: Search Scope Permissions": [
+        {
+          "primaryKey": {
+            "ID": "03F9FDE5-CBF6-4E90-A1DD-35EEC9FF195A"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "88E13B5F-4AA1-4A8C-8489-A8E03684B7D6"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "32F453D9-D634-4617-8E30-A975E4A9A637"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "A5743928-DB75-468B-B41E-1B84BB150EE3"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration",
+            "PermissionLevel": "Search"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "B9E95381-3F7A-48BE-AACD-ECBBB6E48FC9"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+            "PermissionLevel": "Search"
+          }
+        }
+      ]
+    }
+  }
+]

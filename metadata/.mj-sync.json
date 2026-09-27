@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "schema-info",
+    "roles",
+    "applications",
+    "application-roles",
+    "user-notification-types",
+    "permission-domains",
+    "resource-types",
+    "space-types",
+    "space-role-types",
+    "row-level-security-filters",
+    "entities",
+    "entity-permissions",
+    "entity-field-permissions",
+    "query-categories",
+    "queries",
+    "templates",
+    "prompts",
+    "ai-skills",
+    "search-scopes",
+    "agents",
+    "task-types"
+  ],
+  "emitSyncNotes": false,
+  "sqlLogging": {
+    "enabled": true,
+    "outputDirectory": "./sql_logging",
+    "formatAsMigration": true
+  }
+}

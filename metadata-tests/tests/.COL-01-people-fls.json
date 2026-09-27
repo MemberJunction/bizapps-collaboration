@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-01 - People FLS",
+    "Description": "Verify Field-Level Security on People: participants read only ID, FirstName, LastName, Email; all other fields are denied or redacted.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Participant reads only permitted fields; queries on Phone/DOB/Address are denied or redacted; column audit confirms exact allow list."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "people-fls"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "24E67D04-BE02-4315-B0DF-92299D51FC79"
+  }
+}

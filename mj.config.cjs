@@ -17,6 +17,10 @@ module.exports = {
 
   entityPackageName: '@mj-biz-apps/collaboration-entities',
 
+  testing: {
+    checkModules: ['@mj-biz-apps/collaboration-integration-tests'],
+  },
+
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
     {
@@ -43,6 +47,14 @@ module.exports = {
 
   includeSchemas: ['__mj_BizAppsCollaboration'],
   excludeSchemas: ['sys', 'staging', 'dbo', '__mj'],
+
+  advancedGeneration: {
+    enableAdvancedGeneration: false,
+  },
+
+  fileEmit: {
+    perSchema: true,
+  },
 
   SQLOutput: {
     enabled: true,

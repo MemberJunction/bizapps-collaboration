@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
-import { loadWriteContext } from '../dist/load-graph.js';
+import { loadMemberReach, loadWriteContext } from '../dist/load-graph.js';
 
 const USER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE1';
+const ASSIGNEE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE4';
+const MEMBER_ROLE = '7F565CD3-5E5C-4073-AD3D-55EFE85B0D40';
 const SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
-const ROLE = 'B2000001-0000-4000-8000-000000000001';
-const TYPE = 'A1000001-0000-4000-8000-000000000001';
+const ROLE = '69090145-C214-4C16-83C5-9D0F1F3B6DE4';
+const TYPE = 'C76A0ACA-CBF8-43AD-A996-9296CDA681BE';
 
 const tables = {
     members: [{
@@ -17,6 +19,13 @@ const tables = {
         Status: 'Active',
         Band: 'Team',
         SpaceRoleTypeID: ROLE,
+    }, {
+        ID: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE5',
+        SpaceID: SPACE,
+        UserID: ASSIGNEE,
+        Status: 'Active',
+        Band: 'Shared',
+        SpaceRoleTypeID: MEMBER_ROLE,
     }],
     roles: [{
         ID: ROLE,
@@ -26,6 +35,15 @@ const tables = {
         CanPromoteBand: true,
         CanSeeTeamBand: true,
         IsOwnerRole: true,
+        CanContribute: true,
+    }, {
+        ID: MEMBER_ROLE,
+        Level: 10,
+        MaxGrantableLevel: 10,
+        CanInvite: false,
+        CanPromoteBand: false,
+        CanSeeTeamBand: false,
+        IsOwnerRole: false,
         CanContribute: true,
     }],
     spaces: [{
@@ -55,6 +73,7 @@ function listed(id: string, filter: string): boolean {
 function select(entityName: string, filter = ''): unknown[] {
     if (entityName.endsWith('Space Members')) {
         return tables.members.filter((row) => {
+            if (filter.includes('UserID') && !filter.includes('SpaceID')) return same(row.UserID, quoted(filter, 'UserID'));
             if (filter.includes('<>')) return same(row.SpaceID, quoted(filter, 'SpaceID')) && row.Status !== 'Removed';
             if (filter.includes("Status = 'Active'")) return same(row.SpaceID, quoted(filter, 'SpaceID')) && row.Status === 'Active' && listed(row.SpaceRoleTypeID, filter);
             if (filter.includes('UserID')) return same(row.UserID, quoted(filter, 'UserID'));
@@ -106,6 +125,33 @@ describe('loadWriteContext on SQL Server ids', () => {
             assert.equal(context.approval, 'Approve');
         } finally {
             source.GetSystemUser = original;
+        }
+    });
+});
+
+describe('loadMemberReach', () => {
+    const entity = { RunViewProviderToUse: provider, ProviderToUse: provider } as unknown as BaseEntity;
+    const reader = { ID: USER } as UserInfo;
+
+    it('uses the assignee seat and ignores the reader seat', async () => {
+        const reach = await loadMemberReach(entity, reader, ASSIGNEE, SPACE);
+        assert.equal(reach?.role.canSeeTeamBand, false);
+        assert.equal(reach?.role.canContribute, true);
+        assert.equal(reach?.userId, ASSIGNEE.toLowerCase());
+    });
+
+    it('refuses an assignee with no seat', async () => {
+        const reach = await loadMemberReach(entity, reader, 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9', SPACE);
+        assert.equal(reach, null);
+    });
+
+    it('refuses a full page instead of deciding on part of the roster', async () => {
+        const saved = tables.members;
+        tables.members = Array.from({ length: 2000 }, () => saved[1]);
+        try {
+            await assert.rejects(() => loadMemberReach(entity, reader, ASSIGNEE, SPACE), /full page/);
+        } finally {
+            tables.members = saved;
         }
     });
 });

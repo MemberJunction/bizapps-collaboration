@@ -1,0 +1,16 @@
+Key,Space,Uploader,FileName,MimeType,Folder,Kind,Band
+brief,discovery,ada,discovery-brief.pdf,application/pdf,Briefs,pdf,Team
+notes,field-notes,ada,field-notes.txt,text/plain,Notes,text,Team
+photo,discovery,bea,site-photo.png,image/png,Photos,png,Shared
+welcome,cohort,lee,welcome.html,text/html,Welcome,html,Shared
+sealed-doc,sealed-child,ada,sealed-doc.txt,text/plain,Notes,text,Team
+audit-charter,committee,ada,audit-committee-charter.pdf,application/pdf,Governance,pdf,Team
+q3-audit-report,committee,ada,q3-audit-findings.pdf,application/pdf,Reports,pdf,Team
+compliance-checklist,committee,ada,sox-compliance-checklist.txt,text/plain,Compliance,text,Team
+northwind-msa,northwind,ada,master-services-agreement.pdf,application/pdf,Contracts,pdf,Team
+executive-roadmap,northwind,casey,executive-roadmap.pdf,application/pdf,Strategy,pdf,Shared
+account-plan,northwind,ada,northwind-account-plan.txt,text/plain,Planning,text,Team
+sprint-matrix,delivery,ada,sprint-deliverables-matrix.txt,text/plain,Deliverables,text,Team
+architecture-diagram,delivery,ada,system-architecture.png,image/png,Design,png,Team
+design-tokens,studio,ada,design-tokens-v2.txt,text/plain,Design System,text,Team
+workshop-deck,studio,ada,studio-workshop-deck.pdf,application/pdf,Decks,pdf,Team

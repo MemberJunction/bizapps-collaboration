@@ -1,0 +1,262 @@
+[
+  {
+    "primaryKey": {
+      "ID": "58B6738B-13FA-4DE7-9F89-DF300C916C27"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Spaces",
+      "Description": "A space the caller owns, a space their active membership reaches, or the one space a magic-link scope names. Parenthesised so it ANDs onto any other filter the caller holds. TRY_CAST so a missing user id matches nothing instead of raising a conversion error.",
+      "FilterText": "(OwnerID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR CAST(ID AS NVARCHAR(450)) = '{{ScopeResourceID}}')"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7D2320C1-4106-434B-A789-15E34C3B0F15"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Members",
+      "Description": "The caller's own roster rows, active seats on spaces they reach, and invited or removed seats where their reaching role can invite.",
+      "FilterText": "((Status = N'Active' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR (Status IN (N'Invited', N'Removed') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanInvite = 1)) OR ID IN (SELECT MemberID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "03CB9211-930A-4964-950F-A542F8971217"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Items",
+      "Description": "Shared items in a visible space, team items only when the reaching role has CanSeeTeamBand, and shared items in the one space a magic link names.",
+      "FilterText": "((SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR (Band = N'Shared' AND CAST(SpaceID AS NVARCHAR(450)) = '{{ScopeResourceID}}'))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1BFCFDB6-EC62-49A8-801F-651902327D71"
+    },
+    "fields": {
+      "Name": "Collaboration: Active Space Types",
+      "Description": "Space types are vocabulary, not content. Active types are readable. The filter is present so the role is not exempt from row-level security.",
+      "FilterText": "(IsActive = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8F228922-83F0-4E92-821C-F1E00BE3192A"
+    },
+    "fields": {
+      "Name": "Collaboration: Active Space Roles",
+      "Description": "Role types are the flags the engine reads. Active roles are readable. The filter is present so the role is not exempt from row-level security.",
+      "FilterText": "(IsActive = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "FE9BD3AC-E832-474E-BD80-B70E1BF5005A"
+    },
+    "fields": {
+      "Name": "Collaboration: Shell Empty",
+      "Description": "Present and empty. A participant can boot the shell without reading core rows.",
+      "FilterText": "(1 = 0)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "63EBE663-2420-4433-801F-EABFF5167F80"
+    },
+    "fields": {
+      "Name": "Collaboration: Own User",
+      "Description": "The caller's own user row.",
+      "FilterText": "(ID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "EA4D9B49-1CC8-4990-A26B-5BAE8D7C007A"
+    },
+    "fields": {
+      "Name": "Collaboration: Own User Child",
+      "Description": "Rows owned by the caller, keyed UserID.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E3F72710-966C-4365-BAF6-2723EE6CD86A"
+    },
+    "fields": {
+      "Name": "Collaboration: All Application Roles",
+      "Description": "Application role rows name which role may open which app. The filter is present so the participant is not exempt from row-level security.",
+      "FilterText": "(1 = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3225E3AB-F9A3-49E2-AE33-4B49499DDDEC"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversations In Reach",
+      "Description": "Conversations bound to a space the caller reaches.",
+      "FilterText": "(LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB' AND LinkedRecordID IN (SELECT CONVERT(nvarchar(36), SpaceID) FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3CECF865-7204-48A1-A13C-B2A73FE3EB6D"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversation Details In Reach",
+      "Description": "Details whose conversation is bound to a space the caller reaches.",
+      "FilterText": "(ConversationID IN (SELECT ID FROM [__mj].[Conversation] WHERE LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB' AND LinkedRecordID IN (SELECT CONVERT(nvarchar(36), SpaceID) FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3539B489-C197-48EF-BDBA-96AD95B5F2A4"
+    },
+    "fields": {
+      "Name": "Collaboration: Files In Reach",
+      "Description": "Files whose canonical RecordID is a Shared or visible Team item in a space the caller reaches.",
+      "FilterText": "((N'ID|' + CONVERT(nvarchar(36), ID)) IN (SELECT i.RecordID FROM [__mj_BizAppsCollaboration].[SpaceItem] AS i WHERE i.EntityID = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND ((i.Band = N'Shared' AND i.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR i.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C79AD45D-9C11-45CB-AFB9-EAB9C454155C"
+    },
+    "fields": {
+      "Name": "Collaboration: Notices For The Caller",
+      "Description": "Share notices addressed to the caller, in spaces they reach.",
+      "FilterText": "(RecipientUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9EB44691-CCD8-4172-8FF4-4F92A7AB159B"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Item Uses",
+      "Description": "The caller's own item uses, in spaces they reach.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DC44E308-4842-4329-909F-10979999E593"
+    },
+    "fields": {
+      "Name": "Collaboration: Notices The Caller May Send",
+      "Description": "A new notice is in a space the caller reaches, and it is not addressed to the caller.",
+      "FilterText": "(RecipientUserID <> TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E6282EA3-879A-4B7F-8333-09DE41F438B8"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Workspace Items",
+      "Description": "Items in a workspace the caller owns.",
+      "FilterText": "(WorkspaceID IN (SELECT ID FROM [__mj].[Workspace] WHERE UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "13869C21-5AEB-44EA-B558-9028DDFCEA97"
+    },
+    "fields": {
+      "Name": "Collaboration: Tasks In Reach",
+      "Description": "Tasks filed in a space the caller reaches, and the tasks under them.",
+      "FilterText": "(ID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "012F2B79-FC3E-4EC6-B73D-8B668AF45E42"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Rows In Reach",
+      "Description": "Rows whose task is one the caller can see.",
+      "FilterText": "(TaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C925B9C9-C33C-4D97-9526-5C5A578F875C"
+    },
+    "fields": {
+      "Name": "Collaboration: Subtasks Under A Writable Parent",
+      "Description": "A subtask whose parent the caller can write. Roots are filed by the server.",
+      "FilterText": "(ParentID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3D1008D1-E327-459B-A836-C319E69888F9"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Catalog",
+      "Description": "Task types, roles, and templates. No row of the caller's work.",
+      "FilterText": "(1 = 1)"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "99FA70BA-D7C1-4B82-9CC0-0056AFBC9C36"
+    },
+    "fields": {
+      "Name": "Collaboration: Tasks The Caller May Change",
+      "Description": "A filed root stays parentless. Any other task needs a writable parent.",
+      "FilterText": "(ID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1) AND ((ID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE IsRoot = 1) AND ParentID IS NULL) OR (ID NOT IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE IsRoot = 1) AND ParentID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D782305C-C026-4F16-AA75-6BD8389237C0"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Rows A Contributor May Change",
+      "Description": "A row of a task the caller can write.",
+      "FilterText": "(TaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D3DBD148-8DE3-4CF8-ADA8-F0099FAFFDDA"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Dependencies In Reach",
+      "Description": "Both ends of the dependency are tasks the caller can see.",
+      "FilterText": "(TaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) AND DependsOnTaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9786E4C7-F3A5-46E4-8289-ABC11BC0E2F6"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Dependencies A Contributor May Change",
+      "Description": "Both ends are tasks the caller can write.",
+      "FilterText": "(TaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1) AND DependsOnTaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F3950945-D6A9-426B-BA67-811E5DF57A45"
+    },
+    "fields": {
+      "Name": "Collaboration: Task Comments The Author May Change",
+      "Description": "The caller wrote the comment, on a task they can write.",
+      "FilterText": "((TaskID IN (SELECT TaskID FROM [__mj_BizAppsCollaboration].[fnCollaborationTasks](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanWrite = 1)) AND (PersonID IN (SELECT ID FROM [__mj_BizAppsCommon].[Person] WHERE LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "76439682-05D4-4769-8F8A-AA10083F2C70"
+    },
+    "fields": {
+      "Name": "Collaboration: People In Reach",
+      "Description": "The caller's own person, and people linked to a user with an active seat on a space the caller reaches.",
+      "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR LinkedUserID IN (SELECT UserID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  }
+]

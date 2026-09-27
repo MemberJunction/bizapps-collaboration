@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-04 - Write Gates",
+    "Description": "Verify write gates on spaces, space members, space items, share notices, and item uses: cycle prevention, last owner protection, and caller authorization.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Cycle moves fail, stranding last owner fails, immutable seat fields enforced, invalid signer/space refused."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "write-gates"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "332DBB2E-7CAB-49D9-8E58-8F5FB54BE9E4"
+  }
+}

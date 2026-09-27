@@ -1,0 +1,3 @@
+Key,ID,Code,Name,InviteApproval,MemberCap,DefaultRetention,OwnedBy
+workshop,E1000001-0000-4000-8000-000000000001,world-workshop,Workshop,AutoApprove,3,Indefinite,world
+committee,E1000001-0000-4000-8000-000000000002,world-committee,Committee,Approve,,Year,world

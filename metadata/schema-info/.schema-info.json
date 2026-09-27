@@ -1,0 +1,19 @@
+[
+  {
+    "_comments": [
+      "Matched by schema name. CodeGen creates a row with its own id when this one is missing, and a fixed id here would miss that row.",
+      "EntityNamePrefix is null because SchemaInfo.EntityNamePrefix is capped at nvarchar(25), but the collaboration prefix 'MJ_BizApps_Collaboration: ' is 26 characters. The prefix rule is configured in mj.config.cjs."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Schema Info.SchemaName=__mj_BizAppsCollaboration"
+    },
+    "fields": {
+      "SchemaName": "__mj_BizAppsCollaboration",
+      "EntityIDMin": 10100001,
+      "EntityIDMax": 10199999,
+      "EntityNamePrefix": null,
+      "Comments": null,
+      "Description": "MemberJunction: BizApps Collaboration. Spaces are the permission and retrieval boundary. Conversations, tasks, and files compose in through SpaceItem."
+    }
+  }
+]

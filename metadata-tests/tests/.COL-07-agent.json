@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-07 - Collaboration Space Agent and Retrieval",
+    "Description": "Verify Collaboration Space Agent metadata, Search Scope with restricting SpaceID dimension, and agentMayQuote retrieval scoping.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Agent metadata declares 3 skills; Search Scope restricts on SpaceID; retrieval covers subtree and band; client never gets Team materials."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4843A038-A034-4BD0-8886-A895E0107F01"
+  }
+}

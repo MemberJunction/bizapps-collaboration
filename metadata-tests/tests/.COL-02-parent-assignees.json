@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-02 - Parent Assignees",
+    "Description": "Verify AllowParentAssignees control: participant can assign ancestor members when on, refused when off; only staff may toggle.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Participant assignment of ancestor member succeeds when AllowParentAssignees=true and fails when AllowParentAssignees=false."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "parent-assignees"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "2E97C10B-CAB8-4902-B385-D92BEFDFE1C8"
+  }
+}

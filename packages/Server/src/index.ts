@@ -7,9 +7,13 @@
 import '@mj-biz-apps/collaboration-entities';
 import '@mj-biz-apps/collaboration-actions';
 import {
+    LoadItemUseEntityServer,
+    LoadShareNoticeEntityServer,
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
+    LoadCollaborationTaskEntityServer,
+    LoadTaskAttributionEntityServer,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
 import { fileURLToPath } from 'node:url';
@@ -18,10 +22,22 @@ import { resolve } from 'node:path';
 const here = fileURLToPath(new URL('.', import.meta.url));
 
 /** Passed to the host schema builder. Importing the resolvers is not enough. */
-export const RESOLVER_PATHS = [resolve(here, 'generated/generated.{js,ts}')];
+export const RESOLVER_PATHS = [
+    resolve(here, 'generated/generated.{js,ts}'),
+    resolve(here, 'upload-space-file.resolver.{js,ts}'),
+    resolve(here, 'mint-space-link.resolver.{js,ts}'),
+    resolve(here, 'create-space-task.resolver.{js,ts}'),
+    resolve(here, 'post-space-message.resolver.{js,ts}'),
+];
+
+export { mintSpaceLink } from './mint-space-link.js';
 
 export function LoadBizAppsCollaborationServer(): void {
+    LoadItemUseEntityServer();
+    LoadShareNoticeEntityServer();
     LoadSpaceEntityServer();
     LoadSpaceItemEntityServer();
     LoadSpaceMemberEntityServer();
+    LoadTaskAttributionEntityServer();
+    LoadCollaborationTaskEntityServer();
 }

@@ -12,7 +12,16 @@
   },
   "repository": "https://github.com/MemberJunction/bizapps-collaboration",
   "mjVersionRange": ">=6.1.2 <7.0.0",
-  "dependencies": {},
+  "dependencies": {
+    "mj-bizapps-common": {
+      "version": ">=5.46.0 <6.0.0",
+      "repository": "https://github.com/MemberJunction/bizapps-common"
+    },
+    "mj-bizapps-tasks": {
+      "version": ">=1.5.0 <2.0.0",
+      "repository": "https://github.com/MemberJunction/bizapps-tasks"
+    }
+  },
   "schema": {
     "name": "__mj_BizAppsCollaboration",
     "createIfNotExists": true
@@ -41,6 +50,10 @@
         "name": "@mj-biz-apps/collaboration-ng",
         "role": "bootstrap",
         "startupExport": "LoadBizAppsCollaborationClient"
+      },
+      {
+        "name": "@mj-biz-apps/collaboration-ng-widgets",
+        "role": "library"
       }
     ],
     "shared": [

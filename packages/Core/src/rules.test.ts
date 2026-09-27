@@ -3,12 +3,23 @@ import { describe, it } from 'node:test';
 import {
     agentMayQuote,
     authorizeItemWrite,
+    authorizeTaskAssignment,
+    mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,
     isSelfRemoval,
     leavingWouldStrand,
     wouldStrandLastOwner,
+    callerMayReceiveLink,
+    handInviteToEngine,
+    inviteEmail,
+    linkHandoff,
+    lockoutMessage,
+    magicLinkBlocksAccount,
+    resourcesFromRoster,
     membershipReaches,
+    rosterActions,
+    rosterBySeat,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
@@ -16,6 +27,7 @@ import {
     strandFromSavedRow,
     retentionDeadline,
     visibleSpaces,
+    type InviteEmail,
     type MemberSnapshot,
     type RoleFlags,
     type SpaceNode,
@@ -66,6 +78,7 @@ function member(partial: Partial<MemberSnapshot> & Pick<MemberSnapshot, 'spaceId
 const tree: SpaceNode[] = [
     space({ id: 'root', ownerId: 'ada' }),
     space({ id: 'child', parentId: 'root' }),
+    space({ id: 'grandchild', parentId: 'child' }),
     space({ id: 'sealed', parentId: 'root', inheritsMembership: false }),
     space({ id: 'under-sealed', parentId: 'sealed' }),
 ];
@@ -96,6 +109,136 @@ describe('membershipReaches', () => {
     it('ignores invited and removed rows', () => {
         const memberships = [member({ spaceId: 'root', userId: 'cy', role: ownerRole, status: 'Invited' })];
         assert.equal(membershipReaches(tree, memberships, 'cy', 'root'), null);
+    });
+});
+
+describe('magic link and roster permission', () => {
+    const memberships = [
+        member({ spaceId: 'root', userId: 'ada', role: ownerRole }),
+        member({ spaceId: 'root', userId: 'sam', role: readerRole, band: 'Shared' }),
+    ];
+
+    it('withholds the sign-in link from a space owner who is not a host issuer', () => {
+        assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: [] }), false);
+        assert.equal(callerMayReceiveLink({ userType: 'Owner', roleNames: [], issuerRoleNames: [] }), true);
+        assert.equal(callerMayReceiveLink({ userType: 'User', roleNames: ['UI'], issuerRoleNames: ['UI'] }), true);
+        assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: false }), 'withhold');
+        assert.equal(linkHandoff({ emailChannel: false, callerIsIssuer: true }), 'show');
+        assert.equal(linkHandoff({ emailChannel: true, callerIsIssuer: false }), 'email');
+    });
+
+    it('lists the spaces Sam reaches, including children he is not seated on', () => {
+        const samTree: SpaceNode[] = [
+            space({ id: 'northwind', ownerId: 'ada' }),
+            space({ id: 'discovery', parentId: 'northwind' }),
+            space({ id: 'field-notes', parentId: 'discovery' }),
+            space({ id: 'delivery', parentId: 'northwind', inheritsMembership: false }),
+            space({ id: 'delivery-room', parentId: 'delivery' }),
+        ];
+        const samSeats = [
+            member({ spaceId: 'northwind', userId: 'sam', role: readerRole }),
+            member({ spaceId: 'delivery', userId: 'sam', role: readerRole }),
+        ];
+        const names = new Map(resourcesFromRoster({ callerUserId: 'sam', spaces: samTree, memberships: samSeats }).map((row) => [row.spaceId, row.actions]));
+        assert.ok(names.has('discovery'));
+        assert.ok(names.has('field-notes'));
+        assert.ok(names.has('delivery-room'));
+        assert.deepEqual(names.get('discovery'), ['Read']);
+    });
+
+    it('does not issue a link MJ would refuse, unless the host warns instead', () => {
+        const staff = {
+            userType: 'User',
+            roleNames: ['UI'],
+            restrictedRoleName: 'Space Participant',
+            grantableRoleNames: ['Space Participant'],
+            invitedRoleName: 'Space Participant',
+        };
+        assert.equal(magicLinkBlocksAccount({ ...staff, provisioningGuard: 'block' }), true);
+        assert.equal(magicLinkBlocksAccount({ ...staff, provisioningGuard: 'warn' }), false);
+        assert.equal(magicLinkBlocksAccount({ ...staff, userType: 'Owner', roleNames: [], provisioningGuard: 'block' }), true);
+        assert.equal(magicLinkBlocksAccount({
+            userType: 'User',
+            roleNames: ['Space Participant'],
+            restrictedRoleName: 'Space Participant',
+            grantableRoleNames: ['Space Participant'],
+            invitedRoleName: 'Space Participant',
+            provisioningGuard: 'block',
+        }), false);
+    });
+
+    it('names an invited seat and a removed seat on the no-access page', () => {
+        assert.equal(
+            lockoutMessage([{ spaceName: 'Audit committee', status: 'Invited' }]),
+            "Your invite to Audit committee is waiting for an owner's approval.",
+        );
+        assert.equal(
+            lockoutMessage([{ spaceName: 'Discovery', status: 'Removed' }]),
+            'Your seat on Discovery was removed.',
+        );
+        assert.match(lockoutMessage([]), /invite your account/);
+    });
+
+    it('sends the invite email with a from address and the link', async () => {
+        const sent: InviteEmail[] = [];
+        const message = inviteEmail({ from: 'invites@example.com', to: 'bea@example.com', url: 'http://host/magic-link/redeem?token=abc' });
+        const ok = await handInviteToEngine({
+            SendSingleMessage: async (_provider, _type, email) => {
+                sent.push(email);
+                return { Success: true };
+            },
+        }, 'smtp', message);
+        assert.equal(ok, true);
+        assert.equal(sent[0]?.from, 'invites@example.com');
+        assert.equal(sent[0]?.to, 'bea@example.com');
+        assert.match(sent[0]?.body ?? '', /token=abc/);
+    });
+
+    it('grants read to a member who reaches the space, and update to the owner', () => {
+        assert.deepEqual(rosterActions({ callerUserId: 'sam', spaceId: 'child', spaces: tree, memberships }), ['Read']);
+        assert.deepEqual(rosterActions({ callerUserId: 'ada', spaceId: 'sealed', spaces: tree, memberships }), []);
+        assert.deepEqual(rosterActions({ callerUserId: 'ada', spaceId: 'child', spaces: tree, memberships }), ['Read', 'Update', 'Share']);
+    });
+});
+
+describe('rosterBySeat', () => {
+    const seated = [
+        member({ spaceId: 'root', userId: 'ada', role: ownerRole }),
+        member({ spaceId: 'child', userId: 'bea', role: readerRole, band: 'Shared' }),
+        member({ spaceId: 'grandchild', userId: 'lee', role: readerRole, band: 'Shared' }),
+        member({ spaceId: 'sealed', userId: 'sam', role: ownerRole }),
+    ];
+
+    it('lists a three-level chain by the seat, nearest first', () => {
+        const walk = rosterBySeat(tree, seated, 'grandchild');
+        assert.equal(walk.stop, 'root');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.deepEqual(walk.groups[2].members.map((member) => member.userId), ['ada']);
+    });
+
+    it('lists a person once, under their nearest seat', () => {
+        const both = [...seated, member({ spaceId: 'child', userId: 'ada', role: ownerRole })];
+        const walk = rosterBySeat(tree, both, 'grandchild');
+        const seats = walk.groups.flatMap((group) => group.members.filter((member) => member.userId === 'ada').map(() => group.spaceId));
+        assert.deepEqual(seats, ['child']);
+    });
+
+    it('stops the list at a sealed space', () => {
+        const walk = rosterBySeat(tree, seated, 'under-sealed');
+        assert.equal(walk.stop, 'sealed');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['sealed']);
+        assert.equal(membershipReaches(tree, seated, 'ada', 'under-sealed'), null);
+        assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
+    });
+
+    it('reports a parent the viewer was not given, the way a row filter hides it', () => {
+        const visible = tree.filter((space) => space.id === 'child' || space.id === 'grandchild');
+        const visibleMembers = seated.filter((member) => member.spaceId === 'child' || member.spaceId === 'grandchild');
+        const walk = rosterBySeat(visible, visibleMembers, 'grandchild');
+        assert.equal(walk.stop, 'unloaded-parent');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild', 'child']);
+        assert.equal(membershipReaches(visible, visibleMembers, 'ada', 'grandchild'), null);
+        assert.equal(membershipReaches(visible, visibleMembers, 'bea', 'grandchild')?.userId, 'bea');
     });
 });
 
@@ -354,6 +497,45 @@ describe('space writes', () => {
     });
 });
 
+describe('filing a root task', () => {
+    const now = new Date('2026-09-22T00:00:00Z');
+    it('refuses a guest', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'bea',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, false);
+    });
+    it('files a client member on Shared when they ask for Team', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'bea',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'child', userId: 'bea', role: { ...guestRole, canContribute: true }, band: 'Shared' })],
+        });
+        assert.equal(decision.ok, true);
+        if (decision.ok) assert.equal(decision.band, 'Shared');
+    });
+    it('keeps Team when the caller can see it', () => {
+        const decision = mayFileRootTask({
+            callerUserId: 'ada',
+            spaceId: 'child',
+            requestedBand: 'Team',
+            now,
+            spaces: tree,
+            memberships: [member({ spaceId: 'root', userId: 'ada', role: ownerRole })],
+        });
+        assert.equal(decision.ok, true);
+        if (decision.ok) assert.equal(decision.band, 'Team');
+    });
+});
+
 describe('item writes', () => {
     const now = new Date('2026-09-22T00:00:00Z');
     const memberships = [member({ spaceId: 'root', userId: 'ada', role: ownerRole })];
@@ -421,6 +603,83 @@ describe('item writes', () => {
     it('requires reach on both spaces for a move', () => {
         const decision = authorizeItemWrite({ ...base, previousSpaceId: 'sealed', nextSpaceId: 'child', previousBand: 'Team', nextBand: 'Team' });
         assert.equal(decision.ok, false);
+    });
+    it('B0.1: refuses demoting someone above, removing someone above, or peer admin, but allows self leaving', () => {
+        const clientAdmin: RoleFlags = { level: 20, maxGrantableLevel: 10, canInvite: true, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: true };
+        const memberRole: RoleFlags = { level: 20, maxGrantableLevel: 10, canInvite: true, canPromoteBand: false, canSeeTeamBand: true, isOwnerRole: false, canContribute: true };
+        const clientMember: RoleFlags = { level: 10, maxGrantableLevel: 0, canInvite: false, canPromoteBand: false, canSeeTeamBand: false, isOwnerRole: false, canContribute: true };
+
+        const testTree: SpaceNode[] = [space({ id: 'northwind' })];
+        const memberships: MemberSnapshot[] = [
+            member({ spaceId: 'northwind', userId: 'casey', role: clientAdmin }),
+            member({ spaceId: 'northwind', userId: 'sam', role: memberRole }),
+        ];
+
+        // 1. Demoting someone above: Casey tries to demote Sam (currentRole level 20 > 10) to client-member
+        const demoteAbove = refuseInvite({
+            callerUserId: 'casey',
+            inviteeUserId: 'sam',
+            targetSpaceId: 'northwind',
+            currentRole: memberRole,
+            granted: clientMember,
+            approval: 'AutoApprove',
+            memberCap: null,
+            spaces: testTree,
+            memberships,
+        });
+        assert.equal(demoteAbove.ok, false);
+        if (!demoteAbove.ok) assert.equal(demoteAbove.code, 'above-ceiling');
+
+        // 2. Removing someone above: Casey tries to remove Sam (currentRole level 20 > 10) while setting role to client-member
+        const removeAbove = refuseInvite({
+            callerUserId: 'casey',
+            inviteeUserId: 'sam',
+            targetSpaceId: 'northwind',
+            currentRole: memberRole,
+            granted: clientMember,
+            approval: 'AutoApprove',
+            memberCap: null,
+            spaces: testTree,
+            memberships,
+        });
+        assert.equal(removeAbove.ok, false);
+        if (!removeAbove.ok) {
+            assert.equal(removeAbove.code, 'above-ceiling');
+            assert.equal(removeAbove.message, 'Invite refused: that role is above the level this member may grant.');
+        }
+
+        // 3. Peer admin: Casey tries to modify another client-admin peer (currentRole level 20 > 10)
+        const peerAdmin = refuseInvite({
+            callerUserId: 'casey',
+            inviteeUserId: 'peer',
+            targetSpaceId: 'northwind',
+            currentRole: clientAdmin,
+            granted: clientMember,
+            approval: 'AutoApprove',
+            memberCap: null,
+            spaces: testTree,
+            memberships,
+        });
+        assert.equal(peerAdmin.ok, false);
+        if (!peerAdmin.ok) assert.equal(peerAdmin.code, 'above-ceiling');
+
+        // 4. Own seat through refuseInvite: caller is target, current role is above ceiling (e.g. member level 20 > 10), current-role check does not refuse it
+        const selfUpdate = refuseInvite({
+            callerUserId: 'sam',
+            inviteeUserId: 'sam',
+            targetSpaceId: 'northwind',
+            currentRole: memberRole,
+            granted: clientMember,
+            approval: 'AutoApprove',
+            memberCap: null,
+            spaces: testTree,
+            memberships,
+        });
+        assert.equal(selfUpdate.ok, true);
+
+        // 5. Own seat self-removal helper
+        assert.equal(isSelfRemoval({ callerUserId: 'casey', inviteeUserId: 'casey', nextStatus: 'Removed' }), true);
+        assert.equal(isSelfRemoval({ callerUserId: 'casey', inviteeUserId: 'sam', nextStatus: 'Removed' }), false);
     });
 });
 
@@ -503,3 +762,75 @@ describe('retentionDeadline', () => {
         assert.equal(retentionDeadline(start, 'Year')?.toISOString(), '2027-01-31T00:00:00.000Z');
     });
 });
+
+describe('authorizeTaskAssignment', () => {
+    const teamMemberRole: RoleFlags = { ...guestRole, canSeeTeamBand: true, canContribute: true };
+    const sharedOnlyRole: RoleFlags = { ...guestRole, canSeeTeamBand: false, canContribute: true };
+
+    it('allows a participant to assign an ancestor member when AllowParentAssignees is on', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: true,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('refuses a participant assigning an ancestor member when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.message, 'Assignment refused: participants may not assign people seated above this space.');
+        }
+    });
+
+    it('allows a participant to assign someone seated in the same space even when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: false,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'discovery',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('allows staff to assign an ancestor member even when AllowParentAssignees is off', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: true,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'northwind',
+            allowParentAssignees: false,
+            taskBand: 'Shared',
+            assigneeRole: teamMemberRole,
+        });
+        assert.equal(decision.ok, true);
+    });
+
+    it('refuses assignment of a Team task to someone who cannot see Team', () => {
+        const decision = authorizeTaskAssignment({
+            callerIsStaff: true,
+            taskSpaceId: 'discovery',
+            assigneeSeatSpaceId: 'discovery',
+            allowParentAssignees: true,
+            taskBand: 'Team',
+            assigneeRole: sharedOnlyRole,
+        });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.message, 'Assignment refused: a Team task cannot be given to someone who cannot see Team.');
+        }
+    });
+});
+

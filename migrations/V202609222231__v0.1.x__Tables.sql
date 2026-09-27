@@ -17,7 +17,7 @@
 --   ${mjSchema}              MJ core (__mj)
 --
 -- Hierarchy columns (RootParentID, ParentIDPath, …) are NOT columns of Space.
--- CodeGen emits them on the base view when ParentID is marked IsHierarchy.
+-- ParentID does not carry the IsHierarchy flag, so CodeGen emits none.
 -- =============================================================================
 
 -- =============================================================================
@@ -108,8 +108,8 @@ GO
 -- sub-spaces for the work inside it. Closure lives on the sub-space (ClosedAt),
 -- never by deleting the root.
 --
--- ParentID is the self-referencing hierarchy key. IsHierarchy is metadata on
--- that relationship, set when the entity is registered — not a column here.
+-- ParentID is a self-reference. It does not carry the IsHierarchy flag, so
+-- CodeGen emits no path columns. The walk is fnCollaborationAccess.
 ---------------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.Space (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -205,7 +205,7 @@ GO
 -- =============================================================================
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'BizApps Collaboration. A Space is the permission boundary and the agent retrieval boundary. Five tables; conversations, tasks, and files compose in through SpaceItem.',
+    @value = N'MemberJunction: BizApps Collaboration. Spaces are the permission and retrieval boundary. Conversations, tasks, and files compose in through SpaceItem.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}';
 GO
 
@@ -264,7 +264,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'Space';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Designated name of the space.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'Space', @level2type = N'COLUMN', @level2name = N'Name';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Parent space. Null on the perpetual root. Self-reference is the hierarchy key CodeGen marks IsHierarchy.',
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Parent space. Null on a root. It does not carry the IsHierarchy flag, so CodeGen emits no path columns.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'Space', @level2type = N'COLUMN', @level2name = N'ParentID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ user who owns the space.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'Space', @level2type = N'COLUMN', @level2name = N'OwnerID';
@@ -2967,7 +2967,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB'),
             'ParentID',
             'Parent ID',
-            'Parent space. Null on the perpetual root. Self-reference is the hierarchy key CodeGen marks IsHierarchy.',
+            'Parent space. Null on a root. It does not carry the IsHierarchy flag, so CodeGen emits no path columns.',
             'uniqueidentifier',
             16,
             0,

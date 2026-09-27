@@ -1,4 +1,4 @@
--- Rolled-back check for one participant. Run against a database that has the Collaboration migrations.
+-- Rolled-back check for one participant. Run against a database that has the Collaboration migrations and metadata push.
 -- It inserts fixtures, asserts what that person can see, and rolls the transaction back.
 SET XACT_ABORT ON;
 BEGIN TRAN;
@@ -6,8 +6,8 @@ BEGIN TRAN;
 DECLARE @User uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1);
 DECLARE @Other uniqueidentifier = (SELECT TOP 1 ID FROM __mj.[User] WHERE IsActive = 1 AND ID <> @User);
 DECLARE @Participant uniqueidentifier = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
-DECLARE @Type uniqueidentifier = 'A1000001-0000-4000-8000-000000000001';
-DECLARE @Guest uniqueidentifier = 'B2000001-0000-4000-8000-000000000004';
+DECLARE @Type uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'workspace');
+DECLARE @Guest uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE Code = 'guest');
 DECLARE @Ours uniqueidentifier = NEWID();
 DECLARE @Sibling uniqueidentifier = NEWID();
 DECLARE @Sealed uniqueidentifier = NEWID();
@@ -48,6 +48,12 @@ DECLARE @Seen int = (
     SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) a
     WHERE a.SpaceID IN (@Sibling, @Sealed)
 );
+IF EXISTS (
+    SELECT 1 FROM __mj.Entity
+    WHERE SchemaName = N'__mj_BizAppsCollaboration' AND AllowAllRowsAPI <> 0
+)
+    THROW 50000, 'A collaboration entity allows the All query.', 1;
+
 IF @Seen <> 0 THROW 50000, 'Participant reached a sibling or a sealed space.', 1;
 
 IF NOT EXISTS (SELECT 1 FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) WHERE SpaceID = @Ours)
@@ -63,10 +69,34 @@ IF EXISTS (
           OR (p.RoleID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AND e.Name IN (
               N'MJ_BizApps_Collaboration: Spaces',
               N'MJ_BizApps_Collaboration: Space Members',
-              N'MJ_BizApps_Collaboration: Space Items'))
+              N'MJ_BizApps_Collaboration: Space Items',
+              N'MJ_BizApps_Collaboration: Share Notices',
+              N'MJ_BizApps_Collaboration: Item Uses'))
       )
 )
     THROW 50000, 'A readable participant or UI row has no filter.', 1;
+
+IF EXISTS (
+    SELECT 1
+    FROM __mj.EntityPermission p
+    INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE (
+        (p.RoleID = @Participant AND e.Name NOT IN (
+            N'MJ_BizApps_Collaboration: Spaces',
+            N'MJ_BizApps_Collaboration: Space Members',
+            N'MJ_BizApps_Collaboration: Space Items'
+        ) AND (
+            (p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
+            OR (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
+            OR (p.CanDelete = 1 AND p.DeleteRLSFilterID IS NULL)
+        ))
+        OR (p.RoleID = 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AND e.Name IN (
+            N'MJ_BizApps_Collaboration: Share Notices',
+            N'MJ_BizApps_Collaboration: Item Uses'
+        ) AND p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
+    )
+)
+    THROW 50000, 'A participant or UI write operation is enabled without an RLS filter.', 1;
 
 DECLARE @uid nvarchar(36) = CONVERT(nvarchar(36), @User);
 DECLARE @n int;
@@ -127,6 +157,46 @@ SET @countSql = N'SELECT @out = COUNT(*) FROM __mj.vwConversationDetails WHERE I
 EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @Detail, @n OUTPUT;
 IF @n <> 1 THROW 50000, 'Conversation details filter missed the bound detail.', 1;
 
+DECLARE @Item uniqueidentifier = (
+    SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID = @Ours AND Band = N'Shared'
+);
+INSERT INTO __mj_BizAppsCollaboration.ShareNotice (SpaceID, ItemID, RecipientUserID)
+VALUES
+    (@Ours, @Item, @User),
+    (@Ours, @Item, @Other),
+    (@Sibling, @Item, @User);
+INSERT INTO __mj_BizAppsCollaboration.ItemUse (ItemID, UserID, UsedAt, Kind, SpaceID)
+VALUES
+    (@Item, @User, SYSUTCDATETIME(), N'open', @Ours),
+    (@Item, @Other, SYSUTCDATETIME(), N'open', @Ours);
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Share Notices';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND RecipientUserID = @user AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @user uniqueidentifier, @out int OUTPUT', @Ours, @User, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Notices filter did not return the notice addressed to the caller.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @ours AND RecipientUserID = @other AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @other uniqueidentifier, @out int OUTPUT', @Ours, @Other, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notices filter returned a notice addressed to someone else.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwShareNotices WHERE SpaceID = @sibling AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@sibling uniqueidentifier, @out int OUTPUT', @Sibling, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notices filter returned the sibling notice.', 1;
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Item Uses';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE SpaceID = @ours AND UserID = @user AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @user uniqueidentifier, @out int OUTPUT', @Ours, @User, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Item uses filter did not return the caller''s use.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwItemUses WHERE SpaceID = @ours AND UserID = @other AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@ours uniqueidentifier, @other uniqueidentifier, @out int OUTPUT', @Ours, @Other, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Item uses filter returned someone else''s use.', 1;
+
 DECLARE @Filter nvarchar(max), @Name nvarchar(255), @Schema sysname, @View sysname, @sql nvarchar(max);
 DECLARE filters CURSOR LOCAL FAST_FORWARD FOR
     SELECT f.Name, e.SchemaName, e.BaseView, f.FilterText
@@ -152,4 +222,53 @@ END
 CLOSE filters;
 DEALLOCATE filters;
 
+-- Field-level security check: Space Participant must read only ID, name, email, and link fields on People.
+-- Any new column added to People without an explicit Deny for Space Participant will fail this check.
+IF OBJECT_ID('__mj.EntityFieldPermission', 'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj.Entity WHERE Name = N'MJ_BizApps_Common: People' AND EnableFieldLevelSecurity = 1
+    )
+        THROW 50000, 'MJ_BizApps_Common: People does not have EnableFieldLevelSecurity turned on.', 1;
+
+    DECLARE @UnexpectedReadableFields int = (
+        SELECT COUNT(*)
+        FROM __mj.vwEntityFields ef
+        JOIN __mj.Entity e ON ef.EntityID = e.ID
+        LEFT JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+        WHERE e.Name = N'MJ_BizApps_Common: People'
+          AND ef.Name NOT LIKE N'[_][_]mj[_]%'
+          AND ef.Name NOT IN (
+              N'ID', N'FirstName', N'LastName', N'MiddleName', N'Prefix', N'Suffix',
+              N'PreferredName', N'DisplayName', N'Email', N'PrimaryEmail',
+              N'LinkedUserID', N'LinkedUser'
+          )
+          AND (
+              efp.ReadAccess = N'Allow' OR ISNULL(efp.ReadAccess, N'') <> N'Deny'
+          )
+    );
+    IF @UnexpectedReadableFields > 0
+        THROW 50000, 'Space Participant has access to unapproved fields on MJ_BizApps_Common: People.', 1;
+
+    DECLARE @MissingAllowedFields int = (
+        SELECT COUNT(*)
+        FROM (VALUES
+            (N'FirstName'), (N'LastName'), (N'MiddleName'), (N'Prefix'), (N'Suffix'),
+            (N'PreferredName'), (N'DisplayName'), (N'Email'), (N'PrimaryEmail'),
+            (N'LinkedUserID'), (N'LinkedUser')
+        ) AS a(Name)
+        LEFT JOIN (
+            SELECT ef.Name, efp.ReadAccess
+            FROM __mj.vwEntityFields ef
+            JOIN __mj.Entity e ON ef.EntityID = e.ID
+            JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant
+            WHERE e.Name = N'MJ_BizApps_Common: People'
+        ) AS p ON p.Name = a.Name AND p.ReadAccess = N'Allow'
+        WHERE p.Name IS NULL
+    );
+    IF @MissingAllowedFields > 0
+        THROW 50000, 'Space Participant is missing required Allow on allowed People fields.', 1;
+END
+
 ROLLBACK TRAN;
+

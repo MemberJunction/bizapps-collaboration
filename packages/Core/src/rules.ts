@@ -38,6 +38,7 @@ export interface SpaceNode {
     inheritsMembership: boolean;
     ownerId: string;
     agentRetrieval: AgentRetrieval;
+    allowParentAssignees?: boolean;
 }
 
 export interface InviteRefusal {
@@ -61,7 +62,7 @@ export type InviteDecision =
 
 const ACTIVE = 'Active';
 
-function idKey(value: string | null | undefined): string {
+export function idKey(value: string | null | undefined): string {
     return (value ?? '').trim().toLowerCase();
 }
 
@@ -99,6 +100,70 @@ export function membershipReaches(
         current = index.get(idKey(current.parentId));
     }
     return null;
+}
+
+export interface RosterGroup {
+    /** The space these people are seated on. The first group is the target. */
+    spaceId: string;
+    members: MemberSnapshot[];
+}
+
+export type RosterStop = 'root' | 'sealed' | 'unloaded-parent';
+
+export interface RosterWalk {
+    groups: RosterGroup[];
+    /** Why the walk ended. `unloaded-parent` means the next parent was not in `spaces`. */
+    stop: RosterStop;
+}
+
+/**
+ * Everyone who reaches `targetId`, grouped by the space they sit on.
+ * Each person is listed once, under their nearest active seat. That is the
+ * seat `membershipReaches` returns. The walk stops at a root, at a sealed
+ * space, or at a parent the caller did not load.
+ */
+export function rosterBySeat(
+    spaces: readonly SpaceNode[],
+    memberships: readonly MemberSnapshot[],
+    targetId: string,
+): RosterWalk {
+    const index = byId(spaces);
+    const groups: RosterGroup[] = [];
+    const listed = new Set<string>();
+    let current = index.get(idKey(targetId));
+    const seen = new Set<string>();
+    if (!current) {
+        return { groups, stop: 'unloaded-parent' };
+    }
+    let stop: RosterStop = 'root';
+    while (current && !seen.has(idKey(current.id))) {
+        seen.add(idKey(current.id));
+        const seated = memberships.filter((member) => {
+            if (idKey(member.spaceId) !== idKey(current!.id) || member.status !== ACTIVE) return false;
+            const key = idKey(member.userId);
+            if (listed.has(key)) return false;
+            listed.add(key);
+            return true;
+        });
+        if (seated.length) {
+            groups.push({ spaceId: current.id, members: seated });
+        }
+        if (!current.inheritsMembership) {
+            stop = 'sealed';
+            break;
+        }
+        if (!current.parentId) {
+            stop = 'root';
+            break;
+        }
+        const parent = index.get(idKey(current.parentId));
+        if (!parent) {
+            stop = 'unloaded-parent';
+            break;
+        }
+        current = parent;
+    }
+    return { groups, stop };
 }
 
 /** Every space this person's active memberships reach, including sealed stops. */
@@ -254,6 +319,58 @@ export function authorizeSpaceWrite(input: {
 }
 
 /**
+ * Filing a task as the root item of a space. The same rules as a new file:
+ * the caller must be able to add material, and a caller who cannot see Team
+ * lands the item on Shared.
+ */
+export function mayFileRootTask(input: {
+    callerUserId: string | null;
+    spaceId: string;
+    requestedBand: Band;
+    now: Date;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): PromotionDecision | InviteRefusal {
+    return authorizeItemWrite({
+        callerUserId: input.callerUserId,
+        previousSpaceId: null,
+        nextSpaceId: input.spaceId,
+        previousBand: null,
+        nextBand: input.requestedBand,
+        now: input.now,
+        spaces: input.spaces,
+        memberships: input.memberships,
+    });
+}
+
+/**
+ * Authorize task assignment to a member whose seat is known.
+ *
+ * When the filed task's space has `allowParentAssignees` off and the caller is
+ * not staff, participants may only assign people seated in their space or below.
+ * An ancestor seat reaches the space through inheritance, but the switch
+ * restricts assignment to local seats.
+ * A Team task can never be given to someone who cannot see Team.
+ */
+export function authorizeTaskAssignment(input: {
+    callerIsStaff: boolean;
+    taskSpaceId: string;
+    assigneeSeatSpaceId: string;
+    allowParentAssignees: boolean;
+    taskBand: Band;
+    assigneeRole: RoleFlags;
+}): { ok: true } | { ok: false; message: string } {
+    if (input.taskBand === 'Team' && !input.assigneeRole.canSeeTeamBand) {
+        return { ok: false, message: 'Assignment refused: a Team task cannot be given to someone who cannot see Team.' };
+    }
+    const isAncestorSeat = idKey(input.assigneeSeatSpaceId) !== idKey(input.taskSpaceId);
+    if (isAncestorSeat && !input.allowParentAssignees && !input.callerIsStaff) {
+        return { ok: false, message: 'Assignment refused: participants may not assign people seated above this space.' };
+    }
+    return { ok: true };
+}
+
+/**
  * Placing, moving, or demoting an item. The caller must reach every space
  * involved. Leaving the shared band, or entering it, requires CanPromoteBand.
  * A shared item that stays shared does not rewrite the promotion stamp.
@@ -278,6 +395,11 @@ export function authorizeItemWrite(input: {
     if (!next.role.canContribute) {
         return { ok: false, code: 'cannot-invite', message: 'Item change refused: this role cannot add or move material.' };
     }
+    // A new item from someone who cannot see Team lands in Shared, whichever band was asked for.
+    // It is stamped as them. The material is already theirs.
+    if (!next.role.canSeeTeamBand && !input.previousSpaceId) {
+        return { ok: true, band: 'Shared', promotedAt: input.now, promotedByUserId: input.callerUserId, rewriteStamp: true };
+    }
     const crossesSpace = !!input.previousSpaceId && idKey(input.previousSpaceId) !== idKey(input.nextSpaceId);
     if (crossesSpace && input.previousSpaceId) {
         const previous = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.previousSpaceId);
@@ -301,6 +423,130 @@ export function authorizeItemWrite(input: {
         return { ok: true, band: 'Shared', promotedAt: input.now, promotedByUserId: input.callerUserId, rewriteStamp: true };
     }
     return { ok: true, band: 'Shared', promotedAt: null, promotedByUserId: null, rewriteStamp: false };
+}
+
+/**
+ * Who may be handed the raw sign-in link. An email channel delivers it to the
+ * address instead. Otherwise only an Owner-type account, or a role the host
+ * listed in `inviteIssuerRoleNames`, may see it. A space owner is not enough:
+ * the link signs in as the address it names.
+ */
+export function callerMayReceiveLink(input: {
+    userType: string | null | undefined;
+    roleNames: readonly string[];
+    issuerRoleNames: readonly string[];
+}): boolean {
+    if ((input.userType ?? '').trim().toLowerCase() === 'owner') return true;
+    const allowed = new Set(input.issuerRoleNames.map((name) => name.trim().toLowerCase()).filter((name) => name.length > 0));
+    if (allowed.size === 0) return false;
+    return input.roleNames.some((name) => allowed.has(name.trim().toLowerCase()));
+}
+
+export interface InviteEmail {
+    from: string;
+    to: string;
+    subject: string;
+    body: string;
+}
+
+/** The message MJ's mailer is asked to send. `from` is the host's magicLink.fromAddress. */
+export function inviteEmail(input: { from: string; to: string; url: string }): InviteEmail {
+    return {
+        from: input.from,
+        to: input.to,
+        subject: "You've been invited to Collaboration",
+        body: `Open this link to sign in:\n\n${input.url}\n\nThis link is single-use and will expire.`,
+    };
+}
+
+export async function handInviteToEngine(
+    engine: { SendSingleMessage: (provider: string, type: string, message: InviteEmail) => Promise<{ Success?: boolean } | null | undefined> },
+    providerName: string,
+    message: InviteEmail,
+): Promise<boolean> {
+    const result = await engine.SendSingleMessage(providerName, 'Email', message);
+    return !!result?.Success;
+}
+
+/** Spaces the roster grants this person, including spaces they reach through a parent. */
+export function resourcesFromRoster(input: {
+    callerUserId: string;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): { spaceId: string; actions: RosterAction[] }[] {
+    const listed: { spaceId: string; actions: RosterAction[] }[] = [];
+    for (const space of input.spaces) {
+        const actions = rosterActions({
+            callerUserId: input.callerUserId,
+            spaceId: space.id,
+            spaces: input.spaces,
+            memberships: input.memberships,
+        });
+        if (actions.length) listed.push({ spaceId: space.id, actions });
+    }
+    return listed;
+}
+
+/**
+ * MJ refuses to redeem a link onto an existing Owner, or onto an account that
+ * holds a role outside the restricted role, the grantable names, and the role
+ * the link itself grants. It consumes the link before that check. `block` is
+ * MJ's default. `warn` still issues the link.
+ */
+export function magicLinkBlocksAccount(input: {
+    userType: string | null | undefined;
+    roleNames: readonly string[];
+    restrictedRoleName: string;
+    grantableRoleNames: readonly string[];
+    invitedRoleName: string;
+    provisioningGuard: 'block' | 'warn';
+}): boolean {
+    if (input.provisioningGuard !== 'block') return false;
+    if ((input.userType ?? '').trim().toLowerCase() === 'owner') return true;
+    const allowed = new Set(
+        [input.restrictedRoleName, ...input.grantableRoleNames, input.invitedRoleName]
+            .map((name) => name.trim().toLowerCase())
+            .filter((name) => name.length > 0),
+    );
+    return input.roleNames.some((name) => {
+        const normalized = name.trim().toLowerCase();
+        return normalized.length > 0 && !allowed.has(normalized);
+    });
+}
+
+/**
+ * What to tell someone who reaches no space. An Invited seat is waiting.
+ * A Removed seat names the space. Anyone else gets the general line.
+ */
+export function lockoutMessage(seats: readonly { spaceName: string; status: string }[]): string {
+    const own = seats.filter((seat) => seat.spaceName.trim().length > 0);
+    const invited = own.find((seat) => seat.status.trim() === 'Invited');
+    if (invited) return `Your invite to ${invited.spaceName.trim()} is waiting for an owner's approval.`;
+    const removed = own.find((seat) => seat.status.trim() === 'Removed');
+    if (removed) return `Your seat on ${removed.spaceName.trim()} was removed.`;
+    return 'Ask a member of the space to invite your account. Signing in is not the same thing as being on the roster.';
+}
+
+/** Where a sign-in link goes. `withhold` means the response carries no URL. */
+export function linkHandoff(input: { emailChannel: boolean; callerIsIssuer: boolean }): 'email' | 'show' | 'withhold' {
+    if (input.emailChannel) return 'email';
+    if (input.callerIsIssuer) return 'show';
+    return 'withhold';
+}
+
+export type RosterAction = 'Read' | 'Update' | 'Share';
+
+/** What the roster grants on one space. Read follows reach. Update and Share follow the owner role. */
+export function rosterActions(input: {
+    callerUserId: string | null;
+    spaceId: string;
+    spaces: readonly SpaceNode[];
+    memberships: readonly MemberSnapshot[];
+}): RosterAction[] {
+    if (!input.callerUserId) return [];
+    const reach = membershipReaches(input.spaces, input.memberships, input.callerUserId, input.spaceId);
+    if (!reach) return [];
+    return reach.role.isOwnerRole ? ['Read', 'Update', 'Share'] : ['Read'];
 }
 
 export function initialMemberStatus(approval: InviteApproval): 'Invited' | 'Active' {
@@ -333,6 +579,7 @@ export function refuseInvite(input: {
     inviteeUserId: string;
     targetSpaceId: string;
     granted: RoleFlags;
+    currentRole?: RoleFlags | null;
     approval: InviteApproval;
     memberCap: number | null;
     /** When set, the roster size already counted by the server. Otherwise counted from memberships. */
@@ -373,6 +620,23 @@ export function refuseInvite(input: {
 
     if (!grantor.role.canInvite) {
         return { ok: false, code: 'cannot-invite', message: 'Invite refused: this role cannot invite.' };
+    }
+    if (input.currentRole && idKey(input.callerUserId) !== idKey(input.inviteeUserId)) {
+        if (input.currentRole.level > grantor.role.maxGrantableLevel) {
+            return {
+                ok: false,
+                code: 'above-ceiling',
+                message: 'Invite refused: that role is above the level this member may grant.',
+            };
+        }
+        const currentFlagGap = flagExceedsGrantor(input.currentRole, grantor.role);
+        if (currentFlagGap) {
+            return {
+                ok: false,
+                code: 'above-ceiling',
+                message: `Invite refused: the granted role can ${currentFlagGap}, and the signer cannot.`,
+            };
+        }
     }
     if (input.granted.level > grantor.role.maxGrantableLevel) {
         return {

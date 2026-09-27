@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-00 - Collab World",
+    "Description": "Verify the baseline sample world (COLLAB-WORLD): 13 spaces, 26 seats, and library items loaded through entity gates.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "13 Spaces across workspace/committee/cohort types, 26 Seats across personas and bands, and library items."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "collab-world"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1A65E4C9-08C4-48C3-ADE1-91E3CCD3FBA9"
+  }
+}

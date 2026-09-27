@@ -1,0 +1,422 @@
+[
+  {
+    "primaryKey": {
+      "ID": "963C6CDE-78B2-4AAE-BD99-D5D543909737"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=FirstName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D3D812AA-167E-49E4-B70D-694E25A66AE4"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=LastName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "75CDDB33-DD5F-48B7-8B35-DE60F50FB773"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=MiddleName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A317F67F-A1B6-4BBA-A3D0-F34E61BE41F0"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Prefix&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3B7CE422-0614-46DA-810D-E7FE2B72A559"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Suffix&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9FE28555-7701-4E5E-B59F-3FF6B3E6FDDE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PreferredName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0934EDE0-E56D-4CEA-A26A-8F044631C22B"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DisplayName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "BD53CAD5-958F-4501-A671-94B235F87B63"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Email&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E5071AA8-B56A-416E-9FAD-8AFB0D3DEE5E"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryEmail&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DEDE015F-4E42-45E0-B9DA-46D27D52C7C1"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=LinkedUserID&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5719D01F-F3F2-4498-B3D7-0593097807ED"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=LinkedUser&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Allow",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "35DB8940-A3F4-4D54-BA27-785AA3417347"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Title&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C986D97D-72C6-41F8-AC53-1F1E22896429"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Phone&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "DE6D766C-F31F-4864-BBE7-67E703747FA9"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=DateOfBirth&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "0EB219EE-91CA-410D-A3E3-F4C6C48B7189"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Gender&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9DF7FDF6-6FCA-45DD-80EB-B2F03D8217CF"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PhotoURL&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "25A5559A-AB99-486F-A859-7AA9BF52A51F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Bio&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3D83D3E9-2BF5-41A5-9182-0FE8ADFFB22E"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=Status&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3E013E62-04FB-4849-A5F1-5DF740717037"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=SeniorityLevelID&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "Deny",
+      "CreateAccess": "Deny"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6F5162B9-19E3-4E2A-B431-4B3872B8A985"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=SeniorityLevel&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "FDAC2016-0B33-4214-9352-D662C133C850"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressLine1&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8A9D0FBA-0D9B-4A44-A8C0-1A975108BC2D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressLine2&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5E7E0C2E-07D5-47C4-8C78-56F7CA1694E5"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressCity&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "EC499570-EFA0-4BFA-B15C-0EB54F45455A"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressState&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "66538ADD-F8B3-4B20-8DD9-D998D2D580DE"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressPostalCode&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D74EFE75-58D1-4A86-A7AB-4ACB64EF431F"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressCountry&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "87EC5624-FA7E-4215-98E7-885352D7E652"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressLatitude&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C8EDEA4E-5D66-4FE6-A63C-1A8E823AE897"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressLongitude&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C73178CA-A5AE-4F27-8C97-DDF5A4B9D02D"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryAddressType&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3C5C8B32-8ED5-4508-A798-3623FDF40D4E"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryPhone&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6C537164-AEBB-4786-A999-5E9716766132"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CurrentOrganizationID&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A59165FD-48B2-4D36-A15C-502A9F366F30"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CurrentOrganizationName&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F0A5E833-FF35-4171-8727-C98EEE2C3830"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=CurrentJobTitle&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "22AE326C-C2E3-4F7D-A79E-6608AB685110"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryJobFunctionID&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A0218FA9-BF4B-4861-95DE-EB267FD44369"
+    },
+    "fields": {
+      "EntityFieldID": "@lookup:MJ: Entity Fields.Name=PrimaryJobFunction&Entity=MJ_BizApps_Common: People",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "ReadAccess": "Deny",
+      "UpdateAccess": "No Access",
+      "CreateAccess": "No Access"
+    }
+  }
+]

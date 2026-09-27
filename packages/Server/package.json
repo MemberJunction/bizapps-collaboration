@@ -5,29 +5,49 @@
   "description": "BizApps Collaboration server bootstrap.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "publishConfig": { "access": "public" },
-  "files": ["/dist"],
-  "scripts": { "build": "tsc" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
   "license": "UNLICENSED",
   "dependencies": {
     "@mj-biz-apps/collaboration-actions": "0.1.0",
+    "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0",
-    "class-validator": "0.14.2"
+    "class-validator": "^0.14.3"
   },
   "peerDependencies": {
+    "@memberjunction/communication-engine": "^6.1.2",
+    "@memberjunction/communication-types": "^6.1.2",
     "@memberjunction/core": "^6.1.2",
+    "@memberjunction/core-entities": "^6.1.2",
+    "@memberjunction/generic-database-provider": "^6.1.2",
     "@memberjunction/global": "^6.1.2",
-    "@memberjunction/server": "^6.1.2"
+    "@memberjunction/server": "^6.1.2",
+    "@memberjunction/storage": "^6.1.2",
+    "@mj-biz-apps/common-entities": "^5.46.0"
   },
   "devDependencies": {
+    "@memberjunction/communication-engine": "6.1.3",
+    "@memberjunction/communication-types": "6.1.3",
     "@memberjunction/core": "6.1.3",
+    "@memberjunction/core-entities": "6.1.3",
+    "@memberjunction/generic-database-provider": "6.1.3",
     "@memberjunction/global": "6.1.3",
     "@memberjunction/server": "6.1.3",
+    "@memberjunction/storage": "6.1.3",
+    "@mj-biz-apps/common-entities": "5.46.0",
     "typescript": "5.9.3"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/bizapps-collaboration"
-  }
+  },
+  "mjUILayer": "runtime"
 }

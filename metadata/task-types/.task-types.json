@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "Milestone",
+      "Code": "MILESTONE",
+      "Description": "A key project event or deliverable date marking significant progress",
+      "IconClass": "fa-solid fa-flag-checkered",
+      "DefaultPriority": "High"
+    },
+    "primaryKey": {
+      "ID": "8AFDE498-1B11-42A7-A1C6-41B537A1AEAA"
+    }
+  }
+]

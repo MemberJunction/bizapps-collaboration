@@ -1,0 +1,18 @@
+[
+  {
+    "_comments": [
+      "In-app notice that an item was shared. Email and SMS stay off. There is no template."
+    ],
+    "primaryKey": {
+      "ID": "A4B298C5-2D9E-471F-82B0-B962DA5150A8"
+    },
+    "fields": {
+      "Name": "Collaboration Share",
+      "Description": "An item was shared with a member of a space.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
+  }
+]

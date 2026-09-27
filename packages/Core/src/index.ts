@@ -1,13 +1,24 @@
 export {
     agentMayQuote,
     authorizeItemWrite,
+    authorizeTaskAssignment,
+    mayFileRootTask,
     authorizeSpaceWrite,
     chainsForSpaceWrite,
     flagExceedsGrantor,
     initialMemberStatus,
     isSelfRemoval,
     leavingWouldStrand,
+    callerMayReceiveLink,
+    handInviteToEngine,
+    inviteEmail,
+    linkHandoff,
+    lockoutMessage,
+    magicLinkBlocksAccount,
+    resourcesFromRoster,
     membershipReaches,
+    rosterActions,
+    rosterBySeat,
     parentCreatesCycle,
     planSpaceWrite,
     promotionStamps,
@@ -17,6 +28,8 @@ export {
     visibleSpaces,
     wouldStrandLastOwner,
 } from './rules.js';
+export { authorizeNoticeWrite, authorizeUseWrite, foldersIn, openMode, recordUse, requestedItemBand, shareRecipients, SPACE_UPLOAD_MAX_BYTES, storedContentType } from './phase2.js';
+export type { LibraryItem, ItemUse } from './phase2.js';
 export type {
     AgentRetrieval,
     Band,
@@ -24,8 +37,33 @@ export type {
     InviteRefusal,
     MemberSnapshot,
     PromotionDecision,
+    RosterAction,
     Retention,
     RoleFlags,
+    RosterGroup,
+    RosterStop,
+    RosterWalk,
     SpaceNode,
     InviteDecision,
+    InviteEmail,
 } from './rules.js';
+export {
+    AVATAR_COLOR_CLASSES,
+    avatarColorClass,
+    summarizeAudience,
+    computeSpaceProgress,
+    mergeAgenda,
+    NeedsYouProvider,
+    AgendaProvider,
+    SpaceHeaderChipProvider,
+} from './view-models.js';
+export type {
+    AvatarColorClass,
+    AudienceMemberInput,
+    ExternalOrgGroup,
+    AudienceBreakdown,
+    SpaceProgressResult,
+    NeedsYouItem,
+    AgendaItem,
+    SpaceHeaderChip,
+} from './view-models.js';

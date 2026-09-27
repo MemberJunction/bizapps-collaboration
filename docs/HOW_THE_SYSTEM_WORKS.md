@@ -34,27 +34,31 @@ A file, a conversation, or a task is an item. This app does not copy those table
 `migrations/V202609230010__v0.1.x__Access.sql` creates:
 
 - `fnCollaborationAccess(@UserID)`, the SQL form of the reach walk, plus whether that reach may see the team band.
-- Five row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on any role a person holds exempts them from row-level security.
-- A `ResourceType` named `Space`, so a magic link of kind `resource-share` can name a space.
+- Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on a grant the person holds exempts them from row-level security for that operation. A share notice is readable only by the member it is addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either row carries a create filter, and the server subclass is the rest of the gate.
+- A `ResourceType` named `Space`. An email invitation does not use it. Access comes from the seat.
 
-The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can read that one space and its Shared items.
+The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can still read one space, but this app's invites are app sessions, not resource shares, so a removed seat takes effect at once.
 
 Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permissions, and one unfiltered permission exempts the user from every filter.
 
-## The workspace
+## The UI surface
 
-`mj-collaboration-workspace` is the screen: the tree, the roster, the material, and an invite form. The form calls `refuseInvite` with the same inputs the server will, and shows the refusal before the save. `mj-collaboration-no-access` is the page a person sees when they are signed in and not on the roster. The components do not load data. The host passes the rows in.
+`CollaborationSectionResource` (`mj-collaboration-section`) is the Explorer resource component hosting the Collaboration application in MemberJunction Explorer. It is composed from `@mj-biz-apps/collaboration-ng-widgets` (space rail, header, tabs, and content views). When a signed-in user opens a space where they hold no seat, `CollaborationNoAccessComponent` (`mjc-no-access`) presents a branded empty state powered by MemberJunction's canonical `<mj-empty-state>` using `lockoutMessage` from `@mj-biz-apps/collaboration-core`.
 
 ## What this repo does not contain
 
 These are named in the plan and belong in other repositories. They are not implemented here, and the live checkouts of those repositories are not modified by this work.
 
 - Hierarchy path columns and traversal functions. `ParentID` does not carry the `IsHierarchy` flag (set in one migration, cleared in the next), so CodeGen emits no path columns or traversal functions. Access uses `fnCollaborationAccess`, which is T-SQL and needs a PostgreSQL port.
-- Minting a magic-link token. That stays in MemberJunction's magic-link API. This app registers the `Space` resource type and accepts `{{ScopeResourceID}}`. A host mints `Kind: resource-share` with that space id and the Space Participant role.
+- MemberJunction's `CreateInvite` still does not accept a resource id. This app does not write a resource-share. An email invitation saves a seat through the member gate. The sign-in link is an app session for Space Participant. It is emailed when the host has `magicLink.communicationProvider`. Otherwise the raw URL is returned only to an Owner-type user, or a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL. The host must set `magicLink.enabled` and list `Space Participant` in `grantableRoleNames`. Do not change `restrictedRoleName`; that is the host's default for every app.
 - The filter text is T-SQL (`TRY_CAST`, bracketed names). A PostgreSQL host needs a dialect of the same function before the filters run.
 - Committees moving its membership onto Space.
 - Platform work in MemberJunction itself: presence, @mention notifications, per-user read state, live message fan-out, and the search fixes.
 - A license. Distribution is free. The license text is still an open decision.
+
+## The All query
+
+CodeGen emits an `All…` query only when `AllowAllRowsAPI` is 1. Every Collaboration entity leaves that flag at 0, so this app generates no `All…` route. MemberJunction 6.1.3 still ships `All…` queries for metadata entities such as Users and Roles. Each of those appends the caller's read filter. None of them covers Conversations, Conversation Details, or Files, and BizApps Tasks generates none. The lane is as safe as the grants: a NULL filter on a Space Participant read row would open it, and `scripts/persona-check.sql` asserts there is no such row and that every Collaboration entity keeps `AllowAllRowsAPI` at 0.
 
 ## Tests
 

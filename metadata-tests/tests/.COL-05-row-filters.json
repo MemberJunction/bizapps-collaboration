@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "COL-05 - Row Filters",
+    "Description": "Verify Row-Level Security across personas: Bea in Discovery, Harper in Harbor, Dana in Committee, and Team band isolation.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each persona sees only reachable spaces and items; Team items are hidden from participants; cross-space isolation verified."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "row-filters"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5EA07535-9DAB-48BE-9BAE-E43B39AD5FDA"
+  }
+}

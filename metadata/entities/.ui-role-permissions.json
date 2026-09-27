@@ -1,0 +1,128 @@
+[
+  {
+    "_comments": [
+      "UI role permissions for Collaboration entities, matching the row-level security boundaries.",
+      "RELEASE SEED NOTE FOR BUILD ENGINEER: The UI entity permission rows for Collaboration entities (Spaces, Space Members, Space Items, Share Notices, Item Uses) come from the CodeGen output appended to this repo's migrations (V202609222231__v0.1.x__Tables.sql and V202609230620__v0.1.x__Library_CodeGen.sql). Because they are inserted without fixed IDs, every host has its own IDs. When generating the release Metadata_Sync SQL, ensure updates to these permissions are keyed by EntityID and RoleID (matching UI role) rather than capture-database permission IDs, so that CodeGen's default unfiltered UI permissions are properly updated with these RLS filters on every target host (following the bizapps-forms pattern)."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Spaces"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 1,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Spaces"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Members"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Members"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Members&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 1,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Members"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 1,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Items"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Share Notices"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Share Notices"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Share Notices&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 0,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Notices For The Caller",
+            "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Notices The Caller May Send"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Item Uses"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Item Uses"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Item Uses&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 1,
+            "CanUpdate": 0,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Item Uses",
+            "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Item Uses"
+          }
+        }
+      ]
+    }
+  }
+]

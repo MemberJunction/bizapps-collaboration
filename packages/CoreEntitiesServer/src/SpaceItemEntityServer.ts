@@ -1,11 +1,30 @@
-import { BaseEntity, CompositeKey, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type IMetadataProvider, type TransactionGroupBase, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
-import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadWriteContext } from './load-graph.js';
+import { recordItemUse, recordShare } from './library-events.js';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
+import {
+    mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Items';
+
+/** The item object this upload created. Another request's item cannot match it. */
+const vouchedItems = new WeakSet<object>();
+
+export function vouchStoredFile(item: object): void {
+    vouchedItems.add(item);
+}
+
+export function releaseStoredFile(item: object): void {
+    vouchedItems.delete(item);
+}
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
@@ -20,6 +39,17 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const spaceId = parseUuid(this.SpaceID);
         if (!user || !caller || !spaceId) {
             return fail(result, 'Item change refused: the signer and the space must be real ids.');
+        }
+        const filesEntity = asMetadata(this.ProviderToUse)?.EntityByName('MJ: Files');
+        const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+        if (isFile) {
+            const isNewFilePointer = !this.IsSaved || this.Fields.some((f) => f.Dirty && (f.Name === 'EntityID' || f.Name === 'RecordID'));
+            if (isNewFilePointer && !vouchedItems.has(this)) {
+                const isExternal = await isExternalUrlFile(this, user);
+                if (!isExternal) {
+                    return fail(result, 'Item change refused: file items must be created through space upload.');
+                }
+            }
         }
         const previousRaw = this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue as string | null | undefined;
         const previousSpace = previousRaw ? parseUuid(String(previousRaw)) : null;
@@ -64,6 +94,11 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (!readable) {
             return fail(result, 'Item change refused: the signer cannot read the record this item points at.');
         }
+        const parented = await filedTaskHasParent(this, user);
+        if (parented) {
+            return fail(result, 'Item change refused: a subtask cannot be filed as a space root.');
+        }
+        this.Band = decision.band;
         if (decision.rewriteStamp) {
             this.PromotedAt = decision.promotedAt;
             this.PromotedByUserID = decision.promotedByUserId;
@@ -74,6 +109,265 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             if (by) this.PromotedByUserID = (by.OldValue as string | null) ?? null;
         }
         return result;
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        const wasNew = !this.IsSaved;
+        const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
+        const ok = await super.Save(options);
+        const user = this.ContextCurrentUser;
+        if (!ok || !user || !this.ID) return ok;
+        const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
+        try {
+            if (!wasNew && becameShared) await recordItemUse(this, user, this.ID, this.SpaceID, 'promote');
+            if (becameShared) await recordShare(this, user, this.ID, this.SpaceID, 'Shared');
+        } catch (error) {
+            LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return ok;
+    }
+
+    private failDelete(message: string): false {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'delete';
+        result.Message = message;
+        this.RegisterResultHistoryEntry(result);
+        return false;
+    }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        // 1. Permission check FIRST: stop immediately if the caller lacks delete permission.
+        // This prevents unauthorized callers from wiping out child history (Item Uses / Share Notices)
+        // before MJ's ORM check.
+        try {
+            this.CheckPermissions(EntityPermissionType.Delete, true);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(msg);
+            return this.failDelete(msg);
+        }
+
+        const currentItemId = this.ID;
+        if (!currentItemId || !this.IsSaved) {
+            return super.Delete(options);
+        }
+
+        const provider = asMetadata(this.ProviderToUse);
+        if (!provider) {
+            const msg = `Space item delete failed: metadata provider is not available for item ${currentItemId}`;
+            LogError(msg);
+            return this.failDelete(msg);
+        }
+
+        // 2. Pre-compute file information BEFORE super.Delete(options) is called,
+        // because super.Delete clears this.RecordID and this.EntityID upon completion.
+        const filesEntity = provider.EntityByName('MJ: Files');
+        const isFile = !!filesEntity && !!this.EntityID && this.EntityID.toLowerCase() === filesEntity.ID.toLowerCase();
+        const rawRecId = this.RecordID;
+        const rawId = isFile && rawRecId ? (rawRecId.toLowerCase().startsWith('id|') ? rawRecId.slice(3) : rawRecId) : null;
+        const parsedFileId = rawId ? parseUuid(rawId) : null;
+
+        // 3. Child deletes (Item Uses & Share Notices) and item delete run atomically in ONE transaction group.
+        const isInitiator = !this.TransactionGroup;
+        let tg = this.TransactionGroup;
+        if (isInitiator) {
+            try {
+                tg = await provider.CreateTransactionGroup();
+            } catch (error) {
+                const msg = `Space item delete failed to create transaction group: ${error instanceof Error ? error.message : String(error)}`;
+                LogError(msg);
+                return this.failDelete(msg);
+            }
+        }
+
+        const loadedUses: mjBizAppsCollaborationItemUseEntity[] = [];
+        const loadedNotices: mjBizAppsCollaborationShareNoticeEntity[] = [];
+
+        try {
+            const system = await requireSystemUser(this);
+            const rv = RunView.FromMetadataProvider(provider);
+
+            const usesRes = await rv.RunView<mjBizAppsCollaborationItemUseEntity>({
+                EntityName: 'MJ_BizApps_Collaboration: Item Uses',
+                ExtraFilter: `ItemID = '${currentItemId}'`,
+                ResultType: 'entity_object',
+                IgnoreMaxRows: true,
+            }, system);
+            if (!usesRes || !usesRes.Success) {
+                const msg = `Space item reference cleanup: failed to query Item Uses for item ${currentItemId}: ${usesRes?.ErrorMessage ?? 'RunView failed'}`;
+                LogError(msg);
+                return this.failDelete(msg);
+            }
+
+            if (usesRes.Results && usesRes.Results.length > 0) {
+                for (const useEntity of usesRes.Results) {
+                    loadedUses.push(useEntity);
+                    useEntity.TransactionGroup = tg;
+                    const queued = await useEntity.Delete();
+                    if (!queued) {
+                        const msg = `Space item reference cleanup: failed to queue delete for Item Use ${useEntity.ID}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
+                    }
+                }
+            }
+
+            const noticesRes = await rv.RunView<mjBizAppsCollaborationShareNoticeEntity>({
+                EntityName: 'MJ_BizApps_Collaboration: Share Notices',
+                ExtraFilter: `ItemID = '${currentItemId}'`,
+                ResultType: 'entity_object',
+                IgnoreMaxRows: true,
+            }, system);
+            if (!noticesRes || !noticesRes.Success) {
+                const msg = `Space item reference cleanup: failed to query Share Notices for item ${currentItemId}: ${noticesRes?.ErrorMessage ?? 'RunView failed'}`;
+                LogError(msg);
+                return this.failDelete(msg);
+            }
+
+            if (noticesRes.Results && noticesRes.Results.length > 0) {
+                for (const noticeEntity of noticesRes.Results) {
+                    loadedNotices.push(noticeEntity);
+                    noticeEntity.TransactionGroup = tg;
+                    const queued = await noticeEntity.Delete();
+                    if (!queued) {
+                        const msg = `Space item reference cleanup: failed to queue delete for Share Notice ${noticeEntity.ID}`;
+                        LogError(msg);
+                        return this.failDelete(msg);
+                    }
+                }
+            }
+
+            this.TransactionGroup = tg;
+            const itemQueued = await super.Delete(options);
+            if (!itemQueued) {
+                const msg = this.LatestResult?.CompleteMessage || `Space item delete failed to queue delete for item ${currentItemId}`;
+                LogError(msg);
+                if (!this.LatestResult || this.LatestResult.Success) {
+                    this.failDelete(msg);
+                }
+                return false;
+            }
+
+            if (isInitiator && tg) {
+                const submitted = await tg.Submit();
+                if (!submitted) {
+                    const msg = `Space item delete transaction failed for item ${currentItemId}`;
+                    LogError(msg);
+                    return this.failDelete(msg);
+                }
+            } else if (!isInitiator && tg) {
+                // Inside a caller's transaction group:
+                // Hook file cleanup to run only when caller's transaction group commits successfully.
+                if (parsedFileId && filesEntity && typeof tg.TransactionNotifications$?.subscribe === 'function') {
+                    const fileIdToClean = parsedFileId;
+                    const filesEntityId = filesEntity.ID;
+                    const currentId = currentItemId;
+                    tg.TransactionNotifications$.subscribe(async (notification) => {
+                        if (notification?.success) {
+                            await cleanupStoredFileIfUnreferenced(provider, this, fileIdToClean, filesEntityId, currentId);
+                        }
+                    });
+                }
+                return true;
+            }
+        } catch (error) {
+            const msg = `Space item delete transaction failed: ${error instanceof Error ? error.message : String(error)}`;
+            LogError(msg);
+            return this.failDelete(msg);
+        } finally {
+            if (isInitiator) {
+                (this as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                for (const u of loadedUses) {
+                    (u as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+                for (const n of loadedNotices) {
+                    (n as { TransactionGroup?: TransactionGroupBase }).TransactionGroup = undefined;
+                }
+            }
+        }
+
+        // 4. Stored file cleanup only runs AFTER the item delete transaction commits!
+        if (parsedFileId && filesEntity) {
+            await cleanupStoredFileIfUnreferenced(provider, this, parsedFileId, filesEntity.ID, currentItemId);
+        }
+
+        return true;
+    }
+}
+
+async function cleanupStoredFileIfUnreferenced(
+    provider: IMetadataProvider,
+    contextEntity: BaseEntity,
+    fileId: string,
+    filesEntityId: string,
+    currentItemId: string
+): Promise<void> {
+    try {
+        const sys = await requireSystemUser(contextEntity);
+        const rvw = RunView.FromMetadataProvider(provider);
+        const recIdFilter = `(RecordID = 'ID|${fileId}' OR RecordID = '${fileId}')`;
+        const otherItemsRes = await rvw.RunView<{ ID: string }>({
+            EntityName: ENTITY,
+            ExtraFilter: `EntityID = '${filesEntityId}' AND ${recIdFilter} AND ID <> '${currentItemId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, sys);
+        if (!otherItemsRes || !otherItemsRes.Success) {
+            LogError(`Space item file count query failed for ${fileId}: ${otherItemsRes?.ErrorMessage ?? 'RunView failed'}`);
+            return;
+        }
+
+        const remainingCount = otherItemsRes.Results ? otherItemsRes.Results.length : 0;
+        if (remainingCount === 0) {
+            await cleanupStoredItemFile(provider, sys, fileId);
+        }
+    } catch (error) {
+        LogError(`Space item file cleanup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo, fileId: string): Promise<void> {
+    let storagePath: string | null = null;
+    let accountId: string | null = null;
+    let fileEntity: MJFileEntity | null = null;
+
+    try {
+        fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+        if (await fileEntity.Load(fileId)) {
+            storagePath = fileEntity.ProviderKey;
+            const providerId = fileEntity.ProviderID;
+            await FileStorageEngine.Instance.Config(false, user, provider);
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerId);
+            const resolved = accounts[0] ? { account: accounts[0] } : FileStorageEngine.Instance.ResolveStorageAccount();
+            if (resolved) {
+                accountId = resolved.account.ID;
+            }
+        }
+    } catch (error) {
+        LogError(`Space item file lookup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    let objectGone = false;
+    if (storagePath && accountId) {
+        try {
+            const driver = await FileStorageEngine.Instance.GetDriver(accountId, user);
+            objectGone = await driver.DeleteObject(storagePath);
+        } catch (error) {
+            LogError(`Space item storage cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    let rowGone = false;
+    if (fileEntity && fileEntity.IsSaved) {
+        try {
+            rowGone = await fileEntity.Delete();
+        } catch (error) {
+            LogError(`Space item file row cleanup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    if ((storagePath && !objectGone) || !rowGone) {
+        LogError(`Space item file cleanup incomplete for ${fileId}: object=${objectGone} row=${rowGone}.`);
     }
 }
 
@@ -95,6 +389,19 @@ function canonicalRecordId(item: SpaceItemEntityServer): string | null {
     }
 }
 
+async function filedTaskHasParent(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {
+    const provider = asMetadata(item.ProviderToUse);
+    const tasks = provider?.EntityByName('MJ_BizApps_Tasks: Tasks');
+    const entityId = parseUuid(item.EntityID);
+    if (!provider || !tasks || !entityId || entityId.toLowerCase() !== tasks.ID.toLowerCase()) return false;
+    const raw = item.RecordID ?? '';
+    const taskId = raw.toLowerCase().startsWith('id|') ? raw.slice(3) : raw;
+    if (!taskId) return false;
+    const task = await provider.GetEntityObject<mjBizAppsTasksTaskEntity>(tasks.Name, user);
+    if (!(await task.Load(taskId))) return false;
+    return !!task.ParentID;
+}
+
 async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {
     const entityId = parseUuid(item.EntityID);
     if (!entityId || !item.RecordID) {
@@ -108,6 +415,9 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
     const info = provider.EntityByID(entityId);
     if (!info) {
         return false;
+    }
+    if (vouchedItems.has(item)) {
+        return true;
     }
     let key: CompositeKey;
     try {
@@ -123,6 +433,27 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
         LogError(`Space item target check: ${error instanceof Error ? error.message : String(error)}`);
         return false;
     }
+}
+
+const EXTERNAL_URL_PROVIDER_ID = '93dbcfc9-5b2a-48d6-9d95-e93b319c88e5';
+
+async function isExternalUrlFile(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {
+    const provider = asMetadata(item.ProviderToUse);
+    const files = provider?.EntityByName('MJ: Files');
+    if (!provider || !files) return false;
+    const raw = item.RecordID ?? '';
+    const fileId = raw.toLowerCase().startsWith('id|') ? raw.slice(3) : raw;
+    if (!fileId) return false;
+    try {
+        const file = await provider.GetEntityObject<MJFileEntity>(files.Name, user);
+        if (await file.Load(fileId)) {
+            const providerId = file.ProviderID ? parseUuid(file.ProviderID) : null;
+            return providerId === EXTERNAL_URL_PROVIDER_ID;
+        }
+    } catch (e) {
+        LogError(`isExternalUrlFile check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return false;
 }
 
 function fail(result: ValidationResult, message: string): ValidationResult {

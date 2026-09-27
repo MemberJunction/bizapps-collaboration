@@ -1,0 +1,37 @@
+{
+  "entity": "MJ: AI Skills",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "Status": "Active",
+    "ActivationMode": "Auto",
+    "Category": "Collaboration",
+    "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".collaboration-skills.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Category = 'Collaboration'",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CreatedByUserID": {
+        "entity": "MJ: Users",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": {
+        "entity": "MJ: AI Skill Actions",
+        "foreignKey": "SkillID"
+      }
+    }
+  }
+}

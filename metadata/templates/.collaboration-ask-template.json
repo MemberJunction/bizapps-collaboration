@@ -1,0 +1,29 @@
+[
+  {
+    "primaryKey": {
+      "ID": "A61788A9-9524-4BE7-B5F5-3FB8DEAA7081"
+    },
+    "fields": {
+      "Name": "Collaboration Space Agent - Ask",
+      "Description": "Template for Collaboration Space Agent Ask prompt",
+      "UserID": "@lookup:MJ: Users.Name=System",
+      "IsActive": true
+    },
+    "relatedEntities": {
+      "MJ: Template Contents": [
+        {
+          "primaryKey": {
+            "ID": "A2FB62CC-2E47-4185-97F1-A893D3499423"
+          },
+          "fields": {
+            "TemplateID": "@parent:ID",
+            "TypeID": "@lookup:MJ: Template Content Types.Name=Text",
+            "TemplateText": "Answer user questions using knowledge, items, and files available in the space. Never disclose or quote items from the Team band to participants who do not have access to Team items. Maintain all space boundary restrictions.",
+            "Priority": 1,
+            "IsActive": true
+          }
+        }
+      ]
+    }
+  }
+]

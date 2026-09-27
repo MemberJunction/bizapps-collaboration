@@ -1,0 +1,28 @@
+{
+  "entity": "MJ: Queries",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "Status": "Approved",
+    "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+    "UsesTemplate": true,
+    "Reusable": false,
+    "AuditQueryRuns": false,
+    "CacheEnabled": false,
+    "IsMaterialized": false
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".collaboration-space-subtree.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'Collaboration Space Subtree'",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true
+  }
+}

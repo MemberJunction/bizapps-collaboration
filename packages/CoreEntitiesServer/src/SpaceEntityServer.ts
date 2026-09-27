@@ -3,7 +3,7 @@ import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { authorizeSpaceWrite, chainsForSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -24,6 +24,64 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const dirty = this.Fields.filter((field) => field.Dirty);
         if (this.IsSaved && dirty.length === 0) {
             return result;
+        }
+
+        if (!this.IsSaved) {
+            const typeId = this.SpaceTypeID ? parseUuid(this.SpaceTypeID) : null;
+            if (!typeId) {
+                return fail(result, 'SpaceTypeID', 'Space change refused: the space type id is not valid.');
+            }
+            let defaultAllow: boolean;
+            let defaultAgent: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
+            try {
+                const system = await requireSystemUser(this);
+                const rv = new RunView(this.RunViewProviderToUse);
+                const typeRows = await rv.RunView<{ DefaultAllowParentAssignees: boolean; DefaultAgentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Types',
+                    ExtraFilter: `ID = '${typeId}'`,
+                    Fields: ['DefaultAllowParentAssignees', 'DefaultAgentRetrieval'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                }, system);
+                if (!typeRows.Success || !typeRows.Results?.[0]) {
+                    LogError(`Space change refused: space type ${typeId} could not be read: ${typeRows.ErrorMessage ?? 'no rows returned'}`);
+                    return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
+                }
+                const spaceType = typeRows.Results[0];
+                defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
+                defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
+            } catch (err) {
+                LogError(`Space change refused: error reading space type ${typeId}: ${err instanceof Error ? err.message : String(err)}`);
+                return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
+            }
+
+            const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
+            const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
+
+            if (!allowDirty) {
+                this.AllowParentAssignees = defaultAllow;
+            }
+            if (!agentDirty) {
+                this.AgentRetrieval = defaultAgent;
+            }
+
+            if (!isStaffUser(user)) {
+                if (this.AllowParentAssignees !== defaultAllow) {
+                    return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+                }
+                if (this.AgentRetrieval !== defaultAgent) {
+                    return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+                }
+            }
+        } else {
+            const allowParentChanged = this.Fields.some((field) => field.Name === 'AllowParentAssignees' && field.Dirty);
+            if (allowParentChanged && !isStaffUser(user)) {
+                return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+            }
+            const agentRetrievalChanged = this.Fields.some((field) => field.Name === 'AgentRetrieval' && field.Dirty);
+            if (agentRetrievalChanged && !isStaffUser(user)) {
+                return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+            }
         }
         const spaceId = this.ID ? parseUuid(this.ID) : null;
         if (this.ID && !spaceId) {
@@ -63,7 +121,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const decision = authorizeSpaceWrite({
             kind,
             callerUserId: caller,
-            callerIsStaff: isStaff(user),
+            callerIsStaff: isStaffUser(user),
             nextOwnerId: ownerId,
             toRoot,
             here,
@@ -103,12 +161,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 }
 
-const STAFF = new Set(['UI', 'Developer', 'Integration']);
-
-function isStaff(user: { UserRoles?: { Role?: string }[] }): boolean {
-    return (user.UserRoles ?? []).some((role) => !!role.Role && STAFF.has(role.Role));
-}
-
 function fail(result: ValidationResult, field: string, message: string): ValidationResult {
     result.Success = false;
     result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
@@ -116,6 +168,7 @@ function fail(result: ValidationResult, field: string, message: string): Validat
 }
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
+const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 async function ensureConversation(space: SpaceEntityServer, user: NonNullable<SpaceEntityServer['ContextCurrentUser']>): Promise<void> {
     const metadata = asMetadata(space.ProviderToUse);
@@ -124,24 +177,39 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         return;
     }
     const system = await requireSystemUser(space);
-    const existing = await new RunView(space.RunViewProviderToUse).RunView({
+    const existing = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string }>({
         EntityName: 'MJ: Conversations',
         ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${space.ID}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
         MaxRows: 1,
     }, system);
     if (!existing.Success) {
         LogError(`Space conversation was not bound: ${existing.ErrorMessage ?? 'the lookup failed'}`);
         return;
     }
-    if ((existing.Results?.length ?? 0) > 0) {
-        return;
-    }
+    const found = existing.Results?.[0]?.ID;
     const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
-    conversation.NewRecord();
-    conversation.UserID = space.OwnerID;
+    if (found) {
+        if (!(await conversation.Load(found))) {
+            LogError(`Space conversation was not bound: ${found} could not be read.`);
+            return;
+        }
+    } else {
+        conversation.NewRecord();
+        conversation.LinkedEntityID = SPACES_ENTITY_ID;
+        conversation.LinkedRecordID = space.ID;
+    }
+    const alreadyBound = !!found
+        && conversation.UserID?.toLowerCase() === system.ID.toLowerCase()
+        && conversation.ApplicationScope === 'Application'
+        && conversation.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()
+        && conversation.Name === space.Name;
+    if (alreadyBound) return;
+    conversation.UserID = system.ID;
     conversation.Name = space.Name;
-    conversation.LinkedEntityID = SPACES_ENTITY_ID;
-    conversation.LinkedRecordID = space.ID;
+    conversation.ApplicationScope = 'Application';
+    conversation.ApplicationID = COLLABORATION_APP_ID;
     const saved = await conversation.Save();
     if (!saved) {
         LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);

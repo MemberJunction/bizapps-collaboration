@@ -1,0 +1,35 @@
+[
+  {
+    "primaryKey": {
+      "ID": "08E35F1F-7DCA-40D3-AAA0-D0EF441A433A"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanAccess": 1,
+      "CanAdmin": 0
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "45232CFB-3B4B-4028-AE4C-652E8A4B61CF"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": 1,
+      "CanAdmin": 1
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3A6BEA98-46FC-491C-BAFD-8AEFB1C23627"
+    },
+    "fields": {
+      "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "CanAccess": 1,
+      "CanAdmin": 0
+    }
+  }
+]

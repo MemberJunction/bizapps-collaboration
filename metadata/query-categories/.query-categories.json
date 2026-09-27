@@ -1,0 +1,13 @@
+[
+  {
+    "primaryKey": {
+      "ID": "478D8F2C-728A-497C-A56E-EEE204C51F2C"
+    },
+    "fields": {
+      "Name": "Collaboration",
+      "ParentID": null,
+      "Description": "Queries for BizApps Collaboration spaces, access models, and scopes.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    }
+  }
+]

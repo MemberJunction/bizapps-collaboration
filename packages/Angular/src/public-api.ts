@@ -1,15 +1,12 @@
-import { SpaceWorkspaceComponent } from './lib/space-workspace.component';
-import { NoAccessComponent } from './lib/no-access.component';
-import { CollaborationSectionResource } from './lib/collaboration-section.component';
+import { LoadCollaborationPermissionProvider } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationSectionResource } from './lib/collaboration-section.component.js';
+import { CollaborationNoAccessComponent } from './lib/no-access.component.js';
 
-export { SpaceWorkspaceComponent };
-export type { WorkspaceRole, WorkspaceSpace } from './lib/space-workspace.component';
-export { NoAccessComponent };
-export { CollaborationSectionResource };
+export { CollaborationSectionResource, CollaborationNoAccessComponent };
 
 /** Startup export for MJExplorer. Referencing the classes keeps them in the bundle. */
 export function LoadBizAppsCollaborationClient(): void {
-    void SpaceWorkspaceComponent;
-    void NoAccessComponent;
+    LoadCollaborationPermissionProvider();
     void CollaborationSectionResource;
+    void CollaborationNoAccessComponent;
 }

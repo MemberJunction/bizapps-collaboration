@@ -1,0 +1,50 @@
+[
+  {
+    "primaryKey": {
+      "ID": "C76A0ACA-CBF8-43AD-A996-9296CDA681BE"
+    },
+    "fields": {
+      "Code": "workspace",
+      "Name": "Workspace",
+      "Vocabulary": "workspace",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "GovernancePanel": false,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-shapes",
+      "Color": "#7c3aed"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "20538AF5-5FA2-4FDF-A10D-1A7752DB207D"
+    },
+    "fields": {
+      "Code": "cohort",
+      "Name": "Cohort",
+      "Vocabulary": "cohort",
+      "Discoverability": "Listed",
+      "JoinMode": "RequestToJoin",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "GovernancePanel": false,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Shared",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-graduation-cap",
+      "Color": "#16a34a"
+    }
+  }
+]

@@ -1,0 +1,25 @@
+// Collaboration app tokens: expressions of MJ semantic tokens.
+// Shared = what everyone in the space sees (MJ tertiary).
+// Team = the firm's side (quiet neutral + lock).
+@mixin collaboration-tokens {
+  --mjc-shared: var(--mj-brand-tertiary-active);
+  --mjc-shared-strong: var(--mj-brand-tertiary-hover);
+  --mjc-shared-bg: var(--mj-brand-tertiary-subtle);
+  --mjc-shared-border: color-mix(in srgb, var(--mj-brand-tertiary) 35%, transparent);
+  --mjc-team: var(--mj-text-secondary);
+  --mjc-team-strong: var(--mj-text-secondary);
+  --mjc-team-bg: color-mix(in srgb, var(--mj-text-muted) 12%, transparent);
+  --mjc-team-border: var(--mj-border-strong);
+  --mjc-on-strong: var(--mj-text-inverse);
+  --mjc-ai-from: var(--mj-brand-primary);
+  --mjc-ai-to: var(--mj-brand-accent);
+  --mjc-warn-bg: var(--mj-status-warning-bg);
+  --mjc-warn-text: var(--mj-status-warning-text);
+  --mjc-font-feature-settings: 'cv11', 'ss01';
+  --mjc-line-height: 1.45;
+}
+
+:host {
+  @include collaboration-tokens;
+}
+

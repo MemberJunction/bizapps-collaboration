@@ -5,8 +5,12 @@
   "description": "Generated entity classes and the shared Collaboration rules.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "publishConfig": { "access": "public" },
-  "files": ["/dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "npm test --prefix ../Core"
@@ -17,6 +21,7 @@
     "@memberjunction/global": "^6.1.2"
   },
   "dependencies": {
+    "@mj-biz-apps/collaboration-core": "0.1.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
@@ -27,5 +32,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/bizapps-collaboration"
-  }
+  },
+  "mjUILayer": "runtime"
 }
