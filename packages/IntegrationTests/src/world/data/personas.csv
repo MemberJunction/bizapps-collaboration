@@ -11,3 +11,4 @@ harbor,D2000001-0000-4000-8000-000000000009,harbor.owner@collab-world.example,Ha
 harper,D2000001-0000-4000-8000-000000000010,harper.member@collab-world.example,Harper,Member,client,Space Participant
 pat,D2000001-0000-4000-8000-000000000011,pat.invited@collab-world.example,Pat,Invited,director,Space Participant
 remy,D2000001-0000-4000-8000-000000000012,remy.removed@collab-world.example,Remy,Removed,client,Space Participant
+dev,D2000001-0000-4000-8000-000000000013,dev.admin@collab-world.example,Dev,Admin,staff,Developer

@@ -14,6 +14,10 @@
       "DefaultForNewUser": true,
       "Status": "Active",
       "DefaultNavItems": "[{\"Label\":\"Spaces\",\"Icon\":\"fa-solid fa-people-group\",\"ResourceType\":\"Custom\",\"DriverClass\":\"CollaborationSectionResource\",\"isDefault\":true}]"
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.385Z",
+      "checksum": "6d29d6f1a2a7479ec0677f8ac15abf1497c5278b55ad954983a8fc3bf389af58"
     }
   }
 ]

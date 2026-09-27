@@ -82,17 +82,6 @@ export class SpaceTypeEntityServer extends mjBizAppsCollaborationSpaceTypeEntity
                     return fail(result, 'Configuration', storageCheck.error ?? 'Configured storage account does not exist or is not active.');
                 }
             }
-
-            // Verify AllowedTypeCodes if provided using CollaborationEngine
-            if (config.Children?.AllowedTypeCodes && config.Children.AllowedTypeCodes.length > 0) {
-                await CollaborationEngine.Instance.EnsureLoaded(user, md);
-                const missing = config.Children.AllowedTypeCodes.filter(
-                    code => !CollaborationEngine.Instance.SpaceTypeByCode(code)
-                );
-                if (missing.length > 0) {
-                    return fail(result, 'Configuration', `AllowedTypeCodes contains unknown type codes: ${missing.join(', ')}.`);
-                }
-            }
         }
 
         // 2. Validate SpaceExtensionEntity if set

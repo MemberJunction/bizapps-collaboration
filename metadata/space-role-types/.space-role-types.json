@@ -82,6 +82,10 @@
       "IsOwnerRole": false,
       "CanContribute": true,
       "IsActive": true
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.536Z",
+      "checksum": "d6128923cc4f2d97e1f39988d671d437900966658575e4070ce15d0625da34eb"
     }
   },
   {
@@ -99,6 +103,10 @@
       "IsOwnerRole": false,
       "CanContribute": true,
       "IsActive": true
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.542Z",
+      "checksum": "16dc62bb2a98c6d98169e020df17fcf71e3197649008f68214e18ef808020014"
     }
   }
 ]

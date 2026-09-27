@@ -24,12 +24,13 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
             if (!personId) return refuse(result, 'CreatedByPersonID', 'Task refused: the signer has no person record.');
             this.CreatedByPersonID = personId;
         }
-        const parentChanged = this.IsSaved && !!this.Fields.find((field) => field.Name === 'ParentID')?.Dirty;
-        const statusChanged = this.IsSaved && !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
-        if (parentChanged || statusChanged) {
+        const anyFieldChanged = this.IsSaved && this.Fields.some((field) => field.Dirty);
+        if (anyFieldChanged) {
+            const statusChanged = !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
+            const parentChanged = !!this.Fields.find((field) => field.Name === 'ParentID')?.Dirty;
+            const dirtyField = statusChanged ? 'Status' : parentChanged ? 'ParentID' : (this.Fields.find((field) => field.Dirty)?.Name ?? 'Name');
             const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
-            const errorField = statusChanged ? 'Status' : 'ParentID';
-            if (!provider?.EntityByName) return refuse(result, errorField, 'Task refused: the space could not be read.');
+            if (!provider?.EntityByName) return refuse(result, dirtyField, 'Task refused: the space could not be read.');
             try {
                 const system = await requireSystemUser(this);
                 const place = await filedTask(provider, system, this.ID);
@@ -37,7 +38,7 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                     const context = await loadWriteContext(this, user, place.spaceId, null);
                     const space = context.spaces.find((s) => s.id.toLowerCase() === place.spaceId.toLowerCase());
                     if (space?.closedAt) {
-                        return refuse(result, errorField, 'Task refused: cannot update a task in a closed space.');
+                        return refuse(result, dirtyField, 'Task refused: cannot update a task in a closed space.');
                     }
                     if (statusChanged) {
                         const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
@@ -64,7 +65,7 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                 }
             } catch (error) {
                 LogError(`Space task check for task ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
-                return refuse(result, errorField, 'Task refused: the space could not be read.');
+                return refuse(result, dirtyField, 'Task refused: the space could not be read.');
             }
         }
         return result;

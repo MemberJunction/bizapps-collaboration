@@ -72,6 +72,10 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Active Space Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.570Z",
+      "checksum": "bd590ab35972599e4922bbdb5eea35aaedc05ef0d33734f34e9aabfa01e51349"
     }
   },
   {

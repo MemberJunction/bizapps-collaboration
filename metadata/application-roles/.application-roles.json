@@ -8,6 +8,10 @@
       "RoleID": "@lookup:MJ: Roles.Name=UI",
       "CanAccess": 1,
       "CanAdmin": 0
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.396Z",
+      "checksum": "7d462a32e0ebd77574c4dfd820c6711d2662fc7331bd6a81a9bc12749efb7673"
     }
   },
   {
@@ -19,6 +23,10 @@
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "CanAccess": 1,
       "CanAdmin": 1
+    },
+    "sync": {
+      "lastModified": "2026-09-27T19:24:37.403Z",
+      "checksum": "324e32693fc3985add52eb77a634ac3fbd31e96ea818a555b419f5ef9abb74f0"
     }
   },
   {

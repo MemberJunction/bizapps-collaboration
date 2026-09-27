@@ -178,12 +178,12 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
         return provider;
     }
 
-    function makeTask(provider: object, user: UserInfo) {
+    function makeTask(provider: object, user: UserInfo, fields: Array<{ Name: string; Dirty: boolean }> = [{ Name: 'Status', Dirty: true }]) {
         const task = Object.create(CollaborationTaskEntityServer.prototype) as CollaborationTaskEntityServer;
         Object.defineProperties(task, {
             ID: { value: TASK_ID, writable: true },
             IsSaved: { value: true, writable: true },
-            Fields: { value: [{ Name: 'Status', Dirty: true }], writable: true },
+            Fields: { value: fields, writable: true },
             ProviderToUse: { value: provider, writable: true },
             RunViewProviderToUse: { value: provider, writable: true },
             ContextCurrentUser: { value: user, writable: true },
@@ -207,6 +207,37 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
             const err = res.Errors.find((e) => e.Source === 'Status');
             assert.ok(err, 'Expected error on Status');
             assert.equal(err?.Message, 'Task refused: cannot update a task in a closed space.');
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses name or priority update when the space is closed', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as Partial<UserInfo> as UserInfo;
+        try {
+            const provider = createMockStatusProvider({ closedAt: '2026-09-01', canContribute: true });
+            const user = {
+                ID: ASSIGNEE_USER_ID,
+                UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo],
+            } as Partial<UserInfo> as UserInfo;
+
+            // Name update
+            const nameTask = makeTask(provider, user, [{ Name: 'Name', Dirty: true }]);
+            const nameRes = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(nameTask);
+            assert.equal(nameRes.Success, false);
+            const nameErr = nameRes.Errors.find((e) => e.Source === 'Name');
+            assert.ok(nameErr, 'Expected error on Name');
+            assert.equal(nameErr?.Message, 'Task refused: cannot update a task in a closed space.');
+
+            // Priority update
+            const prioTask = makeTask(provider, user, [{ Name: 'Priority', Dirty: true }]);
+            const prioRes = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(prioTask);
+            assert.equal(prioRes.Success, false);
+            const prioErr = prioRes.Errors.find((e) => e.Source === 'Priority');
+            assert.ok(prioErr, 'Expected error on Priority');
+            assert.equal(prioErr?.Message, 'Task refused: cannot update a task in a closed space.');
         } finally {
             source.GetSystemUser = orig;
         }
