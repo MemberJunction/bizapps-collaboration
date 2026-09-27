@@ -110,6 +110,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
           }
         </div>
+      } @else {
+        <div class="no-findings-banner">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>No policy findings</span>
+        </div>
       }
 
       <div class="m-sec">
@@ -136,11 +141,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     </div>
 
     <div class="m-f mj-dialog-actions">
-      <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
-        <i class="fa-solid fa-check"></i>
-        <span>{{ primaryButtonText }}</span>
-      </button>
-      <button mjButton variant="secondary" class="btn" (click)="onShareAsIs()">Share as is</button>
+      @if (Findings && Findings.length > 0) {
+        <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
+          <i class="fa-solid fa-check"></i>
+          <span>{{ primaryButtonText }}</span>
+        </button>
+        <button mjButton variant="secondary" class="btn" (click)="onShareAsIs()">Share as is</button>
+      } @else {
+        <button mjButton variant="primary" class="btn primary" (click)="onShareAsIs()">
+          <i class="fa-solid fa-share"></i>
+          <span>Share</span>
+        </button>
+      }
       <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
   `,
@@ -234,6 +246,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       &.more {
         background: var(--mj-bg-surface);
         border-style: dashed;
+      }
+    .no-findings-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--mj-bg-surface-sunken, #f8fafc);
+      border: 1px solid var(--mj-border-default, #e2e8f0);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--mj-text-secondary, #475569);
+      margin-bottom: 16px;
+
+      i {
+        color: var(--mj-status-success, #16a34a);
+        font-size: 15px;
       }
     }
 

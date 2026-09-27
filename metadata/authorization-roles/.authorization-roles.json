@@ -7,10 +7,6 @@
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Space Types",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.446Z",
-      "checksum": "4e9f2a2cbba9593fff7882fdb8445b40a31c2e3e322fbdd119a522f00e33da1a"
     }
   },
   {
@@ -21,10 +17,7 @@
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Spaces",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.453Z",
-      "checksum": "72abda492838f20d99a9d79f079bcc48550add87def078d9b7d0fc139300568d"
     }
   }
 ]
+

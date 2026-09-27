@@ -249,16 +249,5 @@ export interface SpaceSettingsModel {
   status: string;
 }
 
-export interface RoomMessageItem {
-  id: string;
-  senderName: string;
-  senderInitials: string;
-  senderColorClass?: string;
-  isAssistant?: boolean;
-  isOutside?: boolean;
-  timestamp: string;
-  text: string;
-}
-
 
 

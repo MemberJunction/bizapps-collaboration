@@ -223,12 +223,13 @@ const checks: NamedCheck[] = [
             );
             let createdUseId: string | null = null;
             if (existingUses.length === 0) {
-                const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, bea);
                 use.NewRecord();
                 use.ItemID = targetItem.ID;
                 use.SpaceID = targetItem.SpaceID;
                 use.UserID = bea.ID;
                 use.Kind = 'open';
+                use.UsedAt = new Date();
                 Assert(await use.Save(), 'Created Item Use for test');
                 createdUseId = use.ID;
             }

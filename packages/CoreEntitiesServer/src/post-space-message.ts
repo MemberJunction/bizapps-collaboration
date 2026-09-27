@@ -1,6 +1,7 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, ResolveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { parseUuid } from './uuid.js';
@@ -50,15 +51,16 @@ export async function postSpaceMessage(
     const view = RunView.FromMetadataProvider(provider);
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
-    const space = await view.RunView<{ ClosedAt: string | null }>({
+    const space = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt'],
+        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
-    if (space.Results?.[0]?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
+    const targetSpace = space.Results?.[0];
+    if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
 
     let conversationId: string | null = null;
     if (input.conversationId) {
@@ -66,19 +68,22 @@ export async function postSpaceMessage(
         if (!parsedTarget) {
             return { ok: false, message: 'The conversation ID is invalid.' };
         }
-        const chatCheck = await view.RunView<{ ID: string; ConversationID: string }>({
+        const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',
             ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
-            Fields: ['ID', 'ConversationID'],
+            Fields: ['ID', 'ConversationID', 'Kind'],
             MaxRows: 1,
             ResultType: 'simple',
         }, system);
         if (!chatCheck.Success) return { ok: false, message: chatCheck.ErrorMessage || 'The space chat could not be read.' };
-        if (chatCheck.Results?.[0]?.ConversationID) {
-            conversationId = parsedTarget;
-        } else {
+        const foundChat = chatCheck.Results?.[0];
+        if (!foundChat?.ConversationID) {
             return { ok: false, message: 'The conversation does not belong to this space.' };
         }
+        if (foundChat.Kind !== 'Room') {
+            return { ok: false, message: 'Only the space Room accepts messages.' };
+        }
+        conversationId = parsedTarget;
     } else {
         const roomChat = await view.RunView<{ ID: string; ConversationID: string }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',
@@ -109,7 +114,33 @@ export async function postSpaceMessage(
         return { ok: false, message };
     }
 
-    if (input.executeAgent) {
+    let typeConfig: ISpaceTypeConfiguration | null = null;
+    if (targetSpace?.SpaceTypeID) {
+        await CollaborationEngine.Instance.EnsureLoaded(undefined, provider);
+        const spaceType = CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID);
+        if (spaceType?.Configuration) {
+            try {
+                typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
+            } catch {
+                typeConfig = null;
+            }
+        }
+    }
+    let spaceConfig: ISpaceConfiguration | null = null;
+    if (targetSpace?.Configuration) {
+        try {
+            spaceConfig = JSON.parse(targetSpace.Configuration) as ISpaceConfiguration;
+        } catch {
+            spaceConfig = null;
+        }
+    }
+    const rules = ResolveSpaceRules(typeConfig, spaceConfig);
+    const hasMention = /(@(assistant|agent)|^\/ask)/i.test(text);
+    const shouldExecuteAgent = rules.Chats.AgentReplyMode === 'Always'
+        ? true
+        : Boolean(input.executeAgent || hasMention);
+
+    if (shouldExecuteAgent) {
         try {
             const assistantResult = await postAssistantReply(provider, user, system, conversationId, spaceId);
             if (assistantResult.ok) {

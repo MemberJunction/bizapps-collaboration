@@ -83,10 +83,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.SpaceRoleTypes;
     }
 
-    public get TaskTypes(): BaseEntity[] {
-        return this.Base.TaskTypes;
-    }
-
     public get ApplicationSettings(): MJApplicationSettingEntity[] {
         return this.Base.ApplicationSettings;
     }
@@ -137,13 +133,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
 
     public SpaceRoleTypeByCode(code: string | null | undefined): mjBizAppsCollaborationSpaceRoleTypeEntity | undefined {
         return this.Base.SpaceRoleTypeByCode(code);
-    }
-
-    /**
-     * Testing hook: populates in-memory space role types without running a full database config (D19).
-     */
-    public SetSpaceRoleTypesForTesting(roleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[]): void {
-        this.Base.SetSpaceRoleTypesForTesting(roleTypes);
     }
 
     public GetApplicationSetting(name: string): string | undefined {
@@ -210,16 +199,9 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
 
     /**
      * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.
-     * Evaluates via AuthorizationEvaluator.UserCanExecuteWithAncestors.
      */
     public UserCanConfigureSpaceTypes(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
-        const auth = this.FindCollaborationAuthorization('Configure Space Types', md);
-        if (!auth) {
-            const hasDeveloperRole = user.UserRoles?.some(r => r.Role?.trim().toLowerCase() === 'developer');
-            return !!hasDeveloperRole;
-        }
-        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+        return this.Base.UserCanConfigureSpaceTypes(user, provider);
     }
 
     /**
@@ -232,61 +214,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         spaceId?: string | null,
         provider?: IMetadataProvider
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
-        const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
-        if (auth && !new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? [])) {
-            return false;
-        } else if (!auth) {
-            const hasDeveloperRole = user.UserRoles?.some(r => r.Role?.trim().toLowerCase() === 'developer');
-            if (!hasDeveloperRole) return false;
-        }
-
-        if (!spaceId) {
-            return true;
-        }
-
-        // Check if user holds an owner role that reaches this space
-        try {
-            const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
-            if (!memberEntity) return false;
-
-            const rv = RunView.FromMetadataProvider(md);
-            let currentSpaceId: string | null = spaceId;
-            const seen = new Set<string>();
-
-            while (currentSpaceId && !seen.has(currentSpaceId.toLowerCase())) {
-                seen.add(currentSpaceId.toLowerCase());
-                const memberRes = await rv.RunView<{ SpaceRoleTypeID: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                    ExtraFilter: `SpaceID = '${currentSpaceId}' AND UserID = '${user.ID}' AND Status = 'Active'`,
-                    Fields: ['SpaceRoleTypeID'],
-                    ResultType: 'simple',
-                    MaxRows: 1,
-                }, user);
-
-                if (memberRes.Success && memberRes.Results?.[0]?.SpaceRoleTypeID) {
-                    const roleType = this.SpaceRoleTypeById(memberRes.Results[0].SpaceRoleTypeID);
-                    return !!roleType?.IsOwnerRole;
-                }
-
-                const spaceRes: RunViewResult<{ ParentID: string | null; InheritsMembership: boolean }> = await rv.RunView<{ ParentID: string | null; InheritsMembership: boolean }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Spaces',
-                    ExtraFilter: `ID = '${currentSpaceId}'`,
-                    Fields: ['ParentID', 'InheritsMembership'],
-                    ResultType: 'simple',
-                    MaxRows: 1,
-                }, user);
-
-                if (!spaceRes.Success || !spaceRes.Results?.[0] || !spaceRes.Results[0].InheritsMembership || !spaceRes.Results[0].ParentID) {
-                    break;
-                }
-                currentSpaceId = spaceRes.Results[0].ParentID;
-            }
-            return false;
-        } catch (e) {
-            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
-        }
+        return this.Base.UserCanConfigureSpaces(user, spaceId, provider);
     }
 
     /**
@@ -431,13 +359,17 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         typeId: string | null;
     }> {
         const md = provider ?? Metadata.Provider;
+        const rv = RunView.FromMetadataProvider(md);
         const configs: CollaborationSettings[] = [];
         let currentId: string | null = spaceId;
         let targetTypeId: string | null = null;
         const visited = new Set<string>();
 
-        const rv = RunView.FromMetadataProvider(md);
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         while (currentId && !visited.has(currentId.toLowerCase())) {
+            if (!uuidRegex.test(currentId.trim())) {
+                break;
+            }
             visited.add(currentId.toLowerCase());
             const spaceRes: RunViewResult<{
                 ID: string;

@@ -1,7 +1,6 @@
 /**
- * A directory on this machine, for a host that has no cloud storage account.
- * The bytes live under `rootDir` from the account credential. The API and the
- * world loader read the same directory because that path is stored with the account.
+ * A directory on this machine, for integration test runs.
+ * Kept strictly inside the test package (Punch list 6 item 64).
  */
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -80,8 +79,11 @@ export class LocalDirectoryStorage extends FileStorageBase {
         try {
             const info = await stat(this.inside(objectName));
             return info.isFile();
-        } catch {
-            return false;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return false;
+            }
+            throw error;
         }
     }
 
@@ -105,8 +107,11 @@ export class LocalDirectoryStorage extends FileStorageBase {
         let names: string[] = [];
         try {
             names = await readdir(dir);
-        } catch {
-            return { objects: [], prefixes: [] };
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return { objects: [], prefixes: [] };
+            }
+            throw error;
         }
         const objects: StorageObjectMetadata[] = [];
         const prefixes: string[] = [];
@@ -137,8 +142,11 @@ export class LocalDirectoryStorage extends FileStorageBase {
         try {
             const info = await stat(this.inside(directoryPath));
             return info.isDirectory();
-        } catch {
-            return false;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return false;
+            }
+            throw error;
         }
     }
 

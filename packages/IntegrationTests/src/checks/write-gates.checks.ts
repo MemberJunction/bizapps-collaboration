@@ -6,7 +6,9 @@ import {
     mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { postSpaceMessage, createSpaceTask } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import {
     SPACE_ENTITY,
     SPACE_MEMBER_ENTITY,
@@ -16,8 +18,11 @@ import {
     SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
     TASK_ENTITY,
+    TASK_LINK_ENTITY,
+    TASK_ACTIVITY_ENTITY,
+    CONVERSATION_DETAIL_ENTITY,
 } from '../entity-names.js';
-import { FindRows, GetPersonaUser } from '../wire.js';
+import { FindRows, GetPersonaUser, View } from '../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -281,7 +286,7 @@ const checks: NamedCheck[] = [
             Assert(sharedTaskItems.length > 0, 'Discovery shared task item found');
             const sharedTaskId = sharedTaskItems[0].RecordID.replace(/^ID\|/i, '');
             const sharedTaskProbe = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
-            await sharedTaskProbe.Load(sharedTaskId);
+            Assert(await sharedTaskProbe.Load(sharedTaskId), 'Loading sharedTaskProbe must succeed');
             const taskTypeId = sharedTaskProbe.TypeID;
 
             // Find Discovery Team task (e.g. Internal prep)
@@ -347,10 +352,9 @@ const checks: NamedCheck[] = [
             // Cleanup created subtask
             if (savedSharedSub && subUnderShared.ID) {
                 const cleanupTask = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
-                if (await cleanupTask.Load(subUnderShared.ID)) {
-                    const deleted = await cleanupTask.Delete();
-                    Assert(deleted, 'Cleanup of Bea subtask must succeed');
-                }
+                Assert(await cleanupTask.Load(subUnderShared.ID), 'Loading created subtask for cleanup must succeed');
+                const deleted = await cleanupTask.Delete();
+                Assert(deleted, 'Cleanup of Bea subtask must succeed');
             }
         },
     },
@@ -421,10 +425,11 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'write-gates.WG6',
-        Name: 'WG6 — write gates accepting side: authorized member writes are accepted',
+        Name: 'WG6 — write gates accepting side for PR #7: room post (staff & outside participant), status change, settings rights, and item use',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
 
             // 1. Authorized item use: Ada reaches Discovery, recording 'open' must succeed
             const items = await FindRows<{ ID: string }>(
@@ -448,26 +453,99 @@ const checks: NamedCheck[] = [
             Assert(savedUse, `Item use by reaching member Ada must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
             if (savedUse && use.ID) {
                 const cleanupUse = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                if (await cleanupUse.Load(use.ID)) await cleanupUse.Delete();
+                Assert(await cleanupUse.Load(use.ID), 'Loading item use for cleanup must succeed');
+                Assert(await cleanupUse.Delete(), 'Deleting item use cleanup must succeed');
             }
 
-            // 2. Authorized child space creation: Ada (staff owner of Northwind) creating child space
-            const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
-            Assert(Boolean(workspaceType?.ID), 'Workspace space type exists');
-
-            const childSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-            childSpace.NewRecord();
-            childSpace.Name = `WG6 Acceptance Space ${Date.now()}`;
-            childSpace.OwnerID = ada.ID;
-            childSpace.ParentID = NORTHWIND_SPACE_ID;
-            childSpace.SpaceTypeID = workspaceType.ID;
-
-            const savedChild = await childSpace.Save();
-            Assert(savedChild, `Authorized owner creating child space must succeed: ${childSpace.LatestResult?.CompleteMessage ?? ''}`);
-            if (savedChild && childSpace.ID) {
-                const cleanupSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
-                if (await cleanupSpace.Load(childSpace.ID)) await cleanupSpace.Delete();
+            // 2. Authorized room post: staff member (Ada) and outside participant (Bea) posting to Discovery room
+            const adaPostRes = await postSpaceMessage(ctx.Provider, ada, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: 'WG6 acceptance test message from Ada (staff)',
+            });
+            Assert(adaPostRes.ok, `Authorized staff room post must succeed: ${adaPostRes.ok ? '' : adaPostRes.message}`);
+            if (adaPostRes.ok && adaPostRes.detailId) {
+                const cleanupDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                Assert(await cleanupDetail.Load(adaPostRes.detailId), 'Loading posted message detail for cleanup must succeed');
+                Assert(await cleanupDetail.Delete(), 'Deleting posted message detail cleanup must succeed');
             }
+
+            const beaPostRes = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: 'WG6 acceptance test message from Bea (outside participant)',
+            });
+            Assert(beaPostRes.ok, `Authorized outside participant room post must succeed: ${beaPostRes.ok ? '' : beaPostRes.message}`);
+            if (beaPostRes.ok && beaPostRes.detailId) {
+                const cleanupDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                Assert(await cleanupDetail.Load(beaPostRes.detailId), 'Loading Bea posted message detail for cleanup must succeed');
+                Assert(await cleanupDetail.Delete(), 'Deleting Bea posted message detail cleanup must succeed');
+            }
+
+            // 3. Authorized status change: contributing member Bea updating a task status is accepted
+            const taskRes = await createSpaceTask(ctx.Provider, ada, {
+                spaceId: DISCOVERY_SPACE_ID,
+                name: `WG6 Task Status Acceptance ${Date.now()}`,
+                band: 'Shared',
+            });
+            Assert(taskRes.ok && !!taskRes.taskId, `Creating root task via createSpaceTask must succeed: ${taskRes.ok ? '' : taskRes.message}`);
+            if (taskRes.ok && taskRes.taskId) {
+                const task = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, bea);
+                Assert(await task.Load(taskRes.taskId), 'Loading task for status update must succeed');
+                task.Status = 'Completed';
+                task.PercentComplete = 100;
+                const updatedStatus = await task.Save();
+                Assert(updatedStatus, `Authorized status change to Completed by contributing member Bea must succeed: ${task.LatestResult?.CompleteMessage ?? ''}`);
+
+                if (taskRes.itemId) {
+                    const cleanupItem = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
+                    if (await cleanupItem.Load(taskRes.itemId)) {
+                        await cleanupItem.Delete();
+                    }
+                }
+                const rv = View(ctx);
+                const linkRows = await rv.RunView<{ ID: string }>({
+                    EntityName: TASK_LINK_ENTITY,
+                    ExtraFilter: `TaskID = '${taskRes.taskId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                }, ctx.User);
+                if (linkRows.Success && linkRows.Results) {
+                    for (const r of linkRows.Results) {
+                        const link = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskLinkEntity>(TASK_LINK_ENTITY, ctx.User);
+                        if (await link.Load(r.ID)) {
+                            await link.Delete();
+                        }
+                    }
+                }
+                const actRows = await rv.RunView<{ ID: string }>({
+                    EntityName: TASK_ACTIVITY_ENTITY,
+                    ExtraFilter: `TaskID = '${taskRes.taskId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                }, ctx.User);
+                if (actRows.Success && actRows.Results) {
+                    for (const r of actRows.Results) {
+                        const act = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskActivityEntity>(TASK_ACTIVITY_ENTITY, ctx.User);
+                        if (await act.Load(r.ID)) {
+                            await act.Delete();
+                        }
+                    }
+                }
+                const cleanupTask = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
+                if (await cleanupTask.Load(taskRes.taskId)) {
+                    Assert(await cleanupTask.Delete(), 'Deleting task cleanup must succeed');
+                }
+            }
+
+            // 4. Authorized settings rights: Ada updates Discovery settings and restores
+            const discoverySpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            Assert(await discoverySpace.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space for settings acceptance must succeed');
+            const originalAllow = discoverySpace.AllowParentAssignees;
+            discoverySpace.AllowParentAssignees = !originalAllow;
+            const savedSettings = await discoverySpace.Save();
+            Assert(savedSettings, `Authorized space owner saving settings must succeed: ${discoverySpace.LatestResult?.CompleteMessage ?? ''}`);
+            discoverySpace.AllowParentAssignees = originalAllow;
+            const restoredSettings = await discoverySpace.Save();
+            Assert(restoredSettings, `Restoring space settings must succeed: ${discoverySpace.LatestResult?.CompleteMessage ?? ''}`);
         },
     },
 ];

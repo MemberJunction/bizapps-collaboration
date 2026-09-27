@@ -127,7 +127,7 @@ function hasExecuteGQL(target: object | null | undefined): target is GraphQLExec
     return target != null && 'ExecuteGQL' in target && typeof target.ExecuteGQL === 'function';
 }
 
-function resolveExecutor(executor?: GraphQLExecutor): GraphQLExecutor {
+function resolveExecutor(executor?: GraphQLExecutor | object | null): GraphQLExecutor {
     if (executor && hasExecuteGQL(executor)) return executor;
     const provider = Metadata.Provider;
     if (hasExecuteGQL(provider)) return provider;
@@ -139,7 +139,7 @@ function resolveExecutor(executor?: GraphQLExecutor): GraphQLExecutor {
  * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage, OpenSpaceFile.
  */
 export class CollaborationClient {
-    constructor(private readonly executor?: GraphQLExecutor) {}
+    constructor(private readonly executor?: GraphQLExecutor | object | null) {}
 
     static isAvailable(target?: object | null): boolean {
         return hasExecuteGQL(target ?? Metadata.Provider);

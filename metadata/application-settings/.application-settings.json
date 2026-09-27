@@ -8,10 +8,6 @@
       "Name": "CollaborationSettings",
       "Value": "{\"PostCloseAccess\":\"ReadOnly\",\"PostCloseAccessDays\":null,\"Chats\":{\"WhoCanStart\":\"Anyone\",\"AgentReplyMode\":\"MentionOrOneToOne\",\"HistoryOnAdd\":\"None\"},\"Agents\":{\"ListMode\":\"Extend\"}}",
       "Comments": "Default settings configuration for the BizApps Collaboration application."
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.413Z",
-      "checksum": "357c5a15c59a319f35ff7c828a86ed662e9071f180025a0a1b46adc0a39a8f18"
     }
   }
 ]

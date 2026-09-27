@@ -85,7 +85,7 @@ function buildDescendantSet(spaces: readonly SpaceNode[], anchorSpaceId: string)
  * Rules:
  * 1. If audience includes an unmapped principal (e.g. unknown member in Teams/Slack):
  *    No space material is reachable (returns empty allowedSpaceIds).
- * 2. Private chat (mode 'Private' | 'Caller' | 'Union', or 1 principal):
+ * 2. Private chat (mode 'Private' | 'Caller', or 1 principal):
  *    Uses caller's union of reachable spaces.
  * 3. Shared chat (mode 'Shared' | 'Intersection', or >1 principals):
  *    Uses intersection of what every listed principal can read.
@@ -207,8 +207,25 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
             continue;
         }
 
-        // Excluded from parent scope (search only when question originates from that space)
-        if (spaceNode.agentRetrieval === 'ExcludedFromParentScope' && anchorId !== spId) {
+        // Walk ancestors to check ExcludedFromParentScope or ExcludedEntirely
+        let excludedOnPath = false;
+        let curr: SpaceNode | undefined = spaceNode;
+        while (curr) {
+            const currId = normalizeId(curr.id);
+            if (curr.agentRetrieval === 'ExcludedEntirely') {
+                excludedOnPath = true;
+                break;
+            }
+            if (curr.agentRetrieval === 'ExcludedFromParentScope' && (!anchorId || anchorId !== currId)) {
+                excludedOnPath = true;
+                break;
+            }
+            if (anchorId && currId === anchorId) {
+                break;
+            }
+            curr = curr.parentId ? spaceMap.get(normalizeId(curr.parentId)) : undefined;
+        }
+        if (excludedOnPath) {
             continue;
         }
 

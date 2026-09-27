@@ -1,16 +1,16 @@
-Key,ID,Name,Type,Parent,Owner,InheritsMembership,AgentRetrieval,ClosedAt,Retention
-northwind,C1000001-0000-4000-8000-000000000001,Northwind relationship,workspace,,ada,1,Included,,
-discovery,C1000001-0000-4000-8000-000000000002,Discovery,workspace,northwind,ada,1,Included,,
-delivery,C1000001-0000-4000-8000-000000000003,Delivery,workspace,northwind,ada,0,ExcludedFromParentScope,,
-committee,C1000001-0000-4000-8000-000000000004,Audit committee,committee,,ada,1,Included,,
-cohort,C1000001-0000-4000-8000-000000000005,Spring cohort,cohort,,ada,1,Included,,
-field-notes,C1000001-0000-4000-8000-000000000011,Field notes,workspace,discovery,ada,1,Included,,
-delivery-room,C1000001-0000-4000-8000-000000000012,Delivery room,workspace,delivery,ada,1,Included,,
-cohort-archive,C1000001-0000-4000-8000-000000000013,Cohort archive,cohort,cohort,ada,1,Included,past,
-harbor,C1000001-0000-4000-8000-000000000006,Harbor relationship,workspace,,harbor,1,Included,,
-closed-recent,C1000001-0000-4000-8000-000000000007,Closed this month,workspace,northwind,ada,1,Included,recent,Month
-closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,ExcludedEntirely,past,Month
-closed-open,C1000001-0000-4000-8000-000000000009,Closed indefinite,workspace,northwind,ada,1,Included,past,
-studio,C1000001-0000-4000-8000-000000000010,Studio,workshop,,ada,1,Included,,
-sealed-branch,C1000001-0000-4000-8000-000000000014,Sealed branch,workspace,northwind,sam,0,Included,,
-sealed-child,C1000001-0000-4000-8000-000000000015,Sealed child,workspace,sealed-branch,sam,0,Included,,
+Key,ID,Name,Type,Parent,Owner,InheritsMembership,AgentRetrieval,ClosedAt,Retention,IconClass,Color,BackgroundImageURL
+northwind,C1000001-0000-4000-8000-000000000001,Northwind relationship,workspace,,ada,1,Included,,,fa-solid fa-compass,#0076b6,https://images.unsplash.com/photo-northwind
+discovery,C1000001-0000-4000-8000-000000000002,Discovery,workspace,northwind,ada,1,Included,,,fa-solid fa-magnifying-glass,#2e7d32,https://images.unsplash.com/photo-discovery
+delivery,C1000001-0000-4000-8000-000000000003,Delivery,workspace,northwind,ada,0,ExcludedFromParentScope,,,fa-solid fa-truck-fast,#e65100,https://images.unsplash.com/photo-delivery
+committee,C1000001-0000-4000-8000-000000000004,Audit committee,committee,,ada,1,Included,,,fa-solid fa-users,#6a1b9a,https://images.unsplash.com/photo-committee
+cohort,C1000001-0000-4000-8000-000000000005,Spring cohort,cohort,,ada,1,Included,,,fa-solid fa-graduation-cap,#1565c0,https://images.unsplash.com/photo-cohort
+field-notes,C1000001-0000-4000-8000-000000000011,Field notes,workspace,discovery,ada,1,Included,,,fa-solid fa-note-sticky,#00838f,https://images.unsplash.com/photo-field-notes
+delivery-room,C1000001-0000-4000-8000-000000000012,Delivery room,workspace,delivery,ada,1,Included,,,fa-solid fa-box-archive,#c2185b,https://images.unsplash.com/photo-delivery-room
+cohort-archive,C1000001-0000-4000-8000-000000000013,Cohort archive,cohort,cohort,ada,1,Included,past,,fa-solid fa-archive,#5d4037,https://images.unsplash.com/photo-cohort-archive
+harbor,C1000001-0000-4000-8000-000000000006,Harbor relationship,workspace,,harbor,1,Included,,,fa-solid fa-anchor,#0277bd,https://images.unsplash.com/photo-harbor
+closed-recent,C1000001-0000-4000-8000-000000000007,Closed this month,workspace,northwind,ada,1,Included,recent,Month,fa-solid fa-calendar-xmark,#78909c,https://images.unsplash.com/photo-closed-recent
+closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,ExcludedEntirely,past,Month,fa-solid fa-calendar-minus,#b0bec5,https://images.unsplash.com/photo-closed-past
+closed-open,C1000001-0000-4000-8000-000000000009,Closed indefinite,workspace,northwind,ada,1,Included,past,,fa-solid fa-door-closed,#90a4ae,https://images.unsplash.com/photo-closed-open
+studio,C1000001-0000-4000-8000-000000000010,Studio,workshop,,ada,1,Included,,,fa-solid fa-palette,#ad1457,https://images.unsplash.com/photo-studio
+sealed-branch,C1000001-0000-4000-8000-000000000014,Sealed branch,workspace,northwind,sam,0,Included,,,fa-solid fa-lock,#37474f,https://images.unsplash.com/photo-sealed-branch
+sealed-child,C1000001-0000-4000-8000-000000000015,Sealed child,workspace,sealed-branch,sam,0,Included,,,fa-solid fa-shield-halved,#263238,https://images.unsplash.com/photo-sealed-child

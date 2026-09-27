@@ -32,97 +32,94 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         skillRows?: Array<{ SkillID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
     }
 
-    function createMockProvider(options: MockWorldOptions): IMetadataProvider {
-        const {
-            typeConfig = null,
-            spaceConfig = null,
-            agentRows = [],
-            knowledgeRows = [],
-            skillRows = [],
-        } = options;
+    let currentOptions: MockWorldOptions = {};
 
-        const provider: Record<string, unknown> = {
-            async RunView(params: { EntityName: string; ExtraFilter?: string }) {
-                const { EntityName, ExtraFilter = '' } = params;
+    const mockProvider = {
+        async RunView(params: { EntityName: string; ExtraFilter?: string }) {
+            const { EntityName, ExtraFilter = '' } = params;
+            const typeConfig = currentOptions.typeConfig ?? null;
+            const spaceConfig = currentOptions.spaceConfig ?? null;
+            const agentRows = currentOptions.agentRows ?? [];
+            const knowledgeRows = currentOptions.knowledgeRows ?? [];
+            const skillRows = currentOptions.skillRows ?? [];
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
-                    if (ExtraFilter.includes(CHILD_SPACE_ID)) {
-                        return {
-                            Success: true,
-                            Results: [
-                                {
-                                    ID: CHILD_SPACE_ID,
-                                    ParentID: ROOT_SPACE_ID,
-                                    SpaceTypeID: TYPE_ID,
-                                    Configuration: spaceConfig,
-                                },
-                            ],
-                        };
-                    }
-                    if (ExtraFilter.includes(ROOT_SPACE_ID)) {
-                        return {
-                            Success: true,
-                            Results: [
-                                {
-                                    ID: ROOT_SPACE_ID,
-                                    ParentID: null,
-                                    SpaceTypeID: TYPE_ID,
-                                    Configuration: null,
-                                },
-                            ],
-                        };
-                    }
-                }
-
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+            if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                if (ExtraFilter.includes(CHILD_SPACE_ID)) {
                     return {
                         Success: true,
                         Results: [
                             {
-                                ID: TYPE_ID,
-                                Configuration: typeConfig,
+                                ID: CHILD_SPACE_ID,
+                                ParentID: ROOT_SPACE_ID,
+                                SpaceTypeID: TYPE_ID,
+                                Configuration: spaceConfig,
                             },
                         ],
                     };
                 }
-
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
+                if (ExtraFilter.includes(ROOT_SPACE_ID)) {
                     return {
                         Success: true,
-                        Results: agentRows,
+                        Results: [
+                            {
+                                ID: ROOT_SPACE_ID,
+                                ParentID: null,
+                                SpaceTypeID: TYPE_ID,
+                                Configuration: null,
+                            },
+                        ],
                     };
                 }
+            }
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Knowledge Sources') {
-                    return {
-                        Success: true,
-                        Results: knowledgeRows,
-                    };
-                }
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: TYPE_ID,
+                            Configuration: typeConfig,
+                        },
+                    ],
+                };
+            }
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Agent Skills') {
-                    return {
-                        Success: true,
-                        Results: skillRows,
-                    };
-                }
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
+                return {
+                    Success: true,
+                    Results: agentRows,
+                };
+            }
 
-                return { Success: true, Results: [] };
-            },
-            async RunViews(paramsList: Array<{ EntityName: string; ExtraFilter?: string }>) {
-                const results = [];
-                for (const p of paramsList) {
-                    results.push(await (this as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> }).RunView(p));
-                }
-                return results;
-            },
-        };
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Knowledge Sources') {
+                return {
+                    Success: true,
+                    Results: knowledgeRows,
+                };
+            }
 
-        return provider as unknown as IMetadataProvider;
-    }
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Agent Skills') {
+                return {
+                    Success: true,
+                    Results: skillRows,
+                };
+            }
+
+            return { Success: true, Results: [] };
+        },
+        async RunViews(paramsList: Array<{ EntityName: string; ExtraFilter?: string }>) {
+            const results = [];
+            for (const p of paramsList) {
+                results.push(await (this as { RunView: (params: { EntityName: string; ExtraFilter?: string }) => Promise<unknown> }).RunView(p));
+            }
+            return results;
+        },
+    };
+
+    const provider = mockProvider as unknown as IMetadataProvider;
 
     it('returns built-in default agent when no SpaceAgent rows exist', async () => {
-        const provider = createMockProvider({});
+        currentOptions = {};
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
@@ -132,11 +129,11 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('app-wide SpaceAgent row is resolved when present', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             agentRows: [
                 { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
@@ -146,13 +143,13 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('extends app agent with type agent when type ListMode is Extend', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Extend' } }),
             agentRows: [
                 { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
                 { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
@@ -161,13 +158,13 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('replaces app agent with type agent when type ListMode is Replace', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
             agentRows: [
                 { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
                 { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
@@ -176,7 +173,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('replaces with space agent when space ListMode is Replace (via SpaceOverridable)', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             typeConfig: JSON.stringify({
                 SpaceOverridable: ['Agents.ListMode'],
                 Agents: { ListMode: 'Extend' },
@@ -189,7 +186,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
                 { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
 
@@ -199,12 +196,12 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('resolves bound knowledge sources across type and space hierarchy', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             knowledgeRows: [
                 { ContentSourceID: SOURCE_ID_1, SpaceTypeID: TYPE_ID, SpaceID: null },
                 { ContentSourceID: SOURCE_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const sources = await resolveSpaceKnowledgeSources(provider, CHILD_SPACE_ID);
 
@@ -214,12 +211,12 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     });
 
     it('resolves bound AI skills across type and space hierarchy', async () => {
-        const provider = createMockProvider({
+        currentOptions = {
             skillRows: [
                 { SkillID: SKILL_ID_1, SpaceTypeID: TYPE_ID, SpaceID: null },
                 { SkillID: SKILL_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
             ],
-        });
+        };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         const skills = await resolveSpaceAgentSkills(provider, CHILD_SPACE_ID);
 

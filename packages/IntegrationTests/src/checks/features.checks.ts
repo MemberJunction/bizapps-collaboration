@@ -18,7 +18,7 @@ const checks: NamedCheck[] = [
     {
         Id: 'features.FE1',
         Name: 'FE1 — spaces have distinct IconClass, Color, and BackgroundImageURL',
-        RequiresMutation: true,
+        RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const spaces = await FindRows<{
                 ID: string;
@@ -34,42 +34,18 @@ const checks: NamedCheck[] = [
             );
             Assert(spaces.length > 0, 'Spaces exist in the database');
 
-            let withIcon = spaces.filter((s) => s.IconClass && s.IconClass.trim().length > 0);
-            let withColor = spaces.filter((s) => s.Color && s.Color.trim().length > 0);
-            let withBackground = spaces.filter((s) => s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0);
-
-            if (withIcon.length === 0 || withColor.length === 0 || withBackground.length === 0) {
-                const ada = await GetPersonaUser(ctx, 'ada');
-                const spaceEntity = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                if (await spaceEntity.Load(spaces[0].ID)) {
-                    spaceEntity.IconClass = 'fa-solid fa-shapes';
-                    spaceEntity.Color = '#0076b6';
-                    spaceEntity.BackgroundImageURL = 'https://images.unsplash.com/photo-workspace-bg';
-                    const saved = await spaceEntity.Save();
-                    Assert(saved, `Updating space styling as Ada must succeed: ${spaceEntity.LatestResult?.CompleteMessage ?? ''}`);
-                }
-            }
-
-            const updatedSpaces = await FindRows<{
-                ID: string;
-                Name: string;
-                IconClass: string | null;
-                Color: string | null;
-                BackgroundImageURL: string | null;
-            }>(
-                ctx,
-                SPACE_ENTITY,
-                'ID IS NOT NULL',
-                ['ID', 'Name', 'IconClass', 'Color', 'BackgroundImageURL'],
-            );
-
-            withIcon = updatedSpaces.filter((s) => s.IconClass && s.IconClass.trim().length > 0);
-            withColor = updatedSpaces.filter((s) => s.Color && s.Color.trim().length > 0);
-            withBackground = updatedSpaces.filter((s) => s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0);
+            const withIcon = spaces.filter((s) => s.IconClass && s.IconClass.trim().length > 0);
+            const withColor = spaces.filter((s) => s.Color && s.Color.trim().length > 0);
+            const withBackground = spaces.filter((s) => s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0);
 
             Assert(withIcon.length > 0, 'At least one space has an IconClass');
             Assert(withColor.length > 0, 'At least one space has a Color');
             Assert(withBackground.length > 0, 'At least one space has a BackgroundImageURL');
+
+            const uniqueIcons = new Set(withIcon.map((s) => s.IconClass));
+            const uniqueColors = new Set(withColor.map((s) => s.Color));
+            Assert(uniqueIcons.size > 1, 'Spaces have distinct IconClass values');
+            Assert(uniqueColors.size > 1, 'Spaces have distinct Color values');
         },
     },
     {

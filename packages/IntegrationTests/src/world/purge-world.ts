@@ -16,7 +16,7 @@ import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
-import { getBoxStorageConfig } from './local-storage-account.js';
+import { COLLABORATION_BOX_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
 
 function storedObjectPath(root: string, providerKey: string | null): string | null {
     const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
@@ -61,6 +61,14 @@ export async function purgeWorld(): Promise<void> {
             WHERE i.SpaceID IN (${spaceIds}) AND i.RecordID LIKE 'ID|%'
         )
     `);
+    const foreignSpaces = await pool.request().query<{ ID: string; Name: string }>(`
+        SELECT ID, Name FROM __mj_BizAppsCollaboration.Space WHERE ParentID IN (${spaceIds}) AND ID NOT IN (${spaceIds});
+    `);
+    if (foreignSpaces.recordset && foreignSpaces.recordset.length > 0) {
+        const names = foreignSpaces.recordset.map((r: { ID: string; Name: string }) => `'${r.Name}' (${r.ID})`).join(', ');
+        throw new Error(`Purge refused: foreign child spaces found under world spaces: ${names}`);
+    }
+
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
@@ -119,9 +127,10 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
-            UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ParentID IN (${spaceIds}) OR ID IN (${spaceIds});
+            UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
+            UPDATE [${core}].FileStorageProvider SET IsActive = 0 WHERE ID = '${COLLABORATION_BOX_PROVIDER_ID}';
 
             SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
             SELECT ID INTO #details FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});

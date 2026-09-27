@@ -49,10 +49,6 @@
           "Agents.ListMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.468Z",
-      "checksum": "37ccdb532a78f3196123bfac5df59da64ad272f7e4aa5b06d04b52bb4de86f97"
     }
   },
   {
@@ -100,10 +96,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.479Z",
-      "checksum": "001f2a0ce395cf9bae852355be8c1855fb21d947cd8cba6e95d5fb599abe8507"
     }
   },
   {
@@ -150,10 +142,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.489Z",
-      "checksum": "715888c894e0be28e26bcb02014c7b0cbfab1a05baaf117f0ae4feb6bbc160c2"
     }
   },
   {
@@ -197,10 +185,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.500Z",
-      "checksum": "58bc393cfefee7eb9499a7431c76a4303fbc3a5b709352bdd4cd6ee0304a0c27"
     }
   },
   {
@@ -246,10 +230,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.510Z",
-      "checksum": "47038c6c7f7d85362732339118039afdc282602afee58e0bc1d5c9ed76a9686e"
     }
   },
   {
@@ -296,10 +276,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.519Z",
-      "checksum": "4e98e47dcd8fbc548db62ffe9a9dbe03ff755eef0bc101d13502a20f7a174efb"
     }
   },
   {
@@ -343,10 +319,6 @@
           "Chats.AgentReplyMode"
         ]
       }
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.528Z",
-      "checksum": "19f27eb0412ebc6156a43a870f6afaa2c79eff55c1c05345bc12d6ad05a607fb"
     }
   }
 ]

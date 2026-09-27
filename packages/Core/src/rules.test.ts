@@ -26,6 +26,7 @@ import {
     refuseInvite,
     strandFromSavedRow,
     retentionDeadline,
+    utcCalendarDaysBetween,
     visibleSpaces,
     type InviteEmail,
     type MemberSnapshot,
@@ -835,9 +836,9 @@ describe('authorizeTaskAssignment', () => {
 });
 
 describe('access after close in membershipReaches', () => {
-    const ownerRole: RoleFlags = { isOwnerRole: true, canInvite: true, canContribute: true, canSeeTeamBand: true, canPromoteBand: true };
-    const memberRole: RoleFlags = { isOwnerRole: false, canInvite: false, canContribute: true, canSeeTeamBand: true, canPromoteBand: false };
-    const guestRole: RoleFlags = { isOwnerRole: false, canInvite: false, canContribute: false, canSeeTeamBand: false, canPromoteBand: false };
+    const ownerRole: RoleFlags = { level: 100, maxGrantableLevel: 100, isOwnerRole: true, canInvite: true, canContribute: true, canSeeTeamBand: true, canPromoteBand: true };
+    const memberRole: RoleFlags = { level: 50, maxGrantableLevel: 50, isOwnerRole: false, canInvite: false, canContribute: true, canSeeTeamBand: true, canPromoteBand: false };
+    const guestRole: RoleFlags = { level: 10, maxGrantableLevel: 10, isOwnerRole: false, canInvite: false, canContribute: false, canSeeTeamBand: false, canPromoteBand: false };
 
     const closedDate = new Date('2026-01-01T00:00:00Z');
     const withinWindowDate = new Date('2026-01-15T00:00:00Z'); // 14 days later
@@ -979,6 +980,59 @@ describe('access after close in membershipReaches', () => {
         const reach2 = membershipReaches([spaceOverridingToReadOnly], [m2], 'u1', 'sp2', outsideWindowDate);
         assert.ok(reach2);
         assert.equal(reach2.role.canContribute, false);
+    });
+
+    it('calculates calendar day differences in UTC matching SQL Server DATEDIFF(day, ...)', () => {
+        const d1 = new Date('2026-01-01T23:59:59Z');
+        const d2 = new Date('2026-01-02T00:00:01Z');
+        assert.equal(utcCalendarDaysBetween(d1, d2), 1, 'Crossing UTC midnight is 1 calendar day');
+
+        const d3 = new Date('2026-01-01T00:00:00Z');
+        const d4 = new Date('2026-01-01T23:59:59Z');
+        assert.equal(utcCalendarDaysBetween(d3, d4), 0, 'Same UTC calendar date is 0 days');
+    });
+
+    it('open sub-space under closed parent strips contribute and invite rights from inherited members', () => {
+        const parentSpace: SpaceNode = {
+            id: 'parent1',
+            parentId: null,
+            inheritsMembership: false,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'ReadOnly',
+            postCloseAccessDays: 30,
+        };
+        const childSpace: SpaceNode = {
+            id: 'child1',
+            parentId: 'parent1',
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: null, // open sub-space
+        };
+        const parentSeat: MemberSnapshot = {
+            spaceId: 'parent1',
+            userId: 'u1',
+            status: 'Active',
+            band: 'Team',
+            role: ownerRole, // has canInvite: true, canContribute: true
+        };
+
+        // Reading child space within parent's post-close access window:
+        const reach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', withinWindowDate);
+        assert.ok(reach, 'Member reaches open child via parent within parent post-close window');
+        assert.equal(reach.role.canInvite, false, 'canInvite stripped because parent is closed');
+        assert.equal(reach.role.canContribute, false, 'canContribute stripped because parent is closed');
+
+        // Reading child space past parent's post-close access window:
+        const pastWindowReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate);
+        assert.equal(pastWindowReach, null, 'No access to child when closed parent is past post-close access window');
+
+        // Reopening / ignorePostCloseFilter allows access without stripping:
+        const reopeningReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate, true);
+        assert.ok(reopeningReach);
+        assert.equal(reopeningReach.role.canContribute, true, 'ignorePostCloseFilter preserves rights for reopen evaluation');
     });
 });
 

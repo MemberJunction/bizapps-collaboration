@@ -183,7 +183,7 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-title">
                       <mjc-band-chip Band="Shared" Label="Shared" />
                     </div>
-                    <div class="b-opt-sub">Visible to both firms</div>
+                    <div class="b-opt-sub">Visible to all participants</div>
                   </div>
                 </label>
 

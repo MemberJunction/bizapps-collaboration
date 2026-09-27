@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { before, describe, it } from 'node:test';
 import { AuthorizationInfo, type EntityInfo, EntityUserPermissionInfo, type IMetadataProvider, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceRoleTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { SpaceTypeEntityServer } from '../dist/SpaceTypeEntityServer.js';
+import { toNode, type SpaceRow } from '../dist/load-graph.js';
 
 const ROOT_AUTH_ID = '11111111-1111-4111-8111-111111111111';
 const TYPES_AUTH_ID = '22222222-2222-4222-8222-222222222222';
@@ -78,19 +81,44 @@ function createMockProvider(options: {
             if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
                 return {
                     Success: true,
-                    Results: [{ SpaceRoleTypeID: options.isOwnerMember ? OWNER_ROLE_ID : MEMBER_ROLE_ID }],
+                    Results: [{
+                        SpaceID: SPACE_ID,
+                        UserID: USER_ID,
+                        Status: 'Active',
+                        Band: 'Shared',
+                        SpaceRoleTypeID: options.isOwnerMember ? OWNER_ROLE_ID : MEMBER_ROLE_ID,
+                    }],
+                };
+            }
+            if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                return {
+                    Success: true,
+                    Results: [{
+                        ID: SPACE_ID,
+                        ParentID: null,
+                        InheritsMembership: false,
+                        OwnerID: USER_ID,
+                        AgentRetrieval: 'Included',
+                        AllowParentAssignees: true,
+                        ClosedAt: null,
+                        PostCloseAccess: null,
+                        PostCloseAccessDays: null,
+                    }],
                 };
             }
             if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
                 return {
                     Success: true,
-                    Results: [{ ID: TYPE_ID, DriverKey: null }],
+                    Results: [{ ID: TYPE_ID, DriverKey: null, PostCloseAccess: 'ReadOnly', PostCloseAccessDays: 30 }],
                 };
             }
             if (EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
                 return {
                     Success: true,
-                    Results: [{ ID: OWNER_ROLE_ID, IsOwnerRole: options.isOwnerMember ? true : false }],
+                    Results: [
+                        { ID: OWNER_ROLE_ID, Code: 'owner', Name: 'Owner', IsOwnerRole: true },
+                        { ID: MEMBER_ROLE_ID, Code: 'member', Name: 'Member', IsOwnerRole: false },
+                    ],
                 };
             }
             return { Success: true, Results: [] };
@@ -102,7 +130,7 @@ function createMockProvider(options: {
     return provider as Partial<IMetadataProvider> as IMetadataProvider;
 }
 
-describe('CollaborationEngine authorization checks (Item 56)', () => {
+describe('CollaborationEngine authorization checks', () => {
     const adminUser = {
         ID: USER_ID,
         UserRoles: [{ Role: 'Developer' } as Partial<UserRoleInfo> as UserRoleInfo],
@@ -123,10 +151,10 @@ describe('CollaborationEngine authorization checks (Item 56)', () => {
         spacesAllowedRoles: ['Developer'],
     });
 
-    CollaborationEngine.Instance.SetSpaceRoleTypesForTesting([
-        { ID: OWNER_ROLE_ID, Code: 'owner', Name: 'Owner', IsOwnerRole: true } as Partial<mjBizAppsCollaborationSpaceRoleTypeEntity> as mjBizAppsCollaborationSpaceRoleTypeEntity,
-        { ID: MEMBER_ROLE_ID, Code: 'member', Name: 'Member', IsOwnerRole: false } as Partial<mjBizAppsCollaborationSpaceRoleTypeEntity> as mjBizAppsCollaborationSpaceRoleTypeEntity,
-    ]);
+    before(async () => {
+        const setupProvider = createMockProvider({ authorizations: auths });
+        await CollaborationEngine.Instance.Config(true, adminUser, setupProvider);
+    });
 
     it('FindCollaborationAuthorization resolves child authorizations under Collaboration root', () => {
         const provider = createMockProvider({ authorizations: auths });
@@ -179,7 +207,7 @@ describe('CollaborationEngine authorization checks (Item 56)', () => {
     });
 });
 
-describe('SpaceTypeEntityServer Configure Space Types enforcement (Item 56)', () => {
+describe('SpaceTypeEntityServer Configure Space Types enforcement', () => {
     const auths = createMockAuthorizations({
         typesAllowedRoles: ['Developer'],
         spacesAllowedRoles: ['Developer'],
@@ -241,7 +269,7 @@ describe('SpaceTypeEntityServer Configure Space Types enforcement (Item 56)', ()
     });
 });
 
-describe('SpaceEntityServer PostCloseAccess direct write guardrails (Item 56 / Item 12)', () => {
+describe('SpaceEntityServer PostCloseAccess direct write guardrails', () => {
     const auths = createMockAuthorizations({
         typesAllowedRoles: ['Developer'],
         spacesAllowedRoles: ['Developer'],
@@ -306,12 +334,8 @@ describe('SpaceEntityServer PostCloseAccess direct write guardrails (Item 56 / I
     });
 });
 
-describe('Metadata Role Lookups Static Check (Item 56)', () => {
-    it('verifies that every @lookup:MJ: Roles.Name=... names a valid MJ core role or role in metadata/roles', async () => {
-        const fs = await import('node:fs');
-        const path = await import('node:path');
-        const allowedRoles = new Set(['UI', 'Developer', 'Integration', 'Agent Administrator', 'Space Participant']);
-
+describe('Metadata Role Lookups Static Check', () => {
+    it('verifies that every @lookup:MJ: Roles.Name=... names a valid MJ core role or role in metadata/roles', () => {
         let dir = process.cwd();
         while (!fs.existsSync(path.join(dir, 'metadata')) && path.dirname(dir) !== dir) {
             dir = path.dirname(dir);
@@ -332,6 +356,26 @@ describe('Metadata Role Lookups Static Check (Item 56)', () => {
             return results;
         }
 
+        const allowedRoles = new Set(['UI', 'Developer', 'Integration', 'Agent Administrator']);
+        const rolesDir = path.join(metadataDir, 'roles');
+        if (fs.existsSync(rolesDir)) {
+            const roleFiles = scanDir(rolesDir);
+            for (const rf of roleFiles) {
+                try {
+                    const parsed = JSON.parse(fs.readFileSync(rf, 'utf-8'));
+                    if (Array.isArray(parsed)) {
+                        for (const item of parsed) {
+                            if (item.fields?.Name) {
+                                allowedRoles.add(item.fields.Name);
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignore parse errors
+                }
+            }
+        }
+
         const files = scanDir(metadataDir);
         const lookupRegex = /@lookup:MJ:\s*Roles\.Name=([^"&}]+)/g;
 
@@ -346,6 +390,41 @@ describe('Metadata Role Lookups Static Check (Item 56)', () => {
                 );
             }
         }
+    });
+});
+
+describe('toNode post-close mapping', () => {
+    it('maps post-close values from row and space type', () => {
+        const rowWithClose: SpaceRow = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            ParentID: null,
+            InheritsMembership: false,
+            OwnerID: USER_ID,
+            SpaceTypeID: TYPE_ID,
+            AgentRetrieval: 'Included',
+            ClosedAt: '2026-01-01T00:00:00Z',
+            PostCloseAccess: 'ReadOnlyWithAgent',
+            PostCloseAccessDays: 14,
+        };
+        const node1 = toNode(rowWithClose);
+        assert.equal(node1.postCloseAccess, 'ReadOnlyWithAgent');
+        assert.equal(node1.postCloseAccessDays, 14);
+        assert.equal(node1.spaceTypePostCloseAccess, 'ReadOnly');
+        assert.equal(node1.spaceTypePostCloseAccessDays, 30);
+
+        const rowWithoutClose: SpaceRow = {
+            ID: '22222222-3333-4444-5555-666666666666',
+            ParentID: null,
+            InheritsMembership: false,
+            OwnerID: USER_ID,
+            SpaceTypeID: TYPE_ID,
+            AgentRetrieval: 'Included',
+        };
+        const node2 = toNode(rowWithoutClose);
+        assert.equal(node2.postCloseAccess, null);
+        assert.equal(node2.postCloseAccessDays, null);
+        assert.equal(node2.spaceTypePostCloseAccess, 'ReadOnly');
+        assert.equal(node2.spaceTypePostCloseAccessDays, 30);
     });
 });
 

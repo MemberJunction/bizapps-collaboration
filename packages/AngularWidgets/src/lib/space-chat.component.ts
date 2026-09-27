@@ -1,12 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  EventEmitter,
   Input,
-  Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -32,10 +29,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           [assistantDisplayName]="'Assistant'"
           [allowMentions]="AllowMentions"
           [allowAgentMentions]="true"
-          [allowEntityMentions]="true"
-          [allowSkillCommands]="true"
-          [allowAttachments]="AllowAttachments"
-          (conversationCreated)="onConversationCreated($event)">
+          [allowEntityMentions]="false"
+          [allowSkillCommands]="false"
+          [allowAttachments]="AllowAttachments">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
@@ -73,12 +69,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
           <h3 class="empty-title">Select a Conversation</h3>
           <p class="empty-desc">
-            Choose a channel from the space sidebar or start a new conversation to begin chatting with your team and the AI assistant.
+            Choose a channel from the space sidebar to begin chatting.
           </p>
-          <button type="button" class="btn-create-convo" (click)="onNewConversationClick()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Conversation</span>
-          </button>
         </div>
       }
     </div>
@@ -201,25 +193,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         line-height: 1.5;
         margin-bottom: 20px;
       }
-
-      .btn-create-convo {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
-        border: none;
-        padding: 8px 18px;
-        border-radius: 6px;
-        font-size: 13.5px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-
-      .btn-create-convo:hover {
-        background: var(--mj-brand-primary-hover, #005a8c);
-      }
     `,
   ],
 })
@@ -236,16 +209,5 @@ export class CollabSpaceChatComponent {
   @Input() public DefaultAgentId: string | null = null;
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
-  @Input() public AllowAttachments = true;
-
-  @Output() public ConversationCreated = new EventEmitter<{ conversationId: string; name?: string }>();
-  @Output() public NewConversationRequested = new EventEmitter<void>();
-
-  public onConversationCreated(event: { conversation: MJConversationEntity }): void {
-    this.ConversationCreated.emit({ conversationId: event.conversation.ID, name: event.conversation.Name ?? undefined });
-  }
-
-  public onNewConversationClick(): void {
-    this.NewConversationRequested.emit();
-  }
+  @Input() public AllowAttachments = false;
 }

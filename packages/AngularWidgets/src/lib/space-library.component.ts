@@ -77,7 +77,7 @@ export interface LibrarySmartView {
         <div class="legend">
           <div class="row gap8">
             <mjc-band-chip Band="Shared" Label="Shared" />
-            <span class="fs12 muted">Both firms</span>
+            <span class="fs12 muted">Shared band</span>
           </div>
           <div class="row gap8">
             <mjc-band-chip Band="Team" Label="Team" />
@@ -184,7 +184,7 @@ export interface LibrarySmartView {
           [FlagDescription]="PreviewFlagDescription"
           [ShareButtonLabel]="PreviewShareButtonLabel"
           [RecentUses]="PreviewRecentUses"
-          [FileId]="SelectedRow?.fileId || SelectedRow?.id || ''"
+          [FileId]="SelectedRow?.fileId || ''"
           (CloseRequested)="onCloseDrawer()"
           (ShareRequested)="onShareFromPreview()"
           (OpenFileRequested)="onOpenFile($event)"

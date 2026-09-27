@@ -84,7 +84,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="spacer"></div>
 
         @if (CanCreateTask) {
-          <button class="add-task-btn" (click)="isAddingTask = !isAddingTask">
+          <button class="add-task-btn" (click)="openAddTask()">
             <i class="fa-solid fa-plus"></i>
             <span>Add task</span>
           </button>
@@ -508,6 +508,14 @@ export class CollabSpaceWorkComponent {
   @Input() Tasks: TaskItemModel[] = [];
   @Input() SpaceName = '';
   @Input() CanCreateTask = true;
+  @Input() public set DefaultBand(val: SpaceBand) {
+    this._defaultBand = val || 'Shared';
+    this.newTaskBand = this._defaultBand;
+  }
+  public get DefaultBand(): SpaceBand {
+    return this._defaultBand;
+  }
+  private _defaultBand: SpaceBand = 'Shared';
 
   @Output() TaskSelectRequested = new EventEmitter<TaskItemModel>();
   @Output() TaskToggleRequested = new EventEmitter<TaskItemModel>();
@@ -521,6 +529,13 @@ export class CollabSpaceWorkComponent {
   public newTaskName = '';
   public newTaskBand: SpaceBand = 'Shared';
   public newTaskPriority = 'Medium';
+
+  public openAddTask(): void {
+    this.isAddingTask = !this.isAddingTask;
+    if (this.isAddingTask) {
+      this.newTaskBand = this.DefaultBand;
+    }
+  }
 
   public get TotalTasks(): number {
     return this.Tasks.length;
@@ -575,6 +590,7 @@ export class CollabSpaceWorkComponent {
       priority: this.newTaskPriority,
     });
     this.newTaskName = '';
+    this.newTaskBand = this.DefaultBand;
     this.isAddingTask = false;
   }
 

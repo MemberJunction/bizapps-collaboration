@@ -6,12 +6,11 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJCredentialEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, type StorageProviderConfig } from '@memberjunction/storage';
-import { COLLABORATION_STORAGE_DRIVER_KEY } from '@mj-biz-apps/collaboration-core-entities-server';
+import { COLLABORATION_STORAGE_DRIVER_KEY } from './local-directory-storage.js';
 
 export const COLLABORATION_STORAGE_PROVIDER_ID = 'F3000001-0000-4000-8000-000000000001';
 export const COLLABORATION_STORAGE_ACCOUNT_ID = 'F3000001-0000-4000-8000-000000000002';
 export const COLLABORATION_BOX_PROVIDER_ID = 'CEB9433E-F36B-1410-8DA0-00021F8B792E';
-export const COLLABORATION_BOX_ROOT_FOLDER_ID = '421917038096';
 
 const PROVIDERS = 'MJ: File Storage Providers';
 const ACCOUNTS = 'MJ: File Storage Accounts';
@@ -33,9 +32,9 @@ export interface BoxStorageConfig extends StorageProviderConfig {
 export function getBoxStorageConfig(): BoxStorageConfig | null {
     const clientID = process.env.STORAGE_BOX_CLIENT_ID?.trim();
     const clientSecret = process.env.STORAGE_BOX_CLIENT_SECRET?.trim();
-    if (!clientID || !clientSecret) return null;
-    const enterpriseID = process.env.STORAGE_BOX_ENTERPRISE_ID?.trim() || '';
-    const rootFolderID = process.env.STORAGE_BOX_ROOT_FOLDER_ID?.trim() || COLLABORATION_BOX_ROOT_FOLDER_ID;
+    const enterpriseID = process.env.STORAGE_BOX_ENTERPRISE_ID?.trim();
+    const rootFolderID = process.env.STORAGE_BOX_ROOT_FOLDER_ID?.trim();
+    if (!clientID || !clientSecret || !enterpriseID || !rootFolderID) return null;
     return { clientID, clientSecret, enterpriseID, rootFolderID };
 }
 

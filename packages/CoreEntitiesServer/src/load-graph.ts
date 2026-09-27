@@ -20,7 +20,7 @@ export interface WriteContext {
     ownerCount: number;
 }
 
-interface SpaceRow {
+export interface SpaceRow {
     ID: string;
     ParentID: string | null;
     InheritsMembership: boolean;
@@ -33,7 +33,7 @@ interface SpaceRow {
     PostCloseAccessDays?: number | null;
 }
 
-function toNode(row: SpaceRow): SpaceNode {
+export function toNode(row: SpaceRow): SpaceNode {
     const spaceType = row.SpaceTypeID ? CollaborationEngine.Instance.SpaceTypeById(row.SpaceTypeID) : null;
     return {
         id: parseUuid(row.ID) ?? row.ID,

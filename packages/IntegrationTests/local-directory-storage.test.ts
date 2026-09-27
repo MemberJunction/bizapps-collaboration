@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'vitest';
-import { LocalDirectoryStorage } from '@mj-biz-apps/collaboration-core-entities-server';
+import { LocalDirectoryStorage } from './src/world/local-directory-storage.js';
 
 describe('local directory storage', () => {
     it('writes a file and reads the same bytes back', async () => {

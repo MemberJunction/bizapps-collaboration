@@ -31,7 +31,7 @@ const USERS_ENTITY_ID = '88888888-8888-4888-8888-888888888888';
 const ROLE_ID = '99999999-9999-4999-8999-999999999999';
 
 describe('assigneeSeatMessage', () => {
-    function createMockProvider(allowParentAssignees: boolean) {
+    function createMockProvider(allowParentAssignees: boolean, closedAt: string | null = null) {
         return {
             EntityByName(name: string) {
                 if (name === 'MJ_BizApps_Tasks: Tasks') return { ID: TASKS_ENTITY_ID, Name: name };
@@ -50,10 +50,10 @@ describe('assigneeSeatMessage', () => {
                 }
                 if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
                     if (ExtraFilter.includes(CHILD_SPACE_ID)) {
-                        return { Success: true, Results: [{ ID: CHILD_SPACE_ID, ParentID: PARENT_SPACE_ID, InheritsMembership: true, AllowParentAssignees: allowParentAssignees }] };
+                        return { Success: true, Results: [{ ID: CHILD_SPACE_ID, ParentID: PARENT_SPACE_ID, InheritsMembership: true, AllowParentAssignees: allowParentAssignees, ClosedAt: closedAt }] };
                     }
                     if (ExtraFilter.includes(PARENT_SPACE_ID)) {
-                        return { Success: true, Results: [{ ID: PARENT_SPACE_ID, ParentID: null, InheritsMembership: true, AllowParentAssignees: true }] };
+                        return { Success: true, Results: [{ ID: PARENT_SPACE_ID, ParentID: null, InheritsMembership: true, AllowParentAssignees: true, ClosedAt: null }] };
                     }
                 }
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
@@ -134,6 +134,30 @@ describe('assigneeSeatMessage', () => {
 
             const msg = await assigneeSeatMessage(assignment);
             assert.equal(msg, null);
+        } finally {
+            source.GetSystemUser = orig;
+        }
+    });
+
+    it('refuses assignment in a closed space', async () => {
+        const source = WellKnownUserSource.Instance;
+        const orig = source.GetSystemUser.bind(source);
+        source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as UserInfo;
+        try {
+            const provider = createMockProvider(true, '2026-01-01T00:00:00Z');
+            const assignment = {
+                IsSaved: false,
+                Fields: [],
+                ProviderToUse: provider,
+                RunViewProviderToUse: provider,
+                ContextCurrentUser: { ID: CALLER_USER_ID, UserRoles: [{ Role: 'UI' }] } as unknown as UserInfo,
+                TaskID: TASK_ID,
+                AssigneeEntityID: USERS_ENTITY_ID,
+                AssigneeRecordID: ASSIGNEE_USER_ID,
+            } as unknown as mjBizAppsTasksTaskAssignmentEntity;
+
+            const msg = await assigneeSeatMessage(assignment);
+            assert.equal(msg, 'Assignment refused: cannot update assignments in a closed space.');
         } finally {
             source.GetSystemUser = orig;
         }
@@ -296,7 +320,9 @@ describe('CollaborationTaskEntityServer status guardrails', () => {
             const task = makeTask(provider, user);
             const res = await CollaborationTaskEntityServer.prototype.ValidateAsync.call(task);
             assert.equal(res.Success, false);
-            assert.ok(res.Errors.some((e: ValidationErrorInfo) => e.Source === 'Status'));
+            const err = res.Errors.find((e: ValidationErrorInfo) => e.Source === 'Status');
+            assert.ok(err, 'Expected error on Status');
+            assert.equal(err?.Message, 'Task refused: you do not have permission to update task status in this space.');
         } finally {
             source.GetSystemUser = orig;
         }

@@ -191,14 +191,6 @@ interface SpaceNavPref {
             @if (!isCollapsed) {
               <div class="section-title-row">
                 <span class="section-title">CONVERSATIONS</span>
-                <button
-                  type="button"
-                  class="btn-add-convo-inline"
-                  title="New conversation"
-                  aria-label="New conversation"
-                  (click)="onNewConversation()">
-                  <i class="fa-solid fa-plus"></i>
-                </button>
               </div>
             }
 
@@ -230,16 +222,6 @@ interface SpaceNavPref {
                       [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
                     </span>
                   }
-                </button>
-              }
-
-              @if (!isCollapsed) {
-                <button
-                  type="button"
-                  class="btn-new-convo-row"
-                  (click)="onNewConversation()">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>New Conversation</span>
                 </button>
               }
             </div>
@@ -552,21 +534,6 @@ interface SpaceNavPref {
       padding: 4px 10px 2px;
     }
 
-    .btn-add-convo-inline {
-      background: transparent;
-      border: none;
-      color: var(--mj-text-muted, #94a3b8);
-      font-size: 11px;
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 4px;
-      transition: all 0.15s ease;
-    }
-    .btn-add-convo-inline:hover {
-      color: var(--mj-brand-primary, #0076b6);
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-    }
-
     .nav-links-list {
       display: flex;
       flex-direction: column;
@@ -666,27 +633,6 @@ interface SpaceNavPref {
     }
     .band-dot.shared { background: var(--mjc-shared, #0076b6); }
     .band-dot.team { background: var(--mjc-team, #7c3aed); }
-
-    .btn-new-convo-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      background: transparent;
-      border: 1px dashed var(--mj-border-default, #e2e8f0);
-      border-radius: 6px;
-      color: var(--mj-text-muted, #94a3b8);
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-top: 4px;
-      transition: all 0.15s ease;
-    }
-    .btn-new-convo-row:hover {
-      border-color: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-brand-primary, #0076b6);
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-    }
 
     .space-nav-footer {
       padding: 10px 14px;
@@ -915,7 +861,6 @@ export class CollabSpaceRailComponent implements OnInit {
 
   @Output() TabSelectRequested = new EventEmitter<string>();
   @Output() ConversationSelectRequested = new EventEmitter<string>();
-  @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
 
   public navWidth = 280;
@@ -989,10 +934,6 @@ export class CollabSpaceRailComponent implements OnInit {
 
   public onConversationClick(conversationId: string): void {
     this.ConversationSelectRequested.emit(conversationId);
-  }
-
-  public onNewConversation(): void {
-    this.NewConversationRequested.emit();
   }
 
   public onBackToSpaces(): void {

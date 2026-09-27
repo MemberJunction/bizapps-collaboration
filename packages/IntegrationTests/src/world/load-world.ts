@@ -232,8 +232,11 @@ export async function loadWorld(): Promise<void> {
         const typeId = requireMap(types, space.Type, 'space type');
         const parentSpace = space.Parent ? spaceRows.find((item) => item.Key === space.Parent) : null;
         const creator = parentSpace ? actor(parentSpace.Owner) : actor(space.Owner);
-        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, creator);
         const existing = await findId(provider, SPACES, `ID = '${space.ID}'`, system);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(
+            SPACES,
+            existing ? actor(space.Owner) : creator
+        );
         if (existing) {
             if (!(await record.Load(existing))) throw new Error(`Could not load space ${space.Key}.`);
         } else {
@@ -249,6 +252,9 @@ export async function loadWorld(): Promise<void> {
         record.AgentRetrieval = space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
         record.ClosedAt = null;
         record.Retention = (space.Retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
+        record.IconClass = space.IconClass || null;
+        record.Color = space.Color || null;
+        record.BackgroundImageURL = space.BackgroundImageURL || null;
         if (!(await record.Save())) throw new Error(`space ${space.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         spaceIds.set(space.Key, record.ID);
     };

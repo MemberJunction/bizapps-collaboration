@@ -40,9 +40,9 @@ export interface SpaceNode {
     agentRetrieval: AgentRetrieval;
     allowParentAssignees?: boolean;
     closedAt?: string | Date | null;
-    postCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | string | null;
+    postCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
     postCloseAccessDays?: number | null;
-    spaceTypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | string | null;
+    spaceTypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
     spaceTypePostCloseAccessDays?: number | null;
 }
 
@@ -76,6 +76,15 @@ function byId(spaces: readonly SpaceNode[]): Map<string, SpaceNode> {
 }
 
 /**
+ * Calculates calendar day difference in UTC between two dates, matching SQL Server DATEDIFF(day, ...).
+ */
+export function utcCalendarDaysBetween(d1: Date, d2: Date): number {
+    const utc1 = Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth(), d1.getUTCDate());
+    const utc2 = Date.UTC(d2.getUTCFullYear(), d2.getUTCMonth(), d2.getUTCDate());
+    return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
+}
+
+/**
  * Checks whether post-close access is permitted for a space based on its
  * PostCloseAccess mode and PostCloseAccessDays window (aligning with fnCollaborationAccess).
  */
@@ -95,8 +104,7 @@ export function isPostCloseAccessPermitted(
         : (space.spaceTypePostCloseAccessDays ?? null);
     if (days !== null && days !== undefined) {
         const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
-        const diffMs = now.getTime() - closedDate.getTime();
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffDays = utcCalendarDaysBetween(closedDate, now);
         if (diffDays > days) {
             return false;
         }
@@ -115,6 +123,7 @@ export function isPostCloseAccessPermitted(
  * Closed spaces:
  * - Checks isPostCloseAccessPermitted; if closed without post-close access, returns null.
  * - If closed but post-close access is permitted, strips canInvite and canContribute.
+ * - If ignorePostCloseFilter is true (e.g. for space reopening), does not filter by closure.
  */
 export function membershipReaches(
     spaces: readonly SpaceNode[],
@@ -122,6 +131,7 @@ export function membershipReaches(
     userId: string,
     targetId: string,
     now: Date = new Date(),
+    ignorePostCloseFilter: boolean = false,
 ): MemberSnapshot | null {
     const index = byId(spaces);
     const active = memberships.filter((member) => idKey(member.userId) === idKey(userId) && member.status === ACTIVE);
@@ -129,21 +139,24 @@ export function membershipReaches(
     if (!target) {
         return null;
     }
-    if (target.closedAt && !isPostCloseAccessPermitted(target, now)) {
+    if (!ignorePostCloseFilter && target.closedAt && !isPostCloseAccessPermitted(target, now)) {
         return null;
     }
 
     let current: SpaceNode | undefined = target;
     const seen = new Set<string>();
+    let anyClosedOnPath = !!target.closedAt;
     while (current && !seen.has(idKey(current.id))) {
         seen.add(idKey(current.id));
-        if (current.closedAt && !isPostCloseAccessPermitted(current, now)) {
-            return null;
+        if (current.closedAt) {
+            anyClosedOnPath = true;
+            if (!ignorePostCloseFilter && !isPostCloseAccessPermitted(current, now)) {
+                return null;
+            }
         }
         const direct = active.find((member) => idKey(member.spaceId) === idKey(current!.id));
         if (direct) {
-            const isClosed = !!(target.closedAt || current.closedAt);
-            if (isClosed) {
+            if (anyClosedOnPath && !ignorePostCloseFilter) {
                 return {
                     ...direct,
                     role: {

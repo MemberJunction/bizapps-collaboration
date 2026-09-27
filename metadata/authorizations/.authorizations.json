@@ -9,10 +9,6 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Root authorization for BizApps Collaboration."
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.422Z",
-      "checksum": "522aea9d8891d6836f23863c45b1a0f75ff56a3efdc986eddace00b509b350b8"
     }
   },
   {
@@ -25,10 +21,6 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Configure space types and the collaboration app's settings."
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.431Z",
-      "checksum": "3618df05fc974642a3f503f29f1b57eb90226fa27c9a1fee38448fcde4d65b73"
     }
   },
   {
@@ -41,10 +33,6 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Configure a space's settings, on spaces where the user's role allows configuring."
-    },
-    "sync": {
-      "lastModified": "2026-09-27T19:24:37.438Z",
-      "checksum": "648333dba0a89a5d4f5f364f8abcacaa04be1a8d719342e835d5a7497ecce2cc"
     }
   }
 ]

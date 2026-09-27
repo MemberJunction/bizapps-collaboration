@@ -2,7 +2,7 @@ import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type Va
 import { RegisterClass } from '@memberjunction/global';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { TaskEntityServer } from '@mj-biz-apps/tasks-entities-server';
-import { isStaffUser, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { callerPersonId, isSpaceParticipant, reportCollaborationClasses, watchCollaborationClasses } from './task-attribution.js';
 import { filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
@@ -26,9 +26,12 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
         }
         const anyFieldChanged = this.IsSaved && this.Fields.some((field) => field.Dirty);
         if (anyFieldChanged) {
-            const statusChanged = !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
+            const statusDirty = !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
+            const taskTypeStatusDirty = !!this.Fields.find((field) => field.Name === 'TaskTypeStatusID')?.Dirty;
+            const statusChanged = statusDirty || taskTypeStatusDirty;
             const parentChanged = !!this.Fields.find((field) => field.Name === 'ParentID')?.Dirty;
-            const dirtyField = statusChanged ? 'Status' : parentChanged ? 'ParentID' : (this.Fields.find((field) => field.Dirty)?.Name ?? 'Name');
+            const dirtyStatusField = statusDirty ? 'Status' : 'TaskTypeStatusID';
+            const dirtyField = statusChanged ? dirtyStatusField : parentChanged ? 'ParentID' : (this.Fields.find((field) => field.Dirty)?.Name ?? 'Name');
             const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
             if (!provider?.EntityByName) return refuse(result, dirtyField, 'Task refused: the space could not be read.');
             try {
@@ -43,7 +46,7 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
                     if (statusChanged) {
                         const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
                         if (!reach?.role.canContribute) {
-                            return refuse(result, 'Status', 'Task refused: you do not have permission to update task status in this space.');
+                            return refuse(result, dirtyStatusField, 'Task refused: you do not have permission to update task status in this space.');
                         }
                     }
                 }
