@@ -1047,15 +1047,16 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ### C4. Rebuild Committees in one step (D35)
 
-It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes. That plan predates D33 and still lists meetings, agendas, attendance and video providers among Committees' tables; where the two differ, this section holds.
+It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes. That plan predated D33; [bizapps-committees#55](https://github.com/MemberJunction/bizapps-committees/pull/55) brings it in line. Where the two differ, this section holds.
 - **`Committee` and `Term` stay IsA subtypes of `Space`.**
 - **Committees' meeting tables are stripped out** (Amith, 09-27): `Meeting`, `AgendaItem`, `Attendance` and `VideoProvider`, with the code that serves only them, such as the video drivers, which move to Tasks (T1). Meetings live in bizapps-tasks (workstream T). Committees is being rebuilt on Collaboration anyway, so backward compatibility isn't a concern: no rows are copied, and no compatibility layer is kept.
 - **The governance points at Tasks' meetings instead,** `MJ_BizApps_Tasks: Meetings` and `MJ_BizApps_Tasks: Meeting Agenda Items`:
   - the foreign keys to a meeting, from `Artifact`, `Minute` (both `MeetingID` and `ApprovedByMeetingID`), `Motion` and `Comment`;
   - the foreign keys to an agenda item, from `Artifact`, `Motion` and `Comment`. Votes and ballots follow through their motion; they have no key of their own to either;
-  - the soft references: the ML pipeline, models and weekly scoring job that target `Committees: Meetings` move to Tasks' meetings or are dropped, and `TaskLink` rows that name a Committees meeting go with the table;
+  - their existing values are cleared first, since no meetings are copied. The rows keep everything else, and every one of these keys allows NULL today;
+  - the soft references: the ML pipeline, models and weekly scoring job that target `Committees: Meetings` move to Tasks' meetings or are dropped. Any `TaskLink` rows that point at a Committees meeting would point at nothing, so the upgrade removes them;
   - the computed columns: 1.4.0's migration registers 12 computed `vwMeetings` columns as entity fields that the generated class doesn't carry. They go with the table, and C4 rebuilds on Tasks' meeting only those the governance screens still need.
-- **Quorum** stays with the governance. It's computed in the UI today; `Meeting.PredictedQuorumRisk…`, the only stored quorum data, goes with the table.
+- **Quorum** stays with the governance. It's computed in code today, as a majority of the voting members; `Meeting.PredictedQuorumRisk…`, the only stored quorum data, goes with the table.
 - **A *Vote* agenda item** is Committees' own type in Tasks' agenda item type lookup (T1), which Committees seeds.
 - **A committee type grants its governance data** through B15: for example, the roster and term view to members, and a voting-record dashboard to officers.
 - **C0 still comes first:** ballot sealing enforced on the server, and the entity overrides registered under the wrong names fixed.
