@@ -5,8 +5,6 @@ import {
   Input,
   Output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -14,47 +12,11 @@ import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
-export type SpaceChatAgentReplyMode = 'Always' | 'Never' | 'OnMention';
-
-export interface SpaceChatAgentTurnRequest {
-  ConversationId: string;
-  UserMessageId?: string;
-  MessageText: string;
-  AgentId?: string;
-  AgentName?: string;
-  Route?: string;
-  ApplicationId?: string;
-  AppContext?: string;
-  AgentHistoryFrom?: Date;
-  ConfigurationPresetId?: string;
-  RequestedSkillIDs?: readonly string[];
-  PlanMode?: string;
-}
-
-export interface SpaceChatAgentTurnResult {
-  Success: boolean;
-  ErrorMessage?: string;
-  ReplyDetailIds?: readonly string[];
-}
-
-export type SpaceChatAgentTurnHandler = (request: SpaceChatAgentTurnRequest) => Promise<SpaceChatAgentTurnResult>;
-
-export interface RoomMessageItem {
-  id: string;
-  senderName: string;
-  senderInitials: string;
-  senderColorClass?: string;
-  isAssistant?: boolean;
-  isOutside?: boolean;
-  timestamp: string;
-  text: string;
-}
-
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CollabBandChipComponent, ConversationsModule],
+  imports: [CollabBandChipComponent, ConversationsModule],
   template: `
     <div class="chat-container">
       @if (ConversationId && CurrentUser) {
@@ -275,10 +237,6 @@ export class CollabSpaceChatComponent {
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = true;
-  @Input() public AgentReplyMode: SpaceChatAgentReplyMode = 'Always';
-  @Input() public AllowedAgentIDs: readonly string[] | null = null;
-  @Input() public AgentHistoryFrom: Date | null = null;
-  @Input() public AgentTurnHandler: SpaceChatAgentTurnHandler | null = null;
 
   @Output() public ConversationCreated = new EventEmitter<{ conversationId: string; name?: string }>();
   @Output() public NewConversationRequested = new EventEmitter<void>();

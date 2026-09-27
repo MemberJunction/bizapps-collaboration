@@ -63,34 +63,33 @@ export async function postSpaceMessage(
     let conversationId: string | null = null;
     if (input.conversationId) {
         const parsedTarget = parseUuid(input.conversationId);
-        if (parsedTarget) {
-            const check = await view.RunView<{ ID: string }>({
-                EntityName: 'MJ: Conversations',
-                ExtraFilter: `ID = '${parsedTarget}' AND LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
-                Fields: ['ID'],
-                MaxRows: 1,
-                ResultType: 'simple',
-            }, system);
-            if (!check.Success) return { ok: false, message: check.ErrorMessage || 'The conversation could not be read.' };
-            if (check.Results?.[0]?.ID) {
-                conversationId = parsedTarget;
-            } else {
-                return { ok: false, message: 'The conversation does not belong to this space.' };
-            }
+        if (!parsedTarget) {
+            return { ok: false, message: 'The conversation ID is invalid.' };
         }
-    }
-
-    if (!conversationId) {
-        const conversation = await view.RunView<{ ID: string }>({
-            EntityName: 'MJ: Conversations',
-            ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
-            Fields: ['ID'],
+        const chatCheck = await view.RunView<{ ID: string; ConversationID: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
+            Fields: ['ID', 'ConversationID'],
             MaxRows: 1,
             ResultType: 'simple',
         }, system);
-        if (!conversation.Success) return { ok: false, message: conversation.ErrorMessage || 'The conversation could not be read.' };
-        conversationId = parseUuid(conversation.Results?.[0]?.ID);
-        if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
+        if (!chatCheck.Success) return { ok: false, message: chatCheck.ErrorMessage || 'The space chat could not be read.' };
+        if (chatCheck.Results?.[0]?.ConversationID) {
+            conversationId = parsedTarget;
+        } else {
+            return { ok: false, message: 'The conversation does not belong to this space.' };
+        }
+    } else {
+        const roomChat = await view.RunView<{ ID: string; ConversationID: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Kind = 'Room' AND Status = 'Active'`,
+            Fields: ['ID', 'ConversationID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!roomChat.Success) return { ok: false, message: roomChat.ErrorMessage || 'The space room could not be read.' };
+        conversationId = parseUuid(roomChat.Results?.[0]?.ConversationID);
+        if (!conversationId) return { ok: false, message: 'This space does not have an active room yet.' };
     }
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
@@ -103,8 +102,9 @@ export async function postSpaceMessage(
     detail.HiddenToUser = false;
     detail.IsPinned = false;
     detail.OriginalMessageChanged = false;
-    if (!(await detail.Save()) || !detail.ID) {
-        const message = detail.LatestResult?.CompleteMessage || 'The message was refused.';
+    const saved = await detail.Save();
+    if (!saved || !detail.ID) {
+        const message = detail.LatestResult?.CompleteMessage || detail.LatestResult?.Message || 'The message was refused.';
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
