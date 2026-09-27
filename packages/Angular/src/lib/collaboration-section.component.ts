@@ -6,12 +6,7 @@ import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJFileEntity, MJUserEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import type {
-    AgentReplyMode,
-    AgentTurnHandler,
-    AgentTurnRequest,
-    AgentTurnResult,
-} from '@memberjunction/ng-conversations';
+
 import {
     CollaborationClient,
     mjBizAppsCollaborationSpaceEntity,
@@ -63,6 +58,10 @@ import {
     type SpaceSettingsModel,
     type RoomMessageItem,
     type SpaceConversationItem,
+    type SpaceChatAgentReplyMode,
+    type SpaceChatAgentTurnHandler,
+    type SpaceChatAgentTurnRequest,
+    type SpaceChatAgentTurnResult,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { CollaborationNoAccessComponent } from './no-access.component';
 
@@ -1342,7 +1341,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isCreatingConversation = false;
 
     // Agent turn host rules
-    public spaceAgentReplyMode: AgentReplyMode = 'MentionOnly';
+    public spaceAgentReplyMode: SpaceChatAgentReplyMode = 'OnMention';
     public spaceAllowedAgentIds: string[] | null = null;
     public spaceAgentHistoryFloor: Date | null = null;
 
@@ -2295,7 +2294,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
+    public handleAgentTurn: SpaceChatAgentTurnHandler = async (request: SpaceChatAgentTurnRequest): Promise<SpaceChatAgentTurnResult> => {
         try {
             const client = new CollaborationClient();
             const res = await client.PostSpaceMessage({
