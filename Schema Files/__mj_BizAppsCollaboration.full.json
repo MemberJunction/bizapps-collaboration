@@ -649,6 +649,24 @@
                     "AllowsNull": true 
                 },         
                 {
+                    "Name": "\bIconClass\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bColor\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bBackgroundImageURL\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
                     "Name": "\bSpaceType\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",

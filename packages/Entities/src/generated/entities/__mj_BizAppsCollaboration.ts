@@ -602,6 +602,18 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Planned Close At
         * * SQL Data Type: datetimeoffset
         * * Description: Target or planned close date/time for the space. Actual closure is recorded in ClosedAt.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(50)`),
+    BackgroundImageURL: z.string().nullable().describe(`
+        * * Field Name: BackgroundImageURL
+        * * Display Name: Background Image URL
+        * * SQL Data Type: nvarchar(1000)`),
     SpaceType: z.string().describe(`
         * * Field Name: SpaceType
         * * Display Name: Space Type
@@ -2074,6 +2086,42 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
     set PlannedCloseAt(value: Date | null) {
         this.Set('PlannedCloseAt', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
+    * * Field Name: BackgroundImageURL
+    * * Display Name: Background Image URL
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get BackgroundImageURL(): string | null {
+        return this.Get('BackgroundImageURL');
+    }
+    set BackgroundImageURL(value: string | null) {
+        this.Set('BackgroundImageURL', value);
     }
 
     /**

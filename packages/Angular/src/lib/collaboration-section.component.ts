@@ -3,9 +3,15 @@ import { CommonModule } from '@angular/common';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import type { ResourceData } from '@memberjunction/core-entities';
-import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
+import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import type { ResourceData, MJFileEntity, MJUserEntity } from '@memberjunction/core-entities';
+import {
+    CollaborationClient,
+    mjBizAppsCollaborationSpaceEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
@@ -14,6 +20,11 @@ import {
     CollabSpaceLibraryComponent,
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
+    CollabUploadDialogComponent,
+    CollabSpaceWorkComponent,
+    CollabSpaceChatComponent,
+    CollabSpacePeopleComponent,
+    CollabSpaceSettingsComponent,
     type TabItem,
     type RailSpaceNode,
     type BreadcrumbItem,
@@ -28,10 +39,40 @@ import {
     type FindingModel,
     type RecipientPersonModel,
     type FileKind,
+    type SpaceBand,
     type RecentUseModel,
     type AvatarItem,
+    type CollabUploadSubmitPayload,
+    type TaskItemModel,
+    type SpaceMemberModel,
+    type SpaceSettingsModel,
+    type RoomMessageItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { CollaborationNoAccessComponent } from './no-access.component';
+
+interface RawSpaceRecord {
+    ID: string;
+    Name: string;
+    Description?: string | null;
+    Status?: string | null;
+    ParentID?: string | null;
+    IconClass?: string | null;
+    Color?: string | null;
+    BackgroundImageURL?: string | null;
+    SpaceType?: string;
+    SpaceTypeID: string;
+    InheritsMembership?: boolean;
+    AgentRetrieval?: string;
+    Retention?: string | null;
+}
+
+interface RawSpaceTypeRecord {
+    ID: string;
+    Name: string;
+    Code?: string;
+    IconClass?: string | null;
+    Color?: string | null;
+}
 
 /**
  * Collaboration section resource host for MemberJunction Explorer (L3).
@@ -45,7 +86,6 @@ import { CollaborationNoAccessComponent } from './no-access.component';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
-        MJEmptyStateComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
         CollabSpaceTabsComponent,
@@ -53,6 +93,11 @@ import { CollaborationNoAccessComponent } from './no-access.component';
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
+        CollabUploadDialogComponent,
+        CollabSpaceWorkComponent,
+        CollabSpaceChatComponent,
+        CollabSpacePeopleComponent,
+        CollabSpaceSettingsComponent,
         CollaborationNoAccessComponent,
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -113,6 +158,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                             [InboxCount]="inboxCount"
                             [TaskCount]="taskCount"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
+                            (SpaceToggleRequested)="onSpaceToggleRequested($event)"
                             (NavSelectRequested)="onNavSelectRequested($event)"
                         />
 
@@ -125,6 +171,8 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                 [TypeName]="spaceTypeName"
                                 [Status]="spaceStatus"
                                 [Subtitle]="spaceSubtitle"
+                                [BackgroundImageUrl]="headerBackgroundImageUrl"
+                                (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
                             >
                                 <div actions class="row gap8">
                                     <mjc-audience-pill
@@ -170,6 +218,7 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                             (OpenChatRequested)="onOpenChatRequested()"
                                             (ItemSelectRequested)="onItemSelected($event)"
                                             (ShareRequested)="onShareRequested($event)"
+                                            (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
                                         />
                                     }
                                     @case ('Library') {
@@ -194,31 +243,37 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                         />
                                     }
                                     @case ('Work') {
-                                        <mj-empty-state
-                                            Icon="fa-solid fa-list-check"
-                                            Title="Work & Tasks"
-                                            Message="This space’s tasks will show here."
+                                        <mjc-space-work
+                                            [Tasks]="spaceTasks"
+                                            [SpaceName]="spaceTitle"
+                                            [CanCreateTask]="true"
+                                            (TaskSelectRequested)="onTaskSelected($event)"
+                                            (TaskToggleRequested)="onTaskToggled($event)"
+                                            (CreateTaskRequested)="onCreateTask($event)"
                                         />
                                     }
                                     @case ('Chat') {
-                                        <mj-empty-state
-                                            Icon="fa-solid fa-comments"
-                                            Title="Room & Conversations"
-                                            Message="This space’s discussions and messages will show here."
+                                        <mjc-space-chat
+                                            [Messages]="spaceRoomMessages"
+                                            [SpaceName]="spaceTitle"
+                                            [AudienceBand]="spaceAudienceBand"
+                                            [ParticipantCount]="headerTotalPeople"
+                                            (SendMessageRequested)="onSendChatMessage($event)"
                                         />
                                     }
                                     @case ('People') {
-                                        <mj-empty-state
-                                            Icon="fa-solid fa-user-group"
-                                            Title="People & Access"
-                                            Message="Team members, outside client participants, and permission levels."
+                                        <mjc-space-people
+                                            [Members]="spaceMembers"
+                                            [SpaceName]="spaceTitle"
+                                            (InviteMemberRequested)="onInviteMember($event)"
                                         />
                                     }
                                     @case ('Settings') {
-                                        <mj-empty-state
-                                            Icon="fa-solid fa-sliders"
-                                            Title="Space Settings"
-                                            Message="Configuration, Assistant retrieval rules, and space lifecycle controls."
+                                        <mjc-space-settings
+                                            [Settings]="spaceSettings"
+                                            [isSaving]="isSavingSettings"
+                                            [saveSuccessMessage]="settingsSaveSuccess"
+                                            (SaveSettingsRequested)="onSaveSettings($event)"
                                         />
                                     }
                                 }
@@ -247,6 +302,17 @@ import { CollaborationNoAccessComponent } from './no-access.component';
                                 (CancelRequested)="onShareDialogCancel()"
                             />
                         }
+
+                        @if (isUploadDialogOpen) {
+                            <mjc-upload-dialog
+                                [SpaceName]="spaceTitle"
+                                [SpaceId]="activeSpaceId"
+                                [ClientOrgName]="clientOrgName"
+                                [IsSubmitting]="isUploading"
+                                (CancelRequested)="onUploadDialogCancel()"
+                                (SubmitRequested)="onUploadDialogSubmit($event)"
+                            />
+                        }
                     </div>
                 }
             </mj-page-body>
@@ -265,6 +331,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public selectedItemId: string | null = null;
     public isDrawerOpen = false;
     public isShareDialogOpen = false;
+    public isUploadDialogOpen = false;
+    public isUploading = false;
 
     // Header metadata
     public spaceTitle = '';
@@ -273,6 +341,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceSubtitle = '';
     public headerTypeColor = '#0076b6';
     public headerTypeIcon = 'fa-solid fa-compass';
+    public headerBackgroundImageUrl: string | null = null;
     public headerStaffAvatars: AvatarItem[] = [];
     public headerOutsideAvatars: AvatarItem[] = [];
     public headerTotalPeople = 0;
@@ -296,6 +365,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public inboxCount = 0;
     public taskCount = 0;
     public spaces: RailSpaceNode[] = [];
+    public rawSpaces: RawSpaceRecord[] = [];
+    private spaceTypeMap = new Map<string, { icon: string; color: string; name: string }>();
 
     // Overview state data
     public overviewNeedsYou: NeedsYouItemModel[] = [];
@@ -335,6 +406,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public shareRecipients: RecipientPersonModel[] = [];
     public shareFindings: FindingModel[] = [];
 
+    // Work tab state
+    public spaceTasks: TaskItemModel[] = [];
+
+    // Chat tab state
+    public spaceRoomMessages: RoomMessageItem[] = [];
+    public activeRoomConvId: string | null = null;
+    public spaceAudienceBand: SpaceBand = 'Shared';
+
+    // People tab state
+    public spaceMembers: SpaceMemberModel[] = [];
+
+    // Settings tab state
+    public spaceSettings: SpaceSettingsModel = {
+        id: '',
+        name: '',
+        description: '',
+        spaceType: 'Workspace',
+        spaceTypeId: '',
+        iconClass: 'fa-solid fa-compass',
+        color: '#0076b6',
+        backgroundImageUrl: '',
+        inheritsMembership: true,
+        agentRetrieval: 'Included',
+        retention: 'Indefinite',
+        status: 'Active',
+    };
+    public isSavingSettings = false;
+    public settingsSaveSuccess = '';
+
     private client: CollaborationClient | null = null;
 
     protected async loadRealData(): Promise<void> {
@@ -343,47 +443,506 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.client = new CollaborationClient();
             }
             const rv = new RunView();
-            const spacesRes = await rv.RunView<{ ID: string; Name: string; Description?: string; Status?: string; ParentID?: string }>({
-                EntityName: 'MJ_BizApps_Collaboration: Spaces',
+
+            // Load SpaceTypes to get icons and colors
+            const typesRes = await rv.RunView<RawSpaceTypeRecord>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Types',
                 ResultType: 'simple',
                 MaxRows: 50,
             });
+            if (typesRes?.Success && typesRes.Results) {
+                for (const t of typesRes.Results) {
+                    this.spaceTypeMap.set(t.ID, {
+                        icon: t.IconClass || 'fa-solid fa-compass',
+                        color: t.Color || '#0076b6',
+                        name: t.Name,
+                    });
+                }
+            }
+
+            // Load Spaces
+            const spacesRes = await rv.RunView<RawSpaceRecord>({
+                EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+
             if (spacesRes?.Success && spacesRes.Results && spacesRes.Results.length > 0) {
                 this.hasAccess = true;
-                this.spaces = spacesRes.Results.map((s) => ({
-                    id: s.ID,
-                    name: s.Name,
-                    color: '#0076b6',
-                    iconClass: 'fa-solid fa-compass',
-                    level: s.ParentID ? 1 : 0,
-                    hasChildren: false,
-                    isExpanded: true,
-                }));
-                const first = spacesRes.Results[0];
-                this.activeSpaceId = first.ID;
-                this.spaceTitle = first.Name;
-                this.spaceSubtitle = first.Description || '';
-                this.spaceStatus = first.Status || 'Active';
-                this.breadcrumbs = [{ label: 'Spaces' }, { label: first.Name }];
+                this.rawSpaces = spacesRes.Results;
+                this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+
+                const params = this._pendingQueryParams ?? this.GetQueryParams();
+                this._pendingQueryParams = null;
+                await this.applyQueryParams(params);
             } else {
                 this.hasAccess = false;
             }
-        } catch {
+        } catch (err) {
+            console.error('Error loading collaboration data:', err);
             this.hasAccess = false;
         }
         this.RefreshView();
     }
 
+    private buildSpaceRailNodes(rawSpaces: RawSpaceRecord[]): RailSpaceNode[] {
+        const nodes: RailSpaceNode[] = [];
+        const spaceMap = new Map<string, RawSpaceRecord>();
+        rawSpaces.forEach(s => spaceMap.set(s.ID, s));
+
+        const roots = rawSpaces.filter(s => !s.ParentID || !spaceMap.has(s.ParentID));
+
+        const visit = (space: RawSpaceRecord, level: 0 | 1 | 2) => {
+            const children = rawSpaces.filter(other => other.ParentID === space.ID);
+            const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
+            nodes.push({
+                id: space.ID,
+                name: space.Name,
+                color: space.Color || typeDef?.color || '#0076b6',
+                iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
+                level,
+                hasChildren: children.length > 0,
+                isExpanded: true,
+            });
+            for (const child of children) {
+                visit(child, Math.min(level + 1, 2) as 0 | 1 | 2);
+            }
+        };
+
+        for (const root of roots) {
+            visit(root, 0);
+        }
+        return nodes;
+    }
+
+    private _loadedSpaceId: string | null = null;
+
+    private async selectSpaceInternal(spaceId: string): Promise<void> {
+        this.activeSpaceId = spaceId;
+        this._loadedSpaceId = spaceId;
+        const space = this.rawSpaces.find(s => s.ID === spaceId);
+        if (!space) return;
+
+        const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
+        this.spaceTitle = space.Name;
+        this.spaceSubtitle = space.Description || '';
+        this.spaceStatus = space.Status || 'Active';
+        this.spaceTypeName = space.SpaceType || typeDef?.name || 'Workspace';
+        this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
+        this.headerTypeColor = space.Color || typeDef?.color || '#0076b6';
+        this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
+
+        // Build breadcrumb lineage
+        const lineage: BreadcrumbItem[] = [];
+        let curr: RawSpaceRecord | undefined = space;
+        while (curr) {
+            lineage.unshift({ label: curr.Name, spaceId: curr.ID });
+            curr = curr.ParentID ? this.rawSpaces.find(s => s.ID === curr!.ParentID) : undefined;
+        }
+        this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
+
+        // Overview sub-spaces
+        const children = this.rawSpaces.filter(s => s.ParentID === spaceId);
+        this.overviewSubSpaces = children.map(c => {
+            const cType = this.spaceTypeMap.get(c.SpaceTypeID);
+            return {
+                id: c.ID,
+                name: c.Name,
+                type: c.SpaceType || cType?.name || 'Workspace',
+                iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
+                color: c.Color || cType?.color || '#0076b6',
+                description: c.Description || '',
+            };
+        });
+
+        // Initialize space settings model
+        this.spaceSettings = {
+            id: space.ID,
+            name: space.Name,
+            description: space.Description || '',
+            spaceType: space.SpaceType || typeDef?.name || 'Workspace',
+            spaceTypeId: space.SpaceTypeID,
+            iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
+            color: space.Color || typeDef?.color || '#0076b6',
+            backgroundImageUrl: space.BackgroundImageURL || '',
+            inheritsMembership: space.InheritsMembership !== false,
+            agentRetrieval: (space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely') || 'Included',
+            retention: (space.Retention as 'Month' | 'Year' | 'Indefinite') || 'Indefinite',
+            status: space.Status || 'Active',
+        };
+
+        // Load items, conversation, tasks, members
+        await this.loadSpaceItems(spaceId);
+        await this.loadSpaceConversation(spaceId);
+        await this.loadSpaceTasks(spaceId);
+        await this.loadSpaceMembers(spaceId);
+
+        this.syncStateWithAgent();
+        this.RefreshView();
+    }
+
+    private async loadSpaceItems(spaceId: string): Promise<void> {
+        try {
+            const rv = new RunView();
+            const itemsRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                EntityID: string;
+                Entity?: string;
+                RecordID: string;
+                Band: SpaceBand;
+                Folder?: string | null;
+                PromotedAt?: string | null;
+                PromotedByUser?: string | null;
+                __mj_CreatedAt: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+
+            if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
+                this.libraryRows = [];
+                this.libraryTotalCount = 0;
+                this.overviewSharedItems = [];
+                this.overviewTeamItems = [];
+                this.libraryCollections = [];
+                return;
+            }
+
+            const fileEntityId = '29248F34-2837-EF11-86D4-6045BDEE16E6';
+            const fileItemMap = new Map<string, typeof itemsRes.Results[0]>();
+            const fileIds: string[] = [];
+
+            for (const item of itemsRes.Results) {
+                if (item.EntityID === fileEntityId || item.Entity === 'MJ: Files') {
+                    const fileId = item.RecordID.replace(/^ID\|/, '');
+                    fileIds.push(fileId);
+                    fileItemMap.set(fileId, item);
+                }
+            }
+
+            const filesMap = new Map<string, { ID: string; Name: string; ProviderID: string; ProviderKey?: string; ContentType?: string }>();
+            if (fileIds.length > 0) {
+                const filesRes = await rv.RunView<{
+                    ID: string;
+                    Name: string;
+                    ProviderID: string;
+                    ProviderKey?: string;
+                    ContentType?: string;
+                }>({
+                    EntityName: 'MJ: Files',
+                    ExtraFilter: `ID IN ('${fileIds.join("','")}')`,
+                    ResultType: 'simple',
+                    MaxRows: 100,
+                });
+                if (filesRes?.Success && filesRes.Results) {
+                    filesRes.Results.forEach(f => filesMap.set(f.ID, f));
+                }
+            }
+
+            const rows: LibraryRowModel[] = [];
+            const shared: ItemCardModel[] = [];
+            const team: ItemRowModel[] = [];
+            const folderCounts = new Map<string, { count: number; band: SpaceBand }>();
+
+            for (const item of itemsRes.Results) {
+                const fileId = item.RecordID.replace(/^ID\|/, '');
+                const file = filesMap.get(fileId);
+                const name = file?.Name || 'Document ' + item.ID.slice(0, 6);
+                const folder = item.Folder || 'General';
+                const kind = this.detectFileKind(name, file?.ProviderKey, file?.ContentType);
+                const dateStr = this.formatDate(item.__mj_CreatedAt);
+                const author = item.PromotedByUser || 'Staff team';
+
+                rows.push({
+                    id: item.ID,
+                    name,
+                    folder,
+                    band: item.Band,
+                    who: author,
+                    when: dateStr,
+                    kind,
+                });
+
+                if (item.Band === 'Shared') {
+                    shared.push({
+                        id: item.ID,
+                        kind,
+                        title: name,
+                        meta: `${folder} · Shared with Client`,
+                        stamp: dateStr,
+                    });
+                } else {
+                    team.push({
+                        id: item.ID,
+                        kind,
+                        title: name,
+                        author,
+                        timestamp: dateStr,
+                        canShare: true,
+                    });
+                }
+
+                const cur = folderCounts.get(folder) || { count: 0, band: item.Band };
+                cur.count++;
+                folderCounts.set(folder, cur);
+            }
+
+            this.libraryRows = rows;
+            this.libraryTotalCount = rows.length;
+            this.overviewSharedItems = shared;
+            this.overviewTeamItems = team;
+
+            this.libraryCollections = Array.from(folderCounts.entries()).map(([folder, info], idx) => ({
+                id: 'folder-' + idx,
+                name: folder,
+                band: info.band,
+                count: info.count,
+            }));
+
+            this.librarySmartViews = [
+                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
+                { id: 'shared', name: 'Shared with Client', iconClass: 'fa-solid fa-eye', count: shared.length },
+                { id: 'team', name: 'Staff internal', iconClass: 'fa-solid fa-lock', count: team.length },
+            ];
+        } catch (err) {
+            console.error('Error loading space items:', err);
+        }
+    }
+
+    private async loadSpaceConversation(spaceId: string): Promise<void> {
+        try {
+            const rv = new RunView();
+            const convRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB' AND LinkedRecordID = '${spaceId}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            if (convRes?.Success && convRes.Results && convRes.Results.length > 0) {
+                const convId = convRes.Results[0].ID;
+                this.activeRoomConvId = convId;
+                const detailRes = await rv.RunView<{
+                    ID: string;
+                    Role: string;
+                    Message: string;
+                    User?: string;
+                    __mj_CreatedAt: string;
+                }>({
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID = '${convId}'`,
+                    OrderBy: '__mj_CreatedAt ASC',
+                    ResultType: 'simple',
+                    MaxRows: 50,
+                });
+                if (detailRes?.Success && detailRes.Results) {
+                    const mapped: RoomMessageItem[] = detailRes.Results.map(d => ({
+                        id: d.ID,
+                        senderName: d.Role === 'AI' ? 'Assistant' : (d.User || 'Team Member'),
+                        senderInitials: d.Role === 'AI' ? 'AI' : (d.User ? d.User.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'TM'),
+                        senderColorClass: d.Role === 'AI' ? 'c1' : 'c2',
+                        isOutside: false,
+                        isAssistant: d.Role === 'AI',
+                        timestamp: this.formatDate(d.__mj_CreatedAt),
+                        text: d.Message,
+                    }));
+                    this.spaceRoomMessages = mapped;
+                    this.overviewRoomMessages = mapped.slice(-5);
+                }
+            } else {
+                this.activeRoomConvId = null;
+                this.spaceRoomMessages = [];
+                this.overviewRoomMessages = [];
+            }
+        } catch (err) {
+            console.error('Error loading space conversation:', err);
+        }
+    }
+
+    private async loadSpaceTasks(spaceId: string): Promise<void> {
+        try {
+            const rv = new RunView();
+            const md = new Metadata();
+            const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
+            if (!tasksEntityInfo) return;
+
+            const itemsRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                EntityID: string;
+                Entity?: string;
+                RecordID: string;
+                Band: SpaceBand;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `SpaceID = '${spaceId}' AND (EntityID = '${tasksEntityInfo.ID}' OR Entity = 'MJ_BizApps_Tasks: Tasks')`,
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+
+            if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
+                this.spaceTasks = [];
+                this.taskCount = 0;
+                return;
+            }
+
+            const taskItemMap = new Map<string, typeof itemsRes.Results[0]>();
+            const taskIds: string[] = [];
+            for (const item of itemsRes.Results) {
+                const rawId = (item.RecordID ?? '').replace(/^ID\|/i, '');
+                if (rawId) {
+                    taskIds.push(rawId);
+                    taskItemMap.set(rawId.toLowerCase(), item);
+                }
+            }
+
+            if (taskIds.length === 0) {
+                this.spaceTasks = [];
+                this.taskCount = 0;
+                return;
+            }
+
+            const tasksRes = await rv.RunView<{
+                ID: string;
+                Name: string;
+                Description?: string | null;
+                Status?: string | null;
+                Priority?: string | null;
+                PercentComplete?: number | null;
+                TargetEndDate?: string | null;
+                AssignedTo?: string | null;
+            }>({
+                EntityName: 'MJ_BizApps_Tasks: Tasks',
+                ExtraFilter: `ID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+
+            if (tasksRes?.Success && tasksRes.Results) {
+                this.spaceTasks = tasksRes.Results.map(t => {
+                    const spaceItem = taskItemMap.get(t.ID.toLowerCase());
+                    const assigned = t.AssignedTo || undefined;
+                    return {
+                        id: t.ID,
+                        name: t.Name,
+                        description: t.Description || undefined,
+                        status: t.Status || 'Not Started',
+                        priority: t.Priority || 'Medium',
+                        band: spaceItem?.Band || 'Shared',
+                        assigneeName: assigned,
+                        assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
+                        dueDate: t.TargetEndDate ? this.formatDate(t.TargetEndDate) : undefined,
+                        percentComplete: t.PercentComplete || 0,
+                    };
+                });
+                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
+            }
+        } catch (err) {
+            console.error('Error loading space tasks:', err);
+        }
+    }
+
+    private async loadSpaceMembers(spaceId: string): Promise<void> {
+        try {
+            const rv = new RunView();
+            const membersRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                UserID: string;
+                User?: string | null;
+                UserEmail?: string | null;
+                SpaceRoleType?: string | null;
+                SpaceRoleTypeID?: string | null;
+                Band: SpaceBand;
+                Status: string;
+                __mj_CreatedAt: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+
+            if (membersRes?.Success && membersRes.Results) {
+                this.spaceMembers = membersRes.Results.map(m => {
+                    const name = m.User || 'Member';
+                    const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                    return {
+                        id: m.ID,
+                        userId: m.UserID,
+                        name,
+                        email: m.UserEmail || (name.toLowerCase().replace(/\s+/g, '.') + '@example.com'),
+                        initials,
+                        roleName: m.SpaceRoleType || 'Member',
+                        roleCode: (m.SpaceRoleType || 'member').toLowerCase().replace(/\s+/g, '-'),
+                        band: m.Band || 'Team',
+                        status: m.Status || 'Active',
+                        joinedDate: this.formatDate(m.__mj_CreatedAt),
+                    };
+                });
+
+                this.headerTotalPeople = this.spaceMembers.length;
+                this.headerStaffAvatars = this.spaceMembers
+                    .filter(m => m.band === 'Team')
+                    .map(m => ({ initials: m.initials, name: m.name, colorClass: 'c1' }));
+                this.headerOutsideAvatars = this.spaceMembers
+                    .filter(m => m.band === 'Shared')
+                    .map(m => ({ initials: m.initials, name: m.name, isOutside: true, colorClass: 'c2' }));
+                this.headerAudienceSummary = `${this.headerStaffAvatars.length} Team Staff · ${this.headerOutsideAvatars.length} Client`;
+            }
+        } catch (err) {
+            console.error('Error loading space members:', err);
+        }
+    }
+
+    private detectFileKind(name: string, providerKey?: string, contentType?: string): FileKind {
+        const url = (providerKey || '').toLowerCase();
+        const lowerName = name.toLowerCase();
+        if (url.includes('docs.google.com/document') || url.includes('word') || lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) return 'doc';
+        if (url.includes('docs.google.com/spreadsheets') || url.includes('excel') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv')) return 'xls';
+        if (url.includes('docs.google.com/presentation') || url.includes('powerpoint') || lowerName.endsWith('.pptx') || lowerName.endsWith('.ppt')) return 'ppt';
+        if (lowerName.endsWith('.pdf')) return 'pdf';
+        if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.svg') || (contentType && contentType.startsWith('image/'))) return 'img';
+        if (lowerName.endsWith('.zip') || lowerName.endsWith('.tar') || lowerName.endsWith('.gz')) return 'zip';
+        return 'doc';
+    }
+
+    private formatDate(isoStr: string): string {
+        try {
+            const d = new Date(isoStr);
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } catch {
+            return 'Recently';
+        }
+    }
+
     public onInviteClicked(): void {
-        // Invite member dialog / flow
+        this.onTabSelectRequested('People');
     }
 
     public onNewClicked(): void {
-        // Create sub-space / resource flow
+        this.onTabSelectRequested('Work');
     }
 
     public override ngOnInit(): void {
         super.ngOnInit();
+        const params = this.GetQueryParams();
+        if (params['tab']) {
+            const rawTab = params['tab'].toLowerCase();
+            const tabMap: Record<string, string> = {
+                overview: 'Overview',
+                library: 'Library',
+                work: 'Work',
+                chat: 'Chat',
+                people: 'People',
+                settings: 'Settings',
+            };
+            if (tabMap[rawTab]) {
+                this.activeTab = tabMap[rawTab];
+            }
+        }
         this.syncStateWithAgent();
         void this.loadRealData();
         this.NotifyLoadComplete();
@@ -401,16 +960,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return 'fa-solid fa-people-group';
     }
 
+    private _pendingQueryParams: Record<string, string> | null = null;
+
     /**
      * Reacts to query param updates from back/forward or external deep links.
      */
     protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        if (this.rawSpaces.length === 0) {
+            this._pendingQueryParams = params;
+            this.RefreshView();
+            return;
+        }
+
+        void this.applyQueryParams(params);
+    }
+
+    private async applyQueryParams(params: Record<string, string>): Promise<void> {
         if (params['view']) {
             this.activeView = params['view'];
         }
-        if (params['space']) {
-            this.activeSpaceId = params['space'];
-        }
+
         if (params['tab']) {
             const rawTab = params['tab'].toLowerCase();
             const tabMap: Record<string, string> = {
@@ -425,6 +994,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.activeTab = tabMap[rawTab];
             }
         }
+
+        const targetSpaceId = params['space'] && this.rawSpaces.some(s => s.ID === params['space'])
+            ? params['space']
+            : (this._loadedSpaceId && this.rawSpaces.some(s => s.ID === this._loadedSpaceId)
+                ? this._loadedSpaceId
+                : this.rawSpaces[0]?.ID);
+
+        if (targetSpaceId && targetSpaceId !== this._loadedSpaceId) {
+            await this.selectSpaceInternal(targetSpaceId);
+        }
+
         if (params['item']) {
             this.selectedItemId = params['item'];
             this.isDrawerOpen = true;
@@ -442,15 +1022,28 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onSpaceOpenRequested(spaceId: string): void {
-        this.activeSpaceId = spaceId;
-        const space = this.spaces.find((s) => s.id === spaceId);
-        if (space) {
-            this.spaceTitle = space.name;
-        }
+        void this.selectSpaceInternal(spaceId);
         this.activeTab = 'Overview';
         this.UpdateQueryParams({ space: spaceId, tab: 'overview' });
-        this.syncStateWithAgent();
-        this.RefreshView();
+    }
+
+    public onBreadcrumbSelected(crumb: BreadcrumbItem): void {
+        if (crumb.spaceId) {
+            this.onSpaceOpenRequested(crumb.spaceId);
+        } else if (crumb.label === 'Spaces') {
+            const root = this.rawSpaces.find(s => !s.ParentID);
+            if (root) {
+                this.onSpaceOpenRequested(root.ID);
+            }
+        }
+    }
+
+    public onSpaceToggleRequested(node: RailSpaceNode): void {
+        const found = this.spaces.find(s => s.id === node.id);
+        if (found) {
+            found.isExpanded = !found.isExpanded;
+            this.RefreshView();
+        }
     }
 
     public onNavSelectRequested(view: string): void {
@@ -521,7 +1114,295 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onUploadClicked(): void {
-        // Triggers upload workflow
+        this.isUploadDialogOpen = true;
+        this.RefreshView();
+    }
+
+    public onUploadDialogCancel(): void {
+        this.isUploadDialogOpen = false;
+        this.RefreshView();
+    }
+
+    public async onUploadDialogSubmit(payload: CollabUploadSubmitPayload): Promise<void> {
+        this.isUploading = true;
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const filesEntity = md.EntityByName('MJ: Files');
+            if (!filesEntity) throw new Error('MJ: Files entity not found in metadata');
+
+            if (payload.mode === 'upload' && payload.file) {
+                const reader = new FileReader();
+                const base64Data = await new Promise<string>((resolve, reject) => {
+                    reader.onload = () => {
+                        const result = reader.result as string;
+                        const base64 = result.includes(',') ? result.split(',')[1] : result;
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(payload.file!);
+                });
+
+                const client = new CollaborationClient();
+                const uploadRes = await client.UploadSpaceFile({
+                    SpaceID: this.activeSpaceId,
+                    FileName: payload.fileName || payload.title,
+                    MimeType: payload.fileType || 'application/octet-stream',
+                    Base64Data: base64Data,
+                    Folder: payload.folder || 'Deliverables',
+                });
+                if (!uploadRes.Success) {
+                    throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');
+                }
+            } else {
+                const fileRecord = await md.GetEntityObject<MJFileEntity>('MJ: Files');
+                fileRecord.NewRecord();
+                fileRecord.Name = payload.title;
+                fileRecord.ProviderID = '93DBCFC9-5B2A-48D6-9D95-E93B319C88E5'; // External URL
+                fileRecord.ProviderKey = payload.url || '';
+                fileRecord.Status = 'Active';
+                fileRecord.ContentType = payload.kind === 'xls' ? 'application/vnd.google-apps.spreadsheet'
+                    : payload.kind === 'ppt' ? 'application/vnd.google-apps.presentation'
+                    : 'application/vnd.google-apps.document';
+
+                const fileSaved = await fileRecord.Save();
+                if (!fileSaved) {
+                    throw new Error('Failed to save file record: ' + (fileRecord.LatestResult?.Message || 'Unknown error'));
+                }
+
+                const itemRecord = await md.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items');
+                itemRecord.NewRecord();
+                itemRecord.SpaceID = this.activeSpaceId;
+                itemRecord.EntityID = filesEntity.ID;
+                itemRecord.RecordID = 'ID|' + fileRecord.ID;
+                itemRecord.Band = payload.band;
+                itemRecord.Folder = payload.folder || 'Deliverables';
+                if (payload.band === 'Shared') {
+                    itemRecord.PromotedAt = new Date();
+                    itemRecord.PromotedByUserID = md.CurrentUser?.ID || null;
+                } else {
+                    itemRecord.PromotedAt = null;
+                    itemRecord.PromotedByUserID = null;
+                }
+
+                const itemSaved = await itemRecord.Save();
+                if (!itemSaved) {
+                    throw new Error('Failed to save space item: ' + (itemRecord.LatestResult?.Message || 'Unknown error'));
+                }
+            }
+
+            await this.loadSpaceItems(this.activeSpaceId);
+            this.isUploadDialogOpen = false;
+        } catch (err) {
+            console.error('Error submitting upload:', err);
+        } finally {
+            this.isUploading = false;
+            this.RefreshView();
+        }
+    }
+
+    public onTaskSelected(task: TaskItemModel): void {
+        console.log('Task selected:', task.name);
+    }
+
+    public async onTaskToggled(task: TaskItemModel): Promise<void> {
+        const isCompleted = task.status === 'Completed';
+        const newEntityStatus: TaskEntity['Status'] = isCompleted ? 'InProgress' : 'Completed';
+        task.status = isCompleted ? 'In Progress' : 'Completed';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const taskEntity = await md.GetEntityObject<TaskEntity>('MJ_BizApps_Tasks: Tasks');
+            if (await taskEntity.Load(task.id)) {
+                taskEntity.Status = newEntityStatus;
+                if (newEntityStatus === 'Completed') {
+                    taskEntity.PercentComplete = 100;
+                }
+                await taskEntity.Save();
+            }
+        } catch (err) {
+            console.error('Error toggling task:', err);
+        }
+    }
+
+    public async onCreateTask(payload: { name: string; band: SpaceBand; priority: string }): Promise<void> {
+        try {
+            const md = new Metadata();
+            const taskEntity = await md.GetEntityObject<TaskEntity>('MJ_BizApps_Tasks: Tasks');
+            taskEntity.NewRecord();
+            taskEntity.Name = payload.name;
+            taskEntity.Status = 'Open';
+            const priorityMap: Record<string, TaskEntity['Priority']> = {
+                Low: 'Low',
+                Medium: 'Medium',
+                High: 'High',
+                Urgent: 'Critical',
+                Critical: 'Critical',
+            };
+            taskEntity.Priority = priorityMap[payload.priority] || 'Medium';
+            taskEntity.PercentComplete = 0;
+            taskEntity.Sequence = this.spaceTasks.length + 1;
+
+            const rv = new RunView();
+            const typeRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Tasks: Task Types',
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            if (typeRes?.Success && typeRes.Results?.[0]) {
+                taskEntity.TypeID = typeRes.Results[0].ID;
+            }
+            const saved = await taskEntity.Save();
+            if (!saved) {
+                console.error('Failed to save task:', taskEntity.LatestResult?.CompleteMessage);
+                return;
+            }
+
+            const tasksEntityInfo = md.EntityByName('MJ_BizApps_Tasks: Tasks');
+            const spaceItem = await md.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>('MJ_BizApps_Collaboration: Space Items');
+            spaceItem.NewRecord();
+            spaceItem.SpaceID = this.activeSpaceId;
+            spaceItem.EntityID = tasksEntityInfo!.ID;
+            spaceItem.RecordID = 'ID|' + taskEntity.ID;
+            spaceItem.Band = payload.band;
+            if (payload.band === 'Shared') {
+                spaceItem.PromotedAt = new Date();
+                spaceItem.PromotedByUserID = md.CurrentUser?.ID || null;
+            } else {
+                spaceItem.PromotedAt = null;
+                spaceItem.PromotedByUserID = null;
+            }
+            await spaceItem.Save();
+            await this.loadSpaceTasks(this.activeSpaceId);
+            this.RefreshView();
+        } catch (err) {
+            console.error('Error creating task:', err);
+        }
+    }
+
+    public async onSendChatMessage(text: string): Promise<void> {
+        try {
+            const client = new CollaborationClient();
+            const res = await client.PostSpaceMessage({
+                SpaceID: this.activeSpaceId,
+                Text: text,
+                ExecuteAgent: false,
+            });
+            if (!res.Success) {
+                console.error('Failed to post space message:', res.ErrorMessage);
+            }
+            await this.loadSpaceConversation(this.activeSpaceId);
+            this.RefreshView();
+        } catch (err) {
+            console.error('Error sending message:', err);
+        }
+    }
+
+    public async onInviteMember(payload: { email: string; role: string; band: SpaceBand }): Promise<void> {
+        try {
+            const md = new Metadata();
+            const rv = new RunView();
+            let userId: string | null = null;
+            const userRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Users',
+                ExtraFilter: `Email = '${payload.email.replace(/'/g, "''")}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            if (userRes?.Success && userRes.Results?.[0]) {
+                userId = userRes.Results[0].ID;
+            } else {
+                console.warn('User not found in system with email:', payload.email);
+                return;
+            }
+
+            const existingMember = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `SpaceID = '${this.activeSpaceId}' AND UserID = '${userId}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            if (existingMember?.Success && existingMember.Results?.[0]) {
+                console.log('User is already a member of this space');
+                return;
+            }
+
+            const roleRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
+                ExtraFilter: `Code = '${payload.role.toLowerCase()}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            const roleId = roleRes?.Success && roleRes.Results?.[0]?.ID;
+            if (!roleId || !userId) return;
+
+            const memberEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>('MJ_BizApps_Collaboration: Space Members');
+            memberEntity.NewRecord();
+            memberEntity.SpaceID = this.activeSpaceId;
+            memberEntity.UserID = userId;
+            memberEntity.SpaceRoleTypeID = roleId;
+            memberEntity.Band = payload.band;
+            memberEntity.Status = 'Active';
+            await memberEntity.Save();
+
+            await this.loadSpaceMembers(this.activeSpaceId);
+            this.RefreshView();
+        } catch (err) {
+            console.error('Error inviting member:', err);
+        }
+    }
+
+    public async onSaveSettings(settings: SpaceSettingsModel): Promise<void> {
+        this.isSavingSettings = true;
+        this.settingsSaveSuccess = '';
+        this.RefreshView();
+        try {
+            const targetId = settings.id || this.activeSpaceId;
+            if (!targetId) {
+                console.error('Cannot save space settings: missing space ID');
+                this.isSavingSettings = false;
+                return;
+            }
+            const md = new Metadata();
+            const spaceEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
+            if (await spaceEntity.Load(targetId)) {
+                spaceEntity.Name = settings.name;
+                spaceEntity.Description = settings.description;
+                spaceEntity.IconClass = settings.iconClass;
+                spaceEntity.Color = settings.color;
+                spaceEntity.BackgroundImageURL = settings.backgroundImageUrl || null;
+                spaceEntity.InheritsMembership = settings.inheritsMembership;
+                spaceEntity.AgentRetrieval = settings.agentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
+                spaceEntity.Retention = (settings.retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
+                await spaceEntity.Save();
+
+                this.spaceTitle = settings.name;
+                this.spaceSubtitle = settings.description;
+                this.headerTypeIcon = settings.iconClass;
+                this.headerTypeColor = settings.color;
+                this.headerBackgroundImageUrl = settings.backgroundImageUrl || null;
+
+                const raw = this.rawSpaces.find(s => s.ID === targetId);
+                if (raw) {
+                    raw.Name = settings.name;
+                    raw.Description = settings.description;
+                    raw.IconClass = settings.iconClass;
+                    raw.Color = settings.color;
+                    raw.BackgroundImageURL = settings.backgroundImageUrl || null;
+                    raw.InheritsMembership = settings.inheritsMembership;
+                    raw.AgentRetrieval = settings.agentRetrieval;
+                    raw.Retention = settings.retention;
+                    this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+                }
+
+                this.settingsSaveSuccess = 'Space settings saved successfully.';
+            }
+        } catch (err) {
+            console.error('Error saving settings:', err);
+        } finally {
+            this.isSavingSettings = false;
+            this.RefreshView();
+        }
     }
 
     private syncStateWithAgent(): void {

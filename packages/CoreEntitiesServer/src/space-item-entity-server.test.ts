@@ -35,7 +35,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
     const FILE_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
     const ROLE_ID = '44444444-4444-4444-8444-444444444444';
 
-    function mockProvider(): IMetadataProvider {
+    function mockProvider(options?: { fileProviderId?: string }): IMetadataProvider {
         const mock = {
             EntityByName(name: string) {
                 if (name === 'MJ: Files') return { ID: FILES_ENTITY_ID, Name: 'MJ: Files' } as ReturnType<IMetadataProvider['EntityByName']>;
@@ -71,7 +71,9 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             },
             async GetEntityObject(_entityName: string) {
                 return {
+                    ProviderID: options?.fileProviderId,
                     async Load() { return true; },
+                    async InnerLoad() { return true; },
                     async Delete() { return true; },
                 } as unknown as BaseEntity;
             },
@@ -193,6 +195,46 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
             }
         } finally {
             releaseStoredFile(item);
+        }
+    });
+
+    it('allows external URL file item without voucher', async () => {
+        const providerWithExternalFile = mockProvider({ fileProviderId: '93dbcfc9-5b2a-48d6-9d95-e93b319c88e5' });
+
+        const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
+        Object.defineProperties(item, {
+            ContextCurrentUser: { value: user, writable: true },
+            IsSaved: { value: false, writable: true },
+            ID: { value: '99999999-9999-4999-8999-999999999999', writable: true },
+            SpaceID: { value: SPACE_ID, writable: true },
+            EntityID: { value: FILES_ENTITY_ID, writable: true },
+            RecordID: { value: `ID|${FILE_ID}`, writable: true },
+            Band: { value: 'Shared', writable: true },
+            ProviderToUse: { value: providerWithExternalFile, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceID', Dirty: true, Value: SPACE_ID },
+                    { Name: 'EntityID', Dirty: true, Value: FILES_ENTITY_ID },
+                    { Name: 'RecordID', Dirty: true, Value: `ID|${FILE_ID}` },
+                    { Name: 'Band', Dirty: true, Value: 'Shared' },
+                ],
+                writable: true,
+            },
+            PromotedAt: { value: null, writable: true },
+            PromotedByUserID: { value: null, writable: true },
+        });
+
+        const originalValidateAsync = Object.getPrototypeOf(SpaceItemEntityServer.prototype).ValidateAsync;
+        Object.getPrototypeOf(SpaceItemEntityServer.prototype).ValidateAsync = async function () {
+            return { Success: true, Errors: [] };
+        };
+
+        try {
+            const res = await SpaceItemEntityServer.prototype.ValidateAsync.call(item);
+            assert.equal(res.Success, true, 'External URL file item should validate successfully without voucher');
+            assert.equal(res.Errors.length, 0, 'External URL file item should have no validation errors');
+        } finally {
+            Object.getPrototypeOf(SpaceItemEntityServer.prototype).ValidateAsync = originalValidateAsync;
         }
     });
 
