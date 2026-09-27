@@ -25,6 +25,7 @@ const ALL_BUNDLES = [
     'row-filters',
     'library',
     'agent',
+    'features',
 ];
 
 const args = process.argv.slice(2);

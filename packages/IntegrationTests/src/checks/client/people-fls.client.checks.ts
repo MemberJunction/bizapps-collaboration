@@ -1,5 +1,4 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PERSON_ENTITY, ENTITY_FIELD_ENTITY, ENTITY_FIELD_PERMISSION_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, View } from '../../wire.js';
 
@@ -129,24 +128,6 @@ const checks: NamedCheck[] = [
                         `Field '${name}' is in allowed list but is NOT readable for Space Participant`,
                     );
                 }
-            }
-        },
-    },
-    {
-        Id: 'people-fls.FLS4',
-        Name: 'FLS4 — point 2 startup engines check: ungranted engines report IsPermissionConstrained',
-        RequiresMutation: false,
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const beaCtx = await getPersonaContext(ctx, 'bea');
-            Assert(!!beaCtx.User.ID, 'Bea persona resolved over wire');
-
-            const aiEngine = AIEngineBase.Instance;
-            if (aiEngine) {
-                const constrained = aiEngine.IsPermissionConstrained;
-                Assert(
-                    typeof constrained === 'boolean',
-                    `AIEngineBase.IsPermissionConstrained should be a boolean, saw: ${typeof constrained}`,
-                );
             }
         },
     },

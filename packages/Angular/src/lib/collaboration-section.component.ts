@@ -2424,6 +2424,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onRowSelected(row: LibraryRowModel): void {
+        if (row.fileId) {
+            this.onOpenFileRequested(row.fileId);
+        }
         this.selectedItemId = row.id;
         this.isDrawerOpen = true;
         this.UpdateQueryParams({ item: row.id });

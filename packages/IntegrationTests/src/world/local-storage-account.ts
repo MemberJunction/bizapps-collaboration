@@ -6,7 +6,7 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJCredentialEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { COLLABORATION_STORAGE_DRIVER_KEY, LocalDirectoryStorage } from './local-directory-storage.js';
+import { COLLABORATION_STORAGE_DRIVER_KEY, LocalDirectoryStorage } from '@mj-biz-apps/collaboration-core-entities-server';
 
 export const COLLABORATION_STORAGE_PROVIDER_ID = 'F3000001-0000-4000-8000-000000000001';
 export const COLLABORATION_STORAGE_ACCOUNT_ID = 'F3000001-0000-4000-8000-000000000002';
@@ -114,7 +114,7 @@ async function ensureProvider(provider: IMetadataProvider, system: UserInfo, roo
     record.ServerDriverKey = COLLABORATION_STORAGE_DRIVER_KEY;
     record.ClientDriverKey = COLLABORATION_STORAGE_DRIVER_KEY;
     record.Priority = 100;
-    record.IsActive = false;
+    record.IsActive = true;
     record.SupportsSearch = false;
     record.RequiresOAuth = false;
     record.Configuration = JSON.stringify({ rootDir });

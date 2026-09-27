@@ -14,6 +14,7 @@ import {
     LoadSpaceMemberEntityServer,
     LoadCollaborationTaskEntityServer,
     LoadTaskAttributionEntityServer,
+    LocalDirectoryStorage,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import './generated/generated.js';
 import { fileURLToPath } from 'node:url';

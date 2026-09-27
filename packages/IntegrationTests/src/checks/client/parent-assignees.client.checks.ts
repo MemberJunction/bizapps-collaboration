@@ -303,6 +303,7 @@ const checks: NamedCheck[] = [
                 ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'SpaceID', 'UserID'],
                 ResultType: 'simple',
+                BypassCache: true,
             });
             Assert(seatsOn.Success, `Bea read seats with switch on: ${seatsOn.ErrorMessage ?? ''}`);
             Assert((seatsOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's seat on Northwind, got ${seatsOn.Results?.length ?? 0}`);
@@ -312,6 +313,7 @@ const checks: NamedCheck[] = [
                 ExtraFilter: `LinkedUserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'Email'],
                 ResultType: 'simple',
+                BypassCache: true,
             });
             Assert(peopleOn.Success, `Bea read People with switch on: ${peopleOn.ErrorMessage ?? ''}`);
             Assert((peopleOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's person record, got ${peopleOn.Results?.length ?? 0}`);
@@ -335,6 +337,7 @@ const checks: NamedCheck[] = [
                     ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                     Fields: ['ID', 'SpaceID', 'UserID'],
                     ResultType: 'simple',
+                    BypassCache: true,
                 });
                 Assert(seatsOff.Success, `Bea read seats with switch off: ${seatsOff.ErrorMessage ?? ''}`);
                 Assert((seatsOff.Results?.length ?? 0) === 0, `With switch off, Bea MUST NOT read Ada's seat on Northwind, got ${seatsOff.Results?.length ?? 0}`);

@@ -283,6 +283,9 @@ const checks: NamedCheck[] = [
             );
             Assert(sharedTaskItems.length > 0, 'Discovery shared task item found');
             const sharedTaskId = sharedTaskItems[0].RecordID.replace(/^ID\|/i, '');
+            const sharedTaskProbe = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
+            await sharedTaskProbe.Load(sharedTaskId);
+            const taskTypeId = sharedTaskProbe.TypeID;
 
             // Find Discovery Team task (e.g. Internal prep)
             const teamTaskItems = await FindRows<{ RecordID: string }>(
@@ -310,6 +313,7 @@ const checks: NamedCheck[] = [
             subUnderTeam.Name = 'Bea Subtask Under Team Task Wire';
             subUnderTeam.ParentID = teamTaskId;
             subUnderTeam.Status = 'Open';
+            if (taskTypeId) subUnderTeam.TypeID = taskTypeId;
             const savedTeamSub = await subUnderTeam.Save();
             Assert(!savedTeamSub, 'Bea creating subtask under Team task must fail save over the wire');
             const teamSubReason = subUnderTeam.LatestResult?.CompleteMessage ?? '';
@@ -324,6 +328,7 @@ const checks: NamedCheck[] = [
             subUnderUnreachable.Name = 'Bea Subtask Under Unreachable Task Wire';
             subUnderUnreachable.ParentID = unreachableTaskId;
             subUnderUnreachable.Status = 'Open';
+            if (taskTypeId) subUnderUnreachable.TypeID = taskTypeId;
             const savedUnreachableSub = await subUnderUnreachable.Save();
             Assert(!savedUnreachableSub, 'Bea creating subtask under unreachable space task must fail save over the wire');
             const unreachableSubReason = subUnderUnreachable.LatestResult?.CompleteMessage ?? '';
@@ -338,13 +343,17 @@ const checks: NamedCheck[] = [
             subUnderShared.Name = 'Bea Subtask Under Shared Task Wire';
             subUnderShared.ParentID = sharedTaskId;
             subUnderShared.Status = 'Open';
+            if (taskTypeId) subUnderShared.TypeID = taskTypeId;
             const savedSharedSub = await subUnderShared.Save();
             Assert(savedSharedSub, `Bea creating subtask under writable Shared task must succeed over the wire: ${subUnderShared.LatestResult?.CompleteMessage ?? ''}`);
 
             // Cleanup created subtask
             if (savedSharedSub && subUnderShared.ID) {
-                const deleted = await subUnderShared.Delete();
-                Assert(deleted, 'Cleanup of Bea subtask must succeed over the wire');
+                const cleanupTask = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
+                if (await cleanupTask.Load(subUnderShared.ID)) {
+                    const deleted = await cleanupTask.Delete();
+                    Assert(deleted, 'Cleanup of Bea subtask must succeed over the wire');
+                }
             }
         },
     },
@@ -403,6 +412,7 @@ const checks: NamedCheck[] = [
             use.ItemID = itemId;
             use.UserID = harperCtx.User.ID;
             use.Kind = 'open';
+            use.UsedAt = new Date();
 
             const saved = await use.Save();
             Assert(!saved, 'Item use by caller outside space must fail save over the wire');
@@ -413,6 +423,57 @@ const checks: NamedCheck[] = [
             );
         },
     },
+    {
+        Id: 'write-gates.WG6',
+        Name: 'WG6 — write gates accepting side: authorized member writes are accepted over the wire',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaContext(ctx, 'ada');
+
+            // 1. Authorized item use: Ada reaches Discovery, recording 'open' must succeed
+            const items = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}'`,
+                ['ID'],
+            );
+            Assert(items.length > 0, 'Discovery items exist');
+            const itemId = items[0].ID;
+
+            const use = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, adaCtx.User);
+            use.NewRecord();
+            use.SpaceID = DISCOVERY_SPACE_ID;
+            use.ItemID = itemId;
+            use.UserID = adaCtx.User.ID;
+            use.Kind = 'open';
+            use.UsedAt = new Date();
+
+            const savedUse = await use.Save();
+            Assert(savedUse, `Item use by reaching member Ada must succeed over the wire: ${use.LatestResult?.CompleteMessage ?? ''}`);
+            if (savedUse && use.ID) {
+                const cleanupUse = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                if (await cleanupUse.Load(use.ID)) await cleanupUse.Delete();
+            }
+
+            // 2. Authorized child space creation: Ada (staff owner of Northwind) creating child space
+            const [workspaceType] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+            Assert(Boolean(workspaceType?.ID), 'Workspace space type exists');
+
+            const childSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            childSpace.NewRecord();
+            childSpace.Name = `WG6 Acceptance Space Client ${Date.now()}`;
+            childSpace.OwnerID = adaCtx.User.ID;
+            childSpace.ParentID = NORTHWIND_SPACE_ID;
+            childSpace.SpaceTypeID = workspaceType.ID;
+
+            const savedChild = await childSpace.Save();
+            Assert(savedChild, `Authorized owner creating child space must succeed over the wire: ${childSpace.LatestResult?.CompleteMessage ?? ''}`);
+            if (savedChild && childSpace.ID) {
+                const cleanupSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                if (await cleanupSpace.Load(childSpace.ID)) await cleanupSpace.Delete();
+            }
+        },
+    },
 ];
 
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
@@ -420,3 +481,4 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('write-gates', {
     Setup: async () => {},
     Teardown: async () => {},
 });
+
