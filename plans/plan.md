@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.4 · 2026-09-26. This is the one plan for this wave. It merges this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day. Where v0.2 and v0.3 disagreed, v0.3 stands.
+**Version:** v0.4 · 2026-09-26, updated 2026-09-27. This is the one plan for this wave. It merges this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day. Where v0.2 and v0.3 disagreed, v0.3 stands.
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-committees`.
 
@@ -37,7 +37,7 @@
 - **Source wins.** The platform claims here were read from source on 2026-09-26, and the [appendix](#appendix-source-checks-of-2026-09-26) records what was checked. Re-verify on the pin before building on a claim. If source disagrees with this plan, follow the source and say so in the pull request.
 - **References.** `E:<line>` is a line of `MJ/packages/MJCoreEntities/src/generated/entities/__mj.ts` on MJ `next` as of 2026-09-25. Those lines move between versions, so search by name. Other core paths are relative to `MJ/packages/`.
 - **Nothing firm-specific.** Collaboration is a free, generic engine. Anything that exists only for one firm's practice goes in a private extension built on B8's extension points.
-- **One pull request, merged when it's 100% done (D12).** The next pull request doesn't merge stage by stage. PR #3 took 96 review rounds, so keep this one reviewable another way: work [§ 9](#9-sequencing)'s stages in order, cite item numbers in commits and review threads, and let each review round cover one stage.
+- **One pull request, merged when it's 100% done (D12).** The next pull request doesn't merge stage by stage. PR #3 took 100 review rounds, so keep this one reviewable another way: work [§ 9](#9-sequencing)'s stages in order, cite item numbers in commits and review threads, and let each review round cover one stage.
 
 ## 1. What we are building
 
@@ -63,14 +63,15 @@
 
 ### 2.1 Two pull requests
 
-- **PR #3** (`feat/collaboration-phase-0-2`) finishes as it is and then merges whole. Its finish line is [§ 2.3](#23-pr-3s-finish-line). v0.3's B0.9, splitting it, is dropped.
-- **The next pull request** carries everything new in this plan and in the extensibility plan.
-  - It's opened as a draft stacked on PR #3, with base `feat/collaboration-phase-0-2`, and retargets to `next` when PR #3 merges.
-  - The builder moves to it once PR #3 merges, and works directly on its branch, `claude/hopeful-bell-6ldk4v` (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work continues there, slices B to I, and comes last (D16).
+- **PR #3** (`feat/collaboration-phase-0-2`) merged into `next` whole on 2026-09-27 at 02:20Z (`15a737b`), before its finish line ([§ 2.3](#23-pr-3s-finish-line)) was reached. That was Amith's call: PR #3 merges as it is, and what it left is handled in the next pull request. v0.3's B0.9, splitting it, was dropped.
+- **The next pull request is #7**, on `claude/hopeful-bell-6ldk4v`. It carries everything new in this plan and in the extensibility plan, and what PR #3 left.
+  - It was opened as a draft stacked on PR #3, and retargeted to `next` when PR #3 merged. `8c2845b` merged `next` into it.
+  - The builder works directly on its branch (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work, slices B to I, comes last (D16).
   - It merges once, when all of it is 100% done (D12).
+  - Each review of it carries one numbered punch list, and each push gets a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
   - [§ 9](#9-sequencing) is its order.
 
-### 2.2 What PR #3 has delivered
+### 2.2 What PR #3 delivered
 
 At `b539790`, reviewed in round 94:
 
@@ -110,19 +111,27 @@ At `b539790`, reviewed in round 94:
 - **`d4dfcf2` answered part of round 99** (216 unit tests): six widgets set their text color on `:host`, the five `#fff` became `--mj-text-inverse`, frame 04's page behind the dialog draws the people pill, the drawer's *Share with Northwind…* is 44px, the review card's Assistant tile is the mockup's size, and the host's other four tabs use `mj-empty-state`. It restyled the widgets' own buttons to look like `mjButton` rather than using it. CI measures the frames at 34,188, 105,953 and 46,353 pixels, against budgets of 40,234, 115,661 and 60,000.
 - **Amith decided two things that evening:** nothing typed into the code comes first (D14), and MJ's components can look the way they look (D15).
 - **Round 100 found** that the story is still typed into the code: the host reads nothing it shows, and six widgets default 37 lines of inputs and template text to it. A `grep` for the story's names in the Angular and widgets packages, which printed 91 lines at `d4dfcf2`, is the check that it's gone. It also found the widgets still drawing their own copies of MJ's components, CI's budgets still loose, and frame 03's file names black in Explorer, since `space-library` sets no text color. In the live shots the text sizes match the frames.
+- **`9b74199` answered round 100:**
+  - The host reads the viewer's spaces, and the round's `grep` finds nothing. `587f8c9` and `fbd822d` added reads of the space's items, members, tasks and room. `space-library` still defaults its counts to 24, 9 and 15 and its collections to the story's five, and the host passes neither count.
+  - Slice A's widgets use `mjButton`, `mj-switch`, `mj-tab-nav`, `.mj-input` and `.mj-textarea`, and each of them sets its text color on `:host`. Frame 04's dialog stayed local.
+  - With the MJ components, frame 03's count on CI went from 105,953 to 174,492 pixels. `e1076b6` and `f558fab` then set the budgets to CI's counts plus 100: 174,592 for frame 03, and 69,889 for frame 04, whose count varies between 61,089 and 69,789.
+  - Its six live shots of frames 02 to 04 are two images: MJ's *Access Restricted* page, in light and in dark. The account that took them had no seat, so slice A was never shown working in Explorer.
+- **`587f8c9` added** the Chat, People, Work and Settings tabs; an upload dialog, with *Link cloud doc*; icons, colors and backdrops for spaces, in a new migration (`V202609262000`, DDL and CodeGen output only); deep links; and checks FE1 and FE2 on both harnesses.
+- **`fbd822d` added** Home, Inbox, My Tasks and Recent Files on the top rail; the bizapps-tasks board and timeline in the Work tab; the room's assistant in the Chat tab; and tasks across states and ten more files in the world. It also let an MJ `Owner` user with no seat post in any space and have the agent search every space below it, sealed ones included.
+- **PR #3 merged 26 seconds after `fbd822d`,** with 231 unit tests and CI red at the token check: four of `587f8c9`'s widgets used `--mj-bg-subtle`, which isn't an MJ token. Past that check, the color `587f8c9` gave the breadcrumb links in `space-header` put the chrome and frame 03 over their budgets: 825 pixels against 100, and 175,317 against 174,592. #7 has the token fix (`038d3f7`) and moved both budgets (`8431458`); `next` stays red until #7 merges. Round 101 wasn't posted; its findings are in #7's punch list 1.
 
 ### 2.3 PR #3's finish line
 
-PR #3 merges when everything here is done. It's round 100's list: slice A, v0.3's B0 with each item's status, and the round 94 tasks that stay. B0's statuses are as checked at `d4dfcf2` on 2026-09-26, and its numbers are v0.3's, so reviews can cite them.
+PR #3 merged before this list was done. It's round 100's list: slice A, v0.3's B0, and the round 94 tasks that stay. Each point says where it stood at the merge (`15a737b`) and which item of #7's punch list carries it now. B0's numbers are v0.3's, so reviews can cite them.
 
-**Slice A:** frames 02, 03 and 04 ([the UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work)), passing in the gallery, with live Explorer shots of each in light and dark.
-- **Slice A's data lands in PR #3,** not in the next pull request: item versions, share checks and their findings (the UI plan's gap 7), items that hold a set of files (frame 03's 24 photos), the Milestone task type (gap 4, a `metadata/` row), and the columns frames 02 to 04 read.
-- It's being designed in PR #3's review now. Each shape is posted there before its migration, and the tables go into B0.7's baseline.
-- **Nothing typed into the code** (D14, round 100): the Explorer resource reads the viewer's real data through `ProviderToUse` and the typed client, every widget input defaults to empty, and the story lives only in the gallery's fixtures and the dev loader. The check is round 100's `grep` for the story's names in `packages/Angular/src` and `packages/AngularWidgets/src`, which prints nothing when it's done.
-- **The full-frame budgets** go back to what CI measures, as tight as frame 02's chrome, or just above a variation that can't be removed.
-- **MJ's components, as they are** (D15, rounds 99 and 100): the widgets use `mjButton`, `mj-switch`, `mj-tab-nav`, `.mj-textarea` and `.mj-input` where they now draw their own, and frame 04's dialog is `mj-dialog`, whose 90%-of-the-window cap is accepted. Where their look makes a frame differ, the difference is listed, not restyled away.
-- **Text color:** every widget sets `color: var(--mj-text-primary)` on `:host`; six do at `d4dfcf2`. The frames' text sizes match since `42569e2`.
-- **Every new user gets the app:** `DefaultForNewUser` is true (D13).
+**Slice A:** frames 02, 03 and 04 ([the UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work)), passing in the gallery, with live Explorer shots of each in light and dark. **Not reached at the merge.** The gallery's budgets had been moved to its counts, and `587f8c9` then put the chrome and frame 03 over them; CI never got that far, since it stopped at the token check (items 1 and 2). No live shot shows slice A ([§ 2.2](#22-what-pr-3-delivered)). Under D16, slice A is now checked by using it, in #7's walkthrough (items 50 and 51).
+- **Slice A's data** was to land in PR #3: item versions, share checks and their findings (the UI plan's gap 7), items that hold a set of files (frame 03's 24 photos), the Milestone task type (gap 4, a `metadata/` row), and the columns frames 02 to 04 read. **Only the Milestone type landed** (`fc77117`). Nothing stores a share check: the share dialog opens with no findings, and *Share* changes the item's band in the browser only, so a reload shows it unshared (item 50).
+- Each shape is posted in #7's review before its migration, and the tables go into B0.7's baseline (item 14).
+- **Nothing typed into the code** (D14, round 100): the Explorer resource reads the viewer's real data through `ProviderToUse` and the typed client, every widget input defaults to empty, and the story lives only in the gallery's fixtures and the dev loader. The check is round 100's `grep` for the story's names in `packages/Angular/src` and `packages/AngularWidgets/src`, which prints nothing when it's done. **At the merge** it prints three lines, all hints in `587f8c9`'s new widgets (*e.g. Northwind relationship*, and *Discovery* among the upload dialog's suggested folders). The host reads through `new RunView()` and `new Metadata()`, and makes up addresses and file names when a read comes back empty (item 4); `space-library` defaults its counts and collections to the story's (item 9).
+- **The full-frame budgets** go back to what CI measures, as tight as frame 02's chrome, or just above a variation that can't be removed. **At the merge** frames 03 and 04 were at CI's counts plus 100 (`e1076b6`, `f558fab`), and frame 02's at 40,234 against a count of 34,188. Under D16 they're a regression check, not slice A's bar (item 2).
+- **MJ's components, as they are** (D15, rounds 99 and 100): the widgets use `mjButton`, `mj-switch`, `mj-tab-nav`, `.mj-textarea` and `.mj-input` where they now draw their own, and frame 04's dialog is `mj-dialog`, whose 90%-of-the-window cap is accepted. Where their look makes a frame differ, the difference is listed, not restyled away. **At the merge** slice A's widgets use them, but frame 04's dialog is still local, and local styles still restyle MJ's components (item 50).
+- **Text color:** every widget sets `color: var(--mj-text-primary)` on `:host`; six do at `d4dfcf2`. The frames' text sizes match since `42569e2`. **At the merge** slice A's 18 widgets set it; the five `587f8c9` added don't (item 50).
+- **Every new user gets the app:** `DefaultForNewUser` is true (D13). Done.
 
 **B0: the fixes to PR #3's own code.**
 
@@ -154,49 +163,43 @@ PR #3 merges when everything here is done. It's round 100's list: slice A, v0.3'
    - The gate itself checks the parent only when a saved task's parent changes (`task-entity-server.ts:27–52`). v0.3's lines (164–170) are from an older file; this one has 67 lines.
    - **The check,** over the wire as Bea: a subtask under a Team task is refused; so is one under a task in a space Bea doesn't reach; one under a writable Shared task is accepted. WG3 has it on both harnesses since `6786bd0`, and asserts MJ's exact refusal since `86b48c1`.
 4. **B0.4. The four bizapps-tasks subclasses run async validation.** Holds; no change. MJ 6.1.3's `BaseEntity` runs `ValidateAsync` whenever a subclass overrides it, unless `DefaultSkipAsyncValidation` is overridden (the rule is in MJ since 6.1.0). `CollaborationTaskEntityServer`, `TaskCommentEntityServer`, `TaskDecisionEntityServer` and `TaskAssignmentEntityServer` override it, and neither they nor bizapps-tasks 1.5.0's classes override the flag.
-5. **B0.5. CI against a real database.** Open. CI only syntax-checks the two harnesses (`node --check`), so the integration suite and `scripts/persona-check.sql` never run there.
+5. **B0.5. CI against a real database.** Open at the merge; #7's item 13. CI only syntax-checks the two harnesses (`node --check`), so the integration suite and `scripts/persona-check.sql` never run there.
    - Add a job with a SQL Server service. It installs MJ core, bizapps-common and bizapps-tasks at their pinned versions, migrates, pushes `metadata/`, loads the world, runs `pnpm run test:integration:server` and `persona-check.sql`, and fails on any error.
    - The client harness needs MJAPI with PR #3's server package loaded. Run it in the same job if MJAPI can start there, or say what stops it.
 6. **B0.6. `mj-standards.yml` runs `npm ci`.** Done: the workflow was deleted in `28e3a86`, and `ci.yml`, on pnpm, runs `pnpm exec mj standards check`.
-7. **B0.7. One baseline, plus one migration for the access functions.** Open: 16 files today.
+7. **B0.7. One baseline, plus one migration for the access functions.** Open at the merge, with 17 files; #7's item 14.
    - v0.1 hasn't shipped, so squash `migrations/` to two files: the baseline (schema, tables and the CodeGen output) and the access functions. Slice A's new tables and columns go into the same baseline.
    - Regenerate the CodeGen output in one run from a clean database, and don't edit inside it. That clears any hand edits in the generated blocks.
    - **The two migrations `next` has and PR #3 doesn't,** `V202609230200__v0.1.x__Staff_Filters_And_Files.sql` and `V202609230300__v0.1.x__File_RecordID_And_Conversation_Writes.sql`, held only metadata: the `Conversation Details In Reach` and `Files In Reach` filters, and permission updates. Task 1 moved those rows to `metadata/` (`row-level-security-filters/`, `entity-permissions/` and `entities/.ui-role-permissions.json`), and `a763b4f` deleted the files. The baseline's header says so, since `next`'s history still has them.
    - Every database that ran the old chain rebuilds from empty.
-8. **B0.8. READMEs and screenshots.** Open. The old screenshots went in `6786bd0`, and `next` was merged in `625d24c`. PR #3 took the READMEs in `973c0ea`; the Angular one still calls the host an empty page (round 97).
-   - The READMEs for the root and every package are written on the next pull request's branch. Take only those files, with `git checkout origin/claude/hopeful-bell-6ldk4v -- README.md 'packages/*/README.md'`, check each against the code, and keep them current as the B0 fixes and slice A land.
-   - Slice A's shots stay under `docs/screenshots/pr3/ux/`.
+8. **B0.8. READMEs and screenshots.** Open at the merge; #7's item 16. The old screenshots went in `6786bd0`, and `next` was merged in `625d24c`. PR #3 took the READMEs in `973c0ea`; the Angular one still calls the host an empty page (round 97).
+   - The READMEs are on this branch now. Keep each current as #7's work lands; the new widgets, drivers, resolvers and configuration models aren't described yet.
+   - Slice A's live shots at the merge (`9b74199`) are MJ's *Access Restricted* page ([§ 2.2](#22-what-pr-3-delivered)). #7's walkthrough replaces them (item 51).
 9. **B0.9. Split the PR.** Dropped (D8): PR #3 merges whole.
 10. **B0.10. UX conventions.**
     - **Done:** PascalCase inputs and `…Requested` events; type colors from `SpaceType.Color`, which the gallery's fixture keeps in one map; CI's chrome budget at 100 pixels; and diffs uploaded as a CI artifact, since the spec writes only to `e2e/test-results/`.
     - **`no-access.component.ts` stays.** The old file was deleted with the old UI in `77b36f4` and written again as the new `mjc-no-access`, on MJ's `mj-empty-state`, in `0c7096a`.
     - **The tokens, done in `002c2c5`:** they're defined on each widget's own `:host` from MJ's tokens (`COLLAB_TOKENS_CSS`, listed first in each component's `styles`), `--mjc-warn-bg` and `--mjc-warn-text` included, and the token check covers `--mjc-*` tokens. Until then nothing in a host defined them, so the band chip and the avatar rings drew their hex fallbacks in Explorer, dark mode included.
     - **Left (round 100):** remove the `var(--…, #hex)` fallbacks in the AngularWidgets and Angular sources (102 at `d4dfcf2`, including the ones `COLLAB_TOKENS_CSS` gives each token); keep one source for the tokens, since `_tokens.scss` is a second copy that nothing includes; and drop the gallery's own copy at `:root` in `bundle.mjs`, so the gallery draws what a host draws. The five widgets' `color: #fff` became `var(--mj-text-inverse)` in `d4dfcf2`.
-11. **B0.11. Take the committee specifics out** (task 7's removal half, and the UI plan's gap 10). Partly done in `002c2c5`: the row is out of `metadata/space-types/`, the world has its own type, and the loader no longer looks for `committee`. `GovernancePanel` is left, for B0.7, and `phase0-seed.sql` falls back to the Workspace type silently.
+    - **At the merge** (#7's item 17): 263 fallbacks, with the new widgets'; `_tokens.scss` and `bundle.mjs` as they were; and `space-header`'s backdrop washes its image with white, in dark mode too.
+11. **B0.11. Take the committee specifics out** (task 7's removal half, and the UI plan's gap 10). Partly done in `002c2c5`: the row is out of `metadata/space-types/`, the world has its own type, and the loader no longer looks for `committee`. `GovernancePanel` is left, for B0.7, and `phase0-seed.sql` falls back to the Workspace type silently. Unchanged at the merge; #7's item 18.
     - `SpaceType.GovernancePanel` leaves the baseline, with its default and extended property, and the regenerated CodeGen output.
     - The `committee` row leaves `metadata/space-types/`. Its ID, `5FABEBE3-0207-4DB2-8B4C-8DAF0178A3C6`, is the one Committees ships in its own metadata (C1), so nothing here reuses it.
     - Keep the world's committee space for Dana's checks: RF3, RF4 and the world check, on both harnesses. Its type moves into the world's `types.csv` as a world-owned type, with a world code and a new ID, the way `world-workshop` is. `load-world.ts` stops looking for `committee`, and `phase0-seed.sql` stops relying on it.
 
-**The tasks that stay,** by round 94's numbers:
-- **Task 1,** metadata out of migrations: the rebuild from empty after B0.7, the core-entity list checked on slice A's screens as Bea, and other databases.
-- **Task 2,** clients see only a person's name and email: the geocode columns `__mj_Latitude` and `__mj_Longitude`, which field rules can't restrict (an MJ change, A12.21, or a read model); what bizapps-common#186's release does to a host's own roles; and a check of the fields a participant can actually read, rather than of the rows.
+**The tasks that stay,** by round 94's numbers, with #7's items:
+- **Task 1,** metadata out of migrations: the rebuild from empty after B0.7, the core-entity list checked on slice A's screens as Bea, and other databases. Item 19.
+- **Task 2,** clients see only a person's name and email: the geocode columns `__mj_Latitude` and `__mj_Longitude`, which field rules can't restrict (an MJ change, A12.21, or a read model); what bizapps-common#186's release does to a host's own roles; and a check of the fields a participant can actually read, rather than of the rows. Item 20.
 - **Task 3,** assigning people seated above a space: done, except the assignee picker, which moves ([§ 2.4](#24-what-moves-to-the-next-pull-request)).
-- **Task 4,** proving the room: the wire checks RM1 to RM6, with B0.2's sub-space check.
-- **Task 5,** the test scaffolding: RM5's cleanup and the suites' tallies (round 98); the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3 and AG5) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens.
-- **Task 7's removal half:** B0.11.
-- **Task 13,** the staff runs and the client harness over the wire, on PR #3's screens.
-- **Task 14,** the adversarial test of what PR #3 ships.
-- **Task 16,** the smoke suite and the tour, on slice A's screens.
-- **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour.
+- **Task 4,** proving the room: the wire checks RM1 to RM6, with B0.2's sub-space check. At the merge, RM1 to RM6 are on both harnesses; RM5's cleanup is left (item 21).
+- **Task 5,** the test scaffolding: RM5's cleanup and the suites' tallies (round 98); the accepting side of every gate and the other gaps round 95 lists; checks that can't fail (FLS4, AG3 and AG5) made able to fail, or deleted; and a Playwright suite that signs in as each persona on slice A's screens. Item 22.
+- **Task 7's removal half:** B0.11 (item 18).
+- **Task 13,** the staff runs and the client harness over the wire, on #7's screens (item 23).
+- **Task 14,** the adversarial test of what #7 ships (item 24).
+- **Task 16,** the smoke suite and the tour, in #7's walkthrough (items 51 and 52).
+- **Task 17,** the wrap-up: reload the world on a clean database, run everything, and post the tour (item 52).
 
-**The order to work it** (round 100's):
-1. Nothing typed into the code: the slice A map's second pass, then slice A's data layer, with the host and the composites reading real data and every widget default empty.
-2. MJ's components as they are, then CI's budgets.
-3. Slice A's smaller items, the frames within tight budgets, and new live shots of all three frames.
-4. Task 5's coverage for PR #3's gates, RM5's cleanup and the suites' tallies, with task 2's leftovers.
-5. B0.7's squash, then task 1's rebuild from empty.
-6. B0.5, B0.8, B0.10 and B0.11.
-7. Tasks 13, 14, 16 and 17.
+**The order to work it** is now punch list 1's: item 3 first, since it's live on `next`; then items 1 to 26; then B1 to B12 in [§ 9](#9-sequencing)'s order; and the screens last (D16, items 49 to 52).
 
 ### 2.4 What moves to the next pull request
 
@@ -212,6 +215,7 @@ Round 95's list, and where each item lands here:
 - **The agent checks AG3 and AG5,** which can't fail as written, are replaced by B2.6's matrix.
 - **Task 15's slices B to I** (B13): frames 01 and 05 to 13, with the UI plan's gap 2 (tab labels per type) and gap 9 (the Assistant's settings). The five chat widgets PR #3 added in `6786bd0` (`answer-receipt`, `chat-banner`, `chat-lens`, `chat-list` and `space-chats`) left PR #3 in `002c2c5`. Whether slice B reuses them waits on Amith.
 - **v0.3's B1 to B13, and workstreams A and C,** including the extensibility plan's two MJ pull requests (A13).
+- **What PR #3's last commits added** ([§ 2.2](#22-what-pr-3-delivered)) is reviewed here as it stands: #7's items 3 to 9 fix what's live on `next`, and items 25 and 26 are Amith's smoke test of uploads and the sample world.
 
 ## 3. Decisions
 
@@ -562,7 +566,7 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 
 ### B0. Land PR #3
 
-B0 is PR #3's finish line. [§ 2.3](#23-pr-3s-finish-line) lists each item with its status at `b539790`.
+B0 was PR #3's finish line, and PR #3 merged with part of it open. [§ 2.3](#23-pr-3s-finish-line) gives each item's status at the merge and the item of #7's punch list that carries it.
 
 ### B1. Rewrite the doctrine
 
@@ -658,7 +662,7 @@ Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-orde
 - **Slice E (work):** task 3's assignee picker ([§ 2.4](#24-what-moves-to-the-next-pull-request)), task 10 (start a plan from a template), and task 12 (what's left of bizapps-tasks#73).
 - **Slice G (Assistant settings):** the allowed agents and the knowledge bindings (B8.2), which are the UI plan's gap 9.
 - **Slice H (new space):** the UI plan's gap 2, tab labels per type.
-- **Slice I (extension points):** frame 08 through the example plug-in (B8). The UI plan's gap 10, the committee removal, is done in PR #3 (B0.11).
+- **Slice I (extension points):** frame 08 through the example plug-in (B8). The UI plan's gap 10, the committee removal, is B0.11: begun in PR #3 and finished here (item 18).
 
 ## 8. Workstream C: Committees on Collaboration
 
@@ -707,11 +711,11 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ## 9. Sequencing
 
-This is the next pull request's order. Stage 1's B0 is done in PR #3.
+This is the next pull request's order. Stage 1's B0 was PR #3's; its open items moved here ([§ 2.3](#23-pr-3s-finish-line)).
 
 | Stage | Core (A) | Collaboration (B) | Committees (C) |
 |---|---|---|---|
-| **1. Safe foundation** | A12.1, A12.2 (search fixes); A12.13 (urgent) | B0 (in PR #3), B1 | C0 |
+| **1. Safe foundation** | A12.1, A12.2 (search fixes); A12.13 (urgent) | B0's open items (§ 2.3), B1 | C0 |
 | **2. Provenance** | A1, A2, A3, A4 | B4 (receipts from A4) | |
 | **3. Audience** | A5, A6, A7, A11; A12.14 to A12.17 | B2, B3, B9, B10 | |
 | **4. Reach** | A8, A9, A10; A13 | B5, B6, B7, B8 | C1 |
