@@ -84,3 +84,16 @@ export type {
     ISpaceRules,
     ISpaceTypeConfiguration,
 } from './configuration.js';
+export {
+    effectiveRetrievalScope,
+    agentMayQuoteCandidate,
+} from './retrieval.js';
+export type {
+    RetrievalMode,
+    ScopeNarrowing,
+    PrincipalReach,
+    EffectiveRetrievalScopeInput,
+    EffectiveRetrievalScopeResult,
+    AgentCandidateItem,
+    AgentMayQuoteResult,
+} from './retrieval.js';

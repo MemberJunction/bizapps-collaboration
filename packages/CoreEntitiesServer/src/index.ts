@@ -45,5 +45,8 @@ export { LoadTaskAttributionEntityServer } from './task-attribution.js';
 export { LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
+export { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';
+export type { ResolvedAllowedAgentsResult, SpaceAgentItem } from './resolve-allowed-agents.js';
+export { resolveSpaceKnowledgeSources, resolveSpaceAgentSkills } from './resolve-space-agent-context.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
 
