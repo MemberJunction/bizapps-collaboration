@@ -573,8 +573,8 @@ A framework built around one example tends to carry that example's assumptions. 
 - A committee and a term are each a space: `Committee` and `Term` extend `Space` through IsA, disjoint, with `Committee.ID = Space.ID`.
 - Seats come from Committees' memberships, through `SyncSeats`, matched on `SpaceMember.PersonID`.
 - Meetings, motions, votes and minutes stay in Committees, filtered through `fnCollaborationAccess`. **Amended by the plan's D33:** meetings, agenda items, attendance and video providers move to bizapps-tasks, and Committees keeps motions, votes, ballots, quorum and the approval of minutes, re-pointed at Tasks' meetings (the plan's C4).
-- It moves in stages (the plan's workstream C): fixes first; then 1.5 backfills a space per committee with the committee's own ID and syncs the seats; 1.6 adds row-level security and the extension points; and 2.0 declares the IsA and drops the duplicated columns. **The plan's D35 withdraws the stages:** after its fixes, Committees is rebuilt in one step, C4, in a major version.
-- Its plan is in [bizapps-committees](https://github.com/MemberJunction/bizapps-committees/pull/54). The staging is the plan's ([§ 13](#13-order-of-work)).
+- It moves in stages (the plan's workstream C): fixes first; then 1.5 backfills a space per committee with the committee's own ID and syncs the seats; 1.6 adds row-level security and the extension points; and 2.0 declares the IsA and drops the duplicated columns. **The plan's D35 withdraws the stages:** after its fixes, Committees is rebuilt in one step, C4, in a major version, with no data carried over, since it has no production users yet.
+- Its plan is [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md). The staging is the plan's ([§ 13](#13-order-of-work)).
 
 ### 10.2 A deal room: the space belongs to another app's record
 

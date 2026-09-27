@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over.
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -456,12 +456,18 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 **D35. Breaking changes are fine before a first external customer.** Collaboration, Committees and bizapps-tasks may change shape freely until each ships to its first external customer.
 - **v0.3's staged Committees path is withdrawn:** C1 to C3 give way to C4. It amends D9's stages; the IsA stays.
 - **A published package still takes a major version** for a breaking change, under MJ's publish-then-no-breaking-changes policy, as [§ 8](#8-workstream-c-committees-on-collaboration) already says.
+- **Committees carries no data over** (Amith, 09-27, answering [bizapps-committees#55](https://github.com/MemberJunction/bizapps-committees/pull/55)). It has no production users and isn't released to customers yet, so C4 has no data migration and no upgrade action ([bizapps-committees#56](https://github.com/MemberJunction/bizapps-committees/pull/56)).
 
 **D36. MJ's part comes after #7 and PR #8.** Amith, reviewing [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) on 09-27: the builder builds it once #7 and PR #8 are done. It amends [§ 9](#9-sequencing), which ran it beside them.
 - **PR #8 builds on MemberJunction as released,** and merges with [its plan's § 4](pr8-plan.md#4-what-it-depends-on) in force: no view grant with a binding (A14), no dashboard grant (A15), no action with a bound parameter given to an agent (A16), and no query, view, dashboard or component granted to a type that seats participants (A17's approval status, D34).
 - **So until the follow-up, participants reach other apps' data only through their type's data reach** (B18), with its generated filters.
 - **[§ 10](#10-verification)'s rows 13, 15, 16 and 19 are checked closed** in PR #8: what they need is refused. They pass open in the follow-up, with row 23's approved side and row 24 on a view.
 - **The follow-up** pins the MJ release that carries A14 to A17, and opens those grants. A18, and workstream T's calendar sync (T2), come with or after it.
+
+**D37. #7's chat builds on MJ `next`.** Amith, answering punch list 6's chat call on 09-27: the team develops against MJ `next`, which carries A13.1 ([MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)), and MJ's next edge releases go out the week of 09-28. It's the call's option A, without cutting a 6.1.5 from `lts/6.1`.
+- **#7 finishes A:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its room. An outside participant also needs Create on Conversation Details, limited to the rooms they reach.
+- **#7 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
+- **D25 is still Amith's to confirm** (punch list item 62).
 
 ## 4. The model
 
@@ -736,7 +742,7 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
   - a parent's read filter doesn't reach its subtypes' views;
   - a loaded record never looks for its subtype again when it's reloaded.
 
-**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 is [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), in review. Collaboration builds against them once an MJ release carries them.
+**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 builds against `next` and pins the first edge release that carries them (D37).
 
 **A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
 
@@ -1047,19 +1053,19 @@ The mapping, the drivers and the tests are in [Committees' rebuild plan](https:/
 
 ### C4. Rebuild Committees in one step (D35)
 
-It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes. That plan predated D33; [bizapps-committees#55](https://github.com/MemberJunction/bizapps-committees/pull/55) brings it in line. Where the two differ, this section holds.
+It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 and [its own plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md) say, with these changes. That plan predated D33; [bizapps-committees#55](https://github.com/MemberJunction/bizapps-committees/pull/55) brought it in line, and [#56](https://github.com/MemberJunction/bizapps-committees/pull/56) drops its data migration (D35). Where the two differ, this section holds.
 - **`Committee` and `Term` stay IsA subtypes of `Space`.**
 - **Committees' meeting tables are stripped out** (Amith, 09-27): `Meeting`, `AgendaItem`, `Attendance` and `VideoProvider`, with the code that serves only them, such as the video drivers, which move to Tasks (T1). Meetings live in bizapps-tasks (workstream T). Committees is being rebuilt on Collaboration anyway, so backward compatibility isn't a concern: no rows are copied, and no compatibility layer is kept.
 - **The governance points at Tasks' meetings instead,** `MJ_BizApps_Tasks: Meetings` and `MJ_BizApps_Tasks: Meeting Agenda Items`:
   - the foreign keys to a meeting, from `Artifact`, `Minute` (both `MeetingID` and `ApprovedByMeetingID`), `Motion` and `Comment`;
   - the foreign keys to an agenda item, from `Artifact`, `Motion` and `Comment`. Votes and ballots follow through their motion; they have no key of their own to either;
-  - their existing values are cleared first, since no meetings are copied. The rows keep everything else, and every one of these keys allows NULL today;
-  - the soft references: the ML pipeline, models and weekly scoring job that target `Committees: Meetings` move to Tasks' meetings or are dropped. Any `TaskLink` rows that point at a Committees meeting would point at nothing, so the upgrade removes them;
+  - the soft references: the ML pipeline, models and weekly scoring job that target `Committees: Meetings` move to Tasks' meetings or are dropped;
   - the computed columns: 1.4.0's migration registers 12 computed `vwMeetings` columns as entity fields that the generated class doesn't carry. They go with the table, and C4 rebuilds on Tasks' meeting only those the governance screens still need.
 - **Quorum** stays with the governance. It's computed in code today, as a majority of the voting members; `Meeting.PredictedQuorumRisk…`, the only stored quorum data, goes with the table.
 - **A *Vote* agenda item** is Committees' own type in Tasks' agenda item type lookup (T1), which Committees seeds.
 - **A committee type grants its governance data** through B15: for example, the roster and term view to members, and a voting-record dashboard to officers.
 - **C0 still comes first:** ballot sealing enforced on the server, and the entity overrides registered under the wrong names fixed.
+- **No data is carried over** (D35). Committees has no production users, so the rebuild deletes the existing committees and terms, and what depends on them, instead of moving them into spaces, seats or chats. There's no data migration and no upgrade action.
 - **It's a major version of Committees,** since it drops published tables.
 
 ## 8a. Workstream T: meetings and agendas in bizapps-tasks
