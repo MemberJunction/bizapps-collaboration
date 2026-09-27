@@ -94,22 +94,22 @@ export async function purgeWorld(): Promise<void> {
                     SET @added = @@ROWCOUNT;
                 END
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskActivity') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskActivity WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskActivity WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskComment') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskComment WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskComment WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskAssignment') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskAssignment WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskAssignment WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}))) OR AssigneeRecordID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskDecision') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskDecision WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskDecision WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskDependency') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskDependency WHERE TaskID IN (SELECT ID FROM #tasks) OR DependsOnTaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskDependency WHERE TaskID IN (SELECT ID FROM #tasks) OR DependsOnTaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}))) OR DependsOnTaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskLink') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskLink WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskLink WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskTagLink') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskTagLink WHERE TaskID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskTagLink WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
                 IF OBJECT_ID('__mj_BizAppsTasks.TaskNotificationLog') IS NOT NULL
-                    DELETE FROM __mj_BizAppsTasks.TaskNotificationLog WHERE TaskID IN (SELECT ID FROM #tasks);
-                DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks);
+                    DELETE FROM __mj_BizAppsTasks.TaskNotificationLog WHERE TaskID IN (SELECT ID FROM #tasks) OR TaskID IN (SELECT ID FROM __mj_BizAppsTasks.Task WHERE CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds})));
+                DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks) OR CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}));
             END
 
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});

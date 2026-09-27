@@ -28,6 +28,8 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -43,7 +45,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       font-weight: 650;
       color: var(--mj-brand-on-primary, #ffffff);
       letter-spacing: .01em;
-      background: var(--mj-text-muted, #64748b);
+      background: var(--mj-text-muted);
       user-select: none;
       box-sizing: border-box;
     }
@@ -55,7 +57,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
     /* Outside people carry a cyan ring everywhere */
     .av.ext {
-      box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff), 0 0 0 3.5px var(--mjc-shared-strong, #0891b2);
+      box-shadow: 0 0 0 2px var(--mj-bg-surface), 0 0 0 3.5px var(--mjc-shared-strong);
     }
 
     /* 10-color avatar categorical palette */

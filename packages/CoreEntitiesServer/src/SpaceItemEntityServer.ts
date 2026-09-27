@@ -45,7 +45,10 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (isFile) {
             const isNewFilePointer = !this.IsSaved || this.Fields.some((f) => f.Dirty && (f.Name === 'EntityID' || f.Name === 'RecordID'));
             if (isNewFilePointer && !vouchedItems.has(this)) {
-                return fail(result, 'Item change refused: file items must be created through space upload.');
+                const isExternal = await isExternalUrlFile(this, user);
+                if (!isExternal) {
+                    return fail(result, 'Item change refused: file items must be created through space upload.');
+                }
             }
         }
         const previousRaw = this.Fields.find((field) => field.Name === 'SpaceID')?.OldValue as string | null | undefined;
@@ -430,6 +433,27 @@ async function callerCanReadTarget(item: SpaceItemEntityServer, user: NonNullabl
         LogError(`Space item target check: ${error instanceof Error ? error.message : String(error)}`);
         return false;
     }
+}
+
+const EXTERNAL_URL_PROVIDER_ID = '93dbcfc9-5b2a-48d6-9d95-e93b319c88e5';
+
+async function isExternalUrlFile(item: SpaceItemEntityServer, user: NonNullable<SpaceItemEntityServer['ContextCurrentUser']>): Promise<boolean> {
+    const provider = asMetadata(item.ProviderToUse);
+    const files = provider?.EntityByName('MJ: Files');
+    if (!provider || !files) return false;
+    const raw = item.RecordID ?? '';
+    const fileId = raw.toLowerCase().startsWith('id|') ? raw.slice(3) : raw;
+    if (!fileId) return false;
+    try {
+        const file = await provider.GetEntityObject<MJFileEntity>(files.Name, user);
+        if (await file.Load(fileId)) {
+            const providerId = file.ProviderID ? parseUuid(file.ProviderID) : null;
+            return providerId === EXTERNAL_URL_PROVIDER_ID;
+        }
+    } catch (e) {
+        LogError(`isExternalUrlFile check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return false;
 }
 
 function fail(result: ValidationResult, message: string): ValidationResult {

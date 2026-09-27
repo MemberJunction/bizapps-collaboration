@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { FindingModel, FileKind, RecipientPersonModel } from './types';
+import { MJButtonDirective, MJSwitchComponent } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -10,9 +11,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-share-check',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, CollabAvatarComponent, CollabBandChipComponent, CollabFileIconComponent],
+  imports: [
+    FormsModule,
+    CollabAvatarComponent,
+    CollabBandChipComponent,
+    CollabFileIconComponent,
+    MJButtonDirective,
+    MJSwitchComponent,
+  ],
   template: `
-    <div class="m-h">
+    <div class="m-h mj-dialog-titlebar">
       <span class="m-ic">
         <i class="fa-solid fa-share-from-square"></i>
       </span>
@@ -27,7 +35,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <mjc-band-chip Band="Shared" Label="Shared" />
         </div>
       </div>
-      <button type="button" class="icon-btn-ghost close-btn" (click)="onCancel()" aria-label="Close dialog">
+      <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
         <i class="fa-solid fa-xmark muted"></i>
       </button>
     </div>
@@ -44,7 +52,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="pp more">
                 <mjc-avatar [Initials]="'+' + (p.moreCount || 2)" Size="sm" ColorClass="c7" [IsOutside]="true" />
                 <div class="grow">
-                  <div class="fw6 fs12.5">{{ p.name }}</div>
+                  <div class="fw6 fs12-5">{{ p.name }}</div>
                   <div class="fs11 muted">{{ p.role }}</div>
                 </div>
               </div>
@@ -52,7 +60,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="pp">
                 <mjc-avatar [Avatar]="p.avatar" Size="sm" />
                 <div class="grow">
-                  <div class="fw6 fs12.5 ellipsis">{{ p.name }}</div>
+                  <div class="fw6 fs12-5 ellipsis">{{ p.name }}</div>
                   <div class="fs11 muted ellipsis">{{ p.role }}</div>
                 </div>
               </div>
@@ -72,7 +80,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </span>
             <div class="grow">
               <div class="fw7 fs14">{{ ReviewHeader }}</div>
-              <div class="fs12.5 secondary">{{ ReviewSub }}</div>
+              <div class="fs12-5 secondary">{{ ReviewSub }}</div>
             </div>
             <span class="chip warn">
               <i class="fa-solid fa-triangle-exclamation"></i>
@@ -93,7 +101,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>Applied</span>
                   </span>
                 } @else {
-                  <button type="button" class="btn sm apply-btn" (click)="onApplyFix(fix)">
+                  <button mjButton variant="secondary" size="sm" class="btn sm apply-btn" (click)="onApplyFix(fix)">
                     <i class="fa-solid fa-check"></i>
                     <span>Apply</span>
                   </button>
@@ -109,10 +117,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>Note to {{ ClientOrgName }}</span>
           <span class="muted fw5">&nbsp;(sent with the notification)</span>
         </div>
-        <textarea class="textarea note-textarea" [(ngModel)]="Note"></textarea>
+        <textarea class="mj-textarea textarea note-textarea" [(ngModel)]="Note"></textarea>
         <div class="effects">
           <div class="eff">
-            <span class="switch" [class.on]="NotifyRecipients" (click)="NotifyRecipients = !NotifyRecipients"></span>
+            <mj-switch [(ngModel)]="NotifyRecipients" class="switch" />
             <span>Notify the {{ RecipientCount }} people at {{ ClientOrgName }}</span>
           </div>
           <div class="eff">
@@ -127,18 +135,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
     </div>
 
-    <div class="m-f">
-      <button type="button" class="btn primary" (click)="onApplyAndShare()">
+    <div class="m-f mj-dialog-actions">
+      <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
         <i class="fa-solid fa-check"></i>
         <span>{{ primaryButtonText }}</span>
       </button>
-      <button type="button" class="btn" (click)="onShareAsIs()">Share as is</button>
-      <button type="button" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
+      <button mjButton variant="secondary" class="btn" (click)="onShareAsIs()">Share as is</button>
+      <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      max-height: 100%;
+      min-height: 0;
+      box-sizing: border-box;
+      color: var(--mj-text-primary);
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
@@ -150,6 +163,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       gap: 14px;
       padding: 20px 22px 16px;
       border-bottom: 1px solid var(--mj-border-default);
+      flex: none;
     }
 
     .m-ic {
@@ -191,6 +205,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       display: flex;
       flex-direction: column;
       gap: 14px;
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
     .audience-sub {
@@ -277,17 +294,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
     .apply-btn {
       margin-left: auto;
-      height: 28px;
-      padding: 0 10px;
+      min-height: 32px;
+      height: 33.5px;
+      padding: 0 12px;
       border-radius: var(--mj-radius-sm);
       border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
-      font-size: 12px;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
+
+      i {
+        font-size: 13px;
+      }
 
       &:hover {
         background: var(--mj-bg-surface-hover);
@@ -309,11 +332,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .note-textarea {
-      min-height: 62px;
-      height: 62px;
+      min-height: 80px;
+      height: 80px;
       width: 100%;
       box-sizing: border-box;
       resize: none;
+      display: block;
     }
 
     .textarea {
@@ -398,6 +422,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       border-top: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface-card);
       margin-top: 6px;
+      flex: none;
     }
 
     .cancel-btn {
@@ -405,18 +430,28 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .btn {
-      height: 38px;
-      padding: 0 16px;
-      border-radius: var(--mj-radius-sm);
+      min-height: 44px;
+      height: 44px;
+      padding: 0 20px;
+      border-radius: var(--mj-radius-md);
       border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-sunken);
       color: var(--mj-text-primary);
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      justify-content: center;
+      gap: 8px;
+
+      &.sm {
+        min-height: 32px;
+        height: 33.5px;
+        padding: 0 12px;
+        font-size: 13px;
+        gap: 6px;
+      }
 
       &.primary {
         background: var(--mj-brand-primary);
@@ -454,14 +489,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
 
     .ai-av.md {
-      width: 34px;
-      height: 34px;
-      font-size: 16px;
+      width: 32px;
+      height: 32px;
+      font-size: 14px;
       border-radius: 9px;
       display: inline-grid;
       place-items: center;
       background: linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to));
-      color: #fff;
+      color: var(--mj-text-inverse);
       flex: none;
     }
 
@@ -491,7 +526,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     .fw7 { font-weight: 700; }
     .fs11 { font-size: 11px; }
     .fs12 { font-size: 12px; }
-    .fs12.5 { font-size: 12.5px; }
+    .fs12-5 { font-size: 12.5px; }
     .fs13 { font-size: 13px; }
     .fs14 { font-size: 14px; }
     .muted { color: var(--mj-text-muted); }
@@ -499,21 +534,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckComponent {
-  @Input() public Title = 'Share with Northwind';
-  @Input() public ItemName = 'Interview synthesis v3';
+  @Input() public Title = '';
+  @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';
-  @Input() public ClientOrgName = 'Northwind';
-  @Input() public RecipientCount = 6;
-  @Input() public AudienceHeader = '6 people at Northwind will be able to open it';
-  @Input() public AudienceStaffSub = 'Meridian’s 3 already can';
+  @Input() public ClientOrgName = '';
+  @Input() public RecipientCount = 0;
+  @Input() public AudienceHeader = '';
+  @Input() public AudienceStaffSub = '';
   @Input() public Recipients: RecipientPersonModel[] = [];
-  @Input() public ReviewHeader = 'The Assistant checked it first';
-  @Input() public ReviewSub = 'Two phrases could identify someone you interviewed under a promise of anonymity.';
+  @Input() public ReviewHeader = '';
+  @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
-  @Input() public Note = 'Synthesis from all 18 interviews — we’ll walk through it together on Thursday.';
+  @Input() public Note = '';
   @Input() public NotifyRecipients = true;
-  @Input() public AuthorName = 'Ada Lovell';
-  @Input() public Timestamp = '10:14 AM';
+  @Input() public AuthorName = '';
+  @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
   @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();

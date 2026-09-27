@@ -6,6 +6,7 @@ import {
   CollabSpaceTabsComponent,
   CollabSpaceLibraryComponent,
   CollabShareCheckDialogComponent,
+  CollabAudiencePillComponent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
@@ -20,6 +21,7 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
     CollabSpaceTabsComponent,
     CollabSpaceLibraryComponent,
     CollabShareCheckDialogComponent,
+    CollabAudiencePillComponent,
     MJButtonDirective,
   ],
   template: `
@@ -53,6 +55,12 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
             [Subtitle]="f.header.subtitle"
           >
             <div actions class="row gap8">
+              <mjc-audience-pill
+                [StaffAvatars]="f.header.staffAvatars"
+                [OutsideAvatars]="f.header.outsideAvatars"
+                [TotalPeople]="f.header.totalPeople"
+                [Summary]="f.header.audienceSummary"
+              ></mjc-audience-pill>
               <button mjButton variant="primary" size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs
@@ -75,7 +83,9 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
             [PreviewStaffAvatars]="f.library.selectedItem.bandAvatars"
             [PreviewFlagTitle]="f.library.selectedItem.flagTitle"
             [PreviewFlagDescription]="f.library.selectedItem.flagDescription"
+            [PreviewShareButtonLabel]="'Share with Northwind…'"
             [PreviewRecentUses]="f.library.selectedItem.recentUses"
+            [TeamBandLegend]="'Meridian only'"
           ></mjc-space-library>
         </main>
       </div>

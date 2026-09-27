@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { BreadcrumbItem } from './types';
@@ -8,12 +8,12 @@ import { BreadcrumbItem } from './types';
   standalone: true,
   imports: [CommonModule, CollabTypeTileComponent],
   template: `
-    <section class="space-head">
+    <section class="space-head" [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, rgba(255,255,255,0.88), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
       @if (Breadcrumbs && Breadcrumbs.length > 0) {
         <div class="crumbs">
           @for (c of Breadcrumbs; track c.label; let last = $last) {
             @if (!last) {
-              <span>{{ c.label }}</span>
+              <span class="crumb-link" (click)="onCrumbClick(c)">{{ c.label }}</span>
               <i class="fa-solid fa-chevron-right"></i>
             } @else {
               <b>{{ c.label }}</b>
@@ -64,6 +64,8 @@ import { BreadcrumbItem } from './types';
   styles: [`
     :host {
       display: block;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -72,8 +74,8 @@ import { BreadcrumbItem } from './types';
       line-height: inherit;
     }
     .space-head {
-      background: var(--mj-bg-surface, #ffffff);
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
       padding: 16px 28px 0;
       box-sizing: border-box;
     }
@@ -82,15 +84,15 @@ import { BreadcrumbItem } from './types';
       align-items: center;
       gap: 6px;
       font-size: 12.5px;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
     .crumbs i {
       font-size: 9px;
-      color: var(--mj-text-disabled, #94a3b8);
+      color: var(--mj-text-disabled);
     }
     .crumbs b {
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-weight: 600;
     }
     .top {
@@ -114,10 +116,10 @@ import { BreadcrumbItem } from './types';
       font-weight: 700;
       letter-spacing: -0.015em;
       margin: 0;
-      color: var(--mj-text-primary, #0f172a);
+      color: var(--mj-text-primary);
     }
     .sub {
-      color: var(--mj-text-secondary, #475569);
+      color: var(--mj-text-secondary);
       font-size: 13px;
       margin-top: 3px;
       display: flex;
@@ -136,7 +138,7 @@ import { BreadcrumbItem } from './types';
       width: 3px;
       height: 3px;
       border-radius: 9px;
-      background: var(--mj-text-disabled, #94a3b8);
+      background: var(--mj-text-disabled);
       display: inline-block;
       margin: 0 8px;
       vertical-align: middle;
@@ -151,11 +153,20 @@ import { BreadcrumbItem } from './types';
       font-size: 11.5px;
       font-weight: 600;
       white-space: nowrap;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      color: var(--mj-text-secondary, #475569);
-      background: var(--mj-bg-surface, #ffffff);
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface);
       box-sizing: border-box;
       user-select: none;
+    }
+    .crumb-link {
+      cursor: pointer;
+      color: var(--mj-text-secondary, #475569);
+      transition: color 0.15s;
+    }
+    .crumb-link:hover {
+      color: var(--mj-brand-primary, #0076b6);
+      text-decoration: underline;
     }
     .chip.plain {
       background: var(--mj-bg-surface-sunken, #f1f5f9);
@@ -176,6 +187,13 @@ export class CollabSpaceHeaderComponent {
   @Input() Status: 'Active' | 'Closed' | string = 'Active';
   @Input() Subtitle = '';
   @Input() Breadcrumbs: BreadcrumbItem[] = [];
+  @Input() BackgroundImageUrl: string | null = null;
+
+  @Output() BreadcrumbSelectRequested = new EventEmitter<BreadcrumbItem>();
+
+  public onCrumbClick(crumb: BreadcrumbItem): void {
+    this.BreadcrumbSelectRequested.emit(crumb);
+  }
 
   get subtitleParts(): string[] {
     if (!this.Subtitle) return [];

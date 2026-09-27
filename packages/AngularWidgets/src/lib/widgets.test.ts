@@ -17,10 +17,18 @@ import { CollabShareCheckComponent } from './share-check.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
 import { CollabSpaceLibraryComponent } from './space-library.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './upload-dialog.component.ts';
+import { CollabSpaceWorkComponent } from './space-work.component.ts';
+import { CollabSpaceChatComponent } from './space-chat.component.ts';
+import { CollabSpacePeopleComponent } from './space-people.component.ts';
+import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import {
   FindingModel,
   LibraryRowModel,
   RailSpaceNode,
+  TaskItemModel,
+  SpaceMemberModel,
+  SpaceSettingsModel,
 } from './types.ts';
 
 describe('CollabAvatarComponent', () => {
@@ -536,7 +544,7 @@ describe('CollabSpaceOverviewComponent', () => {
     comp.PreviewAsRequested.subscribe(p => {
       previewPersona = p;
     });
-    comp.onPreviewAsCasey();
+    comp.onPreviewAsPersona();
     expect(previewPersona).toBe('casey');
   });
 
@@ -625,7 +633,250 @@ describe('CollabShareCheckDialogComponent', () => {
     });
 
     comp.onShareRequested({ applyFixes: true, note: 'Done', notify: true });
+    expect(payload).toEqual({ applyFixes: true, note: 'Done', notify: true });
   });
 });
+
+describe('CollabUploadDialogComponent', () => {
+  it('switches between upload and link modes and updates detection', () => {
+    const comp = new CollabUploadDialogComponent();
+    expect(comp.activeMode).toBe('upload');
+
+    comp.setMode('link');
+    expect(comp.activeMode).toBe('link');
+
+    // Detect Google Docs link
+    comp.linkUrl = 'https://docs.google.com/document/d/12345/edit';
+    comp.onUrlChange(comp.linkUrl);
+    expect(comp.detectedKind).toBe('doc');
+    expect(comp.detectedService?.label).toBe('Google Docs');
+
+    // Detect Google Sheets link
+    comp.linkUrl = 'https://docs.google.com/spreadsheets/d/12345/edit';
+    comp.onUrlChange(comp.linkUrl);
+    expect(comp.detectedKind).toBe('xls');
+    expect(comp.detectedService?.label).toBe('Google Sheets');
+
+    // Detect Microsoft 365 link
+    comp.linkUrl = 'https://contoso.sharepoint.com/:x:/r/budget.xlsx';
+    comp.onUrlChange(comp.linkUrl);
+    expect(comp.detectedKind).toBe('xls');
+    expect(comp.detectedService?.label).toBe('Microsoft 365');
+  });
+
+  it('validates submission readiness and emits SubmitRequested payload for link mode', () => {
+    const comp = new CollabUploadDialogComponent();
+    comp.setMode('link');
+    comp.linkUrl = 'https://docs.google.com/document/d/999/edit';
+    comp.docTitle = 'Project Proposal';
+    comp.docFolder = 'Deliverables';
+    comp.selectedBand = 'Shared';
+
+    expect(comp.canSubmit).toBe(true);
+
+    let submitted: CollabUploadSubmitPayload | null = null;
+    comp.SubmitRequested.subscribe(p => {
+      submitted = p;
+    });
+
+    comp.onSubmit();
+    expect(submitted).toEqual({
+      mode: 'link',
+      title: 'Project Proposal',
+      band: 'Shared',
+      folder: 'Deliverables',
+      kind: 'doc',
+      fileName: undefined,
+      fileSize: undefined,
+      fileType: undefined,
+      file: undefined,
+      url: 'https://docs.google.com/document/d/999/edit',
+    });
+  });
+
+  it('emits CancelRequested on backdrop click or cancel button', () => {
+    const comp = new CollabUploadDialogComponent();
+    let cancelled = false;
+    comp.CancelRequested.subscribe(() => {
+      cancelled = true;
+    });
+
+    comp.onCancel();
+    expect(cancelled).toBe(true);
+  });
+});
+
+describe('CollabSpaceWorkComponent', () => {
+  const sampleTasks: TaskItemModel[] = [
+    { id: 't1', name: 'Draft specification', status: 'In Progress', priority: 'High', band: 'Shared' },
+    { id: 't2', name: 'Internal review', status: 'Not Started', priority: 'Medium', band: 'Team' },
+    { id: 't3', name: 'Sign off document', status: 'Completed', priority: 'Low', band: 'Shared' },
+  ];
+
+  it('computes correct stats and filters tasks by query and band', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.Tasks = sampleTasks;
+
+    expect(comp.TotalTasks).toBe(3);
+    expect(comp.InProgressCount).toBe(1);
+    expect(comp.CompletedCount).toBe(1);
+    expect(comp.SharedCount).toBe(2);
+
+    // Filter by band
+    comp.bandFilter = 'Shared';
+    expect(comp.filteredTasks.length).toBe(2);
+
+    // Search filter
+    comp.searchQuery = 'review';
+    expect(comp.filteredTasks.length).toBe(0); // 'review' is Team band
+    comp.bandFilter = 'all';
+    expect(comp.filteredTasks.length).toBe(1);
+  });
+
+  it('emits TaskToggleRequested and CreateTaskRequested', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.Tasks = sampleTasks;
+
+    let toggled: TaskItemModel | null = null;
+    comp.TaskToggleRequested.subscribe(t => {
+      toggled = t;
+    });
+    comp.onToggleTask(sampleTasks[0]);
+    expect(toggled).toBe(sampleTasks[0]);
+
+    let created: { name: string; band: string; priority: string } | null = null;
+    comp.CreateTaskRequested.subscribe(c => {
+      created = c;
+    });
+    comp.newTaskName = 'New delivery milestone';
+    comp.newTaskBand = 'Shared';
+    comp.newTaskPriority = 'Urgent';
+    comp.submitNewTask();
+
+    expect(created).toEqual({
+      name: 'New delivery milestone',
+      band: 'Shared',
+      priority: 'Urgent',
+    });
+    expect(comp.newTaskName).toBe('');
+    expect(comp.isAddingTask).toBe(false);
+  });
+});
+
+describe('CollabSpaceChatComponent', () => {
+  it('emits SendMessageRequested on non-empty message and clears text', () => {
+    const comp = new CollabSpaceChatComponent();
+    let sentMessage = '';
+    comp.SendMessageRequested.subscribe(msg => {
+      sentMessage = msg;
+    });
+
+    comp.newMessageText = '  Hello everyone in the space room!  ';
+    comp.sendMessage();
+
+    expect(sentMessage).toBe('Hello everyone in the space room!');
+    expect(comp.newMessageText).toBe('');
+  });
+
+  it('ignores empty or whitespace message send attempts', () => {
+    const comp = new CollabSpaceChatComponent();
+    let emitted = false;
+    comp.SendMessageRequested.subscribe(() => {
+      emitted = true;
+    });
+
+    comp.newMessageText = '    ';
+    comp.sendMessage();
+    expect(emitted).toBe(false);
+  });
+});
+
+describe('CollabSpacePeopleComponent', () => {
+  const sampleMembers: SpaceMemberModel[] = [
+    { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active' },
+    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Client Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
+    { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
+  ];
+
+  it('calculates roster counts and filters by audience and search query', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.Members = sampleMembers;
+
+    expect(comp.TotalMembers).toBe(3);
+    expect(comp.TeamCount).toBe(2);
+    expect(comp.OutsideCount).toBe(1);
+    expect(comp.ActiveCount).toBe(2);
+
+    comp.audienceFilter = 'Shared';
+    expect(comp.filteredMembers.length).toBe(1);
+    expect(comp.filteredMembers[0].name).toBe('Bea Client');
+
+    comp.audienceFilter = 'all';
+    comp.searchQuery = 'lovelace';
+    expect(comp.filteredMembers.length).toBe(1);
+    expect(comp.filteredMembers[0].name).toBe('Ada Lovelace');
+  });
+
+  it('emits InviteMemberRequested with form fields and resets form', () => {
+    const comp = new CollabSpacePeopleComponent();
+    let invited: { email: string; role: string; band: string } | null = null;
+    comp.InviteMemberRequested.subscribe(i => {
+      invited = i;
+    });
+
+    comp.inviteEmail = 'newperson@example.com';
+    comp.inviteRole = 'admin';
+    comp.inviteBand = 'Shared';
+    comp.submitInvite();
+
+    expect(invited).toEqual({
+      email: 'newperson@example.com',
+      role: 'admin',
+      band: 'Shared',
+    });
+    expect(comp.inviteEmail).toBe('');
+    expect(comp.isInviting).toBe(false);
+  });
+});
+
+describe('CollabSpaceSettingsComponent', () => {
+  const initialSettings: SpaceSettingsModel = {
+    id: 's1',
+    name: 'Northwind relationship',
+    description: 'Lead engagement space',
+    spaceType: 'Workspace',
+    spaceTypeId: 'st1',
+    iconClass: 'fa-solid fa-briefcase',
+    color: '#0076b6',
+    backgroundImageUrl: 'https://example.com/banner.jpg',
+    inheritsMembership: true,
+    agentRetrieval: 'Included',
+    retention: 'Indefinite',
+    status: 'Active',
+  };
+
+  it('initializes form data and emits SaveSettingsRequested', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+
+    expect(comp.formData.name).toBe('Northwind relationship');
+    expect(comp.formData.color).toBe('#0076b6');
+
+    let saved: SpaceSettingsModel | null = null;
+    comp.SaveSettingsRequested.subscribe(s => {
+      saved = s;
+    });
+
+    comp.formData.name = 'Northwind strategic relationship';
+    comp.formData.color = '#0284c7';
+    comp.saveChanges();
+
+    expect(saved).not.toBeNull();
+    expect(saved!.name).toBe('Northwind strategic relationship');
+    expect(saved!.color).toBe('#0284c7');
+  });
+});
+
 
 

@@ -1421,6 +1421,18 @@ export class mjBizAppsCollaborationSpace_ {
     PlannedCloseAt?: Date;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
+    IconClass?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Color?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    BackgroundImageURL?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(200)
     SpaceType?: string;
         
@@ -1481,6 +1493,15 @@ export class CreatemjBizAppsCollaborationSpaceInput {
     @Field({ nullable: true })
     PlannedCloseAt: Date | null;
 
+    @Field({ nullable: true })
+    IconClass: string | null;
+
+    @Field({ nullable: true })
+    Color: string | null;
+
+    @Field({ nullable: true })
+    BackgroundImageURL: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -1529,6 +1550,15 @@ export class UpdatemjBizAppsCollaborationSpaceInput {
 
     @Field({ nullable: true })
     PlannedCloseAt?: Date | null;
+
+    @Field({ nullable: true })
+    IconClass?: string | null;
+
+    @Field({ nullable: true })
+    Color?: string | null;
+
+    @Field({ nullable: true })
+    BackgroundImageURL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -41,7 +41,7 @@
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
             "Description": "\bThe\b \bcontainer\b. \bPermission\b \bboundary\b \band\b \bagent\b \bretrieval\b \bboundary\b, \bas\b \ba\b \btree\b: \bone\b \broot\b \bper\b \brelationship\b, \bsub\b-\bspaces\b \bfor\b \bthe\b \bwork\b \binside\b \bit\b.",
             "BaseView": "\bvwSpaces\b", 
-            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bRetention\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bSpaceType\b","\bParent\b","\bOwner\b"]
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bRetention\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bSpaceType\b","\bParent\b","\bOwner\b"]
         }
         ]
     }

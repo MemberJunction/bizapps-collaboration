@@ -23,6 +23,7 @@ export interface BreadcrumbItem {
   label: string;
   url?: string;
   active?: boolean;
+  spaceId?: string;
 }
 
 export interface RailSpaceNode {
@@ -186,4 +187,50 @@ export interface ChatLensAudienceGroup {
   count: number;
   members: AvatarItem[];
 }
+
+export interface TaskItemModel {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'Not Started' | 'In Progress' | 'Completed' | 'Deferred' | 'Blocked' | string;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent' | string;
+  band: SpaceBand;
+  assigneeName?: string;
+  assigneeInitials?: string;
+  assigneeAvatarUrl?: string;
+  dueDate?: string;
+  percentComplete?: number;
+  subtaskCount?: number;
+}
+
+export interface SpaceMemberModel {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  initials: string;
+  avatarUrl?: string;
+  colorClass?: string;
+  roleName: string;
+  roleCode: string;
+  band: SpaceBand;
+  status: 'Active' | 'Invited' | 'Removed' | string;
+  joinedDate?: string;
+}
+
+export interface SpaceSettingsModel {
+  id: string;
+  name: string;
+  description: string;
+  spaceType: string;
+  spaceTypeId: string;
+  iconClass: string;
+  color: string;
+  backgroundImageUrl: string;
+  inheritsMembership: boolean;
+  agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;
+  retention: 'Month' | 'Year' | 'Indefinite' | string;
+  status: string;
+}
+
 

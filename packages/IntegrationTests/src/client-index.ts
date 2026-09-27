@@ -18,6 +18,7 @@ import './checks/client/write-gates.client.checks.js';
 import './checks/client/row-filters.client.checks.js';
 import './checks/client/library.client.checks.js';
 import './checks/client/agent.client.checks.js';
+import './checks/client/features.client.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

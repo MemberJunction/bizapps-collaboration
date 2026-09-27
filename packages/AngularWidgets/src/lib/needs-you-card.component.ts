@@ -29,6 +29,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     :host {
       display: block;
       min-width: 0;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       line-height: var(--mjc-line-height);
     }
 

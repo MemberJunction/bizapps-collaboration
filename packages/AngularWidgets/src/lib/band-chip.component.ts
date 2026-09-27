@@ -21,6 +21,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     :host {
       display: inline-flex;
       vertical-align: middle;
+      color: var(--mj-text-primary);
+      font-family: var(--mj-font-family, Inter, sans-serif);
       font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
       line-height: var(--mjc-line-height, 1.45);
     }
@@ -34,22 +36,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       font-size: 11.5px;
       font-weight: 600;
       white-space: nowrap;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      color: var(--mj-text-secondary, #475569);
-      background: var(--mj-bg-surface, #ffffff);
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface);
       box-sizing: border-box;
       user-select: none;
     }
     .chip i { font-size: 10px; }
     .chip.shared {
-      color: var(--mjc-shared, #0e7490);
-      background: var(--mjc-shared-bg, #ecfeff);
-      border-color: var(--mjc-shared-border, rgba(6, 182, 212, 0.35));
+      color: var(--mjc-shared);
+      background: var(--mjc-shared-bg);
+      border-color: var(--mjc-shared-border);
     }
     .chip.team {
-      color: var(--mjc-team, #475569);
-      background: var(--mjc-team-bg, rgba(100, 116, 139, 0.12));
-      border-color: var(--mjc-team-border, #cbd5e1);
+      color: var(--mjc-team);
+      background: var(--mjc-team-bg);
+      border-color: var(--mjc-team-border);
     }
     .chip.lg {
       height: 26px;
