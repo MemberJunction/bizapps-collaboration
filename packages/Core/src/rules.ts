@@ -39,6 +39,7 @@ export interface SpaceNode {
     ownerId: string;
     agentRetrieval: AgentRetrieval;
     allowParentAssignees?: boolean;
+    closedAt?: string | Date | null;
 }
 
 export interface InviteRefusal {

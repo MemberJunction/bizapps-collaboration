@@ -2,7 +2,7 @@ import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type Va
 import { RegisterClass } from '@memberjunction/global';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { TaskEntityServer } from '@mj-biz-apps/tasks-entities-server';
-import { loadWriteContext, requireSystemUser } from './load-graph.js';
+import { isStaffUser, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { callerPersonId, isSpaceParticipant, reportCollaborationClasses, watchCollaborationClasses } from './task-attribution.js';
 import { filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
@@ -25,29 +25,46 @@ export class CollaborationTaskEntityServer extends TaskEntityServer {
             this.CreatedByPersonID = personId;
         }
         const parentChanged = this.IsSaved && !!this.Fields.find((field) => field.Name === 'ParentID')?.Dirty;
-        if (parentChanged) {
+        const statusChanged = this.IsSaved && !!this.Fields.find((field) => field.Name === 'Status')?.Dirty;
+        if (parentChanged || statusChanged) {
             const provider = this.ProviderToUse ? asMetadata(this.ProviderToUse) : null;
-            if (!provider?.EntityByName) return refuse(result, 'ParentID', 'Task refused: the space could not be read.');
+            const errorField = statusChanged ? 'Status' : 'ParentID';
+            if (!provider?.EntityByName) return refuse(result, errorField, 'Task refused: the space could not be read.');
             try {
                 const system = await requireSystemUser(this);
                 const place = await filedTask(provider, system, this.ID);
-                if (this.ParentID) {
-                    if (place?.root) return refuse(result, 'ParentID', 'Task refused: a filed root task cannot take a parent.');
-                    const parent = await filedTask(provider, system, this.ParentID);
-                    if ((place?.spaceId ?? null) !== (parent?.spaceId ?? null)) {
+                if (place) {
+                    const context = await loadWriteContext(this, user, place.spaceId, null);
+                    const space = context.spaces.find((s) => s.id.toLowerCase() === place.spaceId.toLowerCase());
+                    if (space?.closedAt) {
+                        return refuse(result, errorField, 'Task refused: cannot update a task in a closed space.');
+                    }
+                    if (statusChanged) {
+                        const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
+                        if (!reach?.role.canContribute && !isStaffUser(user)) {
+                            return refuse(result, 'Status', 'Task refused: you do not have permission to update task status in this space.');
+                        }
+                    }
+                }
+                if (parentChanged) {
+                    if (this.ParentID) {
+                        if (place?.root) return refuse(result, 'ParentID', 'Task refused: a filed root task cannot take a parent.');
+                        const parent = await filedTask(provider, system, this.ParentID);
+                        if ((place?.spaceId ?? null) !== (parent?.spaceId ?? null)) {
+                            return refuse(result, 'ParentID', 'Task refused: a task stays in the space it was filed in.');
+                        }
+                        if (place && parent && place.band !== parent.band) {
+                            const context = await loadWriteContext(this, user, place.spaceId, null);
+                            const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
+                            if (!reach?.role.canPromoteBand) return refuse(result, 'ParentID', 'Task refused: changing a task between Shared and Team takes promote rights.');
+                        }
+                    } else if (place && !place.root) {
                         return refuse(result, 'ParentID', 'Task refused: a task stays in the space it was filed in.');
                     }
-                    if (place && parent && place.band !== parent.band) {
-                        const context = await loadWriteContext(this, user, place.spaceId, null);
-                        const reach = membershipReaches(context.spaces, context.memberships, user.ID, place.spaceId);
-                        if (!reach?.role.canPromoteBand) return refuse(result, 'ParentID', 'Task refused: changing a task between Shared and Team takes promote rights.');
-                    }
-                } else if (place && !place.root) {
-                    return refuse(result, 'ParentID', 'Task refused: a task stays in the space it was filed in.');
                 }
             } catch (error) {
-                LogError(`Filed root check for task ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
-                return refuse(result, 'ParentID', 'Task refused: the space could not be read.');
+                LogError(`Space task check for task ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+                return refuse(result, errorField, 'Task refused: the space could not be read.');
             }
         }
         return result;

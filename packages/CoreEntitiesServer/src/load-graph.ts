@@ -27,6 +27,7 @@ interface SpaceRow {
     AgentRetrieval: SpaceNode['agentRetrieval'];
     SpaceTypeID: string;
     AllowParentAssignees?: boolean;
+    ClosedAt?: string | Date | null;
 }
 
 function toNode(row: SpaceRow): SpaceNode {
@@ -37,6 +38,7 @@ function toNode(row: SpaceRow): SpaceNode {
         ownerId: parseUuid(row.OwnerID) ?? row.OwnerID,
         agentRetrieval: row.AgentRetrieval,
         allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
+        closedAt: row.ClosedAt ? String(row.ClosedAt) : null,
     };
 }
 
