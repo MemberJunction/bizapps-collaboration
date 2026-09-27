@@ -74,6 +74,9 @@ importers:
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
         version: link:../Core
+      '@mj-biz-apps/collaboration-engine-base':
+        specifier: 0.1.0
+        version: link:../EngineBase
       '@mj-biz-apps/collaboration-entities':
         specifier: 0.1.0
         version: link:../Entities
@@ -208,6 +211,9 @@ importers:
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
         version: link:../Core
+      '@mj-biz-apps/collaboration-engine-base':
+        specifier: 0.1.0
+        version: link:../EngineBase
       '@mj-biz-apps/collaboration-entities':
         specifier: 0.1.0
         version: link:../Entities
@@ -236,6 +242,28 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/EngineBase:
+    dependencies:
+      '@memberjunction/core':
+        specifier: ^6.1.2
+        version: 6.1.3
+      '@memberjunction/core-entities':
+        specifier: ^6.1.2
+        version: 6.1.3
+      '@memberjunction/global':
+        specifier: ^6.1.2
+        version: 6.1.3
+      '@mj-biz-apps/collaboration-core':
+        specifier: 0.1.0
+        version: link:../Core
+      '@mj-biz-apps/collaboration-entities':
+        specifier: 0.1.0
+        version: link:../Entities
+    devDependencies:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
