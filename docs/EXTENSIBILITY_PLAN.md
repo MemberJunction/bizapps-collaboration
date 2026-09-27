@@ -599,7 +599,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 ## 13. Order of work
 
 1. **During the next pull request's work,** once the builder is on it, the two MJ pull requests of [§ 9](#9-mj-changes) are opened, in parallel (the plan's D11). § 9.1 is redesigned with the plan's A5, A7 and A12.11 first. Collaboration pins the MJ release that carries them.
-2. **In the next pull request,** after PR #3 merges with slice A, build in this order, each step with its tests, beside the UI's slices B to I ([the plan's § 9](../plans/plan.md#9-sequencing)):
+2. **In the next pull request,** after PR #3 merges with slice A, build in this order, each step with its tests ([the plan's § 9](../plans/plan.md#9-sequencing)). The screens come last (the plan's D16): steps 4 and 6 build their server side here, and slices G and I wait for the UI stage with the other slices:
    1. the schema: the `SpaceType` and `Space` columns, `SpaceMember.SyncSource` and `PersonID`, the chat, agent and knowledge-binding tables, the JSONType wiring and the type rows;
    2. the server drivers, the registry and the calls in every entity server class and operation, with the lifecycle subscribers and signal providers;
    3. the UI drivers and contributions, replacing the scaffold's `BaseSpaceTab`, `BaseSpaceOverviewCard` and three provider classes, with slice D's needs-you and agenda rows moved onto the providers;
