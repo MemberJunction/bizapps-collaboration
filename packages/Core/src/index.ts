@@ -54,10 +54,14 @@ export {
     computeSpaceProgress,
     mergeAgenda,
     NeedsYouProvider,
+    BaseNeedsYouProvider,
     AgendaProvider,
+    BaseAgendaProvider,
     SpaceHeaderChipProvider,
+    BaseSpaceHeaderChipProvider,
 } from './view-models.js';
 export type {
+    SpaceBatchContext,
     AvatarColorClass,
     AudienceMemberInput,
     ExternalOrgGroup,

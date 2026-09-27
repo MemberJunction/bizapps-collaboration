@@ -51,6 +51,7 @@ export interface EffectiveSpaceRules {
     Agents: {
         ListMode: 'Extend' | 'Replace';
     };
+    Labels?: { Tabs?: Record<string, string> };
     Extensions: Record<string, Record<string, ConfigurationValue>>;
 }
 
@@ -63,6 +64,7 @@ export const DEFAULT_SPACE_RULES: EffectiveSpaceRules = {
     Agents: {
         ListMode: 'Extend',
     },
+    Labels: undefined,
     Extensions: {},
 };
 
@@ -86,6 +88,7 @@ export function ResolveSpaceRules(
         Agents: {
             ListMode: typeConfig?.Agents?.ListMode ?? DEFAULT_SPACE_RULES.Agents.ListMode,
         },
+        Labels: typeConfig?.Labels,
         Extensions: {
             ...(typeConfig?.Extensions ?? {}),
         },
