@@ -177,7 +177,10 @@ export async function executeSpaceChatTurn(
     // 7. Mention rule: decide from saved message alone using MentionParser (Item 6)
     const parser = new MentionParser();
     const parseResult = parser.parseMentions(messageText, availableAgents);
-    const taggedAgentId = parseResult.agentMention?.id ? parseUuid(parseResult.agentMention.id) : null;
+    const isLegacyMention = /@(assistant|agent)\b/i.test(messageText);
+    const taggedAgentId = parseResult.agentMention?.id
+        ? parseUuid(parseResult.agentMention.id)
+        : (isLegacyMention ? resolvedDefault : null);
 
     let targetAgentId: string;
     if (taggedAgentId) {

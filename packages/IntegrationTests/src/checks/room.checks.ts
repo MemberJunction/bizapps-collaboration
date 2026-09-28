@@ -24,33 +24,6 @@ const checks: NamedCheck[] = [
         Name: 'RM1 — space conversation bound to system user, linked to space, and scoped to Collaboration app',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const convs = await FindRows<{
-                ID: string;
-                UserID: string;
-                LinkedEntityID: string;
-                LinkedRecordID: string;
-                ApplicationScope: string;
-                ApplicationID: string;
-            }>(
-                ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID', 'UserID', 'LinkedEntityID', 'LinkedRecordID', 'ApplicationScope', 'ApplicationID'],
-            );
-
-            Assert(convs.length === 1, `Discovery room conversation exists (found ${convs.length})`);
-            const room = convs[0];
-            Assert(room.ApplicationScope === 'Application', `ApplicationScope is Application, saw ${room.ApplicationScope}`);
-            Assert(room.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase(), 'ApplicationID is Collaboration App');
-            Assert(room.LinkedEntityID?.toLowerCase() === SPACES_ENTITY_ID.toLowerCase(), 'LinkedEntityID is Spaces');
-            Assert(room.LinkedRecordID?.toLowerCase() === DISCOVERY_SPACE_ID.toLowerCase(), 'LinkedRecordID is Discovery Space');
-
-            // Assert UserID is bound to the system user (not regular user)
-            const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
-            Assert(systemUsers.length === 1, 'System user found in MJ: Users');
-            Assert(room.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Room conversation must be bound to system user, saw: ${room.UserID}`);
-
-            // Assert Space Chat room row exists for room conversation
             const spaceChats = await FindRows<{
                 ID: string;
                 SpaceID: string;
@@ -60,30 +33,53 @@ const checks: NamedCheck[] = [
             }>(
                 ctx,
                 SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND ConversationID = '${room.ID}'`,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
                 ['ID', 'SpaceID', 'ConversationID', 'Kind', 'Status'],
             );
-            Assert(spaceChats.length === 1, `Discovery Space Chat room row exists (found ${spaceChats.length})`);
-            Assert(spaceChats[0].Kind === 'Room', `Space Chat Kind is Room, saw ${spaceChats[0].Kind}`);
-            Assert(spaceChats[0].Status === 'Active', `Space Chat Status is Active, saw ${spaceChats[0].Status}`);
+
+            Assert(spaceChats.length >= 1, `Discovery Space Chat General row exists (found ${spaceChats.length})`);
+            const chat = spaceChats[0];
+            Assert(chat.Kind === 'General', `Space Chat Kind is General, saw ${chat.Kind}`);
+            Assert(chat.Status === 'Active', `Space Chat Status is Active, saw ${chat.Status}`);
+
+            const convs = await FindRows<{
+                ID: string;
+                UserID: string;
+                ApplicationScope: string;
+                ApplicationID: string;
+            }>(
+                ctx,
+                CONVERSATION_ENTITY,
+                `ID = '${chat.ConversationID}'`,
+                ['ID', 'UserID', 'ApplicationScope', 'ApplicationID'],
+            );
+            Assert(convs.length === 1, `Discovery conversation exists`);
+            const conv = convs[0];
+            Assert(conv.ApplicationScope === 'Application', `ApplicationScope is Application, saw ${conv.ApplicationScope}`);
+            Assert(conv.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase(), 'ApplicationID is Collaboration App');
+
+            // Assert UserID is bound to the system user (not regular user)
+            const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
+            Assert(systemUsers.length === 1, 'System user found in MJ: Users');
+            Assert(conv.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Space conversation must be bound to system user, saw: ${conv.UserID}`);
         },
     },
     {
         Id: 'room.RM2',
-        Name: "RM2 — owner's regular chat list excludes the room conversation",
+        Name: "RM2 — owner's regular chat list excludes the space conversation",
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
 
-            // Find the Discovery room conversation ID
-            const roomConvs = await FindRows<{ ID: string }>(
+            // Find Discovery General conversation ID
+            const spaceChats = await FindRows<{ ConversationID: string }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID'],
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
+                ['ConversationID'],
             );
-            Assert(roomConvs.length === 1, 'Room conversation found');
-            const roomId = roomConvs[0].ID;
+            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
+            const convId = spaceChats[0].ConversationID;
 
             const view = View(ctx);
 
@@ -95,8 +91,8 @@ const checks: NamedCheck[] = [
                 ResultType: 'simple',
             }, ada);
             Assert(defaultChat.Success, `Default chat view failed: ${defaultChat.ErrorMessage ?? ''}`);
-            const foundDefault = (defaultChat.Results ?? []).some((c) => c.ID.toLowerCase() === roomId.toLowerCase());
-            Assert(!foundDefault, "Owner's default chat list MUST NOT contain the space room conversation");
+            const foundDefault = (defaultChat.Results ?? []).some((c) => c.ID.toLowerCase() === convId.toLowerCase());
+            Assert(!foundDefault, "Owner's default chat list MUST NOT contain the space conversation");
 
             // Check chat list when includeApplicationScoped is toggled on (drops scope clause, still filters by UserID)
             const appChat = await view.RunView<{ ID: string }>({
@@ -106,34 +102,35 @@ const checks: NamedCheck[] = [
                 ResultType: 'simple',
             }, ada);
             Assert(appChat.Success, `App-inclusive chat view failed: ${appChat.ErrorMessage ?? ''}`);
-            const foundApp = (appChat.Results ?? []).some((c) => c.ID.toLowerCase() === roomId.toLowerCase());
-            Assert(!foundApp, "Owner's chat list with app scope included MUST NOT contain the room conversation (it is system-owned)");
+            const foundApp = (appChat.Results ?? []).some((c) => c.ID.toLowerCase() === convId.toLowerCase());
+            Assert(!foundApp, "Owner's chat list with app scope included MUST NOT contain the space conversation (it is system-owned)");
         },
     },
     {
         Id: 'room.RM3',
-        Name: 'RM3 — contributing seat (Ada) direct save to room succeeds; non-contributor (Pat, Dana) and spoofing are refused',
+        Name: 'RM3 — contributing seat (Ada) direct save to General conversation succeeds; non-contributor (Pat, Dana) and spoofing are refused',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
             const pat = await GetPersonaUser(ctx, 'pat');
             const dana = await GetPersonaUser(ctx, 'dana');
 
-            const roomConvs = await FindRows<{ ID: string }>(
+            const discChats = await FindRows<{ ConversationID: string }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID'],
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                ['ConversationID'],
             );
-            const roomId = roomConvs[0].ID;
+            Assert(discChats.length >= 1, 'Discovery General conversation found');
+            const convId = discChats[0].ConversationID;
 
-            // Direct save by Ada (contributing seat with Edit grant on room conversation) succeeds
+            // Direct save by Ada (contributing seat with Edit grant on conversation) succeeds
             const adaDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
             adaDetail.NewRecord();
-            adaDetail.ConversationID = roomId;
+            adaDetail.ConversationID = convId;
             adaDetail.UserID = ada.ID;
             adaDetail.Role = 'User';
-            adaDetail.Message = 'Direct chat by contributing member into space room';
+            adaDetail.Message = 'Direct chat by contributing member into space conversation';
             adaDetail.Status = 'Complete';
 
             const adaSaved = await adaDetail.Save();
@@ -146,10 +143,10 @@ const checks: NamedCheck[] = [
             // Direct save by Pat (Invited / non-contributor without Edit grant) is refused
             const patDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, pat);
             patDetail.NewRecord();
-            patDetail.ConversationID = roomId;
+            patDetail.ConversationID = convId;
             patDetail.UserID = pat.ID;
             patDetail.Role = 'User';
-            patDetail.Message = 'Direct chat attempt by non-contributor into space room';
+            patDetail.Message = 'Direct chat attempt by non-contributor into space conversation';
             patDetail.Status = 'Complete';
 
             const patSaved = await patDetail.Save();
@@ -158,19 +155,19 @@ const checks: NamedCheck[] = [
             }
             Assert(!patSaved || !patDetail.ID, 'Direct conversation detail save into room by non-contributor must be refused');
 
-            // Direct save by Dana into Committee room (guest seat, CanContribute = false) is refused
-            const committeeConvs = await FindRows<{ ID: string }>(
+            // Direct save by Dana into Committee conversation (guest seat, CanContribute = false) is refused
+            const committeeChats = await FindRows<{ ConversationID: string }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${COMMITTEE_SPACE_ID}'`,
-                ['ID'],
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${COMMITTEE_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                ['ConversationID'],
             );
-            Assert(committeeConvs.length === 1, 'Committee room conversation found');
-            const committeeRoomId = committeeConvs[0].ID;
+            Assert(committeeChats.length >= 1, 'Committee General conversation found');
+            const committeeConvId = committeeChats[0].ConversationID;
 
             const danaDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, dana);
             danaDetail.NewRecord();
-            danaDetail.ConversationID = committeeRoomId;
+            danaDetail.ConversationID = committeeConvId;
             danaDetail.UserID = dana.ID;
             danaDetail.Role = 'User';
             danaDetail.Message = 'Dana attempting direct save in committee room';
@@ -187,7 +184,7 @@ const checks: NamedCheck[] = [
             // Bea saving detail with mismatched UserID (spoofing Pat) is refused
             const beaSpoofDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, bea);
             beaSpoofDetail.NewRecord();
-            beaSpoofDetail.ConversationID = roomId;
+            beaSpoofDetail.ConversationID = convId;
             beaSpoofDetail.UserID = pat.ID;
             beaSpoofDetail.Role = 'User';
             beaSpoofDetail.Message = 'Bea spoofing Pat';
@@ -202,7 +199,7 @@ const checks: NamedCheck[] = [
             // Bea saving detail with Role = 'AI' is refused
             const beaAiDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, bea);
             beaAiDetail.NewRecord();
-            beaAiDetail.ConversationID = roomId;
+            beaAiDetail.ConversationID = convId;
             beaAiDetail.UserID = bea.ID;
             beaAiDetail.Role = 'AI';
             beaAiDetail.Message = 'Bea spoofing AI role';
@@ -217,70 +214,70 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM4',
-        Name: 'RM4 — Pat (Invited) and Remy (Removed) query room conversation and get nothing; post-close access reads room',
+        Name: 'RM4 — Pat (Invited) and Remy (Removed) query space conversation and get nothing; post-close access reads conversation',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const pat = await GetPersonaUser(ctx, 'pat');
             const remy = await GetPersonaUser(ctx, 'remy');
-            const ada = await GetPersonaUser(ctx, 'ada');
 
-            const roomConvs = await FindRows<{ ID: string }>(
+            const discChats = await FindRows<{ ConversationID: string }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID'],
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
+                ['ConversationID'],
             );
-            const roomId = roomConvs[0].ID;
+            Assert(discChats.length >= 1, 'Discovery General conversation found');
+            const convId = discChats[0].ConversationID;
 
             const view = View(ctx);
 
-            // Pat queries the room conversation
+            // Pat queries the space conversation
             const patRes = await view.RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
-                ExtraFilter: `ID = '${roomId}'`,
+                ExtraFilter: `ID = '${convId}'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, pat);
             Assert(patRes.Success, `Pat RunView failed unexpectedly: ${patRes.ErrorMessage ?? ''}`);
             Assert(
                 (patRes.Results?.length ?? 0) === 0,
-                `Pat (Invited) MUST NOT be able to view Discovery room conversation, got ${patRes.Results?.length ?? 0} rows`,
+                `Pat (Invited) MUST NOT be able to view Discovery space conversation, got ${patRes.Results?.length ?? 0} rows`,
             );
 
-            // Remy queries the room conversation
+            // Remy queries the space conversation
             const remyRes = await view.RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
-                ExtraFilter: `ID = '${roomId}'`,
+                ExtraFilter: `ID = '${convId}'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, remy);
             Assert(remyRes.Success, `Remy RunView failed unexpectedly: ${remyRes.ErrorMessage ?? ''}`);
             Assert(
                 (remyRes.Results?.length ?? 0) === 0,
-                `Remy (Removed) MUST NOT be able to view Discovery room conversation, got ${remyRes.Results?.length ?? 0} rows`,
+                `Remy (Removed) MUST NOT be able to view Discovery space conversation, got ${remyRes.Results?.length ?? 0} rows`,
             );
 
-            // Assertion that someone with post-close access reads the room of a closed space (closed-recent)
-            const closedRoomConvs = await FindRows<{ ID: string }>(
+            // Assertion that someone with post-close access reads the conversation of a closed space (closed-recent)
+            const closedChats = await FindRows<{ ConversationID: string }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${CLOSED_RECENT_SPACE_ID}'`,
-                ['ID'],
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${CLOSED_RECENT_SPACE_ID}'`,
+                ['ConversationID'],
             );
-            Assert(closedRoomConvs.length === 1, 'Closed-recent room conversation found');
-            const closedRoomId = closedRoomConvs[0].ID;
+            Assert(closedChats.length >= 1, 'Closed-recent space conversation found');
+            const closedConvId = closedChats[0].ConversationID;
 
             const casey = await GetPersonaUser(ctx, 'casey');
             const caseyClosedRes = await view.RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
-                ExtraFilter: `ID = '${closedRoomId}'`,
+                ExtraFilter: `ID = '${closedConvId}'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
             }, casey);
-            Assert(caseyClosedRes.Success, `Casey RunView on closed-recent room failed: ${caseyClosedRes.ErrorMessage ?? ''}`);
+            Assert(caseyClosedRes.Success, `Casey RunView on closed-recent conversation failed: ${caseyClosedRes.ErrorMessage ?? ''}`);
             Assert(
                 (caseyClosedRes.Results?.length ?? 0) === 1,
-                `Casey (with post-close access) MUST be able to view closed-recent room conversation, got ${caseyClosedRes.Results?.length ?? 0} rows`,
+                `Casey (with post-close access) MUST be able to view closed-recent space conversation, got ${caseyClosedRes.Results?.length ?? 0} rows`,
             );
         },
     },
@@ -291,8 +288,18 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await GetPersonaUser(ctx, 'bea');
 
+            const discChats = await FindRows<{ ConversationID: string }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                ['ConversationID'],
+            );
+            Assert(discChats.length >= 1, 'Discovery General conversation found');
+            const discConvId = discChats[0].ConversationID;
+
             const result = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
                 text: 'Hello from Bea in the Discovery space room!',
             });
 
@@ -319,6 +326,7 @@ const checks: NamedCheck[] = [
             const ada = await GetPersonaUser(ctx, 'ada');
             const adaRes = await postSpaceMessage(ctx.Provider, ada, {
                 spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
                 text: '@Assistant summarize materials in this space',
                 executeAgent: true,
             });
@@ -376,8 +384,18 @@ const checks: NamedCheck[] = [
             let testError: unknown;
             try {
                 // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
+                const nwChats = await FindRows<{ ConversationID: string }>(
+                    ctx,
+                    SPACE_CHAT_ENTITY,
+                    `SpaceID = '${NORTHWIND_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                    ['ConversationID'],
+                );
+                Assert(nwChats.length >= 1, 'Northwind General conversation found');
+                const nwConvId = nwChats[0].ConversationID;
+
                 const samPostRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: NORTHWIND_SPACE_ID,
+                    conversationId: nwConvId,
                     text: '@Assistant summarize all materials in this space',
                     executeAgent: true,
                 });
@@ -401,8 +419,16 @@ const checks: NamedCheck[] = [
                 Assert(!nwReplyMsg.includes(uniqueFileName), `Northwind room assistant reply must not name sub-space Shared file ${uniqueFileName}`);
 
                 // 2. The other half: Sam asking in Sealed branch's own room names it
+                const sealedConvRes = await createSpaceConversation(ctx.Provider, sam, {
+                    SpaceID: SEALED_BRANCH_SPACE_ID,
+                    Name: `sealed-branch-gen-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(sealedConvRes.ok && !!sealedConvRes.conversationId, 'Sam creates General conversation in Sealed branch');
+
                 const samSealedRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: SEALED_BRANCH_SPACE_ID,
+                    conversationId: sealedConvRes.conversationId,
                     text: '@Assistant summarize materials in this space',
                     executeAgent: true,
                 });
@@ -455,9 +481,27 @@ const checks: NamedCheck[] = [
             const bea = await GetPersonaUser(ctx, 'bea');
             const remy = await GetPersonaUser(ctx, 'remy');
 
+            const discChats = await FindRows<{ ConversationID: string }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                ['ConversationID'],
+            );
+            Assert(discChats.length >= 1, 'Discovery General conversation found');
+            const discConvId = discChats[0].ConversationID;
+
+            // 0. Missing conversation ID
+            const noConvRes = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: 'Message without conversationId',
+            });
+            Assert(!noConvRes.ok, 'Message without conversationId must be refused');
+            Assert(!noConvRes.ok && noConvRes.message === 'A conversation ID is required to post a message.', 'Correct missing conversationId message');
+
             // 1. Empty message
             const emptyRes = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
                 text: '   ',
             });
             Assert(!emptyRes.ok, 'Empty message must be refused');
@@ -467,6 +511,7 @@ const checks: NamedCheck[] = [
             const longText = 'x'.repeat(4001);
             const longRes = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
                 text: longText,
             });
             Assert(!longRes.ok, 'Message > 4000 characters must be refused');
@@ -475,6 +520,7 @@ const checks: NamedCheck[] = [
             // 3. Closed space
             const closedRes = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: CLOSED_PAST_SPACE_ID,
+                conversationId: discConvId,
                 text: 'Message to closed space',
             });
             Assert(!closedRes.ok, 'Message to closed space must be refused');
@@ -482,6 +528,7 @@ const checks: NamedCheck[] = [
             // 4. Non-contributor (Remy - Removed)
             const remyRes = await postSpaceMessage(ctx.Provider, remy, {
                 spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
                 text: 'Message from removed user',
             });
             Assert(!remyRes.ok, 'Message from removed user must be refused');
@@ -492,6 +539,7 @@ const checks: NamedCheck[] = [
                 remy.Type = 'Owner';
                 const ownerOutsiderRes = await postSpaceMessage(ctx.Provider, remy, {
                     spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: discConvId,
                     text: 'Message from Owner with no seat',
                 });
                 Assert(!ownerOutsiderRes.ok, 'User with Owner account type and no space seat must be refused a post');
@@ -536,65 +584,43 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM8',
-        Name: 'RM8 — createSpaceConversation WhoCanStart=Owners: Sam is refused, Ada is permitted',
+        Name: 'RM8 — createSpaceConversation WhoCanStart=Owners: Bea is refused, Dev is permitted',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const sam = await GetPersonaUser(ctx, 'sam');
-            const ada = await GetPersonaUser(ctx, 'ada');
             const dev = await GetPersonaUser(ctx, 'dev');
+            const bea = await GetPersonaUser(ctx, 'bea');
 
-            const ownerRoles = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
-            Assert(ownerRoles.length === 1, 'Owner space role type found');
-            const ownerRoleId = ownerRoles[0].ID;
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
+            const origConfig = space.Configuration;
 
-            // Ada seats Dev as owner on Northwind so Dev (with Configure Spaces authorization) can configure space settings
-            const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
-            devMember.NewRecord();
-            devMember.SpaceID = NORTHWIND_SPACE_ID;
-            devMember.UserID = dev.ID;
-            devMember.SpaceRoleTypeID = ownerRoleId;
-            devMember.Band = 'Team';
-            devMember.Status = 'Active';
-            Assert(await devMember.Save(), 'Seating Dev as owner on Northwind must succeed');
-
-            let origConfig: string | null = null;
             try {
-                const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                Assert(await space.Load(NORTHWIND_SPACE_ID), 'Load Northwind space');
-                origConfig = space.Configuration;
-
                 const configObj = origConfig ? JSON.parse(origConfig) : {};
                 configObj.Chats = { ...(configObj.Chats ?? {}), WhoCanStart: 'Owners' };
                 space.Configuration = JSON.stringify(configObj);
                 const saved = await space.Save();
-                Assert(saved, 'Updated Northwind space config with WhoCanStart: Owners');
+                Assert(saved, 'Updated Discovery space config with WhoCanStart: Owners');
 
-                // Sam (contributing member, but not owner) is refused
-                const samRes = await createSpaceConversation(ctx.Provider, sam, {
-                    SpaceID: NORTHWIND_SPACE_ID,
-                    Name: `northwind-sam-refused-${Date.now()}`,
+                // Bea (contributing member, but not owner) is refused
+                const beaRes = await createSpaceConversation(ctx.Provider, bea, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-bea-refused-${Date.now()}`,
                     Kind: 'General',
                 });
-                Assert(!samRes.ok, 'Sam must be refused starting a conversation when WhoCanStart is Owners');
+                Assert(!beaRes.ok, 'Bea must be refused starting a conversation when WhoCanStart is Owners');
 
-                // Ada (owner) is permitted
-                const adaRes = await createSpaceConversation(ctx.Provider, ada, {
-                    SpaceID: NORTHWIND_SPACE_ID,
-                    Name: `northwind-ada-allowed-${Date.now()}`,
+                // Dev (owner) is permitted
+                const devRes = await createSpaceConversation(ctx.Provider, dev, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-dev-allowed-${Date.now()}`,
                     Kind: 'General',
                 });
-                Assert(adaRes.ok === true && !!adaRes.conversationId, `Ada (owner) must be permitted when WhoCanStart is Owners: ${adaRes.message ?? ''}`);
+                Assert(devRes.ok === true && !!devRes.conversationId, `Dev (owner) must be permitted when WhoCanStart is Owners: ${devRes.message ?? ''}`);
             } finally {
                 const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                if (await restoreSpace.Load(NORTHWIND_SPACE_ID)) {
+                if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
                     restoreSpace.Configuration = origConfig;
                     await restoreSpace.Save();
-                }
-                if (devMember.ID) {
-                    const cleanupMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
-                    if (await cleanupMember.Load(devMember.ID)) {
-                        await cleanupMember.Delete();
-                    }
                 }
             }
         },

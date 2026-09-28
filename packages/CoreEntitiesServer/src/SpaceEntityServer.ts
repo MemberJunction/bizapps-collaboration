@@ -1,5 +1,4 @@
 import { BaseEntity, type FieldValueCollection, type IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
-import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
     authorizeSpaceWrite,
@@ -357,10 +356,29 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
-            try {
-                await ensureConversation(this, user);
-            } catch (error) {
-                LogError(`Space conversation was not bound: ${error instanceof Error ? error.message : String(error)}`);
+            if (this.ClosedAt) {
+                try {
+                    const system = await requireSystemUser(this);
+                    const view = new RunView(this.RunViewProviderToUse);
+                    const chatsRes = await view.RunView<{ ID: string }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                        ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Active'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, system);
+                    if (chatsRes.Success && chatsRes.Results) {
+                        const md = new Metadata();
+                        for (const row of chatsRes.Results) {
+                            const chatObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+                            if (await chatObj.Load(row.ID)) {
+                                chatObj.Status = 'Archived';
+                                await chatObj.Save();
+                            }
+                        }
+                    }
+                } catch (closeErr) {
+                    LogError(`Failed to archive space chats on space close: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
+                }
             }
 
             if (structureChanged) {
@@ -416,103 +434,6 @@ function fail(result: ValidationResult, field: string, message: string): Validat
     result.Success = false;
     result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
     return result;
-}
-
-const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
-const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
-
-async function ensureConversation(space: SpaceEntityServer, user: NonNullable<SpaceEntityServer['ContextCurrentUser']>): Promise<void> {
-    const metadata = asMetadata(space.ProviderToUse);
-    if (!metadata) {
-        LogError('Space conversation was not bound: the provider cannot create entities.');
-        return;
-    }
-    const system = await requireSystemUser(space);
-    const targetStatus: mjBizAppsCollaborationSpaceChatEntity['Status'] = space.ClosedAt ? 'Archived' : 'Active';
-
-    // 1. Find existing Room for this space by its Space Chats row (Kind = 'Room')
-    const chatExisting = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string; ConversationID: string; Status: string }>({
-        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-        ExtraFilter: `SpaceID = '${space.ID}' AND Kind = 'Room'`,
-        Fields: ['ID', 'ConversationID', 'Status'],
-        OrderBy: '__mj_CreatedAt ASC',
-        ResultType: 'simple',
-        MaxRows: 1,
-    }, system);
-    if (!chatExisting.Success) {
-        LogError(`Space chat room lookup failed: ${chatExisting.ErrorMessage ?? 'the lookup failed'}`);
-        return;
-    }
-
-    const foundChat = chatExisting.Results?.[0];
-    if (foundChat) {
-        // On later saves, only set the row's status if changed
-        if (foundChat.Status !== targetStatus) {
-            const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
-            if (await spaceChat.Load(foundChat.ID)) {
-                spaceChat.Status = targetStatus;
-                const chatSaved = await spaceChat.Save();
-                if (!chatSaved) {
-                    LogError(`Space chat room status was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
-                } else {
-                    await syncRoomEditGrantsForSpace(metadata, space.ID);
-                }
-            } else {
-                LogError(`Space chat room load failed for ID ${foundChat.ID}`);
-            }
-        }
-        return;
-    }
-
-    // 2. Create the room when the space is created (no existing Room Space Chat)
-    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
-    conversation.NewRecord();
-    conversation.LinkedEntityID = SPACES_ENTITY_ID;
-    conversation.LinkedRecordID = space.ID;
-    conversation.UserID = system.ID;
-    conversation.Name = space.Name;
-    conversation.ApplicationScope = 'Application';
-    conversation.ApplicationID = COLLABORATION_APP_ID;
-
-    const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
-    spaceChat.NewRecord();
-    spaceChat.SpaceID = space.ID;
-    spaceChat.ConversationID = conversation.ID;
-    spaceChat.Name = space.Name;
-    spaceChat.Kind = 'Room';
-    spaceChat.Status = targetStatus;
-
-    if (typeof metadata.CreateTransactionGroup === 'function') {
-        const tg = await metadata.CreateTransactionGroup();
-        conversation.TransactionGroup = tg;
-        spaceChat.TransactionGroup = tg;
-        await conversation.Save();
-        await spaceChat.Save();
-        const submitted = await tg.Submit();
-        if (!submitted || !conversation.ID || !spaceChat.ID) {
-            const msg = conversation.LatestResult?.CompleteMessage || spaceChat.LatestResult?.CompleteMessage || 'Failed to submit room creation transaction.';
-            LogError(`Space conversation transaction failed for space ${space.ID}: ${msg}`);
-            return;
-        }
-        await syncRoomEditGrantsForSpace(metadata, space.ID);
-    } else {
-        const convSaved = await conversation.Save();
-        if (!convSaved || !conversation.ID) {
-            LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
-            return;
-        }
-        spaceChat.ConversationID = conversation.ID;
-        const chatSaved = await spaceChat.Save();
-        if (!chatSaved) {
-            LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
-            const deleted = await conversation.Delete();
-            if (!deleted) {
-                LogError(`Failed to cleanup unbound conversation ${conversation.ID}: ${conversation.LatestResult?.CompleteMessage ?? 'delete returned false'}`);
-            }
-        } else {
-            await syncRoomEditGrantsForSpace(metadata, space.ID);
-        }
-    }
 }
 
 function getFieldVal<T>(entity: BaseEntity, name: string): T | undefined {

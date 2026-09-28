@@ -357,13 +357,6 @@ export async function loadWorld(): Promise<void> {
         rootDir: worldStorageRoot(),
     });
 
-    const discoverySpaceId = spaceIds.get('discovery');
-    if (discoverySpaceId) {
-        await postSpaceMessage(provider, actor('ada'), {
-            spaceId: discoverySpaceId,
-            text: 'Welcome to the Discovery space room! Initial room message history seeded.',
-        });
-    }
 
     async function seedSpaceConversations(
         spaceKey: 'discovery' | 'northwind' | 'committee',

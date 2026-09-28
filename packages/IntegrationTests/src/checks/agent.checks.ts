@@ -393,9 +393,19 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await GetPersonaUser(ctx, 'bea');
 
+            const discChats = await FindRows<{ ConversationID: string }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General' AND Status = 'Active'`,
+                ['ConversationID'],
+            );
+            Assert(discChats.length >= 1, 'Discovery General conversation found');
+            const discConvId = discChats[0].ConversationID;
+
             const result = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: DISCOVERY_SPACE_ID,
-                text: 'What shared materials are available in Discovery?',
+                conversationId: discConvId,
+                text: '@Assistant what shared materials are available in Discovery?',
                 executeAgent: true,
             });
 

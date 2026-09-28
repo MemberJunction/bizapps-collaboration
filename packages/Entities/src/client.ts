@@ -75,7 +75,9 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
 export interface CreateSpaceConversationGraphQLInput {
     SpaceID: string;
     Name: string;
-    Kind?: 'Room' | 'General' | 'Topic' | 'Private';
+    Kind?: 'General' | 'Topic' | 'Private';
+    InitialMessage?: string;
+    ExecuteAgent?: boolean;
 }
 
 export interface CreateSpaceConversationGraphQLPayload {
@@ -84,6 +86,8 @@ export interface CreateSpaceConversationGraphQLPayload {
     SpaceChatID?: string;
     Name?: string;
     Kind?: string;
+    InitialDetailID?: string;
+    AssistantDetailID?: string;
     ErrorMessage?: string;
 }
 
@@ -118,6 +122,8 @@ mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
         SpaceChatID
         Name
         Kind
+        InitialDetailID
+        AssistantDetailID
         ErrorMessage
     }
 }

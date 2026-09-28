@@ -3,12 +3,13 @@ import {
     type UserInfo,
     LogError,
 } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
+import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
+import { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -17,7 +18,9 @@ const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 export interface CreateSpaceConversationInput {
     SpaceID: string;
     Name: string;
-    Kind?: 'Room' | 'General' | 'Topic' | 'Private';
+    Kind?: 'General' | 'Topic' | 'Private';
+    InitialMessage?: string;
+    executeAgent?: boolean;
 }
 
 export interface CreateSpaceConversationResult {
@@ -27,6 +30,8 @@ export interface CreateSpaceConversationResult {
     spaceChatId?: string;
     name?: string;
     kind?: string;
+    initialDetailId?: string;
+    assistantDetailId?: string;
 }
 
 /**
@@ -88,8 +93,8 @@ export async function createSpaceConversation(
     }
 
     const targetKind = input.Kind ?? 'General';
-    if (targetKind === 'Room') {
-        return { ok: false, message: 'Room conversations cannot be created on demand.' };
+    if (!['General', 'Topic', 'Private'].includes(targetKind)) {
+        return { ok: false, message: 'Invalid conversation kind. Only General, Topic, and Private (Internal Only) are permitted.' };
     }
 
     // 2. Check if caller can post in the selected kind
@@ -102,10 +107,9 @@ export async function createSpaceConversation(
 
     const system = await requireSystemUser(probe);
 
-    // 3. Create Conversation and SpaceChat in one transaction owned by system user
+    // 3. Create Conversation, SpaceChat, and optional initial message in one transaction owned by system user
     const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
     conversation.NewRecord();
-    // Non-room space conversations link to the space via SpaceChat, preserving the single-room entity link
     conversation.Name = cleanName;
     conversation.UserID = system.ID;
     conversation.ApplicationScope = 'Application';
@@ -119,15 +123,34 @@ export async function createSpaceConversation(
     spaceChat.Kind = targetKind;
     spaceChat.Status = 'Active';
 
+    let initialDetail: MJConversationDetailEntity | undefined;
+    const initialText = input.InitialMessage?.trim();
+    if (initialText) {
+        initialDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', system);
+        initialDetail.NewRecord();
+        initialDetail.ConversationID = conversation.ID;
+        initialDetail.UserID = user.ID;
+        initialDetail.Role = 'User';
+        initialDetail.Message = initialText;
+        initialDetail.Status = 'Complete';
+        initialDetail.HiddenToUser = false;
+        initialDetail.IsPinned = false;
+        initialDetail.OriginalMessageChanged = false;
+    }
+
     if (typeof provider.CreateTransactionGroup === 'function') {
         const tg = await provider.CreateTransactionGroup();
         conversation.TransactionGroup = tg;
         spaceChat.TransactionGroup = tg;
         await conversation.Save();
         await spaceChat.Save();
+        if (initialDetail) {
+            initialDetail.TransactionGroup = tg;
+            await initialDetail.Save();
+        }
         const submitted = await tg.Submit();
-        if (!submitted || !conversation.ID || !spaceChat.ID) {
-            const msg = conversation.LatestResult?.CompleteMessage || spaceChat.LatestResult?.CompleteMessage || 'Failed to submit conversation creation transaction.';
+        if (!submitted || !conversation.ID || !spaceChat.ID || (initialDetail && !initialDetail.ID)) {
+            const msg = conversation.LatestResult?.CompleteMessage || spaceChat.LatestResult?.CompleteMessage || initialDetail?.LatestResult?.CompleteMessage || 'Failed to submit conversation creation transaction.';
             LogError(`createSpaceConversation transaction failed for space ${spaceId}: ${msg}`);
             return { ok: false, message: msg };
         }
@@ -143,11 +166,30 @@ export async function createSpaceConversation(
         LogError(`Failed to sync room edit grants after conversation creation for space ${spaceId}: ${grantErr instanceof Error ? grantErr.message : String(grantErr)}`);
     }
 
+    // 5. If initial message was saved and agent turn is requested or mentioned, run agent
+    let assistantDetailId: string | undefined;
+    if (initialDetail?.ID && (input.executeAgent || /@(assistant|agent)\b/i.test(initialText!))) {
+        try {
+            const turnRes = await executeSpaceChatTurn(provider, user, {
+                spaceId,
+                conversationId: conversation.ID,
+                userMessageId: initialDetail.ID,
+            });
+            if (turnRes.ok && turnRes.replyDetailIds?.length > 0) {
+                assistantDetailId = turnRes.replyDetailIds[0];
+            }
+        } catch (turnErr) {
+            LogError(`Failed to execute initial agent turn for conversation ${conversation.ID}: ${turnErr instanceof Error ? turnErr.message : String(turnErr)}`);
+        }
+    }
+
     return {
         ok: true,
         conversationId: conversation.ID,
         spaceChatId: spaceChat.ID,
         name: cleanName,
         kind: targetKind,
+        initialDetailId: initialDetail?.ID,
+        assistantDetailId,
     };
 }

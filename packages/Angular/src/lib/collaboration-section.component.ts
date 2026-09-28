@@ -2574,15 +2574,40 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onOverviewAskRequested(query: string): Promise<void> {
-        const room = this.spaceConversations.find(c => c.kind === 'Room');
-        if (room) {
-            this.activeConversationId = room.id;
-            this.UpdateQueryParams({ tab: 'chat', conv: room.id });
-        } else {
-            this.activeConversationId = '';
-            this.UpdateQueryParams({ tab: 'chat' });
+        const text = query?.trim() ?? '';
+        if (!text) {
+            this.activeTab = 'Chat';
+            this.RefreshView();
+            return;
         }
-        this.composerDraft = query?.trim() ?? '';
+
+        const name = text.length > 50 ? `${text.slice(0, 47)}...` : text;
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.CreateSpaceConversation({
+                SpaceID: this.activeSpaceId,
+                Name: name,
+                Kind: 'General',
+                InitialMessage: text,
+                ExecuteAgent: true,
+            });
+
+            if (res.Success && res.ConversationID) {
+                await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID);
+                this.activeConversationId = res.ConversationID;
+                this.composerDraft = '';
+                this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
+            } else {
+                const msg = res.ErrorMessage || 'Failed to start conversation';
+                LogError('onOverviewAskRequested error: ' + msg);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError('onOverviewAskRequested error: ' + msg);
+            SharedService.Instance.CreateSimpleNotification('Failed to start conversation: ' + msg, 'error', 5000);
+        }
+
         this.activeTab = 'Chat';
         this.RefreshView();
     }

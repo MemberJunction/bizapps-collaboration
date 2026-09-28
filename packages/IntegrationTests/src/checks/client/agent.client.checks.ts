@@ -260,8 +260,19 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
+
+            const spaceChats = await FindRows<{ ConversationID: string }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
+                ['ConversationID'],
+            );
+            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
+            const discConvId = spaceChats[0].ConversationID;
+
             const result = await client.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: discConvId,
                 Text: 'AG6 client check verification message',
                 ExecuteAgent: false,
             });

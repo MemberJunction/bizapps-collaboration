@@ -12,6 +12,12 @@ export class CreateSpaceConversationInput {
 
     @Field({ nullable: true })
     Kind?: string;
+
+    @Field({ nullable: true })
+    InitialMessage?: string;
+
+    @Field({ nullable: true })
+    ExecuteAgent?: boolean;
 }
 
 @ObjectType()
@@ -32,6 +38,12 @@ export class CreateSpaceConversationPayload {
     Kind?: string;
 
     @Field({ nullable: true })
+    InitialDetailID?: string;
+
+    @Field({ nullable: true })
+    AssistantDetailID?: string;
+
+    @Field({ nullable: true })
     ErrorMessage?: string;
 }
 
@@ -49,13 +61,15 @@ export class CreateSpaceConversationResolver extends ResolverBase {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'Creating a conversation requires a signed-in person.' };
         try {
-            const kind = (input.Kind === 'Room' || input.Kind === 'General' || input.Kind === 'Topic' || input.Kind === 'Private')
+            const kind = (input.Kind === 'General' || input.Kind === 'Topic' || input.Kind === 'Private')
                 ? input.Kind
                 : undefined;
             const result = await createSpaceConversation(provider, user, {
                 SpaceID: input.SpaceID,
                 Name: input.Name,
                 Kind: kind,
+                InitialMessage: input.InitialMessage,
+                executeAgent: input.ExecuteAgent,
             });
             if (result.ok === false) {
                 return { Success: false, ErrorMessage: result.message };
@@ -66,6 +80,8 @@ export class CreateSpaceConversationResolver extends ResolverBase {
                 SpaceChatID: result.spaceChatId,
                 Name: result.name,
                 Kind: result.kind,
+                InitialDetailID: result.initialDetailId,
+                AssistantDetailID: result.assistantDetailId,
             };
         } catch (error) {
             LogError(`CreateSpaceConversation failed for space ${input.SpaceID}: ${error instanceof Error ? error.message : String(error)}`);

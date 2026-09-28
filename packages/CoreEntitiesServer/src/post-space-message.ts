@@ -62,41 +62,30 @@ export async function postSpaceMessage(
     const targetSpace = space.Results?.[0];
     if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
 
-    let conversationId: string | null = null;
-    if (input.conversationId) {
-        const parsedTarget = parseUuid(input.conversationId);
-        if (!parsedTarget) {
-            return { ok: false, message: 'The conversation ID is invalid.' };
-        }
-        const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
-            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
-            Fields: ['ID', 'ConversationID', 'Kind'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        if (!chatCheck.Success) return { ok: false, message: chatCheck.ErrorMessage || 'The space chat could not be read.' };
-        const foundChat = chatCheck.Results?.[0];
-        if (!foundChat?.ConversationID) {
-            return { ok: false, message: 'The conversation does not belong to this space.' };
-        }
-        if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
-            return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
-        }
-        conversationId = parsedTarget;
-    } else {
-        const roomChat = await view.RunView<{ ID: string; ConversationID: string }>({
-            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-            ExtraFilter: `SpaceID = '${spaceId}' AND Kind = 'Room' AND Status = 'Active'`,
-            Fields: ['ID', 'ConversationID'],
-            OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        if (!roomChat.Success) return { ok: false, message: roomChat.ErrorMessage || 'The space room could not be read.' };
-        conversationId = parseUuid(roomChat.Results?.[0]?.ConversationID);
-        if (!conversationId) return { ok: false, message: 'This space does not have an active room yet.' };
+    if (!input.conversationId) {
+        return { ok: false, message: 'A conversation ID is required to post a message.' };
     }
+
+    const parsedTarget = parseUuid(input.conversationId);
+    if (!parsedTarget) {
+        return { ok: false, message: 'The conversation ID is invalid.' };
+    }
+    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
+        Fields: ['ID', 'ConversationID', 'Kind'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    if (!chatCheck.Success) return { ok: false, message: chatCheck.ErrorMessage || 'The space chat could not be read.' };
+    const foundChat = chatCheck.Results?.[0];
+    if (!foundChat?.ConversationID) {
+        return { ok: false, message: 'The conversation does not belong to this space.' };
+    }
+    if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
+        return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
+    }
+    const conversationId = parsedTarget;
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();

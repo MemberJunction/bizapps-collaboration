@@ -6,7 +6,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface NewConversationSubmitPayload {
   name: string;
-  kind: 'Room' | 'General' | 'Topic' | 'Private';
+  kind: 'General' | 'Topic' | 'Private';
 }
 
 @Component({
@@ -343,7 +343,7 @@ export class CollabNewConversationDialogComponent {
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
   public name = '';
-  public kind: 'Room' | 'General' | 'Topic' | 'Private' = 'General';
+  public kind: 'General' | 'Topic' | 'Private' = 'General';
 
   public get trimmedName(): string {
     return this.name.trim();
