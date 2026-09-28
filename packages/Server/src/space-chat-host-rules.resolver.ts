@@ -46,6 +46,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
     @Query(() => SpaceChatHostRulesPayload)
     async GetSpaceChatHostRules(
         @Arg('spaceId', () => String) spaceId: string,
+        @Arg('conversationId', () => String, { nullable: true }) conversationId: string | undefined,
         @Ctx() context: AppContext,
     ): Promise<SpaceChatHostRulesPayload> {
         const provider = GetReadWriteProvider(context.providers);
@@ -59,7 +60,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
             };
         }
         try {
-            const result = await resolveSpaceChatHostRules(provider, user, spaceId);
+            const result = await resolveSpaceChatHostRules(provider, user, spaceId, conversationId);
             if (!result.ok) {
                 return {
                     Success: false,

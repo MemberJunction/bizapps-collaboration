@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { WellKnownUserSource, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
+import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 
@@ -32,15 +34,33 @@ describe('executeSpaceChatTurn', () => {
 
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
+    let origRunAgent: typeof AgentRunner.prototype.RunAgentInConversation;
 
     before(() => {
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
+
+        origRunAgent = AgentRunner.prototype.RunAgentInConversation;
+        AgentRunner.prototype.RunAgentInConversation = async (_params, options) => {
+            return {
+                agentResult: {
+                    success: true,
+                    status: 'Success',
+                    agentRun: {
+                        ID: 'run-mocked-1',
+                        Result: 'Mocked agent response',
+                    } as never,
+                },
+                conversationId: options.conversationId ?? '',
+                userMessageDetailId: options.conversationDetailId ?? '',
+            };
+        };
     });
 
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
+        AgentRunner.prototype.RunAgentInConversation = origRunAgent;
     });
 
     interface MockWorldOptions {
@@ -48,6 +68,8 @@ describe('executeSpaceChatTurn', () => {
         closedAt?: string | null;
         hasRoomChat?: boolean;
         hasExistingAgentRun?: boolean;
+        agentRunReadFails?: boolean;
+        callerHasReach?: boolean;
         messageUserId?: string;
         messageRole?: string;
         messageConversationId?: string;
@@ -61,6 +83,7 @@ describe('executeSpaceChatTurn', () => {
         const closedAt = options.closedAt ?? null;
         const hasRoomChat = options.hasRoomChat !== false;
         const hasExistingAgentRun = options.hasExistingAgentRun === true;
+        const callerHasReach = options.callerHasReach !== false;
         const messageUserId = options.messageUserId ?? CALLER_ID;
         const messageRole = options.messageRole ?? 'User';
         const messageConversationId = options.messageConversationId ?? CONVERSATION_ID;
@@ -134,6 +157,18 @@ describe('executeSpaceChatTurn', () => {
                     };
                     return run as never;
                 }
+                if (entityName === 'MJ: AI Agents') {
+                    const agent = {
+                        ID: ALLOWED_AGENT_ID,
+                        Name: 'Sage',
+                        TypeID: 'agent-type-1',
+                        DriverClass: null,
+                        async Load(id: string) {
+                            return id.toLowerCase() === ALLOWED_AGENT_ID.toLowerCase();
+                        },
+                    };
+                    return agent as never;
+                }
                 return undefined as never;
             },
             async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
@@ -156,6 +191,9 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    if (!callerHasReach) {
+                        return mockResult<T>([]);
+                    }
                     return mockResult<T>([
                         {
                             ID: 'mem-1',
@@ -164,6 +202,7 @@ describe('executeSpaceChatTurn', () => {
                             Status: 'Active',
                             Band: 'Team',
                             SpaceRoleTypeID: canContribute ? ROLE_CONTRIB_ID : ROLE_NON_CONTRIB_ID,
+                            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
                         } as unknown as T,
                     ]);
                 }
@@ -198,25 +237,10 @@ describe('executeSpaceChatTurn', () => {
                         {
                             ID: TYPE_ID,
                             DriverKey: null,
-                            PostCloseAccess: 'ReadOnly',
-                            PostCloseAccessDays: 30,
-                            InviteApproval: 'AutoApprove',
-                            MemberCap: null,
+                            ServerDriverClass: null,
+                            UIDriverClass: null,
+                            AllowSubSpaces: true,
                             Configuration: JSON.stringify({
-                                SpaceOverridable: ['Chats.AgentReplyMode'],
-                            }),
-                        } as unknown as T,
-                    ]);
-                }
-
-                if (EntityName === 'MJ: Application Settings') {
-                    return mockResult<T>([
-                        {
-                            ID: 'app-setting-1',
-                            ApplicationID: '94F5906B-38AB-4A9F-BFCA-3D395BBBC198',
-                            Name: 'CollaborationSettings',
-                            Value: JSON.stringify({
-                                StorageAccountID: null,
                                 PostCloseAccess: 'ReadOnly',
                                 PostCloseAccessDays: null,
                                 Chats: {
@@ -247,7 +271,38 @@ describe('executeSpaceChatTurn', () => {
                     ]);
                 }
 
+                if (EntityName === 'MJ: Application Settings') {
+                    return mockResult<T>([
+                        {
+                            ID: 'app-setting-1',
+                            Name: 'Collaboration Settings',
+                            Value: JSON.stringify({
+                                PostCloseAccess: 'ReadOnly',
+                                PostCloseAccessDays: null,
+                                Chats: {
+                                    WhoCanStart: 'Anyone',
+                                    AgentReplyMode: 'MentionOrOneToOne',
+                                    HistoryOnAdd: 'None',
+                                },
+                                Agents: {
+                                    ListMode: 'Extend',
+                                },
+                            }),
+                        } as unknown as T,
+                    ]);
+                }
+
                 if (EntityName === 'MJ: AI Agent Runs') {
+                    if (options.agentRunReadFails) {
+                        return {
+                            Success: false,
+                            Results: [],
+                            RowCount: 0,
+                            TotalRowCount: 0,
+                            ExecutionTime: 0,
+                            ErrorMessage: 'Database connection failed while checking agent runs.',
+                        };
+                    }
                     if (hasExistingAgentRun) {
                         return mockResult<T>([{ ID: 'run-existing-1' } as unknown as T]);
                     }
@@ -267,6 +322,25 @@ describe('executeSpaceChatTurn', () => {
                                 }) as unknown as T,
                         ),
                     );
+                }
+
+                if (EntityName === 'MJ: AI Agents') {
+                    return mockResult<T>([
+                        {
+                            ID: ALLOWED_AGENT_ID,
+                            Name: 'Sage',
+                        } as unknown as T,
+                    ]);
+                }
+
+                if (EntityName === 'MJ: Users') {
+                    return mockResult<T>([
+                        {
+                            ID: CALLER_ID,
+                            Name: 'Caller',
+                            Email: 'caller@example.com',
+                        } as unknown as T,
+                    ]);
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Type Agents') {
@@ -320,6 +394,18 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
+    it('under MentionOnly, an untagged message sent with agentId is refused', async () => {
+        const provider = createMockProvider({ messageText: 'Hello room without any agent mention' });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /does not mention an agent/i);
+        }
+    });
+
     it('refuses when target space is closed', async () => {
         const provider = createMockProvider({ closedAt: new Date().toISOString() });
         const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
@@ -347,12 +433,21 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
-    it('refuses when conversation does not belong to active room chat', async () => {
+    it('refuses when second-turn read fails', async () => {
+        const provider = createMockProvider({ agentRunReadFails: true });
+        const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /Could not verify agent run status|Database connection failed/i);
+        }
+    });
+
+    it('refuses when conversation does not belong to active space chat', async () => {
         const provider = createMockProvider({ hasRoomChat: false });
         const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
         assert.equal(result.ok, false);
         if (!result.ok) {
-            assert.match(result.message, /active Room accepts agent turns/i);
+            assert.match(result.message, /active conversations in this space accept agent turns/i);
         }
     });
 
@@ -402,6 +497,27 @@ describe('executeSpaceChatTurn', () => {
         if (result.ok) {
             assert.ok(result.replyDetailIds.length > 0);
             assert.ok(result.agentRunId);
+        }
+    });
+
+    it('refuses host-rules query when caller does not reach space', async () => {
+        const provider = createMockProvider({ callerHasReach: false });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message ?? '', /Caller does not reach this space/i);
+        }
+    });
+
+    it('resolves host-rules query with caller reach and HistoryOnAdd floor', async () => {
+        const provider = createMockProvider({ callerHasReach: true });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, true);
+        if (result.ok) {
+            assert.equal(result.agentReplyMode, 'MentionOnly');
+            assert.ok(result.agentHistoryFrom instanceof Date);
+            assert.equal(result.mentionPeople.length, 1);
+            assert.equal(result.mentionPeople[0].ID, CALLER_ID);
         }
     });
 });

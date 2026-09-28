@@ -191,6 +191,14 @@ interface SpaceNavPref {
             @if (!isCollapsed) {
               <div class="section-title-row">
                 <span class="section-title">CONVERSATIONS</span>
+                <button
+                  type="button"
+                  class="btn-add-section"
+                  (click)="onNewConversation()"
+                  title="New Conversation"
+                  aria-label="New Conversation">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
               </div>
             }
 
@@ -879,6 +887,7 @@ export class CollabSpaceRailComponent implements OnInit {
 
   @Output() TabSelectRequested = new EventEmitter<string>();
   @Output() ConversationSelectRequested = new EventEmitter<string>();
+  @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
 
   public navWidth = 280;
@@ -889,6 +898,10 @@ export class CollabSpaceRailComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
   }
 
   private loadLayoutPreference(): void {

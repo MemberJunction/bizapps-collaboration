@@ -6,7 +6,13 @@ import {
   Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
-import { ConversationsModule } from '@memberjunction/ng-conversations';
+import {
+  ConversationsModule,
+  type AgentReplyMode,
+  type AgentTurnHandler,
+  type AgentTurnRequest,
+  type AgentTurnResult,
+} from '@memberjunction/ng-conversations';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -16,32 +22,6 @@ export interface ChatMentionPerson {
   Name: string;
   Email?: string | null;
 }
-
-export type AgentReplyMode = 'Always' | 'MentionOnly';
-
-export interface AgentTurnRequest {
-  ConversationId: string;
-  UserMessageId: string;
-  MessageText: string;
-  AgentId: string;
-  AgentName: string | null;
-  Route?: string;
-  ApplicationId?: string | null;
-  AppContext?: Record<string, unknown> | null;
-  AgentHistoryFrom?: Date | null;
-  ConfigurationPresetId?: string | null;
-  RequestedSkillIDs?: string[];
-  PlanMode?: boolean;
-}
-
-export interface AgentTurnResult {
-  Success: boolean;
-  ErrorMessage?: string;
-  ReplyDetailIds?: string[];
-  AgentRunId?: string;
-}
-
-export type AgentTurnHandler = (request: AgentTurnRequest) => Promise<AgentTurnResult>;
 
 @Component({
   selector: 'mjc-space-chat',
@@ -99,6 +79,15 @@ export type AgentTurnHandler = (request: AgentTurnRequest) => Promise<AgentTurnR
                     <span>{{ ParticipantCount }}</span>
                   </div>
                 }
+                <button
+                  type="button"
+                  class="btn-new-convo-header"
+                  (click)="onNewConversation()"
+                  title="New Conversation"
+                  aria-label="New Conversation">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>New Conversation</span>
+                </button>
               </div>
             </div>
           </ng-template>
@@ -111,8 +100,15 @@ export type AgentTurnHandler = (request: AgentTurnRequest) => Promise<AgentTurnR
           </div>
           <h3 class="empty-title">Select a Conversation</h3>
           <p class="empty-desc">
-            Choose a channel from the space sidebar.
+            Choose a channel from the space sidebar or start a new conversation.
           </p>
+          <button
+            type="button"
+            class="btn-new-convo"
+            (click)="onNewConversation()">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Conversation</span>
+          </button>
         </div>
       }
     </div>
@@ -235,6 +231,42 @@ export type AgentTurnHandler = (request: AgentTurnRequest) => Promise<AgentTurnR
         line-height: 1.5;
         margin-bottom: 20px;
       }
+
+      .btn-new-convo-header {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--mj-brand-primary, #0076b6);
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .btn-new-convo-header:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
+      }
+
+      .btn-new-convo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--mj-brand-primary, #0076b6);
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .btn-new-convo:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
+      }
     `,
   ],
 })
@@ -260,7 +292,12 @@ export class CollabSpaceChatComponent {
   @Input() public AutoNameConversation: boolean = false;
   @Input() public ComposerDraft: string | null = null;
 
+  @Output() public NewConversationRequested = new EventEmitter<void>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
+  }
 
   public onComposerDraftConsumed(): void {
     this.ComposerDraft = null;

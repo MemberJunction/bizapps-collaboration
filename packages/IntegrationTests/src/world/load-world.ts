@@ -39,6 +39,7 @@ import {
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
+    createSpaceConversation,
     postSpaceMessage,
     syncRoomEditGrantsForSpace,
 } from '@mj-biz-apps/collaboration-core-entities-server';
@@ -363,6 +364,76 @@ export async function loadWorld(): Promise<void> {
             text: 'Welcome to the Discovery space room! Initial room message history seeded.',
         });
     }
+
+    async function seedSpaceConversations(
+        spaceKey: 'discovery' | 'northwind' | 'committee',
+        teamActorKey: string,
+        otherActorKey: string
+    ) {
+        const spaceId = spaceIds.get(spaceKey);
+        if (!spaceId) return;
+
+        // 1. General conversation
+        const genRes = await createSpaceConversation(provider, actor(teamActorKey), {
+            SpaceID: spaceId,
+            Name: `${spaceKey}-general`,
+            Kind: 'General',
+        });
+        if (genRes.ok && genRes.conversationId) {
+            await postSpaceMessage(provider, actor(otherActorKey), {
+                spaceId,
+                conversationId: genRes.conversationId,
+                text: `Thanks @{"type":"user","id":"${actor(teamActorKey).ID}","name":"${teamActorKey}"}! Looking forward to collaborating in ${spaceKey}.`,
+            });
+            await postSpaceMessage(provider, actor(teamActorKey), {
+                spaceId,
+                conversationId: genRes.conversationId,
+                text: `Let's keep discussions and general updates posted here.`,
+            });
+        }
+
+        // 2. Topic conversation
+        const topicRes = await createSpaceConversation(provider, actor(teamActorKey), {
+            SpaceID: spaceId,
+            Name: `${spaceKey}-deliverables`,
+            Kind: 'Topic',
+        });
+        if (topicRes.ok && topicRes.conversationId) {
+            await postSpaceMessage(provider, actor(otherActorKey), {
+                spaceId,
+                conversationId: topicRes.conversationId,
+                text: 'We are preparing the draft documentation for this workstream.',
+            });
+            await postSpaceMessage(provider, actor(teamActorKey), {
+                spaceId,
+                conversationId: topicRes.conversationId,
+                text: 'Sounds great, will review the draft once uploaded.',
+            });
+        }
+
+        // 3. Private / Internal Only conversation (team members only)
+        const privRes = await createSpaceConversation(provider, actor(teamActorKey), {
+            SpaceID: spaceId,
+            Name: `${spaceKey}-internal`,
+            Kind: 'Private',
+        });
+        if (privRes.ok && privRes.conversationId) {
+            await postSpaceMessage(provider, actor('sam'), {
+                spaceId,
+                conversationId: privRes.conversationId,
+                text: 'Internal sync: reviewed preliminary findings and resource allocations.',
+            });
+            await postSpaceMessage(provider, actor(teamActorKey), {
+                spaceId,
+                conversationId: privRes.conversationId,
+                text: 'Confirmed. Internal findings will remain in this private channel.',
+            });
+        }
+    }
+
+    await seedSpaceConversations('discovery', 'ada', 'bea');
+    await seedSpaceConversations('northwind', 'ada', 'casey');
+    await seedSpaceConversations('committee', 'ada', 'sam');
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);

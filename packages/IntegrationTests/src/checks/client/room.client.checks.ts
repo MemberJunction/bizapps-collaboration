@@ -1,11 +1,12 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../../entity-names.js';
+import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_ENTITY, SPACE_CHAT_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -106,6 +107,21 @@ const checks: NamedCheck[] = [
 
             const deleted = await adaDetail.Delete();
             Assert(deleted, `Ada deleting her own detail over wire should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
+
+            // Direct save over wire by Pat (non-contributor / invited) is refused
+            const patClientCtx = await getPersonaClientContext(ctx, 'pat');
+            const patDetail = await patClientCtx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, patClientCtx.User);
+            patDetail.NewRecord();
+            patDetail.ConversationID = roomId;
+            patDetail.UserID = patClientCtx.User.ID;
+            patDetail.Role = 'User';
+            patDetail.Message = 'Direct chat attempt over wire by non-contributor into space room';
+            patDetail.Status = 'Complete';
+            const patSaved = await patDetail.Save();
+            if (patSaved) {
+                await patDetail.Delete();
+            }
+            Assert(!patSaved || !patDetail.ID, 'Direct conversation detail save over wire by non-contributor (Pat) must be refused');
 
             const patRes = await View(patCtx).RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
@@ -330,6 +346,148 @@ const checks: NamedCheck[] = [
                 Text: 'Message from removed user',
             });
             Assert(!remyRes.Success, 'Message from removed user must be refused');
+        },
+    },
+    {
+        Id: 'room.RM7',
+        Name: 'RM7 — Client CreateSpaceConversation: Sam starts General in Committee; Dana (Guest) is refused',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const danaCtx = await getPersonaClientContext(ctx, 'dana');
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+            const danaClient = new CollaborationClient(danaCtx.GraphQLProvider);
+
+            // 1. Sam starts General conversation in Committee
+            const samRes = await samClient.CreateSpaceConversation({
+                SpaceID: COMMITTEE_SPACE_ID,
+                Name: `committee-client-sam-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(samRes.Success === true && !!samRes.ConversationID, `Sam can start General conversation in Committee over wire: ${samRes.ErrorMessage ?? ''}`);
+
+            // 2. Dana (guest) is refused
+            const danaRes = await danaClient.CreateSpaceConversation({
+                SpaceID: COMMITTEE_SPACE_ID,
+                Name: `committee-client-dana-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(!danaRes.Success, 'Dana (guest in Committee) must be refused starting a conversation over wire');
+        },
+    },
+    {
+        Id: 'room.RM8',
+        Name: 'RM8 — Client CreateSpaceConversation WhoCanStart=Owners: Bea is refused, Dev is permitted',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const devCtx = await getPersonaClientContext(ctx, 'dev');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const devClient = new CollaborationClient(devCtx.GraphQLProvider);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
+            const origConfig = space.Configuration;
+
+            try {
+                const configObj = origConfig ? JSON.parse(origConfig) : {};
+                configObj.Chats = { ...(configObj.Chats ?? {}), WhoCanStart: 'Owners' };
+                space.Configuration = JSON.stringify(configObj);
+                const saved = await space.Save();
+                Assert(saved, 'Updated Discovery space config with WhoCanStart: Owners');
+
+                // Bea (contributing member, but not owner) is refused
+                const beaRes = await beaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-bea-refused-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(!beaRes.Success, 'Bea must be refused starting a conversation over wire when WhoCanStart is Owners');
+
+                // Dev (owner) is permitted
+                const devRes = await devClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-dev-allowed-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(devRes.Success === true && !!devRes.ConversationID, `Dev (owner) must be permitted over wire when WhoCanStart is Owners: ${devRes.ErrorMessage ?? ''}`);
+            } finally {
+                const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
+                    restoreSpace.Configuration = origConfig;
+                    await restoreSpace.Save();
+                }
+            }
+        },
+    },
+    {
+        Id: 'room.RM9',
+        Name: 'RM9 — Client: Bea reads/posts in Discovery General; refused reading, posting, or starting Private',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+
+            // 1. Bea creates/starts Private conversation in Discovery — refused over wire
+            const startPrivRes = await beaClient.CreateSpaceConversation({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-client-bea-private-${Date.now()}`,
+                Kind: 'Private',
+            });
+            Assert(!startPrivRes.Success, 'Bea must be refused starting a Private conversation over wire');
+
+            // 2. Find Discovery General conversation and Private conversation
+            const spaceChats = await FindRows<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Kind: string;
+            }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Status = 'Active'`,
+                ['ID', 'SpaceID', 'ConversationID', 'Kind'],
+            );
+
+            const generalChat = spaceChats.find((c) => c.Kind === 'General');
+            const privateChat = spaceChats.find((c) => c.Kind === 'Private');
+            Assert(!!generalChat, 'Discovery General conversation found');
+            Assert(!!privateChat, 'Discovery Private conversation found');
+
+            // 3. Bea can read General conversation over wire
+            const beaGenRead = await View(beaCtx).RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID = '${generalChat!.ConversationID}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, beaCtx.User);
+            Assert(beaGenRead.Success && (beaGenRead.Results?.length ?? 0) === 1, 'Bea can read Discovery General conversation over wire');
+
+            // 4. Bea can post in General conversation over wire
+            const beaPostGen = await beaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: generalChat!.ConversationID,
+                Text: 'Bea posted in General channel over wire.',
+            });
+            Assert(beaPostGen.Success === true && !!beaPostGen.DetailID, `Bea can post in Discovery General conversation over wire: ${beaPostGen.ErrorMessage ?? ''}`);
+            if (beaPostGen.DetailID) createdDetailIds.push(beaPostGen.DetailID);
+
+            // 5. Bea CANNOT read Private conversation over wire
+            const beaPrivRead = await View(beaCtx).RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID = '${privateChat!.ConversationID}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, beaCtx.User);
+            Assert(beaPrivRead.Success && (beaPrivRead.Results?.length ?? 0) === 0, 'Bea CANNOT read Discovery Private conversation over wire');
+
+            // 6. Bea CANNOT post in Private conversation over wire
+            const beaPostPriv = await beaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: privateChat!.ConversationID,
+                Text: 'Bea trying to post in Private channel over wire.',
+            });
+            Assert(!beaPostPriv.Success, 'Bea must be refused posting in Discovery Private conversation over wire');
         },
     },
 ];

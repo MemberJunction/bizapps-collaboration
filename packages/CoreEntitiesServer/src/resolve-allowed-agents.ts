@@ -1,4 +1,4 @@
-import { RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
 
@@ -98,7 +98,8 @@ export async function resolveAllowedAgents(
     if (spaceType?.Configuration) {
         try {
             typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
-        } catch {
+        } catch (err) {
+            LogError(`Failed to parse SpaceType configuration for ${spaceTypeId}: ${err instanceof Error ? err.message : String(err)}`);
             typeConfig = null;
         }
     }

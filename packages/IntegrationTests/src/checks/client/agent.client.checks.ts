@@ -10,6 +10,7 @@ import {
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
+    SPACE_CHAT_ENTITY,
     FILE_ENTITY,
 } from '../../entity-names.js';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
@@ -269,6 +270,116 @@ const checks: NamedCheck[] = [
             if (result.DetailID) {
                 createdDetailIds.push(result.DetailID);
             }
+        },
+    },
+    {
+        Id: 'agent.AG7',
+        Name: 'AG7 — Space chat turn honors conversation kind audience bounding (Item 23)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+
+            // Find Discovery conversations
+            const convs = await FindRows<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Kind: string;
+                Name: string;
+            }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Status = 'Active'`,
+                ['ID', 'SpaceID', 'ConversationID', 'Kind', 'Name'],
+            );
+            const generalChat = convs.find((c) => c.Kind === 'General');
+            const privateChat = convs.find((c) => c.Kind === 'Private');
+            Assert(!!generalChat, 'Discovery General conversation found');
+            Assert(!!privateChat, 'Discovery Private conversation found');
+
+            // 1. Bea posts in General conversation tagging agent
+            const beaMsg = await beaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: generalChat!.ConversationID,
+                Text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
+            });
+            Assert(beaMsg.Success === true && !!beaMsg.DetailID, `Bea posted tagged message in General: ${beaMsg.ErrorMessage ?? ''}`);
+            if (beaMsg.DetailID) createdDetailIds.push(beaMsg.DetailID);
+
+            const genTurnRes = await beaClient.ExecuteSpaceChatTurn({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: generalChat!.ConversationID,
+                UserMessageID: beaMsg.DetailID!,
+                AgentID: AGENT_ID,
+            });
+            Assert(genTurnRes.Success === true, `Agent turn in General succeeded: ${genTurnRes.ErrorMessage ?? ''}`);
+            if (genTurnRes.ReplyDetailIDs) {
+                createdDetailIds.push(...genTurnRes.ReplyDetailIDs);
+                for (const rId of genTurnRes.ReplyDetailIDs) {
+                    const details = await FindRows<{ ID: string; Message: string }>(
+                        ctx,
+                        CONVERSATION_DETAIL_ENTITY,
+                        `ID = '${rId}'`,
+                        ['ID', 'Message'],
+                    );
+                    if (details.length > 0) {
+                        Assert(!details[0].Message.includes('discovery-brief.pdf'), 'General turn must NOT quote discovery-brief.pdf');
+                    }
+                }
+            }
+
+            // 2. Ada posts in Private conversation tagging agent
+            const adaMsg = await adaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: privateChat!.ConversationID,
+                Text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
+            });
+            Assert(adaMsg.Success === true && !!adaMsg.DetailID, `Ada posted tagged message in Private: ${adaMsg.ErrorMessage ?? ''}`);
+            if (adaMsg.DetailID) createdDetailIds.push(adaMsg.DetailID);
+
+            const privTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: privateChat!.ConversationID,
+                UserMessageID: adaMsg.DetailID!,
+                AgentID: AGENT_ID,
+            });
+            Assert(privTurnRes.Success === true, `Agent turn in Private succeeded: ${privTurnRes.ErrorMessage ?? ''}`);
+            if (privTurnRes.ReplyDetailIDs) {
+                createdDetailIds.push(...privTurnRes.ReplyDetailIDs);
+                let foundBrief = false;
+                for (const rId of privTurnRes.ReplyDetailIDs) {
+                    const details = await FindRows<{ ID: string; Message: string }>(
+                        ctx,
+                        CONVERSATION_DETAIL_ENTITY,
+                        `ID = '${rId}'`,
+                        ['ID', 'Message'],
+                    );
+                    if (details.length > 0 && details[0].Message.includes('discovery-brief.pdf')) {
+                        foundBrief = true;
+                    }
+                }
+                Assert(foundBrief, 'Private turn MUST quote discovery-brief.pdf');
+            }
+
+            // 3. Test Item 6: Untagged message with AgentID under MentionOnly is refused turn
+            const untaggedMsg = await adaClient.PostSpaceMessage({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: generalChat!.ConversationID,
+                Text: 'Untagged message asking for turn over wire',
+            });
+            Assert(untaggedMsg.Success === true && !!untaggedMsg.DetailID, `Ada posted untagged message: ${untaggedMsg.ErrorMessage ?? ''}`);
+            if (untaggedMsg.DetailID) createdDetailIds.push(untaggedMsg.DetailID);
+
+            const untaggedTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: generalChat!.ConversationID,
+                UserMessageID: untaggedMsg.DetailID!,
+                AgentID: AGENT_ID,
+            });
+            Assert(!untaggedTurnRes.Success, 'Untagged message with AgentID under MentionOnly must be refused a turn over wire');
         },
     },
 ];

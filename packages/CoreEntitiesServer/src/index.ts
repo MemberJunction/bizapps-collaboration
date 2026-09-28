@@ -55,5 +55,9 @@ export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult } from './execute-space-chat-turn.js';
 export { resolveSpaceChatHostRules } from './resolve-space-chat-host-rules.js';
 export type { SpaceChatHostRulesMentionPerson, SpaceChatHostRulesResult } from './resolve-space-chat-host-rules.js';
+export { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
+export type { ResolvedSpaceChatSettings } from './resolve-space-chat-settings.js';
+export { createSpaceConversation } from './create-space-conversation.js';
+export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
 
 

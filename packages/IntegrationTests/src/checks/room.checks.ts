@@ -1,8 +1,8 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
-import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY } from '../entity-names.js';
+import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore, createSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
@@ -182,35 +182,37 @@ const checks: NamedCheck[] = [
             }
             Assert(!danaSaved || !danaDetail.ID, 'Direct conversation detail save into room by non-contributor (Dana in Committee) must be refused');
 
-            // Ada saving detail with mismatched UserID (spoofing Pat) is refused
-            const adaSpoofDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
-            adaSpoofDetail.NewRecord();
-            adaSpoofDetail.ConversationID = roomId;
-            adaSpoofDetail.UserID = pat.ID;
-            adaSpoofDetail.Role = 'User';
-            adaSpoofDetail.Message = 'Ada spoofing Pat';
-            adaSpoofDetail.Status = 'Complete';
+            const bea = await GetPersonaUser(ctx, 'bea');
 
-            const spoofSaved = await adaSpoofDetail.Save();
+            // Bea saving detail with mismatched UserID (spoofing Pat) is refused
+            const beaSpoofDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, bea);
+            beaSpoofDetail.NewRecord();
+            beaSpoofDetail.ConversationID = roomId;
+            beaSpoofDetail.UserID = pat.ID;
+            beaSpoofDetail.Role = 'User';
+            beaSpoofDetail.Message = 'Bea spoofing Pat';
+            beaSpoofDetail.Status = 'Complete';
+
+            const spoofSaved = await beaSpoofDetail.Save();
             if (spoofSaved) {
-                await adaSpoofDetail.Delete();
+                await beaSpoofDetail.Delete();
             }
-            Assert(!spoofSaved || !adaSpoofDetail.ID, 'Ada saving detail with mismatched UserID must be refused');
+            Assert(!spoofSaved || !beaSpoofDetail.ID, 'Bea saving detail with mismatched UserID must be refused');
 
-            // Ada saving detail with Role = 'AI' is refused
-            const adaAiDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
-            adaAiDetail.NewRecord();
-            adaAiDetail.ConversationID = roomId;
-            adaAiDetail.UserID = ada.ID;
-            adaAiDetail.Role = 'AI';
-            adaAiDetail.Message = 'Ada spoofing AI role';
-            adaAiDetail.Status = 'Complete';
+            // Bea saving detail with Role = 'AI' is refused
+            const beaAiDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, bea);
+            beaAiDetail.NewRecord();
+            beaAiDetail.ConversationID = roomId;
+            beaAiDetail.UserID = bea.ID;
+            beaAiDetail.Role = 'AI';
+            beaAiDetail.Message = 'Bea spoofing AI role';
+            beaAiDetail.Status = 'Complete';
 
-            const aiSaved = await adaAiDetail.Save();
+            const aiSaved = await beaAiDetail.Save();
             if (aiSaved) {
-                await adaAiDetail.Delete();
+                await beaAiDetail.Delete();
             }
-            Assert(!aiSaved || !adaAiDetail.ID, 'Ada saving detail with Role = AI must be refused');
+            Assert(!aiSaved || !beaAiDetail.ID, 'Bea saving detail with Role = AI must be refused');
         },
     },
     {
@@ -268,16 +270,17 @@ const checks: NamedCheck[] = [
             Assert(closedRoomConvs.length === 1, 'Closed-recent room conversation found');
             const closedRoomId = closedRoomConvs[0].ID;
 
-            const adaClosedRes = await view.RunView<{ ID: string }>({
+            const casey = await GetPersonaUser(ctx, 'casey');
+            const caseyClosedRes = await view.RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,
                 ExtraFilter: `ID = '${closedRoomId}'`,
                 Fields: ['ID'],
                 ResultType: 'simple',
-            }, ada);
-            Assert(adaClosedRes.Success, `Ada RunView on closed-recent room failed: ${adaClosedRes.ErrorMessage ?? ''}`);
+            }, casey);
+            Assert(caseyClosedRes.Success, `Casey RunView on closed-recent room failed: ${caseyClosedRes.ErrorMessage ?? ''}`);
             Assert(
-                (adaClosedRes.Results?.length ?? 0) === 1,
-                `Ada (with post-close access) MUST be able to view closed-recent room conversation, got ${adaClosedRes.Results?.length ?? 0} rows`,
+                (caseyClosedRes.Results?.length ?? 0) === 1,
+                `Casey (with post-close access) MUST be able to view closed-recent room conversation, got ${caseyClosedRes.Results?.length ?? 0} rows`,
             );
         },
     },
@@ -504,6 +507,170 @@ const checks: NamedCheck[] = [
             });
             Assert(!foreignConvRes.ok, 'Conversation not belonging to space must be refused');
             Assert(!foreignConvRes.ok && foreignConvRes.message === 'The conversation does not belong to this space.', 'Correct mismatched conversation error');
+        },
+    },
+    {
+        Id: 'room.RM7',
+        Name: 'RM7 — createSpaceConversation: Sam starts General in Committee; Dana (Guest) is refused',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const dana = await GetPersonaUser(ctx, 'dana');
+
+            // 1. Sam (contributing member in committee) starts a General conversation
+            const samRes = await createSpaceConversation(ctx.Provider, sam, {
+                SpaceID: COMMITTEE_SPACE_ID,
+                Name: `committee-sam-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(samRes.ok === true && !!samRes.conversationId, `Sam can start a General conversation in Committee: ${samRes.message ?? ''}`);
+
+            // 2. Dana (guest, non-contributor in committee) is refused starting a conversation
+            const danaRes = await createSpaceConversation(ctx.Provider, dana, {
+                SpaceID: COMMITTEE_SPACE_ID,
+                Name: `committee-dana-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(!danaRes.ok, 'Dana (guest in Committee) must be refused starting a conversation');
+        },
+    },
+    {
+        Id: 'room.RM8',
+        Name: 'RM8 — createSpaceConversation WhoCanStart=Owners: Sam is refused, Ada is permitted',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const dev = await GetPersonaUser(ctx, 'dev');
+
+            const ownerRoles = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
+            Assert(ownerRoles.length === 1, 'Owner space role type found');
+            const ownerRoleId = ownerRoles[0].ID;
+
+            // Ada seats Dev as owner on Northwind so Dev (with Configure Spaces authorization) can configure space settings
+            const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+            devMember.NewRecord();
+            devMember.SpaceID = NORTHWIND_SPACE_ID;
+            devMember.UserID = dev.ID;
+            devMember.SpaceRoleTypeID = ownerRoleId;
+            devMember.Band = 'Team';
+            devMember.Status = 'Active';
+            Assert(await devMember.Save(), 'Seating Dev as owner on Northwind must succeed');
+
+            let origConfig: string | null = null;
+            try {
+                const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await space.Load(NORTHWIND_SPACE_ID), 'Load Northwind space');
+                origConfig = space.Configuration;
+
+                const configObj = origConfig ? JSON.parse(origConfig) : {};
+                configObj.Chats = { ...(configObj.Chats ?? {}), WhoCanStart: 'Owners' };
+                space.Configuration = JSON.stringify(configObj);
+                const saved = await space.Save();
+                Assert(saved, 'Updated Northwind space config with WhoCanStart: Owners');
+
+                // Sam (contributing member, but not owner) is refused
+                const samRes = await createSpaceConversation(ctx.Provider, sam, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `northwind-sam-refused-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(!samRes.ok, 'Sam must be refused starting a conversation when WhoCanStart is Owners');
+
+                // Ada (owner) is permitted
+                const adaRes = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `northwind-ada-allowed-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(adaRes.ok === true && !!adaRes.conversationId, `Ada (owner) must be permitted when WhoCanStart is Owners: ${adaRes.message ?? ''}`);
+            } finally {
+                const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                if (await restoreSpace.Load(NORTHWIND_SPACE_ID)) {
+                    restoreSpace.Configuration = origConfig;
+                    await restoreSpace.Save();
+                }
+                if (devMember.ID) {
+                    const cleanupMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                    if (await cleanupMember.Load(devMember.ID)) {
+                        await cleanupMember.Delete();
+                    }
+                }
+            }
+        },
+    },
+    {
+        Id: 'room.RM9',
+        Name: 'RM9 — Bea reads/posts in Discovery General conversation; refused reading, posting, or starting Private',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await GetPersonaUser(ctx, 'bea');
+
+            // 1. Bea creates/starts a Private conversation in Discovery — REFUSED because she cannot see Team
+            const startPrivRes = await createSpaceConversation(ctx.Provider, bea, {
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-bea-private-${Date.now()}`,
+                Kind: 'Private',
+            });
+            Assert(!startPrivRes.ok, 'Bea (outside member, cannot see Team) must be refused starting a Private conversation');
+
+            // 2. Find Discovery General conversation and Private conversation seeded by world loader
+            const spaceChats = await FindRows<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Kind: string;
+            }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Status = 'Active'`,
+                ['ID', 'SpaceID', 'ConversationID', 'Kind'],
+            );
+
+            const generalChat = spaceChats.find((c) => c.Kind === 'General');
+            const privateChat = spaceChats.find((c) => c.Kind === 'Private');
+            Assert(!!generalChat, 'Discovery General conversation found');
+            Assert(!!privateChat, 'Discovery Private conversation found');
+
+            const view = View(ctx);
+
+            // 3. Bea can read General conversation
+            const beaGenRead = await view.RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID = '${generalChat!.ConversationID}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, bea);
+            Assert(beaGenRead.Success && (beaGenRead.Results?.length ?? 0) === 1, 'Bea can read Discovery General conversation');
+
+            // 4. Bea can post in General conversation
+            const beaPostGen = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                conversationId: generalChat!.ConversationID,
+                text: 'Bea posted in General channel.',
+            });
+            if (!beaPostGen.ok) {
+                throw new Error(`Bea can post in Discovery General conversation failed: ${beaPostGen.message}`);
+            }
+            Assert(beaPostGen.ok === true && !!beaPostGen.detailId, 'Bea can post in Discovery General conversation');
+            createdDetailIds.push(beaPostGen.detailId);
+
+            // 5. Bea CANNOT read Private conversation
+            const beaPrivRead = await view.RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID = '${privateChat!.ConversationID}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, bea);
+            Assert(beaPrivRead.Success && (beaPrivRead.Results?.length ?? 0) === 0, 'Bea CANNOT read Discovery Private conversation');
+
+            // 6. Bea CANNOT post in Private conversation
+            const beaPostPriv = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                conversationId: privateChat!.ConversationID,
+                text: 'Bea trying to post in Private channel.',
+            });
+            Assert(!beaPostPriv.ok, 'Bea must be refused posting in Discovery Private conversation');
         },
     },
 ];

@@ -482,16 +482,8 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     spaceChat.Kind = 'Room';
     spaceChat.Status = targetStatus;
 
-    let tg;
-    try {
-        if (typeof metadata.CreateTransactionGroup === 'function') {
-            tg = await metadata.CreateTransactionGroup();
-        }
-    } catch {
-        tg = undefined;
-    }
-
-    if (tg) {
+    if (typeof metadata.CreateTransactionGroup === 'function') {
+        const tg = await metadata.CreateTransactionGroup();
         conversation.TransactionGroup = tg;
         spaceChat.TransactionGroup = tg;
         await conversation.Save();

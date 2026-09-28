@@ -94,26 +94,16 @@ export async function syncRoomEditGrantsForSpace(
 
     const rv = RunView.FromMetadataProvider(provider);
 
-    // 1. Find the active Room for this space
-    const roomRes = await rv.RunView<{ ID: string; ConversationID: string; Status: string }>({
+    // 1. Find all active conversations for this space
+    const chatsRes = await rv.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string }>({
         EntityName: SPACE_CHATS_ENTITY,
-        ExtraFilter: `SpaceID = '${spaceId}' AND Kind = 'Room'`,
-        Fields: ['ID', 'ConversationID', 'Status'],
-        MaxRows: 1,
+        ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
+        Fields: ['ID', 'ConversationID', 'Kind', 'Status'],
+        MaxRows: 200,
     }, systemUser);
 
-    if (!roomRes.Success) {
-        LogError(`syncRoomEditGrantsForSpace: failed to read room for space ${spaceId}: ${roomRes.ErrorMessage ?? 'RunView failed'}`);
-        return;
-    }
-    if (!roomRes.Results || roomRes.Results.length === 0) {
-        return; // No room conversation for this space
-    }
-
-    const room = roomRes.Results[0];
-    const conversationId = parseUuid(room.ConversationID);
-    if (!conversationId) {
-        LogError(`syncRoomEditGrantsForSpace: invalid ConversationID for space ${spaceId}`);
+    if (!chatsRes.Success) {
+        LogError(`syncRoomEditGrantsForSpace: failed to read chats for space ${spaceId}: ${chatsRes.ErrorMessage ?? 'RunView failed'}`);
         return;
     }
 
@@ -137,7 +127,8 @@ export async function syncRoomEditGrantsForSpace(
     const space = spaceRes.Results[0];
     const isClosed = !!space.ClosedAt;
 
-    const targetUserIds = new Set<string>();
+    const allContributingUserIds = new Set<string>();
+    const teamContributingUserIds = new Set<string>();
 
     if (!isClosed) {
         const spaceNodes: SpaceNode[] = [];
@@ -272,72 +263,83 @@ export async function syncRoomEditGrantsForSpace(
             for (const uid of uniqueUserIds) {
                 const reach = membershipReaches(spaceNodes, memberships, uid, spaceId);
                 if (reach?.role.canContribute) {
-                    targetUserIds.add(uid);
+                    allContributingUserIds.add(uid);
+                    if (reach.role.canSeeTeamBand) {
+                        teamContributingUserIds.add(uid);
+                    }
                 }
             }
         }
     }
 
-    // 3. Reconcile existing MJ: Resource Permissions rows for this Room conversation
-    const existingGrantsRes = await rv.RunView<ExistingGrantRow>({
-        EntityName: RESOURCE_PERMISSIONS_ENTITY,
-        ExtraFilter: `ResourceTypeID = '${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${conversationId}' AND Type = 'User'`,
-        Fields: ['ID', 'UserID', 'PermissionLevel', 'Status'],
-        MaxRows: 2000,
-    }, systemUser);
+    // 3. Reconcile existing MJ: Resource Permissions rows for each active conversation
+    for (const chat of (chatsRes.Results ?? [])) {
+        const conversationId = parseUuid(chat.ConversationID);
+        if (!conversationId) continue;
 
-    if (!existingGrantsRes.Success) {
-        LogError(`syncRoomEditGrantsForSpace: failed to read existing grants for space ${spaceId}: ${existingGrantsRes.ErrorMessage ?? 'RunView failed'}`);
-        return;
-    }
+        const isPrivate = chat.Kind === 'Private';
+        const targetUserIds = new Set<string>(isPrivate ? teamContributingUserIds : allContributingUserIds);
 
-    if (existingGrantsRes.Results) {
-        for (const existing of existingGrantsRes.Results) {
-            const existingUserId = parseUuid(existing.UserID);
-            if (existingUserId && targetUserIds.has(existingUserId)) {
-                // Grant is still required. Check if properties are up to date.
-                targetUserIds.delete(existingUserId);
-                if (existing.PermissionLevel !== 'Edit' || existing.Status !== 'Approved') {
-                    const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
-                    if (await permObj.Load(existing.ID)) {
-                        permObj.PermissionLevel = 'Edit';
-                        permObj.Status = 'Approved';
-                        const saved = await permObj.Save();
-                        if (!saved) {
-                            LogError(`syncRoomEditGrantsForSpace: failed to update grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+        const existingGrantsRes = await rv.RunView<ExistingGrantRow>({
+            EntityName: RESOURCE_PERMISSIONS_ENTITY,
+            ExtraFilter: `ResourceTypeID = '${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${conversationId}' AND Type = 'User'`,
+            Fields: ['ID', 'UserID', 'PermissionLevel', 'Status'],
+            MaxRows: 2000,
+        }, systemUser);
+
+        if (!existingGrantsRes.Success) {
+            LogError(`syncRoomEditGrantsForSpace: failed to read existing grants for space ${spaceId} conversation ${conversationId}: ${existingGrantsRes.ErrorMessage ?? 'RunView failed'}`);
+            continue;
+        }
+
+        if (existingGrantsRes.Results) {
+            for (const existing of existingGrantsRes.Results) {
+                const existingUserId = parseUuid(existing.UserID);
+                if (existingUserId && targetUserIds.has(existingUserId)) {
+                    // Grant is still required. Check if properties are up to date.
+                    targetUserIds.delete(existingUserId);
+                    if (existing.PermissionLevel !== 'Edit' || existing.Status !== 'Approved') {
+                        const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
+                        if (await permObj.Load(existing.ID)) {
+                            permObj.PermissionLevel = 'Edit';
+                            permObj.Status = 'Approved';
+                            const saved = await permObj.Save();
+                            if (!saved) {
+                                LogError(`syncRoomEditGrantsForSpace: failed to update grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                            }
+                        } else {
+                            LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for update`);
                         }
-                    } else {
-                        LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for update`);
-                    }
-                }
-            } else {
-                // Grant should be revoked
-                const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
-                if (await permObj.Load(existing.ID)) {
-                    const deleted = await permObj.Delete();
-                    if (!deleted) {
-                        LogError(`syncRoomEditGrantsForSpace: failed to delete grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
                     }
                 } else {
-                    LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for revocation`);
+                    // Grant should be revoked
+                    const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
+                    if (await permObj.Load(existing.ID)) {
+                        const deleted = await permObj.Delete();
+                        if (!deleted) {
+                            LogError(`syncRoomEditGrantsForSpace: failed to delete grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                        }
+                    } else {
+                        LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for revocation`);
+                    }
                 }
             }
         }
-    }
 
-    // 4. Create missing grants for remaining target users
-    for (const userId of targetUserIds) {
-        const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
-        permObj.NewRecord();
-        permObj.ResourceTypeID = CONVERSATIONS_RESOURCE_TYPE_ID;
-        permObj.ResourceRecordID = conversationId;
-        permObj.Type = 'User';
-        permObj.UserID = userId;
-        permObj.PermissionLevel = 'Edit';
-        permObj.Status = 'Approved';
-        const saved = await permObj.Save();
-        if (!saved) {
-            LogError(`syncRoomEditGrantsForSpace: failed to save room edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+        // 4. Create missing grants for remaining target users
+        for (const userId of targetUserIds) {
+            const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
+            permObj.NewRecord();
+            permObj.ResourceTypeID = CONVERSATIONS_RESOURCE_TYPE_ID;
+            permObj.ResourceRecordID = conversationId;
+            permObj.Type = 'User';
+            permObj.UserID = userId;
+            permObj.PermissionLevel = 'Edit';
+            permObj.Status = 'Approved';
+            const saved = await permObj.Save();
+            if (!saved) {
+                LogError(`syncRoomEditGrantsForSpace: failed to save edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+            }
         }
     }
 

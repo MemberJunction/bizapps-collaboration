@@ -95,8 +95,8 @@
     },
     "fields": {
       "Name": "Collaboration: Conversations In Reach",
-      "Description": "Conversations bound to a space room the caller reaches.",
-      "FilterText": "(ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room'))"
+      "Description": "Conversations bound to a space the caller reaches.",
+      "FilterText": "(ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'Room', N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
     }
   },
   {
@@ -105,8 +105,8 @@
     },
     "fields": {
       "Name": "Collaboration: Conversation Details In Reach",
-      "Description": "Details whose conversation is a space room the caller reaches.",
-      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room'))"
+      "Description": "Details whose conversation is a space conversation the caller reaches.",
+      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE (sc.Kind IN (N'Room', N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
     }
   },
   {
@@ -265,8 +265,8 @@
     },
     "fields": {
       "Name": "Collaboration: Conversation Details Create In Reach",
-      "Description": "Allows contributing participants to create user messages in space rooms.",
-      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND Role = N'User' AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room' AND sc.Status = N'Active' AND a.CanContribute = 1))"
+      "Description": "Allows contributing participants to create user messages in space conversations.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND Role = N'User' AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Status = N'Active' AND a.CanContribute = 1 AND (sc.Kind IN (N'Room', N'General', N'Topic') OR (sc.Kind = N'Private' AND a.CanSeeTeam = 1))))"
     }
   },
   {

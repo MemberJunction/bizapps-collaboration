@@ -19,7 +19,7 @@ export interface PostSpaceMessageInput {
 }
 
 export type PostSpaceMessageResult =
-    | { ok: true; detailId: string; assistantDetailId?: string; quotedCount?: number; assistantError?: string }
+    | { ok: true; detailId: string; conversationId?: string; assistantDetailId?: string; quotedCount?: number; assistantError?: string }
     | { ok: false; message: string };
 
 /**
@@ -80,8 +80,8 @@ export async function postSpaceMessage(
         if (!foundChat?.ConversationID) {
             return { ok: false, message: 'The conversation does not belong to this space.' };
         }
-        if (foundChat.Kind !== 'Room') {
-            return { ok: false, message: 'Only the space Room accepts messages.' };
+        if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
+            return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
         }
         conversationId = parsedTarget;
     } else {
@@ -114,19 +114,18 @@ export async function postSpaceMessage(
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
-
     if (input.executeAgent) {
         try {
             const turnResult = await executeSpaceChatTurn(provider, user, {
                 spaceId,
                 conversationId,
                 userMessageId: detail.ID,
-                forceExecute: true,
             });
             if (turnResult.ok) {
                 return {
                     ok: true,
                     detailId: detail.ID,
+                    conversationId,
                     assistantDetailId: turnResult.replyDetailIds[0],
                     quotedCount: turnResult.quotedCount,
                 };
@@ -135,6 +134,7 @@ export async function postSpaceMessage(
                 return {
                     ok: true,
                     detailId: detail.ID,
+                    conversationId,
                     assistantError: turnResult.message,
                 };
             }
@@ -144,12 +144,13 @@ export async function postSpaceMessage(
             return {
                 ok: true,
                 detailId: detail.ID,
+                conversationId,
                 assistantError: errMessage,
             };
         }
     }
 
-    return { ok: true, detailId: detail.ID };
+    return { ok: true, detailId: detail.ID, conversationId };
 }
 
 /**

@@ -1,13 +1,11 @@
 import { type IMetadataProvider, LogError, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     membershipReaches,
-    type CollaborationSettings,
     type MemberSnapshot,
     type SpaceNode,
-    ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
-import { CollaborationEngine } from './CollaborationEngine.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
+import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -49,6 +47,7 @@ interface MemberRow {
     SpaceRoleTypeID?: string | null;
     Band?: string | null;
     Status?: string | null;
+    __mj_CreatedAt?: string | Date | null;
 }
 
 interface RoleRow {
@@ -64,16 +63,18 @@ interface RoleRow {
 
 /**
  * Resolves chat host rules for a space from the server's view of the space (D25).
- * - AgentReplyMode: derived from Chats.AgentReplyMode (MentionOrOneToOne and MentionOnly -> MentionOnly, Always -> Always).
+ * - AgentReplyMode: derived from Chats.AgentReplyMode via unified resolveSpaceChatSettings.
  * - AllowedAgentIDs: allowed agents in scope.
  * - DefaultAgentID: default agent in scope.
- * - AgentHistoryFrom: history floor if configured, else null.
+ * - AgentHistoryFrom: viewer's history floor from Chats.HistoryOnAdd.
  * - MentionPeople: all room members whose seat reaches the space (including inherited seats).
+ * Refuses unless caller reaches the space (Item 20).
  */
 export async function resolveSpaceChatHostRules(
     providerOrObject: IMetadataProvider | object,
     user: UserInfo,
     spaceId: string,
+    conversationId?: string,
 ): Promise<SpaceChatHostRulesResult> {
     const provider = asMetadata(providerOrObject);
     if (!provider) {
@@ -125,38 +126,16 @@ export async function resolveSpaceChatHostRules(
 
     const targetSpace = spaceRes.Results[0];
 
-    // 2. Resolve settings & reply mode
-    await CollaborationEngine.Instance.EnsureLoaded(systemUser, provider);
-
-    let spaceConfig: CollaborationSettings | null = null;
-    if (targetSpace.Configuration) {
-        try {
-            const parsed: unknown = JSON.parse(targetSpace.Configuration);
-            const val = ValidateCollaborationSettings(parsed, 'space');
-            if (val.valid) {
-                spaceConfig = parsed as CollaborationSettings;
-            } else {
-                LogError(`resolveSpaceChatHostRules: Invalid space configuration for ${spaceId}: ${val.errors.join(', ')}`);
-            }
-        } catch (err) {
-            LogError(`resolveSpaceChatHostRules: Error parsing space configuration for ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
-        spaceConfig ? [spaceConfig] : [],
-        targetSpace.SpaceTypeID
-    );
-
-    const rawReplyMode = resolvedSettings?.Chats?.AgentReplyMode ?? 'MentionOrOneToOne';
-    const agentReplyMode: 'Always' | 'MentionOnly' = rawReplyMode === 'Always' ? 'Always' : 'MentionOnly';
+    // 2. Resolve settings & reply mode using unified function (Item 16)
+    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, systemUser);
+    const agentReplyMode = chatSettings.agentReplyMode;
 
     // 3. Resolve allowed agents & default agent
     const allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
     const allowedAgentIds = allowed.allowedAgentIds.length > 0 ? allowed.allowedAgentIds : null;
     const defaultAgentId = allowed.defaultAgentId ?? null;
 
-    // 4. Resolve mention people: everyone whose seat reaches the space
+    // 4. Build ancestor chain and memberships to verify reach and resolve mention people
     const spaceNodes: SpaceNode[] = [];
     const chainSpaceIds: string[] = [spaceId];
     let currentSpace: SpaceRow = targetSpace;
@@ -206,7 +185,7 @@ export async function resolveSpaceChatHostRules(
     const membersRes = await rv.RunView<MemberRow>({
         EntityName: SPACE_MEMBERS_ENTITY,
         ExtraFilter: `SpaceID IN (${chainSpaceIds.map((id) => `'${id}'`).join(', ')}) AND Status = 'Active'`,
-        Fields: ['ID', 'SpaceID', 'UserID', 'User', 'SpaceRoleTypeID', 'Band'],
+        Fields: ['ID', 'SpaceID', 'UserID', 'User', 'SpaceRoleTypeID', 'Band', '__mj_CreatedAt'],
         MaxRows: 2000,
     }, systemUser);
 
@@ -260,26 +239,90 @@ export async function resolveSpaceChatHostRules(
 
     const reachingUserIds = new Set<string>();
     const userToMemberRow = new Map<string, MemberRow>();
+    const userReachMap = new Map<string, NonNullable<ReturnType<typeof membershipReaches>>>();
     for (const m of memberRows) {
         const uid = parseUuid(m.UserID);
         if (uid) {
             userToMemberRow.set(uid, m);
             const reach = membershipReaches(spaceNodes, memberships, uid, spaceId);
             if (reach) {
+                userReachMap.set(uid, reach);
                 reachingUserIds.add(uid);
             }
         }
     }
 
+    // 5. Item 20: Refuse unless caller reaches the space
+    const callerId = parseUuid(user?.ID);
+    if (!callerId || !reachingUserIds.has(callerId)) {
+        return {
+            ok: false,
+            message: 'Caller does not reach this space.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: null,
+            defaultAgentId: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+        };
+    }
+    const callerReach = userReachMap.get(callerId);
+
+    // If conversationId is specified, check conversation access
+    let targetChatKind: string = 'Room';
+    if (conversationId) {
+        const parsedConvId = parseUuid(conversationId);
+        if (parsedConvId) {
+            const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}' AND Status = 'Active'`,
+                Fields: ['ID', 'Kind', 'Status'],
+                MaxRows: 1,
+            }, systemUser);
+            if (chatCheck.Success && chatCheck.Results?.[0]) {
+                targetChatKind = chatCheck.Results[0].Kind;
+            }
+        }
+    }
+
+    if (targetChatKind === 'Private') {
+        if (!callerReach?.role.canSeeTeamBand) {
+            return {
+                ok: false,
+                message: 'Caller does not have access to this internal conversation.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: null,
+                defaultAgentId: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+            };
+        }
+    }
+
+    // 6. Item 16: Compute viewer's floor from Chats.HistoryOnAdd
+    let agentHistoryFrom: Date | null = null;
+    if (chatSettings.historyOnAdd !== 'All' && callerId) {
+        const callerRow = userToMemberRow.get(callerId);
+        if (callerRow?.__mj_CreatedAt) {
+            agentHistoryFrom = new Date(callerRow.__mj_CreatedAt);
+        }
+    }
+
+    // 7. Resolve mention people for this conversation
     const mentionPeople: SpaceChatHostRulesMentionPerson[] = [];
-    const reachingUserIdsArr = [...reachingUserIds];
-    if (reachingUserIdsArr.length > 0) {
-        const userFilter = reachingUserIdsArr.map((id) => `'${id}'`).join(', ');
+    const mentionUserIds = [...reachingUserIds].filter((uid) => {
+        if (targetChatKind === 'Private') {
+            return userReachMap.get(uid)?.role.canSeeTeamBand === true;
+        }
+        return true;
+    });
+
+    if (mentionUserIds.length > 0) {
+        const userFilter = mentionUserIds.map((id) => `'${id}'`).join(', ');
         const usersRes = await rv.RunView<{ ID: string; Name: string; Email: string }>({
             EntityName: 'MJ: Users',
             ExtraFilter: `ID IN (${userFilter})`,
             Fields: ['ID', 'Name', 'Email'],
-            MaxRows: reachingUserIdsArr.length,
+            MaxRows: mentionUserIds.length,
         }, systemUser);
 
         if (usersRes.Success && usersRes.Results) {
@@ -292,7 +335,7 @@ export async function resolveSpaceChatHostRules(
             }
         } else {
             // Fallback to member row names
-            for (const uid of reachingUserIdsArr) {
+            for (const uid of mentionUserIds) {
                 const row = userToMemberRow.get(uid);
                 mentionPeople.push({
                     ID: uid,
@@ -308,7 +351,7 @@ export async function resolveSpaceChatHostRules(
         agentReplyMode,
         allowedAgentIds,
         defaultAgentId,
-        agentHistoryFrom: null,
+        agentHistoryFrom,
         mentionPeople,
     };
 }

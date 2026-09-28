@@ -287,17 +287,26 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         spaceTypeId?: string | null
     ): ResolvedCollaborationSettings {
         const typeEntity = spaceTypeId ? this.SpaceTypeById(spaceTypeId) : undefined;
-        const typeConfig = typeEntity?.Configuration
-            ? (typeof typeEntity.Configuration === 'string'
-                  ? JSON.parse(typeEntity.Configuration)
-                  : typeEntity.Configuration)
-            : undefined;
+        let typeConfig: CollaborationSettings | undefined;
+        if (typeEntity?.Configuration) {
+            try {
+                typeConfig =
+                    typeof typeEntity.Configuration === 'string'
+                        ? (JSON.parse(typeEntity.Configuration) as CollaborationSettings)
+                        : (typeEntity.Configuration as CollaborationSettings);
+            } catch (err) {
+                LogError(
+                    `ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${err instanceof Error ? err.message : String(err)}`
+                );
+                typeConfig = undefined;
+            }
+        }
 
         let appConfig: CollaborationSettings | undefined;
         try {
             appConfig = this.CollaborationSettings;
         } catch {
-            appConfig = undefined;
+            appConfig = DEFAULT_COLLABORATION_SETTINGS;
         }
 
         return ResolveCollaborationSettings({
