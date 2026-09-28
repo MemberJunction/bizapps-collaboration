@@ -130,9 +130,6 @@ export async function purgeWorld(): Promise<void> {
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
-            DELETE FROM [${core}].FileStorageAccount WHERE ID = '${COLLABORATION_STORAGE_ACCOUNT_ID}';
-            DELETE FROM [${core}].Credential WHERE Name IN ('Collaboration local directory', 'Collaboration Box Storage');
-            DELETE FROM [${core}].FileStorageProvider WHERE ID = '${COLLABORATION_STORAGE_PROVIDER_ID}';
 
             SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
             SELECT ID INTO #details FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
@@ -171,6 +168,9 @@ export async function purgeWorld(): Promise<void> {
 
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
+            DELETE FROM [${core}].FileStorageAccount WHERE ID = '${COLLABORATION_STORAGE_ACCOUNT_ID}';
+            DELETE FROM [${core}].Credential WHERE Name IN ('Collaboration local directory', 'Collaboration Box Storage');
+            DELETE FROM [${core}].FileStorageProvider WHERE ID = '${COLLABORATION_STORAGE_PROVIDER_ID}';
         `);
         await transaction.commit();
     } catch (error) {

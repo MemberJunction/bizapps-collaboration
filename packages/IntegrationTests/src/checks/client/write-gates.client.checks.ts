@@ -605,14 +605,22 @@ const checks: NamedCheck[] = [
                     `Expected closed space status refusal message over wire, got: ${closedReason}`,
                 );
             } finally {
-                if (closedTaskCreated) {
-                    await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
-                }
-                const restoreSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-                if (await restoreSpace.Load(CLOSED_RECENT_SPACE_ID)) {
-                    if (restoreSpace.ClosedAt !== origClosedAt) {
+                try {
+                    if (closedTaskCreated) {
+                        await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
+                    }
+                } finally {
+                    const restoreSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+                    Assert(await restoreSpace.Load(CLOSED_RECENT_SPACE_ID), 'Loading closed-recent space over wire to restore ClosedAt must succeed');
+                    const currentTime = restoreSpace.ClosedAt instanceof Date
+                        ? restoreSpace.ClosedAt.getTime()
+                        : (restoreSpace.ClosedAt ? new Date(restoreSpace.ClosedAt).getTime() : null);
+                    const origTime = origClosedAt instanceof Date
+                        ? origClosedAt.getTime()
+                        : (origClosedAt ? new Date(origClosedAt).getTime() : null);
+                    if (currentTime !== origTime) {
                         restoreSpace.ClosedAt = origClosedAt;
-                        await restoreSpace.Save();
+                        Assert(await restoreSpace.Save(), 'Restoring closed-recent ClosedAt over wire must succeed');
                     }
                 }
             }
@@ -665,19 +673,38 @@ const checks: NamedCheck[] = [
 
             // 4c. Space owner with Configure Spaces authorization (Dev) updating Configuration succeeds and restores in try/finally
             const devCtx = await getPersonaContext(ctx, 'dev');
-            const devDiscovery = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
-            Assert(await devDiscovery.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space as Dev over wire must succeed');
-            const devOrigConfig = devDiscovery.Configuration;
+            const ownerRoles = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
+            Assert(ownerRoles.length === 1, 'Owner space role type found');
+            const ownerRoleId = ownerRoles[0].ID;
+
+            const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+            devMember.NewRecord();
+            devMember.SpaceID = DISCOVERY_SPACE_ID;
+            devMember.UserID = devCtx.User.ID;
+            devMember.SpaceRoleTypeID = ownerRoleId;
+            devMember.Band = 'Team';
+            devMember.Status = 'Active';
+            Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery over wire must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+
             try {
-                devDiscovery.Configuration = JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } });
-                const devSaved = await devDiscovery.Save();
-                Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed over wire: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
+                const devDiscovery = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                Assert(await devDiscovery.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space as Dev over wire must succeed');
+                const devOrigConfig = devDiscovery.Configuration;
+                try {
+                    devDiscovery.Configuration = JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } });
+                    const devSaved = await devDiscovery.Save();
+                    Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed over wire: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
+                } finally {
+                    const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                    Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
+                    restoreDev.Configuration = devOrigConfig;
+                    const restoredConfig = await restoreDev.Save();
+                    Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                }
             } finally {
-                const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
-                Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
-                restoreDev.Configuration = devOrigConfig;
-                const restoredConfig = await restoreDev.Save();
-                Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                const cleanupDevMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+                Assert(await cleanupDevMember.Load(devMember.ID), 'Loading Dev space member over wire for cleanup must succeed');
+                Assert(await cleanupDevMember.Delete(), 'Deleting Dev space member over wire cleanup must succeed');
             }
         },
     },

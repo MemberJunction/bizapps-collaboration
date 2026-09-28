@@ -595,14 +595,22 @@ const checks: NamedCheck[] = [
                     `Expected closed space status refusal message, got: ${closedReason}`,
                 );
             } finally {
-                if (closedTaskCreated) {
-                    await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
-                }
-                const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                if (await restoreSpace.Load(CLOSED_RECENT_SPACE_ID)) {
-                    if (restoreSpace.ClosedAt !== origClosedAt) {
+                try {
+                    if (closedTaskCreated) {
+                        await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
+                    }
+                } finally {
+                    const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                    Assert(await restoreSpace.Load(CLOSED_RECENT_SPACE_ID), 'Loading closed-recent space to restore ClosedAt must succeed');
+                    const currentTime = restoreSpace.ClosedAt instanceof Date
+                        ? restoreSpace.ClosedAt.getTime()
+                        : (restoreSpace.ClosedAt ? new Date(restoreSpace.ClosedAt).getTime() : null);
+                    const origTime = origClosedAt instanceof Date
+                        ? origClosedAt.getTime()
+                        : (origClosedAt ? new Date(origClosedAt).getTime() : null);
+                    if (currentTime !== origTime) {
                         restoreSpace.ClosedAt = origClosedAt;
-                        await restoreSpace.Save();
+                        Assert(await restoreSpace.Save(), 'Restoring closed-recent ClosedAt must succeed');
                     }
                 }
             }
@@ -655,19 +663,38 @@ const checks: NamedCheck[] = [
 
             // 4c. Space owner with Configure Spaces authorization (Dev) updating Configuration succeeds and restores in try/finally
             const dev = await GetPersonaUser(ctx, 'dev');
-            const devDiscovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-            Assert(await devDiscovery.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space as Dev must succeed');
-            const devOrigConfig = devDiscovery.Configuration;
+            const ownerRoles = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
+            Assert(ownerRoles.length === 1, 'Owner space role type found');
+            const ownerRoleId = ownerRoles[0].ID;
+
+            const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+            devMember.NewRecord();
+            devMember.SpaceID = DISCOVERY_SPACE_ID;
+            devMember.UserID = dev.ID;
+            devMember.SpaceRoleTypeID = ownerRoleId;
+            devMember.Band = 'Team';
+            devMember.Status = 'Active';
+            Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+
             try {
-                devDiscovery.Configuration = JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } });
-                const devSaved = await devDiscovery.Save();
-                Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
+                const devDiscovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await devDiscovery.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space as Dev must succeed');
+                const devOrigConfig = devDiscovery.Configuration;
+                try {
+                    devDiscovery.Configuration = JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } });
+                    const devSaved = await devDiscovery.Save();
+                    Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
+                } finally {
+                    const restoreDev = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                    Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration must succeed');
+                    restoreDev.Configuration = devOrigConfig;
+                    const restoredConfig = await restoreDev.Save();
+                    Assert(restoredConfig, `Restoring Discovery Configuration as Dev must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                }
             } finally {
-                const restoreDev = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration must succeed');
-                restoreDev.Configuration = devOrigConfig;
-                const restoredConfig = await restoreDev.Save();
-                Assert(restoredConfig, `Restoring Discovery Configuration as Dev must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                Assert(await cleanupDevMember.Load(devMember.ID), 'Loading Dev space member for cleanup must succeed');
+                Assert(await cleanupDevMember.Delete(), 'Deleting Dev space member cleanup must succeed');
             }
         },
     },

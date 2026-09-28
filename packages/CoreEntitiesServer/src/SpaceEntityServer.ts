@@ -454,7 +454,10 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     const chatSaved = await spaceChat.Save();
     if (!chatSaved) {
         LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
-        await conversation.Delete();
+        const deleted = await conversation.Delete();
+        if (!deleted) {
+            LogError(`Failed to cleanup unbound conversation ${convId}: ${conversation.LatestResult?.CompleteMessage ?? 'delete returned false'}`);
+        }
     }
 }
 
