@@ -407,7 +407,7 @@ This section is round 94's task 6, rewritten; it moved to the next pull request.
 ### Data
 
 - **`SpaceChat`**, one per conversation in a space:
-  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (`Room` or `Chat`), `Name`, `CreatedByUserID` and `Status`;
+  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (General, Topic or Internal Only, and chats with their own people), `Name`, `CreatedByUserID` and `Status`;
   - optional `SubjectEntityID` and `SubjectRecordID` make it a chat about one record, such as a meeting, a document or a task;
   - it replaces today's binding through `Conversation.LinkedRecordID`, which allows only one conversation per space.
 - **A chat's people are MJ core's conversation participants,** `MJ: Conversation Participants` (the plan's A5 and D10). MJ has no such table today, in 6.1.3 or on `next` as of 2026-09-25; the nearest are the realtime bridges' `MJ: AI Agent Session Bridge Participants`, a conversation's owner (`Conversation.UserID`) and Resource Permission shares.
@@ -422,12 +422,12 @@ This section is round 94's task 6, rewritten; it moved to the next pull request.
 
 ### Who sees what
 
-- **The Room** is `Kind` `Room`, one per space, created with the space. Its participants are derived from the space's roster: everyone who reaches the space, or only those who see Team. Collaboration keeps them in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them.
+- **A space's conversations** are started on request, and none is created with the space (Amith, 2026-09-28). Their participants are derived from the space's roster: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. Collaboration keeps them in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them.
 - **A chat** is `Kind` `Chat`. Only its participants see it.
-- **Nothing else in a space is time-limited.** A seat opens everything its band allows, from the space's first day: the library, the tasks, the Room and every chat the person is in.
+- **Nothing else in a space is time-limited.** A seat opens everything its band allows, from the space's first day: the library, the tasks, the space's conversations and every chat the person is in.
 - **Sub-spaces keep their own membership** when `InheritsMembership` is off, as today. A compensation sub-committee under a board, for example, isn't open to the whole board. A type's server driver can set the switch for the sub-spaces it allows ([§ 5](#5-server-drivers)).
 - **Reads are enforced in SQL:** row-level security on `SpaceChat`, as Collaboration's metadata, and core's row-level security on Conversations and Conversation Details, keyed on participants and their `HistoryFrom` (the plan's A5). Core applies it to everyone, staff included, so the chat area needs no cutoff of its own. That's decision 14.
-- **Sealing.** A newcomer to a room or a chat, or a new seat on a space, sees an AI message inside their window only if they can read every source it recorded. Otherwise it's sealed for them: they see who wrote it and when, and can request access (the plan's D4 and A7). People's own messages aren't sealed.
+- **Sealing.** A newcomer to a conversation or a chat, or a new seat on a space, sees an AI message inside their window only if they can read every source it recorded. Otherwise it's sealed for them: they see who wrote it and when, and can request access (the plan's D4 and A7). People's own messages aren't sealed.
 
 ### Starting a chat and adding people
 
@@ -469,7 +469,7 @@ This section is round 94's task 6, rewritten; it moved to the next pull request.
   - Under a floor, MJ skips its summary of earlier messages, since the summary covers messages before the floor. The agent then sees the last 20 messages after the floor.
 - **Search: the audience of the answer decides it** (the plan's D2). This extends the subtree bound this plan first set:
   - **In a private chat,** one person plus agents, the agent uses the caller's union of reach: everything their seats reach, anywhere in the tree. A scope control narrows it to *this space*, *this space and its sub-spaces*, or *everything I can reach*. The default is *this space and its sub-spaces* when the chat is opened from a space, and *everything* from Home.
-  - **In a chat with two or more people,** the Room included, the agent uses the intersection of what every current participant can read, with each participant's band: a chat with anyone who can't see Team uses Shared material only. Nobody can change it, the asker included.
+  - **In a chat with two or more people,** a space's conversations included, the agent uses the intersection of what every current participant can read, with each participant's band: a chat with anyone who can't see Team uses Shared material only. Nobody can change it, the asker included.
   - In both, the space's `AgentRetrieval` still applies, and the bound is recomputed on every turn.
   - An earlier reply stands when someone joins later, but it's sealed for them if they can't read its sources.
 - **Knowledge beyond the space's items** comes only from the Content Sources bound to the type or the space ([§ 3](#3-data)), under their classification.

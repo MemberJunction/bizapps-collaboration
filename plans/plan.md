@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19.
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -83,7 +83,7 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
 - **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
   - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. When #7 merged, it was retargeted to `next` and handed to the builder, as #7 was when PR #3 merged.
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
-- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, and A18's. Amith and MJ's reviewers review it now, and the builder builds it after #7 and PR #8 (D36). PR #8 builds on MemberJunction as released, and a follow-up pins the release that carries it.
+- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, A18's and A19's. Amith and MJ's reviewers review it now, and the builder builds it after #7 and PR #8 (D36). PR #8 builds on MemberJunction as released, and a follow-up pins the release that carries it.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
 ### 2.2 What PR #3 delivered
@@ -259,7 +259,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 | Conversation | Retrieval scope | Who can change it |
 |---|---|---|
 | **Private:** one person, plus agents | The caller's union of reach (D1), optionally narrowed | The person, with a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach* |
-| **Shared:** two or more people | The intersection of what every current participant can read | Nobody, the asker included. It's a property of the room. |
+| **Shared:** two or more people | The intersection of what every current participant can read | Nobody, the asker included. It's a property of the conversation. |
 
 - In both, the agent runs as the asking user, never as a service account. The asker's access is the ceiling.
 - In a shared conversation, each candidate must also pass a read check for every other participant. The space bound is a fast pre-filter; the per-participant check is the rule.
@@ -276,7 +276,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 **D4. Adding a person to a conversation doesn't grant them its history.** When a participant is added, any AI message whose recorded sources the newcomer can't read is sealed for them. They see that the message exists, who wrote it and when, and a *Request access* action routed to the owner of the source space. They don't see the content.
 - **Rejected: blanket consent.** Adding someone would silently grant retroactive access to a transcript nobody reviewed.
 - **Rejected: silent filtering.** The newcomer would read a transcript with holes and not know it.
-- **People's own messages aren't sealed.** Someone who pasted something into the room disclosed it, as they could anywhere. That's a training issue, not something this plan tries to stop.
+- **People's own messages aren't sealed.** Someone who pasted something into a shared conversation disclosed it, as they could anywhere. That's a training issue, not something this plan tries to stop.
 - **Maybe later:** an explicit *Disclose to this conversation* action on a sealed message, taken by someone who can read its sources, and recorded in the audit log.
 
 **D5. Copying agent output warns when it crosses an audience boundary.** When someone copies or forwards an answer whose provenance includes material the target audience can't read, the UI warns. It's advice, not a block.
@@ -296,7 +296,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 
 **D10. A chat's people are core participants.**
 - **MJ core gains `MJ: Conversation Participants`** (A5). No such table exists in MJ 6.1.3, or on MJ `next` as of 2026-09-25. The nearest things are `MJ: AI Agent Session Bridge Participants` (realtime and meeting bridges), `Conversation.UserID` (the owner) and Resource Permission shares.
-- **Collaboration keeps `SpaceChat`:** the space link, `Kind` (`Room` or `Chat`), `Name`, the subject record and `Status`. A chat's people are core participants, and `SpaceChatMember` goes.
+- **Collaboration keeps `SpaceChat`:** the space link, `Kind` (General, Topic or Internal Only, and B3's chats with their own people), `Name`, the subject record and `Status`. A chat's people are core participants, and `SpaceChatMember` goes.
 - **The adder's history choice** (none, all, or since a time) sets each new participant's window. It's proposed as a `HistoryFrom` column on core's participants, so core row-level security enforces it for everyone, staff included.
 - **Inside that window,** D4 and A7 seal the AI messages whose recorded sources the newcomer can't read.
 - **`ng-conversations`' `HistoryFrom` input,** a cutoff drawn only on screen, is no longer needed. `AgentHistoryFrom`, the agent's floor, stays, under A6 and A7.
@@ -369,14 +369,14 @@ These are v0.3's decisions. They change v0.2's doctrine.
 **D25. The chat is MJ's chat area, as merged to MJ `next`** (Amith, 09-27).
 - **One chat UI.** A space's chat is `<mj-conversation-chat-area>` from `@memberjunction/ng-conversations`, with the host rules for chats with several people that [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788) added to it on MJ `next`. There's no custom message feed or composer. If the Overview keeps its ask box, the box hands its message to the chat area rather than posting on its own, so every message and every agent turn goes through the component.
 - **The host rules are set from the server's view of the space:**
-  - `AgentReplyMode`: the space's `Chats.AgentReplyMode`, where `MentionOrOneToOne` and `MentionOnly` become `'MentionOnly'` in the room, and `Always` stays `'Always'`;
+  - `AgentReplyMode`: the space's `Chats.AgentReplyMode`, where `MentionOrOneToOne` and `MentionOnly` become `'MentionOnly'` in a space's conversations, and `Always` stays `'Always'`;
   - `AllowedAgentIDs`: the space's allowed agents;
-  - `MentionPeople`: the room's members;
+  - `MentionPeople`: the conversation's people;
   - `AgentHistoryFrom`: the viewer's floor from `Chats.HistoryOnAdd`;
-  - `AutoNameConversation` off, since the room is named for its space;
-  - `AgentTurnHandler`: a call to Collaboration's turn operation. From the saved message it checks everything again on the server: that the caller can contribute, that the conversation is the space's room, that the agent is allowed and, where the mode needs it, tagged in the stored message, and the history floor. It then runs the agent under the audience rule and writes the reply as the system user.
-- **People post as themselves.** A contributing seat has Edit on its space's room: an `MJ: Resource Permissions` grant the server writes and revokes with the seat and with the space's closure. Space Participant has Create on Conversation Details, limited by a create filter to rooms its user can contribute to; the permission and its filter are metadata, under `metadata/`.
-- **One room per space in #7.** Chats with their own people are B3's, in #8. `PostSpaceMessage`'s `ExecuteAgent` switch and its mention regex go.
+  - `AutoNameConversation` off, since each conversation is named when it's started;
+  - `AgentTurnHandler`: a call to Collaboration's turn operation. From the saved message it checks everything again on the server: that the caller can contribute, that the conversation is an active conversation of the space that the caller can post in, that the agent is allowed and, where the mode needs it, tagged in the stored message, and the history floor. It then runs the agent under the audience rule and writes the reply as the system user.
+- **People post as themselves.** A contributing seat has Edit on its space's conversations, and on an Internal Only one only if it sees Team: an `MJ: Resource Permissions` grant the server writes and revokes with the seat and with the space's closure. Space Participant has Create on Conversation Details, limited by a create filter to the conversations its user can contribute to; the permission and its filter are metadata, under `metadata/`.
+- **No conversation until someone asks for one** (Amith, 09-28). A space starts with none, and nothing is created with it. People start General, Topic and Internal Only conversations from the rail's +, the chat's New Conversation button or the Overview's ask box, through `CreateSpaceConversation`, which applies `Chats.WhoCanStart`. There's no room: `Room` is retired. Chats with their own people stay B3's. `PostSpaceMessage`'s `ExecuteAgent` switch and its mention regex go.
 - **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 merged without it, so #8 pins the first edge release that carries it, and #8's CI can pass only once that release is out.
 
 ### 3.5 Decided on 2026-09-27: anchors, grants, data, notes and meetings
@@ -474,7 +474,7 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 - **The follow-up** pins the MJ release that carries A14 to A17, and opens those grants. A18, and workstream T's calendar sync (T2), come with or after it.
 
 **D37. #7's chat builds on MJ `next`.** Amith, answering punch list 6's chat call on 09-27: the team develops against MJ `next`, which carries A13.1 ([MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)), and MJ's next edge releases go out the week of 09-28. It's the call's option A, without cutting a 6.1.5 from `lts/6.1`.
-- **#8 finishes A, not #7:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its room. An outside participant also needs Create on Conversation Details, limited to the rooms they reach. #7 merged on 2026-09-28 without it (Amith: complete enough), so it's #8's first work (#7's items 57, 8 and 61). Amith, the same day: the bindings go in right away, against MJ `next` in the pnpm workspace, without waiting for the release.
+- **#8 finishes A, not #7:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its space's conversations. An outside participant also needs Create on Conversation Details, limited to the conversations they reach. #7 merged on 2026-09-28 without it (Amith: complete enough), so it's #8's first work (#7's items 57, 8 and 61). Amith, the same day: the bindings go in right away, against MJ `next` in the pnpm workspace, without waiting for the release.
 - **#8 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
 - **D25 is settled** (Amith, 09-27): the chat is MJ's chat area as merged to MJ `next`, with MJ#4788's host rules set from the server. #7 rewrote D25 (`455b88c`), and this plan took it when #7 merged.
 
@@ -484,7 +484,7 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 
 | Capability | Substrate | What Collaboration adds |
 |---|---|---|
-| Messaging | `ng-conversations` over `MJ: Conversations` and `Conversation Details`, threaded by `ParentID` | A space's room and chats (B3) |
+| Messaging | `ng-conversations` over `MJ: Conversations` and `Conversation Details`, threaded by `ParentID` | A space's conversations and chats (B3) |
 | Agents | MJ's agent framework, `@` mentions and Scoped Search | The space's scope, the audience (D2) and per-space settings |
 | Work | bizapps-tasks: task links, several assignees, lifecycle hooks, templates, dependencies, board and gantt | Tasks filed in a space |
 | Library | `MJ: Files` and the storage drivers | Space scoping through `SpaceItem` |
@@ -664,7 +664,7 @@ A new entity, **`MJ: Conversation Participants`:** `ConversationID`, `UserID`, `
 - **Reads of `Conversations` and `Conversation Details` go through row-level security keyed on participants.** Today it's a filter in the app layer (`MJCoreEntities/src/engines/conversations.ts:769–809`), and the only Conversations row-level security belongs to the Widget Guest role.
 - **`HistoryFrom` is the first moment of the conversation a participant sees.** The person who adds someone chooses none (the moment they're added), all (empty), or a time. Core row-level security applies it for everyone, staff included, so no screen-side cutoff is needed.
 - **Agents in a conversation:** an `AgentID` on this table, or a row on the app's side. Settled in the next pull request's first design comment (D10).
-- **Apps can derive participants.** Collaboration's room derives them from the space's roster and band (B3). The only roster-like entity today is `MJ: AI Agent Session Bridge Participants` (`E:43108`), which is for meetings.
+- **Apps can derive participants.** A space's conversations derive them from the space's roster and band (B3). The only roster-like entity today is `MJ: AI Agent Session Bridge Participants` (`E:43108`), which is for meetings.
 - **Also on MJ's list for chats with several people:** editing, deleting and answering forms are allowed to the conversation's owner rather than a message's author.
 - **Accept:** someone who isn't a participant can't read a conversation or its details through RunView, GraphQL or the full-text lane, and a participant can't read details from before their `HistoryFrom`.
 
@@ -730,7 +730,7 @@ v0.2's § 8 and round 94's "Not in this PR" list, merged. Items 1 to 12 keep v0.
 | A12.14 | **Scoped Search takes its scope from the model's parameters** instead of the run. | Before dogfooding (stage 3) |
 | A12.15 | **`RunAIAgent` accepts scope and agent-type settings** from the caller's `data`. | Before dogfooding (stage 3) |
 | A12.16 | **The storage routes:** `CreatePreAuthDownloadUrl` and `SearchAcrossAccounts` check only entity-level Read on `MJ: Files`, then act on a storage account and key the client supplies, so the row filter never applies. | Before dogfooding (stage 3) |
-| A12.17 | **An `IsPermissionConstrained` check before `AIEngineBase.Instance.Agents`** in `ng-conversations`. A participant's room throws on every agent message until it ships. | With B3 |
+| A12.17 | **An `IsPermissionConstrained` check before `AIEngineBase.Instance.Agents`** in `ng-conversations`. A participant's conversation throws on every agent message until it ships. | With B3 |
 | A12.18 | **Opening a custom resource type,** such as a Space, from the notification bell. | Stage 5 |
 | A12.19 | **Hiding MJ's chat overlay** for participants. | Stage 5 |
 | A12.20 | **The CodeGen `\b` bug.** | Stage 5 |
@@ -753,7 +753,7 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 
 **Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 merged on 2026-09-28 without pinning them, and #8 pins the first edge release that carries them (D37).
 
-**A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
+**A14 to A18** are D26 to D35's MJ work, and **A19** is a fix found while building the chat. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
 
 ### A14. Properties on user views
 
@@ -775,8 +775,9 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 - **A mapping in each part's configuration** from the dashboard's properties to the part's inputs: a view's properties (A14), a query's parameters, and a component's props, which interactive components already take as `ComponentProps`.
 - **A `Properties` input** on the dashboard viewer.
 - **An Interactive Component part type,** first-class.
+- **Events and wires** (Amith, 09-28): a part's event sets a dashboard property, so selecting a row in one part filters another. The host's value still wins, and a wire can only narrow what a part shows.
 
-**Accept:** one chapter dashboard, with its `Chapter` property set once, drives a view part, a query part and a component part, and each shows only that chapter.
+**Accept:** one chapter dashboard, with its `Chapter` property set once, drives a view part, a query part and a component part, and each shows only that chapter. With a wire, selecting a chapter in a *Chapters* view part does the same for the parts beside it.
 
 ### A16. Bound, hidden action parameters for agents
 
@@ -810,6 +811,14 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 
 **Accept:** an MJ record creates an Outlook event and a Google event with attendees; a time change in either calendar flows back to the record; an RSVP updates the attendee.
 
+### A19. Who a conversation message is from
+
+**Today:** MJ's write gate on conversation messages lets anyone with an `Edit` grant on a shared conversation save a message in someone else's name, or with `Role` `AI`, and change or delete other people's messages. MJ's own chat creates each agent reply's row in the browser, so on the server a real reply and a forged one look the same. Found while building PR #8's chat (its punch list 5, item 19).
+
+**Add:** people post as themselves; only server code writing as the system user writes the agent's replies; and MJ's chat stops creating reply rows in the browser. The rules for people's own messages can land first.
+
+**Accept:** in a conversation shared with `Edit`, a message saved with another person's `UserID` is refused, and so is one with `Role` `AI`, and an agent still replies.
+
 ## 7. Workstream B: Collaboration
 
 ### B0. Land PR #3
@@ -832,10 +841,10 @@ This plan and `docs/HOW_THE_SYSTEM_WORKS.md` state D1 to D7: the union of seats 
 ### B3. Conversations in a space
 
 - **Chats** follow the [extensibility plan's § 8](../docs/EXTENSIBILITY_PLAN.md#8-chats-history-and-agents), with D10: `SpaceChat` holds the space link, kind, name, subject and status, and a chat's people are core participants (A5).
-- **The room's participants** are derived from the space's roster and band: everyone who reaches the space, or only those who see Team. The chat banner (`mjc-chat-banner`) shows that audience.
+- **A space's conversations** take their people from the space's roster and band: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. People start them on request (D25), in PR #8's chat work. The chat banner (`mjc-chat-banner`) shows that audience.
 - **A private chat** holds one person and the agent, linked to the space for context.
 - **Posting:** members don't post into conversations today, because core's detail gate is wrong (v0.2's § 9). With A5's row-level security, participants can post.
-- **A newcomer** to a room or a chat, or a new seat on a space, triggers A7's sealing inside their window.
+- **A newcomer** to a conversation or a chat, or a new seat on a space, triggers A7's sealing inside their window.
 
 ### B4. Provenance in the UI
 
@@ -855,7 +864,7 @@ v0.2's *Summarize*, built generically: a member subscribes to a weekly or monthl
 
 ### B7. Proposed posts
 
-A8 in the space: a staff member sees *Proposed by the Assistant* items in *Needs you*, and can edit, approve or discard each. An approved post appears in the room as the Assistant, with a "reviewed by" line.
+A8 in the space: a staff member sees *Proposed by the Assistant* items in *Needs you*, and can edit, approve or discard each. An approved post appears in its conversation as the Assistant, with a "reviewed by" line.
 
 ### B8. Extension points
 
@@ -906,7 +915,7 @@ Port `fnCollaborationAccess`, `fnCollaborationTasks`, `fnCollaborationAncestorMe
 **Last, and checked by using it (D16).** These are the next pull request's final work, reviewed through the builder's end-to-end screenshots for function and overall form.
 
 Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-order-of-work), in the next pull request, with:
-- **Slice B (chats):** the scope control (B2.4), sealed messages and receipts (B4), chats on core participants (B3), and Bea opening the room's own screen with no console errors (task 4's last step).
+- **Slice B (chats):** the scope control (B2.4), sealed messages and receipts (B4), chats on core participants (B3), and Bea opening a space conversation's own screen with no console errors (task 4's last step).
 - **Slice C (people):** B9's identity door.
 - **Slice E (work):** task 3's assignee picker ([§ 2.4](#24-what-moves-to-the-next-pull-request)), task 10 (start a plan from a template), and task 12 (what's left of bizapps-tasks#73).
 - **Slice G (Assistant settings):** the allowed agents and the knowledge bindings (B8.2), which are the UI plan's gap 9.
@@ -1143,7 +1152,7 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 
 - **The UI comes last (D16).** Slices B to I, and the screen side of items whose acceptance includes one, start once everything else in the next pull request is 100% done. They're checked through the builder's end-to-end Playwright screenshots, for function and overall form. That's why B13 sits in stage 5.
 - **The extensibility plan's build** (its § 13) maps onto these stages: the schema and the drivers with B8, chats with B3, the starter types' configuration and the example plug-ins with B8's acceptance. The MJ pull requests (A13) are opened in parallel as soon as the builder is on the next pull request (D11).
-- **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared room is provably bounded by its audience. Don't put a real client in a shared room before A6 and B2 pass [§ 10](#10-verification).
+- **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared conversation is provably bounded by its audience. Don't put a real client in a shared conversation before A6 and B2 pass [§ 10](#10-verification).
 - **Within a stage,** core and app items can run in parallel. App items that depend on a core item ship behind a feature check until the core version is pinned.
 
 **After #7: PR #8, the MJ pull request, Tasks and Committees.** D26 to D35's work runs in this order. [PR #8's plan](pr8-plan.md) details its stages.
@@ -1186,10 +1195,10 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 |---|---|---|
 | 1 | D, private chat, scope *everything* | Uses Board and Compensation material |
 | 2 | D, private chat from the Board, scope *this space* | Board only |
-| 3 | D and E in the Board's room | No Compensation material in retrieval, the answer or the access log |
+| 3 | D and E in a Board conversation | No Compensation material in retrieval, the answer or the access log |
 | 4 | E browsing the Board | The Compensation sub-space isn't listed (sealed) |
 | 5 | C alone asks about Acme | Team and Shared |
-| 6 | C and K in the Acme room | Shared only |
+| 6 | C and K in an Acme conversation | Shared only |
 | 7 | K is added to a conversation of C's that used Team material | Those AI messages are sealed for K, with *Request access* |
 | 8 | K asks in a mixed Teams channel with an unmapped member | Only `Public` knowledge; no space material |
 | 9 | O on the Board demotes E (a higher role) | Refused (B0.1) |
@@ -1202,8 +1211,8 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | 16 | L calls the granted query over GraphQL with `ChapterID = 40` | Refused and logged (A17) |
 | 17 | M tries to run one of Chapter 12's grants | Refused: M doesn't reach that space |
 | 18 | A same-type sub-space and a sub-space of another type under Chapter 12 | The first inherits the parent's overrides; the second starts from its own type |
-| 19 | A Team-band grant, a dues-arrears dashboard, in a room with L | Not listed in the room, and not a tool for the agent there; N alone can use it |
-| 20 | L writes a private note, then asks in a room | The note isn't used |
+| 19 | A Team-band grant, a dues-arrears dashboard, in a conversation with L | Not listed in the conversation, and not a tool for the agent there; N alone can use it |
+| 20 | L writes a private note, then asks in a shared conversation | The note isn't used |
 | 21 | A space removes one action its type grants | The action is gone for that space only |
 | 22 | A meeting is created in a space (after workstream T) | It appears in the organizer's Outlook with the attendees, and an RSVP updates the attendee |
 | 23 | A query that isn't Canon-approved is granted to a type that seats participants | The grant is refused on save |
@@ -1265,7 +1274,7 @@ Under D36, PR #8 checks rows 13, 15, 16 and 19 closed, since what they need wait
 | bizapps-tasks#67, still open, adds a `TaskAssignmentEntityServer` at priority 2, the same entity and priority as Collaboration's assignee gate. On a tie MJ uses the last registration, so one of the two checks would stop running, silently | High | If #67 merges, extend its class and register at 3 |
 | bizapps-tasks#46, still open, takes a decision's decider from `User.LinkedEntityRecordID` and requires `User.LinkedEntityID`. Collaboration links people only through `Person.LinkedUserID`, so a member's decision would be refused | Medium | If #46 merges, set both user fields wherever a Person is linked: in the loader and in `mint-space-link.ts` |
 | Every save reaches every signed-in socket through `cacheInvalidation` | High | A12.13, urgent; recorded by round 94's task 14 |
-| A shared room answers from material one participant can't read | High | D2's intersection; A6's per-principal check; no real client in a shared room before stage 3 passes |
+| A shared conversation answers from material one participant can't read | High | D2's intersection; A6's per-principal check; no real client in a shared conversation before stage 3 passes |
 | Recording provenance slows the write path | Medium | Batched inserts; A2's 5% budget on a 1,000-row RunView |
 | Intersection retrieval misses material people expected | Medium | The audience is shown in the chat banner (B3); a private chat is always available |
 | An outside channel answers as a service account | High | D6 and A9: an unresolved identity refuses |

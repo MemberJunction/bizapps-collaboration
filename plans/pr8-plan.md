@@ -54,10 +54,10 @@ Punch list 4 moved the first set of #7's items here, by number, and the rest cam
 
 | #7's item | What | Stage |
 |---|---|---|
-| 57, 8, 61 | *At merge.* **The chat on D25.** The server turn operation: it checks everything again from the saved message, runs the agent under the audience rule, and writes the reply as the system user. Edit grants for contributing seats. Space Participant's Create on Conversation Details, with its create filter, as metadata. One room per space: a filtered unique index, the host listing only the room, and the row-level security filters narrowed. `PostSpaceMessage`'s `ExecuteAgent` switch and regex retired. The ask box going through the chat area. The room's conversation and row saved together. Posting that honors a space's own reply mode and doesn't fail when the app settings row is missing. RM3 flipped on both harnesses. The host-rule bindings go in now, against MJ `next` in the pnpm workspace (Amith, 09-28; [the D25 note](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5860741029) lists them). CI can't pass the chat's build until MJ's first edge release carrying MJ#4788 is out and pinned with the lockfile (D37) | First, then 4 |
+| 57, 8, 61 | *At merge.* **The chat on D25.** The server turn operation: it checks everything again from the saved message, runs the agent under the audience rule, and writes the reply as the system user. Edit grants for contributing seats. Space Participant's Create on Conversation Details, with its create filter, as metadata. No conversation until someone asks for one (Amith, 09-28): `CreateSpaceConversation` behind the rail's +, the chat's New Conversation button and the Overview's ask box, with General, Topic and Internal Only kinds and `Room` retired; the host listing the conversations the viewer can read; the read and create filters and the Edit grants by kind. `PostSpaceMessage`'s `ExecuteAgent` switch and regex retired. The ask box going through the chat area. A conversation and its row saved together. Posting that honors a space's own reply mode and doesn't fail when the app settings row is missing. RM3 flipped on both harnesses. The host-rule bindings go in now, against MJ `next` in the pnpm workspace (Amith, 09-28; [the D25 note](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5860741029) lists them). CI can't pass the chat's build until MJ's first edge release carrying MJ#4788 is out and pinned with the lockfile (D37) | First, then 4 |
 | 13 | CI against a real database (B0.5) | 1 |
 | 14 | One baseline, regenerated from a clean database, with #7's migrations folded in and D20 to D22's type columns not created | 1 |
-| 15 | The extensibility migration's fixes, in the baseline: no hand-written `__mj_` columns, `${mjSchema}`, extended properties, one room per space | 1 |
+| 15 | The extensibility migration's fixes, in the baseline: no hand-written `__mj_` columns, `${mjSchema}`, extended properties, no `Room` kind (D25) | 1 |
 | 18 | The committee specifics, with the baseline | 1 |
 | 19 | Rebuild from empty, and check the core-entity list on the screens as Bea | 1 |
 | 12 | The type dropped from `fnCollaborationAccess`'s fallback, with the type's close columns | 1 |
@@ -68,7 +68,7 @@ Punch list 4 moved the first set of #7's items here, by number, and the rest cam
 | 6 | Storage as a setting: uploads use the resolved account, a space can set it, each item records its account, and linked documents go through a server operation | 2 |
 | 12 | A space setting its own close values | 2 |
 | 20 | The fields a participant can read, the geocode columns, and what bizapps-common#186's release does to a host's roles | 2 |
-| 29 | Chats with their own people and audience (B3): started through a server operation that applies `Chats.WhoCanStart`, with their kinds recorded, and readable only by their people. Posting on A5 and sealing on A7 wait for those MJ items | 2, 4 |
+| 29 | Chats with their own people and audience (B3): started through a server operation that applies `Chats.WhoCanStart`, with their kinds recorded, and readable only by their people. Posting on A5 and sealing on A7 wait for those MJ items. The space's own conversations moved to the chat's work (row 57) | 2, 4 |
 | 34 | The extension points' leftovers, with `example-chapter`: the examples' migration with its CodeGen output, frame 08 through the points, examples that read their own rows | 2 |
 | 35 | React hooks inside the save's transaction | 2 |
 | 36 | The drivers on the one configuration | 2 |
@@ -157,7 +157,8 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
   - **A14,** properties on user views, for `RunSpaceView` and every view grant with a binding;
   - **A15,** properties on dashboards and the component part, for `GetSpaceDashboard` and the data surface;
   - **A16,** bound, hidden action parameters, for B20's granted actions;
-  - **A17,** locked query parameters, the server-set context variable, and the approval status D34 reads.
+  - **A17,** locked query parameters, the server-set context variable, and the approval status D34 reads;
+  - **A19,** who a conversation message is from. Until it ships, someone with a contributing seat can save a message in a space's conversation as someone else, or as the agent.
 - **So PR #8 merges with these closed,** and a follow-up opens them once an MJ release carries MJ#4789:
   - a view grant with a binding isn't offered before A14, and a view grant with none runs;
   - a dashboard grant isn't offered before A15;

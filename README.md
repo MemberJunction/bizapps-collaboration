@@ -56,7 +56,7 @@ flowchart TB
     direction TB
     P["People<br/>staff and outsiders, on one roster"]
     M["Material<br/>files, tasks, notes"]
-    C["Conversations<br/>a room, and private chats"]
+    C["Conversations<br/>shared and private"]
     A["The assistant<br/>answers only from what its audience may read"]
     D["Your data<br/>approved views, dashboards and queries"]
   end
@@ -70,8 +70,8 @@ flowchart TB
 
 - **The people** are one roster: your staff and your outside participants, each with a role whose flags, never its name, decide what they can do.
 - **The material** is on one of two **bands**: *Team*, your working material, and *Shared*, what your outside participants see. Moving something to Shared is an audited act.
-- **The conversations** belong to the space: a room for everyone in it, and chats for a few.
-- **The assistant** answers from what the space holds, bounded by the **audience of the answer**. In a private chat it uses what you can read. In a shared room it uses only what *everyone in the room* can read, so it can't repeat your team's notes to a client who's in the conversation.
+- **The conversations** belong to the space. People start them when they need them: open to everyone in the space, internal to the team, or a chat for a few.
+- **The assistant** answers from what the space holds, bounded by the **audience of the answer**. In a private chat it uses what you can read. In a shared conversation it uses only what *everyone in it* can read, so it can't repeat your team's notes to a client who's in the conversation.
 - **Your data** comes in through the space too: a chapter's members, a sponsor's booth leads, an institution's accreditation status, shown through views and dashboards your organization approved.
 
 Who reads what is decided **in the database**, by row-level security, never by a screen hiding a button. An outside participant gets one narrow role, and the same rules hold in the browser, over the API, and for the agent.
@@ -116,9 +116,9 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| 🚧 | **A room in every space,** created with the space, on MemberJunction's own chat area. |
+| 🚧 | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
 | 🚧 | **Chats inside a space,** with the people you choose. Whoever adds someone decides how much history they see. |
-| 🚧 | **An assistant bounded by its audience.** In a private chat it uses your reach, narrowed by a scope control; in a shared room, only what every participant can read, band by band. |
+| 🚧 | **An assistant bounded by its audience.** In a private chat it uses your reach, narrowed by a scope control; in a shared conversation, only what every participant can read, band by band. |
 | 🚧 | **Per-space agents,** skills and knowledge sources, set down the tree by admins. |
 | 🗺️ | **Citations and sealing.** Every answer records its sources. Someone added to a conversation later sees an answer built on material they can't read as sealed, with a way to request access. Copying an answer across an audience boundary warns. |
 | 🗺️ | **The same bounded assistant** over MCP, Slack and Teams, with a real identity on every channel or a refusal. |
