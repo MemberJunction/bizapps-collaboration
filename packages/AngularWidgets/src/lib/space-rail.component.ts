@@ -191,6 +191,14 @@ interface SpaceNavPref {
             @if (!isCollapsed) {
               <div class="section-title-row">
                 <span class="section-title">CONVERSATIONS</span>
+                <button
+                  type="button"
+                  class="btn-add-section"
+                  (click)="onNewConversation()"
+                  title="New Conversation"
+                  aria-label="New Conversation">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
               </div>
             }
 
@@ -534,6 +542,24 @@ interface SpaceNavPref {
       padding: 4px 10px 2px;
     }
 
+    .btn-add-section {
+      background: transparent;
+      border: none;
+      color: var(--mj-text-muted, #94a3b8);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-add-section:hover {
+      color: var(--mj-text-primary, #0f172a);
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+
     .nav-links-list {
       display: flex;
       flex-direction: column;
@@ -861,6 +887,7 @@ export class CollabSpaceRailComponent implements OnInit {
 
   @Output() TabSelectRequested = new EventEmitter<string>();
   @Output() ConversationSelectRequested = new EventEmitter<string>();
+  @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
 
   public navWidth = 280;
@@ -871,6 +898,10 @@ export class CollabSpaceRailComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
   }
 
   private loadLayoutPreference(): void {

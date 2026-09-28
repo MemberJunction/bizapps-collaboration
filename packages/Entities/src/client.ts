@@ -72,6 +72,21 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     ErrorMessage?: string;
 }
 
+export interface CreateSpaceConversationGraphQLInput {
+    SpaceID: string;
+    Name: string;
+    Kind?: 'Room' | 'General' | 'Topic' | 'Private';
+}
+
+export interface CreateSpaceConversationGraphQLPayload {
+    Success: boolean;
+    ConversationID?: string;
+    SpaceChatID?: string;
+    Name?: string;
+    Kind?: string;
+    ErrorMessage?: string;
+}
+
 export interface OpenSpaceFilePayload {
     Success: boolean;
     Base64?: string;
@@ -80,6 +95,19 @@ export interface OpenSpaceFilePayload {
     Mode?: string;
     ErrorMessage?: string;
 }
+
+const CREATE_SPACE_CONVERSATION_MUTATION = `
+mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
+    CreateSpaceConversation(input: $input) {
+        Success
+        ConversationID
+        SpaceChatID
+        Name
+        Kind
+        ErrorMessage
+    }
+}
+`;
 
 const MINT_SPACE_LINK_MUTATION = `
 mutation MintSpaceLink($input: MintSpaceLinkInput!) {
@@ -196,6 +224,11 @@ export class CollaborationClient {
     async ExecuteSpaceChatTurn(input: ExecuteSpaceChatTurnGraphQLInput): Promise<ExecuteSpaceChatTurnGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(EXECUTE_SPACE_CHAT_TURN_MUTATION, { input });
         return (res?.ExecuteSpaceChatTurn as ExecuteSpaceChatTurnGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async CreateSpaceConversation(input: CreateSpaceConversationGraphQLInput): Promise<CreateSpaceConversationGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_CONVERSATION_MUTATION, { input });
+        return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {

@@ -25,6 +25,11 @@ import {
     type BeforeKanbanStatusChangeEvent,
 } from '@mj-biz-apps/tasks-ng';
 import {
+    type AgentTurnHandler,
+    type AgentTurnRequest,
+    type AgentTurnResult,
+} from '@memberjunction/ng-conversations';
+import {
     CollabSpaceRailComponent,
     CollabSpaceHeaderComponent,
     CollabSpaceTabsComponent,
@@ -33,6 +38,7 @@ import {
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
     CollabUploadDialogComponent,
+    CollabNewConversationDialogComponent,
     CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
     CollabSpacePeopleComponent,
@@ -55,6 +61,8 @@ import {
     type RecentUseModel,
     type AvatarItem,
     type CollabUploadSubmitPayload,
+    type NewConversationSubmitPayload,
+    type ChatMentionPerson,
     type TaskItemModel,
     type SpaceMemberModel,
     type SpaceSettingsModel,
@@ -117,6 +125,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
         CollabUploadDialogComponent,
+        CollabNewConversationDialogComponent,
         CollabSpaceWorkComponent,
         CollabSpaceChatComponent,
         CollabSpacePeopleComponent,
@@ -557,6 +566,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             (NavSelectRequested)="onNavSelectRequested($event)"
                             (TabSelectRequested)="onTabSelectRequested($event)"
                             (ConversationSelectRequested)="onSpaceConversationSelected($event)"
+                            (NewConversationRequested)="openNewConversationDialog()"
                             (BackToSpacesRequested)="onBackToSpacesRequested()"
                         />
 
@@ -881,6 +891,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SpaceEntityId]="spaceEntityId"
                                                     [AudienceBand]="spaceAudienceBand"
                                                     [ParticipantCount]="headerTotalPeople"
+                                                    [AgentReplyMode]="'Always'"
+                                                    [MentionPeople]="chatMentionPeople"
+                                                    [AgentTurnHandler]="handleAgentTurn"
+                                                    [AutoNameConversation]="false"
+                                                    (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
                                             @case ('People') {
@@ -936,6 +951,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
                         }
+
+                        @if (isNewConversationDialogOpen) {
+                            <mjc-new-conversation-dialog
+                                [SpaceName]="spaceTitle"
+                                [IsSubmitting]="isCreatingConversation"
+                                (CancelRequested)="closeNewConversationDialog()"
+                                (SubmitRequested)="onSubmitNewConversation($event)"
+                            />
+                        }
                     </div>
                 }
             </mj-page-body>
@@ -957,6 +981,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isShareDialogOpen = false;
     public isUploadDialogOpen = false;
     public isUploading = false;
+    public isNewConversationDialogOpen = false;
+    public isCreatingConversation = false;
+
+    public get chatMentionPeople(): readonly ChatMentionPerson[] {
+        return this.spaceMembers.map(m => ({
+            ID: m.userId,
+            Name: m.name,
+            Email: m.email,
+        }));
+    }
 
     // Header metadata
     public spaceTitle = '';
@@ -2324,6 +2358,74 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.RefreshView();
         }
     }
+
+    public openNewConversationDialog(): void {
+        this.isNewConversationDialogOpen = true;
+        this.RefreshView();
+    }
+
+    public closeNewConversationDialog(): void {
+        this.isNewConversationDialogOpen = false;
+        this.RefreshView();
+    }
+
+    public async onSubmitNewConversation(payload: NewConversationSubmitPayload): Promise<void> {
+        this.isCreatingConversation = true;
+        this.RefreshView();
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.CreateSpaceConversation({
+                SpaceID: this.activeSpaceId,
+                Name: payload.name,
+                Kind: payload.kind,
+            });
+            if (!res.Success || !res.ConversationID) {
+                const msg = res.ErrorMessage || 'Failed to create conversation.';
+                LogError(`CreateSpaceConversation failed: ${msg}`);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+                return;
+            }
+
+            await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID);
+            this.isNewConversationDialogOpen = false;
+            this.activeTab = 'Chat';
+            this.activeConversationId = res.ConversationID;
+            this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
+            this.syncStateWithAgent();
+            SharedService.Instance.CreateSimpleNotification(`Conversation #${res.Name || payload.name} created.`, 'info', 3000);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Error creating space conversation: ${msg}`);
+            SharedService.Instance.CreateSimpleNotification(`Failed to create conversation: ${msg}`, 'error', 5000);
+        } finally {
+            this.isCreatingConversation = false;
+            this.RefreshView();
+        }
+    }
+
+    public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
+        try {
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const res = await client.ExecuteSpaceChatTurn({
+                SpaceID: this.activeSpaceId,
+                ConversationID: request.ConversationId,
+                UserMessageID: request.UserMessageId,
+                AgentID: request.AgentId,
+            });
+            return {
+                Success: res.Success,
+                ErrorMessage: res.ErrorMessage,
+                ReplyDetailIds: res.ReplyDetailIDs,
+                AgentRunId: res.AgentRunID,
+            };
+        } catch (error) {
+            LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
+            return {
+                Success: false,
+                ErrorMessage: error instanceof Error ? error.message : 'The chat turn failed.',
+            };
+        }
+    };
 
     public onTaskSelected(task: TaskItemModel): void {
         if (!task?.id) return;

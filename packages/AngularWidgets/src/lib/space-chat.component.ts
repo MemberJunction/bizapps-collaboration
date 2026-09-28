@@ -1,13 +1,25 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  EventEmitter,
   Input,
+  Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
-import { ConversationsModule } from '@memberjunction/ng-conversations';
+import {
+  ConversationsModule,
+  type AgentReplyMode,
+  type AgentTurnHandler,
+} from '@memberjunction/ng-conversations';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
+
+export interface ChatMentionPerson {
+  ID: string;
+  Name: string;
+  Email?: string | null;
+}
 
 @Component({
   selector: 'mjc-space-chat',
@@ -31,7 +43,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           [allowAgentMentions]="true"
           [allowEntityMentions]="false"
           [allowSkillCommands]="false"
-          [allowAttachments]="AllowAttachments">
+          [allowAttachments]="AllowAttachments"
+          [AgentReplyMode]="AgentReplyMode"
+          [AllowedAgentIDs]="AllowedAgentIDs"
+          [MentionPeople]="MentionPeople"
+          [AgentHistoryFrom]="AgentHistoryFrom"
+          [AgentTurnHandler]="AgentTurnHandler"
+          [AutoNameConversation]="AutoNameConversation">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
@@ -69,8 +87,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
           <h3 class="empty-title">Select a Conversation</h3>
           <p class="empty-desc">
-            Choose a channel from the space sidebar to begin chatting.
+            Choose a channel from the space sidebar or start a new conversation.
           </p>
+          <button
+            type="button"
+            class="btn-new-convo"
+            (click)="onNewConversation()">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Conversation</span>
+          </button>
         </div>
       }
     </div>
@@ -193,6 +218,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         line-height: 1.5;
         margin-bottom: 20px;
       }
+
+      .btn-new-convo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--mj-brand-primary, #0076b6);
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .btn-new-convo:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
+      }
     `,
   ],
 })
@@ -210,4 +253,16 @@ export class CollabSpaceChatComponent {
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = false;
+  @Input() public AgentReplyMode: AgentReplyMode = 'Always';
+  @Input() public AllowedAgentIDs: readonly string[] | null = null;
+  @Input() public MentionPeople: readonly ChatMentionPerson[] | null = null;
+  @Input() public AgentHistoryFrom: Date | null = null;
+  @Input() public AgentTurnHandler: AgentTurnHandler | null = null;
+  @Input() public AutoNameConversation: boolean = true;
+
+  @Output() public NewConversationRequested = new EventEmitter<void>();
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
+  }
 }

@@ -29,6 +29,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'create-space-task.resolver.{js,ts}'),
     resolve(here, 'post-space-message.resolver.{js,ts}'),
     resolve(here, 'execute-space-chat-turn.resolver.{js,ts}'),
+    resolve(here, 'create-space-conversation.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';
