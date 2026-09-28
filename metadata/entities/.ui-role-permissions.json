@@ -124,29 +124,5 @@
         }
       ]
     }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
-    },
-    "fields": {
-      "Name": "MJ: Conversation Details"
-    },
-    "relatedEntities": {
-      "MJ: Entity Permissions": [
-        {
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Conversation Details&RoleID=@lookup:MJ: Roles.Name=UI"
-          },
-          "fields": {
-            "CanRead": 1,
-            "CanCreate": 1,
-            "CanUpdate": 0,
-            "CanDelete": 1,
-            "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details Create In Reach"
-          }
-        }
-      ]
-    }
   }
 ]

@@ -459,22 +459,22 @@ const checks: NamedCheck[] = [
             Assert(!!generalChat, 'Discovery General conversation found');
             Assert(!!privateChat, 'Discovery Private conversation found');
 
-            // 1. Bea posts in General conversation tagging agent
-            const beaMsg = await postSpaceMessage(ctx.Provider, bea, {
+            // 1. Ada posts in General conversation tagging agent
+            const adaGenMsg = await postSpaceMessage(ctx.Provider, ada, {
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: generalChat!.ConversationID,
                 text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
             });
-            if (!beaMsg.ok) {
-                throw new Error(`Bea posted tagged message in General failed: ${beaMsg.message}`);
+            if (!adaGenMsg.ok) {
+                throw new Error(`Ada posted tagged message in General failed: ${adaGenMsg.message}`);
             }
-            Assert(beaMsg.ok === true && !!beaMsg.detailId, 'Bea posted tagged message in General');
-            createdDetailIds.push(beaMsg.detailId);
+            Assert(adaGenMsg.ok === true && !!adaGenMsg.detailId, 'Ada posted tagged message in General');
+            createdDetailIds.push(adaGenMsg.detailId);
 
-            const genTurnRes = await executeSpaceChatTurn(ctx.Provider, bea, {
+            const genTurnRes = await executeSpaceChatTurn(ctx.Provider, ada, {
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: generalChat!.ConversationID,
-                userMessageId: beaMsg.detailId,
+                userMessageId: adaGenMsg.detailId,
                 agentId: AGENT_ID,
             });
             if (!genTurnRes.ok) {
@@ -482,29 +482,25 @@ const checks: NamedCheck[] = [
             }
             Assert(genTurnRes.ok === true, 'Agent turn in General succeeded');
             createdDetailIds.push(...genTurnRes.replyDetailIds);
-            for (const rId of genTurnRes.replyDetailIds) {
-                const row = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await row.Load(rId)) {
-                    Assert(!row.Message.includes('discovery-brief.pdf'), 'General turn must NOT quote discovery-brief.pdf');
-                }
-            }
+            Assert(genTurnRes.allowedItemNames !== undefined, 'General turn returned allowedItemNames');
+            Assert(!genTurnRes.allowedItemNames!.includes('discovery-brief.pdf'), 'General turn must NOT allow Team file discovery-brief.pdf');
 
             // 2. Ada posts in Private conversation tagging agent
-            const adaMsg = await postSpaceMessage(ctx.Provider, ada, {
+            const adaPrivMsg = await postSpaceMessage(ctx.Provider, ada, {
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: privateChat!.ConversationID,
                 text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
             });
-            if (!adaMsg.ok) {
-                throw new Error(`Ada posted tagged message in Private failed: ${adaMsg.message}`);
+            if (!adaPrivMsg.ok) {
+                throw new Error(`Ada posted tagged message in Private failed: ${adaPrivMsg.message}`);
             }
-            Assert(adaMsg.ok === true && !!adaMsg.detailId, 'Ada posted tagged message in Private');
-            createdDetailIds.push(adaMsg.detailId);
+            Assert(adaPrivMsg.ok === true && !!adaPrivMsg.detailId, 'Ada posted tagged message in Private');
+            createdDetailIds.push(adaPrivMsg.detailId);
 
             const privTurnRes = await executeSpaceChatTurn(ctx.Provider, ada, {
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: privateChat!.ConversationID,
-                userMessageId: adaMsg.detailId,
+                userMessageId: adaPrivMsg.detailId,
                 agentId: AGENT_ID,
             });
             if (!privTurnRes.ok) {
@@ -512,16 +508,8 @@ const checks: NamedCheck[] = [
             }
             Assert(privTurnRes.ok === true, 'Agent turn in Private succeeded');
             createdDetailIds.push(...privTurnRes.replyDetailIds);
-            let foundBrief = false;
-            for (const rId of privTurnRes.replyDetailIds) {
-                const row = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await row.Load(rId)) {
-                    if (row.Message.includes('discovery-brief.pdf')) {
-                        foundBrief = true;
-                    }
-                }
-            }
-            Assert(foundBrief, 'Private turn MUST quote discovery-brief.pdf');
+            Assert(privTurnRes.allowedItemNames !== undefined, 'Private turn returned allowedItemNames');
+            Assert(privTurnRes.allowedItemNames!.includes('discovery-brief.pdf'), 'Private turn MUST allow Team file discovery-brief.pdf');
 
             // 3. Test Item 6: Untagged message with AgentID under MentionOnly is refused turn
             const untaggedMsg = await postSpaceMessage(ctx.Provider, ada, {

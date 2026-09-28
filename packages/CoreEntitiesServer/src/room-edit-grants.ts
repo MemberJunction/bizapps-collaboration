@@ -73,38 +73,41 @@ export async function syncRoomEditGrantsForSpace(
     providerOrObject: IMetadataProvider | object,
     spaceIdInput: string,
     visitedSpaces: Set<string> = new Set<string>()
-): Promise<void> {
+): Promise<{ ok: boolean; message?: string }> {
     const spaceId = parseUuid(spaceIdInput);
     if (!spaceId || visitedSpaces.has(spaceId)) {
-        return;
+        return { ok: true };
     }
     visitedSpaces.add(spaceId);
 
     const provider = asMetadata(providerOrObject);
     if (!provider) {
-        LogError(`syncRoomEditGrantsForSpace: provider could not be resolved as metadata provider`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: provider could not be resolved as metadata provider`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
 
     const systemUser = await WellKnownUserSource.Instance.GetSystemUser(provider);
     if (!systemUser) {
-        LogError(`syncRoomEditGrantsForSpace: system user not available for space ${spaceId}`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: system user not available for space ${spaceId}`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
 
     const rv = RunView.FromMetadataProvider(provider);
 
-    // 1. Find all active conversations for this space
+    // 1. Find all conversations for this space
     const chatsRes = await rv.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string }>({
         EntityName: SPACE_CHATS_ENTITY,
-        ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
+        ExtraFilter: `SpaceID = '${spaceId}'`,
         Fields: ['ID', 'ConversationID', 'Kind', 'Status'],
         MaxRows: 200,
     }, systemUser);
 
     if (!chatsRes.Success) {
-        LogError(`syncRoomEditGrantsForSpace: failed to read chats for space ${spaceId}: ${chatsRes.ErrorMessage ?? 'RunView failed'}`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: failed to read chats for space ${spaceId}: ${chatsRes.ErrorMessage ?? 'RunView failed'}`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
 
     // 2. Load space and check closure & inheritance chain
@@ -116,12 +119,14 @@ export async function syncRoomEditGrantsForSpace(
     }, systemUser);
 
     if (!spaceRes.Success) {
-        LogError(`syncRoomEditGrantsForSpace: failed to read space ${spaceId}: ${spaceRes.ErrorMessage ?? 'RunView failed'}`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: failed to read space ${spaceId}: ${spaceRes.ErrorMessage ?? 'RunView failed'}`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
     if (!spaceRes.Results || spaceRes.Results.length === 0) {
-        LogError(`syncRoomEditGrantsForSpace: space ${spaceId} not found`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: space ${spaceId} not found`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
 
     const space = spaceRes.Results[0];
@@ -191,7 +196,7 @@ export async function syncRoomEditGrantsForSpace(
         }
 
         if (ancestorReadFailed) {
-            return;
+            return { ok: false, message: 'Failed to read ancestor space for grant sync.' };
         }
 
         // Load active members across all contributing spaces
@@ -203,8 +208,9 @@ export async function syncRoomEditGrantsForSpace(
         }, systemUser);
 
         if (!membersRes.Success) {
-            LogError(`syncRoomEditGrantsForSpace: failed to read members for space ${spaceId}: ${membersRes.ErrorMessage ?? 'RunView failed'}`);
-            return;
+            const msg = `syncRoomEditGrantsForSpace: failed to read members for space ${spaceId}: ${membersRes.ErrorMessage ?? 'RunView failed'}`;
+            LogError(msg);
+            return { ok: false, message: msg };
         }
 
         const memberRows = membersRes.Results ?? [];
@@ -221,8 +227,9 @@ export async function syncRoomEditGrantsForSpace(
                 }, systemUser);
 
                 if (!rolesRes.Success) {
-                    LogError(`syncRoomEditGrantsForSpace: failed to read roles for space ${spaceId}: ${rolesRes.ErrorMessage ?? 'RunView failed'}`);
-                    return;
+                    const msg = `syncRoomEditGrantsForSpace: failed to read roles for space ${spaceId}: ${rolesRes.ErrorMessage ?? 'RunView failed'}`;
+                    LogError(msg);
+                    return { ok: false, message: msg };
                 }
 
                 if (rolesRes.Results) {
@@ -278,7 +285,10 @@ export async function syncRoomEditGrantsForSpace(
         if (!conversationId) continue;
 
         const isPrivate = chat.Kind === 'Private';
-        const targetUserIds = new Set<string>(isPrivate ? teamContributingUserIds : allContributingUserIds);
+        const isChatActive = chat.Status === 'Active';
+        const targetUserIds = new Set<string>(
+            !isChatActive ? [] : isPrivate ? teamContributingUserIds : allContributingUserIds
+        );
 
         const existingGrantsRes = await rv.RunView<ExistingGrantRow>({
             EntityName: RESOURCE_PERMISSIONS_ENTITY,
@@ -288,8 +298,9 @@ export async function syncRoomEditGrantsForSpace(
         }, systemUser);
 
         if (!existingGrantsRes.Success) {
-            LogError(`syncRoomEditGrantsForSpace: failed to read existing grants for space ${spaceId} conversation ${conversationId}: ${existingGrantsRes.ErrorMessage ?? 'RunView failed'}`);
-            continue;
+            const msg = `syncRoomEditGrantsForSpace: failed to read existing grants for space ${spaceId} conversation ${conversationId}: ${existingGrantsRes.ErrorMessage ?? 'RunView failed'}`;
+            LogError(msg);
+            return { ok: false, message: msg };
         }
 
         if (existingGrantsRes.Results) {
@@ -305,10 +316,14 @@ export async function syncRoomEditGrantsForSpace(
                             permObj.Status = 'Approved';
                             const saved = await permObj.Save();
                             if (!saved) {
-                                LogError(`syncRoomEditGrantsForSpace: failed to update grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                                const msg = `syncRoomEditGrantsForSpace: failed to update grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`;
+                                LogError(msg);
+                                return { ok: false, message: msg };
                             }
                         } else {
-                            LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for update`);
+                            const msg = `syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for update`;
+                            LogError(msg);
+                            return { ok: false, message: msg };
                         }
                     }
                 } else {
@@ -317,10 +332,14 @@ export async function syncRoomEditGrantsForSpace(
                     if (await permObj.Load(existing.ID)) {
                         const deleted = await permObj.Delete();
                         if (!deleted) {
-                            LogError(`syncRoomEditGrantsForSpace: failed to delete grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                            const msg = `syncRoomEditGrantsForSpace: failed to delete grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`;
+                            LogError(msg);
+                            return { ok: false, message: msg };
                         }
                     } else {
-                        LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for revocation`);
+                        const msg = `syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for revocation`;
+                        LogError(msg);
+                        return { ok: false, message: msg };
                     }
                 }
             }
@@ -338,7 +357,9 @@ export async function syncRoomEditGrantsForSpace(
             permObj.Status = 'Approved';
             const saved = await permObj.Save();
             if (!saved) {
-                LogError(`syncRoomEditGrantsForSpace: failed to save edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                const msg = `syncRoomEditGrantsForSpace: failed to save edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`;
+                LogError(msg);
+                return { ok: false, message: msg };
             }
         }
     }
@@ -352,16 +373,22 @@ export async function syncRoomEditGrantsForSpace(
     }, systemUser);
 
     if (!childrenRes.Success) {
-        LogError(`syncRoomEditGrantsForSpace: failed to read child spaces for space ${spaceId}: ${childrenRes.ErrorMessage ?? 'RunView failed'}`);
-        return;
+        const msg = `syncRoomEditGrantsForSpace: failed to read child spaces for space ${spaceId}: ${childrenRes.ErrorMessage ?? 'RunView failed'}`;
+        LogError(msg);
+        return { ok: false, message: msg };
     }
 
     if (childrenRes.Results) {
         for (const child of childrenRes.Results) {
             const childId = parseUuid(child.ID);
             if (childId) {
-                await syncRoomEditGrantsForSpace(provider, childId, visitedSpaces);
+                const childRes = await syncRoomEditGrantsForSpace(provider, childId, visitedSpaces);
+                if (!childRes.ok) {
+                    return childRes;
+                }
             }
         }
     }
+
+    return { ok: true };
 }

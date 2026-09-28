@@ -363,65 +363,83 @@ export async function loadWorld(): Promise<void> {
         teamActorKey: string,
         otherActorKey: string
     ) {
-        const spaceId = spaceIds.get(spaceKey);
-        if (!spaceId) return;
+        const targetSpaceId = spaceIds.get(spaceKey);
+        if (!targetSpaceId) {
+            throw new Error(`seedSpaceConversations: space ${spaceKey} not found`);
+        }
+        const spaceId: string = targetSpaceId;
+        const view = RunView.FromMetadataProvider(provider);
+
+        async function ensureConvoAndPosts(
+            name: string,
+            kind: 'General' | 'Topic' | 'Private',
+            creatorKey: string,
+            posts: Array<{ actorKey: string; text: string }>
+        ) {
+            const existingRes = await view.RunView<{ ID: string; ConversationID: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                ExtraFilter: `SpaceID = '${spaceId}' AND Name = '${name}' AND Status = 'Active'`,
+                Fields: ['ID', 'ConversationID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            }, system);
+            let convId: string | undefined = existingRes.Success && existingRes.Results?.[0]?.ConversationID ? existingRes.Results[0].ConversationID : undefined;
+            if (!convId) {
+                const res = await createSpaceConversation(provider, actor(creatorKey), {
+                    SpaceID: spaceId,
+                    Name: name,
+                    Kind: kind,
+                });
+                if (!res.ok || !res.conversationId) {
+                    throw new Error(`Failed to create conversation ${name} in space ${spaceKey}: ${res.message}`);
+                }
+                convId = res.conversationId;
+                const activeConvId: string = convId;
+                for (const p of posts) {
+                    const postRes = await postSpaceMessage(provider, actor(p.actorKey), {
+                        spaceId,
+                        conversationId: activeConvId,
+                        text: p.text,
+                    });
+                    if (!postRes.ok) {
+                        throw new Error(`Failed to post message in ${name} by ${p.actorKey}: ${postRes.message}`);
+                    }
+                }
+            }
+        }
 
         // 1. General conversation
-        const genRes = await createSpaceConversation(provider, actor(teamActorKey), {
-            SpaceID: spaceId,
-            Name: `${spaceKey}-general`,
-            Kind: 'General',
-        });
-        if (genRes.ok && genRes.conversationId) {
-            await postSpaceMessage(provider, actor(otherActorKey), {
-                spaceId,
-                conversationId: genRes.conversationId,
-                text: `Thanks @{"type":"user","id":"${actor(teamActorKey).ID}","name":"${teamActorKey}"}! Looking forward to collaborating in ${spaceKey}.`,
-            });
-            await postSpaceMessage(provider, actor(teamActorKey), {
-                spaceId,
-                conversationId: genRes.conversationId,
-                text: `Let's keep discussions and general updates posted here.`,
-            });
-        }
+        await ensureConvoAndPosts(
+            `${spaceKey}-general`,
+            'General',
+            teamActorKey,
+            [
+                { actorKey: otherActorKey, text: `Thanks @{"type":"user","id":"${actor(teamActorKey).ID}","name":"${teamActorKey}"}! Looking forward to collaborating in ${spaceKey}.` },
+                { actorKey: teamActorKey, text: `Let's keep discussions and general updates posted here.` },
+            ]
+        );
 
         // 2. Topic conversation
-        const topicRes = await createSpaceConversation(provider, actor(teamActorKey), {
-            SpaceID: spaceId,
-            Name: `${spaceKey}-deliverables`,
-            Kind: 'Topic',
-        });
-        if (topicRes.ok && topicRes.conversationId) {
-            await postSpaceMessage(provider, actor(otherActorKey), {
-                spaceId,
-                conversationId: topicRes.conversationId,
-                text: 'We are preparing the draft documentation for this workstream.',
-            });
-            await postSpaceMessage(provider, actor(teamActorKey), {
-                spaceId,
-                conversationId: topicRes.conversationId,
-                text: 'Sounds great, will review the draft once uploaded.',
-            });
-        }
+        await ensureConvoAndPosts(
+            `${spaceKey}-deliverables`,
+            'Topic',
+            teamActorKey,
+            [
+                { actorKey: otherActorKey, text: 'We are preparing the draft documentation for this workstream.' },
+                { actorKey: teamActorKey, text: 'Sounds great, will review the draft once uploaded.' },
+            ]
+        );
 
         // 3. Private / Internal Only conversation (team members only)
-        const privRes = await createSpaceConversation(provider, actor(teamActorKey), {
-            SpaceID: spaceId,
-            Name: `${spaceKey}-internal`,
-            Kind: 'Private',
-        });
-        if (privRes.ok && privRes.conversationId) {
-            await postSpaceMessage(provider, actor('sam'), {
-                spaceId,
-                conversationId: privRes.conversationId,
-                text: 'Internal sync: reviewed preliminary findings and resource allocations.',
-            });
-            await postSpaceMessage(provider, actor(teamActorKey), {
-                spaceId,
-                conversationId: privRes.conversationId,
-                text: 'Confirmed. Internal findings will remain in this private channel.',
-            });
-        }
+        await ensureConvoAndPosts(
+            `${spaceKey}-internal`,
+            'Private',
+            teamActorKey,
+            [
+                { actorKey: 'sam', text: 'Internal sync: reviewed preliminary findings and resource allocations.' },
+                { actorKey: teamActorKey, text: 'Confirmed. Internal findings will remain in this private channel.' },
+            ]
+        );
     }
 
     await seedSpaceConversations('discovery', 'ada', 'bea');
@@ -558,6 +576,16 @@ async function assertCatalog(
         if (found.SpaceRoleTypeID.toLowerCase() !== requireMap(roles, row.Role, 'role').toLowerCase()) {
             throw new Error(`${row.Person} on ${row.Space} has the wrong role.`);
         }
+    }
+
+    const chatsCheck = await view.RunView<{ ID: string; SpaceID: string; Name: string; Kind: string; Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID IN (${['discovery', 'northwind', 'committee'].map(k => `'${spaceIds.get(k)}'`).join(',')}) AND Status = 'Active'`,
+        Fields: ['ID', 'SpaceID', 'Name', 'Kind', 'Status'],
+        ResultType: 'simple',
+    }, user);
+    if (!chatsCheck.Success || (chatsCheck.Results?.length ?? 0) < 9) {
+        throw new Error(`Expected at least 9 seeded space chats, read ${chatsCheck.Results?.length ?? 0}.`);
     }
 }
 

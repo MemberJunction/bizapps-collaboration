@@ -6,6 +6,7 @@ import {
 } from '@mj-biz-apps/collaboration-core';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
+import { evaluateCanStartSpaceConversation } from './create-space-conversation.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -26,6 +27,8 @@ export interface SpaceChatHostRulesResult {
     defaultAgentId: string | null;
     agentHistoryFrom: Date | null;
     mentionPeople: SpaceChatHostRulesMentionPerson[];
+    canStartConversation: boolean;
+    allowedConversationKinds: string[];
 }
 
 interface SpaceRow {
@@ -86,6 +89,8 @@ export async function resolveSpaceChatHostRules(
             defaultAgentId: null,
             agentHistoryFrom: null,
             mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
         };
     }
 
@@ -99,6 +104,8 @@ export async function resolveSpaceChatHostRules(
             defaultAgentId: null,
             agentHistoryFrom: null,
             mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
         };
     }
 
@@ -121,6 +128,8 @@ export async function resolveSpaceChatHostRules(
             defaultAgentId: null,
             agentHistoryFrom: null,
             mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
         };
     }
 
@@ -263,6 +272,8 @@ export async function resolveSpaceChatHostRules(
             defaultAgentId: null,
             agentHistoryFrom: null,
             mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
         };
     }
     const callerReach = userReachMap.get(callerId);
@@ -294,6 +305,8 @@ export async function resolveSpaceChatHostRules(
                 defaultAgentId: null,
                 agentHistoryFrom: null,
                 mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
             };
         }
     }
@@ -346,6 +359,13 @@ export async function resolveSpaceChatHostRules(
         }
     }
 
+    const whoCanStart = chatSettings.resolvedSettings.Chats?.WhoCanStart ?? 'Anyone';
+    const startPerms = evaluateCanStartSpaceConversation(
+        !!targetSpace.ClosedAt,
+        whoCanStart,
+        callerReach?.role
+    );
+
     return {
         ok: true,
         agentReplyMode,
@@ -353,5 +373,7 @@ export async function resolveSpaceChatHostRules(
         defaultAgentId,
         agentHistoryFrom,
         mentionPeople,
+        canStartConversation: startPerms.canStartConversation,
+        allowedConversationKinds: startPerms.allowedConversationKinds,
     };
 }

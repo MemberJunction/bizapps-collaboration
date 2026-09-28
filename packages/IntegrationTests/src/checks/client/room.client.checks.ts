@@ -96,15 +96,15 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const patCtx = await getPersonaContext(ctx, 'pat');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
 
-            const spaceChats = await FindRows<{ ConversationID: string }>(
-                ctx,
-                SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
-                ['ConversationID'],
-            );
-            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
-            const roomId = spaceChats[0].ConversationID;
+            const startRes = await adaClient.CreateSpaceConversation({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-rm3-wire-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(startRes.Success === true && !!startRes.ConversationID, `Ada creates General conversation over wire for RM3: ${startRes.ErrorMessage ?? ''}`);
+            const roomId = startRes.ConversationID!;
 
             // Direct save over wire by Ada (contributing seat)
             const adaDetail = await adaCtx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, adaCtx.User);
@@ -184,16 +184,17 @@ const checks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const client = new CollaborationClient(beaCtx.GraphQLProvider);
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
 
-            const spaceChats = await FindRows<{ ConversationID: string }>(
-                ctx,
-                SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
-                ['ConversationID'],
-            );
-            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
-            const discConvId = spaceChats[0].ConversationID;
+            const startRes = await adaClient.CreateSpaceConversation({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-rm5-wire-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(startRes.Success === true && !!startRes.ConversationID, `Ada creates General conversation over wire for RM5: ${startRes.ErrorMessage ?? ''}`);
+            const discConvId = startRes.ConversationID!;
 
             const result = await client.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
@@ -218,8 +219,6 @@ const checks: NamedCheck[] = [
             Assert(details[0].UserID.toLowerCase() === beaCtx.User.ID.toLowerCase(), 'Message UserID is Bea');
 
             // B0.2: Ada asks with ExecuteAgent: true, and as Bea, the reply in Discovery room does not quote Team files
-            const adaCtx = await getPersonaClientContext(ctx, 'ada');
-            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
             const adaResult = await adaClient.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 ConversationID: discConvId,
@@ -270,14 +269,13 @@ const checks: NamedCheck[] = [
             let testError: unknown;
             try {
                 // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
-                const nwChats = await FindRows<{ ConversationID: string }>(
-                    ctx,
-                    SPACE_CHAT_ENTITY,
-                    `SpaceID = '${NORTHWIND_SPACE_ID}' AND Kind = 'General'`,
-                    ['ConversationID'],
-                );
-                Assert(nwChats.length >= 1, 'Northwind General conversation found');
-                const nwConvId = nwChats[0].ConversationID;
+                const nwConvRes = await samClient.CreateSpaceConversation({
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    Name: `northwind-rm5-wire-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(nwConvRes.Success === true && !!nwConvRes.ConversationID, `Sam creates General conversation in Northwind over wire: ${nwConvRes.ErrorMessage ?? ''}`);
+                const nwConvId = nwConvRes.ConversationID!;
 
                 const samPostRes = await samClient.PostSpaceMessage({
                     SpaceID: NORTHWIND_SPACE_ID,
@@ -364,17 +362,18 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const remyCtx = await getPersonaClientContext(ctx, 'remy');
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
             const remyClient = new CollaborationClient(remyCtx.GraphQLProvider);
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
 
-            const spaceChats = await FindRows<{ ConversationID: string }>(
-                ctx,
-                SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
-                ['ConversationID'],
-            );
-            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
-            const discConvId = spaceChats[0].ConversationID;
+            const startRes = await adaClient.CreateSpaceConversation({
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-rm6-wire-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(startRes.Success === true && !!startRes.ConversationID, `Ada creates General conversation over wire for RM6: ${startRes.ErrorMessage ?? ''}`);
+            const discConvId = startRes.ConversationID!;
 
             // 0. Missing conversation ID
             const noConvRes = await beaClient.PostSpaceMessage({
@@ -449,16 +448,16 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM8',
-        Name: 'RM8 — Client CreateSpaceConversation WhoCanStart=Owners: Bea is refused, Dev is permitted',
+        Name: 'RM8 — Client CreateSpaceConversation WhoCanStart=Owners: Sam is refused, Ada is permitted',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const devCtx = await getPersonaClientContext(ctx, 'dev');
-            const beaCtx = await getPersonaClientContext(ctx, 'bea');
-            const devClient = new CollaborationClient(devCtx.GraphQLProvider);
-            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
 
-            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
-            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space');
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space as Ada');
             const origConfig = space.Configuration;
 
             try {
@@ -468,26 +467,27 @@ const checks: NamedCheck[] = [
                 const saved = await space.Save();
                 Assert(saved, 'Updated Discovery space config with WhoCanStart: Owners');
 
-                // Bea (contributing member, but not owner) is refused
-                const beaRes = await beaClient.CreateSpaceConversation({
+                // Sam (contributing member, but not owner) is refused
+                const samRes = await samClient.CreateSpaceConversation({
                     SpaceID: DISCOVERY_SPACE_ID,
-                    Name: `discovery-client-bea-refused-${Date.now()}`,
+                    Name: `discovery-client-sam-refused-${Date.now()}`,
                     Kind: 'General',
                 });
-                Assert(!beaRes.Success, 'Bea must be refused starting a conversation over wire when WhoCanStart is Owners');
+                Assert(!samRes.Success, 'Sam must be refused starting a conversation over wire when WhoCanStart is Owners');
 
-                // Dev (owner) is permitted
-                const devRes = await devClient.CreateSpaceConversation({
+                // Ada (owner) is permitted
+                const adaRes = await adaClient.CreateSpaceConversation({
                     SpaceID: DISCOVERY_SPACE_ID,
-                    Name: `discovery-client-dev-allowed-${Date.now()}`,
+                    Name: `discovery-client-ada-allowed-${Date.now()}`,
                     Kind: 'General',
                 });
-                Assert(devRes.Success === true && !!devRes.ConversationID, `Dev (owner) must be permitted over wire when WhoCanStart is Owners: ${devRes.ErrorMessage ?? ''}`);
+                Assert(adaRes.Success === true && !!adaRes.ConversationID, `Ada (owner) must be permitted over wire when WhoCanStart is Owners: ${adaRes.ErrorMessage ?? ''}`);
             } finally {
-                const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                const restoreSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
                 if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
                     restoreSpace.Configuration = origConfig;
-                    await restoreSpace.Save();
+                    const restoreSaved = await restoreSpace.Save();
+                    Assert(restoreSaved, 'Restoring original Discovery space configuration over wire must succeed');
                 }
             }
         },
@@ -560,6 +560,178 @@ const checks: NamedCheck[] = [
                 Text: 'Bea trying to post in Private channel over wire.',
             });
             Assert(!beaPostPriv.Success, 'Bea must be refused posting in Discovery Private conversation over wire');
+        },
+    },
+    {
+        Id: 'room.RM10',
+        Name: 'RM10 — newly created space has zero conversations until someone starts one',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+
+            const discovery = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await discovery.Load(DISCOVERY_SPACE_ID), 'Load Discovery space to read SpaceType');
+            const typeId = discovery.SpaceTypeID;
+
+            const testSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            testSpace.NewRecord();
+            testSpace.Name = `RM10-New-Space-Wire-${Date.now()}`;
+            testSpace.SpaceTypeID = typeId;
+            testSpace.ParentID = DISCOVERY_SPACE_ID;
+            const saved = await testSpace.Save();
+            Assert(saved && !!testSpace.ID, `Created new space for RM10 over wire: ${testSpace.LatestResult?.CompleteMessage ?? ''}`);
+
+            try {
+                // 1. Verify zero conversations exist initially
+                const chats = await FindRows<{ ID: string }>(
+                    ctx,
+                    SPACE_CHAT_ENTITY,
+                    `SpaceID = '${testSpace.ID}'`,
+                    ['ID'],
+                );
+                Assert(chats.length === 0, `Newly created space must have zero conversations until one is started (found ${chats.length})`);
+
+                // 2. Start a General conversation through CreateSpaceConversation over wire
+                const startRes = await adaClient.CreateSpaceConversation({
+                    SpaceID: testSpace.ID,
+                    Name: 'General',
+                    Kind: 'General',
+                });
+                Assert(startRes.Success === true && !!startRes.ConversationID, `Starting General conversation in new space over wire must succeed: ${startRes.ErrorMessage ?? ''}`);
+
+                // 3. Verify exactly one conversation exists now
+                const chatsAfter = await FindRows<{ ID: string; Kind: string; Status: string }>(
+                    ctx,
+                    SPACE_CHAT_ENTITY,
+                    `SpaceID = '${testSpace.ID}'`,
+                    ['ID', 'Kind', 'Status'],
+                );
+                Assert(chatsAfter.length === 1, `Space must have exactly 1 conversation after start (found ${chatsAfter.length})`);
+                Assert(chatsAfter[0].Kind === 'General', `Conversation kind must be General, saw ${chatsAfter[0].Kind}`);
+                Assert(chatsAfter[0].Status === 'Active', `Conversation status must be Active, saw ${chatsAfter[0].Status}`);
+            } finally {
+                const adminSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                if (await adminSpace.Load(testSpace.ID)) {
+                    await adminSpace.Delete();
+                }
+            }
+        },
+    },
+    {
+        Id: 'room.RM11',
+        Name: 'RM11 — space closure revokes edit grants and refuses posts; space reopen restores conversation and edit grants',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+
+            const nwSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await nwSpace.Load(NORTHWIND_SPACE_ID), 'Load Northwind space');
+            const typeId = nwSpace.SpaceTypeID;
+
+            const testSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            testSpace.NewRecord();
+            testSpace.Name = `RM11-Close-Reopen-Wire-${Date.now()}`;
+            testSpace.SpaceTypeID = typeId;
+            testSpace.ParentID = NORTHWIND_SPACE_ID;
+            testSpace.InheritsMembership = true;
+            const saved = await testSpace.Save();
+            Assert(saved && !!testSpace.ID, `Created test space for RM11 over wire: ${testSpace.LatestResult?.CompleteMessage ?? ''}`);
+
+            try {
+                // 1. Start General conversation over wire
+                const startRes = await adaClient.CreateSpaceConversation({
+                    SpaceID: testSpace.ID,
+                    Name: 'General',
+                    Kind: 'General',
+                });
+                Assert(startRes.Success === true && !!startRes.ConversationID, `Ada starts General conversation over wire: ${startRes.ErrorMessage ?? ''}`);
+                const convId = startRes.ConversationID!;
+
+                // 2. Sam (contributing staff seat) posts message in open space — succeeds
+                const samPost1 = await samClient.PostSpaceMessage({
+                    SpaceID: testSpace.ID,
+                    ConversationID: convId,
+                    Text: 'Sam post before close over wire',
+                });
+                Assert(samPost1.Success === true && !!samPost1.DetailID, `Sam post before close must succeed: ${samPost1.ErrorMessage ?? ''}`);
+                if (samPost1.DetailID) createdDetailIds.push(samPost1.DetailID);
+
+                // 3. Ada closes the space
+                testSpace.ClosedAt = new Date();
+                const closedSaved = await testSpace.Save();
+                Assert(closedSaved, 'Ada closes test space over wire');
+
+                // 4. Verify conversation is archived with [ArchivedOnClose]
+                const archivedChats = await FindRows<{ ID: string; Status: string; Subject: string }>(
+                    ctx,
+                    SPACE_CHAT_ENTITY,
+                    `SpaceID = '${testSpace.ID}'`,
+                    ['ID', 'Status', 'Subject'],
+                );
+                Assert(archivedChats.length === 1, 'Found conversation for test space');
+                Assert(archivedChats[0].Status === 'Archived', `Conversation status must be Archived after close, saw ${archivedChats[0].Status}`);
+                Assert(archivedChats[0].Subject?.includes('[ArchivedOnClose]'), 'Conversation Subject must be tagged with [ArchivedOnClose]');
+
+                // 5. Verify Sam's Resource Permission Edit grant is revoked
+                const grantsAfterClose = await FindRows<{ ID: string }>(
+                    ctx,
+                    'MJ: Resource Permissions',
+                    `ResourceRecordID = '${convId}' AND UserID = '${samCtx.User.ID}' AND PermissionLevel = 'Edit'`,
+                    ['ID'],
+                );
+                Assert(grantsAfterClose.length === 0, `Sam must have NO Edit grant on archived conversation after close (found ${grantsAfterClose.length})`);
+
+                // 6. Sam post in closed space is refused
+                const samPostClosed = await samClient.PostSpaceMessage({
+                    SpaceID: testSpace.ID,
+                    ConversationID: convId,
+                    Text: 'Sam post in closed space attempt over wire',
+                });
+                Assert(!samPostClosed.Success, 'Sam post in closed space must be refused over wire');
+
+                // 7. Ada reopens the space
+                testSpace.ClosedAt = null;
+                const reopenedSaved = await testSpace.Save();
+                Assert(reopenedSaved, 'Ada reopens test space over wire');
+
+                // 8. Verify conversation is restored to Active and tag is stripped
+                const restoredChats = await FindRows<{ ID: string; Status: string; Subject: string }>(
+                    ctx,
+                    SPACE_CHAT_ENTITY,
+                    `SpaceID = '${testSpace.ID}'`,
+                    ['ID', 'Status', 'Subject'],
+                );
+                Assert(restoredChats.length === 1, 'Found conversation for test space after reopen');
+                Assert(restoredChats[0].Status === 'Active', `Conversation status must be Active after reopen, saw ${restoredChats[0].Status}`);
+                Assert(!restoredChats[0].Subject?.includes('[ArchivedOnClose]'), 'Conversation Subject must NOT have [ArchivedOnClose] tag after reopen');
+
+                // 9. Verify Sam's Resource Permission Edit grant is restored
+                const grantsAfterReopen = await FindRows<{ ID: string }>(
+                    ctx,
+                    'MJ: Resource Permissions',
+                    `ResourceRecordID = '${convId}' AND UserID = '${samCtx.User.ID}' AND PermissionLevel = 'Edit'`,
+                    ['ID'],
+                );
+                Assert(grantsAfterReopen.length === 1, `Sam must have Edit grant restored on conversation after reopen (found ${grantsAfterReopen.length})`);
+
+                // 10. Sam posts in reopened space — succeeds
+                const samPostReopen = await samClient.PostSpaceMessage({
+                    SpaceID: testSpace.ID,
+                    ConversationID: convId,
+                    Text: 'Sam post after reopen over wire',
+                });
+                Assert(samPostReopen.Success === true && !!samPostReopen.DetailID, `Sam post after reopen must succeed: ${samPostReopen.ErrorMessage ?? ''}`);
+                if (samPostReopen.DetailID) createdDetailIds.push(samPostReopen.DetailID);
+            } finally {
+                const adminSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                if (await adminSpace.Load(testSpace.ID)) {
+                    await adminSpace.Delete();
+                }
+            }
         },
     },
 ];

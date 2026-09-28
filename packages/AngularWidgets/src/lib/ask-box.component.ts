@@ -33,8 +33,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </button>
       </div>
       <div class="ask-scope">
-        <i class="fa-solid fa-lock"></i>
-        <span>Only you will see this. It can use <b>Team and Shared</b> material.</span>
+        <i class="fa-solid fa-users"></i>
+        <span>Starts a General conversation. The assistant uses <b>Shared</b> materials.</span>
       </div>
       @if (Suggestions && Suggestions.length > 0) {
         <div class="sugs">

@@ -191,15 +191,30 @@ interface SpaceNavPref {
             @if (!isCollapsed) {
               <div class="section-title-row">
                 <span class="section-title">CONVERSATIONS</span>
-                <button
-                  type="button"
-                  class="btn-add-section"
-                  (click)="onNewConversation()"
-                  title="New Conversation"
-                  aria-label="New Conversation">
-                  <i class="fa-solid fa-plus"></i>
-                </button>
+                @if (CanStartConversation) {
+                  <button
+                    type="button"
+                    class="btn-add-section"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                }
               </div>
+            } @else {
+              @if (CanStartConversation) {
+                <div class="collapsed-add-row">
+                  <button
+                    type="button"
+                    class="btn-collapsed-add"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              }
             }
 
             <div class="nav-links-list">
@@ -548,7 +563,8 @@ interface SpaceNavPref {
       color: var(--mj-text-muted, #94a3b8);
       cursor: pointer;
       font-size: 11px;
-      padding: 2px 6px;
+      width: 24px;
+      height: 24px;
       border-radius: 4px;
       transition: all 0.15s ease;
       display: inline-flex;
@@ -558,6 +574,30 @@ interface SpaceNavPref {
     .btn-add-section:hover {
       color: var(--mj-text-primary, #0f172a);
       background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+
+    .collapsed-add-row {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .btn-collapsed-add {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px dashed var(--mj-border-strong, #cbd5e1);
+      color: var(--mj-text-muted, #94a3b8);
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+    .btn-collapsed-add:hover {
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+      color: var(--mj-text-primary, #0f172a);
+      border-color: var(--mj-brand-primary, #0076b6);
     }
 
     .nav-links-list {
@@ -878,6 +918,7 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() MemberCount = 0;
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
+  @Input() CanStartConversation = true;
 
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();

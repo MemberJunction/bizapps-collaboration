@@ -31,6 +31,9 @@ export class ExecuteSpaceChatTurnPayload {
     @Field(() => Int, { nullable: true })
     QuotedCount?: number;
 
+    @Field(() => [String], { nullable: true })
+    AllowedItemNames?: string[];
+
     @Field({ nullable: true })
     ErrorMessage?: string;
 }
@@ -63,6 +66,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 ReplyDetailIDs: result.replyDetailIds,
                 AgentRunID: result.agentRunId,
                 QuotedCount: result.quotedCount,
+                AllowedItemNames: result.allowedItemNames,
             };
         } catch (error) {
             LogError(`ExecuteSpaceChatTurn failed for space ${input.SpaceID} and message ${input.UserMessageID}: ${error instanceof Error ? error.message : String(error)}`);

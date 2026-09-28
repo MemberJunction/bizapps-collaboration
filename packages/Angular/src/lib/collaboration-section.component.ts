@@ -50,7 +50,6 @@ import {
     type BreadcrumbItem,
     type NeedsYouItemModel,
     type ItemCardModel,
-    type ChatMentionPerson,
     type ItemRowModel,
     type LibraryRowModel,
     type RoomMiniMessage,
@@ -69,7 +68,10 @@ import {
     type SpaceSettingsModel,
     type SpaceConversationItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { CollaborationNoAccessComponent } from './no-access.component';
+
+const COLLABORATION_DEFAULT_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 
 interface RawSpaceRecord {
     ID: mjBizAppsCollaborationSpaceEntity['ID'];
@@ -558,6 +560,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [ActiveTab]="activeTab"
                             [Conversations]="spaceConversations"
                             [ActiveConversationId]="activeConversationId"
+                            [CanStartConversation]="canStartConversation"
                             [LibraryCount]="libraryTotalCount"
                             [TaskCount]="taskCount"
                             [MemberCount]="headerTotalPeople"
@@ -891,7 +894,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SpaceName]="spaceTitle"
                                                     [SpaceEntityId]="spaceEntityId"
                                                     [AudienceBand]="spaceAudienceBand"
-                                                    [ParticipantCount]="headerTotalPeople"
+                                                    [ParticipantCount]="conversationParticipantCount"
                                                     [DefaultAgentId]="chatDefaultAgentId"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
@@ -901,6 +904,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
                                                     (ComposerDraftConsumed)="composerDraft = null"
+                                                    [PendingMessage]="pendingChatMessage"
+                                                    [PendingMessageConversationId]="pendingChatMessageConversationId"
+                                                    (PendingMessageConsumed)="pendingChatMessage = null; pendingChatMessageConversationId = null"
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
@@ -961,7 +967,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                         @if (isNewConversationDialogOpen) {
                             <mjc-new-conversation-dialog
                                 [SpaceName]="spaceTitle"
-                                [CanSeeTeam]="canSeeTeam"
+                                [CanSeeTeam]="canSeeTeam && allowedConversationKinds.includes('Private')"
                                 [IsSubmitting]="isCreatingConversation"
                                 (CancelRequested)="closeNewConversationDialog()"
                                 (SubmitRequested)="onSubmitNewConversation($event)"
@@ -995,7 +1001,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public chatAllowedAgentIds: readonly string[] | null = null;
     public chatDefaultAgentId: string | null = null;
     public chatAgentHistoryFrom: Date | null = null;
-    public chatMentionPeople: readonly ChatMentionPerson[] = [];
+    public chatMentionPeople: readonly MentionPerson[] = [];
 
     // Header metadata
     public spaceTitle = '';
@@ -1253,7 +1259,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Chat tab state
     public spaceAudienceBand: SpaceBand = 'Shared';
+    public canStartConversation = true;
+    public allowedConversationKinds: string[] = ['General', 'Topic', 'Private'];
+    public pendingChatMessage: string | null = null;
+    public pendingChatMessageConversationId: string | null = null;
     public shareDialogItemId: string | null = null;
+
+    public get conversationParticipantCount(): number {
+        return this.chatMentionPeople?.length || this.headerTotalPeople;
+    }
 
     public get homeSharedRows(): LibraryRowModel[] {
         return this.libraryRows.filter(r => r.band === 'Shared');
@@ -1643,49 +1657,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
-            const md = this.ProviderToUse;
-            const spaceEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
-            if (!spaceEntity) {
-                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
-                return;
-            }
-            const spaceEntityId = spaceEntity.ID;
-
-            const batchRes = await rv.RunViews([
-                {
-                    EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                    ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
-                    ResultType: 'simple',
-                    MaxRows: 50,
-                },
-                {
-                    EntityName: 'MJ: Conversations',
-                    ExtraFilter: `LinkedEntityID = '${spaceEntityId}' AND LinkedRecordID = '${spaceId}'`,
-                    ResultType: 'simple',
-                    MaxRows: 50,
-                },
-            ]);
-
-            const spaceChatsRes = batchRes?.[0] as {
-                Success: boolean;
-                Results?: Array<{
-                    ID: string;
-                    SpaceID: string;
-                    ConversationID: string;
-                    Name: string;
-                    Subject?: string | null;
-                    Kind: string;
-                    Status: string;
-                }>;
-            };
-
-            const convsRes = batchRes?.[1] as {
-                Success: boolean;
-                Results?: Array<{
-                    ID: string;
-                    Name: string;
-                }>;
-            };
+            const spaceChatsRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Name: string;
+                Subject?: string | null;
+                Kind: string;
+                Status: string;
+                __mj_CreatedAt: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                Fields: ['ID', 'SpaceID', 'ConversationID', 'Name', 'Subject', 'Kind', 'Status', '__mj_CreatedAt'],
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
 
             const items: SpaceConversationItem[] = [];
             const seenConvIds = new Set<string>();
@@ -1697,7 +1685,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         const isPrivate = sc.Kind === 'Private';
                         items.push({
                             id: sc.ConversationID,
-                            name: sc.Name || 'general-room',
+                            name: sc.Name || 'General',
                             kind: sc.Kind || 'General',
                             band: isPrivate ? 'Team' : 'Shared',
                             unreadCount: 0,
@@ -1705,27 +1693,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     }
                 }
             }
-
-            if (convsRes?.Success && convsRes.Results) {
-                for (const c of convsRes.Results) {
-                    if (!seenConvIds.has(c.ID)) {
-                        seenConvIds.add(c.ID);
-                        items.push({
-                            id: c.ID,
-                            name: c.Name || 'general-room',
-                            kind: 'General',
-                            band: 'Shared',
-                            unreadCount: 0,
-                        });
-                    }
-                }
-            }
-
-            items.sort((a, b) => {
-                if (a.kind === 'Room' && b.kind !== 'Room') return -1;
-                if (b.kind === 'Room' && a.kind !== 'Room') return 1;
-                return a.name.localeCompare(b.name);
-            });
 
             this.spaceConversations = items;
 
@@ -1736,6 +1703,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             } else {
                 this.activeConversationId = '';
             }
+
+            const activeItem = items.find(i => UUIDsEqual(i.id, this.activeConversationId));
+            this.spaceAudienceBand = activeItem?.band === 'Team' ? 'Team' : 'Shared';
 
             if (this.activeConversationId) {
                 await this.loadOverviewMessages(this.activeConversationId);
@@ -2144,12 +2114,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public onOpenChatRequested(): void {
         this.activeTab = 'Chat';
+        const item = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
+        this.spaceAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.UpdateQueryParams({ tab: 'chat', conv: this.activeConversationId || null });
         this.RefreshView();
     }
 
     public onSpaceConversationSelected(convId: string): void {
         this.activeConversationId = convId;
+        const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
+        this.spaceAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.activeTab = 'Chat';
         this.UpdateQueryParams({ tab: 'chat', conv: convId });
         void this.loadOverviewMessages(convId);
@@ -2387,6 +2361,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public openNewConversationDialog(): void {
+        if (!this.canStartConversation) {
+            SharedService.Instance.CreateSimpleNotification('You do not have permission to start conversations in this space.', 'warning', 3000);
+            return;
+        }
         this.isNewConversationDialogOpen = true;
         this.RefreshView();
     }
@@ -2442,6 +2420,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.chatDefaultAgentId = null;
         this.chatAgentHistoryFrom = null;
         this.chatMentionPeople = [];
+        this.canStartConversation = false;
+        this.allowedConversationKinds = [];
 
         if (!isValidUuid(spaceId)) return;
         try {
@@ -2457,6 +2437,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     Name: p.Name,
                     Email: p.Email ?? null,
                 }));
+                this.canStartConversation = res.CanStartConversation ?? false;
+                this.allowedConversationKinds = res.AllowedConversationKinds ?? [];
             }
         } catch (err) {
             LogError('Error loading space chat host rules: ' + (err instanceof Error ? err.message : String(err)));
@@ -2575,9 +2557,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOverviewAskRequested(query: string): Promise<void> {
         const text = query?.trim() ?? '';
-        if (!text) {
-            this.activeTab = 'Chat';
-            this.RefreshView();
+        if (!text) return;
+        if (!this.canStartConversation) {
+            SharedService.Instance.CreateSimpleNotification('You do not have permission to start conversations in this space.', 'warning', 3000);
             return;
         }
 
@@ -2588,15 +2570,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 SpaceID: this.activeSpaceId,
                 Name: name,
                 Kind: 'General',
-                InitialMessage: text,
-                ExecuteAgent: true,
             });
 
             if (res.Success && res.ConversationID) {
-                await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID);
+                const defaultAgentId = this.chatDefaultAgentId || COLLABORATION_DEFAULT_AGENT_ID;
+                this.pendingChatMessage = defaultAgentId ? `@{"type":"agent","id":"${defaultAgentId}"} ${text}` : text;
+                this.pendingChatMessageConversationId = res.ConversationID;
                 this.activeConversationId = res.ConversationID;
-                this.composerDraft = '';
+                await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID);
+                await this.loadSpaceChatHostRules(this.activeSpaceId, res.ConversationID);
+                this.activeTab = 'Chat';
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
+                this.RefreshView();
             } else {
                 const msg = res.ErrorMessage || 'Failed to start conversation';
                 LogError('onOverviewAskRequested error: ' + msg);
@@ -2607,9 +2592,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             LogError('onOverviewAskRequested error: ' + msg);
             SharedService.Instance.CreateSimpleNotification('Failed to start conversation: ' + msg, 'error', 5000);
         }
-
-        this.activeTab = 'Chat';
-        this.RefreshView();
     }
 
     public async onInviteMember(payload: { email: string; role: string; band: SpaceBand }): Promise<void> {

@@ -348,6 +348,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const wasClosed = !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue;
         const isNowClosed = !!this.ClosedAt;
         const justClosed = !wasClosed && isNowClosed;
+        const justReopened = wasClosed && !isNowClosed;
 
         const parentChanged = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
         const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
@@ -356,28 +357,65 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
-            if (this.ClosedAt) {
+            if (justClosed) {
                 try {
                     const system = await requireSystemUser(this);
                     const view = new RunView(this.RunViewProviderToUse);
-                    const chatsRes = await view.RunView<{ ID: string }>({
+                    const chatsRes = await view.RunView<{ ID: string; Subject: string | null }>({
                         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
                         ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Active'`,
-                        Fields: ['ID'],
+                        Fields: ['ID', 'Subject'],
                         ResultType: 'simple',
                     }, system);
                     if (chatsRes.Success && chatsRes.Results) {
-                        const md = new Metadata();
+                        const md = asMetadata(this.ProviderToUse) ?? new Metadata();
                         for (const row of chatsRes.Results) {
                             const chatObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
                             if (await chatObj.Load(row.ID)) {
                                 chatObj.Status = 'Archived';
-                                await chatObj.Save();
+                                chatObj.Subject = chatObj.Subject ? `[ArchivedOnClose] ${chatObj.Subject}` : '[ArchivedOnClose]';
+                                const chatSaved = await chatObj.Save();
+                                if (!chatSaved) {
+                                    LogError(`Failed to archive space chat ${row.ID}: ${chatObj.LatestResult?.CompleteMessage ?? ''}`);
+                                }
                             }
                         }
                     }
+                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
                 } catch (closeErr) {
                     LogError(`Failed to archive space chats on space close: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
+                }
+            } else if (justReopened) {
+                try {
+                    const system = await requireSystemUser(this);
+                    const view = new RunView(this.RunViewProviderToUse);
+                    const chatsRes = await view.RunView<{ ID: string; Subject: string | null }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                        ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Archived' AND Subject LIKE '[ArchivedOnClose]%'`,
+                        Fields: ['ID', 'Subject'],
+                        ResultType: 'simple',
+                    }, system);
+                    if (chatsRes.Success && chatsRes.Results) {
+                        const md = asMetadata(this.ProviderToUse) ?? new Metadata();
+                        for (const row of chatsRes.Results) {
+                            const chatObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+                            if (await chatObj.Load(row.ID)) {
+                                chatObj.Status = 'Active';
+                                if (chatObj.Subject === '[ArchivedOnClose]') {
+                                    chatObj.Subject = null;
+                                } else if (chatObj.Subject?.startsWith('[ArchivedOnClose] ')) {
+                                    chatObj.Subject = chatObj.Subject.substring('[ArchivedOnClose] '.length);
+                                }
+                                const chatSaved = await chatObj.Save();
+                                if (!chatSaved) {
+                                    LogError(`Failed to restore space chat ${row.ID}: ${chatObj.LatestResult?.CompleteMessage ?? ''}`);
+                                }
+                            }
+                        }
+                    }
+                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                } catch (reopenErr) {
+                    LogError(`Failed to restore space chats on space reopen: ${reopenErr instanceof Error ? reopenErr.message : String(reopenErr)}`);
                 }
             }
 

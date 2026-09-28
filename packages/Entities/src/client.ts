@@ -69,6 +69,7 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     ReplyDetailIDs?: string[];
     AgentRunID?: string;
     QuotedCount?: number;
+    AllowedItemNames?: string[];
     ErrorMessage?: string;
 }
 
@@ -76,8 +77,6 @@ export interface CreateSpaceConversationGraphQLInput {
     SpaceID: string;
     Name: string;
     Kind?: 'General' | 'Topic' | 'Private';
-    InitialMessage?: string;
-    ExecuteAgent?: boolean;
 }
 
 export interface CreateSpaceConversationGraphQLPayload {
@@ -86,8 +85,6 @@ export interface CreateSpaceConversationGraphQLPayload {
     SpaceChatID?: string;
     Name?: string;
     Kind?: string;
-    InitialDetailID?: string;
-    AssistantDetailID?: string;
     ErrorMessage?: string;
 }
 
@@ -98,6 +95,8 @@ export interface SpaceChatHostRulesGraphQLPayload {
     AllowedAgentIDs?: string[];
     DefaultAgentID?: string;
     AgentHistoryFrom?: string;
+    CanStartConversation: boolean;
+    AllowedConversationKinds: string[];
     MentionPeople: {
         ID: string;
         Name: string;
@@ -122,8 +121,6 @@ mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
         SpaceChatID
         Name
         Kind
-        InitialDetailID
-        AssistantDetailID
         ErrorMessage
     }
 }
@@ -138,6 +135,8 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         AllowedAgentIDs
         DefaultAgentID
         AgentHistoryFrom
+        CanStartConversation
+        AllowedConversationKinds
         MentionPeople {
             ID
             Name
@@ -198,6 +197,7 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
         ReplyDetailIDs
         AgentRunID
         QuotedCount
+        AllowedItemNames
         ErrorMessage
     }
 }
@@ -281,6 +281,8 @@ export class CollaborationClient {
             ErrorMessage: 'No payload returned',
             AgentReplyMode: 'MentionOnly',
             MentionPeople: [],
+            CanStartConversation: false,
+            AllowedConversationKinds: [],
         };
     }
 }

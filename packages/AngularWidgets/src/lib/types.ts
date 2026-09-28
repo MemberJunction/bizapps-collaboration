@@ -137,7 +137,7 @@ export interface ChatSummaryModel {
 export interface SpaceConversationItem {
   id: string;
   name: string;
-  kind: 'General' | 'Room' | 'Topic' | 'Private' | string;
+  kind: 'General' | 'Topic' | 'Private' | string;
   band: SpaceBand;
   unreadCount?: number;
   lastMessageSnippet?: string;

@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface NewConversationSubmitPayload {
@@ -13,7 +21,7 @@ export interface NewConversationSubmitPayload {
   selector: 'mjc-new-conversation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJButtonDirective],
+  imports: [CommonModule, FormsModule, MJButtonDirective, SharedGenericModule],
   template: `
     <div class="scrim" (click)="onCancel()"></div>
     <div class="modal conversation-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
@@ -42,12 +50,11 @@ export interface NewConversationSubmitPayload {
               autofocus
             />
           </div>
-          <span class="f-hint">Names are automatically formatted as clean channel tags.</span>
         </div>
 
         <div class="form-group">
-          <label class="f-label">Channel Type</label>
-          <div class="kind-options">
+          <label class="f-label" id="channel-type-label">Channel Type</label>
+          <div class="kind-options" role="radiogroup" aria-labelledby="channel-type-label">
             <label class="kind-card" [class.selected]="kind === 'General'">
               <input type="radio" name="convoKind" value="General" [(ngModel)]="kind" class="sr-only" />
               <div class="kind-card-icon general"><i class="fa-solid fa-comments"></i></div>
@@ -66,7 +73,7 @@ export interface NewConversationSubmitPayload {
               </div>
             </label>
 
-            @if (CanSeeTeam) {
+            @if (canShowPrivate) {
               <label class="kind-card" [class.selected]="kind === 'Private'">
                 <input type="radio" name="convoKind" value="Private" [(ngModel)]="kind" class="sr-only" />
                 <div class="kind-card-icon private"><i class="fa-solid fa-lock"></i></div>
@@ -84,26 +91,26 @@ export interface NewConversationSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="secondary"
-          size="md"
-          [disabled]="IsSubmitting"
-          (click)="onCancel()"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          mjButton
           variant="primary"
           size="md"
           [disabled]="!trimmedName || IsSubmitting"
           (click)="onSubmit()"
         >
           @if (IsSubmitting) {
-            <i class="fa-solid fa-spinner fa-spin"></i> Creating...
+            <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
           } @else {
             <i class="fa-solid fa-plus"></i> Create Conversation
           }
+        </button>
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="md"
+          [disabled]="IsSubmitting"
+          (click)="onCancel()"
+        >
+          Cancel
         </button>
       </footer>
     </div>
@@ -282,6 +289,11 @@ export interface NewConversationSubmitPayload {
         border: 0;
       }
 
+      .kind-card:has(input:focus-visible) {
+        outline: 2px solid var(--mj-brand-primary, #0076b6);
+        outline-offset: 2px;
+      }
+
       .kind-card-icon {
         width: 34px;
         height: 34px;
@@ -296,8 +308,8 @@ export interface NewConversationSubmitPayload {
         color: var(--mj-brand-primary, #0076b6);
       }
       .kind-card-icon.topic {
-        background: color-mix(in srgb, #0891b2 12%, transparent);
-        color: #0891b2;
+        background: color-mix(in srgb, var(--mj-brand-secondary, #0076b6) 12%, transparent);
+        color: var(--mj-brand-secondary, #0076b6);
       }
       .kind-card-icon.private {
         background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, transparent);
@@ -325,7 +337,7 @@ export interface NewConversationSubmitPayload {
       .d-footer {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: 10px;
         padding: 16px 24px;
         border-top: 1px solid var(--mj-border-default, #e2e8f0);
@@ -337,6 +349,7 @@ export interface NewConversationSubmitPayload {
 export class CollabNewConversationDialogComponent {
   @Input() public SpaceName = '';
   @Input() public CanSeeTeam = true;
+  @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
 
   @Output() public CancelRequested = new EventEmitter<void>();
@@ -345,8 +358,17 @@ export class CollabNewConversationDialogComponent {
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
+  public get canShowPrivate(): boolean {
+    return this.CanSeeTeam && this.AllowedKinds.includes('Private');
+  }
+
   public get trimmedName(): string {
     return this.name.trim();
+  }
+
+  @HostListener('keydown.escape')
+  public onEscape(): void {
+    this.onCancel();
   }
 
   public onCancel(): void {

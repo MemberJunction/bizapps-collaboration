@@ -36,6 +36,12 @@ export class SpaceChatHostRulesPayload {
 
     @Field(() => [ChatMentionPersonPayload])
     MentionPeople: ChatMentionPersonPayload[];
+
+    @Field()
+    CanStartConversation: boolean;
+
+    @Field(() => [String])
+    AllowedConversationKinds: string[];
 }
 
 /**
@@ -57,6 +63,8 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                 ErrorMessage: 'Resolving space chat host rules requires a signed-in user.',
                 AgentReplyMode: 'MentionOnly',
                 MentionPeople: [],
+                CanStartConversation: false,
+                AllowedConversationKinds: [],
             };
         }
         try {
@@ -67,6 +75,8 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                     ErrorMessage: result.message,
                     AgentReplyMode: 'MentionOnly',
                     MentionPeople: [],
+                    CanStartConversation: false,
+                    AllowedConversationKinds: [],
                 };
             }
             return {
@@ -80,6 +90,8 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                     Name: p.Name,
                     Email: p.Email ?? undefined,
                 })),
+                CanStartConversation: result.canStartConversation,
+                AllowedConversationKinds: result.allowedConversationKinds,
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -89,6 +101,8 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                 ErrorMessage: message,
                 AgentReplyMode: 'MentionOnly',
                 MentionPeople: [],
+                CanStartConversation: false,
+                AllowedConversationKinds: [],
             };
         }
     }

@@ -10,24 +10,18 @@ import {
   ConversationsModule,
   type AgentReplyMode,
   type AgentTurnHandler,
-  type AgentTurnRequest,
-  type AgentTurnResult,
 } from '@memberjunction/ng-conversations';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
-
-export interface ChatMentionPerson {
-  ID: string;
-  Name: string;
-  Email?: string | null;
-}
 
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule],
+  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
     <div class="chat-container">
       @if (ConversationId && CurrentUser) {
@@ -53,14 +47,17 @@ export interface ChatMentionPerson {
           [AgentTurnHandler]="AgentTurnHandler"
           [AutoNameConversation]="AutoNameConversation"
           [ComposerDraft]="ComposerDraft"
-          (ComposerDraftConsumed)="onComposerDraftConsumed()">
+          [PendingMessage]="PendingMessage"
+          [PendingMessageConversationId]="PendingMessageConversationId"
+          (ComposerDraftConsumed)="onComposerDraftConsumed()"
+          (PendingMessageConsumed)="onPendingMessageConsumed()">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
               <div class="header-left">
                 <div class="title-row">
                   <i class="fa-solid fa-hashtag hash-icon"></i>
-                  <span class="chat-title">{{ ConversationName || SpaceName + ' Room' }}</span>
+                  <span class="chat-title">{{ ConversationName || (SpaceName ? SpaceName + ' General' : 'General') }}</span>
                   <mjc-band-chip [Band]="AudienceBand" />
                 </div>
                 <div class="subtitle-row">
@@ -81,6 +78,9 @@ export interface ChatMentionPerson {
                 }
                 <button
                   type="button"
+                  mjButton
+                  variant="primary"
+                  size="sm"
                   class="btn-new-convo-header"
                   (click)="onNewConversation()"
                   title="New Conversation"
@@ -104,6 +104,9 @@ export interface ChatMentionPerson {
           </p>
           <button
             type="button"
+            mjButton
+            variant="primary"
+            size="md"
             class="btn-new-convo"
             (click)="onNewConversation()">
             <i class="fa-solid fa-plus"></i>
@@ -236,36 +239,12 @@ export interface ChatMentionPerson {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
-        border: none;
-        border-radius: 6px;
-        padding: 5px 10px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .btn-new-convo-header:hover {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
       }
 
       .btn-new-convo {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
-        border: none;
-        border-radius: 6px;
-        padding: 8px 16px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .btn-new-convo:hover {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
       }
     `,
   ],
@@ -286,14 +265,17 @@ export class CollabSpaceChatComponent {
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] | null = null;
-  @Input() public MentionPeople: readonly ChatMentionPerson[] | null = null;
+  @Input() public MentionPeople: readonly MentionPerson[] | null = null;
   @Input() public AgentHistoryFrom: Date | null = null;
   @Input() public AgentTurnHandler: AgentTurnHandler | null = null;
   @Input() public AutoNameConversation: boolean = false;
   @Input() public ComposerDraft: string | null = null;
+  @Input() public PendingMessage: string | null = null;
+  @Input() public PendingMessageConversationId: string | null = null;
 
   @Output() public NewConversationRequested = new EventEmitter<void>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
+  @Output() public PendingMessageConsumed = new EventEmitter<void>();
 
   public onNewConversation(): void {
     this.NewConversationRequested.emit();
@@ -302,5 +284,10 @@ export class CollabSpaceChatComponent {
   public onComposerDraftConsumed(): void {
     this.ComposerDraft = null;
     this.ComposerDraftConsumed.emit();
+  }
+
+  public onPendingMessageConsumed(): void {
+    this.PendingMessage = null;
+    this.PendingMessageConsumed.emit();
   }
 }

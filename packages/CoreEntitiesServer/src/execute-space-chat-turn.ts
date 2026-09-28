@@ -29,7 +29,7 @@ export interface ExecuteSpaceChatTurnInput {
 }
 
 export type ExecuteSpaceChatTurnResult =
-    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number }
+    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[] }
     | { ok: false; message: string };
 
 /**
@@ -310,5 +310,6 @@ export async function executeSpaceChatTurn(
         replyDetailIds: [assistantDetail.ID],
         agentRunId,
         quotedCount: audienceQuoted.length,
+        allowedItemNames: audienceQuoted.map((item) => item.Name),
     };
 }

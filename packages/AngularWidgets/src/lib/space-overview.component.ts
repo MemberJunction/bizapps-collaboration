@@ -136,10 +136,10 @@ export interface SubSpaceSummary {
             (AskRequested)="onAskRequested($event)"
           />
 
-          <!-- Room Card -->
+          <!-- Discussion Card -->
           <div class="card room-card">
             <div class="card-h">
-              <span class="h3">Room</span>
+              <span class="h3">Discussion</span>
               <mjc-band-chip Band="Shared" [Label]="'Everyone · ' + AudienceCount" />
               <a class="link open-chat-link" (click)="onOpenChat($event)">Open chat</a>
             </div>
