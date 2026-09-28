@@ -135,6 +135,7 @@ export interface SubSpaceSummary {
               #askBox
               [Title]="'Ask about ' + SpaceName"
               [Suggestions]="AskSuggestions"
+              [IsSubmitting]="IsSubmittingAsk"
               (AskRequested)="onAskRequested($event)"
             />
           }
@@ -420,7 +421,8 @@ export class CollabSpaceOverviewComponent {
   @Input() public RoomMessages: RoomMiniMessage[] = [];
   @Input() public SubSpaces: SubSpaceSummary[] = [];
   @Input() public AskSuggestions: string[] = [];
-  @Input() public CanStartConversation = true;
+  @Input() public CanStartConversation = false;
+  @Input() public IsSubmittingAsk = false;
   @Input() public DiscussionBand: SpaceBand = 'Shared';
 
   @ViewChild('askBox') public askBoxComponent?: CollabAskBoxComponent;

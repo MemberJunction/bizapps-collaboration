@@ -2,13 +2,14 @@ import {
     type IMetadataProvider,
     type UserInfo,
     LogError,
+    RunView,
 } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
+import type { MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
 import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
-import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
+import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 import { parseUuid } from './uuid.js';
 
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
@@ -157,23 +158,13 @@ export async function createSpaceConversation(
         if (!grantSync.ok) {
             const msg = grantSync.message ?? 'Failed to sync permissions for new conversation.';
             LogError(`createSpaceConversation: grant sync failed for space ${spaceId}: ${msg}`);
-            try {
-                await spaceChat.Delete();
-                await conversation.Delete();
-            } catch (delErr) {
-                LogError(`createSpaceConversation: failed to rollback spaceChat/conversation after grant sync failure: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
-            }
+            await rollbackFailedConversation(provider, system, spaceChat, conversation, spaceId);
             return { ok: false, message: msg };
         }
     } catch (grantErr) {
         const msg = `Failed to sync room edit grants after conversation creation for space ${spaceId}: ${grantErr instanceof Error ? grantErr.message : String(grantErr)}`;
         LogError(msg);
-        try {
-            await spaceChat.Delete();
-            await conversation.Delete();
-        } catch (delErr) {
-            LogError(`createSpaceConversation: failed to rollback spaceChat/conversation after grant sync error: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
-        }
+        await rollbackFailedConversation(provider, system, spaceChat, conversation, spaceId);
         return { ok: false, message: msg };
     }
 
@@ -184,4 +175,63 @@ export async function createSpaceConversation(
         name: cleanName,
         kind: targetKind,
     };
+}
+
+async function rollbackFailedConversation(
+    provider: IMetadataProvider,
+    system: UserInfo,
+    spaceChat: mjBizAppsCollaborationSpaceChatEntity,
+    conversation: MJConversationEntity,
+    spaceId: string
+): Promise<void> {
+    // 1. Remove any resource permissions that may have been written for this conversation
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const grantsRes = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Resource Permissions',
+            ExtraFilter: `ResourceTypeID = '${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${conversation.ID}'`,
+            Fields: ['ID'],
+            MaxRows: 1000,
+        }, system);
+        if (grantsRes.Success && grantsRes.Results) {
+            for (const g of grantsRes.Results) {
+                const perm = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', system);
+                if (await perm.Load(g.ID)) {
+                    const deleted = await perm.Delete();
+                    if (!deleted) {
+                        LogError(`createSpaceConversation rollback: failed to delete resource permission ${g.ID}: ${perm.LatestResult?.CompleteMessage ?? ''}`);
+                    }
+                }
+            }
+        }
+    } catch (permErr) {
+        LogError(`createSpaceConversation rollback: failed to clean up permissions for conversation ${conversation.ID}: ${permErr instanceof Error ? permErr.message : String(permErr)}`);
+    }
+
+    // 2. Delete spaceChat and check return value
+    try {
+        const chatDeleted = await spaceChat.Delete();
+        if (!chatDeleted) {
+            LogError(`createSpaceConversation rollback: spaceChat.Delete() returned false for ${spaceChat.ID}: ${spaceChat.LatestResult?.CompleteMessage ?? ''}`);
+        }
+    } catch (chatDelErr) {
+        LogError(`createSpaceConversation rollback: error deleting spaceChat ${spaceChat.ID}: ${chatDelErr instanceof Error ? chatDelErr.message : String(chatDelErr)}`);
+    }
+
+    // 3. Delete conversation and check return value
+    try {
+        const convDeleted = await conversation.Delete();
+        if (!convDeleted) {
+            LogError(`createSpaceConversation rollback: conversation.Delete() returned false for ${conversation.ID}: ${conversation.LatestResult?.CompleteMessage ?? ''}`);
+        }
+    } catch (convDelErr) {
+        LogError(`createSpaceConversation rollback: error deleting conversation ${conversation.ID}: ${convDelErr instanceof Error ? convDelErr.message : String(convDelErr)}`);
+    }
+
+    // 4. Re-sync remaining space room grants so the space is left in a consistent state
+    try {
+        await syncRoomEditGrantsForSpace(provider, spaceId);
+    } catch (resyncErr) {
+        LogError(`createSpaceConversation rollback: error re-syncing space grants: ${resyncErr instanceof Error ? resyncErr.message : String(resyncErr)}`);
+    }
 }

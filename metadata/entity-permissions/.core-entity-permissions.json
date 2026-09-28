@@ -265,7 +265,12 @@
       "CanCreate": 1,
       "CanRead": 1,
       "CanUpdate": 1,
-      "CanDelete": 0
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T21:57:52.207Z",
+      "checksum": "6583ba03c965cf1161f2b7d61d84f674153ec8815ea48a8135eb91a6971e32a2"
     }
   },
   {
@@ -279,7 +284,31 @@
       "CanCreate": 1,
       "CanRead": 1,
       "CanUpdate": 1,
-      "CanDelete": 0
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Agent Run Steps"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T21:57:52.231Z",
+      "checksum": "4b48682abec5920cce2a95f49b05ae159361965b68e89e8ab0b8c23c3cdaa210"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2D79FA6B-B855-4D04-8E82-72EBE66F71A1"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Prompt Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T21:57:52.256Z",
+      "checksum": "f722a5a873132b630b81895d6e02da7e8b98b7436c6a3b3f023aa0365e23d2ea"
     }
   }
 ]

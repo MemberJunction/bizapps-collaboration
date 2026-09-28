@@ -28,9 +28,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           type="text"
           [placeholder]="Placeholder"
           [(ngModel)]="Query"
+          [disabled]="IsSubmitting"
           (keydown.enter)="onSend()"
         />
-        <button type="button" class="send" (click)="onSend()" aria-label="Send query">
+        <button
+          type="button"
+          class="send"
+          [disabled]="IsSubmitting || !Query.trim()"
+          (click)="onSend()"
+          aria-label="Send query"
+        >
           <i class="fa-solid fa-arrow-up"></i>
         </button>
       </div>
@@ -180,9 +187,11 @@ export class CollabAskBoxComponent {
   @Input() public Suggestions: string[] = [];
 
   @Input() public Query = '';
+  @Input() public IsSubmitting = false;
   @Output() public AskRequested = new EventEmitter<string>();
 
   public onSend(): void {
+    if (this.IsSubmitting) return;
     if (this.Query.trim()) {
       this.AskRequested.emit(this.Query.trim());
     }
@@ -193,6 +202,7 @@ export class CollabAskBoxComponent {
   }
 
   public onSelectSuggestion(sug: string): void {
+    if (this.IsSubmitting) return;
     this.Query = sug;
     this.onSend();
   }

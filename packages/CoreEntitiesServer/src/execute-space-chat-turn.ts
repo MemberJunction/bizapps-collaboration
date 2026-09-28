@@ -5,7 +5,11 @@ import {
     type IMetadataProvider,
     type UserInfo,
 } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import {
+    ConversationEngine,
+    MJConversationDetailEntity,
+    MJAIAgentRunEntity,
+} from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
@@ -131,10 +135,26 @@ export async function executeSpaceChatTurn(
         return { ok: false, message: 'Only messages authored by the caller can initiate an agent turn.' };
     }
 
-    // 4. Refuse a second turn on a message that already has an agent run; refuse when read fails (Items 5 & 22)
+    // 4. Refuse a second turn on a message that already has an agent run or reply detail; refuse when read fails (Items 5 & 22)
+    const detailCheck = await view.RunView<{ ID: string }>({
+        EntityName: DETAILS,
+        ExtraFilter: `ParentID = '${userMessageId}' AND Role = 'AI'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+
+    if (!detailCheck.Success) {
+        return { ok: false, message: detailCheck.ErrorMessage || 'Could not verify reply status for this message.' };
+    }
+
+    if ((detailCheck.Results?.length ?? 0) > 0) {
+        return { ok: false, message: 'This message has already been processed by an agent turn.' };
+    }
+
     const runCheck = await view.RunView<{ ID: string }>({
         EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `ConversationDetailID = '${userMessageId}'`,
+        ExtraFilter: `ExternalReferenceID = '${userMessageId}'`,
         Fields: ['ID'],
         MaxRows: 1,
         ResultType: 'simple',
@@ -235,43 +255,33 @@ export async function executeSpaceChatTurn(
     assistantDetail.UserID = system.ID;
     assistantDetail.AgentID = targetAgentId;
     assistantDetail.Role = 'AI';
+    assistantDetail.Status = 'In-Progress';
+    assistantDetail.ParentID = userMessageId;
     assistantDetail.HiddenToUser = false;
     assistantDetail.IsPinned = false;
     assistantDetail.OriginalMessageChanged = false;
-    assistantDetail.Message = '';
+    assistantDetail.Message = '⏳ Starting...';
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to initialize assistant detail record.';
         LogError(`executeSpaceChatTurn: ${errMsg}`);
         return { ok: false, message: errMsg };
     }
 
-    // Load prior conversation messages for context window
-    const detailsFilter = conversationHistoryFrom
-        ? `ConversationID = '${conversationId}' AND __mj_CreatedAt >= '${conversationHistoryFrom.toISOString()}'`
-        : `ConversationID = '${conversationId}'`;
-
-    const priorDetailsRes = await view.RunView<{ ID: string; Role: string; Message: string | null; __mj_CreatedAt: string }>({
-        EntityName: DETAILS,
-        ExtraFilter: detailsFilter,
-        OrderBy: '__mj_CreatedAt ASC',
-        Fields: ['ID', 'Role', 'Message', '__mj_CreatedAt'],
-        ResultType: 'simple',
-    }, system);
-
-    const historyMessages: ExecuteAgentParams['conversationMessages'] = [];
-    if (priorDetailsRes.Success && priorDetailsRes.Results) {
-        for (const d of priorDetailsRes.Results) {
-            if (d.ID === userMessageId || d.ID === assistantDetail.ID) continue;
-            historyMessages.push({
-                role: d.Role === 'AI' ? 'assistant' : 'user',
-                content: d.Message ?? '',
-            });
-        }
-    }
-    historyMessages.push({
-        role: 'user',
-        content: messageText,
+    // Load fresh window rows through ConversationEngine (Item 5)
+    const windowRows = await ConversationEngine.LoadWindowRowsFresh(
+        conversationId,
+        user,
+        provider,
+        conversationHistoryFrom
+    );
+    const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
+        excludeDetailIds: [assistantDetail.ID],
+        historyFrom: conversationHistoryFrom ?? null,
     });
+    const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
+        role: m.role,
+        content: m.content,
+    }));
 
     let agentSuccess = false;
     let agentErrorMessage: string | null = null;
@@ -288,9 +298,10 @@ export async function executeSpaceChatTurn(
                 conversationId,
                 conversationDetailId: assistantDetail.ID,
                 ConversationHistoryFrom: conversationHistoryFrom,
-                PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Spaces',
-                PrimaryScopeRecordID: spaceId,
+                PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                PrimaryScopeRecordID: foundChat.ID,
                 SecondaryScopes: {
+                    SpaceID: [spaceId],
                     Audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
                 },
                 data: {
@@ -299,30 +310,37 @@ export async function executeSpaceChatTurn(
                     audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
                     allowedItems: audienceQuoted,
                 },
-                conversationMessages: historyMessages,
+                conversationMessages: assembledMessages,
+                onAgentRunCreated: async (createdRunId: string) => {
+                    agentRunId = createdRunId;
+                    try {
+                        const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
+                        if (runObj && (await runObj.Load(createdRunId))) {
+                            runObj.ExternalReferenceID = userMessageId;
+                            await runObj.Save();
+                        }
+                    } catch (stampErr) {
+                        LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${stampErr}`);
+                    }
+                },
             };
-            const runResult = await runner.RunAgentInConversation(
-                runnerParams,
-                {
-                    conversationId,
-                    conversationDetailId: assistantDetail.ID,
-                }
-            );
 
-            if (runResult?.agentResult?.agentRun?.ID) {
-                agentRunId = runResult.agentResult.agentRun.ID;
+            const runResult = await runner.RunAgent(runnerParams);
+            if (runResult?.agentRun?.ID) {
+                agentRunId = runResult.agentRun.ID;
             }
-            if (runResult?.agentResult?.agentRun?.Result) {
-                agentReplyText = String(runResult.agentResult.agentRun.Result);
+
+            if (runResult?.success) {
                 agentSuccess = true;
-            } else if (typeof runResult?.agentResult?.payload === 'string') {
-                agentReplyText = runResult.agentResult.payload;
-                agentSuccess = true;
-            } else if (runResult?.agentResult?.success) {
-                agentSuccess = true;
-                agentReplyText = 'Completed successfully.';
+                agentReplyText =
+                    runResult.agentRun?.Message ||
+                    (typeof runResult.payload === 'string' ? runResult.payload : null) ||
+                    'Completed successfully.';
             } else {
-                agentErrorMessage = runResult?.agentResult?.errorMessage ?? 'Agent execution did not produce a result.';
+                agentErrorMessage =
+                    runResult?.agentRun?.ErrorMessage ||
+                    runResult?.errorMessage ||
+                    'Agent execution did not produce a result.';
             }
         } else {
             agentErrorMessage = `Failed to load agent ${targetAgentId}.`;
@@ -333,11 +351,14 @@ export async function executeSpaceChatTurn(
     }
 
     if (!agentSuccess || !agentReplyText) {
-        await assistantDetail.Delete();
+        assistantDetail.Status = 'Error';
+        assistantDetail.Message = agentErrorMessage ?? 'Agent execution failed.';
+        await assistantDetail.Save();
         return { ok: false, message: agentErrorMessage ?? 'Agent execution failed.' };
     }
 
     // Save final assistant reply as system user
+    assistantDetail.Status = 'Complete';
     assistantDetail.Message = agentReplyText;
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to save assistant reply';

@@ -330,10 +330,6 @@ export async function loadWorld(): Promise<void> {
         }
     }
 
-    for (const spaceId of spaceIds.values()) {
-        await syncRoomEditGrantsForSpace(provider, spaceId);
-    }
-
     await seedWorldPlan({
         provider,
         actor,
@@ -378,7 +374,7 @@ export async function loadWorld(): Promise<void> {
         ) {
             const existingRes = await view.RunView<{ ID: string; ConversationID: string }>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                ExtraFilter: `SpaceID = '${spaceId}' AND Name = '${name}' AND Status = 'Active'`,
+                ExtraFilter: `SpaceID = '${spaceId}' AND Name = '${name}' AND Kind = '${kind}' AND Status = 'Active'`,
                 Fields: ['ID', 'ConversationID'],
                 ResultType: 'simple',
                 MaxRows: 1,
@@ -445,6 +441,10 @@ export async function loadWorld(): Promise<void> {
     await seedSpaceConversations('discovery', 'ada', 'bea');
     await seedSpaceConversations('northwind', 'ada', 'casey');
     await seedSpaceConversations('committee', 'ada', 'sam');
+
+    for (const spaceId of spaceIds.values()) {
+        await syncRoomEditGrantsForSpace(provider, spaceId);
+    }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
@@ -584,8 +584,26 @@ async function assertCatalog(
         Fields: ['ID', 'SpaceID', 'Name', 'Kind', 'Status'],
         ResultType: 'simple',
     }, user);
-    if (!chatsCheck.Success || (chatsCheck.Results?.length ?? 0) < 9) {
-        throw new Error(`Expected at least 9 seeded space chats, read ${chatsCheck.Results?.length ?? 0}.`);
+    if (!chatsCheck.Success || !chatsCheck.Results) {
+        throw new Error(`Failed to query space chats: ${chatsCheck?.ErrorMessage || 'unknown error'}`);
+    }
+    const expectedChats = [
+        { space: 'discovery', name: 'discovery-general', kind: 'General' },
+        { space: 'discovery', name: 'discovery-deliverables', kind: 'Topic' },
+        { space: 'discovery', name: 'discovery-internal', kind: 'Private' },
+        { space: 'northwind', name: 'northwind-general', kind: 'General' },
+        { space: 'northwind', name: 'northwind-deliverables', kind: 'Topic' },
+        { space: 'northwind', name: 'northwind-internal', kind: 'Private' },
+        { space: 'committee', name: 'committee-general', kind: 'General' },
+        { space: 'committee', name: 'committee-deliverables', kind: 'Topic' },
+        { space: 'committee', name: 'committee-internal', kind: 'Private' },
+    ];
+    for (const ec of expectedChats) {
+        const sid = spaceIds.get(ec.space);
+        const match = chatsCheck.Results.find(c => c.SpaceID.toLowerCase() === sid?.toLowerCase() && c.Name === ec.name && c.Kind === ec.kind);
+        if (!match) {
+            throw new Error(`Missing expected space chat ${ec.name} (${ec.kind}) in space ${ec.space}.`);
+        }
     }
 }
 

@@ -23,7 +23,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
-    <div class="chat-container">
+    <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
       @if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
           [environmentId]="EnvironmentId"
@@ -76,7 +76,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>{{ ParticipantCount }}</span>
                   </div>
                 }
-                @if (CanStartConversation) {
+                @if (CanStartConversation && !IsReadOnly) {
                   <button
                     type="button"
                     mjButton
@@ -95,6 +95,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </ng-template>
 
         </mj-conversation-chat-area>
+        @if (IsReadOnly) {
+          <div class="space-closed-banner" role="status">
+            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            <span>This space is closed. Conversations are read-only.</span>
+          </div>
+        }
       } @else {
         <div class="no-conversation-state">
           <div class="empty-icon-wrap">
@@ -103,7 +109,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           @if (HasConversations) {
             <h3 class="empty-title">Select a Conversation</h3>
             <p class="empty-desc">
-              Choose a channel from the space sidebar or start a new conversation.
+              @if (CanStartConversation) {
+                Choose a channel from the space sidebar or start a new conversation.
+              } @else {
+                Choose a channel from the space sidebar to view the conversation.
+              }
             </p>
           } @else {
             <h3 class="empty-title">No conversations yet</h3>
@@ -115,7 +125,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               }
             </p>
           }
-          @if (CanStartConversation) {
+          @if (CanStartConversation && !IsReadOnly) {
             <button
               type="button"
               mjButton
@@ -261,10 +271,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         align-items: center;
         gap: 6px;
       }
+
+      .read-only-chat ::ng-deep .message-input-container-wrapper {
+        display: none !important;
+      }
     `,
   ],
 })
 export class CollabSpaceChatComponent {
+  @Input() public IsReadOnly = false;
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';
@@ -280,7 +295,7 @@ export class CollabSpaceChatComponent {
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] = [];
-  @Input() public CanStartConversation = true;
+  @Input() public CanStartConversation = false;
   @Input() public HasConversations = false;
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;
   @Input() public AgentHistoryFrom: Date | null = null;

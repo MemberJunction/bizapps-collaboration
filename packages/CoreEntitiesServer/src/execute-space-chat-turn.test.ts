@@ -34,33 +34,37 @@ describe('executeSpaceChatTurn', () => {
 
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
-    let origRunAgent: typeof AgentRunner.prototype.RunAgentInConversation;
+    let origRunAgent: typeof AgentRunner.prototype.RunAgent;
 
     before(() => {
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
 
-        origRunAgent = AgentRunner.prototype.RunAgentInConversation;
-        AgentRunner.prototype.RunAgentInConversation = async (_params, options) => {
+        origRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            const run = {
+                ID: 'run-mocked-1',
+                Message: 'Mocked agent response',
+                Result: 'Mocked agent response',
+                Status: 'Completed',
+                ExternalReferenceID: params.conversationDetailId,
+            };
+            if (typeof params.onAgentRunCreated === 'function') {
+                await params.onAgentRunCreated('run-mocked-1');
+            }
             return {
-                agentResult: {
-                    success: true,
-                    status: 'Success',
-                    agentRun: {
-                        ID: 'run-mocked-1',
-                        Result: 'Mocked agent response',
-                    } as never,
-                },
-                conversationId: options.conversationId ?? '',
-                userMessageDetailId: options.conversationDetailId ?? '',
+                success: true,
+                agentRun: run as never,
+                result: 'Mocked agent response',
+                finalPayload: 'Mocked agent response',
             };
         };
     });
 
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
-        AgentRunner.prototype.RunAgentInConversation = origRunAgent;
+        AgentRunner.prototype.RunAgent = origRunAgent;
     });
 
     interface MockWorldOptions {
@@ -68,6 +72,7 @@ describe('executeSpaceChatTurn', () => {
         closedAt?: string | null;
         hasRoomChat?: boolean;
         hasExistingAgentRun?: boolean;
+        hasExistingReplyDetail?: boolean;
         agentRunReadFails?: boolean;
         callerHasReach?: boolean;
         messageUserId?: string;
@@ -149,6 +154,10 @@ describe('executeSpaceChatTurn', () => {
                         Result: null as string | null,
                         NewRecord() {
                             this.ID = 'run-' + Math.random().toString(36).slice(2);
+                        },
+                        async Load(id: string) {
+                            this.ID = id;
+                            return true;
                         },
                         async Save() {
                             savedRuns.push({ ...this });
@@ -265,7 +274,7 @@ describe('executeSpaceChatTurn', () => {
                         {
                             ID: 'chat-1',
                             ConversationID: CONVERSATION_ID,
-                            Kind: 'Room',
+                            Kind: 'General',
                             Status: 'Active',
                         } as unknown as T,
                     ]);
@@ -303,8 +312,8 @@ describe('executeSpaceChatTurn', () => {
                             ErrorMessage: 'Database connection failed while checking agent runs.',
                         };
                     }
-                    if (hasExistingAgentRun) {
-                        return mockResult<T>([{ ID: 'run-existing-1' } as unknown as T]);
+                    if (hasExistingAgentRun && String(ExtraFilter).includes(USER_MESSAGE_ID)) {
+                        return mockResult<T>([{ ID: 'run-existing-1', ExternalReferenceID: USER_MESSAGE_ID } as unknown as T]);
                     }
                     return mockResult<T>([]);
                 }
@@ -348,6 +357,13 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Items') {
+                    return mockResult<T>([]);
+                }
+
+                if (EntityName === 'MJ: Conversation Details') {
+                    if (options.hasExistingReplyDetail && String(ExtraFilter).includes(USER_MESSAGE_ID)) {
+                        return mockResult<T>([{ ID: 'detail-reply-1', ParentID: USER_MESSAGE_ID, Role: 'AI' } as unknown as T]);
+                    }
                     return mockResult<T>([]);
                 }
 
@@ -426,6 +442,15 @@ describe('executeSpaceChatTurn', () => {
 
     it('refuses a second turn on a message that already has an agent run', async () => {
         const provider = createMockProvider({ hasExistingAgentRun: true });
+        const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /already been processed by an agent turn/i);
+        }
+    });
+
+    it('refuses a second turn on a message that already has an AI reply detail', async () => {
+        const provider = createMockProvider({ hasExistingReplyDetail: true });
         const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
         assert.equal(result.ok, false);
         if (!result.ok) {

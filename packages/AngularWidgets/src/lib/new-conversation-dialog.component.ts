@@ -1,10 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   Input,
+  OnDestroy,
+  OnInit,
   Output,
+  ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -24,14 +28,14 @@ export interface NewConversationSubmitPayload {
   imports: [CommonModule, FormsModule, MJButtonDirective, SharedGenericModule],
   template: `
     <div class="scrim" (click)="onCancel()"></div>
-    <div class="modal conversation-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <div #modalRoot class="modal conversation-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
       <header class="d-header">
         <div class="d-title-group">
           <h2 id="dialog-title" class="d-title">New Conversation</h2>
           <p class="d-sub">Start a new discussion channel in {{ SpaceName || 'this space' }}.</p>
         </div>
         <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
-          <i class="fa-solid fa-xmark"></i>
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </header>
 
@@ -41,10 +45,12 @@ export interface NewConversationSubmitPayload {
           <div class="input-with-prefix">
             <span class="prefix">#</span>
             <input
+              #nameInput
               id="convo-name"
               type="text"
               class="f-input"
               [(ngModel)]="name"
+              [disabled]="IsSubmitting"
               placeholder="e.g. project-updates, weekly-sync"
               (keydown.enter)="onSubmit()"
               autofocus
@@ -56,8 +62,8 @@ export interface NewConversationSubmitPayload {
           <label class="f-label" id="channel-type-label">Channel Type</label>
           <div class="kind-options" role="radiogroup" aria-labelledby="channel-type-label">
             <label class="kind-card" [class.selected]="kind === 'General'">
-              <input type="radio" name="convoKind" value="General" [(ngModel)]="kind" class="sr-only" />
-              <div class="kind-card-icon general"><i class="fa-solid fa-comments"></i></div>
+              <input type="radio" name="convoKind" value="General" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
+              <div class="kind-card-icon general"><i class="fa-solid fa-comments" aria-hidden="true"></i></div>
               <div class="kind-card-text">
                 <div class="kind-title">General Discussion</div>
                 <div class="kind-desc">Open channel for all space participants and team members.</div>
@@ -65,8 +71,8 @@ export interface NewConversationSubmitPayload {
             </label>
 
             <label class="kind-card" [class.selected]="kind === 'Topic'">
-              <input type="radio" name="convoKind" value="Topic" [(ngModel)]="kind" class="sr-only" />
-              <div class="kind-card-icon topic"><i class="fa-solid fa-bullseye"></i></div>
+              <input type="radio" name="convoKind" value="Topic" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
+              <div class="kind-card-icon topic"><i class="fa-solid fa-bullseye" aria-hidden="true"></i></div>
               <div class="kind-card-text">
                 <div class="kind-title">Topic / Workstream</div>
                 <div class="kind-desc">Focused on a specific deliverable, review, or initiative.</div>
@@ -75,8 +81,8 @@ export interface NewConversationSubmitPayload {
 
             @if (canShowPrivate) {
               <label class="kind-card" [class.selected]="kind === 'Private'">
-                <input type="radio" name="convoKind" value="Private" [(ngModel)]="kind" class="sr-only" />
-                <div class="kind-card-icon private"><i class="fa-solid fa-lock"></i></div>
+                <input type="radio" name="convoKind" value="Private" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
+                <div class="kind-card-icon private"><i class="fa-solid fa-lock" aria-hidden="true"></i></div>
                 <div class="kind-card-text">
                   <div class="kind-title">Internal Only</div>
                   <div class="kind-desc">Restricted to internal staff and team members.</div>
@@ -99,7 +105,7 @@ export interface NewConversationSubmitPayload {
           @if (IsSubmitting) {
             <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
           } @else {
-            <i class="fa-solid fa-plus"></i> Create Conversation
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Conversation
           }
         </button>
         <button
@@ -303,8 +309,8 @@ export interface NewConversationSubmitPayload {
         color: var(--mj-brand-primary, #0076b6);
       }
       .kind-card-icon.topic {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
-        color: var(--mj-brand-primary, #0076b6);
+        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 12%, transparent);
+        color: var(--mj-brand-tertiary, #059669);
       }
       .kind-card-icon.private {
         background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, transparent);
@@ -341,17 +347,36 @@ export interface NewConversationSubmitPayload {
     `,
   ],
 })
-export class CollabNewConversationDialogComponent {
+export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
   @Input() public SpaceName = '';
-  @Input() public CanSeeTeam = false;
   @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
 
   @Output() public CancelRequested = new EventEmitter<void>();
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
+  @ViewChild('nameInput') public nameInputElement?: ElementRef<HTMLInputElement>;
+  @ViewChild('modalRoot') public modalRootElement?: ElementRef<HTMLElement>;
+
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
+
+  private previousActiveElement: HTMLElement | null = null;
+
+  public ngOnInit(): void {
+    if (typeof document !== 'undefined') {
+      this.previousActiveElement = document.activeElement as HTMLElement | null;
+      setTimeout(() => {
+        this.nameInputElement?.nativeElement?.focus();
+      }, 0);
+    }
+  }
+
+  public ngOnDestroy(): void {
+    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+      this.previousActiveElement.focus();
+    }
+  }
 
   public get canShowPrivate(): boolean {
     return this.AllowedKinds.includes('Private');
@@ -359,6 +384,29 @@ export class CollabNewConversationDialogComponent {
 
   public get trimmedName(): string {
     return this.name.trim();
+  }
+
+  @HostListener('keydown', ['$event'])
+  public onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Tab' && this.modalRootElement?.nativeElement) {
+      const focusable = this.modalRootElement.nativeElement.querySelectorAll<HTMLElement>(
+        'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          last.focus();
+          event.preventDefault();
+        }
+      } else {
+        if (document.activeElement === last) {
+          first.focus();
+          event.preventDefault();
+        }
+      }
+    }
   }
 
   @HostListener('document:keydown.escape', ['$event'])

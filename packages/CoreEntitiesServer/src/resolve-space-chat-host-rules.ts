@@ -276,7 +276,7 @@ export async function resolveSpaceChatHostRules(
         const uid = parseUuid(m.UserID);
         if (uid) {
             userToMemberRow.set(uid, m);
-            const reach = membershipReaches(spaceNodes, memberships, uid, spaceId);
+            const reach = membershipReaches(spaceNodes, memberships, uid, spaceId, new Date(), true);
             if (reach) {
                 userReachMap.set(uid, reach);
                 reachingUserIds.add(uid);
@@ -322,7 +322,7 @@ export async function resolveSpaceChatHostRules(
         }
         const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}' AND Status = 'Active'`,
+            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}'`,
             Fields: ['ID', 'Kind', 'Status'],
             MaxRows: 1,
             ResultType: 'simple',
@@ -344,7 +344,21 @@ export async function resolveSpaceChatHostRules(
         if (!chatCheck.Results?.[0]) {
             return {
                 ok: false,
-                message: 'Conversation not found or not active in this space.',
+                message: 'The conversation does not belong to this space.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: [],
+                defaultAgentId: null,
+                defaultAgentName: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
+            };
+        }
+        if (chatCheck.Results[0].Status === 'Archived') {
+            return {
+                ok: false,
+                message: 'The conversation is archived.',
                 agentReplyMode: 'MentionOnly',
                 allowedAgentIds: [],
                 defaultAgentId: null,

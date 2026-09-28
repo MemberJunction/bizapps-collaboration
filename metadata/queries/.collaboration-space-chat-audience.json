@@ -1,0 +1,24 @@
+[
+  {
+    "primaryKey": {
+      "ID": "B4742FD3-00D4-461F-A356-0265D72C39F5"
+    },
+    "fields": {
+      "Name": "Collaboration Space Chat Audience",
+      "Description": "Returns the allowed bands (Shared, or Shared + Team for Private/Internal) derived from PrimaryScopeRecordID.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Collaboration",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "SELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n\nUNION ALL\n\nSELECT 'Team' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND sc.Kind = 'Private'\n\nUNION ALL\n\nSELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[Space] s\nWHERE s.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND NOT EXISTS (\n      SELECT 1 FROM [__mj_BizAppsCollaboration].[SpaceChat] sc\n      WHERE sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  )"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T21:57:55.632Z",
+      "checksum": "a6b03d0bac17beeadedca95b3c2221d1d710182843fa5e06db83d09efcd7c9b1"
+    }
+  }
+]

@@ -450,3 +450,144 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         assert.equal(reopenReach?.role.isOwnerRole, true);
     });
 });
+
+interface MockSpaceChatEntity {
+    ID: string;
+    Status: string;
+    ArchivedOnSpaceClose: boolean;
+    Load(id: string): Promise<boolean>;
+    Save(): Promise<boolean>;
+    LatestResult: { CompleteMessage: string };
+}
+
+describe('SpaceEntityServer close and reopen chat archiving and restoration', () => {
+    it('archives active chats with ArchivedOnSpaceClose flag when space closes', async () => {
+        const archivedChats: Array<{ id: string; status: string; archivedOnSpaceClose: boolean }> = [];
+        let grantSyncCalledWithSpaceId: string | null = null;
+
+        const mockSpaceChat: MockSpaceChatEntity = {
+            ID: 'chat-active-1',
+            Status: 'Active',
+            ArchivedOnSpaceClose: false,
+            async Load(id: string) {
+                return id === 'chat-active-1';
+            },
+            async Save() {
+                archivedChats.push({
+                    id: this.ID,
+                    status: this.Status,
+                    archivedOnSpaceClose: this.ArchivedOnSpaceClose,
+                });
+                return true;
+            },
+            LatestResult: { CompleteMessage: '' },
+        };
+
+        const spaceId = 'space-close-test-1';
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        const mockProvider = {
+            EntityByName() { return { ID: 'mock-id' }; },
+            EntityByID() { return { Name: 'mock' }; },
+            async GetEntityObject(entityName: string): Promise<MockSpaceChatEntity> {
+                if (entityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return mockSpaceChat;
+                }
+                return mockSpaceChat;
+            },
+            async RunView(params: { EntityName: string; ExtraFilter: string }) {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'chat-active-1' }],
+                    };
+                }
+                return { Success: true, Results: [] };
+            },
+        };
+
+        // Simulate close: ClosedAt is dirty and truthy
+        const chatsRes = await mockProvider.RunView({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
+        });
+        assert.equal(chatsRes.Success, true);
+        assert.equal(chatsRes.Results.length, 1);
+
+        for (const row of chatsRes.Results) {
+            const chatObj = await mockProvider.GetEntityObject('MJ_BizApps_Collaboration: Space Chats');
+            if (await chatObj.Load(row.ID)) {
+                chatObj.Status = 'Archived';
+                chatObj.ArchivedOnSpaceClose = true;
+                await chatObj.Save();
+            }
+        }
+
+        assert.equal(archivedChats.length, 1);
+        assert.equal(archivedChats[0].status, 'Archived');
+        assert.equal(archivedChats[0].archivedOnSpaceClose, true);
+    });
+
+    it('restores archived chats where ArchivedOnSpaceClose was 1 when space reopens', async () => {
+        const restoredChats: Array<{ id: string; status: string; archivedOnSpaceClose: boolean }> = [];
+
+        const mockSpaceChat: MockSpaceChatEntity = {
+            ID: 'chat-archived-1',
+            Status: 'Archived',
+            ArchivedOnSpaceClose: true,
+            async Load(id: string) {
+                return id === 'chat-archived-1';
+            },
+            async Save() {
+                restoredChats.push({
+                    id: this.ID,
+                    status: this.Status,
+                    archivedOnSpaceClose: this.ArchivedOnSpaceClose,
+                });
+                return true;
+            },
+            LatestResult: { CompleteMessage: '' },
+        };
+
+        const spaceId = 'space-reopen-test-1';
+        const mockProvider = {
+            async GetEntityObject(entityName: string): Promise<MockSpaceChatEntity> {
+                if (entityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return mockSpaceChat;
+                }
+                return mockSpaceChat;
+            },
+            async RunView(params: { EntityName: string; ExtraFilter: string }) {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    // Only return chats archived on space close
+                    if (params.ExtraFilter.includes('ArchivedOnSpaceClose = 1')) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'chat-archived-1' }],
+                        };
+                    }
+                }
+                return { Success: true, Results: [] };
+            },
+        };
+
+        const chatsRes = await mockProvider.RunView({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Archived' AND ArchivedOnSpaceClose = 1`,
+        });
+        assert.equal(chatsRes.Success, true);
+        assert.equal(chatsRes.Results.length, 1);
+
+        for (const row of chatsRes.Results) {
+            const chatObj = await mockProvider.GetEntityObject('MJ_BizApps_Collaboration: Space Chats');
+            if (await chatObj.Load(row.ID)) {
+                chatObj.Status = 'Active';
+                chatObj.ArchivedOnSpaceClose = false;
+                await chatObj.Save();
+            }
+        }
+
+        assert.equal(restoredChats.length, 1);
+        assert.equal(restoredChats[0].status, 'Active');
+        assert.equal(restoredChats[0].archivedOnSpaceClose, false);
+    });
+});

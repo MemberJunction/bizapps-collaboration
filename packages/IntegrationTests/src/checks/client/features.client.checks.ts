@@ -3,6 +3,7 @@ import {
     CONVERSATION_DETAIL_ENTITY,
     CONVERSATION_ENTITY,
     FILE_ENTITY,
+    SPACE_CHAT_ENTITY,
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_MEMBER_ENTITY,
@@ -88,22 +89,22 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'features.FE4',
-        Name: 'FE4 — room conversations have active message history per space',
+        Name: 'FE4 — space conversations have active message history per space',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            const roomConvs = await FindRows<{
+            const spaceChats = await FindRows<{
                 ID: string;
-                LinkedEntityID: string;
-                LinkedRecordID: string;
+                SpaceID: string;
+                ConversationID: string;
             }>(
                 ctx,
-                CONVERSATION_ENTITY,
-                `LinkedEntityID = '${SPACES_ENTITY_ID}'`,
-                ['ID', 'LinkedEntityID', 'LinkedRecordID'],
+                SPACE_CHAT_ENTITY,
+                "Status = 'Active'",
+                ['ID', 'SpaceID', 'ConversationID'],
             );
-            Assert(roomConvs.length > 0, 'Space room conversations exist');
+            Assert(spaceChats.length > 0, 'Space chats exist');
 
-            const convIds = roomConvs.map((c) => c.ID);
+            const convIds = spaceChats.map((c) => c.ConversationID).filter(Boolean);
             const messages = await FindRows<{
                 ID: string;
                 ConversationID: string;

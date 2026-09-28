@@ -797,14 +797,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SpaceName]="spaceTitle"
                                                     [FirmName]="firmName"
                                                     [ClientOrgName]="clientOrgName"
-                                                    [AudienceCount]="headerTotalPeople"
+                                                    [AudienceCount]="discussionAudienceCount"
                                                     [NeedsYouItems]="overviewNeedsYou"
                                                     [SharedItems]="overviewSharedItems"
                                                     [TeamItems]="overviewTeamItems"
                                                     [TeamTotalCount]="libraryTeamCount"
                                                     [RoomMessages]="overviewRoomMessages"
                                                     [SubSpaces]="overviewSubSpaces"
-                                                    [CanStartConversation]="canStartConversation"
+                                                    [CanStartConversation]="canStartConversation && !isSpaceClosed"
+                                                    [IsSubmittingAsk]="isSubmittingAsk"
                                                     [DiscussionBand]="chatAudienceBand"
                                                     (OpenLibraryRequested)="onOpenLibraryRequested()"
                                                     (OpenChatRequested)="onOpenChatRequested()"
@@ -888,6 +889,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
+                                                    [IsReadOnly]="isSpaceClosed"
                                                     [ConversationId]="activeConversationId"
                                                     [ConversationName]="activeConversationName"
                                                     [CurrentUser]="currentUser"
@@ -899,7 +901,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultAgentId]="chatDefaultAgentId"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
-                                                    [CanStartConversation]="canStartConversation"
+                                                    [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
                                                     [MentionPeople]="chatMentionPeople"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
@@ -1030,6 +1032,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public canConfigureCurrentSpace = false;
     public loadErrorMessage = '';
+    public isSubmittingAsk = false;
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
         if (!this.currentUser || !this.activeSpaceId) {
@@ -1159,17 +1162,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return roleType ? roleType.CanContribute : false;
     }
 
-    public get canSeeTeam(): boolean {
-        if (!this.currentUser) return false;
-        const currentUserId = this.currentUser.ID;
-        const member = this.spaceMembers.find(m => UUIDsEqual(m.userId, currentUserId));
-        if (!member || member.status !== 'Active') {
-            return false;
+    public get discussionAudienceCount(): number {
+        if (this.chatAudienceBand === 'Team') {
+            return this.headerStaffAvatars.length;
         }
-        const roleType = member.roleId
-            ? CollaborationEngineBase.Instance.SpaceRoleTypeById(member.roleId)
-            : CollaborationEngineBase.Instance.SpaceRoleTypeByCode(member.roleCode);
-        return !!roleType?.CanSeeTeamBand;
+        return this.headerTotalPeople;
     }
 
     public onBeforeKanbanStatusChange(event: BeforeKanbanStatusChangeEvent): void {
@@ -1434,6 +1431,37 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeConversationId = '';
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
+
+        // Reset host rules immediately so previous space's buttons / ask box do not linger
+        this.chatAgentReplyMode = 'MentionOnly';
+        this.chatAllowedAgentIds = [];
+        this.chatDefaultAgentId = null;
+        this.chatDefaultAgentName = null;
+        this.chatAgentHistoryFrom = null;
+        this.chatMentionPeople = [];
+        this.canStartConversation = false;
+        this.canStartConversationKinds = [];
+
+        // Refresh space record from server to ensure ClosedAt and status are completely fresh
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const freshSpaceRes = await rv.RunView<RawSpaceRecord>({
+                EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                ExtraFilter: `ID = '${spaceId}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            });
+            if (freshSpaceRes?.Success && freshSpaceRes.Results?.[0]) {
+                const fresh = freshSpaceRes.Results[0];
+                const idx = this.rawSpaces.findIndex(s => UUIDsEqual(s.ID, spaceId));
+                if (idx >= 0) {
+                    this.rawSpaces[idx] = { ...this.rawSpaces[idx], ...fresh };
+                }
+            }
+        } catch (e) {
+            LogError(`Failed to refresh space record for ${spaceId}: ${e}`);
+        }
+
         const space = this.rawSpaces.find(s => UUIDsEqual(s.ID, spaceId));
         if (!space) return;
 
@@ -1709,6 +1737,31 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 LogError(`Failed to load space conversations for space ${spaceId}: ${spaceChatsRes?.ErrorMessage ?? 'unknown error'}`);
             }
 
+            if (seenConvIds.size > 0) {
+                try {
+                    const convIds = Array.from(seenConvIds);
+                    const convRes = await rv.RunView<{ ID: string; __mj_UpdatedAt: string }>({
+                        EntityName: 'MJ: Conversations',
+                        ExtraFilter: `ID IN ('${convIds.join("','")}')`,
+                        Fields: ['ID', '__mj_UpdatedAt'],
+                        OrderBy: '__mj_UpdatedAt DESC',
+                        ResultType: 'simple',
+                        MaxRows: convIds.length,
+                    });
+                    if (convRes?.Success && convRes.Results) {
+                        const orderMap = new Map<string, number>();
+                        convRes.Results.forEach((c, idx) => orderMap.set(c.ID.toLowerCase(), idx));
+                        items.sort((a, b) => {
+                            const orderA = orderMap.get(a.id.toLowerCase()) ?? 9999;
+                            const orderB = orderMap.get(b.id.toLowerCase()) ?? 9999;
+                            return orderA - orderB;
+                        });
+                    }
+                } catch (sortErr) {
+                    LogError('Failed to sort conversations by __mj_UpdatedAt: ' + String(sortErr));
+                }
+            }
+
             this.spaceConversations = items;
 
             if (preferredConvId && items.some(i => UUIDsEqual(i.id, preferredConvId))) {
@@ -1928,6 +1981,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     .filter(m => m.band === 'Shared')
                     .map(m => ({ initials: m.initials, name: m.name, isOutside: true, colorClass: 'c2' }));
                 this.headerAudienceSummary = `${this.headerStaffAvatars.length} Team Staff · ${this.headerOutsideAvatars.length} Outside`;
+                const hasShared = this.spaceMembers.some(m => m.band === 'Shared');
+                this.spaceAudienceBand = hasShared ? 'Shared' : 'Team';
             }
         } catch (err) {
             LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
@@ -2134,7 +2189,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onOpenChatRequested(): void {
         this.activeTab = 'Chat';
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
-        this.spaceAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
+        this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.UpdateQueryParams({ tab: 'chat', conv: this.activeConversationId || null });
         this.RefreshView();
     }
@@ -2142,7 +2197,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onSpaceConversationSelected(convId: string): void {
         this.activeConversationId = convId;
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
-        this.spaceAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
+        this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.activeTab = 'Chat';
         this.UpdateQueryParams({ tab: 'chat', conv: convId });
         void this.loadOverviewMessages(convId);
@@ -2450,7 +2505,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const res = await client.GetSpaceChatHostRules(spaceId, conversationId);
             if (this.hostRulesRequestId !== requestId) return;
             if (res?.Success) {
-                this.chatAgentReplyMode = (res.AgentReplyMode as AgentReplyMode) ?? 'MentionOnly';
+                this.chatAgentReplyMode = res.AgentReplyMode ?? 'MentionOnly';
                 this.chatAllowedAgentIds = res.AllowedAgentIDs ?? [];
                 this.chatDefaultAgentId = res.DefaultAgentID ?? null;
                 this.chatDefaultAgentName = res.DefaultAgentName ?? null;
@@ -2470,6 +2525,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.chatDefaultAgentName = null;
                 this.canStartConversation = false;
                 this.canStartConversationKinds = [];
+                const refusalMsg = res?.ErrorMessage || 'Space chat host rules refused by server';
+                LogError(`loadSpaceChatHostRules: server refused host rules for space ${spaceId}: ${refusalMsg}`);
             }
         } catch (err) {
             if (this.hostRulesRequestId !== requestId) return;
@@ -2594,12 +2651,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOverviewAskRequested(query: string): Promise<void> {
         const text = query?.trim() ?? '';
-        if (!text) return;
-        if (!this.canStartConversation) {
+        if (!text || this.isSubmittingAsk) return;
+        if (!this.canStartConversation || this.isSpaceClosed) {
             SharedService.Instance.CreateSimpleNotification('You do not have permission to start conversations in this space.', 'warning', 3000);
             return;
         }
 
+        this.isSubmittingAsk = true;
+        this.RefreshView();
         const name = text.length > 50 ? `${text.slice(0, 47)}...` : text;
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
@@ -2634,6 +2693,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const msg = err instanceof Error ? err.message : String(err);
             LogError('onOverviewAskRequested error: ' + msg);
             SharedService.Instance.CreateSimpleNotification('Failed to start conversation: ' + msg, 'error', 5000);
+        } finally {
+            this.isSubmittingAsk = false;
+            this.RefreshView();
         }
     }
 

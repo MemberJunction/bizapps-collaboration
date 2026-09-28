@@ -10,7 +10,7 @@
       "Status": "Active",
       "IsGlobal": false,
       "IsDefault": false,
-      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true},{\"name\":\"Audience\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"string\",\"valueDomain\":\"set\",\"required\":false}],\"strictValidation\":true}"
+      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true},{\"name\":\"Audience\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueDomain\":\"set\",\"expansionQueryID\":\"B4742FD3-00D4-461F-A356-0265D72C39F5\",\"required\":true}],\"strictValidation\":true}"
     },
     "relatedEntities": {
       "MJ: Search Scope Entities": [
@@ -21,8 +21,12 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
-            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}{% if context.SecondaryScopes.Audience == 'Shared' %} AND Band = 'Shared'{% elif context.SecondaryScopes.Audience == 'Team' %} AND Band IN ('Shared', 'Team'){% endif %}",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}{% if context.SecondaryScopes.Audience | length %} AND Band IN ('{{ context.SecondaryScopes.Audience | join(\"','\") }}'){% else %} AND (Band IS NULL AND 1 = 0){% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T21:57:55.815Z",
+            "checksum": "baa972c9c11d7380d17f5a630ede22a35b03f072601d41e9a5350606fc66cefd"
           }
         },
         {
@@ -32,8 +36,12 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Tasks: Tasks",
-            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'){% else %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IS NULL AND 1 = 0 AND Entity = 'MJ_BizApps_Tasks: Tasks'){% endif %}",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'{% if context.SecondaryScopes.Audience | length %} AND Band IN ('{{ context.SecondaryScopes.Audience | join(\"','\") }}'){% else %} AND (Band IS NULL AND 1 = 0){% endif %}){% else %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IS NULL AND 1 = 0 AND Entity = 'MJ_BizApps_Tasks: Tasks'){% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T21:57:55.825Z",
+            "checksum": "7a31f4c04b00fd6fd3a265e5c5f2bd47df3c9ef34727e020682185335311ce1e"
           }
         }
       ],
@@ -101,6 +109,10 @@
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-09-28T21:57:55.795Z",
+      "checksum": "5e49bca8a4f50842eecc7a58d1b7797bb2a566d6fdedea88e8c6927bd30a0849"
     }
   }
 ]

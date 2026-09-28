@@ -7,17 +7,95 @@ import {
     AI_AGENT_SKILL_ENTITY,
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
+    CONVERSATION_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
     FILE_ENTITY,
 } from '../../entity-names.js';
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import type { MJConversationEntity, MJConversationDetailEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
+import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { FindRows, getPersonaContext, getPersonaClientContext } from '../../wire.js';
 
 const createdDetailIds: string[] = [];
+
+async function cleanupConversation(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    conversationId?: string | null,
+    spaceChatId?: string | null,
+): Promise<void> {
+    const rv = RunView.FromMetadataProvider(provider);
+    if (conversationId) {
+        try {
+            const chats = await rv.RunView<{ ID: string }>({
+                EntityName: SPACE_CHAT_ENTITY,
+                ExtraFilter: `ConversationID = '${conversationId}'`,
+                Fields: ['ID'],
+                MaxRows: 100,
+            }, user);
+            if (chats?.Success && chats.Results) {
+                for (const c of chats.Results) {
+                    const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
+                    if (await chat.Load(c.ID)) {
+                        await chat.Delete();
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+
+        try {
+            const details = await rv.RunView<{ ID: string }>({
+                EntityName: CONVERSATION_DETAIL_ENTITY,
+                ExtraFilter: `ConversationID = '${conversationId}'`,
+                Fields: ['ID'],
+                MaxRows: 1000,
+            }, user);
+            if (details?.Success && details.Results) {
+                for (const d of details.Results) {
+                    const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
+                    if (await det.Load(d.ID)) {
+                        await det.Delete();
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+
+        try {
+            const grants = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Resource Permissions',
+                ExtraFilter: `ResourceRecordID = '${conversationId}'`,
+                Fields: ['ID'],
+                MaxRows: 1000,
+            }, user);
+            if (grants?.Success && grants.Results) {
+                for (const g of grants.Results) {
+                    const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
+                    if (await p.Load(g.ID)) {
+                        await p.Delete();
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+
+        try {
+            const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
+            if (await conv.Load(conversationId)) {
+                await conv.Delete();
+            }
+        } catch { /* ignore */ }
+    } else if (spaceChatId) {
+        try {
+            const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
+            if (await chat.Load(spaceChatId)) {
+                await chat.Delete();
+            }
+        } catch { /* ignore */ }
+    }
+}
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
@@ -258,27 +336,33 @@ const checks: NamedCheck[] = [
         Name: 'AG6 — Space room message submission via typed client verifies DetailID',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
-            const client = new CollaborationClient(beaCtx.GraphQLProvider);
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
 
-            const spaceChats = await FindRows<{ ConversationID: string }>(
-                ctx,
-                SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Kind = 'General'`,
-                ['ConversationID'],
-            );
-            Assert(spaceChats.length >= 1, 'Discovery General conversation found');
-            const discConvId = spaceChats[0].ConversationID;
-
-            const result = await client.PostSpaceMessage({
+            const startRes = await adaClient.CreateSpaceConversation({
                 SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: discConvId,
-                Text: 'AG6 client check verification message',
+                Name: `discovery-client-ag6-${Date.now()}`,
+                Kind: 'General',
             });
-            Assert(result.Success === true, `PostSpaceMessage succeeded: ${result.ErrorMessage ?? 'none'}`);
-            Assert(typeof result.DetailID === 'string' && result.DetailID.length > 0, 'PostSpaceMessage returned valid DetailID');
-            if (result.DetailID) {
-                createdDetailIds.push(result.DetailID);
+            Assert(startRes.Success === true && !!startRes.ConversationID && !!startRes.SpaceChatID, `Ada creates General conversation for client AG6: ${startRes.ErrorMessage ?? ''}`);
+            const convId = startRes.ConversationID!;
+            const chatId = startRes.SpaceChatID!;
+
+            try {
+                const result = await beaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: convId,
+                    Text: 'AG6 client check verification message',
+                });
+                Assert(result.Success === true, `PostSpaceMessage succeeded: ${result.ErrorMessage ?? 'none'}`);
+                Assert(typeof result.DetailID === 'string' && result.DetailID.length > 0, 'PostSpaceMessage returned valid DetailID');
+                if (result.DetailID) {
+                    createdDetailIds.push(result.DetailID);
+                }
+            } finally {
+                await cleanupConversation(ctx.Provider, ctx.User, convId, chatId);
             }
         },
     },
@@ -292,80 +376,110 @@ const checks: NamedCheck[] = [
             const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
             const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
 
-            // Find Discovery conversations
-            const convs = await FindRows<{
-                ID: string;
-                SpaceID: string;
-                ConversationID: string;
-                Kind: string;
-                Name: string;
-            }>(
-                ctx,
-                SPACE_CHAT_ENTITY,
-                `SpaceID = '${DISCOVERY_SPACE_ID}' AND Status = 'Active'`,
-                ['ID', 'SpaceID', 'ConversationID', 'Kind', 'Name'],
-            );
-            const generalChat = convs.find((c) => c.Kind === 'General');
-            const privateChat = convs.find((c) => c.Kind === 'Private');
-            Assert(!!generalChat, 'Discovery General conversation found');
-            Assert(!!privateChat, 'Discovery Private conversation found');
-
-            // 1. Ada posts in General conversation tagging agent
-            const genMsg = await adaClient.PostSpaceMessage({
+            const genStart = await adaClient.CreateSpaceConversation({
                 SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: generalChat!.ConversationID,
-                Text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
+                Name: `discovery-client-ag7-gen-${Date.now()}`,
+                Kind: 'General',
             });
-            Assert(genMsg.Success === true && !!genMsg.DetailID, `Ada posted tagged message in General: ${genMsg.ErrorMessage ?? ''}`);
-            if (genMsg.DetailID) createdDetailIds.push(genMsg.DetailID);
+            Assert(genStart.Success === true && !!genStart.ConversationID && !!genStart.SpaceChatID, `Ada creates General conversation: ${genStart.ErrorMessage ?? ''}`);
+            const genConvId = genStart.ConversationID!;
+            const genChatId = genStart.SpaceChatID!;
 
-            const genTurnRes = await adaClient.ExecuteSpaceChatTurn({
+            const privStart = await adaClient.CreateSpaceConversation({
                 SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: generalChat!.ConversationID,
-                UserMessageID: genMsg.DetailID!,
-                AgentID: AGENT_ID,
+                Name: `discovery-client-ag7-priv-${Date.now()}`,
+                Kind: 'Private',
             });
-            Assert(genTurnRes.Success === true, `Agent turn in General succeeded: ${genTurnRes.ErrorMessage ?? ''}`);
-            if (genTurnRes.ReplyDetailIDs) createdDetailIds.push(...genTurnRes.ReplyDetailIDs);
-            Assert(genTurnRes.AllowedItemNames !== undefined, 'General turn returned AllowedItemNames over wire');
-            Assert(!genTurnRes.AllowedItemNames!.includes('discovery-brief.pdf'), 'General turn must NOT allow Team file discovery-brief.pdf');
+            Assert(privStart.Success === true && !!privStart.ConversationID && !!privStart.SpaceChatID, `Ada creates Private conversation: ${privStart.ErrorMessage ?? ''}`);
+            const privConvId = privStart.ConversationID!;
+            const privChatId = privStart.SpaceChatID!;
 
-            // 2. Ada posts in Private conversation tagging agent
-            const privMsg = await adaClient.PostSpaceMessage({
-                SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: privateChat!.ConversationID,
-                Text: `@{"type":"agent","id":"${AGENT_ID}","name":"Sage"} summarize available documents`,
-            });
-            Assert(privMsg.Success === true && !!privMsg.DetailID, `Ada posted tagged message in Private: ${privMsg.ErrorMessage ?? ''}`);
-            if (privMsg.DetailID) createdDetailIds.push(privMsg.DetailID);
+            try {
+                // 1. Ada posts in General conversation tagging agent
+                const genMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@Collaboration Space Agent summarize available documents`,
+                });
+                Assert(genMsg.Success === true && !!genMsg.DetailID, `Ada posted tagged message in General: ${genMsg.ErrorMessage ?? ''}`);
+                if (genMsg.DetailID) createdDetailIds.push(genMsg.DetailID);
 
-            const privTurnRes = await adaClient.ExecuteSpaceChatTurn({
-                SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: privateChat!.ConversationID,
-                UserMessageID: privMsg.DetailID!,
-                AgentID: AGENT_ID,
-            });
-            Assert(privTurnRes.Success === true, `Agent turn in Private succeeded: ${privTurnRes.ErrorMessage ?? ''}`);
-            if (privTurnRes.ReplyDetailIDs) createdDetailIds.push(...privTurnRes.ReplyDetailIDs);
-            Assert(privTurnRes.AllowedItemNames !== undefined, 'Private turn returned AllowedItemNames over wire');
-            Assert(privTurnRes.AllowedItemNames!.includes('discovery-brief.pdf'), 'Private turn MUST allow Team file discovery-brief.pdf');
+                const genTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: genMsg.DetailID!,
+                    AgentID: AGENT_ID,
+                });
+                Assert(genTurnRes.Success === true, `Agent turn in General succeeded: ${genTurnRes.ErrorMessage ?? ''}`);
+                if (genTurnRes.ReplyDetailIDs) createdDetailIds.push(...genTurnRes.ReplyDetailIDs);
+                Assert(genTurnRes.AllowedItemNames !== undefined, 'General turn returned AllowedItemNames over wire');
+                Assert(genTurnRes.AllowedItemNames!.includes('site-photo.png'), 'General turn MUST allow Shared file site-photo.png');
+                Assert(!genTurnRes.AllowedItemNames!.includes('discovery-brief.pdf'), 'General turn must NOT allow Team file discovery-brief.pdf');
 
-            // 3. Test Item 6: Untagged message with AgentID under MentionOnly is refused turn
-            const untaggedMsg = await adaClient.PostSpaceMessage({
-                SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: generalChat!.ConversationID,
-                Text: 'Untagged message asking for turn over wire',
-            });
-            Assert(untaggedMsg.Success === true && !!untaggedMsg.DetailID, `Ada posted untagged message: ${untaggedMsg.ErrorMessage ?? ''}`);
-            if (untaggedMsg.DetailID) createdDetailIds.push(untaggedMsg.DetailID);
+                // Bea (client with Shared-only visibility) can view the General conversation assistant reply
+                const beaReplies = await FindRows<{ ID: string; Role: string; Message: string }>(
+                    beaCtx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ConversationID = '${genConvId}' AND Role = 'AI'`,
+                    ['ID', 'Role', 'Message'],
+                    beaCtx.User,
+                );
+                Assert(beaReplies.length >= 1, 'Bea can read assistant reply in General conversation');
+                Assert(beaReplies[0].Message.includes('site-photo.png'), 'Bea reads assistant reply quoting site-photo.png');
+                Assert(!beaReplies[0].Message.includes('discovery-brief.pdf'), 'Bea never sees discovery-brief.pdf in General reply');
 
-            const untaggedTurnRes = await adaClient.ExecuteSpaceChatTurn({
-                SpaceID: DISCOVERY_SPACE_ID,
-                ConversationID: generalChat!.ConversationID,
-                UserMessageID: untaggedMsg.DetailID!,
-                AgentID: AGENT_ID,
-            });
-            Assert(!untaggedTurnRes.Success, 'Untagged message with AgentID under MentionOnly must be refused a turn over wire');
+                // 2. Ada posts in Private conversation tagging agent
+                const privMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    Text: `@Collaboration Space Agent summarize available documents`,
+                });
+                Assert(privMsg.Success === true && !!privMsg.DetailID, `Ada posted tagged message in Private: ${privMsg.ErrorMessage ?? ''}`);
+                if (privMsg.DetailID) createdDetailIds.push(privMsg.DetailID);
+
+                const privTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    UserMessageID: privMsg.DetailID!,
+                    AgentID: AGENT_ID,
+                });
+                Assert(privTurnRes.Success === true, `Agent turn in Private succeeded: ${privTurnRes.ErrorMessage ?? ''}`);
+                if (privTurnRes.ReplyDetailIDs) createdDetailIds.push(...privTurnRes.ReplyDetailIDs);
+                Assert(privTurnRes.AllowedItemNames !== undefined, 'Private turn returned AllowedItemNames over wire');
+                Assert(privTurnRes.AllowedItemNames!.includes('site-photo.png'), 'Private turn MUST allow Shared file site-photo.png');
+                Assert(privTurnRes.AllowedItemNames!.includes('discovery-brief.pdf'), 'Private turn MUST allow Team file discovery-brief.pdf');
+
+                // 3. Test Item 6: Untagged message with AgentID under MentionOnly is refused turn
+                const untaggedMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: 'Untagged message asking for turn over wire',
+                });
+                Assert(untaggedMsg.Success === true && !!untaggedMsg.DetailID, `Ada posted untagged message: ${untaggedMsg.ErrorMessage ?? ''}`);
+                if (untaggedMsg.DetailID) createdDetailIds.push(untaggedMsg.DetailID);
+
+                const untaggedTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: untaggedMsg.DetailID!,
+                    AgentID: AGENT_ID,
+                });
+                Assert(!untaggedTurnRes.Success, 'Untagged message with AgentID under MentionOnly must be refused a turn over wire');
+                Assert(untaggedTurnRes.ErrorMessage === 'The message does not mention an agent.', `Untagged refusal matches: ${untaggedTurnRes.ErrorMessage}`);
+
+                // 4. Test Item 5 & 22: Second turn on same userMessageId is refused
+                const secondTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: genMsg.DetailID!,
+                    AgentID: AGENT_ID,
+                });
+                Assert(!secondTurnRes.Success, 'Second turn on already-processed UserMessageID must be refused over wire');
+                Assert(secondTurnRes.ErrorMessage === 'This message has already been processed by an agent turn.', `Second turn refusal matches: ${secondTurnRes.ErrorMessage}`);
+            } finally {
+                await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
+            }
         },
     },
 ];

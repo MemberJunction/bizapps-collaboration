@@ -244,6 +244,8 @@ interface SpaceNavPref {
                       [class.team]="c.band === 'Team'"
                       [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
                     </span>
+                  } @else if (c.unreadCount) {
+                    <span class="collapsed-unread-dot" [title]="c.unreadCount + ' unread'"></span>
                   }
                 </button>
               }
@@ -254,7 +256,7 @@ interface SpaceNavPref {
 
         @if (!isCollapsed) {
           <div class="space-nav-footer">
-            <span class="footer-sync"><i class="fa-solid fa-cloud-check"></i> Preferences synced</span>
+            <span class="footer-sync"><i class="fa-solid fa-cloud"></i> Preferences synced</span>
           </div>
         }
 
@@ -556,6 +558,9 @@ interface SpaceNavPref {
       justify-content: space-between;
       padding: 4px 10px 2px;
     }
+    .section-title-row .section-title {
+      padding: 0;
+    }
 
     .btn-add-section {
       background: transparent;
@@ -586,7 +591,7 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 6px;
       background: transparent;
-      border: 1px dashed var(--mj-border-strong, #cbd5e1);
+      border: 1px dashed var(--mj-border-strong, #64748b);
       color: var(--mj-text-muted, #94a3b8);
       cursor: pointer;
       display: inline-grid;
@@ -667,7 +672,16 @@ interface SpaceNavPref {
     }
     .link-badge.unread {
       background: var(--mj-brand-primary, #0076b6);
-      color: #ffffff;
+      color: var(--mj-brand-on-primary, #ffffff);
+    }
+    .collapsed-unread-dot {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mj-brand-primary, #0076b6);
     }
 
     .convo-link {
@@ -918,7 +932,7 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() MemberCount = 0;
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
-  @Input() CanStartConversation = true;
+  @Input() CanStartConversation = false;
 
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();
