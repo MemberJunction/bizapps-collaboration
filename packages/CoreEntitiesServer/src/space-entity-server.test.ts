@@ -110,6 +110,8 @@ describe('SpaceEntityServer create path validation', () => {
         typeLookupSuccess?: boolean;
         defaultAllow?: boolean;
         defaultAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
+        newRecordAllow?: boolean;
+        newRecordAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
     }) {
         if (options.typeLookupSuccess === false) {
             currentMockType = undefined;
@@ -164,6 +166,8 @@ describe('SpaceEntityServer create path validation', () => {
             SpaceTypeID: { value: TYPE_ID, writable: true },
             AllowParentAssignees: { value: options.allowParentAssignees ?? true, writable: true },
             AgentRetrieval: { value: options.agentRetrieval ?? 'Included', writable: true },
+            _newRecordAllowParentAssignees: { value: options.newRecordAllow ?? true, writable: true },
+            _newRecordAgentRetrieval: { value: options.newRecordAgent ?? 'Included', writable: true },
             Fields: { value: fields, writable: true },
             RunViewProviderToUse: { value: rvMock, writable: true },
             ProviderToUse: { value: mockProvider, writable: true },
@@ -249,6 +253,84 @@ describe('SpaceEntityServer create path validation', () => {
         const err = res.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.ok(err, 'Expected error on AgentRetrieval');
         assert.equal(err?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+    });
+
+    it("keeps the loader's explicit value", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            agentRetrieval: 'ExcludedFromParentScope',
+            defaultAgent: 'Included',
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
+    });
+
+    it("gets the type's defaults when SetMany() leaves fields at column defaults", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: true, // column default
+            agentRetrieval: 'Included', // column default
+            defaultAllow: false,        // type default differs
+            defaultAgent: 'ExcludedFromParentScope', // type default differs
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
+    });
+
+    it('keeps an explicit non-default from staff', async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: false,
+            agentRetrieval: 'ExcludedEntirely',
+            defaultAllow: true,
+            defaultAgent: 'Included',
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedEntirely');
+    });
+
+    it('refuses an explicit non-default from someone who is not staff', async () => {
+        const spaceAllow = mockCreateSpace({
+            user: participantUser,
+            allowParentAssignees: false,
+            defaultAllow: true,
+        });
+        const resAllow = await SpaceEntityServer.prototype.ValidateAsync.call(spaceAllow);
+        assert.equal(resAllow.Success, false);
+        const allowErr = resAllow.Errors.find((e) => e.Source === 'AllowParentAssignees');
+        assert.ok(allowErr, 'Expected error on AllowParentAssignees');
+        assert.equal(allowErr?.Message, 'Space change refused: only staff may change the allow-parent-assignees setting.');
+
+        const spaceAgent = mockCreateSpace({
+            user: participantUser,
+            agentRetrieval: 'ExcludedEntirely',
+            defaultAgent: 'Included',
+        });
+        const resAgent = await SpaceEntityServer.prototype.ValidateAsync.call(spaceAgent);
+        assert.equal(resAgent.Success, false);
+        const agentErr = resAgent.Errors.find((e) => e.Source === 'AgentRetrieval');
+        assert.ok(agentErr, 'Expected error on AgentRetrieval');
+        assert.equal(agentErr?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+    });
+
+    it('snapshots AllowParentAssignees and AgentRetrieval in NewRecord()', () => {
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        Object.defineProperties(space, {
+            AllowParentAssignees: { value: true, writable: true },
+            AgentRetrieval: { value: 'Included', writable: true },
+            init: { value: () => undefined },
+            notifyEmbeddedNewRecord: { value: () => undefined },
+            RaiseEvent: { value: () => undefined },
+            EntityInfo: { value: { PrimaryKeys: [] } },
+        });
+        space.NewRecord();
+        assert.equal(space._newRecordAllowParentAssignees, true);
+        assert.equal(space._newRecordAgentRetrieval, 'Included');
     });
 });
 

@@ -702,7 +702,7 @@ const checks: NamedCheck[] = [
                     Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
                 }
             } finally {
-                const cleanupDevMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+                const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
                 Assert(await cleanupDevMember.Load(devMember.ID), 'Loading Dev space member over wire for cleanup must succeed');
                 Assert(await cleanupDevMember.Delete(), 'Deleting Dev space member over wire cleanup must succeed');
             }

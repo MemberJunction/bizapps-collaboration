@@ -1,4 +1,4 @@
-import { BaseEntity, type IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type FieldValueCollection, type IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -29,8 +29,20 @@ const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
+    public _newRecordAllowParentAssignees: boolean | null | undefined = undefined;
+    public _newRecordAgentRetrieval: mjBizAppsCollaborationSpaceEntity['AgentRetrieval'] | null | undefined = undefined;
+
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
+    }
+
+    public override NewRecord(newValues?: FieldValueCollection): boolean {
+        const res = super.NewRecord(newValues);
+        const hasAllowInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AllowParentAssignees');
+        const hasAgentInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AgentRetrieval');
+        this._newRecordAllowParentAssignees = hasAllowInNewValues ? undefined : this.AllowParentAssignees;
+        this._newRecordAgentRetrieval = hasAgentInNewValues ? undefined : this.AgentRetrieval;
+        return res;
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
@@ -179,27 +191,34 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             : effectiveRules;
 
         if (!this.IsSaved) {
-            const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
-            const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
-
             if (spaceType) {
                 const defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
                 const defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
 
-                if (!allowDirty) {
+                // Treat AllowParentAssignees and AgentRetrieval as unspecified while they still hold
+                // the value NewRecord() gave them (captured in _newRecordAllowParentAssignees / _newRecordAgentRetrieval).
+                // Apply the space type's defaults when unspecified. If an explicit value was set, keep it,
+                // and refuse non-staff callers if their explicit choice differs from the type's default.
+                //
+                // Note: This cannot distinguish staff intentionally selecting the column default when the
+                // type's default differs. The new-space UI form prefills the space type's defaults, so this
+                // ambiguity does not arise in the browser.
+                const initialAllow = this._newRecordAllowParentAssignees !== undefined ? this._newRecordAllowParentAssignees : true;
+                const initialAgent = this._newRecordAgentRetrieval !== undefined ? this._newRecordAgentRetrieval : 'Included';
+
+                const allowSpecified = this.AllowParentAssignees !== initialAllow;
+                const agentSpecified = this.AgentRetrieval !== initialAgent;
+
+                if (!allowSpecified) {
                     this.AllowParentAssignees = defaultAllow;
-                }
-                if (!agentDirty) {
-                    this.AgentRetrieval = defaultAgent;
+                } else if (!isStaffUser(user) && this.AllowParentAssignees !== defaultAllow) {
+                    return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
                 }
 
-                if (!isStaffUser(user)) {
-                    if (allowDirty && this.AllowParentAssignees !== defaultAllow) {
-                        return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
-                    }
-                    if (agentDirty && this.AgentRetrieval !== defaultAgent) {
-                        return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
-                    }
+                if (!agentSpecified) {
+                    this.AgentRetrieval = defaultAgent;
+                } else if (!isStaffUser(user) && this.AgentRetrieval !== defaultAgent) {
+                    return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
                 }
             }
         }
