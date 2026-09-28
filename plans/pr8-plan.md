@@ -43,6 +43,11 @@
 
 If #7's final head differs from this, stage 0 says how, and this plan follows the code.
 
+**What stage 0 found** ([the builder's note](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5861405271)): two defects in #7's final head, both fixed in `16bac53`.
+- A type's defaults overwrote a new space's explicit settings, so a fresh load of the world failed on Delivery's `AgentRetrieval`. MJ treats a field's first set after `NewRecord()` as its initial value, so `Dirty` stayed false. The fix compares each setting with the value `NewRecord()` gave it.
+- WG6 4c's cleanup deleted Dev's seat as Ada, and the UI role can't delete Space Members, so the check failed on both harnesses. It now deletes the seat as the harness's own user.
+- With both fixed, a clean copy of `16bac53` passes 339 unit tests, and the builder's tallies after a purge and a fresh load are 43 and 44 checks passing.
+
 ### What #7 moved here
 
 Punch list 4 moved the first set of #7's items here, by number, and the rest came when #7 merged (*at merge*). Each is done in the stage named, with the rest of that stage's work. **The chat comes first,** before stage 1.
@@ -163,8 +168,8 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 ## 5. Stage 0: start
 
 1. Merge `next` into this branch, and retarget this pull request to `next`. Done at #7's merge.
-2. Check [§ 1](#1-where-7-leaves-the-app) against #7's final head, and post what differs as this pull request's first comment.
-3. Build, test and run both harnesses on the merged head, from a purge and a fresh load of the world, and post the tallies. They're the baseline every later punch list compares against.
+2. Check [§ 1](#1-where-7-leaves-the-app) against #7's final head, and post what differs as this pull request's first comment. Done: [the builder's note](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5861405271).
+3. Build, test and run both harnesses on the merged head, from a purge and a fresh load of the world, and post the tallies. They're the baseline every later punch list compares against. Done at `16bac53`, after the two fixes § 1 lists.
 4. Then the chat, [§ 1](#what-7-moved-here)'s first row, before stage 1.
 5. Work #7's other items in the stage each names, with that stage's own work.
 
