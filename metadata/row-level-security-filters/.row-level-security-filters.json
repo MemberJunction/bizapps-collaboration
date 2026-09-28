@@ -95,8 +95,12 @@
     },
     "fields": {
       "Name": "Collaboration: Conversations In Reach",
-      "Description": "Conversations bound to a space the caller reaches.",
-      "FilterText": "(LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB' AND LinkedRecordID IN (SELECT CONVERT(nvarchar(36), SpaceID) FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+      "Description": "Conversations bound to an active space room the caller reaches.",
+      "FilterText": "(ID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room' AND sc.Status = N'Active'))"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:28.994Z",
+      "checksum": "4dbc7ab7c40e7fe389087e880335da00b89df8f84191acff4ef6d63cdce973eb"
     }
   },
   {
@@ -105,8 +109,12 @@
     },
     "fields": {
       "Name": "Collaboration: Conversation Details In Reach",
-      "Description": "Details whose conversation is bound to a space the caller reaches.",
-      "FilterText": "(ConversationID IN (SELECT ID FROM [__mj].[Conversation] WHERE LinkedEntityID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB' AND LinkedRecordID IN (SELECT CONVERT(nvarchar(36), SpaceID) FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))"
+      "Description": "Details whose conversation is an active space room the caller reaches.",
+      "FilterText": "(ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room' AND sc.Status = N'Active'))"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:29.021Z",
+      "checksum": "e02c15e223620644394b8b903a692f8e30daa280f975241bfb822be01fe4a075"
     }
   },
   {
@@ -257,6 +265,34 @@
       "Name": "Collaboration: People In Reach",
       "Description": "The caller's own person, and people linked to a user with an active seat on a space the caller reaches.",
       "FilterText": "(LinkedUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR LinkedUserID IN (SELECT m.UserID FROM [__mj_BizAppsCollaboration].[SpaceMember] AS m WHERE m.Status = N'Active' AND m.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR LinkedUserID IN (SELECT UserID FROM [__mj_BizAppsCollaboration].[fnCollaborationAncestorMembers](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A3E2641B-FF77-44F1-917E-00CFF82C5A96"
+    },
+    "fields": {
+      "Name": "Collaboration: Conversation Details Create In Reach",
+      "Description": "Allows contributing participants to create user messages in space rooms.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND Role = N'User' AND ConversationID IN (SELECT sc.ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] AS sc INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a ON a.SpaceID = sc.SpaceID WHERE sc.Kind = N'Room' AND sc.Status = N'Active' AND a.CanContribute = 1))"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:29.050Z",
+      "checksum": "2de9fcc61ff397e7bb92f0c022f02364191df3cbf274bd49ad5079396df872fe"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "41EE7455-6841-4E4E-8BA3-1896BF986935"
+    },
+    "fields": {
+      "Name": "Collaboration: Resource Permissions For The Caller",
+      "Description": "Resource permissions granted directly to the caller.",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:29.073Z",
+      "checksum": "eab67d6c73cf67db6e2e96a1bf518afe0c5834f1818208b6ccbcb1ec72883c9d"
     }
   }
 ]

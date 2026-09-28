@@ -50,4 +50,8 @@ export { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-
 export type { ResolvedAllowedAgentsResult, SpaceAgentItem } from './resolve-allowed-agents.js';
 export { resolveSpaceKnowledgeSources, resolveSpaceAgentSkills } from './resolve-space-agent-context.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
+export { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
+export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
+export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult } from './execute-space-chat-turn.js';
+
 

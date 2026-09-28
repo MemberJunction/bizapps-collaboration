@@ -40,6 +40,7 @@ import {
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
     postSpaceMessage,
+    syncRoomEditGrantsForSpace,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import sql from 'mssql';
 import { readCsv } from './csv.js';
@@ -326,6 +327,10 @@ export async function loadWorld(): Promise<void> {
             record.ClosedAt = closedAt(space.ClosedAt);
             if (!(await record.Save())) throw new Error(`closing space ${space.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         }
+    }
+
+    for (const spaceId of spaceIds.values()) {
+        await syncRoomEditGrantsForSpace(provider, spaceId);
     }
 
     await seedWorldPlan({

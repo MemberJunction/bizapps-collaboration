@@ -238,11 +238,16 @@
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Details",
       "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
       "Type": "Allow",
-      "CanCreate": 0,
+      "CanCreate": 1,
       "CanRead": 1,
       "CanUpdate": 0,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details In Reach"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details In Reach",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details Create In Reach"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:29.137Z",
+      "checksum": "cff6fa8ca6a950bb94da8c8ea29620255a670a1a9098eb5bef2e515497b2ac86"
     }
   },
   {

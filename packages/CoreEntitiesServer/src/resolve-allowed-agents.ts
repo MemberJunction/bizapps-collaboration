@@ -1,4 +1,4 @@
-import { RunView, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
 import type {
     mjBizAppsCollaborationSpaceAgentEntity,
@@ -40,9 +40,12 @@ function normalizeId(id: string): string {
  */
 export async function resolveAllowedAgents(
     provider: IMetadataProvider,
-    spaceId: string
+    spaceId: string,
+    contextUser?: UserInfo
 ): Promise<ResolvedAllowedAgentsResult> {
     const rv = RunView.FromMetadataProvider(provider);
+    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
+    const userToUse = contextUser ?? system ?? undefined;
 
     // 1. Load the space and its ancestors
     const spaceResult = await rv.RunView<mjBizAppsCollaborationSpaceEntity>(
@@ -50,7 +53,8 @@ export async function resolveAllowedAgents(
             EntityName: 'MJ_BizApps_Collaboration: Spaces',
             ExtraFilter: `ID = '${spaceId}'`,
             ResultType: 'entity_object',
-        }
+        },
+        userToUse
     );
 
     if (!spaceResult.Success || !spaceResult.Results || spaceResult.Results.length === 0) {
@@ -69,7 +73,8 @@ export async function resolveAllowedAgents(
                 EntityName: 'MJ_BizApps_Collaboration: Spaces',
                 ExtraFilter: `ID = '${currentParentId}'`,
                 ResultType: 'entity_object',
-            }
+            },
+            userToUse
         );
         if (parentRes.Success && parentRes.Results && parentRes.Results.length > 0) {
             const parentSpace = parentRes.Results[0];
@@ -81,8 +86,8 @@ export async function resolveAllowedAgents(
     }
 
     // Load SpaceType configuration from CollaborationEngine once without per-request full reload
-    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
-    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
+    const systemUserForEngine = system ?? (await WellKnownUserSource.Instance.GetSystemUser(provider));
+    await CollaborationEngine.Instance.EnsureLoaded(systemUserForEngine ?? undefined, provider);
     const spaceType = spaceTypeId ? CollaborationEngine.Instance.SpaceTypeById(spaceTypeId) : undefined;
 
     let typeConfig: ISpaceTypeConfiguration | null = null;
@@ -144,7 +149,8 @@ export async function resolveAllowedAgents(
             EntityName: 'MJ_BizApps_Collaboration: Space Agents',
             ExtraFilter: `SpaceID IN (${chainIdsSql})`,
             ResultType: 'entity_object',
-        }
+        },
+        userToUse
     );
 
     const spaceAgentRows = agentsRes.Success && agentsRes.Results ? agentsRes.Results : [];

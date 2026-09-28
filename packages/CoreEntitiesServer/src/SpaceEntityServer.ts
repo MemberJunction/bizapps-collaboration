@@ -23,23 +23,28 @@ import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
+import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
-    public _newRecordAllowParentAssignees: boolean | null | undefined = undefined;
-    public _newRecordAgentRetrieval: mjBizAppsCollaborationSpaceEntity['AgentRetrieval'] | null | undefined = undefined;
+    private _callerSpecifiedAllowParentAssignees = false;
+    private _callerSpecifiedAgentRetrieval = false;
+    private _newRecordAllowParentAssignees: boolean | null | undefined = undefined;
+    private _newRecordAgentRetrieval: mjBizAppsCollaborationSpaceEntity['AgentRetrieval'] | null | undefined = undefined;
 
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
     }
 
     public override NewRecord(newValues?: FieldValueCollection): boolean {
+        const hasAllowInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AllowParentAssignees') ?? false;
+        const hasAgentInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AgentRetrieval') ?? false;
+        this._callerSpecifiedAllowParentAssignees = hasAllowInNewValues;
+        this._callerSpecifiedAgentRetrieval = hasAgentInNewValues;
         const res = super.NewRecord(newValues);
-        const hasAllowInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AllowParentAssignees');
-        const hasAgentInNewValues = newValues?.KeyValuePairs?.some((kv) => kv.FieldName === 'AgentRetrieval');
         this._newRecordAllowParentAssignees = hasAllowInNewValues ? undefined : this.AllowParentAssignees;
         this._newRecordAgentRetrieval = hasAgentInNewValues ? undefined : this.AgentRetrieval;
         return res;
@@ -196,18 +201,18 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 const defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
 
                 // Treat AllowParentAssignees and AgentRetrieval as unspecified while they still hold
-                // the value NewRecord() gave them (captured in _newRecordAllowParentAssignees / _newRecordAgentRetrieval).
+                // the value NewRecord() gave them without an explicit caller assignment in NewRecord().
                 // Apply the space type's defaults when unspecified. If an explicit value was set, keep it,
                 // and refuse non-staff callers if their explicit choice differs from the type's default.
                 //
-                // Note: This cannot distinguish staff intentionally selecting the column default when the
-                // type's default differs. The new-space UI form prefills the space type's defaults, so this
-                // ambiguity does not arise in the browser.
-                const initialAllow = this._newRecordAllowParentAssignees !== undefined ? this._newRecordAllowParentAssignees : true;
-                const initialAgent = this._newRecordAgentRetrieval !== undefined ? this._newRecordAgentRetrieval : 'Included';
-
-                const allowSpecified = this.AllowParentAssignees !== initialAllow;
-                const agentSpecified = this.AgentRetrieval !== initialAgent;
+                // Spaces are created on the server today, by the loader and EnsureSpaceForRecord.
+                // When a new-space UI form is built, it must prefill the space type's defaults so that
+                // staff intentionally choosing the column default when the type's default differs can
+                // be distinguished.
+                const allowSpecified = this._callerSpecifiedAllowParentAssignees ||
+                    (this._newRecordAllowParentAssignees !== undefined && this.AllowParentAssignees !== this._newRecordAllowParentAssignees);
+                const agentSpecified = this._callerSpecifiedAgentRetrieval ||
+                    (this._newRecordAgentRetrieval !== undefined && this.AgentRetrieval !== this._newRecordAgentRetrieval);
 
                 if (!allowSpecified) {
                     this.AllowParentAssignees = defaultAllow;
@@ -437,6 +442,8 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
                 const chatSaved = await spaceChat.Save();
                 if (!chatSaved) {
                     LogError(`Space chat room status was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+                } else {
+                    await syncRoomEditGrantsForSpace(metadata, space.ID);
                 }
             } else {
                 LogError(`Space chat room load failed for ID ${foundChat.ID}`);
@@ -477,6 +484,8 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         if (!deleted) {
             LogError(`Failed to cleanup unbound conversation ${convId}: ${conversation.LatestResult?.CompleteMessage ?? 'delete returned false'}`);
         }
+    } else {
+        await syncRoomEditGrantsForSpace(metadata, space.ID);
     }
 }
 

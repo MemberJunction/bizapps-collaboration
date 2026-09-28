@@ -110,10 +110,11 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM3',
-        Name: 'RM3 — regular chat message to room conversation ID is refused',
+        Name: 'RM3 — contributing seat (Ada) direct save to room succeeds; non-contributor (Pat) is refused',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
+            const pat = await GetPersonaUser(ctx, 'pat');
 
             const roomConvs = await FindRows<{ ID: string }>(
                 ctx,
@@ -123,24 +124,35 @@ const checks: NamedCheck[] = [
             );
             const roomId = roomConvs[0].ID;
 
-            // Attempting to directly post a ConversationDetail row as Ada through regular entity save
-            const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
-            detail.NewRecord();
-            detail.ConversationID = roomId;
-            detail.UserID = ada.ID;
-            detail.Role = 'User';
-            detail.Message = 'Direct chat attempt into space room';
-            detail.Status = 'Complete';
+            // Direct save by Ada (contributing seat with Edit grant on room conversation) succeeds
+            const adaDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
+            adaDetail.NewRecord();
+            adaDetail.ConversationID = roomId;
+            adaDetail.UserID = ada.ID;
+            adaDetail.Role = 'User';
+            adaDetail.Message = 'Direct chat by contributing member into space room';
+            adaDetail.Status = 'Complete';
 
-            // Because the conversation is owned by the system user and scoped to the app,
-            // regular user entity save is either refused by write gates or conversation access checks.
-            const saved = await detail.Save();
-            if (saved) {
-                // If saved, clean it up
-                await detail.Delete();
+            const adaSaved = await adaDetail.Save();
+            Assert(adaSaved && !!adaDetail.ID, `Direct conversation detail save by contributing member should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
+
+            // Clean up Ada's message
+            await adaDetail.Delete();
+
+            // Direct save by Pat (Invited / non-contributor without Edit grant) is refused
+            const patDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, pat);
+            patDetail.NewRecord();
+            patDetail.ConversationID = roomId;
+            patDetail.UserID = pat.ID;
+            patDetail.Role = 'User';
+            patDetail.Message = 'Direct chat attempt by non-contributor into space room';
+            patDetail.Status = 'Complete';
+
+            const patSaved = await patDetail.Save();
+            if (patSaved) {
+                await patDetail.Delete();
             }
-            // Regular chat message should either fail save or fail validation
-            Assert(!saved || !detail.ID, 'Direct unmediated conversation detail save into room should be refused');
+            Assert(!patSaved || !patDetail.ID, 'Direct conversation detail save into room by non-contributor must be refused');
         },
     },
     {

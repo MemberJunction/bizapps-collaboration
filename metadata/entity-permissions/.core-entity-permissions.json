@@ -86,7 +86,11 @@
       "CanRead": 1,
       "CanUpdate": 0,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Resource Permissions For The Caller"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T00:57:29.116Z",
+      "checksum": "199cbe546a844800e2010a889ea6acd6e8b1c428ebf31b0a305d1f806e3f7da0"
     }
   },
   {

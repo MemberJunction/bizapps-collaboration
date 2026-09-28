@@ -166,11 +166,17 @@ describe('SpaceEntityServer create path validation', () => {
             SpaceTypeID: { value: TYPE_ID, writable: true },
             AllowParentAssignees: { value: options.allowParentAssignees ?? true, writable: true },
             AgentRetrieval: { value: options.agentRetrieval ?? 'Included', writable: true },
+            _callerSpecifiedAllowParentAssignees: { value: !!options.allowDirty, writable: true },
+            _callerSpecifiedAgentRetrieval: { value: !!options.agentDirty, writable: true },
             _newRecordAllowParentAssignees: { value: options.newRecordAllow ?? true, writable: true },
             _newRecordAgentRetrieval: { value: options.newRecordAgent ?? 'Included', writable: true },
             Fields: { value: fields, writable: true },
             RunViewProviderToUse: { value: rvMock, writable: true },
             ProviderToUse: { value: mockProvider, writable: true },
+            init: { value: () => undefined, writable: true },
+            notifyEmbeddedNewRecord: { value: () => undefined, writable: true },
+            RaiseEvent: { value: () => undefined, writable: true },
+            EntityInfo: { value: { PrimaryKeys: [], Fields: [{ Name: 'AllowParentAssignees' }, { Name: 'AgentRetrieval' }] }, writable: true },
         });
         return space;
     }
@@ -318,19 +324,17 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(agentErr?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
     });
 
-    it('snapshots AllowParentAssignees and AgentRetrieval in NewRecord()', () => {
-        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
-        Object.defineProperties(space, {
-            AllowParentAssignees: { value: true, writable: true },
-            AgentRetrieval: { value: 'Included', writable: true },
-            init: { value: () => undefined },
-            notifyEmbeddedNewRecord: { value: () => undefined },
-            RaiseEvent: { value: () => undefined },
-            EntityInfo: { value: { PrimaryKeys: [] } },
+    it("applies the type's defaults after NewRecord() with no sets", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            defaultAllow: false,
+            defaultAgent: 'ExcludedFromParentScope',
         });
         space.NewRecord();
-        assert.equal(space._newRecordAllowParentAssignees, true);
-        assert.equal(space._newRecordAgentRetrieval, 'Included');
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
     });
 });
 

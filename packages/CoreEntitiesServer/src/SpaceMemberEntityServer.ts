@@ -5,6 +5,7 @@ import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaborat
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
+import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
@@ -168,6 +169,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     timestamp: new Date(),
                     data: { memberId: this.ID, userId: this.UserID, personId: this.PersonID },
                 });
+            }
+
+            try {
+                await syncRoomEditGrantsForSpace(this.ProviderToUse, this.SpaceID);
+            } catch (syncErr) {
+                LogError(`Room edit grants sync failed on member change: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
             }
         }
         return ok;

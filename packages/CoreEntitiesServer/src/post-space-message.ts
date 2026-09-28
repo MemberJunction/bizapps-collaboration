@@ -1,9 +1,9 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { membershipReaches, ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
-import { CollaborationEngine } from './CollaborationEngine.js';
+import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
-import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from './space-agent-retrieval.js';
+import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -89,6 +89,7 @@ export async function postSpaceMessage(
             EntityName: 'MJ_BizApps_Collaboration: Space Chats',
             ExtraFilter: `SpaceID = '${spaceId}' AND Kind = 'Room' AND Status = 'Active'`,
             Fields: ['ID', 'ConversationID'],
+            OrderBy: '__mj_CreatedAt ASC',
             MaxRows: 1,
             ResultType: 'simple',
         }, system);
@@ -96,47 +97,6 @@ export async function postSpaceMessage(
         conversationId = parseUuid(roomChat.Results?.[0]?.ConversationID);
         if (!conversationId) return { ok: false, message: 'This space does not have an active room yet.' };
     }
-
-    await CollaborationEngine.Instance.EnsureLoaded(system, provider);
-
-    let spaceConfig: CollaborationSettings | null = null;
-    if (targetSpace?.Configuration) {
-        try {
-            const parsed: unknown = JSON.parse(targetSpace.Configuration);
-            const val = ValidateCollaborationSettings(parsed, 'space');
-            if (val.valid) {
-                spaceConfig = parsed as CollaborationSettings;
-            } else {
-                LogError(`Invalid space configuration for ${spaceId}: ${val.errors.join(', ')}`);
-            }
-        } catch (err) {
-            LogError(`Error parsing space configuration for ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    if (targetSpace?.SpaceTypeID) {
-        const spaceType = CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID);
-        if (spaceType?.Configuration) {
-            try {
-                const parsed: unknown = JSON.parse(spaceType.Configuration);
-                const val = ValidateCollaborationSettings(parsed, 'type');
-                if (!val.valid) {
-                    LogError(`Invalid space type configuration for ${targetSpace.SpaceTypeID}: ${val.errors.join(', ')}`);
-                }
-            } catch (err) {
-                LogError(`Error parsing space type configuration for ${targetSpace.SpaceTypeID}: ${err instanceof Error ? err.message : String(err)}`);
-            }
-        }
-    }
-
-    const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
-        spaceConfig ? [spaceConfig] : [],
-        targetSpace?.SpaceTypeID
-    );
-    const hasMention = /(@(assistant|agent)|^\/ask)/i.test(text);
-    const shouldExecuteAgent = resolvedSettings.Chats.AgentReplyMode === 'Always'
-        ? true
-        : Boolean(input.executeAgent || hasMention);
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
@@ -155,27 +115,31 @@ export async function postSpaceMessage(
         return { ok: false, message };
     }
 
-    if (shouldExecuteAgent) {
+    if (input.executeAgent) {
         try {
-            const assistantResult = await postAssistantReply(provider, user, system, conversationId, spaceId);
-            if (assistantResult.ok) {
+            const turnResult = await executeSpaceChatTurn(provider, user, {
+                spaceId,
+                conversationId,
+                userMessageId: detail.ID,
+            });
+            if (turnResult.ok) {
                 return {
                     ok: true,
                     detailId: detail.ID,
-                    assistantDetailId: assistantResult.detailId,
-                    quotedCount: assistantResult.quotedItems.length,
+                    assistantDetailId: turnResult.replyDetailIds[0],
+                    quotedCount: turnResult.quotedCount,
                 };
             } else {
-                LogError(`Space assistant message failed for space ${spaceId}: ${assistantResult.message}`);
+                LogError(`executeSpaceChatTurn failed for space ${spaceId}: ${turnResult.message}`);
                 return {
                     ok: true,
                     detailId: detail.ID,
-                    assistantError: assistantResult.message,
+                    assistantError: turnResult.message,
                 };
             }
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);
-            LogError(`Space assistant message threw for space ${spaceId}: ${errMessage}`);
+            LogError(`executeSpaceChatTurn threw for space ${spaceId}: ${errMessage}`);
             return {
                 ok: true,
                 detailId: detail.ID,
@@ -197,51 +161,5 @@ export async function postSpaceMessage(
 export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[], roomSpaceId: string): SpaceAgentCandidateItem[] {
     const normRoomId = roomSpaceId.trim().toUpperCase();
     return items.filter((item) => item.Band === 'Shared' && item.SpaceID.trim().toUpperCase() === normRoomId);
-}
-
-/**
- * Posts an assistant reply in the room, quoting strictly the items
- * permitted by agentMayQuote for the asking user that everyone in the room can read.
- */
-async function postAssistantReply(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    system: UserInfo,
-    conversationId: string,
-    spaceId: string,
-): Promise<{ ok: true; detailId: string; message: string; quotedItems: SpaceAgentCandidateItem[] } | { ok: false; message: string }> {
-    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-    const roomQuoted = filterRoomReplyItems(retrieval.quotedItems, spaceId);
-    let agentMessage: string;
-    if (roomQuoted.length === 0) {
-        agentMessage = 'I searched this space for materials within your reach, but found no matching items.';
-    } else {
-        const itemNames = roomQuoted.map((item) => item.Name).join(', ');
-        agentMessage = `Based on materials in this space within your reach: ${itemNames}.`;
-    }
-
-    const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
-    assistantDetail.NewRecord();
-    assistantDetail.ConversationID = conversationId;
-    assistantDetail.UserID = system.ID;
-    assistantDetail.AgentID = COLLABORATION_SPACE_AGENT_ID;
-    assistantDetail.Role = 'AI';
-    assistantDetail.Message = agentMessage;
-    assistantDetail.Status = 'Complete';
-    assistantDetail.HiddenToUser = false;
-    assistantDetail.IsPinned = false;
-    assistantDetail.OriginalMessageChanged = false;
-
-    if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
-        const message = assistantDetail.LatestResult?.CompleteMessage || 'Failed to record assistant message';
-        return { ok: false, message };
-    }
-
-    return {
-        ok: true,
-        detailId: assistantDetail.ID,
-        message: agentMessage,
-        quotedItems: roomQuoted,
-    };
 }
 

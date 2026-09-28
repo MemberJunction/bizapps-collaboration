@@ -57,6 +57,21 @@ export interface PostSpaceMessageGraphQLPayload {
     ErrorMessage?: string;
 }
 
+export interface ExecuteSpaceChatTurnGraphQLInput {
+    SpaceID: string;
+    ConversationID: string;
+    UserMessageID: string;
+    AgentID?: string;
+}
+
+export interface ExecuteSpaceChatTurnGraphQLPayload {
+    Success: boolean;
+    ReplyDetailIDs?: string[];
+    AgentRunID?: string;
+    QuotedCount?: number;
+    ErrorMessage?: string;
+}
+
 export interface OpenSpaceFilePayload {
     Success: boolean;
     Base64?: string;
@@ -105,6 +120,18 @@ mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
         DetailID
         AssistantDetailID
         AssistantError
+        ErrorMessage
+    }
+}
+`;
+
+const EXECUTE_SPACE_CHAT_TURN_MUTATION = `
+mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
+    ExecuteSpaceChatTurn(input: $input) {
+        Success
+        ReplyDetailIDs
+        AgentRunID
+        QuotedCount
         ErrorMessage
     }
 }
@@ -164,6 +191,11 @@ export class CollaborationClient {
     async PostSpaceMessage(input: PostSpaceMessageGraphQLInput): Promise<PostSpaceMessageGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(POST_SPACE_MESSAGE_MUTATION, { input });
         return (res?.PostSpaceMessage as PostSpaceMessageGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async ExecuteSpaceChatTurn(input: ExecuteSpaceChatTurnGraphQLInput): Promise<ExecuteSpaceChatTurnGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(EXECUTE_SPACE_CHAT_TURN_MUTATION, { input });
+        return (res?.ExecuteSpaceChatTurn as ExecuteSpaceChatTurnGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
