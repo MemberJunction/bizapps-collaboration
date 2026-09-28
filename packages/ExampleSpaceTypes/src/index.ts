@@ -1,0 +1,19 @@
+/**
+ * Example Space Types Package - Client UI Entrypoint
+ * Extensibility plan § 6, § 10.2, § 10.3.
+ */
+
+// Board UI Plug-in & Components
+export * from './board/ExampleBoardUIDriver.js';
+export * from './board/providers.js';
+export * from './board/components/ExampleBoardMeetingsTab.js';
+export * from './board/components/ExampleBoardMotionsTab.js';
+export * from './board/components/ExampleBoardPapersTab.js';
+export * from './board/components/ExampleBoardNextMeetingCard.js';
+export * from './board/components/ExampleBoardAgendaCard.js';
+export * from './board/components/ExampleBoardVoteCard.js';
+export * from './board/components/ExampleBoardMembersCard.js';
+
+// Room UI Plug-in & Components
+export * from './room/ExampleRoomUIDriver.js';
+export * from './room/ExampleRoomDealSummaryCard.js';

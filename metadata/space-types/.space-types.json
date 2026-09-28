@@ -12,7 +12,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "GovernancePanel": false,
       "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
@@ -20,7 +19,263 @@
       "InviteApproval": "Approve",
       "IsActive": true,
       "IconClass": "fa-solid fa-shapes",
-      "Color": "#7c3aed"
+      "Color": "#7c3aed",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "workspace",
+            "team",
+            "project",
+            "working-group",
+            "event",
+            "community",
+            "cohort"
+          ]
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode",
+          "Agents.ListMode"
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E58999A3-5403-43CD-B383-B0B9EE7BF0FA"
+    },
+    "fields": {
+      "Code": "team",
+      "Name": "Team",
+      "Vocabulary": "team",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-user-group",
+      "Color": "#2563eb",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "project",
+            "working-group",
+            "workspace"
+          ]
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "80BCC2F3-2836-4715-A0FB-B379BA3E4995"
+    },
+    "fields": {
+      "Code": "project",
+      "Name": "Project",
+      "Vocabulary": "project",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-diagram-project",
+      "Color": "#0891b2",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "working-group",
+            "workspace"
+          ]
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3AB9DF10-91C4-444B-B0C2-752383A6E8D3"
+    },
+    "fields": {
+      "Code": "working-group",
+      "Name": "Working Group",
+      "Vocabulary": "working-group",
+      "Discoverability": "Listed",
+      "JoinMode": "RequestToJoin",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Shared",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-users-gear",
+      "Color": "#059669",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": []
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D03731E1-0169-49A8-82C4-134E82150E88"
+    },
+    "fields": {
+      "Code": "event",
+      "Name": "Event",
+      "Vocabulary": "event",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Year",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-calendar-days",
+      "Color": "#d97706",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "working-group"
+          ]
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "2B2C14A8-CCD6-4835-A1BD-969C54236D57"
+    },
+    "fields": {
+      "Code": "community",
+      "Name": "Community",
+      "Vocabulary": "community",
+      "Discoverability": "Listed",
+      "JoinMode": "SelfServe",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Shared",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-people-roof",
+      "Color": "#9333ea",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "working-group",
+            "cohort"
+          ]
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
     }
   },
   {
@@ -36,7 +291,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "GovernancePanel": false,
       "DefaultRetention": "Year",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
@@ -44,7 +298,27 @@
       "InviteApproval": "Approve",
       "IsActive": true,
       "IconClass": "fa-solid fa-graduation-cap",
-      "Color": "#16a34a"
+      "Color": "#16a34a",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": []
+        },
+        "Labels": {
+          "Tabs": {
+            "library": "Documents",
+            "work": "Work"
+          }
+        },
+        "Chats": {
+          "WhoCanStart": "Anyone",
+          "AgentReplyMode": "MentionOrOneToOne",
+          "HistoryOnAdd": "None"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Chats.AgentReplyMode"
+        ]
+      }
     }
   }
 ]

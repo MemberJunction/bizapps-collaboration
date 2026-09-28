@@ -13,6 +13,10 @@ The rule behind every section below comes from MJ's [UI Layering Guide](https://
 
 ## 1. What "done" means
 
+**For the next pull request (D16, Amith, 2026-09-27):** the screens come last, and the bar is function and overall form, not pixels. The builder walks every screen in Explorer with Playwright and posts the shots in the pull request. Items 2 to 4 below still hold. Item 1's match to each PNG, and the "pixel perfect" paragraph after the list, were slice A's bar.
+
+**Since D24 (Amith, 2026-09-27):** the UI's style and design are Amith's, with the local builder, and the frames here are retired as the reference. They no longer set layout and content, and a difference from them isn't a regression. What still holds from this plan is the layering, MJ's components as they are (D15), and nothing typed in (D14).
+
 1. **All fourteen frames are covered, in light and dark.**
    - Frames 01–13 are built in Explorer and run on real data.
    - Frame 00 is a concept diagram, not a screen, so it is not built.
@@ -23,7 +27,7 @@ The rule behind every section below comes from MJ's [UI Layering Guide](https://
 
 "Pixel perfect" is literal. The frames already use MJ's real tokens, fonts, Font Awesome version and component metrics, so a faithful build matches them. The rules for anything that can't match:
 
-- **If a frame and an MJ component disagree, don't restyle MJ.** Stop and raise it in the PR with a screenshot of both. We will adjust the frame or improve MJ.
+- **If a frame and an MJ component disagree, keep MJ's look** (Amith, 2026-09-26). Don't restyle the component: list the difference as a known difference in the PR. Where one matters, we adjust the frame or improve MJ.
 - **Don't guess where a frame is ambiguous.** Open the matching page in [`mockup/html/`](mockup/html/); it has every size, color and spacing value.
 
 ## 2. What to delete, and what to keep
@@ -305,6 +309,8 @@ Build nothing of the earlier shape: provider classes resolved with `ClassFactory
 
 ## 10. Visual tests: how "pixel perfect" is checked
 
+Since D16 this is a regression check for the frames it covers, not the bar for the slices still to come. Since D24 the comparisons with the frames are retired or re-baselined on the new design, and the gallery's functional tests stay.
+
 **The gallery app.** `packages/UXGallery` is private and never published. It is a plain Angular app that imports only `collaboration-ng-widgets` and MJ Generic packages, with no Explorer.
 
 - Routes `/frame/01` … `/frame/13` render each frame from TypeScript fixtures that mirror the story's data. Take the fixtures from the `.mjs` sources in [`mockup/`](mockup/).
@@ -328,7 +334,7 @@ Frame 10 is compared in Explorer, not in the gallery, because its board is bizap
 
 ## 11. Order of work
 
-Work in vertical slices. Each slice ends with its frames passing in the gallery and its Explorer screenshots in the PR.
+Work in vertical slices. Slice A ended with its frames passing in the gallery and its Explorer screenshots in the PR. Slices B to I end with their screens working in Explorer and the builder's end-to-end screenshots in the pull request (D16).
 
 1. **Scaffold:**
    - Delete the old UI.

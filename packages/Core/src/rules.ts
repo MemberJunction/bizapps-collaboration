@@ -39,6 +39,11 @@ export interface SpaceNode {
     ownerId: string;
     agentRetrieval: AgentRetrieval;
     allowParentAssignees?: boolean;
+    closedAt?: string | Date | null;
+    postCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+    postCloseAccessDays?: number | null;
+    spaceTypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+    spaceTypePostCloseAccessDays?: number | null;
 }
 
 export interface InviteRefusal {
@@ -71,27 +76,120 @@ function byId(spaces: readonly SpaceNode[]): Map<string, SpaceNode> {
 }
 
 /**
+ * Calculates calendar day difference in UTC between two dates, matching SQL Server DATEDIFF(day, ...).
+ */
+export function utcCalendarDaysBetween(d1: Date, d2: Date): number {
+    const utc1 = Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth(), d1.getUTCDate());
+    const utc2 = Date.UTC(d2.getUTCFullYear(), d2.getUTCMonth(), d2.getUTCDate());
+    return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Checks whether post-close access is permitted for a space based on its
+ * PostCloseAccess mode and PostCloseAccessDays window (aligning with fnCollaborationAccess).
+ */
+export function isPostCloseAccessPermitted(
+    space: SpaceNode,
+    now: Date = new Date()
+): boolean {
+    if (!space.closedAt) {
+        return true;
+    }
+    const mode = space.postCloseAccess ?? space.spaceTypePostCloseAccess ?? 'None';
+    if (mode !== 'ReadOnly' && mode !== 'ReadOnlyWithAgent') {
+        return false;
+    }
+    const days = space.postCloseAccessDays !== undefined && space.postCloseAccessDays !== null
+        ? space.postCloseAccessDays
+        : (space.spaceTypePostCloseAccessDays ?? null);
+    if (days !== null && days !== undefined) {
+        const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
+        const diffDays = utcCalendarDaysBetween(closedDate, now);
+        if (diffDays > days) {
+            return false;
+        }
+    }
+    return true;
+}
+
+export function isAgentPostCloseAccessPermitted(
+    space: SpaceNode,
+    now: Date = new Date()
+): boolean {
+    if (!space.closedAt) {
+        return true;
+    }
+    const mode = space.postCloseAccess ?? space.spaceTypePostCloseAccess ?? 'None';
+    if (mode !== 'ReadOnlyWithAgent') {
+        return false;
+    }
+    const days = space.postCloseAccessDays !== undefined && space.postCloseAccessDays !== null
+        ? space.postCloseAccessDays
+        : (space.spaceTypePostCloseAccessDays ?? null);
+    if (days !== null && days !== undefined) {
+        const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
+        const diffDays = utcCalendarDaysBetween(closedDate, now);
+        if (diffDays > days) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * The membership that governs `targetId` for this person.
  *
  * A direct row on the target wins. Otherwise walk to the parent, and only
  * when this space inherits. A space with `inheritsMembership` false is sealed:
  * a parent member does not reach it. The first membership found on that walk
  * is the one whose role flags apply.
+ *
+ * Closed spaces:
+ * - Checks isPostCloseAccessPermitted; if closed without post-close access, returns null.
+ * - If closed but post-close access is permitted, strips canInvite and canContribute.
+ * - If ignorePostCloseFilter is true (e.g. for space reopening), does not filter by closure.
  */
 export function membershipReaches(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     userId: string,
     targetId: string,
+    now: Date = new Date(),
+    ignorePostCloseFilter: boolean = false,
 ): MemberSnapshot | null {
     const index = byId(spaces);
     const active = memberships.filter((member) => idKey(member.userId) === idKey(userId) && member.status === ACTIVE);
-    let current = index.get(idKey(targetId));
+    const target = index.get(idKey(targetId));
+    if (!target) {
+        return null;
+    }
+    if (!ignorePostCloseFilter && target.closedAt && !isPostCloseAccessPermitted(target, now)) {
+        return null;
+    }
+
+    let current: SpaceNode | undefined = target;
     const seen = new Set<string>();
+    let anyClosedOnPath = !!target.closedAt;
     while (current && !seen.has(idKey(current.id))) {
         seen.add(idKey(current.id));
+        if (current.closedAt) {
+            anyClosedOnPath = true;
+            if (!ignorePostCloseFilter && !isPostCloseAccessPermitted(current, now)) {
+                return null;
+            }
+        }
         const direct = active.find((member) => idKey(member.spaceId) === idKey(current!.id));
         if (direct) {
+            if (anyClosedOnPath && !ignorePostCloseFilter) {
+                return {
+                    ...direct,
+                    role: {
+                        ...direct.role,
+                        canInvite: false,
+                        canContribute: false,
+                    },
+                };
+            }
             return direct;
         }
         if (!current.inheritsMembership || !current.parentId) {
@@ -717,6 +815,7 @@ export function agentMayQuote(input: {
     itemSpaceId: string;
     askedFromSpaceId: string;
     spaces: readonly SpaceNode[];
+    now?: Date;
 }): boolean {
     if (!input.callerCanRead) {
         return false;
@@ -727,6 +826,9 @@ export function agentMayQuote(input: {
     const index = byId(input.spaces);
     const itemSpace = index.get(idKey(input.itemSpaceId));
     if (!itemSpace) {
+        return false;
+    }
+    if (itemSpace.closedAt && !isAgentPostCloseAccessPermitted(itemSpace, input.now ?? new Date())) {
         return false;
     }
     if (!isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId)) {

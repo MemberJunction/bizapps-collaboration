@@ -1,0 +1,23 @@
+[
+  {
+    "primaryKey": {
+      "ID": "92EBBFAF-8387-4291-A064-B5A8897E73E2"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Space Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "68FBDED4-9912-4A01-B7DE-2C95F5B02B75"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Configure Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    }
+  }
+]
+

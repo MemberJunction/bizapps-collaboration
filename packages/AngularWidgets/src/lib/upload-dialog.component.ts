@@ -45,30 +45,32 @@ export interface CollabUploadSubmitPayload {
         </header>
 
         <!-- Segmented Tab switcher -->
-        <div class="tab-strip" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            class="tab-btn"
-            [class.active]="activeMode === 'upload'"
-            [attr.aria-selected]="activeMode === 'upload'"
-            (click)="setMode('upload')"
-          >
-            <i class="fa-solid fa-arrow-up-from-bracket"></i>
-            <span>Upload file</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="tab-btn"
-            [class.active]="activeMode === 'link'"
-            [attr.aria-selected]="activeMode === 'link'"
-            (click)="setMode('link')"
-          >
-            <i class="fa-solid fa-link"></i>
-            <span>Link cloud doc</span>
-          </button>
-        </div>
+        @if (AllowLinks) {
+          <div class="tab-strip" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              [class.active]="activeMode === 'upload'"
+              [attr.aria-selected]="activeMode === 'upload'"
+              (click)="setMode('upload')"
+            >
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              <span>Upload file</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              [class.active]="activeMode === 'link'"
+              [attr.aria-selected]="activeMode === 'link'"
+              (click)="setMode('link')"
+            >
+              <i class="fa-solid fa-link"></i>
+              <span>Link cloud doc</span>
+            </button>
+          </div>
+        }
 
         <div class="d-body">
           @if (activeMode === 'upload') {
@@ -141,7 +143,7 @@ export interface CollabUploadSubmitPayload {
               id="doc-title-input"
               type="text"
               class="mj-input"
-              placeholder="e.g. Engagement Kickoff Brief"
+              placeholder="e.g. Project Kickoff Brief"
               [(ngModel)]="docTitle"
             />
           </div>
@@ -181,7 +183,7 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-title">
                       <mjc-band-chip Band="Shared" Label="Shared" />
                     </div>
-                    <div class="b-opt-sub">Visible to both firms</div>
+                    <div class="b-opt-sub">Visible to all participants</div>
                   </div>
                 </label>
 
@@ -505,6 +507,7 @@ export class CollabUploadDialogComponent {
   @Input() SpaceId = '';
   @Input() ClientOrgName = '';
   @Input() IsSubmitting = false;
+  @Input() AllowLinks = false;
 
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() SubmitRequested = new EventEmitter<CollabUploadSubmitPayload>();

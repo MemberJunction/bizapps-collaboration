@@ -25,7 +25,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
         <div class="metric-card">
           <span class="metric-num outside">{{ OutsideCount }}</span>
-          <span class="metric-lbl">Client Participants</span>
+          <span class="metric-lbl">Outside Participants</span>
         </div>
         <div class="metric-card">
           <span class="metric-num active">{{ ActiveCount }}</span>
@@ -60,7 +60,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             class="pill-btn"
             [class.active]="audienceFilter === 'Shared'"
             (click)="audienceFilter = 'Shared'"
-          >Client / Shared</button>
+          >Outside / Shared</button>
         </div>
 
         <div class="spacer"></div>
@@ -85,12 +85,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <select [(ngModel)]="inviteRole" class="invite-select">
               <option value="member">Member</option>
               <option value="admin">Admin</option>
-              <option value="client-member">Client Member</option>
+              <option value="client-member">Outside Member</option>
               <option value="guest">Guest</option>
             </select>
             <select [(ngModel)]="inviteBand" class="invite-select">
               <option value="Team">Team only</option>
-              <option value="Shared">Shared with Client</option>
+              <option value="Shared">Shared with Outside</option>
             </select>
             <button
               class="send-invite-btn"
@@ -139,7 +139,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 </div>
 
                 <div class="td-role">
-                  <span class="role-chip" [class]="formatRoleClass(m.roleCode)">
+                  <span class="role-chip" [class]="'role-chip ' + formatRoleClass(m.roleCode)">
                     {{ m.roleName }}
                   </span>
                 </div>
@@ -235,7 +235,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .filter-group {
         display: flex;
-        background: var(--mj-bg-subtle, #f1f5f9);
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
         padding: 3px;
         border-radius: 6px;
         gap: 2px;
@@ -343,7 +343,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         padding: 10px 16px;
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-card, #f8fafc);
         border-bottom: 1px solid var(--mj-border-subtle, #e2e8f0);
         font-size: 12px;
         font-weight: 600;
@@ -370,7 +370,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .member-row:last-child { border-bottom: none; }
       .member-row:hover {
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-hover, #f8fafc);
       }
       .person-details {
         display: flex;

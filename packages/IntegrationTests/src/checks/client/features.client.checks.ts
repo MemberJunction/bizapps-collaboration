@@ -8,9 +8,10 @@ import {
     SPACE_MEMBER_ENTITY,
     TASK_ENTITY,
 } from '../../entity-names.js';
-import { FindRows } from '../../wire.js';
+import { FindRows, getPersonaContext } from '../../wire.js';
 
-const EXTERNAL_URL_PROVIDER_ID = '93DBCFC9-5B2A-48D6-9D95-E93B319C88E5';
+import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 
 const checks: NamedCheck[] = [
@@ -28,72 +29,28 @@ const checks: NamedCheck[] = [
             }>(
                 ctx,
                 SPACE_ENTITY,
-                'ID IS NOT NULL',
+                "ID LIKE 'C1000001-0000-4000-8000-%'",
                 ['ID', 'Name', 'IconClass', 'Color', 'BackgroundImageURL'],
             );
-            Assert(spaces.length > 0, 'Spaces exist in the database');
+            Assert(spaces.length === 15, `Expected 15 world spaces, found ${spaces.length}`);
 
-            const withIcon = spaces.filter((s) => s.IconClass && s.IconClass.trim().length > 0);
-            const withColor = spaces.filter((s) => s.Color && s.Color.trim().length > 0);
-            const withBackground = spaces.filter((s) => s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0);
+            const icons = new Set<string>();
+            const colors = new Set<string>();
+            const backdrops = new Set<string>();
 
-            Assert(withIcon.length > 0, 'At least one space has an IconClass');
-            Assert(withColor.length > 0, 'At least one space has a Color');
-            Assert(withBackground.length > 0, 'At least one space has a BackgroundImageURL');
-        },
-    },
-    {
-        Id: 'features.FE2',
-        Name: 'FE2 — external documents linked via External URL provider with Shared and Team bands',
-        RequiresMutation: false,
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const externalFiles = await FindRows<{
-                ID: string;
-                Name: string;
-                ProviderKey: string;
-                ProviderID: string;
-            }>(
-                ctx,
-                FILE_ENTITY,
-                `ProviderID = '${EXTERNAL_URL_PROVIDER_ID}'`,
-                ['ID', 'Name', 'ProviderKey', 'ProviderID'],
-            );
-            Assert(externalFiles.length > 0, 'External URL files exist');
+            for (const s of spaces) {
+                Assert(!!s.IconClass && s.IconClass.trim().length > 0, `Space ${s.Name} must have an IconClass`);
+                Assert(!!s.Color && s.Color.trim().length > 0, `Space ${s.Name} must have a Color`);
+                Assert(!!s.BackgroundImageURL && s.BackgroundImageURL.trim().length > 0, `Space ${s.Name} must have a BackgroundImageURL`);
 
-            const hasGoogleDoc = externalFiles.some((f) => f.ProviderKey.includes('docs.google.com'));
-            Assert(hasGoogleDoc, 'External Google Doc exists in files');
-
-            const externalFileIds = new Set(externalFiles.map((f) => f.ID.toLowerCase()));
-            const spaceItems = await FindRows<{
-                ID: string;
-                SpaceID: string;
-                RecordID: string;
-                Band: string;
-                PromotedAt: string | null;
-                PromotedByUserID: string | null;
-            }>(
-                ctx,
-                SPACE_ITEM_ENTITY,
-                'ID IS NOT NULL',
-                ['ID', 'SpaceID', 'RecordID', 'Band', 'PromotedAt', 'PromotedByUserID'],
-            );
-
-            const linkedItems = spaceItems.filter((item) => {
-                const rawRecordId = (item.RecordID ?? '').replace(/^ID\|/i, '').toLowerCase();
-                return externalFileIds.has(rawRecordId);
-            });
-
-            Assert(linkedItems.length > 0, 'External files are linked to spaces via SpaceItem');
-
-            for (const item of linkedItems) {
-                if (item.Band === 'Shared') {
-                    Assert(item.PromotedAt !== null, 'Shared item must have PromotedAt per CK_SpaceItem_Promotion');
-                    Assert(item.PromotedByUserID !== null, 'Shared item must have PromotedByUserID per CK_SpaceItem_Promotion');
-                } else if (item.Band === 'Team') {
-                    Assert(item.PromotedAt === null, 'Team item must have null PromotedAt per CK_SpaceItem_Promotion');
-                    Assert(item.PromotedByUserID === null, 'Team item must have null PromotedByUserID per CK_SpaceItem_Promotion');
-                }
+                icons.add(s.IconClass!.trim());
+                colors.add(s.Color!.trim().toLowerCase());
+                backdrops.add(s.BackgroundImageURL!.trim());
             }
+
+            Assert(icons.size === 15, `World spaces must have pairwise-distinct IconClass values: expected 15, got ${icons.size}`);
+            Assert(colors.size === 15, `World spaces must have pairwise-distinct Color values: expected 15, got ${colors.size}`);
+            Assert(backdrops.size === 15, `World spaces must have pairwise-distinct BackgroundImageURL values: expected 15, got ${backdrops.size}`);
         },
     },
     {

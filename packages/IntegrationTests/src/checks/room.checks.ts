@@ -2,7 +2,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../entity-names.js';
+import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
@@ -47,6 +47,23 @@ const checks: NamedCheck[] = [
             const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
             Assert(systemUsers.length === 1, 'System user found in MJ: Users');
             Assert(room.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Room conversation must be bound to system user, saw: ${room.UserID}`);
+
+            // Assert Space Chat room row exists for room conversation
+            const spaceChats = await FindRows<{
+                ID: string;
+                SpaceID: string;
+                ConversationID: string;
+                Kind: string;
+                Status: string;
+            }>(
+                ctx,
+                SPACE_CHAT_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND ConversationID = '${room.ID}'`,
+                ['ID', 'SpaceID', 'ConversationID', 'Kind', 'Status'],
+            );
+            Assert(spaceChats.length === 1, `Discovery Space Chat room row exists (found ${spaceChats.length})`);
+            Assert(spaceChats[0].Kind === 'Room', `Space Chat Kind is Room, saw ${spaceChats[0].Kind}`);
+            Assert(spaceChats[0].Status === 'Active', `Space Chat Status is Active, saw ${spaceChats[0].Status}`);
         },
     },
     {
@@ -260,6 +277,7 @@ const checks: NamedCheck[] = [
             const promoted = await sealedItem.Save();
             Assert(promoted, 'Promoting sealed branch item to Shared must succeed');
 
+            let testError: unknown;
             try {
                 // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
                 const samPostRes = await postSpaceMessage(ctx.Provider, sam, {
@@ -309,13 +327,26 @@ const checks: NamedCheck[] = [
                 Assert(samSealedReplyRes.Success && (samSealedReplyRes.Results?.length ?? 0) === 1, 'Sam can read Sealed branch room assistant reply');
                 const sealedReplyMsg = samSealedReplyRes.Results![0].Message;
                 Assert(sealedReplyMsg.includes(uniqueFileName), `Sealed branch room reply must name its own Shared file ${uniqueFileName}`);
+            } catch (err) {
+                testError = err;
             } finally {
                 if (sealedItemId) {
-                    const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, sam);
-                    if (await itemToDelete.Load(sealedItemId)) {
+                    try {
+                        const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
+                        const loaded = await itemToDelete.Load(sealedItemId);
+                        Assert(loaded === true, `Failed to load uploaded Sealed branch space item ${sealedItemId} for cleanup`);
                         const deleted = await itemToDelete.Delete();
-                        Assert(deleted === true, 'Deleting uploaded Sealed branch space item must succeed');
+                        Assert(deleted === true, `Deleting uploaded Sealed branch space item ${sealedItemId} must succeed: ${itemToDelete.LatestResult?.CompleteMessage ?? ''}`);
+                    } catch (cleanupErr) {
+                        if (!testError) {
+                            throw cleanupErr;
+                        } else {
+                            console.error(`Cleanup failed after test error: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+                        }
                     }
+                }
+                if (testError) {
+                    throw testError;
                 }
             }
         },
@@ -358,6 +389,28 @@ const checks: NamedCheck[] = [
                 text: 'Message from removed user',
             });
             Assert(!remyRes.ok, 'Message from removed user must be refused');
+
+            // 5. Owner-type user with no seat must be refused
+            const origType = remy.Type;
+            try {
+                remy.Type = 'Owner';
+                const ownerOutsiderRes = await postSpaceMessage(ctx.Provider, remy, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    text: 'Message from Owner with no seat',
+                });
+                Assert(!ownerOutsiderRes.ok, 'User with Owner account type and no space seat must be refused a post');
+            } finally {
+                remy.Type = origType;
+            }
+
+            // 6. Conversation not belonging to this space
+            const foreignConvRes = await postSpaceMessage(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                text: 'Message with mismatched conversation ID',
+                conversationId: '00000000-0000-0000-0000-000000000001',
+            });
+            Assert(!foreignConvRes.ok, 'Conversation not belonging to space must be refused');
+            Assert(!foreignConvRes.ok && foreignConvRes.message === 'The conversation does not belong to this space.', 'Correct mismatched conversation error');
         },
     },
 ];

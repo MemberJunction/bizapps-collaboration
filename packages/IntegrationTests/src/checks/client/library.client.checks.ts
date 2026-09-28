@@ -19,6 +19,7 @@ const checks: NamedCheck[] = [
             const emptyRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'empty.txt',
+                MimeType: 'text/plain',
                 Base64Data: '',
                 Folder: 'Briefs',
             });
@@ -33,6 +34,7 @@ const checks: NamedCheck[] = [
             const overCapRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'huge.bin',
+                MimeType: 'application/octet-stream',
                 Base64Data: overCapBuffer.toString('base64'),
                 Folder: 'Briefs',
             });
@@ -46,6 +48,7 @@ const checks: NamedCheck[] = [
             const validRes = await client.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'bea-upload.txt',
+                MimeType: 'text/plain',
                 Base64Data: Buffer.from('Hello from Bea over GraphQL').toString('base64'),
                 Folder: 'Briefs',
             });
@@ -81,10 +84,11 @@ const checks: NamedCheck[] = [
                 ['ID', 'RecordID'],
             );
             Assert(items.length === 1, 'Space Item created');
+            const fileRecordId = items[0].RecordID.includes('|') ? items[0].RecordID.split('|').pop()! : items[0].RecordID;
             const files = await FindRows<{ ID: string; ContentType: string }>(
                 ctx,
                 FILE_ENTITY,
-                `ID = '${items[0].RecordID}'`,
+                `ID = '${fileRecordId}'`,
                 ['ID', 'ContentType'],
             );
             Assert(files.length === 1, 'Linked File found');
@@ -102,6 +106,7 @@ const checks: NamedCheck[] = [
             const refuseRes = await remyClient.UploadSpaceFile({
                 SpaceID: DISCOVERY_SPACE_ID,
                 FileName: 'blocked.pdf',
+                MimeType: 'application/pdf',
                 Base64Data: Buffer.from('blocked content').toString('base64'),
                 Folder: 'Briefs',
             });
@@ -153,12 +158,13 @@ const checks: NamedCheck[] = [
             );
             let createdUseId: string | null = null;
             if (existingUses.length === 0) {
-                const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
+                const use = await beaCtx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, beaCtx.User);
                 use.NewRecord();
                 use.ItemID = targetItem.ID;
                 use.SpaceID = targetItem.SpaceID;
                 use.UserID = beaCtx.User.ID;
                 use.Kind = 'open';
+                use.UsedAt = new Date();
                 Assert(await use.Save(), 'Created Item Use for test');
                 createdUseId = use.ID;
             }
@@ -220,12 +226,10 @@ const checks: NamedCheck[] = [
             } finally {
                 if (createdUseId) {
                     const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    if (await use.Load(createdUseId)) {
-                        const deleted = await use.Delete();
-                        if (!deleted) {
-                            throw new Error(`client LB5 cleanup failed to delete Item Use ${createdUseId}: ${use.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
+                    const loaded = await use.Load(createdUseId);
+                    Assert(loaded === true, `client LB5 cleanup: loading Item Use ${createdUseId} must succeed`);
+                    const deleted = await use.Delete();
+                    Assert(deleted === true, `client LB5 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
                 }
             }
         },

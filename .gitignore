@@ -9,3 +9,5 @@ integration-*.log
 e2e/test-results/
 playwright-report/
 scratch/
+.env
+.env.*

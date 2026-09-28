@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option A: Contextual Workspace Rail — MJ Collaboration UX</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.3.0/files/inter-latin-wght-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: url('https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+
+:root {
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+  /* Light Theme Tokens */
+  --mj-bg-page: #f8fafc;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #ffffff;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+
+  --mj-text-primary: #0f172a;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #94a3b8;
+  --mj-text-link: #0076b6;
+
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #005a8c;
+  --mj-brand-on-primary: #ffffff;
+  --mj-brand-secondary: #0891b2;
+  --mj-brand-tertiary: #6366f1;
+
+  --mj-status-success: #15803d;
+  --mj-status-success-bg: #f0fdf4;
+  --mj-status-warning: #b45309;
+  --mj-status-warning-bg: #fffbeb;
+  --mj-status-error: #b91c1c;
+  --mj-status-error-bg: #fef2f2;
+
+  --mj-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+
+  --mjc-shared-brand: #0076b6;
+  --mjc-team-brand: #7c3aed;
+  --mjc-shared-bg: rgba(0, 118, 182, 0.06);
+  --mjc-team-bg: rgba(124, 58, 237, 0.06);
+  --mjc-shared-border: rgba(0, 118, 182, 0.2);
+  --mjc-team-border: rgba(124, 58, 237, 0.2);
+}
+
+html[data-theme="dark"] {
+  --mj-bg-page: #090d16;
+  --mj-bg-surface: #0f172a;
+  --mj-bg-surface-card: #131d31;
+  --mj-bg-surface-sunken: #090e1a;
+  --mj-bg-surface-hover: #1e293b;
+  --mj-bg-surface-active: #334155;
+
+  --mj-text-primary: #f8fafc;
+  --mj-text-secondary: #cbd5e1;
+  --mj-text-muted: #64748b;
+  --mj-text-link: #38bdf8;
+
+  --mj-border-subtle: #1e293b;
+  --mj-border-default: #243247;
+  --mj-border-strong: #334155;
+
+  --mj-brand-primary: #38bdf8;
+  --mj-brand-primary-hover: #0284c7;
+  --mj-brand-on-primary: #090d16;
+
+  --mj-status-success-bg: rgba(34, 197, 94, 0.12);
+  --mj-status-warning-bg: rgba(245, 158, 11, 0.12);
+  --mj-status-error-bg: rgba(239, 68, 68, 0.12);
+
+  --mjc-shared-bg: rgba(56, 189, 248, 0.08);
+  --mjc-team-bg: rgba(167, 139, 250, 0.08);
+  --mjc-shared-border: rgba(56, 189, 248, 0.25);
+  --mjc-team-border: rgba(167, 139, 250, 0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--mj-font-family);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Option Thesis Top Banner                                    */
+/* ─────────────────────────────────────────────────────────── */
+.thesis-banner {
+  background: linear-gradient(90deg, #091e3a 0%, #1e1b4b 100%);
+  color: #ffffff;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  z-index: 100;
+}
+.thesis-badge {
+  background: #38bdf8;
+  color: #091e3a;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 12px;
+}
+.thesis-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.thesis-tag {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.thesis-tag b {
+  color: #e2e8f0;
+}
+.thesis-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-toggle-theme, .btn-switch-option {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.btn-toggle-theme:hover, .btn-switch-option:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Shell & Top Header                                         */
+/* ─────────────────────────────────────────────────────────── */
+.app-header {
+  height: 48px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.breadcrumbs-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.breadcrumb-item {
+  color: var(--mj-text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.breadcrumb-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.breadcrumb-sep {
+  color: var(--mj-text-muted);
+  font-size: 11px;
+}
+.breadcrumb-item.active {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.global-search-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-muted);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.global-search-btn kbd {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-family: var(--mj-font-family-mono);
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Workspace Layout: Space-Specific Nav + Large Stage         */
+/* ─────────────────────────────────────────────────────────── */
+.workspace-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Left Space Nav */
+.space-nav {
+  width: 280px;
+  min-width: 200px;
+  max-width: 480px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+  position: relative;
+  transition: width 0.05s linear;
+}
+.space-nav.collapsed {
+  width: 58px !important;
+  min-width: 58px !important;
+}
+
+/* Nav Resizer Handle */
+.nav-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  bottom: 0;
+  cursor: col-resize;
+  z-index: 20;
+  transition: background 0.15s ease;
+}
+.nav-resizer:hover, .nav-resizer.dragging {
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+/* Space Header in Nav */
+.space-identity-box {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.space-nav.collapsed .space-identity-box {
+  padding: 12px 10px;
+  justify-content: center;
+}
+.space-title-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  flex: 1;
+}
+.space-title-cluster:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.space-icon-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--mj-brand-secondary) 0%, var(--mj-brand-primary) 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.space-names {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.space-title {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mj-text-primary);
+}
+.space-audience-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--mjc-shared-brand);
+  font-weight: 500;
+}
+.space-audience-tag i { font-size: 9px; }
+
+.btn-nav-toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mj-text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+.btn-nav-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+
+/* Nav Menu Content */
+.space-nav-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.space-nav.collapsed .space-nav-body {
+  padding: 10px 6px;
+  align-items: center;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  padding: 4px 10px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-section-action {
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.nav-section-action:hover {
+  color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.nav-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.nav-link:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.nav-link.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--mj-brand-primary);
+  border-radius: 0 4px 4px 0;
+}
+.nav-link-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.nav-link-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-badge {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-family: var(--mj-font-family-mono);
+}
+.nav-badge.unread {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+}
+
+/* Conversation list items */
+.convo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.convo-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.convo-item.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+.convo-hash {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--mj-text-muted);
+}
+.convo-item.active .convo-hash {
+  color: var(--mj-brand-primary);
+}
+.convo-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.convo-band-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.convo-band-dot.shared { background: var(--mjc-shared-brand); }
+.convo-band-dot.team { background: var(--mjc-team-brand); }
+
+/* Nav footer: storage & user preference memory */
+.space-nav-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--mj-border-default);
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.space-nav.collapsed .space-nav-footer { display: none; }
+
+/* ─────────────────────────────────────────────────────────── */
+/* Main Stage: Large Edge-to-Edge Canvas                      */
+/* ─────────────────────────────────────────────────────────── */
+.main-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Stock ng-conversations chat area replication */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Chat Header (Slot-projected) */
+.chat-slot-header {
+  height: 56px;
+  border-bottom: 1px solid var(--mj-border-default);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--mj-bg-surface);
+}
+.chat-title-cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.chat-title-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.audience-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--mjc-shared-border);
+  background: var(--mjc-shared-bg);
+  color: var(--mjc-shared-brand);
+}
+.chat-actions-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chat-btn-icon:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* Chat Transcript */
+.chat-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.msg-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  max-width: 900px;
+}
+.msg-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.msg-avatar.user-amith {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.msg-avatar.user-casey {
+  background: #fef3c7;
+  color: #b45309;
+}
+.msg-avatar.agent {
+  background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-tertiary) 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 118, 182, 0.25);
+}
+.msg-bubble-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.msg-author-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--mj-text-primary);
+}
+.msg-role-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+}
+.msg-role-chip.agent {
+  background: color-mix(in srgb, var(--mj-brand-tertiary) 15%, transparent);
+  color: var(--mj-brand-tertiary);
+}
+.msg-role-chip.client {
+  background: #fef3c7;
+  color: #b45309;
+}
+.msg-timestamp {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.msg-text-box {
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-sm);
+}
+.msg-text-box.agent-response {
+  border-color: var(--mjc-shared-border);
+  background: color-mix(in srgb, var(--mjc-shared-brand) 3%, var(--mj-bg-surface));
+}
+
+/* Provenance Receipt (Frame 05 citation requirement) */
+.answer-receipt {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.receipt-tag {
+  color: var(--mj-status-success);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.citation-chip {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-strong);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mj-brand-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.citation-chip:hover {
+  text-decoration: underline;
+}
+
+/* Chat Composer Area (ng-conversations ai-composer) */
+.composer-dock {
+  padding: 16px 32px 24px;
+  background: var(--mj-bg-surface);
+  border-top: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.composer-box {
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 10px;
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s ease;
+}
+.composer-box:focus-within {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+.composer-textarea {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  resize: none;
+  min-height: 48px;
+}
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+.composer-tools-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-btn {
+  background: transparent;
+  border: none;
+  color: var(--mj-text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.tool-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.agent-invoke-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--mj-brand-tertiary) 10%, transparent);
+  color: var(--mj-brand-tertiary);
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 25%, transparent);
+}
+.send-btn {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+}
+.send-btn:hover {
+  background: var(--mj-brand-primary-hover);
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Spaces Explorer Modal (Triggered when clicking Home)       */
+/* ─────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open {
+  display: flex;
+}
+.explorer-card {
+  width: 820px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  box-shadow: var(--mj-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.explorer-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.explorer-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+.explorer-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.space-card-item {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.space-card-item:hover {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+  transform: translateY(-1px);
+}
+.space-card-item.active-choice {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+</style>
+</head>
+<body>
+
+<!-- Design Thesis Banner -->
+<div class="thesis-banner">
+  <div class="thesis-text">
+    <span class="thesis-badge">Option A: Contextual Workspace Rail</span>
+    <span class="thesis-tag"><b>Philosophy:</b> Dedicated Space Sidebar with integrated multi-channel tree (Slack/Discord/Linear model).</span>
+    <span class="thesis-tag"><b>Best for:</b> Fast switching between conversations, tasks, and files inside a single workspace.</span>
+  </div>
+  <div class="thesis-controls">
+    <button class="btn-toggle-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Toggle Dark/Light</button>
+    <button class="btn-switch-option" onclick="location.href='option-b-fluid-inspector.html'">View Option B &rarr;</button>
+  </div>
+</div>
+
+<!-- App Top Bar (Global Breadcrumb & Switcher) -->
+<header class="app-header">
+  <div class="breadcrumbs-group">
+    <span class="breadcrumb-item" onclick="openExplorerModal()"><i class="fa-solid fa-house"></i> All Spaces</span>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-item active" id="currentSpaceCrumb"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i> Acme Corp Rebrand</span>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-item" id="currentModuleCrumb">Conversations &middot; #general-room</span>
+  </div>
+  <div class="header-right">
+    <div class="global-search-btn" onclick="openExplorerModal()">
+      <i class="fa-solid fa-magnifying-glass"></i> Quick Jump <kbd>&cmd;K</kbd>
+    </div>
+    <div class="msg-avatar user-amith" style="width:30px;height:30px;font-size:11px;">AN</div>
+  </div>
+</header>
+
+<!-- Main Workspace Layout -->
+<div class="workspace-container">
+
+  <!-- Space-Specific Left Nav (Resizable & Collapsible) -->
+  <aside class="space-nav" id="spaceNav">
+    
+    <!-- Resizer Handle -->
+    <div class="nav-resizer" id="navResizer" title="Drag to resize"></div>
+
+    <!-- Space Identity Header -->
+    <div class="space-identity-box">
+      <div class="space-title-cluster" onclick="openExplorerModal()" title="Click to switch space">
+        <div class="space-icon-tile">
+          <i class="fa-solid fa-shapes"></i>
+        </div>
+        <div class="space-names">
+          <span class="space-title">Acme Corp Rebrand</span>
+          <span class="space-audience-tag"><i class="fa-solid fa-users"></i> Shared &middot; Client &amp; Team</span>
+        </div>
+      </div>
+      <button class="btn-nav-toggle" id="toggleNavBtn" onclick="toggleNavCollapse()" title="Collapse navigation">
+        <i class="fa-solid fa-chevron-left" id="toggleNavIcon"></i>
+      </button>
+    </div>
+
+    <!-- Navigation Body -->
+    <div class="space-nav-body">
+
+      <!-- Core Modules -->
+      <div>
+        <div class="nav-section-title">WORKSPACE</div>
+        <div class="nav-item-list">
+          <div class="nav-link" onclick="selectModule('Overview')">
+            <i class="fa-solid fa-chart-pie nav-link-icon"></i>
+            <span class="nav-link-title">Overview</span>
+          </div>
+          <div class="nav-link" onclick="selectModule('Library')">
+            <i class="fa-solid fa-folder-open nav-link-icon"></i>
+            <span class="nav-link-title">Documents</span>
+            <span class="nav-badge">14</span>
+          </div>
+          <div class="nav-link" onclick="selectModule('Work')">
+            <i class="fa-solid fa-list-check nav-link-icon"></i>
+            <span class="nav-link-title">Work &amp; Tasks</span>
+            <span class="nav-badge">8</span>
+          </div>
+          <div class="nav-link" onclick="selectModule('People')">
+            <i class="fa-solid fa-user-group nav-link-icon"></i>
+            <span class="nav-link-title">People &amp; Access</span>
+            <span class="nav-badge">6</span>
+          </div>
+          <div class="nav-link" onclick="selectModule('Settings')">
+            <i class="fa-solid fa-sliders nav-link-icon"></i>
+            <span class="nav-link-title">Settings &amp; Assistant</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Conversation Section (ng-conversations integration) -->
+      <div>
+        <div class="nav-section-title">
+          <span>CONVERSATIONS</span>
+          <span class="nav-section-action" title="Create new conversation" onclick="createNewConvo()"><i class="fa-solid fa-plus"></i></span>
+        </div>
+        <div class="nav-item-list" id="convoList">
+          <div class="convo-item active" onclick="switchConvo('general', '#general-room', 'Shared')">
+            <span class="convo-hash">#</span>
+            <span class="convo-name">general-room</span>
+            <span class="convo-band-dot shared" title="Shared with Client"></span>
+          </div>
+          <div class="convo-item" onclick="switchConvo('deliverables', '#deliverables-review', 'Shared')">
+            <span class="convo-hash">#</span>
+            <span class="convo-name">deliverables-review</span>
+            <span class="nav-badge unread">3</span>
+          </div>
+          <div class="convo-item" onclick="switchConvo('strategy', '#team-strategy-only', 'Team')">
+            <i class="fa-solid fa-lock" style="font-size:11px;color:var(--mjc-team-brand)"></i>
+            <span class="convo-name">team-strategy-only</span>
+            <span class="convo-band-dot team" title="Internal Team Band Only"></span>
+          </div>
+          <div class="convo-item" onclick="switchConvo('agent', '🤖 Assistant Strategy Desk', 'Shared')">
+            <i class="fa-solid fa-robot" style="font-size:12px;color:var(--mj-brand-tertiary)"></i>
+            <span class="convo-name">Assistant Strategy Desk</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Nav Footer -->
+    <div class="space-nav-footer">
+      <span><i class="fa-solid fa-database"></i> Azure Blob &middot; Prod</span>
+      <span title="Stored in UserInfoEngine"><i class="fa-solid fa-cloud-check"></i> Prefs saved</span>
+    </div>
+
+  </aside>
+
+  <!-- Large Stage (Whatever module is active) -->
+  <main class="main-stage" id="mainStage">
+
+    <!-- Active Chat View (Stock mj-conversation-chat-area) -->
+    <div class="chat-container" id="chatAreaView">
+      
+      <!-- Slot: Header -->
+      <div class="chat-slot-header">
+        <div class="chat-title-cluster">
+          <span class="chat-title-text" id="chatHeaderTitle">#general-room</span>
+          <span class="audience-pill" id="chatAudiencePill">
+            <i class="fa-solid fa-shield-halved"></i> Shared &middot; 4 Team, 2 Outside
+          </span>
+        </div>
+        <div class="chat-actions-cluster">
+          <button class="chat-btn-icon" title="Search conversation"><i class="fa-solid fa-magnifying-glass"></i></button>
+          <button class="chat-btn-icon" title="Pinned items"><i class="fa-solid fa-thumbtack"></i></button>
+          <button class="chat-btn-icon" title="Export conversation"><i class="fa-solid fa-download"></i></button>
+          <button class="chat-btn-icon" title="Conversation settings"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        </div>
+      </div>
+
+      <!-- Messages Transcript -->
+      <div class="chat-transcript" id="chatTranscript">
+        
+        <!-- User Message -->
+        <div class="msg-row">
+          <div class="msg-avatar user-casey">CM</div>
+          <div class="msg-bubble-wrap">
+            <div class="msg-meta-line">
+              <span class="msg-author-name">Casey Miller</span>
+              <span class="msg-role-chip client">Outside Director</span>
+              <span class="msg-timestamp">Today at 10:14 AM</span>
+            </div>
+            <div class="msg-text-box">
+              Hi team! Could the assistant summarize our approved FY2026 brand positioning pillars and confirm if the packaging guidelines are finalized?
+            </div>
+          </div>
+        </div>
+
+        <!-- Assistant Message (With Provenance Receipts & Citations) -->
+        <div class="msg-row">
+          <div class="msg-avatar agent"><i class="fa-solid fa-sparkles"></i></div>
+          <div class="msg-bubble-wrap">
+            <div class="msg-meta-line">
+              <span class="msg-author-name">Assistant</span>
+              <span class="msg-role-chip agent">AI Agent</span>
+              <span class="msg-timestamp">Today at 10:14 AM</span>
+            </div>
+            <div class="msg-text-box agent-response">
+              Here is the approved summary from your space documents:
+              <br><br>
+              1. <b>Core Pillars:</b> Sustainable luxury, digital-first retail, and cross-channel personalization.
+              <br>
+              2. <b>Packaging Guidelines:</b> Status is <i>Approved</i> as of yesterday's committee review. The primary color palette adheres to the 60-30-10 rule.
+              
+              <!-- Slot: messageExtra (Provenance Receipts) -->
+              <div class="answer-receipt">
+                <span class="receipt-tag"><i class="fa-solid fa-circle-check"></i> Bounded to Shared Band:</span>
+                <span>Used 2 files:</span>
+                <a class="citation-chip" href="#doc1"><i class="fa-solid fa-file-pdf"></i> Brand-Guidelines-v2.pdf</a>
+                <a class="citation-chip" href="#doc2"><i class="fa-solid fa-file-lines"></i> Committee-Minutes-Sep25.docx</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Staff Follow up -->
+        <div class="msg-row">
+          <div class="msg-avatar user-amith">AN</div>
+          <div class="msg-bubble-wrap">
+            <div class="msg-meta-line">
+              <span class="msg-author-name">Amith Nagarajan</span>
+              <span class="msg-role-chip">Owner</span>
+              <span class="msg-timestamp">Today at 10:20 AM</span>
+            </div>
+            <div class="msg-text-box">
+              Looks good! I've also linked the revised print specs into the Documents tab for Casey's review.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Composer Dock (mj-conversation-chat-area AI composer) -->
+      <div class="composer-dock">
+        <div class="composer-box">
+          <textarea class="composer-textarea" id="chatComposerInput" placeholder="Message #general-room... (type @ for agents, # for space items)"></textarea>
+          <div class="composer-toolbar">
+            <div class="composer-tools-left">
+              <span class="agent-invoke-chip"><i class="fa-solid fa-robot"></i> Assistant ready</span>
+              <button class="tool-btn" title="Mention an agent or person"><i class="fa-solid fa-at"></i></button>
+              <button class="tool-btn" title="Reference a document or task"><i class="fa-solid fa-hashtag"></i></button>
+              <button class="tool-btn" title="Attach file to space"><i class="fa-solid fa-paperclip"></i></button>
+            </div>
+            <button class="send-btn" onclick="sendMockMessage()">Send <i class="fa-solid fa-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Generic Module Stage (When user clicks Documents/Tasks/etc.) -->
+    <div id="otherModuleView" style="display:none;padding:32px;overflow-y:auto;">
+      <h2 id="otherModuleTitle" style="font-size:22px;margin-bottom:12px;">Module</h2>
+      <p id="otherModuleDesc" style="color:var(--mj-text-secondary);margin-bottom:20px;">Detailed edge-to-edge view for this space section.</p>
+      <div style="background:var(--mj-bg-surface-sunken);border:1px dashed var(--mj-border-strong);border-radius:12px;padding:60px 20px;text-align:center;">
+        <i class="fa-solid fa-layer-group" style="font-size:36px;color:var(--mj-brand-primary);margin-bottom:12px;"></i>
+        <div style="font-weight:600;font-size:16px;">Space-Dedicated Canvas Surface</div>
+        <div style="font-size:13px;color:var(--mj-text-muted);margin-top:6px;">All screen real estate is reserved for this space's work without global distraction.</div>
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- Modal: All Spaces Explorer (Home Directory) -->
+<div class="modal-overlay" id="explorerModal">
+  <div class="explorer-card">
+    <div class="explorer-header">
+      <div class="explorer-title"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i> Spaces Directory</div>
+      <button class="btn-nav-toggle" onclick="closeExplorerModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="explorer-body">
+      <div class="space-card-item active-choice" onclick="selectSpace('Acme Corp Rebrand')">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:700;font-size:15px;">Acme Corp Rebrand</span>
+          <span class="audience-pill" style="font-size:11px;">Shared</span>
+        </div>
+        <span style="font-size:13px;color:var(--mj-text-secondary);">Enterprise client rebrand and packaging engagement.</span>
+        <span style="font-size:11.5px;color:var(--mj-text-muted);margin-top:4px;">4 conversations &middot; 14 documents &middot; 8 tasks</span>
+      </div>
+
+      <div class="space-card-item" onclick="selectSpace('Northwind M&A Deal Room')">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:700;font-size:15px;">Northwind M&A Deal Room</span>
+          <span class="audience-pill" style="font-size:11px;background:var(--mjc-team-bg);color:var(--mjc-team-brand);border-color:var(--mjc-team-border)">Team Only</span>
+        </div>
+        <span style="font-size:13px;color:var(--mj-text-secondary);">Confidential acquisition due diligence and valuation models.</span>
+        <span style="font-size:11.5px;color:var(--mj-text-muted);margin-top:4px;">7 conversations &middot; 32 documents &middot; 12 tasks</span>
+      </div>
+
+      <div class="space-card-item" onclick="selectSpace('Horizon Board FY2026')">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:700;font-size:15px;">Horizon Board FY2026</span>
+          <span class="audience-pill" style="font-size:11px;">Board Governance</span>
+        </div>
+        <span style="font-size:13px;color:var(--mj-text-secondary);">Board of directors governance, motions, and quarterly packs.</span>
+        <span style="font-size:11.5px;color:var(--mj-text-muted);margin-top:4px;">Meetings, Papers, Motions tabs active</span>
+      </div>
+
+      <div class="space-card-item" onclick="selectSpace('Internal Operations')">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:700;font-size:15px;">Internal Operations</span>
+          <span class="audience-pill" style="font-size:11px;background:var(--mjc-team-bg);color:var(--mjc-team-brand);border-color:var(--mjc-team-border)">Team Only</span>
+        </div>
+        <span style="font-size:13px;color:var(--mj-text-secondary);">Quarterly OKRs, staffing pipelines, and platform tooling.</span>
+        <span style="font-size:11.5px;color:var(--mj-text-muted);margin-top:4px;">3 conversations &middot; 9 documents</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Resizing logic for space navigation
+const spaceNav = document.getElementById('spaceNav');
+const resizer = document.getElementById('navResizer');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const newWidth = e.clientX;
+  if (newWidth >= 180 && newWidth <= 450) {
+    spaceNav.style.width = newWidth + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    console.log('[UserInfoEngine] Persisted setting mjc.spaceNav.width =', spaceNav.style.width);
+  }
+});
+
+function toggleNavCollapse() {
+  spaceNav.classList.toggle('collapsed');
+  const icon = document.getElementById('toggleNavIcon');
+  if (spaceNav.classList.contains('collapsed')) {
+    icon.className = 'fa-solid fa-chevron-right';
+    console.log('[UserInfoEngine] Persisted setting mjc.spaceNav.collapsed = true');
+  } else {
+    icon.className = 'fa-solid fa-chevron-left';
+    console.log('[UserInfoEngine] Persisted setting mjc.spaceNav.collapsed = false');
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+}
+
+function switchConvo(id, title, band) {
+  document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('chatHeaderTitle').innerText = title;
+  document.getElementById('currentModuleCrumb').innerText = 'Conversations · ' + title;
+  
+  const pill = document.getElementById('chatAudiencePill');
+  if (band === 'Team') {
+    pill.style.background = 'var(--mjc-team-bg)';
+    pill.style.color = 'var(--mjc-team-brand)';
+    pill.style.borderColor = 'var(--mjc-team-border)';
+    pill.innerHTML = '<i class="fa-solid fa-lock"></i> Internal Team Only';
+  } else {
+    pill.style.background = 'var(--mjc-shared-bg)';
+    pill.style.color = 'var(--mjc-shared-brand)';
+    pill.style.borderColor = 'var(--mjc-shared-border)';
+    pill.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Shared · Client & Team';
+  }
+
+  document.getElementById('chatAreaView').style.display = 'flex';
+  document.getElementById('otherModuleView').style.display = 'none';
+}
+
+function selectModule(name) {
+  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  document.getElementById('chatAreaView').style.display = 'none';
+  document.getElementById('otherModuleView').style.display = 'block';
+  document.getElementById('otherModuleTitle').innerText = name;
+  document.getElementById('currentModuleCrumb').innerText = name;
+}
+
+function sendMockMessage() {
+  const input = document.getElementById('chatComposerInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const transcript = document.getElementById('chatTranscript');
+  const msgRow = document.createElement('div');
+  msgRow.className = 'msg-row';
+  msgRow.innerHTML = `
+    <div class="msg-avatar user-amith">AN</div>
+    <div class="msg-bubble-wrap">
+      <div class="msg-meta-line">
+        <span class="msg-author-name">Amith Nagarajan</span>
+        <span class="msg-role-chip">Owner</span>
+        <span class="msg-timestamp">Just now</span>
+      </div>
+      <div class="msg-text-box">${text}</div>
+    </div>
+  `;
+  transcript.appendChild(msgRow);
+  input.value = '';
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function openExplorerModal() {
+  document.getElementById('explorerModal').classList.add('open');
+}
+function closeExplorerModal() {
+  document.getElementById('explorerModal').classList.remove('open');
+}
+function selectSpace(spaceName) {
+  document.getElementById('currentSpaceCrumb').innerHTML = `<i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i> ${spaceName}`;
+  document.querySelector('.space-title').innerText = spaceName;
+  closeExplorerModal();
+}
+function createNewConvo() {
+  const name = prompt('Enter new conversation name (e.g. #marketing-q3):', '#');
+  if (!name) return;
+  const list = document.getElementById('convoList');
+  const item = document.createElement('div');
+  item.className = 'convo-item';
+  item.onclick = () => switchConvo('new', name, 'Shared');
+  item.innerHTML = `
+    <span class="convo-hash">#</span>
+    <span class="convo-name">${name.replace(/^#/, '')}</span>
+    <span class="convo-band-dot shared" title="Shared"></span>
+  `;
+  list.appendChild(item);
+  item.click();
+}
+</script>
+</body>
+</html>

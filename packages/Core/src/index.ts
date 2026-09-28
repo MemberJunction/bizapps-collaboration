@@ -1,5 +1,6 @@
 export {
     agentMayQuote,
+    isAgentPostCloseAccessPermitted,
     authorizeItemWrite,
     authorizeTaskAssignment,
     mayFileRootTask,
@@ -54,10 +55,14 @@ export {
     computeSpaceProgress,
     mergeAgenda,
     NeedsYouProvider,
+    BaseNeedsYouProvider,
     AgendaProvider,
+    BaseAgendaProvider,
     SpaceHeaderChipProvider,
+    BaseSpaceHeaderChipProvider,
 } from './view-models.js';
 export type {
+    SpaceBatchContext,
     AvatarColorClass,
     AudienceMemberInput,
     ExternalOrgGroup,
@@ -67,3 +72,36 @@ export type {
     AgendaItem,
     SpaceHeaderChip,
 } from './view-models.js';
+export {
+    DEFAULT_SPACE_RULES,
+    DEFAULT_COLLABORATION_SETTINGS,
+    MissingAppSettingsError,
+    ResolveCollaborationSettings,
+    ResolveSpaceRules,
+    ValidateCollaborationSettings,
+    validateSpaceConfiguration,
+    validateSpaceTypeConfiguration,
+} from './configuration.js';
+export type {
+    CollaborationSettings,
+    ConfigurationValue,
+    EffectiveSpaceRules,
+    ISpaceConfiguration,
+    ISpaceRules,
+    ISpaceTypeConfiguration,
+    ResolveCollaborationSettingsParams,
+    ResolvedCollaborationSettings,
+} from './configuration.js';
+export {
+    effectiveRetrievalScope,
+    agentMayQuoteCandidate,
+} from './retrieval.js';
+export type {
+    RetrievalMode,
+    ScopeNarrowing,
+    PrincipalReach,
+    EffectiveRetrievalScopeInput,
+    EffectiveRetrievalScopeResult,
+    AgentCandidateItem,
+    AgentMayQuoteResult,
+} from './retrieval.js';

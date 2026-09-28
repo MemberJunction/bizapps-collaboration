@@ -29,7 +29,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
         <div class="stat-card">
           <span class="stat-num shared">{{ SharedCount }}</span>
-          <span class="stat-lbl">Shared with Client</span>
+          <span class="stat-lbl">Shared with Outside</span>
         </div>
       </div>
 
@@ -83,14 +83,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="spacer"></div>
 
-        <button class="add-task-btn" (click)="isAddingTask = !isAddingTask">
-          <i class="fa-solid fa-plus"></i>
-          <span>Add task</span>
-        </button>
+        @if (CanCreateTask) {
+          <button class="add-task-btn" (click)="openAddTask()">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add task</span>
+          </button>
+        }
       </div>
 
       <!-- Inline Add Task Row -->
-      @if (isAddingTask) {
+      @if (isAddingTask && CanCreateTask) {
         <div class="add-task-row">
           <input
             type="text"
@@ -101,7 +103,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             autofocus
           />
           <select [(ngModel)]="newTaskBand" class="new-task-select">
-            <option value="Shared">Shared with Client</option>
+            <option value="Shared">Shared with Outside</option>
             <option value="Team">Team only</option>
           </select>
           <select [(ngModel)]="newTaskPriority" class="new-task-select">
@@ -280,7 +282,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .filter-group {
         display: flex;
-        background: var(--mj-bg-subtle, #f1f5f9);
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
         padding: 3px;
         border-radius: 6px;
         gap: 2px;
@@ -378,7 +380,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         align-items: center;
         padding: 10px 16px;
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-card, #f8fafc);
         border-bottom: 1px solid var(--mj-border-subtle, #e2e8f0);
         font-size: 12px;
         font-weight: 600;
@@ -408,7 +410,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .task-row:last-child { border-bottom: none; }
       .task-row:hover {
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-hover, #f8fafc);
       }
       .task-row.is-done {
         opacity: 0.65;
@@ -506,6 +508,14 @@ export class CollabSpaceWorkComponent {
   @Input() Tasks: TaskItemModel[] = [];
   @Input() SpaceName = '';
   @Input() CanCreateTask = true;
+  @Input() public set DefaultBand(val: SpaceBand) {
+    this._defaultBand = val || 'Shared';
+    this.newTaskBand = this._defaultBand;
+  }
+  public get DefaultBand(): SpaceBand {
+    return this._defaultBand;
+  }
+  private _defaultBand: SpaceBand = 'Shared';
 
   @Output() TaskSelectRequested = new EventEmitter<TaskItemModel>();
   @Output() TaskToggleRequested = new EventEmitter<TaskItemModel>();
@@ -519,6 +529,13 @@ export class CollabSpaceWorkComponent {
   public newTaskName = '';
   public newTaskBand: SpaceBand = 'Shared';
   public newTaskPriority = 'Medium';
+
+  public openAddTask(): void {
+    this.isAddingTask = !this.isAddingTask;
+    if (this.isAddingTask) {
+      this.newTaskBand = this.DefaultBand;
+    }
+  }
 
   public get TotalTasks(): number {
     return this.Tasks.length;
@@ -573,6 +590,7 @@ export class CollabSpaceWorkComponent {
       priority: this.newTaskPriority,
     });
     this.newTaskName = '';
+    this.newTaskBand = this.DefaultBand;
     this.isAddingTask = false;
   }
 

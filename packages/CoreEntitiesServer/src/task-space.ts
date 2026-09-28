@@ -21,7 +21,7 @@ export function relevantFieldsChanged(record: { IsSaved: boolean; Fields: Readon
  * view is the root, and that root's space item is the filing. A task with no
  * parent is its own root.
  */
-export async function filedTask(provider: IMetadataProvider, reader: UserInfo, taskId: string): Promise<{ spaceId: string; band: Band; root: boolean; allowParentAssignees: boolean } | null> {
+export async function filedTask(provider: IMetadataProvider, reader: UserInfo, taskId: string): Promise<{ spaceId: string; band: Band; root: boolean; allowParentAssignees: boolean; closedAt: string | null } | null> {
     const id = parseUuid(taskId);
     if (!id) return null;
     const view = RunView.FromMetadataProvider(provider);
@@ -39,10 +39,10 @@ export async function filedTask(provider: IMetadataProvider, reader: UserInfo, t
     if (!rootId) return null;
     const item = await spaceItemFor(provider, reader, rootId);
     if (!item) return null;
-    const spaceRows = await view.RunView<{ AllowParentAssignees: boolean }>({
+    const spaceRows = await view.RunView<{ AllowParentAssignees: boolean; ClosedAt: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${item.spaceId}'`,
-        Fields: ['AllowParentAssignees'],
+        Fields: ['AllowParentAssignees', 'ClosedAt'],
         MaxRows: 1,
         ResultType: 'simple',
     }, reader);
@@ -50,11 +50,16 @@ export async function filedTask(provider: IMetadataProvider, reader: UserInfo, t
     const spaceRow = spaceRows.Results?.[0];
     if (!spaceRow) throw new Error(`Space ${item.spaceId} not found.`);
     const allowParentAssignees = spaceRow.AllowParentAssignees !== undefined ? !!spaceRow.AllowParentAssignees : true;
-    return { spaceId: item.spaceId, band: item.band, root: rootId === id, allowParentAssignees };
+    return {
+        spaceId: item.spaceId,
+        band: item.band,
+        root: rootId === id,
+        allowParentAssignees,
+        closedAt: spaceRow.ClosedAt ? String(spaceRow.ClosedAt) : null,
+    };
 }
 
 export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignmentEntity): Promise<string | null> {
-    if (!relevantFieldsChanged(assignment, SEAT_FIELDS)) return null;
     const provider = assignment.ProviderToUse ? asMetadata(assignment.ProviderToUse) : null;
     const user = assignment.ContextCurrentUser;
     if (!provider?.EntityByName || !user || !assignment.TaskID) return null;
@@ -62,6 +67,10 @@ export async function assigneeSeatMessage(assignment: mjBizAppsTasksTaskAssignme
         const system = await requireSystemUser(assignment);
         const place = await filedTask(provider, system, assignment.TaskID);
         if (!place) return null;
+        if (place.closedAt) {
+            return 'Assignment refused: cannot update assignments in a closed space.';
+        }
+        if (!relevantFieldsChanged(assignment, SEAT_FIELDS)) return null;
         const assigneeUserId = await assigneeUser(provider, system, assignment.AssigneeEntityID, assignment.AssigneeRecordID);
         if (!assigneeUserId) return 'Assignment refused: the assignee is not a person in this space.';
         const reach = await loadMemberReach(assignment, system, assigneeUserId, place.spaceId);

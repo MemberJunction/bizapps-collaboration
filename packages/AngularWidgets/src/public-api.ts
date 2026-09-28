@@ -1,5 +1,30 @@
 export { BaseSpaceTab } from './lib/base-space-tab';
 export { BaseSpaceOverviewCard } from './lib/base-space-overview-card';
+export { BaseSpaceSettingsSection } from './lib/base-space-settings-section';
+export {
+    BaseSpaceTypeUIDriver,
+    UIDriverRegistry,
+    assembleSpaceContributions,
+} from './lib/base-space-type-ui-driver';
+export type {
+    SpaceUIContext,
+    SpaceTabDescriptor,
+    SpaceOverviewCardDescriptor,
+    SpaceHeaderChipDescriptor,
+    SpaceHeaderActionDescriptor,
+    SpaceSettingsSectionDescriptor,
+    SpaceNewStepDescriptor,
+    SpaceDetailsFormDescriptor,
+    SpaceContributionMetadata,
+    CancellableSpaceUIEvent,
+    BeforeInviteEvent,
+    BeforeCreateChildSpaceEvent,
+    BeforeStartChatEvent,
+    BeforeAddToChatEvent,
+    BeforePostMessageEvent,
+    BeforeCloseSpaceEvent,
+    AfterSpaceOpenedEvent,
+} from './lib/base-space-type-ui-driver';
 
 export * from './lib/types';
 export { CollabAvatarComponent, AvatarSize } from './lib/avatar.component';
@@ -22,7 +47,7 @@ export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
-export { CollabSpaceChatComponent, RoomMessageItem } from './lib/space-chat.component';
+export { CollabSpaceChatComponent } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

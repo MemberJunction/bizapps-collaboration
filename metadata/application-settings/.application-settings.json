@@ -1,0 +1,13 @@
+[
+  {
+    "primaryKey": {
+      "ID": "6D761433-0821-4ADA-BC20-709BB7077504"
+    },
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Collaboration",
+      "Name": "CollaborationSettings",
+      "Value": "{\"PostCloseAccess\":\"ReadOnly\",\"PostCloseAccessDays\":null,\"Chats\":{\"WhoCanStart\":\"Anyone\",\"AgentReplyMode\":\"MentionOrOneToOne\",\"HistoryOnAdd\":\"None\"},\"Agents\":{\"ListMode\":\"Extend\"}}",
+      "Comments": "Default settings configuration for the BizApps Collaboration application."
+    }
+  }
+]

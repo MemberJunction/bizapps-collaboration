@@ -107,7 +107,8 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         saveTestResultScreenshot('04-dark.png', screenshot);
     });
 
-    test('visual regression: matches 04-share-check.png within budget (§ 10 topbar mask)', async ({ page }) => {
+    // Retired per D24 & Item 2: Mockups are retired as reference; local builder owns UI with Amith
+    test.skip('visual regression: matches 04-share-check.png within budget (§ 10 topbar mask) [Retired per D24]', async ({ page }) => {
         await page.goto('/frame/04');
         await ensureFontsLoaded(page);
         await page.waitForSelector('mjc-share-check-dialog .modal.share-modal');

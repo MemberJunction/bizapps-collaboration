@@ -1,0 +1,612 @@
+/**
+ * Configuration interfaces and rule resolution for Space, SpaceType, and App.
+ * Follows the extensibility plan § 4 and punch list 2 items 55, 12, 6.
+ */
+
+/** A JSON value, for settings that a type's own drivers define. */
+export type ConfigurationValue =
+    | string
+    | number
+    | boolean
+    | null
+    | ConfigurationValue[]
+    | { [key: string]: ConfigurationValue };
+
+/**
+ * The single typed settings shape for BizApps Collaboration at every level
+ * (App, SpaceType, Space, SubSpace).
+ */
+export interface CollaborationSettings {
+    /** Target storage account ID for file uploads. Resolves hierarchically. */
+    StorageAccountID?: string | null;
+    /** Access level permitted after a space closes. App default is 'ReadOnly'. */
+    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
+    /** Duration in days after closing before post-close access lapses. null = indefinite. */
+    PostCloseAccessDays?: number | null;
+    /** Chat behavior rules. */
+    Chats?: {
+        /** Who may start a chat. Default 'Anyone': every seat, read-only guests included. */
+        WhoCanStart?: 'Anyone' | 'Contributors' | 'Owners';
+        /** When an agent replies. Default 'MentionOrOneToOne'. */
+        AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
+        /** The choice preselected when someone is added to an existing chat. Default 'None'. */
+        HistoryOnAdd?: 'None' | 'All' | 'Since';
+    };
+    /** Agent inheritance rules. */
+    Agents?: {
+        /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
+        ListMode?: 'Extend' | 'Replace';
+    };
+    /** Word overrides, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }. */
+    Labels?: {
+        Tabs?: Record<string, string>;
+    };
+    /** Types that may be created under a space of this type. */
+    Children?: {
+        AllowedTypeCodes?: string[];
+        MaxOpen?: number;
+    };
+    /** Roles that administer spaces of this type, beside Collaboration's staff roles. */
+    Admin?: {
+        RoleNames?: string[];
+    };
+    /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
+    SpaceOverridable?: string[];
+    /** Behavior switches that the type's own drivers read, keyed by app. */
+    Extensions?: Record<string, Record<string, ConfigurationValue>>;
+}
+
+export interface ISpaceRules extends CollaborationSettings {}
+export interface ISpaceTypeConfiguration extends CollaborationSettings {}
+export interface ISpaceConfiguration extends CollaborationSettings {}
+
+export interface EffectiveSpaceRules {
+    Chats: {
+        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
+        HistoryOnAdd: 'None' | 'All' | 'Since';
+    };
+    Agents: {
+        ListMode: 'Extend' | 'Replace';
+    };
+    Labels?: { Tabs?: Record<string, string> };
+    Extensions: Record<string, Record<string, ConfigurationValue>>;
+}
+
+export const DEFAULT_SPACE_RULES: EffectiveSpaceRules = {
+    Chats: {
+        WhoCanStart: 'Anyone',
+        AgentReplyMode: 'MentionOrOneToOne',
+        HistoryOnAdd: 'None',
+    },
+    Agents: {
+        ListMode: 'Extend',
+    },
+    Labels: undefined,
+    Extensions: {},
+};
+
+/**
+ * Resolves effective rules for a space given its type configuration and space-level overrides.
+ *
+ * 1. Starts from Collaboration's defaults.
+ * 2. Applies the type's values.
+ * 3. Applies the space's values ONLY for the dotted keys listed in `type.SpaceOverridable`.
+ */
+export function ResolveSpaceRules(
+    typeConfig: ISpaceTypeConfiguration | null | undefined,
+    spaceConfig: ISpaceConfiguration | null | undefined
+): EffectiveSpaceRules {
+    const rules: EffectiveSpaceRules = {
+        Chats: {
+            WhoCanStart: typeConfig?.Chats?.WhoCanStart ?? DEFAULT_SPACE_RULES.Chats.WhoCanStart,
+            AgentReplyMode: typeConfig?.Chats?.AgentReplyMode ?? DEFAULT_SPACE_RULES.Chats.AgentReplyMode,
+            HistoryOnAdd: typeConfig?.Chats?.HistoryOnAdd ?? DEFAULT_SPACE_RULES.Chats.HistoryOnAdd,
+        },
+        Agents: {
+            ListMode: typeConfig?.Agents?.ListMode ?? DEFAULT_SPACE_RULES.Agents.ListMode,
+        },
+        Labels: typeConfig?.Labels,
+        Extensions: {
+            ...(typeConfig?.Extensions ?? {}),
+        },
+    };
+
+    if (!spaceConfig || !typeConfig?.SpaceOverridable || typeConfig.SpaceOverridable.length === 0) {
+        return rules;
+    }
+
+    const overridable = new Set(typeConfig.SpaceOverridable);
+
+    if (overridable.has('Chats.WhoCanStart') && spaceConfig.Chats?.WhoCanStart) {
+        rules.Chats.WhoCanStart = spaceConfig.Chats.WhoCanStart;
+    }
+    if (overridable.has('Chats.AgentReplyMode') && spaceConfig.Chats?.AgentReplyMode) {
+        rules.Chats.AgentReplyMode = spaceConfig.Chats.AgentReplyMode;
+    }
+    if (overridable.has('Chats.HistoryOnAdd') && spaceConfig.Chats?.HistoryOnAdd) {
+        rules.Chats.HistoryOnAdd = spaceConfig.Chats.HistoryOnAdd;
+    }
+    if (overridable.has('Agents.ListMode') && spaceConfig.Agents?.ListMode) {
+        rules.Agents.ListMode = spaceConfig.Agents.ListMode;
+    }
+
+    // Check extensions overrides (e.g. 'Extensions.MyApp')
+    if (spaceConfig.Extensions) {
+        for (const [appName, appSettings] of Object.entries(spaceConfig.Extensions)) {
+            if (overridable.has(`Extensions.${appName}`) || overridable.has('Extensions')) {
+                rules.Extensions[appName] = {
+                    ...(rules.Extensions[appName] ?? {}),
+                    ...appSettings,
+                };
+            }
+        }
+    }
+
+    return rules;
+}
+
+/**
+ * Validates a SpaceTypeConfiguration object structure.
+ */
+export function validateSpaceTypeConfiguration(config: unknown): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        return { valid: false, errors: ['Configuration must be a non-null object.'] };
+    }
+
+    const c = config as ISpaceTypeConfiguration;
+
+    if (c.Chats) {
+        if (c.Chats.WhoCanStart && !['Anyone', 'Contributors', 'Owners'].includes(c.Chats.WhoCanStart)) {
+            errors.push(`Invalid Chats.WhoCanStart: ${c.Chats.WhoCanStart}`);
+        }
+        if (c.Chats.AgentReplyMode && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(c.Chats.AgentReplyMode)) {
+            errors.push(`Invalid Chats.AgentReplyMode: ${c.Chats.AgentReplyMode}`);
+        }
+        if (c.Chats.HistoryOnAdd && !['None', 'All', 'Since'].includes(c.Chats.HistoryOnAdd)) {
+            errors.push(`Invalid Chats.HistoryOnAdd: ${c.Chats.HistoryOnAdd}`);
+        }
+    }
+
+    if (c.Agents) {
+        if (c.Agents.ListMode && !['Extend', 'Replace'].includes(c.Agents.ListMode)) {
+            errors.push(`Invalid Agents.ListMode: ${c.Agents.ListMode}`);
+        }
+    }
+
+    if (c.Children) {
+        if (c.Children.AllowedTypeCodes && !Array.isArray(c.Children.AllowedTypeCodes)) {
+            errors.push('Children.AllowedTypeCodes must be an array of strings.');
+        }
+        if (c.Children.MaxOpen !== undefined && (typeof c.Children.MaxOpen !== 'number' || c.Children.MaxOpen < 0)) {
+            errors.push('Children.MaxOpen must be a non-negative number.');
+        }
+    }
+
+    if (c.SpaceOverridable && !Array.isArray(c.SpaceOverridable)) {
+        errors.push('SpaceOverridable must be an array of strings.');
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Validates a SpaceConfiguration against allowed overridable keys from its SpaceType.
+ */
+export function validateSpaceConfiguration(
+    spaceConfig: unknown,
+    typeConfig: ISpaceTypeConfiguration | null | undefined
+): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    if (!spaceConfig) return { valid: true, errors: [] };
+
+    if (typeof spaceConfig !== 'object' || Array.isArray(spaceConfig)) {
+        return { valid: false, errors: ['Space Configuration must be an object.'] };
+    }
+
+    const sc = spaceConfig as ISpaceConfiguration;
+    const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
+
+    if (sc.Chats?.WhoCanStart && !overridable.has('Chats.WhoCanStart')) {
+        errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+    if (sc.Chats?.AgentReplyMode && !overridable.has('Chats.AgentReplyMode')) {
+        errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+    if (sc.Chats?.HistoryOnAdd && !overridable.has('Chats.HistoryOnAdd')) {
+        errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+    if (sc.Agents?.ListMode && !overridable.has('Agents.ListMode')) {
+        errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
+    }
+
+    if (sc.Extensions) {
+        for (const appName of Object.keys(sc.Extensions)) {
+            if (!overridable.has(`Extensions.${appName}`) && !overridable.has('Extensions')) {
+                errors.push(`Extensions.${appName} cannot be overridden by space: not in type's SpaceOverridable.`);
+            }
+        }
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
+export class MissingAppSettingsError extends Error {
+    constructor(
+        message: string = 'Collaboration application settings row is missing in MJ: Application Settings. Seed metadata/application-settings/.application-settings.json or configure via Collaboration Settings.'
+    ) {
+        super(message);
+        this.name = 'MissingAppSettingsError';
+    }
+}
+
+export interface ResolveCollaborationSettingsParams {
+    /** Spaces in leaf-to-root order: [subSpace, parentSpace, ..., rootSpace]. */
+    spaces?: Array<CollaborationSettings | null | undefined>;
+    /** The space's type configuration. */
+    type?: CollaborationSettings | null | undefined;
+    /** The app-wide configuration row from MJ Application Settings. */
+    app?: CollaborationSettings | null | undefined;
+}
+
+export interface ResolvedCollaborationSettings {
+    StorageAccountID: string | null;
+    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
+    PostCloseAccessDays: number | null;
+    Chats: {
+        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
+        HistoryOnAdd: 'None' | 'All' | 'Since';
+    };
+    Agents: {
+        ListMode: 'Extend' | 'Replace';
+    };
+    Labels?: {
+        Tabs?: Record<string, string>;
+    };
+    Children?: {
+        AllowedTypeCodes?: string[];
+        MaxOpen?: number;
+    };
+    Admin?: {
+        RoleNames?: string[];
+    };
+    Extensions: Record<string, Record<string, ConfigurationValue>>;
+}
+
+export const DEFAULT_COLLABORATION_SETTINGS: ResolvedCollaborationSettings = {
+    StorageAccountID: null,
+    PostCloseAccess: 'ReadOnly',
+    PostCloseAccessDays: null,
+    Chats: {
+        WhoCanStart: 'Anyone',
+        AgentReplyMode: 'MentionOrOneToOne',
+        HistoryOnAdd: 'None',
+    },
+    Agents: {
+        ListMode: 'Extend',
+    },
+    Labels: undefined,
+    Extensions: {},
+};
+
+const KNOWN_SETTINGS_KEYS = new Set([
+    'StorageAccountID',
+    'PostCloseAccess',
+    'PostCloseAccessDays',
+    'Chats',
+    'Agents',
+    'Labels',
+    'Children',
+    'Admin',
+    'SpaceOverridable',
+    'Extensions',
+]);
+
+/**
+ * Validates any CollaborationSettings JSON object against the shape and rules.
+ * Refuses unknown keys, wrong enum/data values, and enforces SpaceOverridable on space level.
+ */
+export function ValidateCollaborationSettings(
+    config: unknown,
+    level: 'app' | 'type' | 'space',
+    typeConfig?: CollaborationSettings | null
+): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        return { valid: false, errors: ['Configuration must be a non-null object.'] };
+    }
+
+    const c = config as Record<string, unknown>;
+
+    for (const key of Object.keys(c)) {
+        if (!KNOWN_SETTINGS_KEYS.has(key)) {
+            errors.push(`Unknown settings key: ${key}`);
+        }
+    }
+
+    if (c['StorageAccountID'] !== undefined && c['StorageAccountID'] !== null && typeof c['StorageAccountID'] !== 'string') {
+        errors.push('StorageAccountID must be a string or null.');
+    }
+
+    if (c['PostCloseAccess'] !== undefined && !['ReadOnly', 'ReadOnlyWithAgent', 'None'].includes(c['PostCloseAccess'] as string)) {
+        errors.push(`Invalid PostCloseAccess: ${String(c['PostCloseAccess'])}`);
+    }
+
+    if (c['PostCloseAccessDays'] !== undefined && c['PostCloseAccessDays'] !== null) {
+        if (typeof c['PostCloseAccessDays'] !== 'number' || c['PostCloseAccessDays'] < 0 || !Number.isInteger(c['PostCloseAccessDays'])) {
+            errors.push('PostCloseAccessDays must be a non-negative integer or null.');
+        }
+    }
+
+    if (c['Chats'] !== undefined) {
+        if (!c['Chats'] || typeof c['Chats'] !== 'object' || Array.isArray(c['Chats'])) {
+            errors.push('Chats must be an object.');
+        } else {
+            const chats = c['Chats'] as Record<string, unknown>;
+            for (const k of Object.keys(chats)) {
+                if (!['WhoCanStart', 'AgentReplyMode', 'HistoryOnAdd'].includes(k)) {
+                    errors.push(`Unknown Chats key: ${k}`);
+                }
+            }
+            if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Contributors', 'Owners'].includes(chats['WhoCanStart'] as string)) {
+                errors.push(`Invalid Chats.WhoCanStart: ${String(chats['WhoCanStart'])}`);
+            }
+            if (chats['AgentReplyMode'] !== undefined && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(chats['AgentReplyMode'] as string)) {
+                errors.push(`Invalid Chats.AgentReplyMode: ${String(chats['AgentReplyMode'])}`);
+            }
+            if (chats['HistoryOnAdd'] !== undefined && !['None', 'All', 'Since'].includes(chats['HistoryOnAdd'] as string)) {
+                errors.push(`Invalid Chats.HistoryOnAdd: ${String(chats['HistoryOnAdd'])}`);
+            }
+        }
+    }
+
+    if (c['Agents'] !== undefined) {
+        if (!c['Agents'] || typeof c['Agents'] !== 'object' || Array.isArray(c['Agents'])) {
+            errors.push('Agents must be an object.');
+        } else {
+            const agents = c['Agents'] as Record<string, unknown>;
+            for (const k of Object.keys(agents)) {
+                if (!['ListMode'].includes(k)) {
+                    errors.push(`Unknown Agents key: ${k}`);
+                }
+            }
+            if (agents['ListMode'] !== undefined && !['Extend', 'Replace'].includes(agents['ListMode'] as string)) {
+                errors.push(`Invalid Agents.ListMode: ${String(agents['ListMode'])}`);
+            }
+        }
+    }
+
+    if (c['Labels'] !== undefined) {
+        if (!c['Labels'] || typeof c['Labels'] !== 'object' || Array.isArray(c['Labels'])) {
+            errors.push('Labels must be an object.');
+        } else {
+            const labels = c['Labels'] as Record<string, unknown>;
+            if (labels['Tabs'] !== undefined) {
+                if (!labels['Tabs'] || typeof labels['Tabs'] !== 'object' || Array.isArray(labels['Tabs'])) {
+                    errors.push('Labels.Tabs must be an object.');
+                }
+            }
+        }
+    }
+
+    if (c['Children'] !== undefined) {
+        if (!c['Children'] || typeof c['Children'] !== 'object' || Array.isArray(c['Children'])) {
+            errors.push('Children must be an object.');
+        } else {
+            const ch = c['Children'] as Record<string, unknown>;
+            if (ch['AllowedTypeCodes'] !== undefined && !Array.isArray(ch['AllowedTypeCodes'])) {
+                errors.push('Children.AllowedTypeCodes must be an array of strings.');
+            }
+            if (ch['MaxOpen'] !== undefined && (typeof ch['MaxOpen'] !== 'number' || ch['MaxOpen'] < 0 || !Number.isInteger(ch['MaxOpen']))) {
+                errors.push('Children.MaxOpen must be a non-negative integer.');
+            }
+        }
+    }
+
+    if (c['Admin'] !== undefined) {
+        if (!c['Admin'] || typeof c['Admin'] !== 'object' || Array.isArray(c['Admin'])) {
+            errors.push('Admin must be an object.');
+        } else {
+            const adm = c['Admin'] as Record<string, unknown>;
+            if (adm['RoleNames'] !== undefined && !Array.isArray(adm['RoleNames'])) {
+                errors.push('Admin.RoleNames must be an array of strings.');
+            }
+        }
+    }
+
+    if (c['SpaceOverridable'] !== undefined && !Array.isArray(c['SpaceOverridable'])) {
+        errors.push('SpaceOverridable must be an array of strings.');
+    }
+
+    if (c['Extensions'] !== undefined) {
+        if (!c['Extensions'] || typeof c['Extensions'] !== 'object' || Array.isArray(c['Extensions'])) {
+            errors.push('Extensions must be an object.');
+        }
+    }
+
+    if (level === 'space') {
+        const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
+        const isAllowed = (dottedKey: string): boolean => {
+            if (overridable.has(dottedKey)) return true;
+            const prefix = dottedKey.split('.')[0];
+            return overridable.has(prefix);
+        };
+
+        if (c['StorageAccountID'] !== undefined && !isAllowed('StorageAccountID')) {
+            errors.push("StorageAccountID cannot be overridden by space: not in type's SpaceOverridable.");
+        }
+        if (c['PostCloseAccess'] !== undefined && !isAllowed('PostCloseAccess')) {
+            errors.push("PostCloseAccess cannot be overridden by space: not in type's SpaceOverridable.");
+        }
+        if (c['PostCloseAccessDays'] !== undefined && !isAllowed('PostCloseAccessDays')) {
+            errors.push("PostCloseAccessDays cannot be overridden by space: not in type's SpaceOverridable.");
+        }
+        if (c['Chats'] && typeof c['Chats'] === 'object') {
+            const chats = c['Chats'] as Record<string, unknown>;
+            if (chats['WhoCanStart'] !== undefined && !isAllowed('Chats.WhoCanStart')) {
+                errors.push("Chats.WhoCanStart cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+            if (chats['AgentReplyMode'] !== undefined && !isAllowed('Chats.AgentReplyMode')) {
+                errors.push("Chats.AgentReplyMode cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+            if (chats['HistoryOnAdd'] !== undefined && !isAllowed('Chats.HistoryOnAdd')) {
+                errors.push("Chats.HistoryOnAdd cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+        }
+        if (c['Agents'] && typeof c['Agents'] === 'object') {
+            const agents = c['Agents'] as Record<string, unknown>;
+            if (agents['ListMode'] !== undefined && !isAllowed('Agents.ListMode')) {
+                errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+        }
+        if (c['Extensions'] && typeof c['Extensions'] === 'object') {
+            for (const appName of Object.keys(c['Extensions'])) {
+                if (!isAllowed(`Extensions.${appName}`) && !isAllowed('Extensions')) {
+                    errors.push(`Extensions.${appName} cannot be overridden by space: not in type's SpaceOverridable.`);
+                }
+            }
+        }
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Pure hierarchical resolver:
+ * sub-space -> parent spaces -> type -> app.
+ * First set value wins for each key.
+ * Enforces type.SpaceOverridable on all space-level values.
+ * Throws MissingAppSettingsError if app configuration is missing.
+ */
+export function ResolveCollaborationSettings(
+    params: ResolveCollaborationSettingsParams
+): ResolvedCollaborationSettings {
+    if (!params.app) {
+        throw new MissingAppSettingsError();
+    }
+
+    const typeConfig = params.type;
+    const appConfig = params.app;
+    const spaces = (params.spaces ?? []).filter((s): s is CollaborationSettings => !!s);
+    const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
+
+    const isOverridable = (dottedKey: string): boolean => {
+        if (overridable.has(dottedKey)) return true;
+        const prefix = dottedKey.split('.')[0];
+        return overridable.has(prefix);
+    };
+
+    const resolveScalar = <T>(
+        dottedKey: string,
+        getter: (s: CollaborationSettings) => T | undefined,
+        fallback: T
+    ): T => {
+        if (isOverridable(dottedKey)) {
+            for (const s of spaces) {
+                const val = getter(s);
+                if (val !== undefined) return val;
+            }
+        }
+        if (typeConfig) {
+            const val = getter(typeConfig);
+            if (val !== undefined) return val;
+        }
+        const appVal = getter(appConfig);
+        if (appVal !== undefined) return appVal;
+        return fallback;
+    };
+
+    const storageAccountId = resolveScalar(
+        'StorageAccountID',
+        s => s.StorageAccountID,
+        DEFAULT_COLLABORATION_SETTINGS.StorageAccountID
+    );
+
+    const postCloseAccess = resolveScalar(
+        'PostCloseAccess',
+        s => s.PostCloseAccess,
+        DEFAULT_COLLABORATION_SETTINGS.PostCloseAccess
+    );
+
+    const postCloseAccessDays = resolveScalar(
+        'PostCloseAccessDays',
+        s => s.PostCloseAccessDays,
+        DEFAULT_COLLABORATION_SETTINGS.PostCloseAccessDays
+    );
+
+    const whoCanStart = resolveScalar(
+        'Chats.WhoCanStart',
+        s => s.Chats?.WhoCanStart,
+        DEFAULT_COLLABORATION_SETTINGS.Chats.WhoCanStart
+    );
+
+    const agentReplyMode = resolveScalar(
+        'Chats.AgentReplyMode',
+        s => s.Chats?.AgentReplyMode,
+        DEFAULT_COLLABORATION_SETTINGS.Chats.AgentReplyMode
+    );
+
+    const historyOnAdd = resolveScalar(
+        'Chats.HistoryOnAdd',
+        s => s.Chats?.HistoryOnAdd,
+        DEFAULT_COLLABORATION_SETTINGS.Chats.HistoryOnAdd
+    );
+
+    const listMode = resolveScalar(
+        'Agents.ListMode',
+        s => s.Agents?.ListMode,
+        DEFAULT_COLLABORATION_SETTINGS.Agents.ListMode
+    );
+
+    let tabs: Record<string, string> | undefined = {
+        ...(appConfig.Labels?.Tabs ?? {}),
+        ...(typeConfig?.Labels?.Tabs ?? {}),
+    };
+    if (isOverridable('Labels.Tabs') || isOverridable('Labels')) {
+        for (const s of [...spaces].reverse()) {
+            if (s.Labels?.Tabs) {
+                tabs = { ...tabs, ...s.Labels.Tabs };
+            }
+        }
+    }
+    if (Object.keys(tabs).length === 0) {
+        tabs = undefined;
+    }
+
+    const extensions: Record<string, Record<string, ConfigurationValue>> = {
+        ...(appConfig.Extensions ?? {}),
+        ...(typeConfig?.Extensions ?? {}),
+    };
+    for (const s of [...spaces].reverse()) {
+        if (s.Extensions) {
+            for (const [appName, ext] of Object.entries(s.Extensions)) {
+                if (isOverridable(`Extensions.${appName}`) || isOverridable('Extensions')) {
+                    extensions[appName] = {
+                        ...(extensions[appName] ?? {}),
+                        ...ext,
+                    };
+                }
+            }
+        }
+    }
+
+    return {
+        StorageAccountID: storageAccountId,
+        PostCloseAccess: postCloseAccess,
+        PostCloseAccessDays: postCloseAccessDays,
+        Chats: {
+            WhoCanStart: whoCanStart,
+            AgentReplyMode: agentReplyMode,
+            HistoryOnAdd: historyOnAdd,
+        },
+        Agents: {
+            ListMode: listMode,
+        },
+        Labels: tabs ? { Tabs: tabs } : undefined,
+        Children: typeConfig?.Children,
+        Admin: typeConfig?.Admin,
+        Extensions: extensions,
+    };
+}

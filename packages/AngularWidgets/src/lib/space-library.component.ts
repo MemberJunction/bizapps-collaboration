@@ -77,7 +77,7 @@ export interface LibrarySmartView {
         <div class="legend">
           <div class="row gap8">
             <mjc-band-chip Band="Shared" Label="Shared" />
-            <span class="fs12 muted">Both firms</span>
+            <span class="fs12 muted">Shared band</span>
           </div>
           <div class="row gap8">
             <mjc-band-chip Band="Team" Label="Team" />
@@ -184,8 +184,10 @@ export interface LibrarySmartView {
           [FlagDescription]="PreviewFlagDescription"
           [ShareButtonLabel]="PreviewShareButtonLabel"
           [RecentUses]="PreviewRecentUses"
+          [FileId]="SelectedRow?.fileId || ''"
           (CloseRequested)="onCloseDrawer()"
           (ShareRequested)="onShareFromPreview()"
+          (OpenFileRequested)="onOpenFile($event)"
         />
       }
     </div>
@@ -458,20 +460,14 @@ export interface LibrarySmartView {
   `],
 })
 export class CollabSpaceLibraryComponent {
-  @Input() public TotalCount = 24;
-  @Input() public SharedCount = 9;
-  @Input() public TeamCount = 15;
+  @Input() public TotalCount = 0;
+  @Input() public SharedCount = 0;
+  @Input() public TeamCount = 0;
 
   @Input() public ActiveFolderId = 'all';
   @Input() public ActiveBandFilter: 'All' | 'Shared' | 'Team' = 'All';
 
-  @Input() public Collections: LibraryCollection[] = [
-    { id: 'deliv', name: 'Deliverables', band: 'Shared', count: 5 },
-    { id: 'proc', name: 'Process maps', band: 'Shared', count: 3 },
-    { id: 'int', name: 'Interviews', band: 'Team', count: 9 },
-    { id: 'vendor', name: 'Vendor scoring', band: 'Team', count: 3 },
-    { id: 'contracts', name: 'Contracts', band: 'Team', count: 2 },
-  ];
+  @Input() public Collections: LibraryCollection[] = [];
 
   @Input() public SmartViews: LibrarySmartView[] = [];
 
@@ -488,7 +484,6 @@ export class CollabSpaceLibraryComponent {
   @Input() public PreviewFlagDescription = '';
   @Input() public PreviewShareButtonLabel = '';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
-  @Input() public SharedBandLegend = '';
   @Input() public TeamBandLegend = '';
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();
@@ -497,6 +492,11 @@ export class CollabSpaceLibraryComponent {
   @Output() public ShareRequested = new EventEmitter<LibraryRowModel>();
   @Output() public CloseDrawerRequested = new EventEmitter<void>();
   @Output() public FilterButtonClickRequested = new EventEmitter<void>();
+  @Output() public OpenFileRequested = new EventEmitter<string>();
+
+  public onOpenFile(fileId: string): void {
+    this.OpenFileRequested.emit(fileId);
+  }
 
   public get FilteredRows(): LibraryRowModel[] {
     if (this.ActiveBandFilter === 'All') {

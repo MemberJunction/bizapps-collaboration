@@ -1,0 +1,41 @@
+{
+  "name": "@mj-biz-apps/collaboration-engine-base",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Browser-safe collaboration engine base for BizApps Collaboration — metadata caches (space types, role types, task types, application settings, authorizations, space agents/skills/knowledge), settings resolution, and typed lookups shared by widgets, host, and server.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@mj-biz-apps/collaboration-core": "0.1.0",
+    "@mj-biz-apps/collaboration-entities": "0.1.0"
+  },
+  "peerDependencies": {
+    "@memberjunction/core": "^6.1.2",
+    "@memberjunction/core-entities": "^6.1.2",
+    "@memberjunction/global": "^6.1.2"
+  },
+  "devDependencies": {
+    "@memberjunction/core": "6.1.3",
+    "@memberjunction/core-entities": "6.1.3",
+    "@memberjunction/global": "6.1.3",
+    "typescript": "5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/bizapps-collaboration"
+  },
+  "mjUILayer": "runtime"
+}

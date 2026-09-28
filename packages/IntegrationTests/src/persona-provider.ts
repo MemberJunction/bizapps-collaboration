@@ -71,6 +71,7 @@ export async function mintUserApiKey(
     label: string,
 ): Promise<{ rawKey: string; keyId: string; scopeRuleId: string }> {
     const engine = GetAPIKeyEngine();
+    await engine.Config(false, ctx.User, ctx.Provider as IMetadataProvider);
     const created = await engine.CreateAPIKey({ UserId: userId, Label: label }, ctx.User);
     if (!created.Success || !created.RawKey || !created.APIKeyId) {
         throw new Error(`CreateAPIKey('${label}') failed: ${created.Error ?? 'no raw key returned'}`);

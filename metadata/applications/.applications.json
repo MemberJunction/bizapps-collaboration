@@ -8,7 +8,7 @@
     },
     "fields": {
       "Name": "Collaboration",
-      "Description": "Spaces for client, committee, and cohort work.",
+      "Description": "Spaces for team, project, and group collaboration.",
       "Icon": "fa-solid fa-people-group",
       "Path": "collaboration",
       "DefaultForNewUser": true,

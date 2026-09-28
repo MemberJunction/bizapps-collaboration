@@ -1,9 +1,28 @@
-import { BaseEntity, LogError, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { authorizeSpaceWrite, chainsForSpaceWrite, membershipReaches, parentCreatesCycle, planSpaceWrite } from '@mj-biz-apps/collaboration-core';
-import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import {
+    authorizeSpaceWrite,
+    chainsForSpaceWrite,
+    membershipReaches,
+    parentCreatesCycle,
+    planSpaceWrite,
+    ResolveSpaceRules,
+    ValidateCollaborationSettings,
+    type CollaborationSettings,
+    type ISpaceConfiguration,
+    type ISpaceTypeConfiguration,
+} from '@mj-biz-apps/collaboration-core';
+import {
+    mjBizAppsCollaborationSpaceChatEntity,
+    mjBizAppsCollaborationSpaceEntity,
+    type mjBizAppsCollaborationSpaceTypeEntity,
+} from '@mj-biz-apps/collaboration-entities';
+import { type BaseSpaceTypeServerDriver } from './base-space-type-server-driver.js';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { ServerDriverRegistry } from './server-driver-registry.js';
+import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -26,54 +45,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             return result;
         }
 
-        if (!this.IsSaved) {
-            const typeId = this.SpaceTypeID ? parseUuid(this.SpaceTypeID) : null;
-            if (!typeId) {
-                return fail(result, 'SpaceTypeID', 'Space change refused: the space type id is not valid.');
-            }
-            let defaultAllow: boolean;
-            let defaultAgent: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
-            try {
-                const system = await requireSystemUser(this);
-                const rv = new RunView(this.RunViewProviderToUse);
-                const typeRows = await rv.RunView<{ DefaultAllowParentAssignees: boolean; DefaultAgentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Types',
-                    ExtraFilter: `ID = '${typeId}'`,
-                    Fields: ['DefaultAllowParentAssignees', 'DefaultAgentRetrieval'],
-                    MaxRows: 1,
-                    ResultType: 'simple',
-                }, system);
-                if (!typeRows.Success || !typeRows.Results?.[0]) {
-                    LogError(`Space change refused: space type ${typeId} could not be read: ${typeRows.ErrorMessage ?? 'no rows returned'}`);
-                    return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
-                }
-                const spaceType = typeRows.Results[0];
-                defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
-                defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
-            } catch (err) {
-                LogError(`Space change refused: error reading space type ${typeId}: ${err instanceof Error ? err.message : String(err)}`);
-                return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
-            }
-
-            const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
-            const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
-
-            if (!allowDirty) {
-                this.AllowParentAssignees = defaultAllow;
-            }
-            if (!agentDirty) {
-                this.AgentRetrieval = defaultAgent;
-            }
-
-            if (!isStaffUser(user)) {
-                if (this.AllowParentAssignees !== defaultAllow) {
-                    return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
-                }
-                if (this.AgentRetrieval !== defaultAgent) {
-                    return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
-                }
-            }
-        } else {
+        if (this.IsSaved) {
             const allowParentChanged = this.Fields.some((field) => field.Name === 'AllowParentAssignees' && field.Dirty);
             if (allowParentChanged && !isStaffUser(user)) {
                 return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
@@ -81,6 +53,154 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             const agentRetrievalChanged = this.Fields.some((field) => field.Name === 'AgentRetrieval' && field.Dirty);
             if (agentRetrievalChanged && !isStaffUser(user)) {
                 return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+            }
+        }
+
+        const rawTypeId = getFieldVal<string>(this, 'SpaceTypeID');
+        const typeId = rawTypeId ? parseUuid(String(rawTypeId)) : null;
+
+        if (!this.IsSaved && !typeId) {
+            return fail(result, 'SpaceTypeID', 'Space change refused: the space type id is not valid.');
+        }
+
+        let spaceType: mjBizAppsCollaborationSpaceTypeEntity | null = null;
+        if (typeId) {
+            const effectiveMd = asMetadata(this.ProviderToUse) ?? (Metadata.Provider as IMetadataProvider | undefined);
+            if (effectiveMd && typeof effectiveMd.EntityByName === 'function') {
+                try {
+                    await CollaborationEngine.Instance.EnsureLoaded(user, effectiveMd);
+                } catch (e) {
+                    LogError(`Space change refused: failed to load CollaborationEngine: ${e instanceof Error ? e.message : String(e)}`);
+                    return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
+                }
+            }
+            let found = CollaborationEngine.Instance.SpaceTypeById(typeId);
+            if (!found && effectiveMd && typeof effectiveMd.EntityByName === 'function') {
+                try {
+                    const typeObj = await effectiveMd.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(
+                        'MJ_BizApps_Collaboration: Space Types',
+                        user
+                    );
+                    if (await typeObj.Load(typeId)) {
+                        found = typeObj;
+                    }
+                } catch (e) {
+                    LogError(`Space change refused: failed to load space type ${typeId}: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+            if (!found) {
+                LogError(`Space change refused: space type ${typeId} could not be read from engine`);
+                return fail(result, 'SpaceTypeID', 'Space change refused: the space type could not be read.');
+            }
+            spaceType = found;
+        }
+
+        let typeConfig: ISpaceTypeConfiguration | null = null;
+        if (spaceType?.Configuration) {
+            try {
+                typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
+            } catch {
+                // Ignore parse errors on type configuration in space save
+            }
+        }
+
+        let parsedSpaceConfig: CollaborationSettings | null = null;
+        const rawConfig = getFieldVal<string>(this, 'Configuration');
+        if (rawConfig) {
+            try {
+                parsedSpaceConfig = JSON.parse(rawConfig) as CollaborationSettings;
+            } catch {
+                return fail(result, 'Configuration', 'Space configuration must be valid JSON.');
+            }
+
+            const configValidation = ValidateCollaborationSettings(
+                parsedSpaceConfig,
+                'space',
+                typeConfig as CollaborationSettings
+            );
+            if (!configValidation.valid) {
+                return fail(result, 'Configuration', `Invalid space configuration: ${configValidation.errors.join('; ')}`);
+            }
+
+            if (parsedSpaceConfig.StorageAccountID) {
+                const storageCheck = CollaborationEngine.Instance.ValidateStorageAccountActive(parsedSpaceConfig.StorageAccountID);
+                if (!storageCheck.valid) {
+                    return fail(result, 'Configuration', storageCheck.error ?? 'Configured storage account does not exist or is not active.');
+                }
+            }
+        }
+
+        const configDirty = this.Fields.some((f) => f.Name === 'Configuration' && f.Dirty);
+        const closeFieldsDirty = this.Fields.some((f) => (f.Name === 'PostCloseAccess' || f.Name === 'PostCloseAccessDays') && f.Dirty);
+        const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
+        const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
+
+        if (isClosing) {
+            const closedDate = new Date(this.ClosedAt!).getTime();
+            if (closedDate > Date.now()) {
+                return fail(result, 'ClosedAt', 'Space change refused: ClosedAt cannot be in the future.');
+            }
+        }
+
+        if (isReopening) {
+            const otherDirty = this.Fields.filter((f) => f.Dirty && f.Name !== 'ClosedAt' && !f.Name.startsWith('__mj_'));
+            if (otherDirty.length > 0) {
+                return fail(result, otherDirty[0].Name, 'Space change refused: reopening a space cannot modify other fields simultaneously.');
+            }
+        }
+
+        if (configDirty || (closeFieldsDirty && !isClosing)) {
+            const canConfig = await CollaborationEngine.Instance.UserCanConfigureSpaces(
+                user,
+                this.IsSaved ? this.ID : null,
+                asMetadata(this.ProviderToUse) ?? Metadata.Provider
+            );
+            if (!canConfig) {
+                const errorField = closeFieldsDirty && !isClosing ? 'PostCloseAccess' : 'Configuration';
+                return fail(result, errorField, "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
+            }
+        }
+
+        let driver: BaseSpaceTypeServerDriver | null = null;
+        if (spaceType) {
+            try {
+                driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
+            } catch (driverErr) {
+                return fail(result, 'SpaceTypeID', driverErr instanceof Error ? driverErr.message : 'Space change refused: driver could not be resolved.');
+            }
+        }
+
+        const effectiveRules = ResolveSpaceRules(typeConfig, parsedSpaceConfig as ISpaceConfiguration);
+        const adjustedRules = driver && spaceType
+            ? await driver.AdjustRules(
+                { actingUser: user, provider: this.ProviderToUse, space: this, spaceType, effectiveRules },
+                effectiveRules
+            )
+            : effectiveRules;
+
+        if (!this.IsSaved) {
+            const allowDirty = this.Fields.some((f) => f.Name === 'AllowParentAssignees' && f.Dirty);
+            const agentDirty = this.Fields.some((f) => f.Name === 'AgentRetrieval' && f.Dirty);
+
+            if (spaceType) {
+                const defaultAllow = spaceType.DefaultAllowParentAssignees !== undefined ? !!spaceType.DefaultAllowParentAssignees : true;
+                const defaultAgent = spaceType.DefaultAgentRetrieval ?? 'Included';
+
+                if (!allowDirty) {
+                    this.AllowParentAssignees = defaultAllow;
+                }
+                if (!agentDirty) {
+                    this.AgentRetrieval = defaultAgent;
+                }
+
+                if (!isStaffUser(user)) {
+                    if (allowDirty && this.AllowParentAssignees !== defaultAllow) {
+                        return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+                    }
+                    if (agentDirty && this.AgentRetrieval !== defaultAgent) {
+                        return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+                    }
+                }
             }
         }
         const spaceId = this.ID ? parseUuid(this.ID) : null;
@@ -116,7 +236,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         } catch (error) {
             return fail(result, 'ParentID', error instanceof Error ? error.message : 'Space change refused: the tree could not be read completely.');
         }
-        const here = hereId && hereContext ? membershipReaches(hereContext.spaces, hereContext.memberships, caller, hereId) : null;
+        const here = hereId && hereContext ? membershipReaches(hereContext.spaces, hereContext.memberships, caller, hereId, new Date(), isReopening) : null;
         const onParent = parentId && destination ? membershipReaches(destination.spaces, destination.memberships, caller, parentId) : null;
         const decision = authorizeSpaceWrite({
             kind,
@@ -145,16 +265,111 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (spaceId && parentCreatesCycle(nodes.map((space) => space.id === spaceId ? { ...space, parentId } : space), spaceId, parentId)) {
             return fail(result, 'ParentID', 'This parent would put the space inside its own subtree.');
         }
+
+        const isNew = !this.IsSaved;
+        const isMoving = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
+
+        if (isClosing) {
+            const postClose = await CollaborationEngine.Instance.ResolvePostCloseAccessForSpace({
+                spaceId: this.ID,
+                currentConfig: parsedSpaceConfig,
+                parentId: this.ParentID,
+                spaceTypeId: this.SpaceTypeID,
+                provider: asMetadata(this.ProviderToUse) ?? Metadata.Provider,
+                contextUser: user,
+            });
+            this.PostCloseAccess = postClose.access;
+            this.PostCloseAccessDays = postClose.days;
+        }
+
+        const changeKind = isNew ? 'Create' : isClosing ? 'Close' : isReopening ? 'Reopen' : isMoving ? 'Move' : 'Update';
+
+        if (driver && spaceType) {
+            const driverValidation = await driver.ValidateSpaceChange({
+                actingUser: user,
+                provider: this.ProviderToUse,
+                space: this,
+                spaceType: spaceType as mjBizAppsCollaborationSpaceTypeEntity,
+                effectiveRules: adjustedRules,
+                kind: changeKind,
+            });
+            if (!driverValidation.ok) {
+                return fail(result, driverValidation.field ?? 'ID', driverValidation.message ?? 'Space change refused by driver.');
+            }
+        }
+
+        if (parentId) {
+            try {
+                const parentInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(parentId, this);
+                const childValidation = await parentInfo.driver.ValidateChildSpaceChange({
+                    actingUser: user,
+                    provider: this.ProviderToUse,
+                    space: parentInfo.space,
+                    spaceType: parentInfo.spaceType,
+                    effectiveRules: ResolveSpaceRules(null, null),
+                    childSpace: this,
+                    kind: isNew ? 'CreateChild' : 'MoveChildIn',
+                });
+                if (!childValidation.ok) {
+                    return fail(result, childValidation.field ?? 'ParentID', childValidation.message ?? 'Child space change refused by parent driver.');
+                }
+            } catch (err) {
+                return fail(result, 'ParentID', err instanceof Error ? err.message : 'Could not validate with parent driver.');
+            }
+        }
+
         return result;
     }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        const wasClosed = !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue;
+        const isNowClosed = !!this.ClosedAt;
+        const justClosed = !wasClosed && isNowClosed;
+
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
+            const user = this.ContextCurrentUser;
             try {
-                await ensureConversation(this, this.ContextCurrentUser);
+                await ensureConversation(this, user);
             } catch (error) {
                 LogError(`Space conversation was not bound: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            try {
+                const spaceType = await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this);
+                const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
+                await driver.OnSpaceChanged({
+                    actingUser: user,
+                    provider: this.ProviderToUse,
+                    space: this,
+                    spaceType,
+                    effectiveRules: ResolveSpaceRules(null, null),
+                    kind: justClosed ? 'Close' : 'Update',
+                });
+
+                if (this.ParentID) {
+                    const parentInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.ParentID, this);
+                    await parentInfo.driver.OnChildSpaceChanged({
+                        actingUser: user,
+                        provider: this.ProviderToUse,
+                        space: parentInfo.space,
+                        spaceType: parentInfo.spaceType,
+                        effectiveRules: ResolveSpaceRules(null, null),
+                        childSpace: this,
+                        kind: 'CreateChild',
+                    });
+                }
+            } catch (driverErr) {
+                LogError(`Space driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+            }
+
+            if (justClosed) {
+                notifySpaceLifecycleSubscribers(this.ProviderToUse, {
+                    spaceId: this.ID,
+                    actingUserId: user.ID,
+                    event: 'AfterSpaceClosed',
+                    timestamp: new Date(),
+                });
             }
         }
         return ok;
@@ -177,35 +392,45 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         return;
     }
     const system = await requireSystemUser(space);
-    const existing = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string }>({
-        EntityName: 'MJ: Conversations',
-        ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${space.ID}'`,
-        Fields: ['ID'],
+    const targetStatus: mjBizAppsCollaborationSpaceChatEntity['Status'] = space.ClosedAt ? 'Archived' : 'Active';
+
+    // 1. Find existing Room for this space by its Space Chats row (Kind = 'Room')
+    const chatExisting = await new RunView(space.RunViewProviderToUse).RunView<{ ID: string; ConversationID: string; Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID = '${space.ID}' AND Kind = 'Room'`,
+        Fields: ['ID', 'ConversationID', 'Status'],
+        OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'simple',
         MaxRows: 1,
     }, system);
-    if (!existing.Success) {
-        LogError(`Space conversation was not bound: ${existing.ErrorMessage ?? 'the lookup failed'}`);
+    if (!chatExisting.Success) {
+        LogError(`Space chat room lookup failed: ${chatExisting.ErrorMessage ?? 'the lookup failed'}`);
         return;
     }
-    const found = existing.Results?.[0]?.ID;
-    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
-    if (found) {
-        if (!(await conversation.Load(found))) {
-            LogError(`Space conversation was not bound: ${found} could not be read.`);
-            return;
+
+    const foundChat = chatExisting.Results?.[0];
+    if (foundChat) {
+        // On later saves, only set the row's status if changed
+        if (foundChat.Status !== targetStatus) {
+            const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+            if (await spaceChat.Load(foundChat.ID)) {
+                spaceChat.Status = targetStatus;
+                const chatSaved = await spaceChat.Save();
+                if (!chatSaved) {
+                    LogError(`Space chat room status was not updated: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+                }
+            } else {
+                LogError(`Space chat room load failed for ID ${foundChat.ID}`);
+            }
         }
-    } else {
-        conversation.NewRecord();
-        conversation.LinkedEntityID = SPACES_ENTITY_ID;
-        conversation.LinkedRecordID = space.ID;
+        return;
     }
-    const alreadyBound = !!found
-        && conversation.UserID?.toLowerCase() === system.ID.toLowerCase()
-        && conversation.ApplicationScope === 'Application'
-        && conversation.ApplicationID?.toLowerCase() === COLLABORATION_APP_ID.toLowerCase()
-        && conversation.Name === space.Name;
-    if (alreadyBound) return;
+
+    // 2. Create the room when the space is created (no existing Room Space Chat)
+    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
+    conversation.NewRecord();
+    conversation.LinkedEntityID = SPACES_ENTITY_ID;
+    conversation.LinkedRecordID = space.ID;
     conversation.UserID = system.ID;
     conversation.Name = space.Name;
     conversation.ApplicationScope = 'Application';
@@ -213,7 +438,35 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
     const saved = await conversation.Save();
     if (!saved) {
         LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+        return;
     }
+
+    const convId = conversation.ID;
+    if (!convId) return;
+
+    const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+    spaceChat.NewRecord();
+    spaceChat.SpaceID = space.ID;
+    spaceChat.ConversationID = convId;
+    spaceChat.Name = space.Name;
+    spaceChat.Kind = 'Room';
+    spaceChat.Status = targetStatus;
+    const chatSaved = await spaceChat.Save();
+    if (!chatSaved) {
+        LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+        const deleted = await conversation.Delete();
+        if (!deleted) {
+            LogError(`Failed to cleanup unbound conversation ${convId}: ${conversation.LatestResult?.CompleteMessage ?? 'delete returned false'}`);
+        }
+    }
+}
+
+function getFieldVal<T>(entity: BaseEntity, name: string): T | undefined {
+    const f = entity.Fields?.find((field) => field.Name === name);
+    if (f !== undefined) return f.Value as T;
+    const desc = Object.getOwnPropertyDescriptor(entity, name);
+    if (desc && 'value' in desc) return desc.value as T;
+    return undefined;
 }
 
 export function LoadSpaceEntityServer(): void {

@@ -17,7 +17,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationShareNoticeEntity, mjBizAppsCollaborationSpaceAgentSkillEntity, mjBizAppsCollaborationSpaceAgentEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceKnowledgeSourceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceRoleTypeEntity, mjBizAppsCollaborationSpaceTypeEntity, mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
     
 
 //****************************************************************************
@@ -384,6 +384,569 @@ export class mjBizAppsCollaborationShareNoticeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Agent Skills
+//****************************************************************************
+@ObjectType()
+export class mjBizAppsCollaborationSpaceAgentSkill_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SkillID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceTypeID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Skill?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    SpaceType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Space?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agent Skills
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceAgentSkillInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SkillID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID: string | null;
+
+    @Field({ nullable: true })
+    SpaceID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agent Skills
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceAgentSkillInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SkillID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID?: string | null;
+
+    @Field({ nullable: true })
+    SpaceID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Agent Skills
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceAgentSkillViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceAgentSkill_])
+    Results: mjBizAppsCollaborationSpaceAgentSkill_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceAgentSkill_)
+export class mjBizAppsCollaborationSpaceAgentSkillResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSkillViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSkillViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSkillViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSkillViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentSkillViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentSkillDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Agent Skills';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => mjBizAppsCollaborationSpaceAgentSkill_, { nullable: true })
+    async mjBizAppsCollaborationSpaceAgentSkill(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceAgentSkill_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Agent Skills', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceAgentSkills')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Agent Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Agent Skills', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSkill_)
+    async CreatemjBizAppsCollaborationSpaceAgentSkill(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpaceAgentSkillInput) input: CreatemjBizAppsCollaborationSpaceAgentSkillInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Agent Skills', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSkill_)
+    async UpdatemjBizAppsCollaborationSpaceAgentSkill(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpaceAgentSkillInput) input: UpdatemjBizAppsCollaborationSpaceAgentSkillInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Agent Skills', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceAgentSkill_)
+    async DeletemjBizAppsCollaborationSpaceAgentSkill(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Agent Skills', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Agents
+//****************************************************************************
+@ObjectType()
+export class mjBizAppsCollaborationSpaceAgent_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceTypeID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceID?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsDefault?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    SpaceType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Space?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agents
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceAgentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID: string | null;
+
+    @Field({ nullable: true })
+    SpaceID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Agents
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceAgentInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID?: string | null;
+
+    @Field({ nullable: true })
+    SpaceID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Agents
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceAgentViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceAgent_])
+    Results: mjBizAppsCollaborationSpaceAgent_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceAgent_)
+export class mjBizAppsCollaborationSpaceAgentResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceAgentViewResult)
+    async RunmjBizAppsCollaborationSpaceAgentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Agents';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => mjBizAppsCollaborationSpaceAgent_, { nullable: true })
+    async mjBizAppsCollaborationSpaceAgent(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceAgent_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceAgents')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Agents', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceAgent_)
+    async CreatemjBizAppsCollaborationSpaceAgent(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpaceAgentInput) input: CreatemjBizAppsCollaborationSpaceAgentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Agents', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => mjBizAppsCollaborationSpaceAgent_)
+    async UpdatemjBizAppsCollaborationSpaceAgent(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpaceAgentInput) input: UpdatemjBizAppsCollaborationSpaceAgentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Agents', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceAgent_)
+    async DeletemjBizAppsCollaborationSpaceAgent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Agents', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Chats
+//****************************************************************************
+@ObjectType()
+export class mjBizAppsCollaborationSpaceChat_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ConversationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    Subject?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Kind?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Space?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Conversation?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Chats
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceChatInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Subject: string | null;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Chats
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceChatInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SpaceID?: string;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Subject?: string | null;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Chats
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceChatViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceChat_])
+    Results: mjBizAppsCollaborationSpaceChat_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceChat_)
+export class mjBizAppsCollaborationSpaceChatResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceChatViewResult)
+    async RunmjBizAppsCollaborationSpaceChatViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceChatViewResult)
+    async RunmjBizAppsCollaborationSpaceChatViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceChatViewResult)
+    async RunmjBizAppsCollaborationSpaceChatDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Chats';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => mjBizAppsCollaborationSpaceChat_, { nullable: true })
+    async mjBizAppsCollaborationSpaceChat(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceChat_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Chats', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceChats')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Chats', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Chats', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceChat_)
+    async CreatemjBizAppsCollaborationSpaceChat(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpaceChatInput) input: CreatemjBizAppsCollaborationSpaceChatInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Chats', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => mjBizAppsCollaborationSpaceChat_)
+    async UpdatemjBizAppsCollaborationSpaceChat(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpaceChatInput) input: UpdatemjBizAppsCollaborationSpaceChatInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Chats', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceChat_)
+    async DeletemjBizAppsCollaborationSpaceChat(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Chats', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ_BizApps_Collaboration: Space Items
 //****************************************************************************
 @ObjectType({ description: `An item in exactly one space: EntityID + RecordID, plus Team or Shared. Unique on (EntityID, RecordID) so an item cannot have two parents.` })
@@ -599,6 +1162,182 @@ export class mjBizAppsCollaborationSpaceItemResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ_BizApps_Collaboration: Space Knowledge Sources
+//****************************************************************************
+@ObjectType()
+export class mjBizAppsCollaborationSpaceKnowledgeSource_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ContentSourceID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceTypeID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SpaceID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ContentSource?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    SpaceType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Space?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Knowledge Sources
+//****************************************************************************
+@InputType()
+export class CreatemjBizAppsCollaborationSpaceKnowledgeSourceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID: string | null;
+
+    @Field({ nullable: true })
+    SpaceID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ_BizApps_Collaboration: Space Knowledge Sources
+//****************************************************************************
+@InputType()
+export class UpdatemjBizAppsCollaborationSpaceKnowledgeSourceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string;
+
+    @Field({ nullable: true })
+    SpaceTypeID?: string | null;
+
+    @Field({ nullable: true })
+    SpaceID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ_BizApps_Collaboration: Space Knowledge Sources
+//****************************************************************************
+@ObjectType()
+export class RunmjBizAppsCollaborationSpaceKnowledgeSourceViewResult {
+    @Field(() => [mjBizAppsCollaborationSpaceKnowledgeSource_])
+    Results: mjBizAppsCollaborationSpaceKnowledgeSource_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(mjBizAppsCollaborationSpaceKnowledgeSource_)
+export class mjBizAppsCollaborationSpaceKnowledgeSourceResolver extends ResolverBase {
+    @Query(() => RunmjBizAppsCollaborationSpaceKnowledgeSourceViewResult)
+    async RunmjBizAppsCollaborationSpaceKnowledgeSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceKnowledgeSourceViewResult)
+    async RunmjBizAppsCollaborationSpaceKnowledgeSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunmjBizAppsCollaborationSpaceKnowledgeSourceViewResult)
+    async RunmjBizAppsCollaborationSpaceKnowledgeSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ_BizApps_Collaboration: Space Knowledge Sources';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => mjBizAppsCollaborationSpaceKnowledgeSource_, { nullable: true })
+    async mjBizAppsCollaborationSpaceKnowledgeSource(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<mjBizAppsCollaborationSpaceKnowledgeSource_ | null> {
+        this.CheckUserReadPermissions('MJ_BizApps_Collaboration: Space Knowledge Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView('__mj_BizAppsCollaboration', 'vwSpaceKnowledgeSources')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ_BizApps_Collaboration: Space Knowledge Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ_BizApps_Collaboration: Space Knowledge Sources', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceKnowledgeSource_)
+    async CreatemjBizAppsCollaborationSpaceKnowledgeSource(
+        @Arg('input', () => CreatemjBizAppsCollaborationSpaceKnowledgeSourceInput) input: CreatemjBizAppsCollaborationSpaceKnowledgeSourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ_BizApps_Collaboration: Space Knowledge Sources', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => mjBizAppsCollaborationSpaceKnowledgeSource_)
+    async UpdatemjBizAppsCollaborationSpaceKnowledgeSource(
+        @Arg('input', () => UpdatemjBizAppsCollaborationSpaceKnowledgeSourceInput) input: UpdatemjBizAppsCollaborationSpaceKnowledgeSourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ_BizApps_Collaboration: Space Knowledge Sources', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => mjBizAppsCollaborationSpaceKnowledgeSource_)
+    async DeletemjBizAppsCollaborationSpaceKnowledgeSource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ_BizApps_Collaboration: Space Knowledge Sources', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ_BizApps_Collaboration: Space Members
 //****************************************************************************
 @ObjectType({ description: `One roster row per user per space. Staff and outsiders are both MJ users. Status Active is the row the membership filter accepts.` })
@@ -634,6 +1373,14 @@ export class mjBizAppsCollaborationSpaceMember_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
+    SyncSource?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PersonID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(200)
     Space?: string;
         
@@ -644,6 +1391,10 @@ export class mjBizAppsCollaborationSpaceMember_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     SpaceRoleType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(201)
+    Person?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -673,6 +1424,12 @@ export class CreatemjBizAppsCollaborationSpaceMemberInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    SyncSource: string | null;
+
+    @Field({ nullable: true })
+    PersonID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -700,6 +1457,12 @@ export class UpdatemjBizAppsCollaborationSpaceMemberInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SyncSource?: string | null;
+
+    @Field({ nullable: true })
+    PersonID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1124,6 +1887,31 @@ export class mjBizAppsCollaborationSpaceType_ {
     @MaxLength(50)
     Color?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ServerDriverClass?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    UIDriverClass?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SpaceExtensionEntity?: string;
+        
+    @Field({nullable: true}) 
+    Configuration?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    DefaultInheritsMembership?: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    PostCloseAccess?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    PostCloseAccessDays?: number;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -1197,6 +1985,27 @@ export class CreatemjBizAppsCollaborationSpaceTypeInput {
     @Field({ nullable: true })
     Color: string | null;
 
+    @Field({ nullable: true })
+    ServerDriverClass: string | null;
+
+    @Field({ nullable: true })
+    UIDriverClass: string | null;
+
+    @Field({ nullable: true })
+    SpaceExtensionEntity: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultInheritsMembership?: boolean;
+
+    @Field({ nullable: true })
+    PostCloseAccess?: string;
+
+    @Field(() => Int, { nullable: true })
+    PostCloseAccessDays: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -1269,6 +2078,27 @@ export class UpdatemjBizAppsCollaborationSpaceTypeInput {
 
     @Field({ nullable: true })
     Color?: string | null;
+
+    @Field({ nullable: true })
+    ServerDriverClass?: string | null;
+
+    @Field({ nullable: true })
+    UIDriverClass?: string | null;
+
+    @Field({ nullable: true })
+    SpaceExtensionEntity?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultInheritsMembership?: boolean;
+
+    @Field({ nullable: true })
+    PostCloseAccess?: string;
+
+    @Field(() => Int, { nullable: true })
+    PostCloseAccessDays?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1420,17 +2250,35 @@ export class mjBizAppsCollaborationSpace_ {
     @Field({nullable: true, description: `Target or planned close date/time for the space. Actual closure is recorded in ClosedAt.`}) 
     PlannedCloseAt?: Date;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Font Awesome icon class representing the space (e.g., fa-solid fa-folder-tree, fa-solid fa-briefcase). Overrides SpaceType.IconClass if set.`}) 
     @MaxLength(100)
     IconClass?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `Hex color code representing the space (e.g., #0076b6, #10b981). Overrides SpaceType.Color if set.`}) 
     @MaxLength(50)
     Color?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: `URL of an optional hero banner or background image displayed in the space header and overview.`}) 
     @MaxLength(1000)
     BackgroundImageURL?: string;
+        
+    @Field({nullable: true}) 
+    Configuration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    AnchorEntityID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(450)
+    AnchorRecordID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    PostCloseAccess?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    PostCloseAccessDays?: number;
         
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -1443,6 +2291,10 @@ export class mjBizAppsCollaborationSpace_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Owner?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AnchorEntity?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -1502,6 +2354,21 @@ export class CreatemjBizAppsCollaborationSpaceInput {
     @Field({ nullable: true })
     BackgroundImageURL: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    AnchorEntityID: string | null;
+
+    @Field({ nullable: true })
+    AnchorRecordID: string | null;
+
+    @Field({ nullable: true })
+    PostCloseAccess: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PostCloseAccessDays: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -1559,6 +2426,21 @@ export class UpdatemjBizAppsCollaborationSpaceInput {
 
     @Field({ nullable: true })
     BackgroundImageURL?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    AnchorEntityID?: string | null;
+
+    @Field({ nullable: true })
+    AnchorRecordID?: string | null;
+
+    @Field({ nullable: true })
+    PostCloseAccess?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PostCloseAccessDays?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -1,69 +1,118 @@
 # How Collaboration works
 
-A space is a tree. The root is a relationship (a client, a committee, a cohort). The children are the pieces of work inside it. Closing a child sets `ClosedAt`. The root stays.
+This page states the rules Collaboration enforces. Each rule is marked:
+- **built:** in the code on PR #7's head (`claude/hopeful-bell-6ldk4v`);
+- **planned:** with the item in [the plan](../plans/plan.md) that builds it (PR #8 or later).
 
-Two rules decide what a person can see, and they are the same rules in three places: `packages/Core/src/rules.ts`, the server subclasses, and `fnCollaborationAccess` in the database.
+D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for PR #7.
 
-1. **Reach.** An active membership on a space reaches that space and every descendant whose `InheritsMembership` is true. A space with `InheritsMembership = 0` is sealed. A parent member does not enter it.
-2. **Band.** Shared items are visible to anyone who reaches the space. Team items are visible only when the reaching role has `CanSeeTeamBand`. `agentMayQuote` is the rule an agent must call before it quotes an item. Nothing in the save path calls it yet. Row-level security enforces reach and band. Agent retrieval is not enforced until a search scope is wired.
+## Spaces and reach
 
-The caller's own grants are the ceiling. These rules only narrow.
+A space is a tree. The root is a relationship: a client, a board, a cohort. The children are the pieces of work inside it. Closing a child sets `ClosedAt`; the root stays.
 
-## Invitation
+- **Reach (D1). Built.** An active seat on a space reaches that space and every descendant whose `InheritsMembership` is 1. A space with `InheritsMembership = 0` is sealed: only its own seats reach it, and a seat above it never does.
+- **A person reads the union of what their seats reach (D1). Built.** That's everything any of their seats reaches, anywhere in the tree, not the subtree of the page they're on. So sub-spaces don't only narrow: a director seated on a board and on its sealed compensation committee reads both, and a director seated only on the board doesn't reach the committee.
+- **The nearest seat governs. Built.** When several seats reach the same space, the one the fewest steps above it decides the role's flags there.
+- **One walk, in three places. Built.** `membershipReaches` in `packages/Core/src/rules.ts`, the server's write gates, and `fnCollaborationAccess` in the database. `fnCollaborationTasks` and `fnCollaborationAncestorMembers` build on the same walk. `Space.ParentID` doesn't carry MJ's `IsHierarchy` flag, so CodeGen emits no path columns or traversal functions for it.
+- **Sub-spaces inherit only when explicitly chosen (D22). Built.** `Space.InheritsMembership` defaults to 0 (sealed). Physical removal of `SpaceType.DefaultInheritsMembership` is scheduled for the single-baseline migration in PR #8 (items 14 and 38).
+- **Access after close (D21). Built.** `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, on the space and falling back to type, are enforced by `fnCollaborationAccess` for SQL reads and in `membershipReaches` for in-memory graph resolution. Full write gating after close and reopen rules are enforced in space and task write gates. Agent retrieval scoping post-close is enforced in PR #7 (item 40).
+- **Generic space types (D18). Built.** Only generic space types ship with the app: Workspace, Team, Project, Working Group, Event, Community, and Cohort; role types include generic Outside Admin and Outside Member.
+- **Closing stamp. Built.** Closing a space stamps `ClosedAt`, resolving and stamping `PostCloseAccess` and `PostCloseAccessDays` from the space's configuration or its type. Reopening clears `ClosedAt`.
+- **One metadata engine (D19). Built.** `CollaborationEngineBase` and `CollaborationEngine` cache space types, role types, and authorizations, providing synchronous, strongly-typed lookups without per-request roundtrips.
+- **Settings rights: authorization tree (D23). Built.** Settings tabs and space-type management are gated by the `Configure Spaces` authorization hierarchy via `CollaborationEngine.UserCanConfigureSpaces`.
 
-`SpaceMemberEntityServer.ValidateAsync` calls `refuseInvite` before a roster row is written.
+## Bands
 
-- The signer must reach the target space.
-- Their role must have `CanInvite`.
-- The granted role's `Level` must be at or below the signer's `MaxGrantableLevel`.
-- The type's `MemberCap` counts every row that is not `Removed`.
-- `InviteApproval = AutoApprove` stores the new row as `Active`. Otherwise it is `Invited`.
-- The owner of a space with an empty roster may seat themselves in the owner role. An owner may also grant the owner role, so a space can have more than one owner.
-- `InviteApproval = Approve` stays `Invited` until an owner sets the row `Active`. The invited person does not activate themselves. `AutoApprove` stores the new row as `Active`.
+**Built.**
+- Shared items are visible to anyone who reaches the space. Team items need a reaching role with `CanSeeTeamBand`. A seat's band follows its role.
+- Bands don't nest: a Team item in a child space is Team.
+- Moving an item between bands needs `CanPromoteBand`. `SpaceItemEntityServer` writes the promotion stamp: a Team item has none, and a Shared item records who promoted it and when.
 
-The engine reads role flags. It does not compare role names.
+## Seats and invitations
+
+**Built.** `SpaceMemberEntityServer.ValidateAsync` calls `refuseInvite` before a seat is written.
+- The signer must reach the target space, with a role that has `CanInvite`.
+- The granted role's `Level` must be at or below the signer's `MaxGrantableLevel`, and it can't carry a flag the signer's role lacks: seeing Team, promoting, inviting, owning or contributing.
+- The type's `MemberCap` counts every seat that isn't `Removed`.
+- A new seat is `Active` when the type's `InviteApproval` is `AutoApprove`, or when the signer is an owner. Otherwise it's `Invited`. Under `Approve`, saving a seat as `Active` needs an owner, and the invited person can't activate their own seat.
+- The owner of a space with no seats may seat themselves in the owner role. An owner may grant the owner role, so a space can have more than one owner.
+- Anyone may leave their own seat, except the last owner, who must seat another owner first.
+
+**Fixed in PR #3 (B0.1, `6786bd0`):** a change to someone else's seat was checked against the role being saved, not the seat's current role, so a signer could remove someone above them by lowering the role and setting `Removed` in one save. Now the target's current role must also fit within the signer's ceiling. PR #3's unit cases and its WG2 checks test it since `002c2c5`.
+
+The engine reads role flags. It never compares role names.
 
 ## Items
 
-An item is `EntityID` + `RecordID` in exactly one space. The unique key is `(EntityID, RecordID)`. `SpaceItemEntityServer` writes the promotion stamp: a Team item has none, a Shared item records the signer and the time. Promoting requires `CanPromoteBand`.
-
-A file, a conversation, or a task is an item. This app does not copy those tables. Point `EntityID` and `RecordID` at the record that already exists.
+**Built.**
+- An item is `EntityID` + `RecordID` in exactly one space. The unique key is `(EntityID, RecordID)`. Move an item; never copy it.
+- A file, a conversation or a task is an item. This app doesn't copy those tables: an item points at the record that already exists.
+- A file item comes only from the upload (`UploadSpaceFile`). Opening a file records an item use.
+- A task is filed in a space by its root: the root task is a space item, and its subtasks follow it through `RootParentID`.
 
 ## Who can read
 
-`migrations/V202609230010__v0.1.x__Access.sql` creates:
+**Built.**
+- **`fnCollaborationAccess(@UserID)`** is the reach walk in SQL. It returns each reachable space with `CanSeeTeam`, `CanInvite` and `CanContribute` from the nearest seat. Its current definition is in `migrations/V202609262200__v0.1.x__Extensibility_Schema_And_Tables.sql`.
+- **Row-level security filters** are metadata: `metadata/row-level-security-filters/`, bound to the **Space Participant** role in `metadata/entity-permissions/`.
+  - Every one of the role's 57 read grants carries a filter, and none is NULL. A NULL filter on a grant a person holds exempts them from row-level security for that operation.
+  - A share notice is readable only by the member it's addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either carries a create filter, and the server subclass is the rest of the gate.
+  - MJ 6.1.3 checks a create filter on every new row, before and after the before-save hooks.
+- **People:** Space Participant's field rules on People allow reading a person's name fields, email and linked user, and nothing else, once People's field-level flag is on (bizapps-common#186, still open). Its Deny rows also hold for a participant who has another role.
+- **The room** is an MJ conversation linked to its space and owned by the system user. Everyone who reaches the space reads it and its messages, whatever their band. The space Chat tab renders MJ's chat area; the Overview ask box calls `PostSpaceMessage` (which runs agent execution when space rules or parameters dictate). Row-level security filter *Conversations In Reach* reads conversations linked to reachable spaces.
+- **The `Space` resource type** and the `Collaboration Spaces` permission domain are metadata too. `CollaborationSpacePermissionProvider` answers the domain from the roster. An email invitation doesn't use them: access comes from the seat.
+- **The owner of a space** can read it before its first seat exists. A magic-link scope (`{{ScopeResourceID}}`) could read one space, but this app's invitations are app sessions, not resource shares, so a removed seat takes effect at once.
 
-- `fnCollaborationAccess(@UserID)`, the SQL form of the reach walk, plus whether that reach may see the team band.
-- Row-level security filters, attached to the **Space Participant** role. The filters are never NULL. A NULL filter on a grant the person holds exempts them from row-level security for that operation. A share notice is readable only by the member it is addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either row carries a create filter, and the server subclass is the rest of the gate.
-- A `ResourceType` named `Space`. An email invitation does not use it. Access comes from the seat.
+**Never give a participant MJ's `UI` role.** `UI` carries unfiltered grants, and one unfiltered grant exempts the user from every filter on that entity.
 
-The owner of a space can read it before the first roster row exists. A magic-link scope (`{{ScopeResourceID}}`) can still read one space, but this app's invites are app sessions, not resource shares, so a removed seat takes effect at once.
+## What an agent may use
 
-Do not also grant Space Participant the `UI` role. `UI` carries unfiltered permissions, and one unfiltered permission exempts the user from every filter.
+**Built:**
+- **`agentMayQuote`** in `rules.ts` is the rule an agent calls before it quotes an item. The caller must be able to read it, a Team item needs `CanSeeTeam`, and the item must be in the subtree of the space the question was asked in. `ExcludedEntirely` on the item's space or any ancestor drops it for every agent; `ExcludedFromParentScope` drops it when the question comes from above that space.
+- **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
+- **Room posts and agent replies.** The room's posts go through `PostSpaceMessage`. An agent reply can be triggered by `ExecuteAgent` or space rules (`Chats.AgentReplyMode`). A failed reply comes back as `AssistantError`. Full model-driven audience-bounded retrieval is planned for PR #8.
 
-## The UI surface
+**Planned: the audience of an answer decides what the agent may use (D2; A6, B2 in PR #8 and later).**
+- **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
+- **In a shared conversation** (two or more people), it uses the intersection of what every current participant can read, with each participant's band. Nobody can change it, the asker included.
+- In both, the agent runs as the asking user, never as a service account, and the space's `AgentRetrieval` still applies. Its own memory follows the same rule.
 
-`CollaborationSectionResource` (`mj-collaboration-section`) is the Explorer resource component hosting the Collaboration application in MemberJunction Explorer. It is composed from `@mj-biz-apps/collaboration-ng-widgets` (space rail, header, tabs, and content views). When a signed-in user opens a space where they hold no seat, `CollaborationNoAccessComponent` (`mjc-no-access`) presents a branded empty state powered by MemberJunction's canonical `<mj-empty-state>` using `lockoutMessage` from `@mj-biz-apps/collaboration-core`.
+## Provenance, sealing and copying
 
-## What this repo does not contain
+**Planned.**
+- **Provenance (D3; A2 to A4):** every agent answer and every artifact version records the resources it drew from, when it's generated. It serves citations, sealing and audit.
+- **Sealing (D4; A5, A7):** adding a person to a conversation doesn't grant them its history. The person who adds them chooses how much history they get (none, all, or since a time), and core's conversation participants enforce that window with row-level security. Inside the window, an AI message whose recorded sources the newcomer can't read is sealed: they see who wrote it and when, and can request access. People's own messages aren't sealed.
+- **Copying (D5; A12.12, B4):** copying or forwarding an answer whose sources the target audience can't read shows a warning. It advises; it doesn't block.
 
-These are named in the plan and belong in other repositories. They are not implemented here, and the live checkouts of those repositories are not modified by this work.
+## Outside channels and proactive posts
 
-- Hierarchy path columns and traversal functions. `ParentID` does not carry the `IsHierarchy` flag (set in one migration, cleared in the next), so CodeGen emits no path columns or traversal functions. Access uses `fnCollaborationAccess`, which is T-SQL and needs a PostgreSQL port.
-- MemberJunction's `CreateInvite` still does not accept a resource id. This app does not write a resource-share. An email invitation saves a seat through the member gate. The sign-in link is an app session for Space Participant. It is emailed when the host has `magicLink.communicationProvider`. Otherwise the raw URL is returned only to an Owner-type user, or a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL. The host must set `magicLink.enabled` and list `Space Participant` in `grantableRoleNames`. Do not change `restrictedRoleName`; that is the host's default for every app.
-- The filter text is T-SQL (`TRY_CAST`, bracketed names). A PostgreSQL host needs a dialect of the same function before the filters run.
-- Committees moving its membership onto Space.
-- Platform work in MemberJunction itself: presence, @mention notifications, per-user read state, live message fan-out, and the search fixes.
-- A license. Distribution is free. The license text is still an open decision.
+**Planned.**
+- **Identity (D6; A9, B5):** a space's agent over MCP, Slack or Teams must resolve the person to an MJ user and apply D2 for the channel's audience, or refuse. Today the messaging adapters fall back to a service account, and MCP's `mode=none` and its system API key run as the system user.
+- **Proposed posts (D7; A8, B7):** an unsolicited agent message to outside participants is a draft until a named staff member approves or edits it. A digest a member subscribed to needs no approval.
 
 ## The All query
 
-CodeGen emits an `All…` query only when `AllowAllRowsAPI` is 1. Every Collaboration entity leaves that flag at 0, so this app generates no `All…` route. MemberJunction 6.1.3 still ships `All…` queries for metadata entities such as Users and Roles. Each of those appends the caller's read filter. None of them covers Conversations, Conversation Details, or Files, and BizApps Tasks generates none. The lane is as safe as the grants: a NULL filter on a Space Participant read row would open it, and `scripts/persona-check.sql` asserts there is no such row and that every Collaboration entity keeps `AllowAllRowsAPI` at 0.
+CodeGen emits an `All…` query only when `AllowAllRowsAPI` is 1. Every Collaboration entity leaves that flag at 0, so this app generates no `All…` route. MemberJunction 6.1.3 still ships `All…` queries for metadata entities such as Users and Roles; each appends the caller's read filter. None covers Conversations, Conversation Details or Files, and BizApps Tasks generates none. The lane is as safe as the grants: a NULL filter on a Space Participant read row would open it, and `scripts/persona-check.sql` asserts there's no such row and that every Collaboration entity keeps `AllowAllRowsAPI` at 0.
+
+## What isn't built yet
+
+Each of these is an item in the plan.
+- **PostgreSQL (B11).** `fnCollaborationAccess`, the other access functions and the filter text are T-SQL (`TRY_CAST`, bracketed schema names). A PostgreSQL host needs its own dialect of each.
+- **The one-off reviewer's link (A12.7).** MJ's `CreateInvite` doesn't accept a resource ID, so this app writes no resource share. An email invitation saves a seat through the seat gate, and the sign-in link is an app session for Space Participant.
+  - It's emailed when the host sets `magicLink.communicationProvider`. Otherwise the raw URL is returned only to a user whose MJ user type is `Owner`, or who holds a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL.
+  - The host must set `magicLink.enabled` and list `Space Participant` in `grantableRoleNames`. Don't change `restrictedRoleName`: it's the host's default for every app.
+- **Committees on Collaboration (workstream C).** Committees extends `Space` through MJ's IsA, in stages.
+- **Platform work in MemberJunction (workstream A):** presence, @mention notifications, read state per person, live message fan-out, conversation participants, and the search fixes.
+- **A license.** Distribution is free; the license is still an open decision.
 
 ## Tests
 
 ```bash
-npm test
+pnpm test                    # the unit tests
+pnpm run test:integration    # both integration harnesses, against a database
 ```
 
-That runs `packages/Core/src/rules.test.ts`. The tests cover reach, the seal, the invitation ceiling, the owner seating themselves, the member cap, promotion stamps, agent retrieval, and retention dates.
+- `pnpm test` runs 326 unit tests across all packages: 116 in `collaboration-core`, 4 in `collaboration-engine-base`, 82 in `collaboration-core-entities-server`, 41 in `collaboration-integration-tests`, 56 in `collaboration-ng-widgets`, and 27 in `collaboration-example-space-types`.
+- The integration harnesses run 43 server checks and 44 client checks, in nine bundles each, and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata and the sample world; the client harness also needs a running MJAPI.
+- `scripts/persona-check.sql` checks the Space Participant role's grants against a database.
+

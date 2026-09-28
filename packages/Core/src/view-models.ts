@@ -227,6 +227,16 @@ export abstract class NeedsYouProvider {
     public abstract getItems(spaceId?: string, userId?: string): Promise<NeedsYouItem[]>;
 }
 
+export interface SpaceBatchContext {
+    spaceIds: string[];
+    viewerId: string;
+    provider?: unknown;
+}
+
+export abstract class BaseNeedsYouProvider {
+    public abstract getItemsForSpaces(context: SpaceBatchContext): Promise<NeedsYouItem[]>;
+}
+
 export interface AgendaItem {
     id: string;
     spaceId?: string;
@@ -242,6 +252,10 @@ export interface AgendaItem {
 
 export abstract class AgendaProvider {
     public abstract getItems(spaceId?: string, userId?: string): Promise<AgendaItem[]>;
+}
+
+export abstract class BaseAgendaProvider {
+    public abstract getItemsForSpaces(context: SpaceBatchContext): Promise<AgendaItem[]>;
 }
 
 /**
@@ -278,3 +292,8 @@ export interface SpaceHeaderChip {
 export abstract class SpaceHeaderChipProvider {
     public abstract getChips(spaceId: string, spaceTypeCode: string): Promise<SpaceHeaderChip[]>;
 }
+
+export abstract class BaseSpaceHeaderChipProvider {
+    public abstract getChipsForSpaces(context: SpaceBatchContext): Promise<Map<string, SpaceHeaderChip[]>>;
+}
+

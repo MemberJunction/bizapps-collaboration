@@ -1,8 +1,10 @@
-import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { isSelfRemoval, membershipReaches, refuseInvite, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
+import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
+import { ServerDriverRegistry } from './server-driver-registry.js';
+import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
@@ -87,7 +89,88 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             }
         }
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
+
+        // Extensibility Driver Validation
+        try {
+            const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
+            const isNew = !this.IsSaved;
+            const statusChanged = this.Fields.some((f) => f.Name === 'Status' && f.Dirty);
+            const roleChanged = this.Fields.some((f) => f.Name === 'SpaceRoleTypeID' && f.Dirty);
+            const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
+
+            let memberKind: 'Invite' | 'RoleChange' | 'BandChange' | 'Remove' = 'Invite';
+            if (this.Status === 'Removed' && (statusChanged || isNew)) {
+                memberKind = 'Remove';
+            } else if (roleChanged) {
+                memberKind = 'RoleChange';
+            } else if (bandChanged) {
+                memberKind = 'BandChange';
+            } else if (isNew) {
+                memberKind = 'Invite';
+            }
+
+            const driverValidation = await spaceInfo.driver.ValidateMemberChange({
+                actingUser: user,
+                provider: this.ProviderToUse,
+                space: spaceInfo.space,
+                spaceType: spaceInfo.spaceType,
+                effectiveRules: ResolveSpaceRules(null, null),
+                member: this,
+                kind: memberKind,
+            });
+            if (!driverValidation.ok) {
+                return fail(result, driverValidation.field ?? 'SpaceRoleTypeID', driverValidation.message ?? 'Member change refused by driver.');
+            }
+        } catch (driverErr) {
+            return fail(result, 'SpaceID', driverErr instanceof Error ? driverErr.message : 'Member change refused: driver could not be resolved.');
+        }
+
         return result;
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        const wasNew = !this.IsSaved;
+        const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
+        const ok = await super.Save(options);
+        if (ok && this.ContextCurrentUser && this.SpaceID) {
+            const user = this.ContextCurrentUser;
+            try {
+                const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
+                await spaceInfo.driver.OnMemberChanged({
+                    actingUser: user,
+                    provider: this.ProviderToUse,
+                    space: spaceInfo.space,
+                    spaceType: spaceInfo.spaceType,
+                    effectiveRules: ResolveSpaceRules(null, null),
+                    member: this,
+                    kind: this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange',
+                });
+            } catch (driverErr) {
+                LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+            }
+
+            const becameActive = this.Status === 'Active' && (wasNew || previousStatus !== 'Active');
+            const becameRemoved = this.Status === 'Removed' && previousStatus !== 'Removed';
+
+            if (becameActive) {
+                notifySpaceLifecycleSubscribers(this.ProviderToUse, {
+                    spaceId: this.SpaceID,
+                    actingUserId: user.ID,
+                    event: 'AfterMemberAdded',
+                    timestamp: new Date(),
+                    data: { memberId: this.ID, userId: this.UserID, personId: this.PersonID },
+                });
+            } else if (becameRemoved) {
+                notifySpaceLifecycleSubscribers(this.ProviderToUse, {
+                    spaceId: this.SpaceID,
+                    actingUserId: user.ID,
+                    event: 'AfterMemberRemoved',
+                    timestamp: new Date(),
+                    data: { memberId: this.ID, userId: this.UserID, personId: this.PersonID },
+                });
+            }
+        }
+        return ok;
     }
 }
 

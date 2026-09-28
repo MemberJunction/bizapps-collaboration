@@ -351,7 +351,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         border-color: var(--mj-brand-primary, #0076b6);
       }
       .form-input:disabled {
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-sunken, #f8fafc);
         color: var(--mj-text-muted, #94a3b8);
       }
 
@@ -416,7 +416,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         transition: background 0.15s ease;
       }
       .radio-label:hover {
-        background: var(--mj-bg-subtle, #f8fafc);
+        background: var(--mj-bg-surface-hover, #f8fafc);
       }
       .radio-title {
         font-size: 13px;

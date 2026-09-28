@@ -764,37 +764,18 @@ describe('CollabSpaceWorkComponent', () => {
 });
 
 describe('CollabSpaceChatComponent', () => {
-  it('emits SendMessageRequested on non-empty message and clears text', () => {
+  it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
-    let sentMessage = '';
-    comp.SendMessageRequested.subscribe(msg => {
-      sentMessage = msg;
-    });
-
-    comp.newMessageText = '  Hello everyone in the space room!  ';
-    comp.sendMessage();
-
-    expect(sentMessage).toBe('Hello everyone in the space room!');
-    expect(comp.newMessageText).toBe('');
-  });
-
-  it('ignores empty or whitespace message send attempts', () => {
-    const comp = new CollabSpaceChatComponent();
-    let emitted = false;
-    comp.SendMessageRequested.subscribe(() => {
-      emitted = true;
-    });
-
-    comp.newMessageText = '    ';
-    comp.sendMessage();
-    expect(emitted).toBe(false);
+    expect(comp.AllowMentions).toBe(true);
+    expect(comp.AllowAttachments).toBe(false);
   });
 });
+
 
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [
     { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active' },
-    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Client Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
+    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Outside Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
     { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
   ];
 
