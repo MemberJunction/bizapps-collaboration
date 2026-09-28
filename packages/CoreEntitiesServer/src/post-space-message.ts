@@ -8,7 +8,6 @@ import { parseUuid } from './uuid.js';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const DETAILS = 'MJ: Conversation Details';
 const MESSAGE_CAP = 4000;
-export const COLLABORATION_SPACE_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 
 export interface PostSpaceMessageInput {
     spaceId: string;

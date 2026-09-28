@@ -253,5 +253,33 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Shell Empty"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "61D03F64-072B-4813-A88B-D57B43328A1C"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C32E4554-A6B5-4D14-998A-E97B1A548C2E"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0
+    }
   }
 ]

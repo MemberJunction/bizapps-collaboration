@@ -282,7 +282,8 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: ArchivedOnSpaceClose
         * * Display Name: Archived On Space Close
         * * SQL Data Type: bit
-        * * Default Value: 0`),
+        * * Default Value: 0
+        * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -1647,6 +1648,7 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     * * Display Name: Archived On Space Close
     * * SQL Data Type: bit
     * * Default Value: 0
+    * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.
     */
     get ArchivedOnSpaceClose(): boolean {
         return this.Get('ArchivedOnSpaceClose');

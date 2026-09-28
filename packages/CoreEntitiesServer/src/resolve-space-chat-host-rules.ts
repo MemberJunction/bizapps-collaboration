@@ -149,15 +149,21 @@ export async function resolveSpaceChatHostRules(
     const defaultAgentId = allowed.defaultAgentId ?? null;
     let defaultAgentName: string | null = null;
     if (defaultAgentId) {
-        const agentRes = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'MJ: Agents',
-            ExtraFilter: `ID = '${defaultAgentId}'`,
-            Fields: ['ID', 'Name'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, systemUser);
-        if (agentRes.Success && agentRes.Results?.[0]?.Name) {
-            defaultAgentName = agentRes.Results[0].Name;
+        try {
+            const agentRes = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: AI Agents',
+                ExtraFilter: `ID = '${defaultAgentId}'`,
+                Fields: ['ID', 'Name'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            }, systemUser);
+            if (agentRes.Success && agentRes.Results?.[0]?.Name) {
+                defaultAgentName = agentRes.Results[0].Name;
+            } else if (!agentRes.Success) {
+                LogError(`[resolveSpaceChatHostRules] Failed to load agent name for defaultAgentId ${defaultAgentId}: ${agentRes.ErrorMessage}`);
+            }
+        } catch (e) {
+            LogError(`[resolveSpaceChatHostRules] Exception loading agent name for defaultAgentId ${defaultAgentId}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

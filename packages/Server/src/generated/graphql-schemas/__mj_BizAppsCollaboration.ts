@@ -783,7 +783,7 @@ export class mjBizAppsCollaborationSpaceChat_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean, {nullable: true}) 
+    @Field(() => Boolean, {nullable: true, description: `Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.`}) 
     ArchivedOnSpaceClose?: boolean;
         
     @Field({nullable: true}) 

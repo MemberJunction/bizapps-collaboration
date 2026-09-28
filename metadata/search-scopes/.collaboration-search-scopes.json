@@ -10,7 +10,7 @@
       "Status": "Active",
       "IsGlobal": false,
       "IsDefault": false,
-      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true}],\"strictValidation\":true}"
+      "SearchContextConfig": "{\"dimensions\":[{\"name\":\"SpaceID\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"uuid[]\",\"valueDomain\":\"set\",\"expansionQueryID\":\"FA742FD3-00D4-461F-A356-0265D72C39F4\",\"required\":true},{\"name\":\"Audience\",\"restricts\":true,\"trust\":\"ServerDerived\",\"valueType\":\"string\",\"valueDomain\":\"set\",\"required\":false}],\"strictValidation\":true}"
     },
     "relatedEntities": {
       "MJ: Search Scope Entities": [
@@ -21,7 +21,7 @@
           "fields": {
             "SearchScopeID": "@parent:ID",
             "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
-            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}",
+            "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% else %}SpaceID IS NULL AND 1 = 0{% endif %}{% if context.SecondaryScopes.Audience == 'Shared' %} AND Band = 'Shared'{% elif context.SecondaryScopes.Audience == 'Team' %} AND Band IN ('Shared', 'Team'){% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
         },

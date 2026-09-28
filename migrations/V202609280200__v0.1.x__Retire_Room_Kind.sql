@@ -49,6 +49,23 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.fn_listextendedproperty(
+        N'MS_Description', 
+        N'SCHEMA', N'${flyway:defaultSchema}', 
+        N'TABLE', N'SpaceChat', 
+        N'COLUMN', N'ArchivedOnSpaceClose'
+    )
+)
+BEGIN
+    EXEC sp_addextendedproperty @name = N'MS_Description',
+        @value = N'Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE', @level1name = N'SpaceChat',
+        @level2type = N'COLUMN', @level2name = N'ArchivedOnSpaceClose';
+END
+GO
+
 
 
 
@@ -146,7 +163,7 @@ EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sy
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = '75E3ED25-C46B-45C1-96F7-91578D88DBE2'),
             'ArchivedOnSpaceClose',
             'Archived On Space Close',
-            NULL,
+            'Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.',
             'bit',
             1,
             1,
@@ -176,6 +193,9 @@ EXEC [${mjSchema}].[spUpdateExistingEntityFieldsFromSchema] @ExcludedSchemaNames
 
 /* SQL text to set default column width where needed */
 EXEC [${mjSchema}].[spSetDefaultColumnWidthWhereNeeded] @ExcludedSchemaNames='sys,staging,dbo,${mjSchema}', @IncludedSchemaNames='${flyway:defaultSchema}';
+
+/* SQL text to delete entity field value ID A140F5A8-9A5C-4459-B7A1-2602F3A2CA11 */
+DELETE FROM [${mjSchema}].[EntityFieldValue] WHERE ID='A140F5A8-9A5C-4459-B7A1-2602F3A2CA11';
 
 /* SQL text to update entity field value sequence */
 UPDATE [${mjSchema}].[EntityFieldValue] SET Sequence=3 WHERE ID='D40C8FF6-EC0B-488A-9CC7-2464A132601D';
