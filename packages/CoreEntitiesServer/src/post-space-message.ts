@@ -1,7 +1,6 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
-import { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { parseUuid } from './uuid.js';
@@ -14,19 +13,16 @@ export const COLLABORATION_SPACE_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9
 export interface PostSpaceMessageInput {
     spaceId: string;
     text: string;
-    executeAgent?: boolean;
     conversationId?: string;
 }
 
 export type PostSpaceMessageResult =
-    | { ok: true; detailId: string; conversationId?: string; assistantDetailId?: string; quotedCount?: number; assistantError?: string }
+    | { ok: true; detailId: string; conversationId: string }
     | { ok: false; message: string };
 
 /**
  * A message in a space conversation.
  * The system user owns the room, so MJ's own write gate accepts the save.
- * If executeAgent is true, the Collaboration Space Agent is invoked server-side
- * after saving the human message, querying only items allowed by agentMayQuote.
  */
 export async function postSpaceMessage(
     provider: IMetadataProvider,
@@ -49,8 +45,7 @@ export async function postSpaceMessage(
     }
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
-    const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
-    if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
+
     const space = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
@@ -61,6 +56,9 @@ export async function postSpaceMessage(
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
     const targetSpace = space.Results?.[0];
     if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
+
+    const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
+    if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
 
     if (!input.conversationId) {
         return { ok: false, message: 'A conversation ID is required to post a message.' };
@@ -103,42 +101,6 @@ export async function postSpaceMessage(
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
-    if (input.executeAgent) {
-        try {
-            const turnResult = await executeSpaceChatTurn(provider, user, {
-                spaceId,
-                conversationId,
-                userMessageId: detail.ID,
-            });
-            if (turnResult.ok) {
-                return {
-                    ok: true,
-                    detailId: detail.ID,
-                    conversationId,
-                    assistantDetailId: turnResult.replyDetailIds[0],
-                    quotedCount: turnResult.quotedCount,
-                };
-            } else {
-                LogError(`executeSpaceChatTurn failed for space ${spaceId}: ${turnResult.message}`);
-                return {
-                    ok: true,
-                    detailId: detail.ID,
-                    conversationId,
-                    assistantError: turnResult.message,
-                };
-            }
-        } catch (error) {
-            const errMessage = error instanceof Error ? error.message : String(error);
-            LogError(`executeSpaceChatTurn threw for space ${spaceId}: ${errMessage}`);
-            return {
-                ok: true,
-                detailId: detail.ID,
-                conversationId,
-                assistantError: errMessage,
-            };
-        }
-    }
-
     return { ok: true, detailId: detail.ID, conversationId };
 }
 

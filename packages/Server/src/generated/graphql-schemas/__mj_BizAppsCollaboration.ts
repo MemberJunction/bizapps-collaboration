@@ -783,6 +783,9 @@ export class mjBizAppsCollaborationSpaceChat_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {nullable: true}) 
+    ArchivedOnSpaceClose?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Space?: string;
@@ -822,6 +825,9 @@ export class CreatemjBizAppsCollaborationSpaceChatInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    ArchivedOnSpaceClose?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -852,6 +858,9 @@ export class UpdatemjBizAppsCollaborationSpaceChatInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ArchivedOnSpaceClose?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

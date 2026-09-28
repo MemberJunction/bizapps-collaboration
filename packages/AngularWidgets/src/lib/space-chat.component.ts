@@ -76,18 +76,20 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>{{ ParticipantCount }}</span>
                   </div>
                 }
-                <button
-                  type="button"
-                  mjButton
-                  variant="primary"
-                  size="sm"
-                  class="btn-new-convo-header"
-                  (click)="onNewConversation()"
-                  title="New Conversation"
-                  aria-label="New Conversation">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>New Conversation</span>
-                </button>
+                @if (CanStartConversation) {
+                  <button
+                    type="button"
+                    mjButton
+                    variant="primary"
+                    size="sm"
+                    class="btn-new-convo-header"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Conversation</span>
+                  </button>
+                }
               </div>
             </div>
           </ng-template>
@@ -98,20 +100,33 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="empty-icon-wrap">
             <i class="fa-solid fa-comments"></i>
           </div>
-          <h3 class="empty-title">Select a Conversation</h3>
-          <p class="empty-desc">
-            Choose a channel from the space sidebar or start a new conversation.
-          </p>
-          <button
-            type="button"
-            mjButton
-            variant="primary"
-            size="md"
-            class="btn-new-convo"
-            (click)="onNewConversation()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Conversation</span>
-          </button>
+          @if (HasConversations) {
+            <h3 class="empty-title">Select a Conversation</h3>
+            <p class="empty-desc">
+              Choose a channel from the space sidebar or start a new conversation.
+            </p>
+          } @else {
+            <h3 class="empty-title">No conversations yet</h3>
+            <p class="empty-desc">
+              @if (CanStartConversation) {
+                Start a new conversation to begin collaborating.
+              } @else {
+                There are no conversations in this space.
+              }
+            </p>
+          }
+          @if (CanStartConversation) {
+            <button
+              type="button"
+              mjButton
+              variant="primary"
+              size="md"
+              class="btn-new-convo"
+              (click)="onNewConversation()">
+              <i class="fa-solid fa-plus"></i>
+              <span>New Conversation</span>
+            </button>
+          }
         </div>
       }
     </div>
@@ -264,7 +279,9 @@ export class CollabSpaceChatComponent {
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
-  @Input() public AllowedAgentIDs: readonly string[] | null = null;
+  @Input() public AllowedAgentIDs: readonly string[] = [];
+  @Input() public CanStartConversation = true;
+  @Input() public HasConversations = false;
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;
   @Input() public AgentHistoryFrom: Date | null = null;
   @Input() public AgentTurnHandler: AgentTurnHandler | null = null;

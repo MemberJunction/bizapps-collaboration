@@ -23,8 +23,9 @@ export interface SpaceChatHostRulesResult {
     ok: boolean;
     message?: string;
     agentReplyMode: 'Always' | 'MentionOnly';
-    allowedAgentIds: string[] | null;
+    allowedAgentIds: string[];
     defaultAgentId: string | null;
+    defaultAgentName?: string | null;
     agentHistoryFrom: Date | null;
     mentionPeople: SpaceChatHostRulesMentionPerson[];
     canStartConversation: boolean;
@@ -85,8 +86,9 @@ export async function resolveSpaceChatHostRules(
             ok: false,
             message: 'Metadata provider is required to resolve space chat host rules.',
             agentReplyMode: 'MentionOnly',
-            allowedAgentIds: null,
+            allowedAgentIds: [],
             defaultAgentId: null,
+            defaultAgentName: null,
             agentHistoryFrom: null,
             mentionPeople: [],
             canStartConversation: false,
@@ -100,8 +102,9 @@ export async function resolveSpaceChatHostRules(
             ok: false,
             message: 'System user is required to resolve space chat host rules.',
             agentReplyMode: 'MentionOnly',
-            allowedAgentIds: null,
+            allowedAgentIds: [],
             defaultAgentId: null,
+            defaultAgentName: null,
             agentHistoryFrom: null,
             mentionPeople: [],
             canStartConversation: false,
@@ -124,8 +127,9 @@ export async function resolveSpaceChatHostRules(
             ok: false,
             message: spaceRes.ErrorMessage || 'The space could not be read.',
             agentReplyMode: 'MentionOnly',
-            allowedAgentIds: null,
+            allowedAgentIds: [],
             defaultAgentId: null,
+            defaultAgentName: null,
             agentHistoryFrom: null,
             mentionPeople: [],
             canStartConversation: false,
@@ -141,8 +145,21 @@ export async function resolveSpaceChatHostRules(
 
     // 3. Resolve allowed agents & default agent
     const allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
-    const allowedAgentIds = allowed.allowedAgentIds.length > 0 ? allowed.allowedAgentIds : null;
+    const allowedAgentIds = allowed.allowedAgentIds;
     const defaultAgentId = allowed.defaultAgentId ?? null;
+    let defaultAgentName: string | null = null;
+    if (defaultAgentId) {
+        const agentRes = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'MJ: Agents',
+            ExtraFilter: `ID = '${defaultAgentId}'`,
+            Fields: ['ID', 'Name'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, systemUser);
+        if (agentRes.Success && agentRes.Results?.[0]?.Name) {
+            defaultAgentName = agentRes.Results[0].Name;
+        }
+    }
 
     // 4. Build ancestor chain and memberships to verify reach and resolve mention people
     const spaceNodes: SpaceNode[] = [];
@@ -268,8 +285,9 @@ export async function resolveSpaceChatHostRules(
             ok: false,
             message: 'Caller does not reach this space.',
             agentReplyMode: 'MentionOnly',
-            allowedAgentIds: null,
+            allowedAgentIds: [],
             defaultAgentId: null,
+            defaultAgentName: null,
             agentHistoryFrom: null,
             mentionPeople: [],
             canStartConversation: false,
@@ -279,20 +297,59 @@ export async function resolveSpaceChatHostRules(
     const callerReach = userReachMap.get(callerId);
 
     // If conversationId is specified, check conversation access
-    let targetChatKind: string = 'Room';
+    let targetChatKind: string = 'General';
     if (conversationId) {
         const parsedConvId = parseUuid(conversationId);
-        if (parsedConvId) {
-            const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}' AND Status = 'Active'`,
-                Fields: ['ID', 'Kind', 'Status'],
-                MaxRows: 1,
-            }, systemUser);
-            if (chatCheck.Success && chatCheck.Results?.[0]) {
-                targetChatKind = chatCheck.Results[0].Kind;
-            }
+        if (!parsedConvId) {
+            return {
+                ok: false,
+                message: 'The conversation ID is invalid.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: [],
+                defaultAgentId: null,
+                defaultAgentName: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
+            };
         }
+        const chatCheck = await rv.RunView<{ ID: string; Kind: string; Status: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedConvId}' AND Status = 'Active'`,
+            Fields: ['ID', 'Kind', 'Status'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, systemUser);
+        if (!chatCheck.Success) {
+            return {
+                ok: false,
+                message: chatCheck.ErrorMessage || 'Failed to read space chat.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: [],
+                defaultAgentId: null,
+                defaultAgentName: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
+            };
+        }
+        if (!chatCheck.Results?.[0]) {
+            return {
+                ok: false,
+                message: 'Conversation not found or not active in this space.',
+                agentReplyMode: 'MentionOnly',
+                allowedAgentIds: [],
+                defaultAgentId: null,
+                defaultAgentName: null,
+                agentHistoryFrom: null,
+                mentionPeople: [],
+                canStartConversation: false,
+                allowedConversationKinds: [],
+            };
+        }
+        targetChatKind = chatCheck.Results[0].Kind;
     }
 
     if (targetChatKind === 'Private') {
@@ -301,8 +358,9 @@ export async function resolveSpaceChatHostRules(
                 ok: false,
                 message: 'Caller does not have access to this internal conversation.',
                 agentReplyMode: 'MentionOnly',
-                allowedAgentIds: null,
+                allowedAgentIds: [],
                 defaultAgentId: null,
+                defaultAgentName: null,
                 agentHistoryFrom: null,
                 mentionPeople: [],
                 canStartConversation: false,
@@ -313,10 +371,16 @@ export async function resolveSpaceChatHostRules(
 
     // 6. Item 16: Compute viewer's floor from Chats.HistoryOnAdd
     let agentHistoryFrom: Date | null = null;
-    if (chatSettings.historyOnAdd !== 'All' && callerId) {
-        const callerRow = userToMemberRow.get(callerId);
-        if (callerRow?.__mj_CreatedAt) {
-            agentHistoryFrom = new Date(callerRow.__mj_CreatedAt);
+    if (chatSettings.historyOnAdd !== 'All' && callerId && callerReach) {
+        const seatRes = await rv.RunView<{ __mj_CreatedAt: string | Date | null }>({
+            EntityName: SPACE_MEMBERS_ENTITY,
+            ExtraFilter: `SpaceID = '${callerReach.spaceId}' AND UserID = '${callerId}' AND Status = 'Active'`,
+            Fields: ['__mj_CreatedAt'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, systemUser);
+        if (seatRes.Success && seatRes.Results?.[0]?.__mj_CreatedAt) {
+            agentHistoryFrom = new Date(seatRes.Results[0].__mj_CreatedAt);
         }
     }
 
@@ -371,6 +435,7 @@ export async function resolveSpaceChatHostRules(
         agentReplyMode,
         allowedAgentIds,
         defaultAgentId,
+        defaultAgentName,
         agentHistoryFrom,
         mentionPeople,
         canStartConversation: startPerms.canStartConversation,

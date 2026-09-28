@@ -25,11 +25,14 @@ export class SpaceChatHostRulesPayload {
     @Field()
     AgentReplyMode: string;
 
-    @Field(() => [String], { nullable: true })
-    AllowedAgentIDs?: string[];
+    @Field(() => [String])
+    AllowedAgentIDs: string[];
 
     @Field({ nullable: true })
     DefaultAgentID?: string;
+
+    @Field({ nullable: true })
+    DefaultAgentName?: string;
 
     @Field({ nullable: true })
     AgentHistoryFrom?: Date;
@@ -62,6 +65,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                 Success: false,
                 ErrorMessage: 'Resolving space chat host rules requires a signed-in user.',
                 AgentReplyMode: 'MentionOnly',
+                AllowedAgentIDs: [],
                 MentionPeople: [],
                 CanStartConversation: false,
                 AllowedConversationKinds: [],
@@ -74,6 +78,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                     Success: false,
                     ErrorMessage: result.message,
                     AgentReplyMode: 'MentionOnly',
+                    AllowedAgentIDs: [],
                     MentionPeople: [],
                     CanStartConversation: false,
                     AllowedConversationKinds: [],
@@ -82,8 +87,9 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
             return {
                 Success: true,
                 AgentReplyMode: result.agentReplyMode,
-                AllowedAgentIDs: result.allowedAgentIds ?? undefined,
+                AllowedAgentIDs: result.allowedAgentIds,
                 DefaultAgentID: result.defaultAgentId ?? undefined,
+                DefaultAgentName: result.defaultAgentName ?? undefined,
                 AgentHistoryFrom: result.agentHistoryFrom ?? undefined,
                 MentionPeople: result.mentionPeople.map((p) => ({
                     ID: p.ID,
@@ -100,6 +106,7 @@ export class SpaceChatHostRulesResolver extends ResolverBase {
                 Success: false,
                 ErrorMessage: message,
                 AgentReplyMode: 'MentionOnly',
+                AllowedAgentIDs: [],
                 MentionPeople: [],
                 CanStartConversation: false,
                 AllowedConversationKinds: [],

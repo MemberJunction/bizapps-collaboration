@@ -18,7 +18,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </span>
         <div>
           <div class="fw7 fs14">{{ Title }}</div>
-          <div class="fs12 muted">{{ Subtitle }}</div>
+          @if (Subtitle) {
+            <div class="fs12 muted">{{ Subtitle }}</div>
+          }
         </div>
       </div>
       <div class="ask-in">
@@ -34,7 +36,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
       <div class="ask-scope">
         <i class="fa-solid fa-users"></i>
-        <span>Starts a General conversation. The assistant uses <b>Shared</b> materials.</span>
+        <span>Starts a General conversation. Everyone in the space will read the question. The assistant uses <b>Shared</b> materials.</span>
       </div>
       @if (Suggestions && Suggestions.length > 0) {
         <div class="sugs">
@@ -173,7 +175,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 })
 export class CollabAskBoxComponent {
   @Input() public Title = '';
-  @Input() public Subtitle = 'One assistant, bounded by who’s asking';
+  @Input() public Subtitle = '';
   @Input() public Placeholder = 'Ask anything about this space…';
   @Input() public Suggestions: string[] = [];
 
@@ -183,8 +185,11 @@ export class CollabAskBoxComponent {
   public onSend(): void {
     if (this.Query.trim()) {
       this.AskRequested.emit(this.Query.trim());
-      this.Query = '';
     }
+  }
+
+  public clear(): void {
+    this.Query = '';
   }
 
   public onSelectSuggestion(sug: string): void {

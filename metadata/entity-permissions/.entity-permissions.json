@@ -649,10 +649,6 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Chats In Reach"
-    },
-    "sync": {
-      "lastModified": "2026-09-28T16:42:52.591Z",
-      "checksum": "a1d63fc0c05857681efca3ccc827843a2060cad7f9a28e8335c592e89bb45d04"
     }
   }
 ]

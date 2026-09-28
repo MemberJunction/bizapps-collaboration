@@ -39,7 +39,7 @@ export class ExecuteSpaceChatTurnPayload {
 }
 
 /**
- * Runs a server turn for an agent on a persisted user message in a space's active Room.
+ * Runs a server turn for an agent on a persisted user message in a space conversation.
  */
 @Resolver()
 export class ExecuteSpaceChatTurnResolver extends ResolverBase {

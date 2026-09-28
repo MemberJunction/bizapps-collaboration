@@ -361,19 +361,21 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 try {
                     const system = await requireSystemUser(this);
                     const view = new RunView(this.RunViewProviderToUse);
-                    const chatsRes = await view.RunView<{ ID: string; Subject: string | null }>({
+                    const chatsRes = await view.RunView<{ ID: string }>({
                         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
                         ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Active'`,
-                        Fields: ['ID', 'Subject'],
+                        Fields: ['ID'],
                         ResultType: 'simple',
                     }, system);
-                    if (chatsRes.Success && chatsRes.Results) {
+                    if (!chatsRes.Success) {
+                        LogError(`Failed to read active space chats on space close for space ${this.ID}: ${chatsRes.ErrorMessage ?? 'Unknown error'}`);
+                    } else if (chatsRes.Results) {
                         const md = asMetadata(this.ProviderToUse) ?? new Metadata();
                         for (const row of chatsRes.Results) {
                             const chatObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
                             if (await chatObj.Load(row.ID)) {
                                 chatObj.Status = 'Archived';
-                                chatObj.Subject = chatObj.Subject ? `[ArchivedOnClose] ${chatObj.Subject}` : '[ArchivedOnClose]';
+                                chatObj.ArchivedOnSpaceClose = true;
                                 const chatSaved = await chatObj.Save();
                                 if (!chatSaved) {
                                     LogError(`Failed to archive space chat ${row.ID}: ${chatObj.LatestResult?.CompleteMessage ?? ''}`);
@@ -381,7 +383,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                             }
                         }
                     }
-                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    if (!syncRes.ok) {
+                        LogError(`Room edit grants sync failed on space close for space ${this.ID}: ${syncRes.message ?? ''}`);
+                    }
                 } catch (closeErr) {
                     LogError(`Failed to archive space chats on space close: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
                 }
@@ -389,23 +394,21 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 try {
                     const system = await requireSystemUser(this);
                     const view = new RunView(this.RunViewProviderToUse);
-                    const chatsRes = await view.RunView<{ ID: string; Subject: string | null }>({
+                    const chatsRes = await view.RunView<{ ID: string }>({
                         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                        ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Archived' AND Subject LIKE '[ArchivedOnClose]%'`,
-                        Fields: ['ID', 'Subject'],
+                        ExtraFilter: `SpaceID = '${this.ID}' AND Status = 'Archived' AND ArchivedOnSpaceClose = 1`,
+                        Fields: ['ID'],
                         ResultType: 'simple',
                     }, system);
-                    if (chatsRes.Success && chatsRes.Results) {
+                    if (!chatsRes.Success) {
+                        LogError(`Failed to read archived space chats on space reopen for space ${this.ID}: ${chatsRes.ErrorMessage ?? 'Unknown error'}`);
+                    } else if (chatsRes.Results) {
                         const md = asMetadata(this.ProviderToUse) ?? new Metadata();
                         for (const row of chatsRes.Results) {
                             const chatObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
                             if (await chatObj.Load(row.ID)) {
                                 chatObj.Status = 'Active';
-                                if (chatObj.Subject === '[ArchivedOnClose]') {
-                                    chatObj.Subject = null;
-                                } else if (chatObj.Subject?.startsWith('[ArchivedOnClose] ')) {
-                                    chatObj.Subject = chatObj.Subject.substring('[ArchivedOnClose] '.length);
-                                }
+                                chatObj.ArchivedOnSpaceClose = false;
                                 const chatSaved = await chatObj.Save();
                                 if (!chatSaved) {
                                     LogError(`Failed to restore space chat ${row.ID}: ${chatObj.LatestResult?.CompleteMessage ?? ''}`);
@@ -413,7 +416,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                             }
                         }
                     }
-                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    if (!syncRes.ok) {
+                        LogError(`Room edit grants sync failed on space reopen for space ${this.ID}: ${syncRes.message ?? ''}`);
+                    }
                 } catch (reopenErr) {
                     LogError(`Failed to restore space chats on space reopen: ${reopenErr instanceof Error ? reopenErr.message : String(reopenErr)}`);
                 }
@@ -421,7 +427,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
             if (structureChanged) {
                 try {
-                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                    if (!syncRes.ok) {
+                        LogError(`Room edit grants sync failed on space structure change for space ${this.ID}: ${syncRes.message ?? ''}`);
+                    }
                 } catch (syncErr) {
                     LogError(`Room edit grants sync failed on space structure change: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
                 }

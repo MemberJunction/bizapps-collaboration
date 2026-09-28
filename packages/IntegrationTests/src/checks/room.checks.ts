@@ -1,6 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore, createSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
+import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore, createSpaceConversation, executeSpaceChatTurn } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
@@ -326,19 +326,27 @@ const checks: NamedCheck[] = [
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: discConvId,
                 text: '@Assistant summarize materials in this space',
-                executeAgent: true,
             });
-            Assert(adaRes.ok === true, 'Ada postSpaceMessage with executeAgent succeeds');
+            Assert(adaRes.ok === true, 'Ada postSpaceMessage succeeds');
             if (!adaRes.ok) throw new Error(`Ada postSpaceMessage failed: ${adaRes.message}`);
             if (adaRes.detailId) createdDetailIds.push(adaRes.detailId);
-            if (adaRes.assistantDetailId) createdDetailIds.push(adaRes.assistantDetailId);
+
+            const adaTurnRes = await executeSpaceChatTurn(ctx.Provider, ada, {
+                spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
+                userMessageId: adaRes.detailId!,
+            });
+            Assert(adaTurnRes.ok === true, 'Ada executeSpaceChatTurn succeeds');
+            if (!adaTurnRes.ok) throw new Error(`Ada executeSpaceChatTurn failed: ${adaTurnRes.message}`);
+            const adaAssistantDetailId = adaTurnRes.replyDetailIds[0];
+            if (adaAssistantDetailId) createdDetailIds.push(adaAssistantDetailId);
 
             // Read the assistant reply as Bea
             const view = View(ctx);
             const beaReplyRes = await view.RunView<{ ID: string; Message: string }>(
                 {
                     EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: `ID = '${adaRes.assistantDetailId}'`,
+                    ExtraFilter: `ID = '${adaAssistantDetailId}'`,
                     Fields: ['ID', 'Message'],
                     ResultType: 'simple',
                 },
@@ -394,18 +402,26 @@ const checks: NamedCheck[] = [
                     spaceId: NORTHWIND_SPACE_ID,
                     conversationId: nwConvId,
                     text: '@Assistant summarize all materials in this space',
-                    executeAgent: true,
                 });
                 Assert(samPostRes.ok === true, 'Sam postSpaceMessage in Northwind room succeeds');
                 if (!samPostRes.ok) throw new Error(`Sam postSpaceMessage failed: ${samPostRes.message}`);
                 if (samPostRes.detailId) createdDetailIds.push(samPostRes.detailId);
-                if (samPostRes.assistantDetailId) createdDetailIds.push(samPostRes.assistantDetailId);
+
+                const samTurnRes = await executeSpaceChatTurn(ctx.Provider, sam, {
+                    spaceId: NORTHWIND_SPACE_ID,
+                    conversationId: nwConvId,
+                    userMessageId: samPostRes.detailId!,
+                });
+                Assert(samTurnRes.ok === true, 'Sam executeSpaceChatTurn in Northwind room succeeds');
+                if (!samTurnRes.ok) throw new Error(`Sam executeSpaceChatTurn failed: ${samTurnRes.message}`);
+                const samAssistantDetailId = samTurnRes.replyDetailIds[0];
+                if (samAssistantDetailId) createdDetailIds.push(samAssistantDetailId);
 
                 // Casey reads the assistant reply in Northwind's room
                 const caseyReplyRes = await view.RunView<{ ID: string; Message: string }>(
                     {
                         EntityName: CONVERSATION_DETAIL_ENTITY,
-                        ExtraFilter: `ID = '${samPostRes.assistantDetailId}'`,
+                        ExtraFilter: `ID = '${samAssistantDetailId}'`,
                         Fields: ['ID', 'Message'],
                         ResultType: 'simple',
                     },
@@ -425,19 +441,27 @@ const checks: NamedCheck[] = [
 
                 const samSealedRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: SEALED_BRANCH_SPACE_ID,
-                    conversationId: sealedConvRes.conversationId,
+                    conversationId: sealedConvRes.conversationId!,
                     text: '@Assistant summarize materials in this space',
-                    executeAgent: true,
                 });
                 Assert(samSealedRes.ok === true, 'Sam postSpaceMessage in Sealed branch room succeeds');
                 if (!samSealedRes.ok) throw new Error(`Sam postSpaceMessage failed: ${samSealedRes.message}`);
                 if (samSealedRes.detailId) createdDetailIds.push(samSealedRes.detailId);
-                if (samSealedRes.assistantDetailId) createdDetailIds.push(samSealedRes.assistantDetailId);
+
+                const samSealedTurnRes = await executeSpaceChatTurn(ctx.Provider, sam, {
+                    spaceId: SEALED_BRANCH_SPACE_ID,
+                    conversationId: sealedConvRes.conversationId!,
+                    userMessageId: samSealedRes.detailId!,
+                });
+                Assert(samSealedTurnRes.ok === true, 'Sam executeSpaceChatTurn in Sealed branch room succeeds');
+                if (!samSealedTurnRes.ok) throw new Error(`Sam executeSpaceChatTurn in Sealed branch failed: ${samSealedTurnRes.message}`);
+                const sealedAssistantDetailId = samSealedTurnRes.replyDetailIds[0];
+                if (sealedAssistantDetailId) createdDetailIds.push(sealedAssistantDetailId);
 
                 const samSealedReplyRes = await view.RunView<{ ID: string; Message: string }>(
                     {
                         EntityName: CONVERSATION_DETAIL_ENTITY,
-                        ExtraFilter: `ID = '${samSealedRes.assistantDetailId}'`,
+                        ExtraFilter: `ID = '${sealedAssistantDetailId}'`,
                         Fields: ['ID', 'Message'],
                         ResultType: 'simple',
                     },

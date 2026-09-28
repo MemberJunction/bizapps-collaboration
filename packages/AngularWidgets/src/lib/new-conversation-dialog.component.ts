@@ -247,11 +247,6 @@ export interface NewConversationSubmitPayload {
         background: transparent;
       }
 
-      .f-hint {
-        font-size: 11.5px;
-        color: var(--mj-text-muted, #94a3b8);
-      }
-
       .kind-options {
         display: flex;
         flex-direction: column;
@@ -308,8 +303,8 @@ export interface NewConversationSubmitPayload {
         color: var(--mj-brand-primary, #0076b6);
       }
       .kind-card-icon.topic {
-        background: color-mix(in srgb, var(--mj-brand-secondary, #0076b6) 12%, transparent);
-        color: var(--mj-brand-secondary, #0076b6);
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        color: var(--mj-brand-primary, #0076b6);
       }
       .kind-card-icon.private {
         background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, transparent);
@@ -348,7 +343,7 @@ export interface NewConversationSubmitPayload {
 })
 export class CollabNewConversationDialogComponent {
   @Input() public SpaceName = '';
-  @Input() public CanSeeTeam = true;
+  @Input() public CanSeeTeam = false;
   @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
 
@@ -359,15 +354,18 @@ export class CollabNewConversationDialogComponent {
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
   public get canShowPrivate(): boolean {
-    return this.CanSeeTeam && this.AllowedKinds.includes('Private');
+    return this.AllowedKinds.includes('Private');
   }
 
   public get trimmedName(): string {
     return this.name.trim();
   }
 
-  @HostListener('keydown.escape')
-  public onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  public onEscape(event?: Event): void {
+    if (event) {
+      event.preventDefault();
+    }
     this.onCancel();
   }
 

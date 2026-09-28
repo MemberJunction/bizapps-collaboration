@@ -339,6 +339,12 @@
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bArchivedOnSpaceClose\b", 
+                    "Description": "",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
                     "Name": "\bSpace\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",

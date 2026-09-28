@@ -219,21 +219,28 @@ const checks: NamedCheck[] = [
             Assert(details[0].UserID.toLowerCase() === beaCtx.User.ID.toLowerCase(), 'Message UserID is Bea');
 
             // B0.2: Ada asks with ExecuteAgent: true, and as Bea, the reply in Discovery room does not quote Team files
-            const adaResult = await adaClient.PostSpaceMessage({
+            const adaPostRes = await adaClient.PostSpaceMessage({
                 SpaceID: DISCOVERY_SPACE_ID,
                 ConversationID: discConvId,
                 Text: '@Assistant summarize materials in this space',
-                ExecuteAgent: true,
             });
-            Assert(adaResult.Success === true, `Ada PostSpaceMessage failed: ${adaResult.ErrorMessage ?? ''}`);
-            if (adaResult.DetailID) createdDetailIds.push(adaResult.DetailID);
-            if (adaResult.AssistantDetailID) createdDetailIds.push(adaResult.AssistantDetailID);
+            Assert(adaPostRes.Success === true, `Ada PostSpaceMessage failed: ${adaPostRes.ErrorMessage ?? ''}`);
+            if (adaPostRes.DetailID) createdDetailIds.push(adaPostRes.DetailID);
+
+            const adaTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                SpaceID: DISCOVERY_SPACE_ID,
+                ConversationID: discConvId,
+                UserMessageID: adaPostRes.DetailID!,
+            });
+            Assert(adaTurnRes.Success === true, `Ada ExecuteSpaceChatTurn failed: ${adaTurnRes.ErrorMessage ?? ''}`);
+            const adaAssistantDetailId = adaTurnRes.ReplyDetailIDs?.[0];
+            if (adaAssistantDetailId) createdDetailIds.push(adaAssistantDetailId);
 
             // Read the assistant reply as Bea
             const beaReplyRes = await View(beaCtx).RunView<{ ID: string; Message: string }>(
                 {
                     EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: `ID = '${adaResult.AssistantDetailID}'`,
+                    ExtraFilter: `ID = '${adaAssistantDetailId}'`,
                     Fields: ['ID', 'Message'],
                     ResultType: 'simple',
                 },
@@ -281,17 +288,24 @@ const checks: NamedCheck[] = [
                     SpaceID: NORTHWIND_SPACE_ID,
                     ConversationID: nwConvId,
                     Text: '@Assistant summarize all materials in this space',
-                    ExecuteAgent: true,
                 });
                 Assert(samPostRes.Success === true, `Sam PostSpaceMessage in Northwind room failed: ${samPostRes.ErrorMessage ?? ''}`);
                 if (samPostRes.DetailID) createdDetailIds.push(samPostRes.DetailID);
-                if (samPostRes.AssistantDetailID) createdDetailIds.push(samPostRes.AssistantDetailID);
+
+                const samTurnRes = await samClient.ExecuteSpaceChatTurn({
+                    SpaceID: NORTHWIND_SPACE_ID,
+                    ConversationID: nwConvId,
+                    UserMessageID: samPostRes.DetailID!,
+                });
+                Assert(samTurnRes.Success === true, `Sam ExecuteSpaceChatTurn failed: ${samTurnRes.ErrorMessage ?? ''}`);
+                const samAssistantDetailId = samTurnRes.ReplyDetailIDs?.[0];
+                if (samAssistantDetailId) createdDetailIds.push(samAssistantDetailId);
 
                 // Casey reads the assistant reply in Northwind's room
                 const caseyReplyRes = await View(caseyCtx).RunView<{ ID: string; Message: string }>(
                     {
                         EntityName: CONVERSATION_DETAIL_ENTITY,
-                        ExtraFilter: `ID = '${samPostRes.AssistantDetailID}'`,
+                        ExtraFilter: `ID = '${samAssistantDetailId}'`,
                         Fields: ['ID', 'Message'],
                         ResultType: 'simple',
                     },
@@ -313,16 +327,23 @@ const checks: NamedCheck[] = [
                     SpaceID: SEALED_BRANCH_SPACE_ID,
                     ConversationID: sealedConvRes.ConversationID,
                     Text: '@Assistant summarize materials in this space',
-                    ExecuteAgent: true,
                 });
                 Assert(samSealedRes.Success === true, `Sam PostSpaceMessage in Sealed branch room failed: ${samSealedRes.ErrorMessage ?? ''}`);
                 if (samSealedRes.DetailID) createdDetailIds.push(samSealedRes.DetailID);
-                if (samSealedRes.AssistantDetailID) createdDetailIds.push(samSealedRes.AssistantDetailID);
+
+                const samSealedTurnRes = await samClient.ExecuteSpaceChatTurn({
+                    SpaceID: SEALED_BRANCH_SPACE_ID,
+                    ConversationID: sealedConvRes.ConversationID!,
+                    UserMessageID: samSealedRes.DetailID!,
+                });
+                Assert(samSealedTurnRes.Success === true, `Sam ExecuteSpaceChatTurn in Sealed branch failed: ${samSealedTurnRes.ErrorMessage ?? ''}`);
+                const sealedAssistantDetailId = samSealedTurnRes.ReplyDetailIDs?.[0];
+                if (sealedAssistantDetailId) createdDetailIds.push(sealedAssistantDetailId);
 
                 const samSealedReplyRes = await View(samCtx).RunView<{ ID: string; Message: string }>(
                     {
                         EntityName: CONVERSATION_DETAIL_ENTITY,
-                        ExtraFilter: `ID = '${samSealedRes.AssistantDetailID}'`,
+                        ExtraFilter: `ID = '${sealedAssistantDetailId}'`,
                         Fields: ['ID', 'Message'],
                         ResultType: 'simple',
                     },

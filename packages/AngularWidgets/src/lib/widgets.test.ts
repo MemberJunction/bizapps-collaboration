@@ -374,7 +374,7 @@ describe('CollabItemRowComponent', () => {
 });
 
 describe('CollabAskBoxComponent', () => {
-  it('emits AskRequested when query is provided and clears query', () => {
+  it('emits AskRequested when query is provided and preserves query until clear()', () => {
     const comp = new CollabAskBoxComponent();
     let queryResult = '';
     comp.AskRequested.subscribe(q => {
@@ -384,6 +384,8 @@ describe('CollabAskBoxComponent', () => {
     comp.Query = 'What is the readout schedule?';
     comp.onSend();
     expect(queryResult).toBe('What is the readout schedule?');
+    expect(comp.Query).toBe('What is the readout schedule?');
+    comp.clear();
     expect(comp.Query).toBe('');
   });
 

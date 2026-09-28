@@ -29,7 +29,7 @@
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bChats\b",
             "Description": "",
             "BaseView": "\bvwSpaceChats\b", 
-            "Fields": ["\bID\b","\bSpaceID\b","\bConversationID\b","\bName\b","\bSubject\b","\bKind\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bConversation\b"]
+            "Fields": ["\bID\b","\bSpaceID\b","\bConversationID\b","\bName\b","\bSubject\b","\bKind\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bArchivedOnSpaceClose\b","\bSpace\b","\bConversation\b"]
         },
         { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",

@@ -45,15 +45,12 @@ export interface CreateSpaceTaskPayload {
 export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
-    ExecuteAgent?: boolean;
     ConversationID?: string;
 }
 
 export interface PostSpaceMessageGraphQLPayload {
     Success: boolean;
     DetailID?: string;
-    AssistantDetailID?: string;
-    AssistantError?: string;
     ErrorMessage?: string;
 }
 
@@ -92,8 +89,9 @@ export interface SpaceChatHostRulesGraphQLPayload {
     Success: boolean;
     ErrorMessage?: string;
     AgentReplyMode: 'Always' | 'MentionOnly';
-    AllowedAgentIDs?: string[];
+    AllowedAgentIDs: string[];
     DefaultAgentID?: string;
+    DefaultAgentName?: string;
     AgentHistoryFrom?: string;
     CanStartConversation: boolean;
     AllowedConversationKinds: string[];
@@ -134,6 +132,7 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         AgentReplyMode
         AllowedAgentIDs
         DefaultAgentID
+        DefaultAgentName
         AgentHistoryFrom
         CanStartConversation
         AllowedConversationKinds
@@ -183,8 +182,6 @@ mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
     PostSpaceMessage(input: $input) {
         Success
         DetailID
-        AssistantDetailID
-        AssistantError
         ErrorMessage
     }
 }

@@ -402,19 +402,28 @@ const checks: NamedCheck[] = [
             Assert(discChats.length >= 1, 'Discovery General conversation found');
             const discConvId = discChats[0].ConversationID;
 
-            const result = await postSpaceMessage(ctx.Provider, bea, {
+            const postRes = await postSpaceMessage(ctx.Provider, bea, {
                 spaceId: DISCOVERY_SPACE_ID,
                 conversationId: discConvId,
                 text: '@Assistant what shared materials are available in Discovery?',
-                executeAgent: true,
             });
 
-            Assert(result.ok === true, 'postSpaceMessage with executeAgent succeeds');
+            Assert(postRes.ok === true, 'postSpaceMessage succeeds');
+            if (!postRes.ok) throw new Error(postRes.message);
+            Assert(!!postRes.detailId, 'Human conversation detail was created');
+            createdDetailIds.push(postRes.detailId);
+
+            const result = await executeSpaceChatTurn(ctx.Provider, bea, {
+                spaceId: DISCOVERY_SPACE_ID,
+                conversationId: discConvId,
+                userMessageId: postRes.detailId,
+            });
+
+            Assert(result.ok === true, 'executeSpaceChatTurn succeeds');
             if (!result.ok) throw new Error(result.message);
-            Assert(!!result.detailId, 'Human conversation detail was created');
-            Assert(!!result.assistantDetailId, 'Assistant conversation detail was created');
-            createdDetailIds.push(result.detailId);
-            if (result.assistantDetailId) createdDetailIds.push(result.assistantDetailId);
+            const assistantDetailId = result.replyDetailIds?.[0];
+            Assert(!!assistantDetailId, 'Assistant conversation detail was created');
+            if (assistantDetailId) createdDetailIds.push(assistantDetailId);
 
             Assert(result.quotedCount !== undefined && result.quotedCount > 0, 'Agent quoted at least 1 shared item');
 
@@ -422,7 +431,7 @@ const checks: NamedCheck[] = [
             const details = await FindRows<{ ID: string; Role: string; Message: string; HiddenToUser: boolean; AgentID?: string }>(
                 ctx,
                 CONVERSATION_DETAIL_ENTITY,
-                `ID = '${result.assistantDetailId}'`,
+                `ID = '${assistantDetailId}'`,
                 ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentID'],
             );
 

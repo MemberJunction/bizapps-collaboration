@@ -124,5 +124,29 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Chats"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Chats"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Chats&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "CanRead": 1,
+            "CanCreate": 0,
+            "CanUpdate": 0,
+            "CanDelete": 0,
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Chats In Reach"
+          }
+        }
+      ]
+    }
   }
 ]

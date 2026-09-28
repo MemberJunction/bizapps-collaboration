@@ -172,9 +172,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             }
 
             try {
-                await syncRoomEditGrantsForSpace(this.ProviderToUse, this.SpaceID);
+                const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.SpaceID);
+                if (!syncRes.ok) {
+                    LogError(`Room edit grants sync failed on member change for space ${this.SpaceID}: ${syncRes.message ?? ''}`);
+                }
             } catch (syncErr) {
-                LogError(`Room edit grants sync failed on member change: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
+                LogError(`Room edit grants sync failed on member change for space ${this.SpaceID}: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
             }
         }
         return ok;
@@ -186,9 +189,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         const ok = await super.Delete(options);
         if (ok && spaceId) {
             try {
-                await syncRoomEditGrantsForSpace(provider, spaceId);
+                const syncRes = await syncRoomEditGrantsForSpace(provider, spaceId);
+                if (!syncRes.ok) {
+                    LogError(`Room edit grants sync failed on member delete for space ${spaceId}: ${syncRes.message ?? ''}`);
+                }
             } catch (syncErr) {
-                LogError(`Room edit grants sync failed on member delete: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
+                LogError(`Room edit grants sync failed on member delete for space ${spaceId}: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
             }
         }
         return ok;

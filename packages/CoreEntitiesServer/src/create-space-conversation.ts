@@ -157,11 +157,23 @@ export async function createSpaceConversation(
         if (!grantSync.ok) {
             const msg = grantSync.message ?? 'Failed to sync permissions for new conversation.';
             LogError(`createSpaceConversation: grant sync failed for space ${spaceId}: ${msg}`);
+            try {
+                await spaceChat.Delete();
+                await conversation.Delete();
+            } catch (delErr) {
+                LogError(`createSpaceConversation: failed to rollback spaceChat/conversation after grant sync failure: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
+            }
             return { ok: false, message: msg };
         }
     } catch (grantErr) {
         const msg = `Failed to sync room edit grants after conversation creation for space ${spaceId}: ${grantErr instanceof Error ? grantErr.message : String(grantErr)}`;
         LogError(msg);
+        try {
+            await spaceChat.Delete();
+            await conversation.Delete();
+        } catch (delErr) {
+            LogError(`createSpaceConversation: failed to rollback spaceChat/conversation after grant sync error: ${delErr instanceof Error ? delErr.message : String(delErr)}`);
+        }
         return { ok: false, message: msg };
     }
 

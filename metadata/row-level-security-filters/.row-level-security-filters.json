@@ -116,11 +116,7 @@
     "fields": {
       "Name": "Collaboration: Space Chats In Reach",
       "Description": "Space chats in a space the caller reaches, filtering Private by CanSeeTeam.",
-      "FilterText": "(SpaceID IN (SELECT a.SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) AS a WHERE (Kind IN (N'General', N'Topic') OR (Kind = N'Private' AND a.CanSeeTeam = 1))))"
-    },
-    "sync": {
-      "lastModified": "2026-09-28T16:42:52.503Z",
-      "checksum": "f6b5c32bf6914b4df70e02d52d6b9f907d502a4669cb7d3256bc8b923dbac291"
+      "FilterText": "((Kind IN (N'General', N'Topic') AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))) OR (Kind = N'Private' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1)))"
     }
   },
   {

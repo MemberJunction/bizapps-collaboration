@@ -274,7 +274,6 @@ const checks: NamedCheck[] = [
                 SpaceID: DISCOVERY_SPACE_ID,
                 ConversationID: discConvId,
                 Text: 'AG6 client check verification message',
-                ExecuteAgent: false,
             });
             Assert(result.Success === true, `PostSpaceMessage succeeded: ${result.ErrorMessage ?? 'none'}`);
             Assert(typeof result.DetailID === 'string' && result.DetailID.length > 0, 'PostSpaceMessage returned valid DetailID');
