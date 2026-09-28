@@ -10,6 +10,8 @@ import { worldStorageRoot } from '../world/seed-files.js';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
+const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
+const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
@@ -110,11 +112,12 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM3',
-        Name: 'RM3 — contributing seat (Ada) direct save to room succeeds; non-contributor (Pat) is refused',
+        Name: 'RM3 — contributing seat (Ada) direct save to room succeeds; non-contributor (Pat, Dana) and spoofing are refused',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
             const pat = await GetPersonaUser(ctx, 'pat');
+            const dana = await GetPersonaUser(ctx, 'dana');
 
             const roomConvs = await FindRows<{ ID: string }>(
                 ctx,
@@ -136,8 +139,9 @@ const checks: NamedCheck[] = [
             const adaSaved = await adaDetail.Save();
             Assert(adaSaved && !!adaDetail.ID, `Direct conversation detail save by contributing member should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
 
-            // Clean up Ada's message
-            await adaDetail.Delete();
+            // Clean up Ada's message and verify deletion succeeds
+            const adaDeleted = await adaDetail.Delete();
+            Assert(adaDeleted, `Ada deleting her own detail should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
 
             // Direct save by Pat (Invited / non-contributor without Edit grant) is refused
             const patDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, pat);
@@ -153,15 +157,70 @@ const checks: NamedCheck[] = [
                 await patDetail.Delete();
             }
             Assert(!patSaved || !patDetail.ID, 'Direct conversation detail save into room by non-contributor must be refused');
+
+            // Direct save by Dana into Committee room (guest seat, CanContribute = false) is refused
+            const committeeConvs = await FindRows<{ ID: string }>(
+                ctx,
+                CONVERSATION_ENTITY,
+                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${COMMITTEE_SPACE_ID}'`,
+                ['ID'],
+            );
+            Assert(committeeConvs.length === 1, 'Committee room conversation found');
+            const committeeRoomId = committeeConvs[0].ID;
+
+            const danaDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, dana);
+            danaDetail.NewRecord();
+            danaDetail.ConversationID = committeeRoomId;
+            danaDetail.UserID = dana.ID;
+            danaDetail.Role = 'User';
+            danaDetail.Message = 'Dana attempting direct save in committee room';
+            danaDetail.Status = 'Complete';
+
+            const danaSaved = await danaDetail.Save();
+            if (danaSaved) {
+                await danaDetail.Delete();
+            }
+            Assert(!danaSaved || !danaDetail.ID, 'Direct conversation detail save into room by non-contributor (Dana in Committee) must be refused');
+
+            // Ada saving detail with mismatched UserID (spoofing Pat) is refused
+            const adaSpoofDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
+            adaSpoofDetail.NewRecord();
+            adaSpoofDetail.ConversationID = roomId;
+            adaSpoofDetail.UserID = pat.ID;
+            adaSpoofDetail.Role = 'User';
+            adaSpoofDetail.Message = 'Ada spoofing Pat';
+            adaSpoofDetail.Status = 'Complete';
+
+            const spoofSaved = await adaSpoofDetail.Save();
+            if (spoofSaved) {
+                await adaSpoofDetail.Delete();
+            }
+            Assert(!spoofSaved || !adaSpoofDetail.ID, 'Ada saving detail with mismatched UserID must be refused');
+
+            // Ada saving detail with Role = 'AI' is refused
+            const adaAiDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ada);
+            adaAiDetail.NewRecord();
+            adaAiDetail.ConversationID = roomId;
+            adaAiDetail.UserID = ada.ID;
+            adaAiDetail.Role = 'AI';
+            adaAiDetail.Message = 'Ada spoofing AI role';
+            adaAiDetail.Status = 'Complete';
+
+            const aiSaved = await adaAiDetail.Save();
+            if (aiSaved) {
+                await adaAiDetail.Delete();
+            }
+            Assert(!aiSaved || !adaAiDetail.ID, 'Ada saving detail with Role = AI must be refused');
         },
     },
     {
         Id: 'room.RM4',
-        Name: 'RM4 — Pat (Invited) and Remy (Removed) query room conversation and get nothing',
+        Name: 'RM4 — Pat (Invited) and Remy (Removed) query room conversation and get nothing; post-close access reads room',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const pat = await GetPersonaUser(ctx, 'pat');
             const remy = await GetPersonaUser(ctx, 'remy');
+            const ada = await GetPersonaUser(ctx, 'ada');
 
             const roomConvs = await FindRows<{ ID: string }>(
                 ctx,
@@ -197,6 +256,28 @@ const checks: NamedCheck[] = [
             Assert(
                 (remyRes.Results?.length ?? 0) === 0,
                 `Remy (Removed) MUST NOT be able to view Discovery room conversation, got ${remyRes.Results?.length ?? 0} rows`,
+            );
+
+            // Assertion that someone with post-close access reads the room of a closed space (closed-recent)
+            const closedRoomConvs = await FindRows<{ ID: string }>(
+                ctx,
+                CONVERSATION_ENTITY,
+                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${CLOSED_RECENT_SPACE_ID}'`,
+                ['ID'],
+            );
+            Assert(closedRoomConvs.length === 1, 'Closed-recent room conversation found');
+            const closedRoomId = closedRoomConvs[0].ID;
+
+            const adaClosedRes = await view.RunView<{ ID: string }>({
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID = '${closedRoomId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, ada);
+            Assert(adaClosedRes.Success, `Ada RunView on closed-recent room failed: ${adaClosedRes.ErrorMessage ?? ''}`);
+            Assert(
+                (adaClosedRes.Results?.length ?? 0) === 1,
+                `Ada (with post-close access) MUST be able to view closed-recent room conversation, got ${adaClosedRes.Results?.length ?? 0} rows`,
             );
         },
     },

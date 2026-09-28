@@ -5,6 +5,12 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import { MJResourcePermissionEntity } from '@memberjunction/core-entities';
+import {
+    membershipReaches,
+    type MemberSnapshot,
+    type SpaceNode,
+    type RoleFlags,
+} from '@mj-biz-apps/collaboration-core';
 import { asMetadata, parseUuid } from './uuid.js';
 
 export const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
@@ -19,18 +25,27 @@ interface SpaceRow {
     Name: string;
     ParentID: string | null;
     InheritsMembership: boolean;
+    OwnerID?: string;
     ClosedAt: string | null;
 }
 
 interface MemberRow {
     ID: string;
+    SpaceID?: string;
     UserID: string;
     SpaceRoleTypeID: string;
+    Band?: string;
 }
 
 interface RoleRow {
     ID: string;
-    CanContribute: boolean;
+    CanContribute?: boolean;
+    Level?: number;
+    MaxGrantableLevel?: number;
+    CanInvite?: boolean;
+    CanPromoteBand?: boolean;
+    CanSeeTeamBand?: boolean;
+    IsOwnerRole?: boolean;
 }
 
 interface ExistingGrantRow {
@@ -46,11 +61,13 @@ interface ExistingGrantRow {
  *
  * Rules:
  * - If the space is closed, all room Edit grants are revoked (deleted).
- * - If the space is open, contributing members who reach the space (direct active
- *   members with CanContribute = 1, plus active members from open ancestors where
- *   InheritsMembership = 1 across the chain) receive Edit grants on the Room conversation.
+ * - If the space is open, contributing members who reach the space (evaluated via
+ *   membershipReaches so the nearest seat on the inheritance chain governs) receive
+ *   Edit grants on the Room conversation.
  * - Non-contributing seats or members who no longer reach have their grants revoked.
  * - Recursively syncs any child spaces that inherit membership from this space.
+ * - Statically checks every read, save, and delete, stopping on failed reads to avoid
+ *   accidental total revocation or duplicate grant creation.
  */
 export async function syncRoomEditGrantsForSpace(
     providerOrObject: IMetadataProvider | object,
@@ -85,13 +102,18 @@ export async function syncRoomEditGrantsForSpace(
         MaxRows: 1,
     }, systemUser);
 
-    if (!roomRes.Success || !roomRes.Results || roomRes.Results.length === 0) {
+    if (!roomRes.Success) {
+        LogError(`syncRoomEditGrantsForSpace: failed to read room for space ${spaceId}: ${roomRes.ErrorMessage ?? 'RunView failed'}`);
+        return;
+    }
+    if (!roomRes.Results || roomRes.Results.length === 0) {
         return; // No room conversation for this space
     }
 
     const room = roomRes.Results[0];
     const conversationId = parseUuid(room.ConversationID);
     if (!conversationId) {
+        LogError(`syncRoomEditGrantsForSpace: invalid ConversationID for space ${spaceId}`);
         return;
     }
 
@@ -99,11 +121,16 @@ export async function syncRoomEditGrantsForSpace(
     const spaceRes = await rv.RunView<SpaceRow>({
         EntityName: SPACES_ENTITY,
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'ClosedAt'],
+        Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'OwnerID', 'ClosedAt'],
         MaxRows: 1,
     }, systemUser);
 
-    if (!spaceRes.Success || !spaceRes.Results || spaceRes.Results.length === 0) {
+    if (!spaceRes.Success) {
+        LogError(`syncRoomEditGrantsForSpace: failed to read space ${spaceId}: ${spaceRes.ErrorMessage ?? 'RunView failed'}`);
+        return;
+    }
+    if (!spaceRes.Results || spaceRes.Results.length === 0) {
+        LogError(`syncRoomEditGrantsForSpace: space ${spaceId} not found`);
         return;
     }
 
@@ -113,11 +140,22 @@ export async function syncRoomEditGrantsForSpace(
     const targetUserIds = new Set<string>();
 
     if (!isClosed) {
-        // Collect all spaces that can contribute down to spaceId
-        const contributingSpaceIds: string[] = [spaceId];
-        let currentSpace = space;
+        const spaceNodes: SpaceNode[] = [];
+        const chainSpaceIds: string[] = [spaceId];
+        let currentSpace: SpaceRow = space;
         const seenAncestors = new Set<string>([spaceId]);
 
+        spaceNodes.push({
+            id: spaceId,
+            parentId: space.ParentID ? parseUuid(space.ParentID) : null,
+            inheritsMembership: !!space.InheritsMembership,
+            ownerId: parseUuid(space.OwnerID) ?? space.OwnerID ?? '',
+            agentRetrieval: 'Included',
+            allowParentAssignees: true,
+            closedAt: space.ClosedAt ? String(space.ClosedAt) : null,
+        });
+
+        let ancestorReadFailed = false;
         while (currentSpace.InheritsMembership && currentSpace.ParentID) {
             const parentId = parseUuid(currentSpace.ParentID);
             if (!parentId || seenAncestors.has(parentId)) break;
@@ -126,58 +164,115 @@ export async function syncRoomEditGrantsForSpace(
             const parentRes = await rv.RunView<SpaceRow>({
                 EntityName: SPACES_ENTITY,
                 ExtraFilter: `ID = '${parentId}'`,
-                Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'ClosedAt'],
+                Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'OwnerID', 'ClosedAt'],
                 MaxRows: 1,
             }, systemUser);
 
-            if (!parentRes.Success || !parentRes.Results || parentRes.Results.length === 0) {
+            if (!parentRes.Success) {
+                LogError(`syncRoomEditGrantsForSpace: failed to read ancestor space ${parentId}: ${parentRes.ErrorMessage ?? 'RunView failed'}`);
+                ancestorReadFailed = true;
+                break;
+            }
+            if (!parentRes.Results || parentRes.Results.length === 0) {
+                LogError(`syncRoomEditGrantsForSpace: ancestor space ${parentId} not found`);
+                ancestorReadFailed = true;
                 break;
             }
 
             const parent = parentRes.Results[0];
+            spaceNodes.push({
+                id: parent.ID,
+                parentId: parent.ParentID ? parseUuid(parent.ParentID) : null,
+                inheritsMembership: !!parent.InheritsMembership,
+                ownerId: parseUuid(parent.OwnerID) ?? parent.OwnerID ?? '',
+                agentRetrieval: 'Included',
+                allowParentAssignees: true,
+                closedAt: parent.ClosedAt ? String(parent.ClosedAt) : null,
+            });
+
             if (parent.ClosedAt) {
                 // Closed ancestor halts inheritance down the branch
                 break;
             }
 
-            contributingSpaceIds.push(parent.ID);
+            chainSpaceIds.push(parent.ID);
             currentSpace = parent;
+        }
+
+        if (ancestorReadFailed) {
+            return;
         }
 
         // Load active members across all contributing spaces
         const membersRes = await rv.RunView<MemberRow>({
             EntityName: SPACE_MEMBERS_ENTITY,
-            ExtraFilter: `SpaceID IN (${contributingSpaceIds.map((id) => `'${id}'`).join(', ')}) AND Status = 'Active'`,
-            Fields: ['ID', 'UserID', 'SpaceRoleTypeID'],
-            MaxRows: 1000,
+            ExtraFilter: `SpaceID IN (${chainSpaceIds.map((id) => `'${id}'`).join(', ')}) AND Status = 'Active'`,
+            Fields: ['ID', 'SpaceID', 'UserID', 'SpaceRoleTypeID', 'Band'],
+            MaxRows: 2000,
         }, systemUser);
 
-        if (membersRes.Success && membersRes.Results && membersRes.Results.length > 0) {
-            const roleIds = [...new Set(membersRes.Results.map((m) => parseUuid(m.SpaceRoleTypeID)).filter((id): id is string => !!id))];
-            const roleLookup = new Map<string, boolean>();
+        if (!membersRes.Success) {
+            LogError(`syncRoomEditGrantsForSpace: failed to read members for space ${spaceId}: ${membersRes.ErrorMessage ?? 'RunView failed'}`);
+            return;
+        }
+
+        const memberRows = membersRes.Results ?? [];
+        if (memberRows.length > 0) {
+            const roleIds = [...new Set(memberRows.map((m) => parseUuid(m.SpaceRoleTypeID)).filter((id): id is string => !!id))];
+            const roleLookup = new Map<string, RoleFlags>();
 
             if (roleIds.length > 0) {
                 const rolesRes = await rv.RunView<RoleRow>({
                     EntityName: SPACE_ROLES_ENTITY,
                     ExtraFilter: `ID IN (${roleIds.map((id) => `'${id}'`).join(', ')})`,
-                    Fields: ['ID', 'CanContribute'],
+                    Fields: ['ID', 'CanContribute', 'Level', 'MaxGrantableLevel', 'CanInvite', 'CanPromoteBand', 'CanSeeTeamBand', 'IsOwnerRole'],
                     MaxRows: roleIds.length + 5,
                 }, systemUser);
 
-                if (rolesRes.Success && rolesRes.Results) {
+                if (!rolesRes.Success) {
+                    LogError(`syncRoomEditGrantsForSpace: failed to read roles for space ${spaceId}: ${rolesRes.ErrorMessage ?? 'RunView failed'}`);
+                    return;
+                }
+
+                if (rolesRes.Results) {
                     for (const r of rolesRes.Results) {
                         const rId = parseUuid(r.ID);
-                        if (rId) roleLookup.set(rId, !!r.CanContribute);
+                        if (rId) {
+                            roleLookup.set(rId, {
+                                level: r.Level ?? 0,
+                                maxGrantableLevel: r.MaxGrantableLevel ?? 0,
+                                canInvite: !!r.CanInvite,
+                                canPromoteBand: !!r.CanPromoteBand,
+                                canSeeTeamBand: !!r.CanSeeTeamBand,
+                                isOwnerRole: !!r.IsOwnerRole,
+                                canContribute: !!r.CanContribute,
+                            });
+                        }
                     }
                 }
             }
 
-            for (const m of membersRes.Results) {
-                const roleId = parseUuid(m.SpaceRoleTypeID);
-                const canContribute = roleId ? roleLookup.get(roleId) ?? false : false;
-                const userId = parseUuid(m.UserID);
-                if (canContribute && userId) {
-                    targetUserIds.add(userId);
+            const memberships: MemberSnapshot[] = memberRows.map((m) => ({
+                spaceId: parseUuid(m.SpaceID) ?? m.SpaceID ?? spaceId,
+                userId: parseUuid(m.UserID) ?? m.UserID,
+                status: 'Active',
+                band: m.Band === 'Team' ? 'Team' : 'Shared',
+                role: roleLookup.get(parseUuid(m.SpaceRoleTypeID) ?? '') ?? {
+                    level: 0,
+                    maxGrantableLevel: 0,
+                    canInvite: false,
+                    canPromoteBand: false,
+                    canSeeTeamBand: false,
+                    isOwnerRole: false,
+                    canContribute: false,
+                },
+            }));
+
+            const uniqueUserIds = new Set(memberRows.map((m) => parseUuid(m.UserID)).filter((id): id is string => !!id));
+            for (const uid of uniqueUserIds) {
+                const reach = membershipReaches(spaceNodes, memberships, uid, spaceId);
+                if (reach?.role.canContribute) {
+                    targetUserIds.add(uid);
                 }
             }
         }
@@ -188,10 +283,15 @@ export async function syncRoomEditGrantsForSpace(
         EntityName: RESOURCE_PERMISSIONS_ENTITY,
         ExtraFilter: `ResourceTypeID = '${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${conversationId}' AND Type = 'User'`,
         Fields: ['ID', 'UserID', 'PermissionLevel', 'Status'],
-        MaxRows: 1000,
+        MaxRows: 2000,
     }, systemUser);
 
-    if (existingGrantsRes.Success && existingGrantsRes.Results) {
+    if (!existingGrantsRes.Success) {
+        LogError(`syncRoomEditGrantsForSpace: failed to read existing grants for space ${spaceId}: ${existingGrantsRes.ErrorMessage ?? 'RunView failed'}`);
+        return;
+    }
+
+    if (existingGrantsRes.Results) {
         for (const existing of existingGrantsRes.Results) {
             const existingUserId = parseUuid(existing.UserID);
             if (existingUserId && targetUserIds.has(existingUserId)) {
@@ -202,14 +302,24 @@ export async function syncRoomEditGrantsForSpace(
                     if (await permObj.Load(existing.ID)) {
                         permObj.PermissionLevel = 'Edit';
                         permObj.Status = 'Approved';
-                        await permObj.Save();
+                        const saved = await permObj.Save();
+                        if (!saved) {
+                            LogError(`syncRoomEditGrantsForSpace: failed to update grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                        }
+                    } else {
+                        LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for update`);
                     }
                 }
             } else {
                 // Grant should be revoked
                 const permObj = await provider.GetEntityObject<MJResourcePermissionEntity>(RESOURCE_PERMISSIONS_ENTITY, systemUser);
                 if (await permObj.Load(existing.ID)) {
-                    await permObj.Delete();
+                    const deleted = await permObj.Delete();
+                    if (!deleted) {
+                        LogError(`syncRoomEditGrantsForSpace: failed to delete grant ${existing.ID}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+                    }
+                } else {
+                    LogError(`syncRoomEditGrantsForSpace: failed to load grant ${existing.ID} for revocation`);
                 }
             }
         }
@@ -227,7 +337,7 @@ export async function syncRoomEditGrantsForSpace(
         permObj.Status = 'Approved';
         const saved = await permObj.Save();
         if (!saved) {
-            LogError(`Failed to save room edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
+            LogError(`syncRoomEditGrantsForSpace: failed to save room edit grant for user ${userId} on conversation ${conversationId}: ${permObj.LatestResult?.CompleteMessage ?? ''}`);
         }
     }
 
@@ -239,7 +349,12 @@ export async function syncRoomEditGrantsForSpace(
         MaxRows: 100,
     }, systemUser);
 
-    if (childrenRes.Success && childrenRes.Results) {
+    if (!childrenRes.Success) {
+        LogError(`syncRoomEditGrantsForSpace: failed to read child spaces for space ${spaceId}: ${childrenRes.ErrorMessage ?? 'RunView failed'}`);
+        return;
+    }
+
+    if (childrenRes.Results) {
         for (const child of childrenRes.Results) {
             const childId = parseUuid(child.ID);
             if (childId) {

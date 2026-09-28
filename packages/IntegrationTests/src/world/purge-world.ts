@@ -160,6 +160,9 @@ export async function purgeWorld(): Promise<void> {
             WHERE conversation.ID IN (SELECT ID FROM #conv)
                OR conversation.LastConversationID IN (SELECT ID FROM #conv);
 
+            IF OBJECT_ID('[${core}].ResourcePermission') IS NOT NULL
+                DELETE FROM [${core}].ResourcePermission WHERE ResourceRecordID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
+
             DELETE FROM [${core}].Conversation WHERE ID IN (SELECT ID FROM #conv);
 
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL

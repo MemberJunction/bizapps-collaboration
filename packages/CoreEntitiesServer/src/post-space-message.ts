@@ -121,6 +121,7 @@ export async function postSpaceMessage(
                 spaceId,
                 conversationId,
                 userMessageId: detail.ID,
+                forceExecute: true,
             });
             if (turnResult.ok) {
                 return {

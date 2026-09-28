@@ -286,6 +286,22 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
     });
 
+    it('keeps explicit value passed to NewRecord matching column default when space type default differs', async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: true, // caller explicitly chose column default true
+            allowDirty: true,           // caller specified it in NewRecord
+            agentRetrieval: 'Included', // caller explicitly chose column default Included
+            agentDirty: true,           // caller specified it in NewRecord
+            defaultAllow: false,        // type default differs
+            defaultAgent: 'ExcludedFromParentScope', // type default differs
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, true, 'Explicit AllowParentAssignees=true must be kept');
+        assert.equal(space.AgentRetrieval, 'Included', 'Explicit AgentRetrieval=Included must be kept');
+    });
+
     it('keeps an explicit non-default from staff', async () => {
         const space = mockCreateSpace({
             user: staffUser,

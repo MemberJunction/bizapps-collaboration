@@ -350,6 +350,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isNowClosed = !!this.ClosedAt;
         const justClosed = !wasClosed && isNowClosed;
 
+        const parentChanged = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
+        const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
+        const structureChanged = parentChanged || inheritsChanged;
+
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
@@ -357,6 +361,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 await ensureConversation(this, user);
             } catch (error) {
                 LogError(`Space conversation was not bound: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            if (structureChanged) {
+                try {
+                    await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
+                } catch (syncErr) {
+                    LogError(`Room edit grants sync failed on space structure change: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
+                }
             }
 
             try {
@@ -452,8 +464,63 @@ async function ensureConversation(space: SpaceEntityServer, user: NonNullable<Sp
         return;
     }
 
-    // Do not auto-create conversation or room up-front for a space.
-    // Conversations in a space are created on demand when the user requests one.
+    // 2. Create the room when the space is created (no existing Room Space Chat)
+    const conversation = await metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);
+    conversation.NewRecord();
+    conversation.LinkedEntityID = SPACES_ENTITY_ID;
+    conversation.LinkedRecordID = space.ID;
+    conversation.UserID = system.ID;
+    conversation.Name = space.Name;
+    conversation.ApplicationScope = 'Application';
+    conversation.ApplicationID = COLLABORATION_APP_ID;
+
+    const spaceChat = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>('MJ_BizApps_Collaboration: Space Chats', system);
+    spaceChat.NewRecord();
+    spaceChat.SpaceID = space.ID;
+    spaceChat.ConversationID = conversation.ID;
+    spaceChat.Name = space.Name;
+    spaceChat.Kind = 'Room';
+    spaceChat.Status = targetStatus;
+
+    let tg;
+    try {
+        if (typeof metadata.CreateTransactionGroup === 'function') {
+            tg = await metadata.CreateTransactionGroup();
+        }
+    } catch {
+        tg = undefined;
+    }
+
+    if (tg) {
+        conversation.TransactionGroup = tg;
+        spaceChat.TransactionGroup = tg;
+        await conversation.Save();
+        await spaceChat.Save();
+        const submitted = await tg.Submit();
+        if (!submitted || !conversation.ID || !spaceChat.ID) {
+            const msg = conversation.LatestResult?.CompleteMessage || spaceChat.LatestResult?.CompleteMessage || 'Failed to submit room creation transaction.';
+            LogError(`Space conversation transaction failed for space ${space.ID}: ${msg}`);
+            return;
+        }
+        await syncRoomEditGrantsForSpace(metadata, space.ID);
+    } else {
+        const convSaved = await conversation.Save();
+        if (!convSaved || !conversation.ID) {
+            LogError(`Space conversation was not bound: ${conversation.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            return;
+        }
+        spaceChat.ConversationID = conversation.ID;
+        const chatSaved = await spaceChat.Save();
+        if (!chatSaved) {
+            LogError(`Space chat room was not bound: ${spaceChat.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            const deleted = await conversation.Delete();
+            if (!deleted) {
+                LogError(`Failed to cleanup unbound conversation ${conversation.ID}: ${conversation.LatestResult?.CompleteMessage ?? 'delete returned false'}`);
+            }
+        } else {
+            await syncRoomEditGrantsForSpace(metadata, space.ID);
+        }
+    }
 }
 
 function getFieldVal<T>(entity: BaseEntity, name: string): T | undefined {

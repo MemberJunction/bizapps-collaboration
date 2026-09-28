@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: V202609280100__v0.1.x__One_Room_Per_Space_Unique_Index.sql
--- Enforces one active Room per space in SpaceChat via filtered unique index.
+-- Enforces one Room per space in SpaceChat via filtered unique index.
 -- =============================================================================
 
 IF NOT EXISTS (

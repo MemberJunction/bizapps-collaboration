@@ -6,11 +6,7 @@ import {
   Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
-import {
-  ConversationsModule,
-  type AgentReplyMode,
-  type AgentTurnHandler,
-} from '@memberjunction/ng-conversations';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -20,6 +16,32 @@ export interface ChatMentionPerson {
   Name: string;
   Email?: string | null;
 }
+
+export type AgentReplyMode = 'Always' | 'MentionOnly';
+
+export interface AgentTurnRequest {
+  ConversationId: string;
+  UserMessageId: string;
+  MessageText: string;
+  AgentId: string;
+  AgentName: string | null;
+  Route?: string;
+  ApplicationId?: string | null;
+  AppContext?: Record<string, unknown> | null;
+  AgentHistoryFrom?: Date | null;
+  ConfigurationPresetId?: string | null;
+  RequestedSkillIDs?: string[];
+  PlanMode?: boolean;
+}
+
+export interface AgentTurnResult {
+  Success: boolean;
+  ErrorMessage?: string;
+  ReplyDetailIds?: string[];
+  AgentRunId?: string;
+}
+
+export type AgentTurnHandler = (request: AgentTurnRequest) => Promise<AgentTurnResult>;
 
 @Component({
   selector: 'mjc-space-chat',
@@ -49,7 +71,9 @@ export interface ChatMentionPerson {
           [MentionPeople]="MentionPeople"
           [AgentHistoryFrom]="AgentHistoryFrom"
           [AgentTurnHandler]="AgentTurnHandler"
-          [AutoNameConversation]="AutoNameConversation">
+          [AutoNameConversation]="AutoNameConversation"
+          [ComposerDraft]="ComposerDraft"
+          (ComposerDraftConsumed)="onComposerDraftConsumed()">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
@@ -87,15 +111,8 @@ export interface ChatMentionPerson {
           </div>
           <h3 class="empty-title">Select a Conversation</h3>
           <p class="empty-desc">
-            Choose a channel from the space sidebar or start a new conversation.
+            Choose a channel from the space sidebar.
           </p>
-          <button
-            type="button"
-            class="btn-new-convo"
-            (click)="onNewConversation()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Conversation</span>
-          </button>
         </div>
       }
     </div>
@@ -218,24 +235,6 @@ export interface ChatMentionPerson {
         line-height: 1.5;
         margin-bottom: 20px;
       }
-
-      .btn-new-convo {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
-        border: none;
-        border-radius: 6px;
-        padding: 8px 16px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .btn-new-convo:hover {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 85%, black);
-      }
     `,
   ],
 })
@@ -253,16 +252,18 @@ export class CollabSpaceChatComponent {
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = false;
-  @Input() public AgentReplyMode: AgentReplyMode = 'Always';
+  @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] | null = null;
   @Input() public MentionPeople: readonly ChatMentionPerson[] | null = null;
   @Input() public AgentHistoryFrom: Date | null = null;
   @Input() public AgentTurnHandler: AgentTurnHandler | null = null;
-  @Input() public AutoNameConversation: boolean = true;
+  @Input() public AutoNameConversation: boolean = false;
+  @Input() public ComposerDraft: string | null = null;
 
-  @Output() public NewConversationRequested = new EventEmitter<void>();
+  @Output() public ComposerDraftConsumed = new EventEmitter<void>();
 
-  public onNewConversation(): void {
-    this.NewConversationRequested.emit();
+  public onComposerDraftConsumed(): void {
+    this.ComposerDraft = null;
+    this.ComposerDraftConsumed.emit();
   }
 }

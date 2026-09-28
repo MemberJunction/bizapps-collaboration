@@ -179,6 +179,20 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
         return ok;
     }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const spaceId = this.SpaceID;
+        const provider = this.ProviderToUse;
+        const ok = await super.Delete(options);
+        if (ok && spaceId) {
+            try {
+                await syncRoomEditGrantsForSpace(provider, spaceId);
+            } catch (syncErr) {
+                LogError(`Room edit grants sync failed on member delete: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
+            }
+        }
+        return ok;
+    }
 }
 
 function previousStatus(entity: SpaceMemberEntityServer): 'Invited' | 'Active' | 'Removed' | null {

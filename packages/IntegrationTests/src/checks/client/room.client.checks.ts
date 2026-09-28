@@ -77,10 +77,35 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM3',
-        Name: 'RM3 — non-member (Pat) cannot read the room conversation',
-        RequiresMutation: false,
+        Name: 'RM3 — contributing seat (Ada) direct save to room succeeds over wire; non-member (Pat) is refused',
+        RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const patCtx = await getPersonaContext(ctx, 'pat');
+
+            const roomConvs = await FindRows<{ ID: string }>(
+                ctx,
+                CONVERSATION_ENTITY,
+                `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${DISCOVERY_SPACE_ID}'`,
+                ['ID'],
+            );
+            Assert(roomConvs.length === 1, 'Discovery room conversation exists');
+            const roomId = roomConvs[0].ID;
+
+            // Direct save over wire by Ada (contributing seat)
+            const adaDetail = await adaCtx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, adaCtx.User);
+            adaDetail.NewRecord();
+            adaDetail.ConversationID = roomId;
+            adaDetail.UserID = adaCtx.User.ID;
+            adaDetail.Role = 'User';
+            adaDetail.Message = 'Direct chat over wire by contributing member into space room';
+            adaDetail.Status = 'Complete';
+
+            const adaSaved = await adaDetail.Save();
+            Assert(adaSaved && !!adaDetail.ID, `Direct conversation detail save over wire by contributing member should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
+
+            const deleted = await adaDetail.Delete();
+            Assert(deleted, `Ada deleting her own detail over wire should succeed: ${adaDetail.LatestResult?.CompleteMessage ?? ''}`);
 
             const patRes = await View(patCtx).RunView<{ ID: string }>({
                 EntityName: CONVERSATION_ENTITY,

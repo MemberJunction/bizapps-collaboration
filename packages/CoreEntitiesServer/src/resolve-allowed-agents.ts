@@ -1,10 +1,5 @@
 import { RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
-import type {
-    mjBizAppsCollaborationSpaceAgentEntity,
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceTypeEntity,
-} from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
 
 export const COLLABORATION_DEFAULT_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
@@ -23,8 +18,8 @@ export interface ResolvedAllowedAgentsResult {
     agents: SpaceAgentItem[];
 }
 
-function normalizeId(id: string): string {
-    return id.trim().toUpperCase();
+function normalizeId(id: string | null | undefined): string {
+    return (id ?? '').trim().toUpperCase();
 }
 
 /**
@@ -47,12 +42,20 @@ export async function resolveAllowedAgents(
     const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
     const userToUse = contextUser ?? system ?? undefined;
 
+    interface SpaceChainNode {
+        ID: string;
+        ParentID: string | null;
+        SpaceTypeID: string | null;
+        Configuration: string | null;
+    }
+
     // 1. Load the space and its ancestors
-    const spaceResult = await rv.RunView<mjBizAppsCollaborationSpaceEntity>(
+    const spaceResult = await rv.RunView<SpaceChainNode>(
         {
             EntityName: 'MJ_BizApps_Collaboration: Spaces',
             ExtraFilter: `ID = '${spaceId}'`,
-            ResultType: 'entity_object',
+            Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
+            ResultType: 'simple',
         },
         userToUse
     );
@@ -65,14 +68,15 @@ export async function resolveAllowedAgents(
     const spaceTypeId = targetSpace.SpaceTypeID;
 
     // Build ancestor chain from root to target space
-    const spaceChain: mjBizAppsCollaborationSpaceEntity[] = [targetSpace];
+    const spaceChain: SpaceChainNode[] = [targetSpace];
     let currentParentId = targetSpace.ParentID;
     while (currentParentId) {
-        const parentRes = await rv.RunView<mjBizAppsCollaborationSpaceEntity>(
+        const parentRes = await rv.RunView<SpaceChainNode>(
             {
                 EntityName: 'MJ_BizApps_Collaboration: Spaces',
                 ExtraFilter: `ID = '${currentParentId}'`,
-                ResultType: 'entity_object',
+                Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
+                ResultType: 'simple',
             },
             userToUse
         );
@@ -144,11 +148,12 @@ export async function resolveAllowedAgents(
 
     // 2. Query only space-level SpaceAgent rows for any space in chain
     const chainIdsSql = spaceChain.map((s) => `'${s.ID}'`).join(',');
-    const agentsRes = await rv.RunView<mjBizAppsCollaborationSpaceAgentEntity>(
+    const agentsRes = await rv.RunView<{ ID: string; AgentID: string; SpaceID: string | null; IsDefault?: boolean }>(
         {
             EntityName: 'MJ_BizApps_Collaboration: Space Agents',
             ExtraFilter: `SpaceID IN (${chainIdsSql})`,
-            ResultType: 'entity_object',
+            Fields: ['ID', 'AgentID', 'SpaceID', 'IsDefault'],
+            ResultType: 'simple',
         },
         userToUse
     );

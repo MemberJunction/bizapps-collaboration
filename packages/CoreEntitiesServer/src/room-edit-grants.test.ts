@@ -41,6 +41,8 @@ describe('syncRoomEditGrantsForSpace', () => {
         isClosed?: boolean;
         inheritsMembership?: boolean;
         existingGrants?: MockPermission[];
+        failMembersRead?: boolean;
+        customMembers?: { ID: string; SpaceID: string; UserID: string; SpaceRoleTypeID: string; Band?: string; Status?: string }[];
     }) {
         const grants: MockPermission[] = [...(options.existingGrants ?? [])];
         const deletedIds: string[] = [];
@@ -89,6 +91,12 @@ describe('syncRoomEditGrantsForSpace', () => {
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Members') {
+                    if (options.failMembersRead) {
+                        return { Success: false, ErrorMessage: 'Database connection failed' };
+                    }
+                    if (options.customMembers) {
+                        return { Success: true, Results: options.customMembers };
+                    }
                     const members = [
                         { ID: 'm1', SpaceID: SPACE_ID, UserID: CONTRIBUTING_USER_ID, SpaceRoleTypeID: ROLE_CONTRIB_ID },
                         { ID: 'm2', SpaceID: SPACE_ID, UserID: NON_CONTRIBUTING_USER_ID, SpaceRoleTypeID: ROLE_NON_CONTRIB_ID },
@@ -251,5 +259,41 @@ describe('syncRoomEditGrantsForSpace', () => {
         assert.ok(deletedIds.includes('stale-grant-1'), 'Stale grant must be deleted');
         assert.equal(grants.some((g) => g.UserID === '99999999-9999-4999-8999-999999999999'), false);
         assert.ok(grants.some((g) => g.UserID === CONTRIBUTING_USER_ID), 'Active contributing user gets grant');
+    });
+
+    it('does not delete existing grants when members read fails', async () => {
+        const existing: MockPermission = {
+            ID: 'existing-grant-keep',
+            ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+            ResourceRecordID: CONVERSATION_ID,
+            Type: 'User',
+            UserID: CONTRIBUTING_USER_ID,
+            PermissionLevel: 'Edit',
+        };
+        const { mockProvider, grants, deletedIds } = createMockEnvironment({
+            isClosed: false,
+            existingGrants: [existing],
+            failMembersRead: true,
+        });
+
+        await syncRoomEditGrantsForSpace(mockProvider, SPACE_ID);
+        assert.equal(deletedIds.length, 0, 'Must not delete existing grants on read failure');
+        assert.equal(grants.length, 1, 'Existing grant must be retained');
+    });
+
+    it('enforces nearest seat rule: contributing on parent, non-contributing on space -> no edit grant', async () => {
+        const OVERRIDE_USER_ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+        const { mockProvider, grants } = createMockEnvironment({
+            isClosed: false,
+            inheritsMembership: true,
+            customMembers: [
+                { ID: 'm1', SpaceID: SPACE_ID, UserID: OVERRIDE_USER_ID, SpaceRoleTypeID: ROLE_NON_CONTRIB_ID },
+                { ID: 'm2', SpaceID: PARENT_SPACE_ID, UserID: OVERRIDE_USER_ID, SpaceRoleTypeID: ROLE_CONTRIB_ID },
+            ],
+        });
+
+        await syncRoomEditGrantsForSpace(mockProvider, SPACE_ID);
+        const overrideGrant = grants.find((g) => g.UserID === OVERRIDE_USER_ID);
+        assert.equal(overrideGrant, undefined, 'Nearest seat on child space (non-contributing) overrides parent seat');
     });
 });

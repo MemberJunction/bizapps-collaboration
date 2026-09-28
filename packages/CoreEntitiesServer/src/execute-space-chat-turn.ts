@@ -5,7 +5,8 @@ import {
     type IMetadataProvider,
     type UserInfo,
 } from '@memberjunction/core';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { MentionParser } from '@memberjunction/conversations-runtime';
 import {
     membershipReaches,
     type CollaborationSettings,
@@ -27,6 +28,7 @@ export interface ExecuteSpaceChatTurnInput {
     conversationId: string;
     userMessageId: string;
     agentId?: string;
+    forceExecute?: boolean;
 }
 
 export type ExecuteSpaceChatTurnResult =
@@ -40,9 +42,11 @@ export type ExecuteSpaceChatTurnResult =
  * 1. Caller reaches the space and can contribute (closed spaces refuse).
  * 2. conversationId belongs to the space's active Room.
  * 3. userMessageId exists, matches the conversation, and was authored by the caller.
- * 4. Agent is allowed in this space via resolveAllowedAgents.
- * 5. Reply mode check: if MentionOnly, verifies user message tags the agent. If Never, refuses.
- * 6. Runs agent under audience rule (filterRoomReplyItems) and records reply as system user.
+ * 4. Checks that the user message does not already have an agent run.
+ * 5. Agent reply mode check: room turns MentionOrOneToOne and MentionOnly into MentionOnly,
+ *    requiring an agent tag. Always allows running without a tag.
+ * 6. Agent resolution: tagged agent if present, otherwise default agent under Always.
+ * 7. Runs agent under audience rule (filterRoomReplyItems) and records reply as system user.
  */
 export async function executeSpaceChatTurn(
     provider: IMetadataProvider,
@@ -64,6 +68,11 @@ export async function executeSpaceChatTurn(
         context = await loadWriteContext(probe, user, spaceId, null);
     } catch (error) {
         return { ok: false, message: error instanceof Error ? error.message : 'The space could not be read.' };
+    }
+
+    const targetNode = context.spaces.find((s) => s.id.toLowerCase() === spaceId.toLowerCase());
+    if (targetNode?.closedAt) {
+        return { ok: false, message: 'A closed space does not take a new turn.' };
     }
 
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
@@ -115,34 +124,58 @@ export async function executeSpaceChatTurn(
         return { ok: false, message: 'The message does not belong to this conversation.' };
     }
 
-    if (parseUuid(userDetail.UserID) !== callerId && userDetail.Role !== 'User') {
+    if (parseUuid(userDetail.UserID) !== callerId || userDetail.Role !== 'User') {
         return { ok: false, message: 'Only messages authored by the caller can initiate an agent turn.' };
+    }
+
+    // 4. Refuse a second turn on a message that already has an agent run
+    const runCheck = await view.RunView<{ ID: string }>({
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `ConversationDetailID = '${userMessageId}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+
+    if (runCheck.Success && (runCheck.Results?.length ?? 0) > 0) {
+        return { ok: false, message: 'This message has already been processed by an agent turn.' };
     }
 
     const messageText = userDetail.Message ?? '';
 
-    // 4. Resolve allowed agents
-    const allowed = await resolveAllowedAgents(provider, spaceId, system);
-    const targetAgentId = parseUuid(input.agentId) ?? parseUuid(allowed.defaultAgentId) ?? COLLABORATION_DEFAULT_AGENT_ID;
+    // 5. Detect mentions using MentionParser
+    const parser = new MentionParser();
+    const parseResult = parser.ParseMentions(messageText, []);
+    const isLegacyMention = /@(assistant|agent)\b/i.test(messageText);
+    const taggedAgentId = parseResult.agentMention?.id
+        ? parseUuid(parseResult.agentMention.id)
+        : (isLegacyMention ? parseUuid(COLLABORATION_DEFAULT_AGENT_ID) : null);
 
-    const isAgentAllowed = allowed.allowedAgentIds.some((id) => parseUuid(id) === targetAgentId);
-    if (!isAgentAllowed) {
-        return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
-    }
-
-    // 5. Resolve settings & reply mode
+    // 6. Resolve settings & reply mode
     await CollaborationEngine.Instance.EnsureLoaded(system, provider);
+
+    const spaceType = targetSpace.SpaceTypeID ? CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID) : undefined;
+    let typeConfig: CollaborationSettings | null = null;
+    if (spaceType?.Configuration) {
+        try {
+            typeConfig = JSON.parse(spaceType.Configuration) as CollaborationSettings;
+        } catch {
+            typeConfig = null;
+        }
+    }
 
     let spaceConfig: CollaborationSettings | null = null;
     if (targetSpace.Configuration) {
         try {
             const parsed: unknown = JSON.parse(targetSpace.Configuration);
-            const val = ValidateCollaborationSettings(parsed, 'space');
+            const val = ValidateCollaborationSettings(parsed, 'space', typeConfig ?? undefined);
             if (val.valid) {
                 spaceConfig = parsed as CollaborationSettings;
+            } else {
+                LogError(`Invalid space configuration for ${spaceId}: ${val.errors.join(', ')}`);
             }
-        } catch {
-            // ignore malformed space configuration
+        } catch (err) {
+            LogError(`Error parsing space configuration for ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -151,16 +184,27 @@ export async function executeSpaceChatTurn(
         targetSpace.SpaceTypeID
     );
 
+    // In room chats, MentionOrOneToOne and MentionOnly both become MentionOnly (D25).
+    // Only 'Always' allows running an unmentioned agent.
     const replyMode = resolvedSettings?.Chats?.AgentReplyMode ?? 'MentionOrOneToOne';
+    const isAlways = replyMode === 'Always';
+    const canRun = isAlways || !!taggedAgentId || !!input.agentId || input.forceExecute === true;
 
-    if (replyMode === 'MentionOnly') {
-        const hasMention = /(@(assistant|agent)|^\/ask)/i.test(messageText);
-        if (!hasMention) {
-            return { ok: false, message: 'The message does not mention the agent.' };
-        }
+    if (!canRun) {
+        return { ok: false, message: 'The message does not mention an agent.' };
     }
 
-    // 6. Run agent retrieval bounded by room audience rule
+    // 7. Resolve allowed agents & target agent
+    const allowed = await resolveAllowedAgents(provider, spaceId, system);
+    const resolvedDefault = parseUuid(allowed.defaultAgentId) ?? COLLABORATION_DEFAULT_AGENT_ID;
+    const targetAgentId: string = taggedAgentId ?? parseUuid(input.agentId) ?? resolvedDefault;
+
+    const isAgentAllowed = allowed.allowedAgentIds.some((id) => (parseUuid(id) ?? '').toLowerCase() === targetAgentId.toLowerCase());
+    if (!isAgentAllowed) {
+        return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
+    }
+
+    // 8. Run agent retrieval bounded by room audience rule
     const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
     const roomQuoted = filterRoomReplyItems(retrieval.quotedItems, spaceId);
 
@@ -172,7 +216,7 @@ export async function executeSpaceChatTurn(
         agentReplyText = `Based on materials in this space within your reach: ${itemNames}.`;
     }
 
-    // 7. Write reply detail as system user
+    // 9. Write reply detail as system user
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
     assistantDetail.ConversationID = conversationId;
@@ -191,9 +235,33 @@ export async function executeSpaceChatTurn(
         return { ok: false, message: errMsg };
     }
 
+    // 10. Record AI Agent Run with ConversationDetailID linked to user message
+    let agentRunId: string | undefined;
+    try {
+        const agentRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
+        if (agentRun) {
+            agentRun.NewRecord();
+            agentRun.AgentID = targetAgentId;
+            agentRun.ConversationID = conversationId;
+            agentRun.ConversationDetailID = userMessageId;
+            agentRun.UserID = callerId;
+            agentRun.Status = 'Completed';
+            agentRun.StartedAt = new Date();
+            agentRun.CompletedAt = new Date();
+            agentRun.Success = true;
+            agentRun.Result = agentReplyText;
+            if (await agentRun.Save()) {
+                agentRunId = agentRun.ID;
+            }
+        }
+    } catch (runErr) {
+        LogError(`executeSpaceChatTurn: failed to record AI agent run: ${runErr instanceof Error ? runErr.message : String(runErr)}`);
+    }
+
     return {
         ok: true,
         replyDetailIds: [assistantDetail.ID],
+        agentRunId,
         quotedCount: roomQuoted.length,
     };
 }
