@@ -1,7 +1,7 @@
 # How Collaboration works
 
 This page states the rules Collaboration enforces. Each rule is marked:
-- **built:** in the code on PR #7's head (`claude/hopeful-bell-6ldk4v`);
+- **built:** in the code on PR #8's head (`claude/hopeful-bell-6ldk4v-pr8`), which carries everything PR #7 merged;
 - **planned:** with the item in [the plan](../plans/plan.md) that builds it (PR #8 or later).
 
 D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for PR #7.
@@ -59,7 +59,11 @@ The engine reads role flags. It never compares role names.
   - A share notice is readable only by the member it's addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either carries a create filter, and the server subclass is the rest of the gate.
   - MJ 6.1.3 checks a create filter on every new row, before and after the before-save hooks.
 - **People:** Space Participant's field rules on People allow reading a person's name fields, email and linked user, and nothing else, once People's field-level flag is on (bizapps-common#186, still open). Its Deny rows also hold for a participant who has another role.
-- **The room** is an MJ conversation linked to its space and owned by the system user. Everyone who reaches the space reads it and its messages, whatever their band. The space Chat tab renders MJ's chat area; the Overview ask box calls `PostSpaceMessage` (which runs agent execution when space rules or parameters dictate). Row-level security filter *Conversations In Reach* reads conversations linked to reachable spaces.
+- **A space's conversations** are MJ conversations owned by the system user, each with a `SpaceChat` row that holds its space, kind and status. There's no room: a space has no conversation until someone starts one through `CreateSpaceConversation`, which applies `Chats.WhoCanStart` and needs a seat that can post in the kind chosen (D25).
+  - **General and Topic** conversations are read by everyone who reaches the space, whatever their band. **Internal Only** ones (kind `Private`) are read only by those who see the Team band.
+  - Row-level security filters *Conversations In Reach* and *Conversation Details In Reach* apply those rules by kind. A create filter lets a contributing seat post its own `User` messages in an active conversation.
+  - Contributing seats get an Edit grant on each conversation they may post in, which is what MJ's own write gate checks. The server writes and revokes the grants with the seats. Closing a space archives its conversations; revoking their grants with the close is planned (PR #8).
+  - The space's Chat tab renders MJ's chat area, and the Overview's ask box starts a General conversation.
 - **The `Space` resource type** and the `Collaboration Spaces` permission domain are metadata too. `CollaborationSpacePermissionProvider` answers the domain from the roster. An email invitation doesn't use them: access comes from the seat.
 - **The owner of a space** can read it before its first seat exists. A magic-link scope (`{{ScopeResourceID}}`) could read one space, but this app's invitations are app sessions, not resource shares, so a removed seat takes effect at once.
 
@@ -70,7 +74,7 @@ The engine reads role flags. It never compares role names.
 **Built:**
 - **`agentMayQuote`** in `rules.ts` is the rule an agent calls before it quotes an item. The caller must be able to read it, a Team item needs `CanSeeTeam`, and the item must be in the subtree of the space the question was asked in. `ExcludedEntirely` on the item's space or any ancestor drops it for every agent; `ExcludedFromParentScope` drops it when the question comes from above that space.
 - **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
-- **Room posts and agent replies.** The room's posts go through `PostSpaceMessage`. An agent reply can be triggered by `ExecuteAgent` or space rules (`Chats.AgentReplyMode`). A failed reply comes back as `AssistantError`. Full model-driven audience-bounded retrieval is planned for PR #8.
+- **Agent turns.** An agent answers in a space's conversation through `ExecuteSpaceChatTurn`, which checks again from the saved message that the caller can post in the conversation, that the agent is allowed and, under `MentionOnly`, tagged in the message. Bounding the agent's search by the conversation's audience is planned for PR #8 (D2, B2).
 
 **Planned: the audience of an answer decides what the agent may use (D2; A6, B2 in PR #8 and later).**
 - **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
