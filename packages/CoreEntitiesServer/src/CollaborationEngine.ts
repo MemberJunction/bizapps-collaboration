@@ -12,11 +12,8 @@
  */
 
 import {
-    AuthorizationEvaluator,
     type AuthorizationInfo,
-    type BaseEntity,
     type IMetadataProvider,
-    LogError,
     Metadata,
     RunView,
     type RunViewResult,
@@ -81,10 +78,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
 
     public get SpaceRoleTypes(): mjBizAppsCollaborationSpaceRoleTypeEntity[] {
         return this.Base.SpaceRoleTypes;
-    }
-
-    public get TaskTypes(): BaseEntity[] {
-        return this.Base.TaskTypes;
     }
 
     public get ApplicationSettings(): MJApplicationSettingEntity[] {
@@ -180,44 +173,17 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
 
     // ─── Server-Only: Authorization Rights ─────────────────────────────────────
 
-    /**
-     * Looks up an authorization specifically under the "Collaboration" root authorization.
-     * In MemberJunction, Authorizations are shared across apps, so sub-authorizations
-     * must be resolved via ParentID under the "Collaboration" root authorization.
-     */
-    public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
-        const md = provider ?? Metadata.Provider;
-        const auths = md.Authorizations ?? [];
-        const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
-        if (root) {
-            const child = auths.find(a =>
-                (a.Name ?? '').trim().toLowerCase() === subAuthName.trim().toLowerCase() &&
-                UUIDsEqual(a.ParentID, root.ID)
-            );
-            if (child) {
-                return child;
-            }
-        }
-        // Fallback for mock/test environments where hierarchy might not be fully linked
-        return auths.find(a => (a.Name ?? '').trim().toLowerCase() === subAuthName.trim().toLowerCase()) ?? null;
-    }
 
     /**
      * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.
-     * Evaluates via AuthorizationEvaluator.UserCanExecuteWithAncestors.
      */
     public UserCanConfigureSpaceTypes(user: UserInfo, provider?: IMetadataProvider): boolean {
-        const md = provider ?? Metadata.Provider;
-        const auth = this.FindCollaborationAuthorization('Configure Space Types', md);
-        if (!auth) {
-            return false;
-        }
-        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+        return this.Base.UserCanConfigureSpaceTypes(user, provider);
     }
 
     /**
      * Checks if a user has the "Configure Spaces" authorization under the "Collaboration" root AND
-     * holds a role with IsOwnerRole on the specified space.
+     * holds a role with IsOwnerRole on the specified space (or reaching it via inheritance).
      * If spaceId is null/undefined (e.g. creating new space), authorization alone suffices.
      */
     public async UserCanConfigureSpaces(
@@ -225,55 +191,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         spaceId?: string | null,
         provider?: IMetadataProvider
     ): Promise<boolean> {
-        const md = provider ?? Metadata.Provider;
-        const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
-        if (!auth || !new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? [])) {
-            return false;
-        }
-
-        if (!spaceId) {
-            return true;
-        }
-
-        // Check if user holds an owner role on this space
-        try {
-            const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
-            if (!memberEntity) return false;
-
-            const rv = RunView.FromMetadataProvider(md);
-            const memberRes = await rv.RunView<{ SpaceRoleTypeID: string }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${user.ID}' AND Status = 'Active'`,
-                Fields: ['SpaceRoleTypeID'],
-                ResultType: 'simple',
-                MaxRows: 1,
-            }, user);
-
-            if (!memberRes.Success || !memberRes.Results?.[0]?.SpaceRoleTypeID) {
-                return false;
-            }
-
-            const roleTypeId = memberRes.Results[0].SpaceRoleTypeID;
-            const roleType = this.SpaceRoleTypeById(roleTypeId);
-            if (roleType) {
-                return !!roleType.IsOwnerRole;
-            }
-            // Fallback for un-cached role types or mock/test environments
-            const roleRes = await rv.RunView<{ ID: string; IsOwnerRole: boolean }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
-                ExtraFilter: `ID = '${roleTypeId}'`,
-                Fields: ['ID', 'IsOwnerRole'],
-                ResultType: 'simple',
-                MaxRows: 1,
-            }, user);
-            if (roleRes.Success && roleRes.Results?.[0]) {
-                return !!roleRes.Results[0].IsOwnerRole;
-            }
-            return false;
-        } catch (e) {
-            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
-        }
+        return this.Base.UserCanConfigureSpaces(user, spaceId, provider);
     }
 
     /**
@@ -418,13 +336,17 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         typeId: string | null;
     }> {
         const md = provider ?? Metadata.Provider;
+        const rv = RunView.FromMetadataProvider(md);
         const configs: CollaborationSettings[] = [];
         let currentId: string | null = spaceId;
         let targetTypeId: string | null = null;
         const visited = new Set<string>();
 
-        const rv = RunView.FromMetadataProvider(md);
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         while (currentId && !visited.has(currentId.toLowerCase())) {
+            if (!uuidRegex.test(currentId.trim())) {
+                break;
+            }
             visited.add(currentId.toLowerCase());
             const spaceRes: RunViewResult<{
                 ID: string;

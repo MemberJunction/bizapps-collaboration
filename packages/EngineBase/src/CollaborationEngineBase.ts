@@ -14,21 +14,30 @@
  */
 
 import {
+    AuthorizationEvaluator,
+    type AuthorizationInfo,
     type BaseEntity,
     BaseEngine,
     type BaseEnginePropertyConfig,
     type IMetadataProvider,
+    LogError,
     Metadata,
     RegisterForStartup,
+    RunView,
+    type RunViewResult,
     type UserInfo,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+    type AgentRetrieval,
     type CollaborationSettings,
     DEFAULT_COLLABORATION_SETTINGS,
+    type MemberSnapshot,
+    membershipReaches,
     MissingAppSettingsError,
     type ResolvedCollaborationSettings,
     ResolveCollaborationSettings,
+    type SpaceNode,
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
 import type {
@@ -53,7 +62,6 @@ export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
-    private _taskTypes: BaseEntity[] = [];
     private _applicationSettings: MJApplicationSettingEntity[] = [];
     private _authorizations: MJAuthorizationEntity[] = [];
     private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
@@ -78,9 +86,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
-        if (provider) {
-            Reflect.set(this, '_provider', provider);
-        }
         const md = provider ?? Metadata.Provider;
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
             {
@@ -129,15 +134,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             },
         ];
 
-        // Conditionally load Task Types if present in metadata
-        if (md?.EntityByName?.('MJ_BizApps_Tasks: Task Types')) {
-            params.push({
-                PropertyName: '_taskTypes',
-                EntityName: 'MJ_BizApps_Tasks: Task Types',
-                CacheLocal: true,
-            });
-        }
-
         return await this.Load(params, md, forceRefresh ?? false, contextUser);
     }
 
@@ -159,10 +155,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
 
     public get SpaceRoleTypes(): mjBizAppsCollaborationSpaceRoleTypeEntity[] {
         return this.GetConfigData<mjBizAppsCollaborationSpaceRoleTypeEntity>('_spaceRoleTypes');
-    }
-
-    public get TaskTypes(): BaseEntity[] {
-        return this.GetConfigData<BaseEntity>('_taskTypes');
     }
 
     public get ApplicationSettings(): MJApplicationSettingEntity[] {
@@ -368,4 +360,180 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         }
         return this._authorizationsByName.get(normalizeKey(name));
     }
+
+    /**
+     * Resolves a child authorization under the "Collaboration" root authorization strictly.
+     * Refuses name-only matches outside the Collaboration hierarchy.
+     */
+    public FindCollaborationAuthorization(subAuthName: string, provider?: IMetadataProvider): AuthorizationInfo | null {
+        const md = provider ?? Metadata.Provider;
+        const auths = md.Authorizations ?? [];
+        const root = auths.find(a => (a.Name ?? '').trim().toLowerCase() === 'collaboration' && !a.ParentID);
+        if (root) {
+            const child = auths.find(a =>
+                (a.Name ?? '').trim().toLowerCase() === subAuthName.trim().toLowerCase() &&
+                UUIDsEqual(a.ParentID, root.ID)
+            );
+            if (child) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a user has the "Configure Space Types" authorization under the "Collaboration" root.
+     */
+    public UserCanConfigureSpaceTypes(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Configure Space Types', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Configure Space Types'");
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /**
+     * Checks if a user has the "Configure Spaces" authorization under the "Collaboration" root AND
+     * holds a role with IsOwnerRole on the specified space (or reaching it via inheritance).
+     * If spaceId is null/undefined, authorization alone suffices.
+     */
+    public async UserCanConfigureSpaces(
+        user: UserInfo,
+        spaceId?: string | null,
+        provider?: IMetadataProvider
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Configure Spaces'");
+            return false;
+        }
+        if (!new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? [])) {
+            return false;
+        }
+
+        if (!spaceId) {
+            return true;
+        }
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
+            return false;
+        }
+
+        try {
+            const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
+            if (!memberEntity) return false;
+
+            const rv = RunView.FromMetadataProvider(md);
+            const spaces: SpaceNode[] = [];
+            let currentSpaceId: string | null = spaceId;
+            const seen = new Set<string>();
+
+            while (currentSpaceId && !seen.has(currentSpaceId.toLowerCase())) {
+                if (!uuidRegex.test(currentSpaceId.trim())) {
+                    break;
+                }
+                seen.add(currentSpaceId.toLowerCase());
+                const spaceRes: RunViewResult<{
+                    ID: string;
+                    ParentID: string | null;
+                    InheritsMembership: boolean;
+                    OwnerID: string;
+                    AgentRetrieval?: AgentRetrieval;
+                    AllowParentAssignees?: boolean;
+                    ClosedAt: string | null;
+                    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+                    PostCloseAccessDays: number | null;
+                }> = await rv.RunView<{
+                    ID: string;
+                    ParentID: string | null;
+                    InheritsMembership: boolean;
+                    OwnerID: string;
+                    AgentRetrieval?: AgentRetrieval;
+                    AllowParentAssignees?: boolean;
+                    ClosedAt: string | null;
+                    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+                    PostCloseAccessDays: number | null;
+                }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Spaces',
+                    ExtraFilter: `ID = '${currentSpaceId}'`,
+                    Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                }, user);
+
+                if (!spaceRes.Success || !spaceRes.Results?.[0]) {
+                    break;
+                }
+                const s = spaceRes.Results[0];
+                spaces.push({
+                    id: s.ID,
+                    parentId: s.ParentID,
+                    inheritsMembership: !!s.InheritsMembership,
+                    ownerId: s.OwnerID,
+                    agentRetrieval: s.AgentRetrieval ?? 'Included',
+                    allowParentAssignees: s.AllowParentAssignees !== undefined ? !!s.AllowParentAssignees : true,
+                    closedAt: s.ClosedAt,
+                    postCloseAccess: s.PostCloseAccess,
+                    postCloseAccessDays: s.PostCloseAccessDays,
+                });
+                if (!s.InheritsMembership || !s.ParentID) {
+                    break;
+                }
+                currentSpaceId = s.ParentID;
+            }
+
+            if (spaces.length === 0) {
+                return false;
+            }
+
+            const spaceFilter = spaces.map(sp => `'${sp.id}'`).join(',');
+            const memberRes = await rv.RunView<{
+                SpaceID: string;
+                UserID: string;
+                Status: MemberSnapshot['status'];
+                Band: MemberSnapshot['band'];
+                SpaceRoleTypeID: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `UserID = '${user.ID}' AND Status = 'Active' AND SpaceID IN (${spaceFilter})`,
+                Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+                ResultType: 'simple',
+                MaxRows: 100,
+            }, user);
+
+            if (!memberRes.Success || !memberRes.Results) {
+                return false;
+            }
+
+            const memberships: MemberSnapshot[] = memberRes.Results.map(m => {
+                const roleType = this.SpaceRoleTypeById(m.SpaceRoleTypeID);
+                return {
+                    spaceId: m.SpaceID,
+                    userId: m.UserID,
+                    status: m.Status,
+                    band: m.Band,
+                    role: {
+                        level: roleType?.Level ?? 0,
+                        maxGrantableLevel: roleType?.MaxGrantableLevel ?? 0,
+                        canInvite: !!roleType?.CanInvite,
+                        canPromoteBand: !!roleType?.CanPromoteBand,
+                        canSeeTeamBand: !!roleType?.CanSeeTeamBand,
+                        isOwnerRole: !!roleType?.IsOwnerRole,
+                        canContribute: !!roleType?.CanContribute,
+                    },
+                };
+            });
+
+            const reached = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
+            return !!reached?.role.isOwnerRole;
+        } catch (e) {
+            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
+    }
 }
+

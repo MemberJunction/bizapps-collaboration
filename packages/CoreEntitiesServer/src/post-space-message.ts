@@ -1,6 +1,7 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceAgentRetrieval, type SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { parseUuid } from './uuid.js';
@@ -50,48 +51,92 @@ export async function postSpaceMessage(
     const view = RunView.FromMetadataProvider(provider);
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
-    const space = await view.RunView<{ ClosedAt: string | null }>({
+    const space = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt'],
+        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
-    if (space.Results?.[0]?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
+    const targetSpace = space.Results?.[0];
+    if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
 
     let conversationId: string | null = null;
     if (input.conversationId) {
         const parsedTarget = parseUuid(input.conversationId);
-        if (parsedTarget) {
-            const check = await view.RunView<{ ID: string }>({
-                EntityName: 'MJ: Conversations',
-                ExtraFilter: `ID = '${parsedTarget}' AND LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
-                Fields: ['ID'],
-                MaxRows: 1,
-                ResultType: 'simple',
-            }, system);
-            if (!check.Success) return { ok: false, message: check.ErrorMessage || 'The conversation could not be read.' };
-            if (check.Results?.[0]?.ID) {
-                conversationId = parsedTarget;
+        if (!parsedTarget) {
+            return { ok: false, message: 'The conversation ID is invalid.' };
+        }
+        const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
+            Fields: ['ID', 'ConversationID', 'Kind'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!chatCheck.Success) return { ok: false, message: chatCheck.ErrorMessage || 'The space chat could not be read.' };
+        const foundChat = chatCheck.Results?.[0];
+        if (!foundChat?.ConversationID) {
+            return { ok: false, message: 'The conversation does not belong to this space.' };
+        }
+        if (foundChat.Kind !== 'Room') {
+            return { ok: false, message: 'Only the space Room accepts messages.' };
+        }
+        conversationId = parsedTarget;
+    } else {
+        const roomChat = await view.RunView<{ ID: string; ConversationID: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Kind = 'Room' AND Status = 'Active'`,
+            Fields: ['ID', 'ConversationID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!roomChat.Success) return { ok: false, message: roomChat.ErrorMessage || 'The space room could not be read.' };
+        conversationId = parseUuid(roomChat.Results?.[0]?.ConversationID);
+        if (!conversationId) return { ok: false, message: 'This space does not have an active room yet.' };
+    }
+
+    await CollaborationEngine.Instance.EnsureLoaded(system, provider);
+
+    let spaceConfig: CollaborationSettings | null = null;
+    if (targetSpace?.Configuration) {
+        try {
+            const parsed: unknown = JSON.parse(targetSpace.Configuration);
+            const val = ValidateCollaborationSettings(parsed, 'space');
+            if (val.valid) {
+                spaceConfig = parsed as CollaborationSettings;
             } else {
-                return { ok: false, message: 'The conversation does not belong to this space.' };
+                LogError(`Invalid space configuration for ${spaceId}: ${val.errors.join(', ')}`);
+            }
+        } catch (err) {
+            LogError(`Error parsing space configuration for ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    if (targetSpace?.SpaceTypeID) {
+        const spaceType = CollaborationEngine.Instance.SpaceTypeById(targetSpace.SpaceTypeID);
+        if (spaceType?.Configuration) {
+            try {
+                const parsed: unknown = JSON.parse(spaceType.Configuration);
+                const val = ValidateCollaborationSettings(parsed, 'type');
+                if (!val.valid) {
+                    LogError(`Invalid space type configuration for ${targetSpace.SpaceTypeID}: ${val.errors.join(', ')}`);
+                }
+            } catch (err) {
+                LogError(`Error parsing space type configuration for ${targetSpace.SpaceTypeID}: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
     }
 
-    if (!conversationId) {
-        const conversation = await view.RunView<{ ID: string }>({
-            EntityName: 'MJ: Conversations',
-            ExtraFilter: `LinkedEntityID = '${SPACES_ENTITY_ID}' AND LinkedRecordID = '${spaceId}'`,
-            Fields: ['ID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        if (!conversation.Success) return { ok: false, message: conversation.ErrorMessage || 'The conversation could not be read.' };
-        conversationId = parseUuid(conversation.Results?.[0]?.ID);
-        if (!conversationId) return { ok: false, message: 'This space does not have a conversation yet.' };
-    }
+    const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
+        spaceConfig ? [spaceConfig] : [],
+        targetSpace?.SpaceTypeID
+    );
+    const hasMention = /(@(assistant|agent)|^\/ask)/i.test(text);
+    const shouldExecuteAgent = resolvedSettings.Chats.AgentReplyMode === 'Always'
+        ? true
+        : Boolean(input.executeAgent || hasMention);
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
@@ -103,13 +148,14 @@ export async function postSpaceMessage(
     detail.HiddenToUser = false;
     detail.IsPinned = false;
     detail.OriginalMessageChanged = false;
-    if (!(await detail.Save()) || !detail.ID) {
-        const message = detail.LatestResult?.CompleteMessage || 'The message was refused.';
+    const saved = await detail.Save();
+    if (!saved || !detail.ID) {
+        const message = detail.LatestResult?.CompleteMessage || detail.LatestResult?.Message || 'The message was refused.';
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
     }
 
-    if (input.executeAgent) {
+    if (shouldExecuteAgent) {
         try {
             const assistantResult = await postAssistantReply(provider, user, system, conversationId, spaceId);
             if (assistantResult.ok) {

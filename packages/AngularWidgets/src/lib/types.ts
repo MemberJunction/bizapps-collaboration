@@ -53,10 +53,12 @@ export interface ItemCardModel {
   openers?: AvatarItem[];
   citationCount?: number;
   isImage?: boolean;
+  fileId?: string;
 }
 
 export interface ItemRowModel {
   id: string;
+  fileId?: string;
   kind: FileKind;
   title: string;
   author: string;
@@ -86,6 +88,7 @@ export interface FindingModel {
 
 export interface LibraryRowModel {
   id: string;
+  fileId?: string;
   kind: FileKind;
   name: string;
   folder: string;
@@ -224,6 +227,8 @@ export interface SpaceMemberModel {
   colorClass?: string;
   roleName: string;
   roleCode: string;
+  roleId?: string;
+  canContribute?: boolean;
   band: SpaceBand;
   status: 'Active' | 'Invited' | 'Removed' | string;
   joinedDate?: string;
@@ -243,5 +248,6 @@ export interface SpaceSettingsModel {
   retention: 'Month' | 'Year' | 'Indefinite' | string;
   status: string;
 }
+
 
 

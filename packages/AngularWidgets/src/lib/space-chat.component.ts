@@ -1,60 +1,19 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  EventEmitter,
   Input,
-  Output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
-export type SpaceChatAgentReplyMode = 'Always' | 'Never' | 'OnMention';
-
-export interface SpaceChatAgentTurnRequest {
-  ConversationId: string;
-  UserMessageId?: string;
-  MessageText: string;
-  AgentId?: string;
-  AgentName?: string;
-  Route?: string;
-  ApplicationId?: string;
-  AppContext?: string;
-  AgentHistoryFrom?: Date;
-  ConfigurationPresetId?: string;
-  RequestedSkillIDs?: readonly string[];
-  PlanMode?: string;
-}
-
-export interface SpaceChatAgentTurnResult {
-  Success: boolean;
-  ErrorMessage?: string;
-  ReplyDetailIds?: readonly string[];
-}
-
-export type SpaceChatAgentTurnHandler = (request: SpaceChatAgentTurnRequest) => Promise<SpaceChatAgentTurnResult>;
-
-export interface RoomMessageItem {
-  id: string;
-  senderName: string;
-  senderInitials: string;
-  senderColorClass?: string;
-  isAssistant?: boolean;
-  isOutside?: boolean;
-  timestamp: string;
-  text: string;
-}
-
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CollabBandChipComponent, ConversationsModule],
+  imports: [CollabBandChipComponent, ConversationsModule],
   template: `
     <div class="chat-container">
       @if (ConversationId && CurrentUser) {
@@ -70,10 +29,9 @@ export interface RoomMessageItem {
           [assistantDisplayName]="'Assistant'"
           [allowMentions]="AllowMentions"
           [allowAgentMentions]="true"
-          [allowEntityMentions]="true"
-          [allowSkillCommands]="true"
-          [allowAttachments]="AllowAttachments"
-          (conversationCreated)="onConversationCreated($event)">
+          [allowEntityMentions]="false"
+          [allowSkillCommands]="false"
+          [allowAttachments]="AllowAttachments">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
@@ -111,12 +69,8 @@ export interface RoomMessageItem {
           </div>
           <h3 class="empty-title">Select a Conversation</h3>
           <p class="empty-desc">
-            Choose a channel from the space sidebar or start a new conversation to begin chatting with your team and the AI assistant.
+            Choose a channel from the space sidebar to begin chatting.
           </p>
-          <button type="button" class="btn-create-convo" (click)="onNewConversationClick()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Conversation</span>
-          </button>
         </div>
       }
     </div>
@@ -239,25 +193,6 @@ export interface RoomMessageItem {
         line-height: 1.5;
         margin-bottom: 20px;
       }
-
-      .btn-create-convo {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
-        border: none;
-        padding: 8px 18px;
-        border-radius: 6px;
-        font-size: 13.5px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-
-      .btn-create-convo:hover {
-        background: var(--mj-brand-primary-hover, #005a8c);
-      }
     `,
   ],
 })
@@ -274,20 +209,5 @@ export class CollabSpaceChatComponent {
   @Input() public DefaultAgentId: string | null = null;
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
-  @Input() public AllowAttachments = true;
-  @Input() public AgentReplyMode: SpaceChatAgentReplyMode = 'Always';
-  @Input() public AllowedAgentIDs: readonly string[] | null = null;
-  @Input() public AgentHistoryFrom: Date | null = null;
-  @Input() public AgentTurnHandler: SpaceChatAgentTurnHandler | null = null;
-
-  @Output() public ConversationCreated = new EventEmitter<{ conversationId: string; name?: string }>();
-  @Output() public NewConversationRequested = new EventEmitter<void>();
-
-  public onConversationCreated(event: { conversation: MJConversationEntity }): void {
-    this.ConversationCreated.emit({ conversationId: event.conversation.ID, name: event.conversation.Name ?? undefined });
-  }
-
-  public onNewConversationClick(): void {
-    this.NewConversationRequested.emit();
-  }
+  @Input() public AllowAttachments = false;
 }

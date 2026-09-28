@@ -277,6 +277,7 @@ const checks: NamedCheck[] = [
             const promoted = await sealedItem.Save();
             Assert(promoted, 'Promoting sealed branch item to Shared must succeed');
 
+            let testError: unknown;
             try {
                 // 1. Sam asks in Northwind's room: Casey's read must NOT name uniqueFileName
                 const samPostRes = await postSpaceMessage(ctx.Provider, sam, {
@@ -326,13 +327,26 @@ const checks: NamedCheck[] = [
                 Assert(samSealedReplyRes.Success && (samSealedReplyRes.Results?.length ?? 0) === 1, 'Sam can read Sealed branch room assistant reply');
                 const sealedReplyMsg = samSealedReplyRes.Results![0].Message;
                 Assert(sealedReplyMsg.includes(uniqueFileName), `Sealed branch room reply must name its own Shared file ${uniqueFileName}`);
+            } catch (err) {
+                testError = err;
             } finally {
                 if (sealedItemId) {
-                    const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, sam);
-                    if (await itemToDelete.Load(sealedItemId)) {
+                    try {
+                        const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
+                        const loaded = await itemToDelete.Load(sealedItemId);
+                        Assert(loaded === true, `Failed to load uploaded Sealed branch space item ${sealedItemId} for cleanup`);
                         const deleted = await itemToDelete.Delete();
-                        Assert(deleted === true, 'Deleting uploaded Sealed branch space item must succeed');
+                        Assert(deleted === true, `Deleting uploaded Sealed branch space item ${sealedItemId} must succeed: ${itemToDelete.LatestResult?.CompleteMessage ?? ''}`);
+                    } catch (cleanupErr) {
+                        if (!testError) {
+                            throw cleanupErr;
+                        } else {
+                            console.error(`Cleanup failed after test error: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+                        }
                     }
+                }
+                if (testError) {
+                    throw testError;
                 }
             }
         },
@@ -376,7 +390,7 @@ const checks: NamedCheck[] = [
             });
             Assert(!remyRes.ok, 'Message from removed user must be refused');
 
-            // 5. Item 3: Owner-type user with no seat must be refused
+            // 5. Owner-type user with no seat must be refused
             const origType = remy.Type;
             try {
                 remy.Type = 'Owner';
@@ -384,7 +398,7 @@ const checks: NamedCheck[] = [
                     spaceId: DISCOVERY_SPACE_ID,
                     text: 'Message from Owner with no seat',
                 });
-                Assert(!ownerOutsiderRes.ok, 'Owner-type user with no seat must be refused a post');
+                Assert(!ownerOutsiderRes.ok, 'User with Owner account type and no space seat must be refused a post');
             } finally {
                 remy.Type = origType;
             }

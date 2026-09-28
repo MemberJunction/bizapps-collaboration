@@ -10,6 +10,7 @@ import {
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
+    FILE_ENTITY,
 } from '../../entity-names.js';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
@@ -27,6 +28,20 @@ const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 
 const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
+
+async function resolveItemNames(ctx: IntegrationCheckContext, items: Array<{ RecordID: string }>): Promise<string[]> {
+    const fileIds = items.map((i) => i.RecordID.replace(/^ID\|/, '')).filter(Boolean);
+    if (fileIds.length === 0) return [];
+    const inClause = fileIds.map((id) => `'${id}'`).join(',');
+    const files = await FindRows<{ ID: string; Name: string }>(
+        ctx,
+        FILE_ENTITY,
+        `ID IN (${inClause})`,
+        ['ID', 'Name'],
+        ctx.User,
+    );
+    return files.map((f) => f.Name);
+}
 
 const checks: NamedCheck[] = [
     {
@@ -148,14 +163,14 @@ const checks: NamedCheck[] = [
             // Discovery has:
             // - site-photo.png (Shared, uploader bea)
             // - discovery-brief.pdf (Team, uploader ada)
-            const items = await FindRows<{ ID: string; Name: string; Band: string }>(
+            const items = await FindRows<{ ID: string; RecordID: string; Band: string }>(
                 beaCtx,
                 SPACE_ITEM_ENTITY,
                 `SpaceID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID', 'Name', 'Band'],
+                ['ID', 'RecordID', 'Band'],
                 beaCtx.User,
             );
-            const names = items.map((i) => i.Name);
+            const names = await resolveItemNames(beaCtx, items);
             Assert(names.includes('site-photo.png'), 'Shared site-photo.png is visible to client Bea');
             Assert(!names.includes('discovery-brief.pdf'), 'Team discovery-brief.pdf is NEVER visible to client Bea');
         },
@@ -167,14 +182,14 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
 
-            const items = await FindRows<{ ID: string; SpaceID: string; Name: string }>(
+            const items = await FindRows<{ ID: string; SpaceID: string; RecordID: string }>(
                 beaCtx,
                 SPACE_ITEM_ENTITY,
                 `SpaceID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID', 'SpaceID', 'Name'],
+                ['ID', 'SpaceID', 'RecordID'],
                 beaCtx.User,
             );
-            const names = items.map((i) => i.Name);
+            const names = await resolveItemNames(beaCtx, items);
             Assert(names.includes('site-photo.png'), 'Must quote site-photo.png inside child space');
 
             for (const item of items) {
@@ -196,14 +211,14 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const adaCtx = await getPersonaContext(ctx, 'ada');
 
-            const items = await FindRows<{ ID: string; Name: string; Band: string }>(
+            const items = await FindRows<{ ID: string; RecordID: string; Band: string }>(
                 adaCtx,
                 SPACE_ITEM_ENTITY,
                 `SpaceID = '${DISCOVERY_SPACE_ID}'`,
-                ['ID', 'Name', 'Band'],
+                ['ID', 'RecordID', 'Band'],
                 adaCtx.User,
             );
-            const names = items.map((i) => i.Name);
+            const names = await resolveItemNames(adaCtx, items);
             Assert(names.includes('site-photo.png'), 'Ada sees Shared site-photo.png');
             Assert(names.includes('discovery-brief.pdf'), 'Ada sees Team discovery-brief.pdf in Discovery');
         },
@@ -215,14 +230,14 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const adaCtx = await getPersonaContext(ctx, 'ada');
 
-            const items = await FindRows<{ ID: string; SpaceID: string; Name: string }>(
+            const items = await FindRows<{ ID: string; SpaceID: string; RecordID: string }>(
                 adaCtx,
                 SPACE_ITEM_ENTITY,
                 `SpaceID IN ('${NORTHWIND_SPACE_ID}', '${DISCOVERY_SPACE_ID}')`,
-                ['ID', 'SpaceID', 'Name'],
+                ['ID', 'SpaceID', 'RecordID'],
                 adaCtx.User,
             );
-            const names = items.map((i) => i.Name);
+            const names = await resolveItemNames(adaCtx, items);
             Assert(names.includes('site-photo.png'), 'Must include site-photo.png in reachable subtree');
 
             for (const item of items) {

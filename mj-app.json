@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "name": "mj-bizapps-collaboration",
   "displayName": "BizApps Collaboration",
-  "description": "Spaces: the permission boundary and the agent retrieval boundary for client, committee, and cohort work.",
+  "description": "Spaces: the permission boundary and the agent retrieval boundary for collaborative team and outside work.",
   "version": "0.1.0",
   "license": "UNLICENSED",
   "publisher": {

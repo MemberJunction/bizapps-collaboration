@@ -2,7 +2,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, TASK_LINK_ENTITY, TASK_ACTIVITY_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaContext, View } from '../../wire.js';
+import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -303,6 +303,7 @@ const checks: NamedCheck[] = [
                 ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'SpaceID', 'UserID'],
                 ResultType: 'simple',
+                BypassCache: true,
             });
             Assert(seatsOn.Success, `Bea read seats with switch on: ${seatsOn.ErrorMessage ?? ''}`);
             Assert((seatsOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's seat on Northwind, got ${seatsOn.Results?.length ?? 0}`);
@@ -312,6 +313,7 @@ const checks: NamedCheck[] = [
                 ExtraFilter: `LinkedUserID = '${adaCtx.User.ID}'`,
                 Fields: ['ID', 'Email'],
                 ResultType: 'simple',
+                BypassCache: true,
             });
             Assert(peopleOn.Success, `Bea read People with switch on: ${peopleOn.ErrorMessage ?? ''}`);
             Assert((peopleOn.Results?.length ?? 0) === 1, `With switch on, Bea should read Ada's person record, got ${peopleOn.Results?.length ?? 0}`);
@@ -335,6 +337,7 @@ const checks: NamedCheck[] = [
                     ExtraFilter: `SpaceID = '${NORTHWIND_SPACE_ID}' AND UserID = '${adaCtx.User.ID}'`,
                     Fields: ['ID', 'SpaceID', 'UserID'],
                     ResultType: 'simple',
+                    BypassCache: true,
                 });
                 Assert(seatsOff.Success, `Bea read seats with switch off: ${seatsOff.ErrorMessage ?? ''}`);
                 Assert((seatsOff.Results?.length ?? 0) === 0, `With switch off, Bea MUST NOT read Ada's seat on Northwind, got ${seatsOff.Results?.length ?? 0}`);
@@ -401,7 +404,8 @@ const checks: NamedCheck[] = [
             if (!personEntity) throw new Error('Person entity found');
 
             // 3. File a task in Field notes as staff Ada via CollaborationClient
-            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const adaClientCtx = await getPersonaClientContext(ctx, 'ada');
+            const adaClient = new CollaborationClient(adaClientCtx.GraphQLProvider);
             const createRes = await adaClient.CreateSpaceTask({
                 SpaceID: FIELD_NOTES_SPACE_ID,
                 Name: 'Field notes inspection task over wire',

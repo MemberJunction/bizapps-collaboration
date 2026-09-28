@@ -1,5 +1,6 @@
 export {
     agentMayQuote,
+    isAgentPostCloseAccessPermitted,
     authorizeItemWrite,
     authorizeTaskAssignment,
     mayFileRootTask,

@@ -6,7 +6,7 @@
 
 import type { Band, SpaceNode } from './rules.js';
 
-export type RetrievalMode = 'Private' | 'Shared' | 'Caller' | 'Intersection' | 'Union';
+export type RetrievalMode = 'Private' | 'Shared' | 'Caller' | 'Intersection';
 
 export type ScopeNarrowing = 'ThisSpace' | 'ThisSpaceAndSubspaces' | 'Everything';
 
@@ -85,7 +85,7 @@ function buildDescendantSet(spaces: readonly SpaceNode[], anchorSpaceId: string)
  * Rules:
  * 1. If audience includes an unmapped principal (e.g. unknown member in Teams/Slack):
  *    No space material is reachable (returns empty allowedSpaceIds).
- * 2. Private chat (mode 'Private' | 'Caller' | 'Union', or 1 principal):
+ * 2. Private chat (mode 'Private' | 'Caller', or 1 principal):
  *    Uses caller's union of reachable spaces.
  * 3. Shared chat (mode 'Shared' | 'Intersection', or >1 principals):
  *    Uses intersection of what every listed principal can read.
@@ -137,11 +137,15 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
 
     const allInternalOrg = validPrincipals.every((p) => p.isInternalOrg === true);
 
+    const mode = audience.mode;
+    if ((mode === 'Private' || mode === 'Caller') && validPrincipals.length !== 1) {
+        return emptyResult;
+    }
+
     const isPrivate =
-        audience.mode === 'Private' ||
-        audience.mode === 'Caller' ||
-        audience.mode === 'Union' ||
-        (audience.mode === undefined && validPrincipals.length === 1);
+        mode === 'Private' ||
+        mode === 'Caller' ||
+        (mode === undefined && validPrincipals.length === 1);
 
     let candidateSpaceIds: Set<string>;
 
@@ -203,8 +207,25 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
             continue;
         }
 
-        // Excluded from parent scope (when queried from an ancestor, not the space itself)
-        if (spaceNode.agentRetrieval === 'ExcludedFromParentScope' && anchorId && anchorId !== spId) {
+        // Walk ancestors to check ExcludedFromParentScope or ExcludedEntirely
+        let excludedOnPath = false;
+        let curr: SpaceNode | undefined = spaceNode;
+        while (curr) {
+            const currId = normalizeId(curr.id);
+            if (curr.agentRetrieval === 'ExcludedEntirely') {
+                excludedOnPath = true;
+                break;
+            }
+            if (curr.agentRetrieval === 'ExcludedFromParentScope' && (!anchorId || anchorId !== currId)) {
+                excludedOnPath = true;
+                break;
+            }
+            if (anchorId && currId === anchorId) {
+                break;
+            }
+            curr = curr.parentId ? spaceMap.get(normalizeId(curr.parentId)) : undefined;
+        }
+        if (excludedOnPath) {
             continue;
         }
 

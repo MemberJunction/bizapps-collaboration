@@ -206,7 +206,7 @@
       "DefaultBand": "Team",
       "InviteApproval": "Approve",
       "IsActive": true,
-      "IconClass": "fa-solid fa-calendar-star",
+      "IconClass": "fa-solid fa-calendar-days",
       "Color": "#d97706",
       "Configuration": {
         "Children": {

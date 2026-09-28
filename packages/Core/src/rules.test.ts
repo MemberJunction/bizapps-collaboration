@@ -26,6 +26,7 @@ import {
     refuseInvite,
     strandFromSavedRow,
     retentionDeadline,
+    utcCalendarDaysBetween,
     visibleSpaces,
     type InviteEmail,
     type MemberSnapshot,
@@ -833,4 +834,206 @@ describe('authorizeTaskAssignment', () => {
         }
     });
 });
+
+describe('access after close in membershipReaches', () => {
+    const ownerRole: RoleFlags = { level: 100, maxGrantableLevel: 100, isOwnerRole: true, canInvite: true, canContribute: true, canSeeTeamBand: true, canPromoteBand: true };
+    const memberRole: RoleFlags = { level: 50, maxGrantableLevel: 50, isOwnerRole: false, canInvite: false, canContribute: true, canSeeTeamBand: true, canPromoteBand: false };
+    const guestRole: RoleFlags = { level: 10, maxGrantableLevel: 10, isOwnerRole: false, canInvite: false, canContribute: false, canSeeTeamBand: false, canPromoteBand: false };
+
+    const closedDate = new Date('2026-01-01T00:00:00Z');
+    const withinWindowDate = new Date('2026-01-15T00:00:00Z'); // 14 days later
+    const outsideWindowDate = new Date('2026-02-15T00:00:00Z'); // 45 days later
+
+    it('open space grants full rights including canInvite and canContribute', () => {
+        const space: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: null,
+        };
+        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
+        const reach = membershipReaches([space], [m], 'u1', 'sp1');
+        assert.ok(reach);
+        assert.equal(reach.role.canInvite, true);
+        assert.equal(reach.role.canContribute, true);
+    });
+
+    it('closed space with PostCloseAccess None refuses access', () => {
+        const space: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'None',
+        };
+        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
+        const reach = membershipReaches([space], [m], 'u1', 'sp1', withinWindowDate);
+        assert.equal(reach, null);
+    });
+
+    it('closed space with ReadOnly permits access within window and strips canInvite and canContribute', () => {
+        const space: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'ReadOnly',
+            postCloseAccessDays: 30,
+        };
+        const mOwner: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
+        const mMember: MemberSnapshot = { spaceId: 'sp1', userId: 'u2', status: 'Active', band: 'Team', role: memberRole };
+        const mGuest: MemberSnapshot = { spaceId: 'sp1', userId: 'u3', status: 'Active', band: 'Shared', role: guestRole };
+
+        // Owner: gets access but loses canInvite and canContribute
+        const reachOwner = membershipReaches([space], [mOwner], 'u1', 'sp1', withinWindowDate);
+        assert.ok(reachOwner);
+        assert.equal(reachOwner.role.canInvite, false);
+        assert.equal(reachOwner.role.canContribute, false);
+        assert.equal(reachOwner.role.isOwnerRole, true);
+        assert.equal(reachOwner.role.canSeeTeamBand, true);
+
+        // Member: gets access but loses canContribute
+        const reachMember = membershipReaches([space], [mMember], 'u2', 'sp1', withinWindowDate);
+        assert.ok(reachMember);
+        assert.equal(reachMember.role.canInvite, false);
+        assert.equal(reachMember.role.canContribute, false);
+        assert.equal(reachMember.role.canSeeTeamBand, true);
+
+        // Guest: retains canSeeTeamBand = false
+        const reachGuest = membershipReaches([space], [mGuest], 'u3', 'sp1', withinWindowDate);
+        assert.ok(reachGuest);
+        assert.equal(reachGuest.role.canInvite, false);
+        assert.equal(reachGuest.role.canContribute, false);
+        assert.equal(reachGuest.role.canSeeTeamBand, false);
+    });
+
+    it('closed space with ReadOnly refuses access outside window', () => {
+        const space: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'ReadOnly',
+            postCloseAccessDays: 30,
+        };
+        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
+        const reach = membershipReaches([space], [m], 'u1', 'sp1', outsideWindowDate);
+        assert.equal(reach, null);
+    });
+
+    it('closed space inherits post-close access from space type when not overridden', () => {
+        const space: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: null,
+            postCloseAccessDays: null,
+            spaceTypePostCloseAccess: 'ReadOnly',
+            spaceTypePostCloseAccessDays: 90,
+        };
+        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
+        const reach = membershipReaches([space], [m], 'u1', 'sp1', outsideWindowDate);
+        assert.ok(reach, 'Type has 90 days window, 45 days is within window');
+        assert.equal(reach.role.canContribute, false);
+    });
+
+    it('space postCloseAccess override overrides type defaults', () => {
+        // Space sets 'None' even though type defaults to 'ReadOnly'
+        const spaceOverridingToNone: SpaceNode = {
+            id: 'sp1',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'None',
+            spaceTypePostCloseAccess: 'ReadOnly',
+            spaceTypePostCloseAccessDays: 90,
+        };
+        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
+        assert.equal(membershipReaches([spaceOverridingToNone], [m], 'u1', 'sp1', withinWindowDate), null);
+
+        // Space sets 'ReadOnly' even though type defaults to 'None'
+        const spaceOverridingToReadOnly: SpaceNode = {
+            id: 'sp2',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'ReadOnly',
+            postCloseAccessDays: null, // indefinite
+            spaceTypePostCloseAccess: 'None',
+        };
+        const m2: MemberSnapshot = { spaceId: 'sp2', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
+        const reach2 = membershipReaches([spaceOverridingToReadOnly], [m2], 'u1', 'sp2', outsideWindowDate);
+        assert.ok(reach2);
+        assert.equal(reach2.role.canContribute, false);
+    });
+
+    it('calculates calendar day differences in UTC matching SQL Server DATEDIFF(day, ...)', () => {
+        const d1 = new Date('2026-01-01T23:59:59Z');
+        const d2 = new Date('2026-01-02T00:00:01Z');
+        assert.equal(utcCalendarDaysBetween(d1, d2), 1, 'Crossing UTC midnight is 1 calendar day');
+
+        const d3 = new Date('2026-01-01T00:00:00Z');
+        const d4 = new Date('2026-01-01T23:59:59Z');
+        assert.equal(utcCalendarDaysBetween(d3, d4), 0, 'Same UTC calendar date is 0 days');
+    });
+
+    it('open sub-space under closed parent strips contribute and invite rights from inherited members', () => {
+        const parentSpace: SpaceNode = {
+            id: 'parent1',
+            parentId: null,
+            inheritsMembership: false,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: closedDate,
+            postCloseAccess: 'ReadOnly',
+            postCloseAccessDays: 30,
+        };
+        const childSpace: SpaceNode = {
+            id: 'child1',
+            parentId: 'parent1',
+            inheritsMembership: true,
+            ownerId: 'u1',
+            agentRetrieval: 'Included',
+            closedAt: null, // open sub-space
+        };
+        const parentSeat: MemberSnapshot = {
+            spaceId: 'parent1',
+            userId: 'u1',
+            status: 'Active',
+            band: 'Team',
+            role: ownerRole, // has canInvite: true, canContribute: true
+        };
+
+        // Reading child space within parent's post-close access window:
+        const reach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', withinWindowDate);
+        assert.ok(reach, 'Member reaches open child via parent within parent post-close window');
+        assert.equal(reach.role.canInvite, false, 'canInvite stripped because parent is closed');
+        assert.equal(reach.role.canContribute, false, 'canContribute stripped because parent is closed');
+
+        // Reading child space past parent's post-close access window:
+        const pastWindowReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate);
+        assert.equal(pastWindowReach, null, 'No access to child when closed parent is past post-close access window');
+
+        // Reopening / ignorePostCloseFilter allows access without stripping:
+        const reopeningReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate, true);
+        assert.ok(reopeningReach);
+        assert.equal(reopeningReach.role.canContribute, true, 'ignorePostCloseFilter preserves rights for reopen evaluation');
+    });
+});
+
 

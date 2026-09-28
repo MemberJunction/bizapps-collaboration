@@ -11,13 +11,14 @@ export function collaborationFileStore(provider: IMetadataProvider, storageAccou
     return {
         async put(upload) {
             await FileStorageEngine.Instance.Config(false, upload.user, provider);
+            const accountId = storageAccountId;
             const stored = await FileStorageEngine.Instance.UploadFile({
                 content: Buffer.from(upload.content),
                 fileName: upload.fileName,
                 mimeType: upload.mimeType,
                 contextUser: upload.user,
                 provider,
-                ...(storageAccountId ? { storageAccountId } : {}),
+                ...(accountId ? { storageAccountId: accountId } : {}),
             });
             return { fileId: stored.FileID, storagePath: stored.StoragePath, accountId: stored.Account.ID };
         },

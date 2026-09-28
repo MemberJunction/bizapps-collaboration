@@ -1,13 +1,14 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import {
     agentMayQuote,
+    isAgentPostCloseAccessPermitted,
     membershipReaches,
     type Band,
     type MemberSnapshot,
     type RoleFlags,
     type SpaceNode,
 } from '@mj-biz-apps/collaboration-core';
-import { requireSystemUser } from './load-graph.js';
+import { requireSystemUser, toNode, type SpaceRow } from './load-graph.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
@@ -42,15 +43,6 @@ export interface SpaceAgentRetrievalResult {
     decisions: SpaceAgentRetrievalDecision[];
 }
 
-interface SpaceRow {
-    ID: string;
-    ParentID: string | null;
-    InheritsMembership: boolean;
-    OwnerID: string;
-    AgentRetrieval: SpaceNode['agentRetrieval'];
-    AllowParentAssignees?: boolean;
-}
-
 interface MemberRow {
     SpaceID: string;
     UserID: string;
@@ -78,17 +70,6 @@ interface SpaceItemRow {
     Band: Band;
 }
 
-function toSpaceNode(row: SpaceRow): SpaceNode {
-    return {
-        id: parseUuid(row.ID) ?? row.ID,
-        parentId: row.ParentID ? parseUuid(row.ParentID) : null,
-        inheritsMembership: !!row.InheritsMembership,
-        ownerId: parseUuid(row.OwnerID) ?? row.OwnerID,
-        agentRetrieval: row.AgentRetrieval ?? 'Included',
-        allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
-    };
-}
-
 function cleanRecordId(raw: string): string {
     const s = String(raw).trim();
     if (s.toLowerCase().startsWith('id|')) return s.slice(3);
@@ -111,6 +92,7 @@ function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nod
 function getReachableSubtreeSpaceIds(
     spaces: readonly SpaceNode[],
     askedFromSpaceId: string,
+    now: Date = new Date(),
 ): string[] {
     const index = new Map<string, SpaceNode>();
     for (const s of spaces) {
@@ -123,6 +105,10 @@ function getReachableSubtreeSpaceIds(
         const sid = s.id.toLowerCase();
         // Item space must have askedFromSpaceId as an ancestor or self
         if (!isAncestorOrSelf(index, cleanAsked, sid)) {
+            continue;
+        }
+        // Filter closed spaces unless ReadOnlyWithAgent within days
+        if (s.closedAt && !isAgentPostCloseAccessPermitted(s, now)) {
             continue;
         }
         // Check ExcludedEntirely up to root
@@ -202,7 +188,7 @@ export async function resolveSpaceAgentRetrieval(
     const batchRes = await rvSystem.RunViews([
         {
             EntityName: SPACES_ENTITY,
-            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees'],
+            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays', 'SpaceTypeID'],
             MaxRows: 2000,
             ResultType: 'simple',
         },
@@ -240,7 +226,7 @@ export async function resolveSpaceAgentRetrieval(
         throw new Error('Refusing retrieval: spaces page came back full, so the check would be incomplete.');
     }
 
-    const spaceNodes: SpaceNode[] = (spacesRes.Results as SpaceRow[] ?? []).map(toSpaceNode);
+    const spaceNodes: SpaceNode[] = (spacesRes.Results as SpaceRow[] ?? []).map(toNode);
     const roleMap = new Map<string, RoleFlags>();
     for (const r of (rolesRes.Results as RoleRow[] ?? [])) {
         const id = parseUuid(r.ID) ?? r.ID;

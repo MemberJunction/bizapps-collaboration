@@ -1,6 +1,5 @@
 import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -765,42 +764,10 @@ describe('CollabSpaceWorkComponent', () => {
 });
 
 describe('CollabSpaceChatComponent', () => {
-  it('emits NewConversationRequested when onNewConversationClick is called', () => {
-    const comp = new CollabSpaceChatComponent();
-    let requested = false;
-    comp.NewConversationRequested.subscribe(() => {
-      requested = true;
-    });
-
-    comp.onNewConversationClick();
-    expect(requested).toBe(true);
-  });
-
-  it('emits ConversationCreated when onConversationCreated is called', () => {
-    const comp = new CollabSpaceChatComponent();
-    let createdPayload: { conversationId: string; name?: string } | null = null;
-    comp.ConversationCreated.subscribe(payload => {
-      createdPayload = payload;
-    });
-
-    comp.onConversationCreated({
-      conversation: { ID: 'conv-123', Name: 'New Project Room' } as MJConversationEntity,
-    });
-
-    expect(createdPayload).toEqual({
-      conversationId: 'conv-123',
-      name: 'New Project Room',
-    });
-  });
-
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
-    expect(comp.AgentReplyMode).toBe('Always');
-    expect(comp.AllowedAgentIDs).toBeNull();
-    expect(comp.AgentHistoryFrom).toBeNull();
-    expect(comp.AgentTurnHandler).toBeNull();
     expect(comp.AllowMentions).toBe(true);
-    expect(comp.AllowAttachments).toBe(true);
+    expect(comp.AllowAttachments).toBe(false);
   });
 });
 
@@ -808,7 +775,7 @@ describe('CollabSpaceChatComponent', () => {
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [
     { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active' },
-    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Client Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
+    { id: 'm2', userId: 'u2', name: 'Bea Client', email: 'bea@client.com', initials: 'BC', roleName: 'Outside Member', roleCode: 'client-member', band: 'Shared', status: 'Active' },
     { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
   ];
 

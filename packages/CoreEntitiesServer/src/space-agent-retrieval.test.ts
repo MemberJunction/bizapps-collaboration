@@ -234,7 +234,7 @@ describe('resolveSpaceAgentRetrieval', () => {
         assert.equal(res.callerCanSeeTeam, false);
     });
 
-    it('Item 3: MJ Owner user with no seat cannot reach the space and gets empty retrieval', async () => {
+    it('MJ Owner user with no seat cannot reach the space and gets empty retrieval', async () => {
         const ownerUser = { ID: OUTSIDER_ID, Name: 'OwnerOutsider', Type: 'Owner' } as UserInfo;
         const res = await resolveSpaceAgentRetrieval(provider, ownerUser, CHILD_SPACE_ID);
 
@@ -350,14 +350,6 @@ describe('resolveSpaceAgentRetrieval', () => {
             mockItemsOverride = null;
         }
     });
-
-    it('Item 3: Owner-type user with no seat gets nothing back from retrieval', async () => {
-        const ownerWithoutSeat = { ID: OUTSIDER_ID, Name: 'Outsider Owner', Type: 'Owner' } as UserInfo;
-        const res = await resolveSpaceAgentRetrieval(provider, ownerWithoutSeat, CHILD_SPACE_ID);
-        assert.equal(res.searchedSpaceIds.length, 0);
-        assert.equal(res.candidateItems.length, 0);
-        assert.equal(res.quotedItems.length, 0);
-        assert.equal(res.callerCanSeeTeam, false);
-    });
 });
+
 

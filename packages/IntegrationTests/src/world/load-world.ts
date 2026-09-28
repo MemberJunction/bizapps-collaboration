@@ -33,11 +33,13 @@ import {
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
+    CollaborationEngine,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
+    postSpaceMessage,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import sql from 'mssql';
 import { readCsv } from './csv.js';
@@ -213,6 +215,7 @@ export async function loadWorld(): Promise<void> {
         if (!(await record.Save())) throw new Error(`type ${type.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         types.set(type.Key, record.ID);
     }
+    await CollaborationEngine.Instance.Config(true, system, provider);
 
     const roles = new Map<string, string>();
     for (const code of ['owner', 'admin', 'member', 'guest', 'client-admin', 'client-member']) {
@@ -229,8 +232,11 @@ export async function loadWorld(): Promise<void> {
         const typeId = requireMap(types, space.Type, 'space type');
         const parentSpace = space.Parent ? spaceRows.find((item) => item.Key === space.Parent) : null;
         const creator = parentSpace ? actor(parentSpace.Owner) : actor(space.Owner);
-        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, creator);
         const existing = await findId(provider, SPACES, `ID = '${space.ID}'`, system);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(
+            SPACES,
+            existing ? actor(space.Owner) : creator
+        );
         if (existing) {
             if (!(await record.Load(existing))) throw new Error(`Could not load space ${space.Key}.`);
         } else {
@@ -244,8 +250,11 @@ export async function loadWorld(): Promise<void> {
         record.ParentID = space.Parent ? requireMap(spaceIds, space.Parent, 'parent space') : null;
         record.InheritsMembership = space.InheritsMembership === '1';
         record.AgentRetrieval = space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
-        record.ClosedAt = closedAt(space.ClosedAt);
+        record.ClosedAt = null;
         record.Retention = (space.Retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
+        record.IconClass = space.IconClass || null;
+        record.Color = space.Color || null;
+        record.BackgroundImageURL = space.BackgroundImageURL || null;
         if (!(await record.Save())) throw new Error(`space ${space.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         spaceIds.set(space.Key, record.ID);
     };
@@ -308,6 +317,17 @@ export async function loadWorld(): Promise<void> {
     }
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
+    for (const space of spaceRows.filter((s) => s.ClosedAt)) {
+        const spaceId = spaceIds.get(space.Key);
+        const parentSpace = space.Parent ? spaceRows.find((item) => item.Key === space.Parent) : null;
+        const creator = parentSpace ? actor(parentSpace.Owner) : actor(space.Owner);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, creator);
+        if (spaceId && (await record.Load(spaceId))) {
+            record.ClosedAt = closedAt(space.ClosedAt);
+            if (!(await record.Save())) throw new Error(`closing space ${space.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
+    }
+
     await seedWorldPlan({
         provider,
         actor,
@@ -330,6 +350,14 @@ export async function loadWorld(): Promise<void> {
         dataDir: dir,
         rootDir: worldStorageRoot(),
     });
+
+    const discoverySpaceId = spaceIds.get('discovery');
+    if (discoverySpaceId) {
+        await postSpaceMessage(provider, actor('ada'), {
+            spaceId: discoverySpaceId,
+            text: 'Welcome to the Discovery space room! Initial room message history seeded.',
+        });
+    }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);

@@ -208,39 +208,18 @@ export class BaseSpaceTypeServerDriver {
      * Modifies only seats with the matching SyncSource.
      */
     public async SyncSeats(
-        space: mjBizAppsCollaborationSpaceEntity,
-        source: string,
-        people: PersonSeatInput[],
-        actingUser: UserInfo,
-        provider: IMetadataProvider
+        _space: mjBizAppsCollaborationSpaceEntity,
+        _source: string,
+        _people: PersonSeatInput[],
+        _actingUser: UserInfo,
+        _provider: IMetadataProvider
     ): Promise<SyncSeatsResult> {
-        const metadata = asMetadata(provider);
-        const result: SyncSeatsResult = {
+        return {
             added: 0,
             updated: 0,
             removed: 0,
             invited: 0,
-            errors: [],
+            errors: ['SyncSeats is not implemented in PR #7; scheduled for PR #8 external roster sync.'],
         };
-        if (!metadata || !space.ID) {
-            result.errors.push('Invalid metadata provider or space ID.');
-            return result;
-        }
-
-        try {
-            const system = await requireSystemUser(space);
-            // Load role types
-            const roleTypes = await metadata.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>('MJ_BizApps_Collaboration: Space Role Types', system);
-            // In a real environment, role types are mapped to SpaceRoleType.ID
-            // Here we look up existing members with this SyncSource
-            // Existing members with this SyncSource are matched and updated or removed
-            // Seats with no SyncSource are untouched.
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            LogError(`SyncSeats failed: ${msg}`);
-            result.errors.push(msg);
-        }
-
-        return result;
     }
 }

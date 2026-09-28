@@ -15,6 +15,8 @@ import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
+import { BoxFileStorage } from '@memberjunction/storage';
+import { COLLABORATION_BOX_PROVIDER_ID, COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
 
 function storedObjectPath(root: string, providerKey: string | null): string | null {
     const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
@@ -59,6 +61,14 @@ export async function purgeWorld(): Promise<void> {
             WHERE i.SpaceID IN (${spaceIds}) AND i.RecordID LIKE 'ID|%'
         )
     `);
+    const foreignSpaces = await pool.request().query<{ ID: string; Name: string }>(`
+        SELECT ID, Name FROM __mj_BizAppsCollaboration.Space WHERE ParentID IN (${spaceIds}) AND ID NOT IN (${spaceIds});
+    `);
+    if (foreignSpaces.recordset && foreignSpaces.recordset.length > 0) {
+        const names = foreignSpaces.recordset.map((r: { ID: string; Name: string }) => `'${r.Name}' (${r.ID})`).join(', ');
+        throw new Error(`Purge refused: foreign child spaces found under world spaces: ${names}`);
+    }
+
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
@@ -117,26 +127,39 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
-            WHILE EXISTS (
-                SELECT 1 FROM __mj_BizAppsCollaboration.Space AS child
-                WHERE child.ID IN (${spaceIds})
-                  AND child.ParentID IN (SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds}))
-            )
-                DELETE FROM __mj_BizAppsCollaboration.Space
-                WHERE ID IN (${spaceIds})
-                  AND ID NOT IN (
-                      SELECT ParentID FROM __mj_BizAppsCollaboration.Space
-                      WHERE ParentID IN (${spaceIds})
-                  );
+            UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
 
             SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
+            SELECT ID INTO #details FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
+
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceChat') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds}) OR ConversationID IN (SELECT ID FROM #conv);
+
+            IF OBJECT_ID('[${core}].AIAgentRun') IS NOT NULL
+                UPDATE [${core}].AIAgentRun SET ConversationDetailID = NULL WHERE ConversationDetailID IN (SELECT ID FROM #details);
+
+            IF OBJECT_ID('[${core}].AIAgentExample') IS NOT NULL
+                UPDATE [${core}].AIAgentExample SET SourceConversationDetailID = NULL, SourceConversationID = NULL WHERE SourceConversationDetailID IN (SELECT ID FROM #details) OR SourceConversationID IN (SELECT ID FROM #conv);
+
+            IF OBJECT_ID('[${core}].AIAgentNote') IS NOT NULL
+                UPDATE [${core}].AIAgentNote SET SourceConversationDetailID = NULL WHERE SourceConversationDetailID IN (SELECT ID FROM #details);
+
+            IF OBJECT_ID('[${core}].ConversationDetailArtifact') IS NOT NULL
+                DELETE FROM [${core}].ConversationDetailArtifact WHERE ConversationDetailID IN (SELECT ID FROM #details);
+
+            IF OBJECT_ID('[${core}].AIAgentSession') IS NOT NULL
+                UPDATE [${core}].AIAgentSession SET ConversationID = NULL WHERE ConversationID IN (SELECT ID FROM #conv);
+
+            UPDATE [${core}].ConversationDetail SET ParentID = NULL WHERE ID IN (SELECT ID FROM #details);
+            DELETE FROM [${core}].ConversationDetail WHERE ID IN (SELECT ID FROM #details);
+
             UPDATE conversation SET LastConversationID = NULL
             FROM [${core}].Conversation AS conversation
             WHERE conversation.ID IN (SELECT ID FROM #conv)
                OR conversation.LastConversationID IN (SELECT ID FROM #conv);
-            DELETE FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
+
             DELETE FROM [${core}].Conversation WHERE ID IN (SELECT ID FROM #conv);
 
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
@@ -145,6 +168,9 @@ export async function purgeWorld(): Promise<void> {
 
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
+            DELETE FROM [${core}].FileStorageAccount WHERE ID = '${COLLABORATION_STORAGE_ACCOUNT_ID}';
+            DELETE FROM [${core}].Credential WHERE Name IN ('Collaboration local directory', 'Collaboration Box Storage');
+            DELETE FROM [${core}].FileStorageProvider WHERE ID = '${COLLABORATION_STORAGE_PROVIDER_ID}';
         `);
         await transaction.commit();
     } catch (error) {
@@ -157,6 +183,24 @@ export async function purgeWorld(): Promise<void> {
         if (!file) continue;
         await rm(file, { force: true });
         await rm(`${file}.mjmeta.json`, { force: true });
+    }
+    const boxConfig = getBoxStorageConfig();
+    if (boxConfig) {
+        try {
+            const boxStorage = new BoxFileStorage();
+            await boxStorage.initialize(boxConfig);
+            for (const row of stored.recordset as Array<{ ProviderKey: string | null }>) {
+                if (row.ProviderKey) {
+                    try {
+                        await boxStorage.DeleteObject(row.ProviderKey);
+                    } catch {
+                        // Best-effort cleanup for individual files
+                    }
+                }
+            }
+        } catch (boxError) {
+            console.error('Box storage cleanup during purge encountered an issue:', boxError);
+        }
     }
     console.log(`COLLAB-WORLD app rows purged from ${DB_DATABASE}. The user accounts were kept.`);
     await pool.close();

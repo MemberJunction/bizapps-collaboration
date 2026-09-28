@@ -1,6 +1,7 @@
 import { RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { membershipReaches, type MemberSnapshot, type RoleFlags, type SpaceNode } from '@mj-biz-apps/collaboration-core';
+import { CollaborationEngine } from './CollaborationEngine.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
@@ -19,7 +20,7 @@ export interface WriteContext {
     ownerCount: number;
 }
 
-interface SpaceRow {
+export interface SpaceRow {
     ID: string;
     ParentID: string | null;
     InheritsMembership: boolean;
@@ -28,9 +29,12 @@ interface SpaceRow {
     SpaceTypeID: string;
     AllowParentAssignees?: boolean;
     ClosedAt?: string | Date | null;
+    PostCloseAccess?: SpaceNode['postCloseAccess'];
+    PostCloseAccessDays?: number | null;
 }
 
-function toNode(row: SpaceRow): SpaceNode {
+export function toNode(row: SpaceRow): SpaceNode {
+    const spaceType = row.SpaceTypeID ? CollaborationEngine.Instance.SpaceTypeById(row.SpaceTypeID) : null;
     return {
         id: parseUuid(row.ID) ?? row.ID,
         parentId: row.ParentID ? parseUuid(row.ParentID) : null,
@@ -39,6 +43,10 @@ function toNode(row: SpaceRow): SpaceNode {
         agentRetrieval: row.AgentRetrieval,
         allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
         closedAt: row.ClosedAt ? String(row.ClosedAt) : null,
+        postCloseAccess: row.PostCloseAccess ?? null,
+        postCloseAccessDays: row.PostCloseAccessDays !== undefined ? row.PostCloseAccessDays : null,
+        spaceTypePostCloseAccess: spaceType?.PostCloseAccess ?? null,
+        spaceTypePostCloseAccessDays: spaceType?.PostCloseAccessDays !== undefined ? spaceType.PostCloseAccessDays : null,
     };
 }
 
@@ -109,7 +117,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const owners = ownerIds
         ? await one<{ ID: string }>(rv, MEMBERS, `SpaceID = '${space}' AND Status = 'Active' AND SpaceRoleTypeID IN (${ownerIds})`, system)
         : [];
-    const walked = await chain(rv, space, user);
+    const walked = await chain(rv, space, system);
     const spaces = walked.nodes;
     const typeId = walked.typeId;
     const typeRows = typeId && parseUuid(typeId)
