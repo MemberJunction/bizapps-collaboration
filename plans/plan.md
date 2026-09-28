@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it.
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -77,10 +77,11 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
   - It was opened as a draft stacked on PR #3, and retargeted to `next` when PR #3 merged. `8c2845b` merged `next` into it.
   - The builder works directly on its branch (D12). Both sides merge the remote branch before pushing, and nobody rebases or force-pushes. The UI work, slices B to I, comes last (D16).
   - It merges once, when all of it is 100% done (D12). **Amith, 2026-09-27: it finishes where it is.** [Punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is its finish line; it moved #7's other open items to PR #8 ([its plan's § 1](pr8-plan.md#what-7-moved-here)) and to after #8.
-  - Each review of it carries one numbered punch list, and each push gets a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
+  - **It merged into `next` on 2026-09-28,** at `0f0dd3d` (merge commit `4d9c779`), as complete enough (Amith). What was left of its finish line moved to PR #8 with the numbers kept, and the chat is #8's first work.
+  - Each review of it carried one numbered punch list, and each push got a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
   - [§ 9](#9-sequencing) is its order.
 - **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
-  - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. The builder takes it over once #7 merges, and it's retargeted to `next` then, as #7 was when PR #3 merged.
+  - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. When #7 merged, it was retargeted to `next` and handed to the builder, as #7 was when PR #3 merged.
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
 - **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, and A18's. Amith and MJ's reviewers review it now, and the builder builds it after #7 and PR #8 (D36). PR #8 builds on MemberJunction as released, and a follow-up pins the release that carries it.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
@@ -376,7 +377,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
   - `AgentTurnHandler`: a call to Collaboration's turn operation. From the saved message it checks everything again on the server: that the caller can contribute, that the conversation is the space's room, that the agent is allowed and, where the mode needs it, tagged in the stored message, and the history floor. It then runs the agent under the audience rule and writes the reply as the system user.
 - **People post as themselves.** A contributing seat has Edit on its space's room: an `MJ: Resource Permissions` grant the server writes and revokes with the seat and with the space's closure. Space Participant has Create on Conversation Details, limited by a create filter to rooms its user can contribute to; the permission and its filter are metadata, under `metadata/`.
 - **One room per space in #7.** Chats with their own people are B3's, in #8. `PostSpaceMessage`'s `ExecuteAgent` switch and its mention regex go.
-- **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 pins the first edge release that carries it, so #7's CI can pass only once that release is out.
+- **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 merged without it, so #8 pins the first edge release that carries it, and #8's CI can pass only once that release is out.
 
 ### 3.5 Decided on 2026-09-27: anchors, grants, data, notes and meetings
 
@@ -473,9 +474,9 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 - **The follow-up** pins the MJ release that carries A14 to A17, and opens those grants. A18, and workstream T's calendar sync (T2), come with or after it.
 
 **D37. #7's chat builds on MJ `next`.** Amith, answering punch list 6's chat call on 09-27: the team develops against MJ `next`, which carries A13.1 ([MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)), and MJ's next edge releases go out the week of 09-28. It's the call's option A, without cutting a 6.1.5 from `lts/6.1`.
-- **#7 finishes A:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its room. An outside participant also needs Create on Conversation Details, limited to the rooms they reach.
-- **#7 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
-- **D25 is settled** (Amith, 09-27): the chat is MJ's chat area as merged to MJ `next`, with MJ#4788's host rules set from the server. #7's plan carries the rewritten D25 (`455b88c`), and this plan takes it when #7 merges.
+- **#8 finishes A, not #7:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its room. An outside participant also needs Create on Conversation Details, limited to the rooms they reach. #7 merged on 2026-09-28 without it (Amith: complete enough), so it's #8's first work (#7's items 57, 8 and 61).
+- **#8 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
+- **D25 is settled** (Amith, 09-27): the chat is MJ's chat area as merged to MJ `next`, with MJ#4788's host rules set from the server. #7 rewrote D25 (`455b88c`), and this plan took it when #7 merged.
 
 ## 4. The model
 
@@ -750,7 +751,7 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
   - a parent's read filter doesn't reach its subtypes' views;
   - a loaded record never looks for its subtype again when it's reloaded.
 
-**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 builds against `next` and pins the first edge release that carries them (D37).
+**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 merged on 2026-09-28 without pinning them, and #8 pins the first edge release that carries them (D37).
 
 **A14 to A18** are D26 to D35's MJ work. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
 
@@ -1157,7 +1158,7 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 | **After PR #8** | The MJ pull request: A16, A14, A15, A17, then A18, and a release | A follow-up that pins the release and opens § 4's grants | T2, on A18 | |
 | **After T ships** | | B23, in a later pull request | | C4, in a major version |
 
-- **PR #8 starts when #7 merges.** Its plan starts from the app as #7 leaves it, and takes the items #7 moved to it ([its § 1](pr8-plan.md#what-7-moved-here)).
+- **PR #8 started when #7 merged,** on 2026-09-28. Its plan starts from the app as #7 left it, and takes the items #7 moved to it ([its § 1](pr8-plan.md#what-7-moved-here)).
 - **The MJ pull request comes after PR #8** (D36). PR #8 merges with the grants that need A14 to A17 closed, and the follow-up opens them once an MJ release carries them.
 - **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass. Under D36, rows 13, 15, 16 and 19 pass closed in PR #8.
 

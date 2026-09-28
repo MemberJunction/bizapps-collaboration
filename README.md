@@ -230,9 +230,9 @@ The UX gallery, the example plug-ins and the integration checks are private pack
 
 | When | What |
 |---|---|
-| **Now: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, chats on MemberJunction's chat area, the assistant bounded by its audience, and the screens, walked end to end |
-| **Next: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | Anchors, grants, data reach, notes and pins ([its plan](plans/pr8-plan.md)), with MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters |
-| **Then** | Meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
+| **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
+| **Now: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area, with agent turns; then anchors, grants, data reach, notes and pins ([its plan](plans/pr8-plan.md)), and the screens, walked end to end |
+| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open #8's closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
 
 The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
 

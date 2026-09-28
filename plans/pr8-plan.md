@@ -2,10 +2,10 @@
 
 **What this is.** The build plan for PR #8, the pull request after #7. It's a differential plan: it starts from the app as #7 leaves it, and lists what #8 changes, in order, with each change's acceptance checks. The reasons and the rules are in [the plan](plan.md), v0.5: its decisions D26 to D35 ([§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)) and its items B14 to B24 and A14 to A18. This document is the how and the order.
 
-**Version:** 2026-09-27, at #7's head `37e290b`. Amith then decided to finish #7 where it is: [its punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is #7's finish line, and moved #7's other open items here ([§ 1](#what-7-moved-here)) or to after this pull request. Stage 0 checks this plan against #7's final head. The same day, the plan's D36 moved MJ's part after this pull request.
+**Version:** 2026-09-27, at #7's head `37e290b`. Amith then decided to finish #7 where it is: [its punch list 4](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5858175690) is #7's finish line, and moved #7's other open items here ([§ 1](#what-7-moved-here)) or to after this pull request. Stage 0 checks this plan against #7's final head. The same day, the plan's D36 moved MJ's part after this pull request. #7 merged on 09-28 at its head `0f0dd3d`, as complete enough (Amith), and [§ 1](#1-where-7-leaves-the-app) is updated to it.
 
 **Who does what.**
-- **The builder builds it,** on `claude/hopeful-bell-6ldk4v-pr8`, once #7 merges. Until then it's a draft stacked on #7, holding this plan, the plan's v0.5 and the new README.
+- **The builder builds it,** on `claude/hopeful-bell-6ldk4v-pr8`, from #7's merge on 2026-09-28. Until then it was a draft stacked on #7, holding this plan, the plan's v0.5 and the new README.
 - **The plan's author reviews it,** with one numbered punch list per push, as for #7, and pushes only document updates. Both sides merge the remote branch before pushing; nobody rebases or force-pushes.
 - **It merges once, when it's 100% done,** as #7 does (D12).
 - **MJ's part is its own pull request,** [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), which the builder builds after this one (the plan's D36). PR #8 builds on MemberJunction as released, with [§ 4](#4-what-it-depends-on)'s grants closed, and a follow-up opens them once a release carries MJ#4789.
@@ -28,26 +28,28 @@
 
 ## 1. Where #7 leaves the app
 
-When #7 merges, its finish line (punch list 4) is done, and its other open items have moved here or later. The app then has:
+#7 merged on 09-28, as complete enough (Amith), not at its finish line. What was left of punch list 4's finish line moved here with #7's other open items, in [the table below](#what-7-moved-here). The app has:
 
 - **The container:** `SpaceType`, `Space`, `SpaceMember`, `SpaceRoleType`, `SpaceItem`, `ItemUse` and `ShareNotice`, with the access functions `fnCollaborationAccess`, `fnCollaborationTasks` and `fnCollaborationAncestorMembers`, and the Space Participant role with a row-level security filter on every read grant.
 - **The extensibility schema,** still as #7's migrations (folding them into one baseline is #7's item 14, now here): the type's `ServerDriverClass`, `UIDriverClass`, `SpaceExtensionEntity` and `Configuration`; `Space.Configuration`, `AnchorEntityID`, `AnchorRecordID`, `PostCloseAccess` and `PostCloseAccessDays`; `SpaceMember.SyncSource` and `PersonID`; and the tables `SpaceChat`, `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`.
 - **The metadata engine** (D19): `CollaborationEngineBase`, in `collaboration-engine-base`, loaded once per process, and the server's `CollaborationEngine`.
-- **Settings** (D20 to D23): `CollaborationSettings` and `ResolveCollaborationSettings`, used when a space closes, beside the older `ResolveSpaceRules` the drivers and gates still run on (#7's items 36 and 55, now here); the app's defaults as an Application Settings row; closing as a setting; sub-spaces sealed unless their creator asks; and the *Collaboration* authorization tree, held by MJ's `Owner` and `Developer` roles.
+- **Settings** (D20 to D23): `CollaborationSettings` and `ResolveCollaborationSettings`, used when a space closes and when a message is posted, beside the older `ResolveSpaceRules` that the drivers, the gates and the allowed-agent resolver still run on (#7's items 36 and 55, now here); the app's defaults as an Application Settings row; closing as a setting; sub-spaces sealed unless their creator asks; and the *Collaboration* authorization tree, held by MJ's `Owner` and `Developer` roles.
 - **Seven generic space types** (D18).
 - **The extension points** (B8): server and UI drivers, contributions, lifecycle subscribers, a server-only `EnsureSpaceForRecord`, and the private example plug-ins `example-board` and `example-room`. `SyncSeats` is out until it's built.
-- **Chats:** one room per space, created by the server, on the chat Amith chose for #7 (punch list 4's A or B). No chats are created in the browser. The allowed-agent, skill and knowledge resolvers, and retrieval bounded by the room's audience (B2.1, B2.2).
-- **The screens** (D24): Home, the space rail and tabs, the library, chat, people, work and settings, with #7's wrong results and browser writes fixed. The walkthrough is here (#7's item 51).
-- **The tests:** the unit tests, both integration harnesses, `persona-check.sql` and the gallery. CI against a real database is here (#7's item 13).
+- **Chats:** a room per space, created by the server, though nothing yet enforces one room. The Overview's ask box posts through `PostSpaceMessage`, the chat call's option B: it saves the message with the system user's rights, in the poster's name, and when the reply mode or an `@assistant` mention calls for it, it answers with the names of the space's items within the poster's reach rather than running the agent. The Chat tab is MJ's chat area on the room. The system user owns the room and no seat has an Edit grant on it, so MJ 6.1.3's write gate refuses anyone else's post there. D25 and D37 put the chat on MJ#4788's host rules, and that's this pull request's first work (#7's items 57, 8 and 61). No chats are created in the browser. The allowed-agent, skill and knowledge resolvers, and retrieval bounded by the room's audience (B2.1, B2.2).
+- **Access after close:** the write gates, `fnCollaborationAccess` and the agent's search honor a space's closure. `fnCollaborationAncestorMembers` doesn't yet (#7's item 40).
+- **The screens** (D24): Home, the space rail and tabs, the library, chat, people, work and settings. Their open items are in the table, in stage 4, and so is the walkthrough (#7's item 51).
+- **The tests:** 334 unit tests, both integration harnesses (43 and 44 checks, in nine bundles each), `persona-check.sql` and the gallery. CI against a real database is here (#7's item 13).
 
 If #7's final head differs from this, stage 0 says how, and this plan follows the code.
 
 ### What #7 moved here
 
-Punch list 4 moved these of #7's items here, by number. Each is done in the stage named, with the rest of that stage's work.
+Punch list 4 moved the first set of #7's items here, by number, and the rest came when #7 merged (*at merge*). Each is done in the stage named, with the rest of that stage's work. **The chat comes first,** before stage 1.
 
 | #7's item | What | Stage |
 |---|---|---|
+| 57, 8, 61 | *At merge.* **The chat on D25.** The server turn operation: it checks everything again from the saved message, runs the agent under the audience rule, and writes the reply as the system user. Edit grants for contributing seats. Space Participant's Create on Conversation Details, with its create filter, as metadata. One room per space: a filtered unique index, the host listing only the room, and the row-level security filters narrowed. `PostSpaceMessage`'s `ExecuteAgent` switch and regex retired. The ask box going through the chat area. The room's conversation and row saved together. Posting that honors a space's own reply mode and doesn't fail when the app settings row is missing. RM3 flipped on both harnesses. Then, once MJ's first edge release carrying MJ#4788 is out, the pin and the host-rule bindings ([the D25 note](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5860741029)) | First, then 4 |
 | 13 | CI against a real database (B0.5) | 1 |
 | 14 | One baseline, regenerated from a clean database, with #7's migrations folded in and D20 to D22's type columns not created | 1 |
 | 15 | The extensibility migration's fixes, in the baseline: no hand-written `__mj_` columns, `${mjSchema}`, extended properties, one room per space | 1 |
@@ -55,6 +57,9 @@ Punch list 4 moved these of #7's items here, by number. Each is done in the stag
 | 19 | Rebuild from empty, and check the core-entity list on the screens as Bea | 1 |
 | 12 | The type dropped from `fnCollaborationAccess`'s fallback, with the type's close columns | 1 |
 | 38 | `EnsureSpaceForRecord` on the primary `SpaceAnchor` | 1, 2 |
+| 63 | *At merge.* `V202609271300`'s generated block, which was assembled by hand, replaced by the baseline's own CodeGen capture | 1 |
+| 40 | *At merge.* `fnCollaborationAncestorMembers` checking every ancestor's closure and `PostCloseAccess`, in the baseline | 1 |
+| 64 | *At merge.* The world's storage: the load leaves MJ's shared Box row active, `purge-world.ts` has an empty `catch`, a comment cites a punch list, and the data doc's purge claims are wrong | 1 |
 | 6 | Storage as a setting: uploads use the resolved account, a space can set it, each item records its account, and linked documents go through a server operation | 2 |
 | 12 | A space setting its own close values | 2 |
 | 20 | The fields a participant can read, the geocode columns, and what bizapps-common#186's release does to a host's roles | 2 |
@@ -70,6 +75,15 @@ Punch list 4 moved these of #7's items here, by number. Each is done in the stag
 | 54 | The engine's unused sets, and its typed-in IDs and names | 2 |
 | 55 | The settings model's open points, settled by D30's one resolver | 2 |
 | 56 | The app settings row's editor | 2 |
+| 40 | *At merge.* The rest of access after close: the reopen bypass skipping closed ancestors, the subtree query and the walk agreeing on closed spaces inside a subtree, unit tests for `isAgentPostCloseAccessPermitted` with a positive case, an entity-level reopen of a space closed with no access, and the read-parity checks on both harnesses | 2 |
+| 56 | *At merge.* One owner walk for the gate and the check, with the type's fallback; failed reads that end silently; a clean push proven; a check that refuses an authorized user with no owner seat; WG6 4a on D23's check | 2 |
+| 58 | *At merge.* Space Item deletes gated on closure, and tests for the assignment delete and for an assignment update in a closed space | 2 |
+| 12 | *At merge.* Checks on both harnesses: a member's write of the close columns refused, an authorized owner's accepted, and the stamp read back. The close time stamped by the server, and an owner without *Configure Spaces* unable to move `ClosedAt` | 2 |
+| 11 | *At merge.* Checks on both harnesses that set and read `InheritsMembership` | 2 |
+| 54 | *At merge.* The unused imports, and the engine base's header listing *Task Types* | 2 |
+| 22 | *At merge.* The rest of WG6: `cleanupTaskAndItem`'s silent skips, the client's skip without a detail ID, D23's owner-seat half, 4a's restore in a `finally`, an undo for the refusal steps 3a and 4b, cleanup errors that hide a check's first error, and `agent.checks.ts`'s stale comment and constants | 2 |
+| 28 | *At merge.* `fnCollaborationCommonAccess` tested, `retrieval.ts`'s comment, the walk to the root with a cycle guard, and `effectiveRetrievalScope` honoring closure | 3 |
+| 3 | *At merge.* The retrieval half of the MJ `Owner` user's check, on the server harness | 3 |
 | 3 | A seat for the account the walkthrough drives | 4 |
 | 4 | The host's placeholders, list limits, made-up labels, metadata reads and typed-in IDs | 4 |
 | 16 | The READMEs and screenshots | 4 |
@@ -84,6 +98,13 @@ Punch list 4 moved these of #7's items here, by number. Each is done in the stag
 | 53 | The tabs' labels from the type | 4 |
 | 57 | The chat's colors | 4 |
 | 58 | The Work tab on `<bizapps-task-panel>`, once bizapps-tasks 1.6.1 is published, with every bizapps-tasks version moved together | 4 |
+| 58 | *At merge.* The browser counting a seat an inheriting sub-space passes down | 4 |
+| 4 | *At merge.* The host's failed reads shown as empty data, the users read batched and parameterized, the task band from the type's `DefaultBand`, and the priority save | 4 |
+| 9 | *At merge.* Home's library: Shared-only collections and views with no Team tab, Shared items across the viewer's spaces, and no stale collections after a failed read | 4 |
+| 50 | *At merge.* The share dialog: the organization's name, the note and the notify choice passed to the server, recipients limited to Active Shared-band seats, the timestamp's format, and the agent's state on an Overview click | 4 |
+| 66 | *At merge.* Text shown by the server's `Mode`, and the popup fallback telling the viewer | 4 |
+| 7 | *At merge.* The seeded backdrops, which don't resolve, with item 26 | 4 |
+| 27 | *At merge.* The docs: `HOW_THE_SYSTEM_WORKS.md:73` and `packages/Server/README.md:27` describe option B, `:4` names a branch, and `:115`, `:22` and `:17` are out of date, as is the Server README's entity count | 4 |
 | 24 | The adversarial test, over #7 and this pull request together, before any release | End |
 | 52 | The wrap-up | End |
 
@@ -141,10 +162,11 @@ v0.1 hasn't shipped to a host, so these change shape freely (D35). If it has shi
 
 ## 5. Stage 0: start
 
-1. When #7 merges, merge `next` into this branch, and retarget this pull request to `next`.
+1. Merge `next` into this branch, and retarget this pull request to `next`. Done at #7's merge.
 2. Check [§ 1](#1-where-7-leaves-the-app) against #7's final head, and post what differs as this pull request's first comment.
-3. Build, test and run both harnesses on the merged head, and post the tallies. They're the baseline every later punch list compares against.
-4. Work the items #7 moved here ([§ 1](#what-7-moved-here)) in the stage each names, with that stage's own work.
+3. Build, test and run both harnesses on the merged head, from a purge and a fresh load of the world, and post the tallies. They're the baseline every later punch list compares against.
+4. Then the chat, [§ 1](#what-7-moved-here)'s first row, before stage 1.
+5. Work #7's other items in the stage each names, with that stage's own work.
 
 ## 6. Stage 1: the schema
 
