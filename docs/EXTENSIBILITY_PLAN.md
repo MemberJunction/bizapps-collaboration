@@ -461,7 +461,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 
 ### Starting a chat and adding people
 
-- **Anyone in the space with a seat that can post can start a chat** (the plan's D43). A read-only guest can't, since they couldn't post in it, and the chat shows anyone without a seat that can post no composer, with a note saying why. The rule is `Chats.WhoCanStart` in the configuration ([§ 4](#4-configuration-one-bag-per-type-and-per-space)): `Anyone` by default, and a type or a space can narrow it to `Owners`. The server checks it when the conversation is created (`CreateSpaceConversation`).
+- **Anyone in the space with a seat that can post can start a chat** (the plan's D43). A read-only guest can't, since they couldn't post in it, and the chat shows anyone without a seat that can post no composer, and a lock whose label says why. The rule is `Chats.WhoCanStart` in the configuration ([§ 4](#4-configuration-one-bag-per-type-and-per-space)): `Anyone` by default, and a type or a space can narrow it to `Owners`. The server checks it when the conversation is created (`CreateSpaceConversation`).
 - **A chat can hold several people and several agents.**
   - People must already reach the space. Someone from outside is invited to the space first, so there's one access model.
   - Agents must be on the space's allowed list.
@@ -597,11 +597,13 @@ These are in the plan's workstream A:
   - there's no live feed of other people's messages (A12.6).
 - Who a conversation message is from (A19, in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), open). Until it ships, a type's message hooks aren't enforced (the plan's D44).
 - Bound view and dashboard properties, hidden action parameters and locked query parameters (A14 to A17, in MJ#4789), which grants and a granted query need ([§ 11](#11-security-rules-for-plug-ins)).
-- A read-only chat area, for a closed space and for someone who can read a space without a seat that can post ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Until that's in MJ `next`, Collaboration hides the composer itself.
-- An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), for the same pull request). Until that's in MJ `next`, Collaboration's server hands a space's delete to its subtype itself.
+- A read-only chat area, for a closed space and for someone who can read a space without a seat that can post ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Collaboration still hides the composer itself; PR 10 takes that out against the fix (the plan's D49 and D50).
+- An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), for the same pull request). Collaboration's server still hands a space's delete to its subtype itself; PR 10 takes that out against the fix.
 - `EnsureISAChild()` on a new record reads a child row that can't exist yet and logs a load error ([MJ#4859](https://github.com/MemberJunction/MJ/issues/4859), for the same pull request). Nothing is wrong, and each new space of a type with its own table logs one until the fix is in.
-- Over GraphQL, a subtype's `Delete()` returns false although both rows are deleted: the server deletes the space along with the subtype, and the client then sends the space's delete too ([MJ#4864](https://github.com/MemberJunction/MJ/issues/4864), for the same pull request). The page deletes no space itself; the integration checks read the rows back rather than trust the result.
+- Over GraphQL, a subtype's `Delete()` returns false although both rows are deleted: the server deletes the space along with the subtype, and the client then sends the space's delete too ([MJ#4864](https://github.com/MemberJunction/MJ/issues/4864), for the same pull request). The page deletes no space itself; the integration checks still read the rows back rather than trust the result, until PR 10 takes that out against the fix.
 - An IsA parent that its child builds has no link back to the child, so the parent's save can't see a change to the child's own columns ([MJ#4870](https://github.com/MemberJunction/MJ/issues/4870), for the same pull request). Every save of a subtype from a client takes that path, so the space judges a change of only its subtype's columns without seeing it ([§ 7](#7-isa-subtypes-and-their-forms)).
+- A host's agent turn has no supported way to publish its live status, because `RunAIAgentResolver`'s publishing is private ([MJ#4884](https://github.com/MemberJunction/MJ/issues/4884), for the same pull request). Collaboration's resolver publishes the same messages from a copy of that code; PR 10 replaces the copy with MJ's publisher.
+- A host turn that finishes before its reply row is shown stays in progress on screen until a reload ([MJ#4885](https://github.com/MemberJunction/MJ/issues/4885), for the same pull request).
 
 ## 10. Examples
 

@@ -101,11 +101,13 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 - `metadata/` has no `sync` block, every file in it ends in a newline, and `git diff next -- metadata` shows only intended changes;
 - the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed;
 - D41's authorization has replaced every check on a role's name, an `example-board` space is created, edited, reloaded and deleted through the screens (D42), and D45's query answers Home's counts, each with its tests;
-- the MemberJunction pull request of D48 has been built and tested locally, and Amith has reviewed it.
+- the MemberJunction pull request of D48 has been built and tested locally, Amith has reviewed it, and it's in MJ `next`, with Collaboration's own handling of each of its issues taken out (D49).
+
+PR 9 merges before all of these are met, and PR 10 finishes stage 0 against this same list (D50).
 
 ### 3.6 Where stage 0 stands
 
-At `3e3a1cd`, on 2026-09-29:
+PR 9 merges at `67acf8f`, with the docs brought to it, and PR 10 finishes stage 0 (the plan's D50). At `67acf8f`, on 2026-09-29:
 - **#8's final review:** every item is closed but the screenshots, which the browser pass takes.
 - **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the screenshot row (70) and the hand-built controls (73).
 - **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
@@ -113,17 +115,16 @@ At `3e3a1cd`, on 2026-09-29:
   - **UI drivers' tabs and Overview cards are wired in the section,** contributions only add, and each Overview card declares its side. The page asks a driver before an invite and before a conversation starts, and for the details form; its other hooks (header chips and actions, settings sections, new-space steps, and the checks before a message or a new sub-space) aren't called yet;
   - **configuration works,** with `Admin.RoleNames` removed and `Labels.Bands` left for a type that needs it;
   - **subtypes are built** (D42): the Spaces resolver, a type paired with its subtype, the check on the entity a type names, a change to only a subtype's own columns held to the space's rules (119), the example tables in a schema of their own with their CodeGen output and forms, `CreateSpace` writing a space, its subtype and the owner's seat in one transaction, and the three screens (New space, Settings' Details card and the Overview's About card), each drawing a driver's component, else MJ's form for the subtype showing only the subtype's own sections, else a field for each column. Left: the details form has been rendered only through a stand-in for MJ's form host, which can't mount a real form in jsdom, so the browser pass checks it; a client's save of only a subtype's columns is judged without the space seeing them until [MJ#4870](https://github.com/MemberJunction/MJ/issues/4870), which the drivers' doc comments say; and the delete of a space through its subtype works around [MJ#4850](https://github.com/MemberJunction/MJ/issues/4850).
-- **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; the dialogs draw through MJ's `mj-dialog`; and a space's chat is read-only, and says why, for someone who can read the space without a seat that can post.
+- **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; the dialogs draw through MJ's `mj-dialog`; and a space's chat is read-only for someone who can read the space without a seat that can post, with a lock in its header whose label says why.
 - **Decided on 2026-09-29, and built:** the checks that went by a role's name ask the *Administer Spaces* authorization, and Settings offers agent retrieval only to someone who holds it (D41). Home's counts come from one approved query that only Integration may run, which the server runs as the system user, and Open Tasks and Invitations Waiting open the rows behind them, from two more (D45). `WhoCanStart` is `Anyone` or `Owners` (D43). A space's conversations offer no voice call.
-- **Tests:** Core's 146, EngineBase's 18, CoreEntitiesServer's 267, Server's 10, IntegrationTests' 56, the page's 140 and its five rendered tests, the widgets' 153 and the example types' 45 pass in a clean install. The harnesses hold 75 checks on the server and 64 on the client, in eleven bundles each; at `61168bd` the builder ran both twice from a purge and a fresh load, and both passed. Since then the server side has changed only in a doc comment and tests, and the browser side in making the chat read-only for a reader with no seat that can post.
-- **To finish:**
-  - the review's open items, 120 and 121;
-  - the MemberJunction pull request of D48, with MJ#4836 to MJ#4839, MJ#4850, MJ#4859, MJ#4864 and MJ#4870 in it. Amith gave the go-ahead on 2026-09-29: the builder builds it next and tests it locally, and Amith reviews it too;
-  - the browser pass, now that the builder can sign in to Explorer: the details form (D42), the hand-built controls (73) and the screenshots;
-  - bizapps-common's pull request 186, which Amith reviews and merges (D46);
+- **Amith's smoke test in the browser** changed the chat at `67acf8f`: a reply is named for the agent that made it; the chat shows a turn's live status and its reply as it streams, through a turn that answers once its reply row is written and publishes the run's progress on the caller's session; a lock in the chat's header replaces the read-only banner; and the sample world allows Sage on Northwind (check CW4).
+- **Tests:** Core's 146, EngineBase's 18, CoreEntitiesServer's 269, Server's 10, IntegrationTests' 56, the page's 140 and its five rendered tests, the widgets' 155 and the example types' 45 pass in a clean install. The harnesses hold 76 checks on the server and 65 on the client, in eleven bundles each; at `67acf8f` the builder ran both twice from a purge and a fresh load, and both passed.
+- **What PR 10 takes** (D50):
+  - the review's open items: PR 9's own handling of the eight MemberJunction issues (122), which comes out against the MemberJunction pull request (D49); the server's copy of MJ's status publishing (123), which gives way to MJ's own once [MJ#4884](https://github.com/MemberJunction/MJ/issues/4884) is fixed; three deletions no test catches (124); a lock whose reason only a mouse can read (125); the board's next meeting (120); the chat's state before the seat is known (121); the hand-built controls (73); and the screenshots (23, 25, 29, 38, 70's row and D42's screens);
+  - the MemberJunction pull request of D48, now with [MJ#4884](https://github.com/MemberJunction/MJ/issues/4884) and [MJ#4885](https://github.com/MemberJunction/MJ/issues/4885) in it, merged into MJ `next`;
+  - bizapps-common's pull request 186 (32, D46);
+  - the browser pass: the details form (D42), 73 and the screenshots;
   - § 3.5's findings.
-
-  PR 9 merges once these are done and the MemberJunction pull request has been built, tested locally and reviewed by Amith.
 
 ## 4. Stages 1 to 4
 
