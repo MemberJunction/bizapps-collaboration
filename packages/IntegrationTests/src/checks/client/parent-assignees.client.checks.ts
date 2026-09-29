@@ -1,8 +1,9 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ENTITY, TASK_ASSIGNMENT_ENTITY, TASK_LINK_ENTITY, TASK_ACTIVITY_ENTITY, PERSON_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
+import { PERSON_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ASSIGNMENT_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../../entity-names.js';
+import { FindRows, getPersonaClientContext, getPersonaContext, View } from '../../wire.js';
+import { registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -523,7 +524,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {

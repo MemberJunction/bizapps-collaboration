@@ -1,19 +1,15 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import {
     CONVERSATION_DETAIL_ENTITY,
-    CONVERSATION_ENTITY,
-    FILE_ENTITY,
     SPACE_CHAT_ENTITY,
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_MEMBER_ENTITY,
     TASK_ENTITY,
 } from '../../entity-names.js';
-import { FindRows, getPersonaContext } from '../../wire.js';
+import { FindRows } from '../../wire.js';
+import { registerChecks } from '../cleanup-helpers.js';
 
-import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-
-const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 
 const checks: NamedCheck[] = [
     {
@@ -180,7 +176,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('features', {
     Setup: async () => {},
     Teardown: async () => {},

@@ -1,7 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJFileEntity } from '@memberjunction/core-entities';
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import {
     collaborationFileStore,
     decideUploadBand,
@@ -9,10 +7,13 @@ import {
     uploadSpaceFile,
     vouchStoredFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { randomUUID } from 'node:crypto';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
-import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
+import { registerChecks } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const createdItemIds: string[] = [];
@@ -285,7 +286,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {

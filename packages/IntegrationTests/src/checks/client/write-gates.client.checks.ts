@@ -1,28 +1,27 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     CollaborationClient,
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceItemEntity,
-    mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import {
-    SPACE_ENTITY,
-    SPACE_MEMBER_ENTITY,
-    SPACE_ITEM_ENTITY,
-    SPACE_TYPE_ENTITY,
-    SPACE_ROLE_TYPE_ENTITY,
-    SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
+    SHARE_NOTICE_ENTITY,
+    SPACE_ENTITY,
+    SPACE_ITEM_ENTITY,
+    SPACE_MEMBER_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
+    SPACE_TYPE_ENTITY,
+    TASK_ACTIVITY_ENTITY,
     TASK_ENTITY,
     TASK_LINK_ENTITY,
-    TASK_ACTIVITY_ENTITY,
 } from '../../entity-names.js';
-import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
-import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
-import { cleanupConversation } from '../cleanup-helpers.js';
+import { FindRows, getPersonaClientContext, getPersonaContext, SameID, View } from '../../wire.js';
+import { cleanupConversation, cleanupStep, deleteRowAndConfirm, registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -689,10 +688,13 @@ const checks: NamedCheck[] = [
             );
             let devMemberId: string | null = null;
             let devMemberCreated = false;
+            // A seat Dev already held is put back the way it was; only a seat this check created is deleted
+            let devSeatBefore: { SpaceRoleTypeID: string; Band: string; Status: string } | null = null;
             if (existingDevMembers.length > 0) {
                 devMemberId = existingDevMembers[0].ID;
                 const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
                 Assert(await devMember.Load(devMemberId), 'Load existing Dev member on Discovery over wire');
+                devSeatBefore = { SpaceRoleTypeID: devMember.SpaceRoleTypeID, Band: devMember.Band, Status: devMember.Status };
                 devMember.SpaceRoleTypeID = ownerRoleId;
                 devMember.Band = 'Team';
                 devMember.Status = 'Active';
@@ -719,25 +721,41 @@ const checks: NamedCheck[] = [
                     const devSaved = await devDiscovery.Save();
                     Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed over wire: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
                 } finally {
-                    const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
-                    Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
-                    restoreDev.Configuration = devOrigConfig;
-                    const restoredConfig = await restoreDev.Save();
-                    Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                    await cleanupStep(async () => {
+                        const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                        Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
+                        restoreDev.Configuration = devOrigConfig;
+                        const restoredConfig = await restoreDev.Save();
+                        Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                    });
                 }
             } finally {
                 if (devMemberCreated && devMemberId) {
-                    const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
-                    if (await cleanupDevMember.Load(devMemberId)) {
-                        await cleanupDevMember.Delete();
-                    }
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devMemberId, "Dev's seat on Discovery");
+                } else if (devMemberId && devSeatBefore) {
+                    const seatBefore = devSeatBefore;
+                    const seatId = devMemberId;
+                    await cleanupStep(async () => {
+                        const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        Assert(await seat.Load(seatId), "Reload Dev's existing seat to put it back");
+                        seat.SpaceRoleTypeID = seatBefore.SpaceRoleTypeID;
+                        seat.Band = seatBefore.Band as typeof seat.Band;
+                        seat.Status = seatBefore.Status as typeof seat.Status;
+                        Assert(await seat.Save(), `Putting Dev's seat back must succeed: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        Assert(await verify.Load(seatId), "Read Dev's seat back after restoring it");
+                        Assert(
+                            SameID(verify.SpaceRoleTypeID, seatBefore.SpaceRoleTypeID) && verify.Band === seatBefore.Band && verify.Status === seatBefore.Status,
+                            "Dev's existing seat must be back to its original role, band and status",
+                        );
+                    });
                 }
             }
         },
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('write-gates', {
     Setup: async () => {},
     Teardown: async () => {},

@@ -2,6 +2,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { CollaborationClient, mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext } from '../../wire.js';
+import { registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const createdItemIds: string[] = [];
@@ -236,7 +237,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {

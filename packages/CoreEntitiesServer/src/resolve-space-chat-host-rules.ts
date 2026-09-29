@@ -304,6 +304,7 @@ export async function resolveSpaceChatHostRules(
 
     // If conversationId is specified, check conversation access
     let targetChatKind: string = 'General';
+    let targetChatArchived = false;
     if (conversationId) {
         const parsedConvId = parseUuid(conversationId);
         if (!parsedConvId) {
@@ -355,21 +356,8 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
-        if (chatCheck.Results[0].Status === 'Archived') {
-            return {
-                ok: true,
-                message: 'The conversation is archived.',
-                agentReplyMode: 'MentionOnly',
-                allowedAgentIds: [],
-                defaultAgentId: null,
-                defaultAgentName: null,
-                agentHistoryFrom: null,
-                mentionPeople: [],
-                canStartConversation: false,
-                allowedConversationKinds: [],
-            };
-        }
         targetChatKind = chatCheck.Results[0].Kind;
+        targetChatArchived = chatCheck.Results[0].Status === 'Archived';
     }
 
     if (targetChatKind === 'Private') {
@@ -387,6 +375,22 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
+    }
+
+    // After the Internal Only check, so a caller who can't see Team never learns that an internal conversation is archived
+    if (targetChatArchived) {
+        return {
+            ok: true,
+            message: 'The conversation is archived.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
     }
 
     // 6. Item 16: Compute viewer's floor from Chats.HistoryOnAdd

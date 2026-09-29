@@ -25,6 +25,12 @@ export async function attachTestAgent(ctx: IntegrationCheckContext, spaceId: str
         `The test agent's DriverClass must be ${COLLABORATION_TEST_AGENT_DRIVER_CLASS} (saw ${agents[0].DriverClass ?? 'null'}).`,
     );
 
+    // A run that died between Setup and Teardown leaves its attachment behind: clear any before adding this one
+    const leftovers = await FindRows<{ ID: string }>(ctx, SPACE_AGENT_ENTITY, `AgentID = '${COLLABORATION_TEST_AGENT_ID}'`, ['ID']);
+    for (const leftover of leftovers) {
+        await detachTestAgent(ctx, leftover.ID);
+    }
+
     const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENT_ENTITY, ctx.User);
     attachment.NewRecord();
     attachment.AgentID = COLLABORATION_TEST_AGENT_ID;

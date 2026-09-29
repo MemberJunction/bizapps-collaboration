@@ -1,4 +1,4 @@
-import { CompositeKey, RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration/registry';
 import { Assert } from '@memberjunction/testing-integration/registry';
@@ -16,12 +16,17 @@ export function View(ctx: IntegrationCheckContext): RunView {
     return RunView.FromMetadataProvider(ctx.Provider as IMetadataProvider);
 }
 
+/**
+ * Reads rows with the caller's own filter. Pass `BypassCache` to re-read a query a check has already made
+ * when the server changed those rows behind the client's back (a save on another entity that writes them).
+ */
 export async function FindRows<T extends object>(
     ctx: IntegrationCheckContext,
     entityName: string,
     extraFilter: string,
     fields: string[],
     user?: UserInfo,
+    options?: { BypassCache?: boolean },
 ): Promise<T[]> {
     const res = await View(ctx).RunView<T>(
         {
@@ -29,6 +34,7 @@ export async function FindRows<T extends object>(
             ExtraFilter: extraFilter,
             Fields: fields,
             ResultType: 'simple',
+            BypassCache: options?.BypassCache,
         },
         user ?? ctx.User,
     );

@@ -1,6 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ITEM_ENTITY, PERSON_ENTITY } from '../entity-names.js';
-import { FindRows, View } from '../wire.js';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY } from '../entity-names.js';
+import { FindRows } from '../wire.js';
+import { registerChecks } from './cleanup-helpers.js';
 
 const checks: NamedCheck[] = [
     {
@@ -80,7 +81,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('collab-world', {
     Setup: async () => {},
     Teardown: async () => {},

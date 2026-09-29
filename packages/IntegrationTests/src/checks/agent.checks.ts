@@ -1,9 +1,9 @@
-import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { RunView } from '@memberjunction/core';
+import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { SearchEngine } from '@memberjunction/search-engine';
-import { resolveSpaceAgentRetrieval, postSpaceMessage, executeSpaceChatTurn, createSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
-import type { MJConversationEntity, MJConversationDetailEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
-import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval } from '@mj-biz-apps/collaboration-core-entities-server';
+import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
     AI_AGENT_PERMISSION_ENTITY,
@@ -12,15 +12,13 @@ import {
     AI_AGENT_SKILL_ENTITY,
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
-    CONVERSATION_ENTITY,
+    FILE_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
-    SPACE_CHAT_ENTITY,
     SPACE_ITEM_ENTITY,
-    FILE_ENTITY,
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, isClientTransport } from '../wire.js';
-import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
+import { cleanupConversation, registerChecks } from './cleanup-helpers.js';
 import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
@@ -32,8 +30,6 @@ const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 const FIELD_NOTES_SPACE_ID = 'C1000001-0000-4000-8000-000000000011';
-const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
-const CLOSED_OPEN_SPACE_ID = 'C1000001-0000-4000-8000-000000000009';
 const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015';
 
 const EXPECTED_BEA_DISCOVERY_SPACES = new Set([
@@ -52,7 +48,6 @@ const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
 const createdDetailIds: string[] = [];
 let testAgentAttachmentId: string | null = null;
 
-import { cleanupConversation } from './cleanup-helpers.js';
 
 const checks: NamedCheck[] = [
     {
@@ -739,7 +734,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
     // The turn checks run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
     Setup: async (ctx: IntegrationCheckContext) => {

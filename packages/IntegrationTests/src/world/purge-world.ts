@@ -16,7 +16,7 @@ import { readCsv } from './csv.js';
 import { coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
-import { COLLABORATION_BOX_PROVIDER_ID, COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
 
 function storedObjectPath(root: string, providerKey: string | null): string | null {
     const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
@@ -130,6 +130,10 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgentSkill') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAgentSkill WHERE SpaceID IN (${spaceIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgent') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAgent WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});

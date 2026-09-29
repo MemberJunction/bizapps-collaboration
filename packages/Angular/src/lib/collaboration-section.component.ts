@@ -1748,8 +1748,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             if (spaceChatsRes?.Success && spaceChatsRes.Results) {
                 for (const sc of spaceChatsRes.Results) {
-                    if (sc.ConversationID && !seenConvIds.has(sc.ConversationID)) {
-                        seenConvIds.add(sc.ConversationID);
+                    // One rail entry per conversation, whatever casing its rows carry
+                    if (sc.ConversationID && !seenConvIds.has(sc.ConversationID.toLowerCase())) {
+                        seenConvIds.add(sc.ConversationID.toLowerCase());
                         const isPrivate = sc.Kind === 'Private';
                         items.push({
                             id: sc.ConversationID,

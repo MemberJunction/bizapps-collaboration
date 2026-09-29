@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -222,7 +223,7 @@ interface SpaceNavPref {
                 <button
                   type="button"
                   class="space-nav-link convo-link"
-                  [class.active]="ActiveTab === 'Chat' && ActiveConversationId === c.id"
+                  [class.active]="ActiveTab === 'Chat' && IsActiveConversation(c.id)"
                   (click)="onConversationClick(c.id)"
                   [title]="c.name">
                   @if (c.kind === 'Private') {
@@ -933,6 +934,11 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() ExtraTabs: TabItem[] = [];
   @Input() Conversations: SpaceConversationItem[] = [];
   @Input() ActiveConversationId = '';
+
+  /** The URL keeps the casing it was given and the rows keep the database's, so compare IDs, never strings. */
+  public IsActiveConversation(conversationId: string): boolean {
+    return !!this.ActiveConversationId && UUIDsEqual(this.ActiveConversationId, conversationId);
+  }
   @Input() LibraryCount = 0;
   @Input() TaskCount = 0;
   @Input() MemberCount = 0;
