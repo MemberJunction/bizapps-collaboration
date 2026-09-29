@@ -31,7 +31,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     type AgentRetrieval,
     type CollaborationSettings,
-    DEFAULT_COLLABORATION_SETTINGS,
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
@@ -295,19 +294,15 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                         ? (JSON.parse(typeEntity.Configuration) as CollaborationSettings)
                         : (typeEntity.Configuration as CollaborationSettings);
             } catch (err) {
-                LogError(
-                    `ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${err instanceof Error ? err.message : String(err)}`
-                );
-                typeConfig = undefined;
+                const detail = err instanceof Error ? err.message : String(err);
+                LogError(`ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${detail}`);
+                // Fails closed: resolving without the type's narrowing would loosen what it restricts
+                throw new Error(`Space settings refused: the space type ${spaceTypeId} has a configuration that does not parse: ${detail}`);
             }
         }
 
-        let appConfig: CollaborationSettings | undefined;
-        try {
-            appConfig = this.CollaborationSettings;
-        } catch {
-            appConfig = DEFAULT_COLLABORATION_SETTINGS;
-        }
+        // A missing app settings row throws MissingAppSettingsError: the app's defaults are not a silent stand-in for it
+        const appConfig: CollaborationSettings = this.CollaborationSettings;
 
         return ResolveCollaborationSettings({
             spaces: spaceConfigs,

@@ -147,4 +147,27 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         expect(resolved.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
         expect(resolved.PostCloseAccess).toBe('ReadOnly'); // from app default
     });
+
+    describe('settings fail closed', () => {
+        type Internals = { _spaceTypes: Array<Partial<mjBizAppsCollaborationSpaceTypeEntity>>; _applicationSettings: unknown[] };
+
+        it('refuses to resolve when a space type configuration does not parse', () => {
+            const internals = engine as unknown as Internals;
+            internals._spaceTypes.push({ ID: 'TYPE-BAD', Code: 'bad', Name: 'Bad', Configuration: '{ not json' });
+            expect(() => engine.ResolveSettingsForSpace([], 'TYPE-BAD')).toThrow(/has a configuration that does not parse/);
+        });
+
+        it('refuses to resolve when the app settings row is missing, instead of falling back to defaults', () => {
+            const internals = engine as unknown as Internals;
+            const held = internals._applicationSettings;
+            internals._applicationSettings = [];
+            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            try {
+                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow();
+            } finally {
+                internals._applicationSettings = held;
+                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            }
+        });
+    });
 });

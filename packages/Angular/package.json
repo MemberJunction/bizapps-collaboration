@@ -8,7 +8,10 @@
   "mjUILayer": "surface",
   "publishConfig": { "access": "public" },
   "files": ["/dist"],
-  "scripts": { "build": "ngc" },
+  "scripts": {
+    "build": "ngc",
+    "test": "node --experimental-strip-types --test src/lib/logic/settings-model.test.ts src/lib/logic/conversation-list.test.ts src/lib/logic/upload-bands.test.ts src/lib/logic/seat-summary.test.ts src/lib/logic/selection-guard.test.ts"
+  },
   "license": "UNLICENSED",
   "dependencies": {
     "@mj-biz-apps/collaboration-core": "0.1.0",

@@ -140,7 +140,23 @@ export async function resolveSpaceChatHostRules(
     const targetSpace = spaceRes.Results[0];
 
     // 2. Resolve settings & reply mode using unified function (Item 16)
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, systemUser);
+    let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, systemUser);
+    } catch (settingsError) {
+        return {
+            ok: false,
+            message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
+    }
     const agentReplyMode = chatSettings.agentReplyMode;
 
     // 3. Resolve allowed agents & default agent

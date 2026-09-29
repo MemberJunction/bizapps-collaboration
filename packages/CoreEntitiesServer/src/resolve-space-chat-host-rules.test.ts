@@ -13,6 +13,7 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
+import { seedAppSettings } from './app-settings.test-support.ts';
 
 /** The shipped agent, read from the metadata that ships it: the resolver's own fallback constant can't vouch for itself. */
 const SHIPPED_AGENT = (
@@ -57,13 +58,16 @@ describe('resolveSpaceChatHostRules', () => {
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
 
+    let restoreAppSettings: () => void = () => undefined;
     before(() => {
+        restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
     });
 
     after(() => {
+        restoreAppSettings();
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
     });
 

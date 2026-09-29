@@ -8,6 +8,11 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
+import { allowedUploadBands } from './logic/upload-bands.js';
+import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
+import { buildSettingsModel, changedSettings } from './logic/settings-model.js';
+import { summarizeSeats } from './logic/seat-summary.js';
+import { isSelectionCurrent } from './logic/selection-guard.js';
 import {
     CollaborationClient,
     type GraphQLExecutor,
@@ -558,6 +563,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [SpaceBand]="spaceAudienceBand"
                             [ActiveTab]="activeTab"
                             [Conversations]="spaceConversations"
+                            [CanConfigure]="canConfigureCurrentSpace"
                             [ActiveConversationId]="activeConversationId"
                             [CanStartConversation]="canStartConversation"
                             [LibraryCount]="libraryTotalCount"
@@ -1016,9 +1022,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const currentUserId = this.currentUser?.ID;
         const member = currentUserId ? this.spaceMembers.find(m => UUIDsEqual(m.userId, currentUserId)) : undefined;
         const roleType = member?.roleId ? CollaborationEngineBase.Instance.SpaceRoleTypeById(member.roleId) : null;
-        if (!roleType) return ['Shared', 'Team'];
-        if (!roleType.CanSeeTeamBand) return ['Shared'];
-        return roleType.CanPromoteBand ? ['Shared', 'Team'] : ['Team'];
+        return allowedUploadBands(roleType);
     }
     public isUploading = false;
     public isNewConversationDialogOpen = false;
@@ -1317,9 +1321,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         backgroundImageUrl: '',
         inheritsMembership: true,
         agentRetrieval: 'Included',
-        retention: 'Indefinite',
+        retention: '',
+        typeDefaultRetention: 'Indefinite',
         status: 'Active',
     };
+    /** What the Settings screen showed when it opened: a save writes only what differs from it. */
+    private settingsBaseline: SpaceSettingsModel = { ...this.spaceSettings };
     public isSavingSettings = false;
     public settingsSaveSuccess = '';
 
@@ -1542,42 +1549,46 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
 
         // Initialize space settings model
-        this.spaceSettings = {
-            id: space.ID,
-            name: space.Name,
-            description: space.Description || '',
-            spaceType: resolvedType || 'Unknown Type',
-            spaceTypeId: space.SpaceTypeID,
-            iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
-            color: space.Color || typeDef?.color || '#0076b6',
-            backgroundImageUrl: space.BackgroundImageURL || '',
-            inheritsMembership: space.InheritsMembership === true,
-            agentRetrieval: (space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely') || 'Included',
-            retention: (space.Retention as 'Month' | 'Year' | 'Indefinite') || 'Indefinite',
-            status: space.ClosedAt ? 'Closed' : 'Active',
-        };
+        this.spaceSettings = buildSettingsModel(space, {
+            name: resolvedType || '',
+            icon: typeDef?.icon ?? null,
+            color: typeDef?.color ?? null,
+            defaultRetention: CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.DefaultRetention ?? null,
+        });
+        this.settingsBaseline = { ...this.spaceSettings };
 
         await this.updateCanConfigureCurrentSpace();
         if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
 
-        // Load items, conversation, tasks, members
-        await this.loadSpaceItems(spaceId);
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
-        await this.loadSpaceConversations(spaceId, this._pendingConvId ?? undefined);
+        // Each loader checks the selection itself, before it writes: a slow read for a space
+        // the person has already left must not put its lists under the space they're in now
+        const isCurrent = (): boolean => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId);
+        const pendingConvId = this._pendingConvId ?? undefined;
+        await this.loadSpaceItems(spaceId, isCurrent);
+        if (!isCurrent()) return;
+        await this.loadSpaceConversations(spaceId, isCurrent, pendingConvId);
+        if (!isCurrent()) return;
+        // Cleared only once this selection is known to be the current one, so a stale load can't drop a deep link
         this._pendingConvId = null;
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
-        await this.loadSpaceTasks(spaceId);
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
-        await this.loadSpaceMembers(spaceId);
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        await this.loadSpaceTasks(spaceId, isCurrent);
+        if (!isCurrent()) return;
+        await this.loadSpaceMembers(spaceId, isCurrent);
+        if (!isCurrent()) return;
         await this.loadSpaceChatHostRules(spaceId, this.activeConversationId || undefined);
-        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        if (!isCurrent()) return;
 
         this.syncStateWithAgent();
         this.RefreshView();
     }
 
-    private async loadSpaceItems(spaceId: string): Promise<void> {
+    /** A test that is true only while the space and the selection request in force now are still the ones in force. */
+    private currentSelection(): () => boolean {
+        const requestId = this.selectSpaceRequestId;
+        const spaceId = this.activeSpaceId;
+        return () => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId);
+    }
+
+    private async loadSpaceItems(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
@@ -1599,6 +1610,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 MaxRows: 100,
             });
 
+            if (!isCurrent()) return;
+            if (!itemsRes?.Success) {
+                LogError(`Failed to load space items for space ${spaceId}: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
+            }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
                 this.libraryRows = [];
                 this.libraryTotalCount = 0;
@@ -1641,9 +1656,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 });
                 if (filesRes?.Success && filesRes.Results) {
                     filesRes.Results.forEach(f => filesMap.set(f.ID, f));
+                } else {
+                    LogError(`Failed to read the files behind space ${spaceId}'s items: ${filesRes?.ErrorMessage ?? 'unknown error'}`);
                 }
             }
 
+            if (!isCurrent()) return;
             const rows: LibraryRowModel[] = [];
             const shared: ItemCardModel[] = [];
             const team: ItemRowModel[] = [];
@@ -1722,6 +1740,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             ];
         } catch (err) {
             LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
+            if (!isCurrent()) return;
             this.libraryRows = [];
             this.libraryTotalCount = 0;
             this.librarySharedCount = 0;
@@ -1731,7 +1750,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    private async loadSpaceConversations(spaceId: string, preferredConvId?: string): Promise<void> {
+    private async loadSpaceConversations(spaceId: string, isCurrent: () => boolean, preferredConvId?: string): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
@@ -1758,27 +1777,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 MaxRows: 100,
             });
 
-            const items: SpaceConversationItem[] = [];
-            const seenConvIds = new Set<string>();
-
+            if (!isCurrent()) return;
+            let items: SpaceConversationItem[] = [];
             if (spaceChatsRes?.Success && spaceChatsRes.Results) {
-                for (const sc of spaceChatsRes.Results) {
-                    // One rail entry per conversation, whatever casing its rows carry
-                    if (sc.ConversationID && !seenConvIds.has(sc.ConversationID.toLowerCase())) {
-                        seenConvIds.add(sc.ConversationID.toLowerCase());
-                        const isPrivate = sc.Kind === 'Private';
-                        items.push({
-                            id: sc.ConversationID,
-                            name: sc.Name || 'General',
-                            kind: sc.Kind || 'General',
-                            band: isPrivate ? 'Team' : 'Shared',
-                            unreadCount: 0,
-                        });
-                    }
-                }
+                items = buildConversationEntries(spaceChatsRes.Results);
             } else if (!spaceChatsRes?.Success) {
                 LogError(`Failed to load space conversations for space ${spaceId}: ${spaceChatsRes?.ErrorMessage ?? 'unknown error'}`);
             }
+            const seenConvIds = new Set(items.map(i => i.id.toLowerCase()));
 
             if (seenConvIds.size > 0) {
                 try {
@@ -1807,15 +1813,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
             }
 
+            if (!isCurrent()) return;
             this.spaceConversations = items;
 
-            if (preferredConvId && items.some(i => UUIDsEqual(i.id, preferredConvId))) {
-                this.activeConversationId = preferredConvId;
-            } else if (items.length > 0) {
-                this.activeConversationId = items[0].id;
-            } else {
-                this.activeConversationId = '';
-            }
+            this.activeConversationId = chooseActiveConversation(items, preferredConvId)?.id ?? '';
 
             const activeItem = items.find(i => UUIDsEqual(i.id, this.activeConversationId));
             this.chatAudienceBand = activeItem?.band === 'Team' ? 'Team' : 'Shared';
@@ -1866,7 +1867,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    private async loadSpaceTasks(spaceId: string): Promise<void> {
+    private async loadSpaceTasks(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
@@ -1888,6 +1889,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 MaxRows: 100,
             });
 
+            if (!isCurrent()) return;
+            if (!itemsRes?.Success) {
+                LogError(`Failed to load task items for space ${spaceId}: ${itemsRes?.ErrorMessage ?? 'unknown error'}`);
+            }
             if (!itemsRes?.Success || !itemsRes.Results || itemsRes.Results.length === 0) {
                 this.spaceTasks = [];
                 this.taskCount = 0;
@@ -1926,7 +1931,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 MaxRows: 100,
             });
 
-            if (tasksRes?.Success && tasksRes.Results) {
+            if (!isCurrent()) return;
+            if (!tasksRes?.Success) {
+                LogError(`Failed to load tasks for space ${spaceId}: ${tasksRes?.ErrorMessage ?? 'unknown error'}`);
+                this.spaceTasks = [];
+                this.taskCount = 0;
+            } else if (tasksRes.Results) {
                 this.spaceTasks = tasksRes.Results.map(t => {
                     const spaceItem = taskItemMap.get(t.ID.toLowerCase());
                     const assigned = t.AssignedTo || undefined;
@@ -1950,7 +1960,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    private async loadSpaceMembers(spaceId: string): Promise<void> {
+    private async loadSpaceMembers(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
@@ -1967,12 +1977,25 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 __mj_CreatedAt: string;
             }>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
+                // Every seat, not only Active ones: the People tab shows invited and removed seats, and re-inviting
+                // someone needs to find their old one. The header's counts leave the others out (summarizeSeats).
+                ExtraFilter: `SpaceID = '${spaceId}'`,
                 ResultType: 'simple',
                 MaxRows: 100,
             });
 
-            if (membersRes?.Success && membersRes.Results) {
+            if (!isCurrent()) return;
+            if (!membersRes?.Success || !membersRes.Results) {
+                // The previous space's people must not stay under this one
+                LogError(`Failed to load members for space ${spaceId}: ${membersRes?.ErrorMessage ?? 'unknown error'}`);
+                this.spaceMembers = [];
+                this.headerTotalPeople = 0;
+                this.headerStaffAvatars = [];
+                this.headerOutsideAvatars = [];
+                this.headerAudienceSummary = '';
+                return;
+            }
+            if (membersRes.Results) {
                 const userIds = [...new Set(membersRes.Results.map(m => m.UserID).filter(Boolean))];
                 const userEmailMap = new Map<string, string>();
                 if (userIds.length > 0) {
@@ -1994,6 +2017,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     }
                 }
 
+                if (!isCurrent()) return;
                 this.spaceMembers = membersRes.Results.map(m => {
                     const name = m.User || 'Member';
                     const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -2018,16 +2042,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     };
                 });
 
-                this.headerTotalPeople = this.spaceMembers.length;
-                this.headerStaffAvatars = this.spaceMembers
-                    .filter(m => m.band === 'Team')
-                    .map(m => ({ initials: m.initials, name: m.name, colorClass: 'c1' }));
-                this.headerOutsideAvatars = this.spaceMembers
-                    .filter(m => m.band === 'Shared')
-                    .map(m => ({ initials: m.initials, name: m.name, isOutside: true, colorClass: 'c2' }));
-                this.headerAudienceSummary = `${this.headerStaffAvatars.length} Team Staff · ${this.headerOutsideAvatars.length} Outside`;
-                const hasShared = this.spaceMembers.some(m => m.band === 'Shared');
-                this.spaceAudienceBand = hasShared ? 'Shared' : 'Team';
+                const seats = summarizeSeats(this.spaceMembers);
+                this.headerTotalPeople = seats.totalPeople;
+                this.headerStaffAvatars = seats.staffAvatars;
+                this.headerOutsideAvatars = seats.outsideAvatars;
+                this.headerAudienceSummary = seats.audienceSummary;
+                this.spaceAudienceBand = seats.audienceBand;
             }
         } catch (err) {
             LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
@@ -2145,6 +2165,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.activeConversationId = params['conv'];
                 this.chatAudienceBand = match.band === 'Team' ? 'Team' : 'Shared';
                 if (this.activeSpaceId && !UUIDsEqual(prevConvId, params['conv'])) {
+                    // Back and forward change the conversation in the URL: the Overview's messages follow it, so the new band
+                    // is never shown over the previous conversation's messages
+                    void this.loadOverviewMessages(params['conv']);
                     void this.loadSpaceChatHostRules(this.activeSpaceId, params['conv']);
                 }
             }
@@ -2472,7 +2495,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             item.band = 'Shared';
             item.flagCount = undefined;
         }
-        await this.loadSpaceItems(this.activeSpaceId);
+        await this.loadSpaceItems(this.activeSpaceId, this.currentSelection());
         this.RefreshView();
     }
 
@@ -2514,7 +2537,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!uploadRes.Success) {
                     throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');
                 }
-                await this.loadSpaceItems(this.activeSpaceId);
+                await this.loadSpaceItems(this.activeSpaceId, this.currentSelection());
                 this.isUploadDialogOpen = false;
                 SharedService.Instance.CreateSimpleNotification('File uploaded successfully.', 'info', 3000);
             }
@@ -2562,7 +2585,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.isNewConversationDialogOpen = false;
             SharedService.Instance.CreateSimpleNotification('Conversation created.', 'info', 3000);
 
-            await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID ?? undefined);
+            await this.loadSpaceConversations(this.activeSpaceId, this.currentSelection(), res.ConversationID ?? undefined);
             if (res.ConversationID) {
                 this.activeConversationId = res.ConversationID;
                 this.activeTab = 'Chat';
@@ -2733,7 +2756,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
             }
 
-            await this.loadSpaceTasks(this.activeSpaceId);
+            await this.loadSpaceTasks(this.activeSpaceId, this.currentSelection());
             SharedService.Instance.CreateSimpleNotification('Task created successfully.', 'info', 3000);
             this.RefreshView();
         } catch (err) {
@@ -2773,7 +2796,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
                 this.pendingChatMessageConversationId = res.ConversationID;
                 this.activeConversationId = res.ConversationID;
-                await this.loadSpaceConversations(this.activeSpaceId, res.ConversationID);
+                await this.loadSpaceConversations(this.activeSpaceId, this.currentSelection(), res.ConversationID);
                 await this.loadSpaceChatHostRules(this.activeSpaceId, res.ConversationID);
                 this.activeTab = 'Chat';
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
@@ -2853,7 +2876,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
 
-            await this.loadSpaceMembers(this.activeSpaceId);
+            await this.loadSpaceMembers(this.activeSpaceId, this.currentSelection());
             SharedService.Instance.CreateSimpleNotification('Member invited successfully.', 'info', 3000);
             this.RefreshView();
         } catch (err) {
@@ -2885,14 +2908,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const md = this.ProviderToUse;
             const spaceEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
             if (await spaceEntity.Load(targetId)) {
-                spaceEntity.Name = settings.name;
-                spaceEntity.Description = settings.description;
-                spaceEntity.IconClass = settings.iconClass;
-                spaceEntity.Color = settings.color;
-                spaceEntity.BackgroundImageURL = settings.backgroundImageUrl || null;
-                spaceEntity.InheritsMembership = settings.inheritsMembership;
-                spaceEntity.AgentRetrieval = settings.agentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
-                spaceEntity.Retention = (settings.retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
+                // Write only what the person changed from what the screen showed them, so a rename can't turn
+                // a type-default retention into a chosen one
+                const changes = changedSettings(this.settingsBaseline, settings);
+                if (Object.keys(changes).length === 0) {
+                    this.isSavingSettings = false;
+                    this.settingsSaveSuccess = 'No changes to save.';
+                    SharedService.Instance.CreateSimpleNotification(this.settingsSaveSuccess, 'info', 3000);
+                    this.RefreshView();
+                    return;
+                }
+                Object.assign(spaceEntity, changes);
                 const saveOk = await spaceEntity.Save();
                 if (!saveOk) {
                     const errMsg = spaceEntity.LatestResult?.CompleteMessage || 'Failed to save space settings.';
@@ -2903,6 +2929,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     return;
                 }
 
+                this.settingsBaseline = { ...settings };
                 this.spaceTitle = settings.name;
                 this.spaceSubtitle = settings.description;
                 this.headerTypeIcon = settings.iconClass;

@@ -287,14 +287,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         background-color: var(--mj-status-warning-bg, #fffbeb);
         color: var(--mj-status-warning-text, #92400e);
         border-top: 1px solid var(--mj-status-warning-border, #fde68a);
-        font-size: var(--mj-font-sm, 13px);
+        font-size: var(--mj-text-sm, 13px);
         font-weight: 500;
         z-index: 10;
       }
 
       .space-closed-banner i {
         font-size: 14px;
-        color: var(--mj-status-warning-icon, #d97706);
+        color: var(--mj-status-warning, #d97706);
       }
     `,
   ],

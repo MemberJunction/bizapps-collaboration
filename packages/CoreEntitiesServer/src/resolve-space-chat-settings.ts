@@ -42,23 +42,20 @@ export async function resolveSpaceChatSettings(
                 ? (JSON.parse(spaceType.Configuration) as CollaborationSettings)
                 : (spaceType.Configuration as CollaborationSettings);
         } catch (err) {
-            LogError(
-                `resolveSpaceChatSettings: Failed to parse type configuration for space type ${spaceChain.typeId}: ${err instanceof Error ? err.message : String(err)}`
-            );
-            typeConfig = null;
+            const detail = err instanceof Error ? err.message : String(err);
+            LogError(`resolveSpaceChatSettings: Failed to parse type configuration for space type ${spaceChain.typeId}: ${detail}`);
+            throw new Error(`Space settings refused: the space type ${spaceChain.typeId} has a configuration that does not parse: ${detail}`);
         }
     }
 
     const validConfigs: CollaborationSettings[] = [];
     for (const cfg of spaceChain.configs) {
         const val = ValidateCollaborationSettings(cfg, 'space', typeConfig ?? undefined);
-        if (val.valid) {
-            validConfigs.push(cfg);
-        } else {
-            LogError(
-                `resolveSpaceChatSettings: Invalid space configuration in chain for space ${spaceId}: ${val.errors.join(', ')}`
-            );
+        if (!val.valid) {
+            LogError(`resolveSpaceChatSettings: Invalid space configuration in chain for space ${spaceId}: ${val.errors.join(', ')}`);
+            throw new Error(`Space settings refused: a space in the chain of ${spaceId} has an invalid configuration: ${val.errors.join('; ')}`);
         }
+        validConfigs.push(cfg);
     }
 
     const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(

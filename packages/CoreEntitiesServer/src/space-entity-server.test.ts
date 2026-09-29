@@ -4,6 +4,8 @@ import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } fro
 import { isStaffUser, STAFF_ROLES } from '../dist/load-graph.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChangeContext } from '../dist/base-space-type-server-driver.js';
+import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { membershipReaches, type SpaceNode, type MemberSnapshot } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
@@ -625,5 +627,139 @@ describe('SpaceEntityServer close and reopen chat archiving and restoration', ()
         assert.equal(restoredChats.length, 1);
         assert.equal(restoredChats[0].status, 'Active');
         assert.equal(restoredChats[0].archivedOnSpaceClose, false);
+    });
+});
+
+describe('SpaceEntityServer type change', () => {
+    const OWNER_ID = '22222222-2222-4222-8222-222222222222';
+    const owner = { ID: OWNER_ID, UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+    const OLD_TYPE_ID = '44444444-4444-4444-8444-444444444444';
+    const NEW_TYPE_ID = '55555555-5555-4555-8555-555555555555';
+    const SPACE_ID = '33333333-3333-4333-8333-333333333333';
+
+    const typeRows = new Map<string, mjBizAppsCollaborationSpaceTypeEntity>();
+    const drivers = new Map<string, BaseSpaceTypeServerDriver>();
+    let mayConfigure = true;
+    let saved: {
+        engineLoaded: typeof CollaborationEngine.Instance.EnsureLoaded;
+        typeById: typeof CollaborationEngine.Instance.SpaceTypeById;
+        mayConfigure: typeof CollaborationEngine.Instance.UserCanConfigureSpaces;
+        driverFor: typeof ServerDriverRegistry.Instance.GetDriverForType;
+        systemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
+    };
+
+    function typeRow(id: string, extensionEntity: string | null): mjBizAppsCollaborationSpaceTypeEntity {
+        return { ID: id, Name: id, SpaceExtensionEntity: extensionEntity, DefaultAllowParentAssignees: true, DefaultAgentRetrieval: 'Included' } as Partial<mjBizAppsCollaborationSpaceTypeEntity> as mjBizAppsCollaborationSpaceTypeEntity;
+    }
+
+    /** A driver that records what it is asked to judge, and answers as told. */
+    class SpyDriver extends BaseSpaceTypeServerDriver {
+        public judged: SpaceChangeContext[] = [];
+        private readonly answer: DriverValidationResult;
+        constructor(answer: DriverValidationResult) {
+            super();
+            this.answer = answer;
+        }
+        public override ValidateSpaceChange(ctx: SpaceChangeContext): DriverValidationResult {
+            this.judged.push(ctx);
+            return this.answer;
+        }
+    }
+
+    function savedSpaceChangingType() {
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        const provider = { GetEntityObject: async () => ({}), EntityByID: () => ({}), EntityByName: () => ({}), Entities: [], CurrentUser: owner };
+        Object.defineProperties(space, {
+            ContextCurrentUser: { value: owner, writable: true },
+            IsSaved: { value: true, writable: true },
+            ID: { value: SPACE_ID, writable: true },
+            OwnerID: { value: OWNER_ID, writable: true },
+            ParentID: { value: null, writable: true },
+            SpaceTypeID: { value: NEW_TYPE_ID, writable: true },
+            Configuration: { value: null, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'SpaceTypeID', Dirty: true, OldValue: OLD_TYPE_ID, Value: NEW_TYPE_ID },
+                    { Name: 'OwnerID', Dirty: false },
+                ],
+                writable: true,
+            },
+            ProviderToUse: { value: provider, writable: true },
+            RunViewProviderToUse: { value: { RunView: async () => ({ Success: true, Results: [] }) }, writable: true },
+            EntityInfo: { value: { PrimaryKeys: [], Fields: [{ Name: 'SpaceTypeID' }] }, writable: true },
+        });
+        return space;
+    }
+
+    before(() => {
+        const engine = CollaborationEngine.Instance;
+        const registry = ServerDriverRegistry.Instance;
+        saved = {
+            engineLoaded: engine.EnsureLoaded.bind(engine),
+            typeById: engine.SpaceTypeById.bind(engine),
+            mayConfigure: engine.UserCanConfigureSpaces.bind(engine),
+            driverFor: registry.GetDriverForType.bind(registry),
+            systemUser: WellKnownUserSource.Instance.GetSystemUser.bind(WellKnownUserSource.Instance),
+        };
+        engine.EnsureLoaded = async () => undefined;
+        engine.SpaceTypeById = (id: string | null | undefined) => typeRows.get(String(id).toLowerCase());
+        engine.UserCanConfigureSpaces = async () => mayConfigure;
+        registry.GetDriverForType = (type) => drivers.get(type.ID) ?? new BaseSpaceTypeServerDriver();
+        WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
+    });
+    after(() => {
+        const engine = CollaborationEngine.Instance;
+        engine.EnsureLoaded = saved.engineLoaded;
+        engine.SpaceTypeById = saved.typeById;
+        engine.UserCanConfigureSpaces = saved.mayConfigure;
+        ServerDriverRegistry.Instance.GetDriverForType = saved.driverFor;
+        WellKnownUserSource.Instance.GetSystemUser = saved.systemUser;
+    });
+
+    function reset(options: { oldExtension?: string | null; newExtension?: string | null; configure?: boolean; oldAnswer?: DriverValidationResult }) {
+        typeRows.clear();
+        drivers.clear();
+        typeRows.set(OLD_TYPE_ID, typeRow(OLD_TYPE_ID, options.oldExtension ?? null));
+        typeRows.set(NEW_TYPE_ID, typeRow(NEW_TYPE_ID, options.newExtension ?? null));
+        const oldDriver = new SpyDriver(options.oldAnswer ?? { ok: true });
+        drivers.set(OLD_TYPE_ID, oldDriver);
+        mayConfigure = options.configure ?? true;
+        return oldDriver;
+    }
+
+    it('refuses an owner who lacks the Configure Spaces authorization', async () => {
+        const oldDriver = reset({ configure: false });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(savedSpaceChangingType());
+        assert.equal(res.Success, false);
+        assert.match(res.Errors.find((e) => e.Source === 'SpaceTypeID')?.Message ?? '', /needs the 'Configure Spaces' authorization/);
+        assert.equal(oldDriver.judged.length, 0, 'no driver judges a change the caller may not make');
+    });
+
+    it('refuses a change between types that do not share a subtype table', async () => {
+        const oldDriver = reset({ oldExtension: 'MJ_Example: Boards', newExtension: 'MJ_Example: Rooms' });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(savedSpaceChangingType());
+        assert.equal(res.Success, false);
+        assert.match(res.Errors.find((e) => e.Source === 'SpaceTypeID')?.Message ?? '', /do not share a subtype table/);
+        assert.equal(oldDriver.judged.length, 0);
+    });
+
+    it("has the previous type's driver judge the change, and stops when it refuses", async () => {
+        const oldDriver = reset({ oldAnswer: { ok: false, field: 'SpaceTypeID', message: 'A board cannot become a room.' } });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(savedSpaceChangingType());
+        assert.equal(res.Success, false);
+        assert.equal(res.Errors.find((e) => e.Source === 'SpaceTypeID')?.Message, 'A board cannot become a room.');
+        assert.equal(oldDriver.judged.length, 1);
+        assert.equal(oldDriver.judged[0].spaceType.ID, OLD_TYPE_ID);
+        assert.equal(oldDriver.judged[0].kind, 'Update');
+        assert.deepEqual(oldDriver.judged[0].oldValues, { SpaceTypeID: OLD_TYPE_ID });
+    });
+
+    it('does not treat a save that leaves the type alone as a type change', async () => {
+        const oldDriver = reset({ configure: false });
+        const space = savedSpaceChangingType();
+        Object.defineProperty(space, 'Fields', { value: [{ Name: 'SpaceTypeID', Dirty: false, OldValue: NEW_TYPE_ID, Value: NEW_TYPE_ID }, { Name: 'Name', Dirty: true }], writable: true });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Errors.find((e) => e.Source === 'SpaceTypeID' && /needs the 'Configure Spaces'/.test(e.Message)), undefined);
+        assert.equal(oldDriver.judged.length, 0);
     });
 });

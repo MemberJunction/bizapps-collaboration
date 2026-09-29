@@ -753,6 +753,28 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'write-gates.WG7',
+        Name: "WG7 — a space owner changing the space's type is refused: the change needs Configure Spaces",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Ada loads Discovery, a space she owns');
+            const others = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, `ID <> '${space.SpaceTypeID}' AND IsActive = 1`, ['ID']);
+            Assert(others.length > 0, 'The world has another active space type to change to');
+            const originalTypeId = space.SpaceTypeID;
+            space.SpaceTypeID = others[0].ID;
+            const saved = await space.Save();
+            Assert(!saved, "Ada, Discovery's owner, changing its type must be refused");
+            Assert(
+                (space.LatestResult?.CompleteMessage ?? '').includes("changing a space's type needs the 'Configure Spaces' authorization"),
+                `The refusal names the missing right: ${space.LatestResult?.CompleteMessage ?? ''}`,
+            );
+            const after = await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ENTITY, `ID = '${DISCOVERY_SPACE_ID}'`, ['SpaceTypeID']);
+            Assert(SameID(after[0]?.SpaceTypeID, originalTypeId), "Discovery's type is unchanged");
+        },
+    },
 ];
 
 registerChecks(checks);

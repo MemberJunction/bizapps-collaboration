@@ -6,6 +6,7 @@ import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/ex
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { seedAppSettings } from './app-settings.test-support.ts';
 
 function mockResult<T>(results: T[]): RunViewResult<T> {
     return {
@@ -36,7 +37,9 @@ describe('executeSpaceChatTurn', () => {
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
     let origRunAgent: typeof AgentRunner.prototype.RunAgent;
 
+    let restoreAppSettings: () => void = () => undefined;
     before(() => {
+        restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
@@ -63,6 +66,7 @@ describe('executeSpaceChatTurn', () => {
     });
 
     after(() => {
+        restoreAppSettings();
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
         AgentRunner.prototype.RunAgent = origRunAgent;
     });

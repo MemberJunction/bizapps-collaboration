@@ -14,6 +14,7 @@
 import {
     type AuthorizationInfo,
     type IMetadataProvider,
+    LogError,
     Metadata,
     RunView,
     type RunViewResult,
@@ -343,9 +344,15 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         const visited = new Set<string>();
 
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // Configuration fails closed: a chain that can't be read completely, or holds a configuration that doesn't
+        // parse, refuses the write or the turn instead of resolving with a link missing (extensibility plan § 4).
+        const refuse = (message: string): never => {
+            LogError(`LoadSpaceSettingsChain: ${message}`);
+            throw new Error(`Space settings refused: ${message}`);
+        };
         while (currentId && !visited.has(currentId.toLowerCase())) {
             if (!uuidRegex.test(currentId.trim())) {
-                break;
+                refuse(`'${currentId}' is not a valid space id.`);
             }
             visited.add(currentId.toLowerCase());
             const spaceRes: RunViewResult<{
@@ -366,21 +373,23 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
                 MaxRows: 1,
             }, contextUser);
 
-            if (!spaceRes.Success || !spaceRes.Results?.[0]) {
-                break;
+            if (!spaceRes.Success) {
+                refuse(`space ${currentId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+            }
+            if (!spaceRes.Results?.[0]) {
+                refuse(`space ${currentId} was not found.`);
             }
 
-            const row = spaceRes.Results[0];
+            const row = spaceRes.Results![0];
             if (!targetTypeId && row.SpaceTypeID) {
                 targetTypeId = row.SpaceTypeID;
             }
 
             if (row.Configuration) {
                 try {
-                    const parsed = JSON.parse(row.Configuration) as CollaborationSettings;
-                    configs.push(parsed);
-                } catch {
-                    // Ignore unparseable configs in ancestor chain
+                    configs.push(JSON.parse(row.Configuration) as CollaborationSettings);
+                } catch (parseError) {
+                    refuse(`space ${currentId} has a configuration that does not parse: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
                 }
             } else {
                 configs.push({});

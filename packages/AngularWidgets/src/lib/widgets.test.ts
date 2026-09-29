@@ -183,6 +183,24 @@ describe('CollabSpaceTabsComponent', () => {
   });
 });
 
+describe('CollabSpaceRailComponent open conversation', () => {
+  const ID = 'A1B2C3D4-0000-4000-8000-000000000001';
+
+  it('is the open one when the URL and the row differ only in case', () => {
+    const comp = new CollabSpaceRailComponent();
+    comp.ActiveConversationId = ID.toLowerCase();
+    expect(comp.IsActiveConversation(ID)).toBe(true);
+  });
+
+  it('is not the open one for another conversation, or when none is open', () => {
+    const comp = new CollabSpaceRailComponent();
+    comp.ActiveConversationId = ID;
+    expect(comp.IsActiveConversation('B1B2C3D4-0000-4000-8000-000000000002')).toBe(false);
+    comp.ActiveConversationId = '';
+    expect(comp.IsActiveConversation(ID)).toBe(false);
+  });
+});
+
 describe('CollabSpaceRailComponent', () => {
   it('emits NavSelectRequested when selectNav is called', () => {
     const comp = new CollabSpaceRailComponent();

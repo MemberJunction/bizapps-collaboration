@@ -115,8 +115,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (spaceType?.Configuration) {
             try {
                 typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
-            } catch {
-                // Ignore parse errors on type configuration in space save
+            } catch (parseErr) {
+                // Fails closed: saving under a type whose narrowing can't be read would loosen it
+                LogError(`Space change refused: space type ${spaceType.ID} has a configuration that does not parse: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+                return fail(result, 'SpaceTypeID', "Space change refused: the space type's configuration does not parse.");
             }
         }
 
@@ -183,6 +185,52 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
             } catch (driverErr) {
                 return fail(result, 'SpaceTypeID', driverErr instanceof Error ? driverErr.message : 'Space change refused: driver could not be resolved.');
+            }
+        }
+
+        // A change of type moves the space out from under its old type's rules, so it takes the same right as a
+        // configuration change, a subtype table both types share, and the judgement of both types' drivers.
+        const typeField = this.Fields.find((f) => f.Name === 'SpaceTypeID');
+        const typeChanged = this.IsSaved && !!typeField?.Dirty;
+        const previousTypeId = typeChanged && typeField?.OldValue ? parseUuid(String(typeField.OldValue)) : null;
+        if (typeChanged && spaceType) {
+            const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+            if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
+                return fail(result, 'SpaceTypeID', "Space change refused: changing a space's type needs the 'Configure Spaces' authorization and an owner seat on the space.");
+            }
+            const previousType = previousTypeId ? CollaborationEngine.Instance.SpaceTypeById(previousTypeId) : undefined;
+            if (!previousType) {
+                return fail(result, 'SpaceTypeID', "Space change refused: the space's previous type could not be read.");
+            }
+            if ((previousType.SpaceExtensionEntity ?? null) !== (spaceType.SpaceExtensionEntity ?? null)) {
+                return fail(result, 'SpaceTypeID', 'Space change refused: the two types do not share a subtype table, so the space cannot move between them.');
+            }
+            let previousConfig: ISpaceTypeConfiguration | null = null;
+            if (previousType.Configuration) {
+                try {
+                    previousConfig = JSON.parse(previousType.Configuration) as ISpaceTypeConfiguration;
+                } catch (parseErr) {
+                    LogError(`Space change refused: type ${previousType.ID} has a configuration that does not parse: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+                    return fail(result, 'SpaceTypeID', "Space change refused: the previous type's configuration does not parse.");
+                }
+            }
+            let previousDriver: BaseSpaceTypeServerDriver;
+            try {
+                previousDriver = ServerDriverRegistry.Instance.GetDriverForType(previousType);
+            } catch (driverErr) {
+                return fail(result, 'SpaceTypeID', driverErr instanceof Error ? driverErr.message : "Space change refused: the previous type's driver could not be resolved.");
+            }
+            const previousJudgement = await previousDriver.ValidateSpaceChange({
+                actingUser: user,
+                provider: this.ProviderToUse,
+                space: this,
+                spaceType: previousType,
+                effectiveRules: ResolveSpaceRules(previousConfig, parsedSpaceConfig as ISpaceConfiguration),
+                kind: 'Update',
+                oldValues: { SpaceTypeID: previousTypeId },
+            });
+            if (!previousJudgement.ok) {
+                return fail(result, previousJudgement.field ?? 'SpaceTypeID', previousJudgement.message ?? 'Space change refused by the previous type\'s driver.');
             }
         }
 
@@ -293,14 +341,19 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isMoving = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
 
         if (isClosing) {
-            const postClose = await CollaborationEngine.Instance.ResolvePostCloseAccessForSpace({
-                spaceId: this.ID,
-                currentConfig: parsedSpaceConfig,
-                parentId: this.ParentID,
-                spaceTypeId: this.SpaceTypeID,
-                provider: asMetadata(this.ProviderToUse) ?? Metadata.Provider,
-                contextUser: user,
-            });
+            let postClose: Awaited<ReturnType<typeof CollaborationEngine.Instance.ResolvePostCloseAccessForSpace>>;
+            try {
+                postClose = await CollaborationEngine.Instance.ResolvePostCloseAccessForSpace({
+                    spaceId: this.ID,
+                    currentConfig: parsedSpaceConfig,
+                    parentId: this.ParentID,
+                    spaceTypeId: this.SpaceTypeID,
+                    provider: asMetadata(this.ProviderToUse) ?? Metadata.Provider,
+                    contextUser: await requireSystemUser(this),
+                });
+            } catch (settingsError) {
+                return fail(result, 'ClosedAt', settingsError instanceof Error ? settingsError.message : 'Space settings refused.');
+            }
             this.PostCloseAccess = postClose.access;
             this.PostCloseAccessDays = postClose.days;
         }
@@ -315,6 +368,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 spaceType: spaceType as mjBizAppsCollaborationSpaceTypeEntity,
                 effectiveRules: adjustedRules,
                 kind: changeKind,
+                oldValues: typeChanged ? { SpaceTypeID: previousTypeId } : undefined,
             });
             if (!driverValidation.ok) {
                 return fail(result, driverValidation.field ?? 'ID', driverValidation.message ?? 'Space change refused by driver.');

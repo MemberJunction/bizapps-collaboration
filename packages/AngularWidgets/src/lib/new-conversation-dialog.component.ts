@@ -368,10 +368,19 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, 
   public ngOnInit(): void {
     if (typeof document !== 'undefined') {
       this.previousActiveElement = document.activeElement as HTMLElement | null;
-      setTimeout(() => {
-        this.nameInputElement?.nativeElement?.focus();
-      }, 0);
+      this.scheduleNameFocus();
     }
+  }
+
+  private focusTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Focuses the name field on the next turn, replacing any focus still pending so the timer can be cleared on destroy. */
+  private scheduleNameFocus(): void {
+    if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
+    this.focusTimer = setTimeout(() => {
+      this.focusTimer = undefined;
+      this.nameInputElement?.nativeElement?.focus();
+    }, 0);
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -379,14 +388,13 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, 
       const prev = changes['IsSubmitting'].previousValue;
       const curr = changes['IsSubmitting'].currentValue;
       if (prev === true && curr === false) {
-        setTimeout(() => {
-          this.nameInputElement?.nativeElement?.focus();
-        }, 0);
+        this.scheduleNameFocus();
       }
     }
   }
 
   public ngOnDestroy(): void {
+    if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
       this.previousActiveElement.focus();
     }
@@ -400,7 +408,7 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, 
     return this.name.trim();
   }
 
-  @HostListener('keydown', ['$event'])
+  // The document listener alone: a key pressed inside the dialog bubbles to it, so a host listener would run this twice
   @HostListener('document:keydown', ['$event'])
   public onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && this.modalRootElement?.nativeElement) {

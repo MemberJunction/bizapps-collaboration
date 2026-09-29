@@ -180,6 +180,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <div class="form-field">
               <label class="field-label">Retention Policy</label>
               <select [(ngModel)]="formData.retention" class="form-select">
+                <option value="">Type default ({{ formData.typeDefaultRetention || 'Indefinite' }})</option>
                 <option value="Indefinite">Indefinite (No automatic archiving)</option>
                 <option value="Year">1 Year</option>
                 <option value="Month">1 Month</option>

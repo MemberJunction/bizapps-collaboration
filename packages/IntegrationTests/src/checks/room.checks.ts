@@ -14,6 +14,7 @@ const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
+const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 
@@ -1040,6 +1041,88 @@ const checks: NamedCheck[] = [
                 if (samPostReopen.ok && samPostReopen.detailId) createdDetailIds.push(samPostReopen.detailId);
             } finally {
                 await cleanupSpace(ctx.Provider, ctx.User, testSpace.ID);
+            }
+        },
+    },
+    {
+        Id: 'room.RM12',
+        Name: "RM12 — a parent's narrowing override binds a sealed child whoever asks: a seat that cannot see the parent is refused under WhoCanStart=Owners",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const nora = await GetPersonaUser(ctx, 'nora');
+
+            const roles = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code IN ('owner', 'member')", ['ID', 'Code']);
+            const ownerRoleId = roles.find((r) => r.Code === 'owner')?.ID;
+            const memberRoleId = roles.find((r) => r.Code === 'member')?.ID;
+            Assert(!!ownerRoleId && !!memberRoleId, 'Owner and member space role types found');
+
+            const seat = async (as: typeof ada, spaceId: string, userId: string, roleId: string) => {
+                const member = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, as);
+                member.NewRecord();
+                member.SpaceID = spaceId;
+                member.UserID = userId;
+                member.SpaceRoleTypeID = roleId;
+                member.Band = 'Team';
+                member.Status = 'Active';
+                Assert(await member.Save(), `Seating ${userId} on ${spaceId}: ${member.LatestResult?.CompleteMessage ?? ''}`);
+                return member.ID;
+            };
+
+            const seatIds: string[] = [];
+            let configCaptured = false;
+            let originalConfig: string | null = null;
+            let samConvId: string | undefined;
+            let samChatId: string | undefined;
+            try {
+                // Dev, who holds Configure Spaces, owns Northwind for the check. Nora reaches the sealed child and nothing above it.
+                seatIds.push(await seat(ada, NORTHWIND_SPACE_ID, dev.ID, ownerRoleId!));
+                seatIds.push(await seat(sam, SEALED_CHILD_SPACE_ID, nora.ID, memberRoleId!));
+
+                const northwind = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await northwind.Load(NORTHWIND_SPACE_ID), 'Dev loads Northwind');
+                originalConfig = northwind.Configuration;
+                configCaptured = true;
+                const config = originalConfig ? JSON.parse(originalConfig) : {};
+                config.Chats = { ...(config.Chats ?? {}), WhoCanStart: 'Owners' };
+                northwind.Configuration = JSON.stringify(config);
+                Assert(await northwind.Save(), `Dev narrows Northwind to WhoCanStart=Owners: ${northwind.LatestResult?.CompleteMessage ?? ''}`);
+
+                // Nora cannot read Northwind, so a chain read as her would skip its override and let her start a chat
+                const noraRes = await createSpaceConversation(ctx.Provider, nora, { SpaceID: SEALED_CHILD_SPACE_ID, Name: `sealed-nora-${Date.now()}`, Kind: 'General' });
+                Assert(
+                    !noraRes.ok && noraRes.message === 'Caller is not permitted to start a conversation in this space.',
+                    `Nora, a member who cannot see Northwind, is refused under Northwind's WhoCanStart=Owners: ${noraRes.ok ? 'she was allowed' : noraRes.message}`,
+                );
+                if (noraRes.ok) {
+                    await cleanupConversation(ctx.Provider, ctx.User, noraRes.conversationId, noraRes.spaceChatId);
+                }
+
+                // Sam owns the sealed child, so the same override lets him
+                const samRes = await createSpaceConversation(ctx.Provider, sam, { SpaceID: SEALED_CHILD_SPACE_ID, Name: `sealed-sam-${Date.now()}`, Kind: 'General' });
+                samConvId = samRes.conversationId;
+                samChatId = samRes.spaceChatId;
+                Assert(samRes.ok === true, `Sam, the sealed child's owner, may start a conversation: ${samRes.message ?? ''}`);
+            } finally {
+                if (samConvId || samChatId) {
+                    await cleanupConversation(ctx.Provider, ctx.User, samConvId, samChatId);
+                }
+                if (configCaptured) {
+                    await cleanupStep(async () => {
+                        const restore = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                        Assert(await restore.Load(NORTHWIND_SPACE_ID), 'Reload Northwind to restore its configuration');
+                        restore.Configuration = originalConfig;
+                        Assert(await restore.Save(), `Restoring Northwind's configuration: ${restore.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                        Assert(await verify.Load(NORTHWIND_SPACE_ID), 'Read Northwind back after the restore');
+                        Assert(verify.Configuration === originalConfig, "Northwind's configuration is back to what it was");
+                    });
+                }
+                for (const id of seatIds.reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, id, 'the RM12 seat');
+                }
             }
         },
     },

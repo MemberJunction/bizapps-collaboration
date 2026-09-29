@@ -155,17 +155,19 @@ interface SpaceNavPref {
                 }
               </button>
 
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Settings'"
-                (click)="onTabClick('Settings')"
-                [title]="isCollapsed ? 'Settings & Assistant' : ''">
-                <i class="fa-solid fa-sliders link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Settings &amp; Assistant</span>
-                }
-              </button>
+              @if (CanConfigure) {
+                <button
+                  type="button"
+                  class="space-nav-link"
+                  [class.active]="ActiveTab === 'Settings'"
+                  (click)="onTabClick('Settings')"
+                  [title]="isCollapsed ? 'Settings & Assistant' : ''">
+                  <i class="fa-solid fa-sliders link-icon"></i>
+                  @if (!isCollapsed) {
+                    <span class="link-label">Settings &amp; Assistant</span>
+                  }
+                </button>
+              }
 
               <!-- Dynamic Plugin Tabs (from drivers e.g. Meetings, Papers, Motions) -->
               @for (tab of ExtraTabs; track tab.id) {
@@ -236,17 +238,12 @@ interface SpaceNavPref {
 
                   @if (!isCollapsed) {
                     <span class="link-label">{{ c.name }}</span>
-                    @if (c.unreadCount) {
-                      <span class="link-badge unread">{{ c.unreadCount }}</span>
-                    }
                     <span
                       class="band-dot"
                       [class.shared]="c.band === 'Shared'"
                       [class.team]="c.band === 'Team'"
                       [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
                     </span>
-                  } @else if (c.unreadCount) {
-                    <span class="collapsed-unread-dot" [title]="c.unreadCount + ' unread'"></span>
                   }
                 </button>
               }
@@ -592,7 +589,7 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 6px;
       background: transparent;
-      border: 1px dashed #64748b;
+      border: 1px dashed var(--mj-text-muted);
       color: var(--mj-text-secondary, #475569);
       cursor: pointer;
       display: inline-grid;
@@ -671,26 +668,6 @@ interface SpaceNavPref {
       border-radius: 99px;
       font-family: var(--mj-font-family-mono, monospace);
     }
-    .link-badge.unread {
-      background: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-brand-on-primary, #ffffff);
-    }
-    :host-context([data-theme="dark"]) .link-badge.unread,
-    :host-context(.dark) .link-badge.unread,
-    [data-theme="dark"] .link-badge.unread {
-      background: var(--mj-brand-primary, #2699cc);
-      color: #0b1528;
-    }
-    .collapsed-unread-dot {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--mj-brand-primary, #0076b6);
-    }
-
     .convo-link {
       padding-left: 12px;
     }
@@ -932,6 +909,9 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() SpaceBand: SpaceBand = 'Shared';
   @Input() ActiveTab = 'Overview';
   @Input() ExtraTabs: TabItem[] = [];
+
+  /** Whether the caller may configure this space. Settings & Assistant is offered only to those who can. */
+  @Input() CanConfigure = false;
   @Input() Conversations: SpaceConversationItem[] = [];
   @Input() ActiveConversationId = '';
 

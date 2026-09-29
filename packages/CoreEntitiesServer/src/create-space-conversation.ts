@@ -95,8 +95,15 @@ export async function createSpaceConversation(
         return { ok: false, message: 'Caller does not reach this space.' };
     }
 
-    // 1. Check Chats.WhoCanStart and allowed kinds
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, user);
+    // 1. Check Chats.WhoCanStart and allowed kinds. The chain is read as the system user, as the host rules and the turn read it:
+    // what the caller can see of the tree must not change which narrowing overrides apply.
+    const system = await requireSystemUser(probe);
+    let chatSettings;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    } catch (settingsError) {
+        return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
+    }
     const whoCanStart = chatSettings.resolvedSettings.Chats?.WhoCanStart ?? 'Anyone';
 
     const startPerms = evaluateCanStartSpaceConversation(
@@ -117,7 +124,6 @@ export async function createSpaceConversation(
         return { ok: false, message: `Caller cannot start a ${targetKind} conversation.` };
     }
 
-    const system = await requireSystemUser(probe);
 
     // 2. Create Conversation and SpaceChat in one transaction owned by system user
     const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);

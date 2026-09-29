@@ -169,7 +169,12 @@ export async function executeSpaceChatTurn(
     }
 
     // 5. Unified settings resolution (Item 16)
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    } catch (settingsError) {
+        return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
+    }
     const agentReplyMode = chatSettings.agentReplyMode;
     const historyOnAdd = chatSettings.historyOnAdd;
 
