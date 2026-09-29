@@ -689,3 +689,17 @@ describe('ExampleDealRoomSignalProvider', () => {
         expect(signals[0].observedAt).toBeInstanceOf(Date);
     });
 });
+
+describe('a setting that does not parse is refused, not read as empty', () => {
+    it('throws on an unparseable configuration and on a list of the wrong shape', () => {
+        const badJson = { ...createMockSpaceType('example-room'), Configuration: '{ not json' } as unknown as mjBizAppsCollaborationSpaceTypeEntity;
+        const driver = new ExampleRoomServerDriver();
+        const ctx = (type: mjBizAppsCollaborationSpaceTypeEntity): MessageValidationContext => ({
+            actingUser: createMockUser(), provider: {} as unknown as IMetadataProvider, space: createMockSpace(), spaceType: type,
+            effectiveRules: createMockRules(), chatId: 'c', messageText: 'hello',
+        });
+        expect(() => driver.ValidateMessage(ctx(badJson))).toThrow(/does not parse/);
+        const wrongShape = createMockSpaceType('example-room', { BlockedPhrases: 'confidential' });
+        expect(() => driver.ValidateMessage(ctx(wrongShape))).toThrow(/BlockedPhrases must be a list of strings/);
+    });
+});

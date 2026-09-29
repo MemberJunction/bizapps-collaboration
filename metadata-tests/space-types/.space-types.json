@@ -32,7 +32,8 @@
           "AgentReplyMode": "MentionOnly"
         },
         "SpaceOverridable": [
-          "Chats.WhoCanStart"
+          "Chats.WhoCanStart",
+          "Extensions.example-board"
         ],
         "Extensions": {
           "example-board": {
@@ -71,7 +72,9 @@
         "Children": {
           "AllowedTypeCodes": []
         },
-        "SpaceOverridable": [],
+        "SpaceOverridable": [
+          "Extensions.example-room"
+        ],
         "Extensions": {
           "example-room": {
             "AnchorEntities": [

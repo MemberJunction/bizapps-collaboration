@@ -305,6 +305,30 @@ const checks: NamedCheck[] = [
             Assert(await space.Save(), `Ada creates an example board: ${space.LatestResult?.CompleteMessage ?? ''}`);
             try {
                 await seatOwner(ctx, ada, space.ID);
+                // Motions open (a setting the type lets a space hold): the board can't be closed, and can once none are
+                // Dev holds Configure Spaces; Ada seats Dev as an owner of this board so the settings can be saved
+                const dev = await GetPersonaUser(ctx, 'dev');
+                const ownerRole = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']))[0].ID;
+                const devSeat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                devSeat.NewRecord();
+                devSeat.SpaceID = space.ID;
+                devSeat.UserID = dev.ID;
+                devSeat.SpaceRoleTypeID = ownerRole;
+                devSeat.Band = 'Team';
+                devSeat.Status = 'Active';
+                Assert(await devSeat.Save(), `Ada seats Dev as owner: ${devSeat.LatestResult?.CompleteMessage ?? ''}`);
+                const withMotions = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await withMotions.Load(space.ID), 'The board loads for Ada');
+                withMotions.Configuration = JSON.stringify({ Extensions: { 'example-board': { OpenMotions: 2 } } });
+                Assert(await withMotions.Save(), `The type lets a board hold OpenMotions: ${withMotions.LatestResult?.CompleteMessage ?? ''}`);
+                withMotions.ClosedAt = new Date(Date.now() - 60_000);
+                Assert(!(await withMotions.Save()), 'A board with motions open must not close');
+                Assert(/motions are open/.test(withMotions.LatestResult?.CompleteMessage ?? ''), `The board's own message comes back: ${withMotions.LatestResult?.CompleteMessage ?? ''}`);
+                const noMotions = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await noMotions.Load(space.ID), 'The board reloads');
+                noMotions.Configuration = JSON.stringify({ Extensions: { 'example-board': { OpenMotions: 0 } } });
+                Assert(await noMotions.Save(), `OpenMotions goes back to none: ${noMotions.LatestResult?.CompleteMessage ?? ''}`);
+
                 const open = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
                 Assert(await open.Load(space.ID), 'The board loads');
                 Assert(!(await open.Delete()), 'The delete of an open board must be refused');

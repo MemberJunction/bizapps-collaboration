@@ -191,23 +191,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
                 @if (CanManageSeats) {
                   <div class="td-actions">
-                    @if (m.canManage && !m.inherited) {
+                    @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
                       @if (pending?.id === m.id) {
                         <span class="fs12">{{ pendingQuestion(m) }}</span>
-                        <button type="button" class="send-invite-btn" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" class="send-invite-btn" [disabled]="busy" (click)="ConfirmPending()">Confirm</button>
                         <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
                       } @else {
-                        @if (m.status === 'Invited') {
+                        @if (m.canApprove) {
                           <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
                         }
-                        @if (m.status === 'Active' && RoleOptions.length > 0) {
+                        @if (m.canChangeRole && RoleOptions.length > 0) {
                           <select class="invite-select role-select" [attr.aria-label]="'Change role for ' + m.name" [ngModel]="m.roleCode" (ngModelChange)="AskRole(m, $event)">
                             @for (option of roleChoicesFor(m); track option.code) {
                               <option [value]="option.code">{{ option.label }}</option>
                             }
                           </select>
                         }
-                        @if (m.status !== 'Removed') {
+                        @if (m.canRemove) {
                           <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Remove ' + m.name" (click)="Ask(m, 'remove')">Remove</button>
                         }
                       }
@@ -594,6 +594,8 @@ export class CollabSpacePeopleComponent {
   /** The action waiting for its confirmation. */
   public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
   /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
+  /** True while a confirmed change is with the server: Confirm can't be pressed twice. */
+  @Input() busy = false;
   public linkStatus = signal<'idle' | 'copied' | 'failed'>('idle');
   /** Where Copy writes. The browser's clipboard when there is one (there isn't on a plain-HTTP host). */
   @Input() Clipboard: Pick<Clipboard, 'writeText'> | null = typeof navigator !== 'undefined' ? navigator.clipboard ?? null : null;

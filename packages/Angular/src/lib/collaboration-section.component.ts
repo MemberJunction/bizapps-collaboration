@@ -18,6 +18,7 @@ import { formatDate as formatDateLocale, formatDateTime } from './logic/format-d
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
+import { seatActions } from './logic/seat-actions.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
 import { accessChain, nearestSeats } from './logic/reached-people.js';
 import { shareAudience } from './logic/share-audience.js';
@@ -29,6 +30,7 @@ import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
+    type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
@@ -977,6 +979,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeamSide]="canSeeTeamSide"
                                                     [RoleOptions]="grantableRoleOptions"
                                                     [CanManageSeats]="canInviteHere"
+                                                    [busy]="isChangingSeat"
                                                     (InviteMemberRequested)="onInviteMember($event)"
                                                     (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
                                                     (ApproveMemberRequested)="onApproveMember($event)"
@@ -2281,10 +2284,33 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** Whether the caller's seat may approve, remove or change a seat holding `role`: it can invite and the role is within its ceiling. */
-    private mayManageSeat(role: { Level: number } | null | undefined): boolean {
+    /** The seat actions to offer on one of this space's own seats, by the gate's rules (see `seatActions`). */
+    private actionsFor(
+        seat: { ID: string; UserID: string; Status: string },
+        roleType: mjBizAppsCollaborationSpaceRoleTypeEntity | null | undefined,
+        inherited: boolean,
+        all: ReadonlyArray<{ row: { UserID: string; Status: string; SpaceRoleTypeID?: string | null }; inherited: boolean }>,
+    ): { canApprove: boolean; canRemove: boolean; canChangeRole: boolean } {
+        const none = { canApprove: false, canRemove: false, canChangeRole: false };
         const mine = this.callerSeat?.role;
-        return !!mine && mine.canInvite && (role?.Level ?? 0) <= mine.maxGrantableLevel;
+        if (inherited || !mine || !roleType) return none;
+        const spaceType = CollaborationEngineBase.Instance.SpaceTypeById(this.activeSpaceRecord?.SpaceTypeID);
+        const activeOwners = all.filter(a => !a.inherited && a.row.Status === 'Active'
+            && !!a.row.SpaceRoleTypeID && CollaborationEngineBase.Instance.SpaceRoleTypeById(a.row.SpaceRoleTypeID)?.IsOwnerRole);
+        const actions = seatActions({
+            caller: mine,
+            typeApprovesInvites: spaceType?.InviteApproval !== 'AutoApprove',
+            target: {
+                status: seat.Status,
+                role: {
+                    level: roleType.Level, maxGrantableLevel: roleType.MaxGrantableLevel, canInvite: roleType.CanInvite, canPromoteBand: roleType.CanPromoteBand,
+                    canSeeTeamBand: roleType.CanSeeTeamBand, isOwnerRole: roleType.IsOwnerRole, canContribute: roleType.CanContribute,
+                },
+                isSelf: !!this.currentUser && UUIDsEqual(seat.UserID, this.currentUser.ID),
+                isOnlyActiveOwner: roleType.IsOwnerRole && activeOwners.length === 1 && UUIDsEqual(activeOwners[0].row.UserID, seat.UserID),
+            },
+        });
+        return { canApprove: actions.approve, canRemove: actions.remove, canChangeRole: actions.changeRole };
     }
 
     private async loadSpaceMembers(spaceId: string, isCurrent: () => boolean): Promise<void> {
@@ -2379,7 +2405,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         inherited,
                         source: inherited ? (from.name || 'a parent space') : undefined,
                         ownSeatNote: ownSeatStatus ? `Their own seat here is ${ownSeatStatus}` : undefined,
-                        canManage: !inherited && this.mayManageSeat(roleType),
+                        ...this.actionsFor(m, roleType, inherited, reached),
                     };
                 });
 
@@ -2389,6 +2415,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.headerOutsideAvatars = seats.outsideAvatars;
                 this.headerAudienceSummary = seats.audienceSummary;
                 this.spaceAudienceBand = seats.audienceBand;
+                // The Discussion card's outside ring needs the seats: map its messages again now that they are here
+                if (this.activeConversationId) void this.loadOverviewMessages(this.activeConversationId, isCurrent);
             }
         } catch (err) {
             LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
@@ -3305,7 +3333,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Changes one of this space's own seats, then reads the people again. A refusal is shown as the server worded it. */
+    public isChangingSeat = false;
+
     private async changeSeat(member: SpaceMemberModel, change: (seat: mjBizAppsCollaborationSpaceMemberEntity) => void, doing: string): Promise<void> {
+        if (this.isChangingSeat) return;
+        this.isChangingSeat = true;
         const spaceId = this.activeSpaceId;
         const isCurrent = this.currentSelection();
         try {
@@ -3322,12 +3354,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             SharedService.Instance.CreateSimpleNotification(`Done: ${doing} for ${member.name}.`, 'info', 3000);
+            // A change to the caller's own seat changes what they may do here: resolve the seat (and the right to configure) again
+            if (this.currentUser && UUIDsEqual(member.userId, this.currentUser.ID) && isCurrent()) {
+                const space = this.activeSpaceRecord;
+                if (space) await this.updateBandChoice(space, isCurrent);
+                await this.updateCanConfigureCurrentSpace();
+            }
             await this.loadSpaceMembers(spaceId, isCurrent);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError(`Could not ${doing}: ${msg}`);
             SharedService.Instance.CreateSimpleNotification(`Could not ${doing}: ${msg}`, 'error', 6000);
         } finally {
+            this.isChangingSeat = false;
             this.RefreshView();
         }
     }

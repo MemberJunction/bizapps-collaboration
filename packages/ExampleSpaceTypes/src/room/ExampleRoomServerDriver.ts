@@ -44,7 +44,7 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
             };
         }
         // The entities a room may be anchored to come from the type's configuration (`Extensions.example-room.AnchorEntities`)
-        const anchorEntities = stringList(readExtension(ctx.spaceType.Configuration, KEY)['AnchorEntities']);
+        const anchorEntities = stringList(readExtension(ctx.spaceType.Configuration, KEY)['AnchorEntities'], 'AnchorEntities');
         const entityName = (ctx.entityName ?? '').toLowerCase().trim();
         if (!anchorEntities.includes(entityName)) {
             return {
@@ -96,7 +96,7 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
         ctx: MemberChangeContext
     ): DriverValidationResult {
         if (ctx.kind !== 'Invite') return { ok: true };
-        const optedOut = stringList(readExtension(ctx.space.Configuration, KEY)['OptedOutUserIds']);
+        const optedOut = stringList(readExtension(ctx.space.Configuration, KEY)['OptedOutUserIds'], 'OptedOutUserIds');
         if (optedOut.includes((ctx.member.UserID ?? '').toLowerCase())) {
             return { ok: false, message: 'This contact has opted out of communications.', field: 'UserID' };
         }
@@ -121,7 +121,7 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
         ctx: MessageValidationContext
     ): DriverValidationResult {
         const text = (ctx.messageText ?? '').toLowerCase();
-        const blocked = stringList(readExtension(ctx.spaceType.Configuration, KEY)['BlockedPhrases']);
+        const blocked = stringList(readExtension(ctx.spaceType.Configuration, KEY)['BlockedPhrases'], 'BlockedPhrases');
         if (blocked.some((phrase) => text.includes(phrase))) {
             return {
                 ok: false,
@@ -193,7 +193,7 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
         provider: IMetadataProvider
     ): Promise<SyncSeatsResult> {
         // Filter out any contacts who opted out (`Extensions.example-room.OptedOutEmails` on the room's configuration)
-        const optedOut = stringList(readExtension(space.Configuration, KEY)['OptedOutEmails']);
+        const optedOut = stringList(readExtension(space.Configuration, KEY)['OptedOutEmails'], 'OptedOutEmails');
         const eligiblePeople = people.filter((p) => !optedOut.includes((p.Email ?? '').toLowerCase().trim()));
         return super.SyncSeats(space, source, eligiblePeople, actingUser, provider);
     }

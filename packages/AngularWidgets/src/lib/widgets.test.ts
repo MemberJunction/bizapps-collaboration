@@ -995,7 +995,7 @@ describe('the share dialog says when nothing was reviewed', () => {
 });
 
 describe('the People tab acts on seats and shows the invite the way the seat may make it', () => {
-  const pat: SpaceMemberModel = { id: 'm9', userId: 'u9', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Guest', roleCode: 'guest', band: 'Shared', status: 'Invited', canManage: true };
+  const pat: SpaceMemberModel = { id: 'm9', userId: 'u9', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Guest', roleCode: 'guest', band: 'Shared', status: 'Invited', canApprove: true, canRemove: true, canChangeRole: false };
 
   it('starts the invite form on the highest role the seat may grant', () => {
     const comp = new CollabSpacePeopleComponent();

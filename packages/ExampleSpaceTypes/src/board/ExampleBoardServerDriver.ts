@@ -86,7 +86,7 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
         if (childTypeCode === 'example-room') {
             return { ok: false, message: 'Boards cannot contain Deal Rooms.', field: 'ParentID' };
         }
-        const sealedNames = stringList(readExtension(ctx.spaceType.Configuration, KEY)['SealedChildNames']);
+        const sealedNames = stringList(readExtension(ctx.spaceType.Configuration, KEY)['SealedChildNames'], 'SealedChildNames');
         const childName = (ctx.childSpace.Name ?? '').toLowerCase();
         if (ctx.childSpace.InheritsMembership && sealedNames.some((name) => childName.includes(name))) {
             return {
