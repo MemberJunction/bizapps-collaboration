@@ -30,7 +30,7 @@
 - **Closing a space** archives its conversations, and reopening restores them. A closed space's chat is read-only.
 
 It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of the items #7 handed over ([#8's plan § 1](pr8-plan.md#what-7-moved-here)) only the chat's row is done. **At the merge:**
-- **CI is red only for D37.** The widgets and the turn use types that are only on MJ `next` until the first edge release carrying [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788) is pinned. That release is expected on 2026-09-29, in the evening.
+- **CI is red only for D37.** The widgets and the turn use types that exist only on MJ `next`, from [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788). For now there's no version pin (D39): the work runs on MJ `next` in a local workspace ([§ 3.1](#31-working-on-mj-next)), so CI stays red on those types until a release carrying them is pinned.
 - **Tests,** in a clean copy of `b80bab6` on 6.1.3: Core's 116, EngineBase's 4, CoreEntitiesServer's 127 and IntegrationTests' 41 pass. The widgets' and ExampleSpaceTypes' tests need MJ `next`.
 - **The chat's defects** are in [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958), of `b80bab6`, and they're stage 0.
 - **#8's last commit, `ad5ffef`,** opens documents in Explorer. Amith asked for it after the final review, and it wasn't reviewed; PR 9's first punch list reviews it.
@@ -39,28 +39,29 @@ It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of t
 
 | Stage | What | Pull request | Starts after |
 |---|---|---|---|
-| **0** | Finish the chat: pin the edge release, fix #8's final review, walk the UI for what isn't built, and test the extension model end to end. It ends with a review of the findings | PR 9 | #8's merge |
+| **0** | Finish the chat, on MJ `next` in a local workspace: fix #8's final review first, then walk the UI for what isn't built and test the extension model end to end. It ends with a review of the findings | PR 9 | #8's merge |
 | **1** | The schema: B14, B15, B21's and B22's tables, `DataReach`, one baseline, CI against a database | Its own | Stage 0 |
 | **2** | The server: B16, B17, B18 and B24, with [#8's plan § 4](pr8-plan.md#4-what-it-depends-on)'s grants closed | Its own | Stage 1 |
 | **3** | Agents: B20 | Its own | Stage 2 |
 | **4** | The screens (D16): B19, notes, pins, the walkthrough and the documents | Its own | Stage 3 |
 | **5** | Ready for a first host | Its own | Stage 4 |
-| **Then** | [Views and dashboards with properties](#6-after-mj4789-ships-views-and-dashboards-with-properties), and [the rest of the plan](#7-the-rest-of-the-plan) | Their own | A release carrying MJ#4789, and stage 5 |
+| **Then** | [Views and dashboards with properties](#6-after-mj4789-ships-views-and-dashboards-with-properties), and [the rest of the plan](#7-the-rest-of-the-plan) | Their own | MJ#4789 in MJ's `next`, and stage 5 |
 
 ## 3. Stage 0: finish the chat, and learn the app
 
-### 3.1 The pin
+### 3.1 Working on MJ `next`
 
-When MemberJunction's first edge release carrying MJ#4788 is out:
-1. Move every exact `@memberjunction/*` pin from `6.1.3` to that release: the root `package.json` and each package's `devDependencies`. Widen each package's `peerDependencies` and `mj-app.json`'s `mjVersionRange` to admit it: a caret range on `6.1.x` doesn't match a `6.2.0` prerelease.
-2. Update `pnpm-lock.yaml` with the same change, and check that `node_modules/.pnpm` holds one `@memberjunction/core`.
-3. Build and test from a clean clone with `pnpm install --frozen-lockfile`, as CI does. The build, the widgets' tests and ExampleSpaceTypes' tests pass there.
+For now there's no version pin (Amith, 2026-09-29; the plan's D39). The work runs in a local pnpm workspace where MemberJunction's `next` branch and the app repos sit side by side, so every change builds against MJ's latest source:
+1. **A plain parent folder of sibling clones:** MJ on `next`; bizapps-collaboration on this pull request's branch, `claude/hopeful-bell-6ldk4v`; the repos it depends on, bizapps-common and bizapps-tasks; and any other repo you change.
+2. **One workspace over them,** made by `mj dev workspace`, as [MJ's quickstart](https://github.com/MemberJunction/MJ/blob/next/guides/DEV_WORKSPACE_QUICKSTART.md) says: build MJ once, run the generator from the parent, and let it remove the members' own installs. Install and build only from the parent. Never install inside a member, and never hand-link packages.
+3. **No pin and no lockfile churn.** Leave the `@memberjunction/*` versions in every `package.json`, and the repo's own `pnpm-lock.yaml`, as they are: the workspace links MJ's source whatever they say.
+4. **A database of your own.** Two agents migrating or pushing metadata to one database break each other. Apply MJ core's migrations, then bizapps-common's and bizapps-tasks', then this app's (`pnpm run mj:migrate`) and its metadata (`pnpm run mj:push`), and load the world ([the data guide](../docs/reviewing-the-data.md)).
 
-Until the release is out, work against MJ `next` in the shared workspace (D37), and start on the rest.
+CI installs published packages, so it stays red on the `next`-only types (D37) until a release carrying them is pinned, which is [stage 5](#5-stage-5-ready-for-a-first-host)'s job. Judge each push by the workspace's build, the unit tests (`pnpm test`) and both harnesses (`pnpm run test:integration`; its client half needs MJAPI running with this app loaded).
 
 ### 3.2 #8's final review
 
-Its items, with their numbers. Each is done when its last column holds.
+Its items, with their numbers. Each is done when its last column holds. Do them before 3.3 and 3.4, starting with 27 and 28: until they're fixed, loading the world changes the shipped agent and seats a real account in whatever database it runs against.
 
 | # | What's left | Done when |
 |---|---|---|
@@ -94,8 +95,8 @@ For each, say whether it works as intended. Fix what's small. What isn't, or wha
 When the app runs and the code is familiar, write down what the UI pass, the extension-model test and a read of the code and architecture found, as a comment on PR 9. Go over it with Amith, and with Colin for anything about retrieval ([§ 8](#8-what-holds-throughout)), before stage 1 starts. It can change the stages that follow.
 
 **Stage 0 is done when:**
-- CI is green on the pinned release, with the token check;
-- the push's comment gives each package's `pnpm test` count from a clean copy, and both harnesses' tallies after a purge and a fresh load of the world;
+- in the workspace, on MJ `next`, every package builds, and the token check (`node scripts/check-mj-tokens.mjs`) and the standards (`pnpm run mj:standards`) pass;
+- the push's comment gives each package's `pnpm test` count, and both harnesses' tallies after a purge and a fresh load of the world;
 - the five screenshots from #8's item 23 are taken again in Explorer, as named users, with the real agent answering. They're committed under `docs/screenshots/pr9/` with the Playwright script that takes them, and embedded in the comment;
 - `metadata/` has no `sync` block, every file in it ends in a newline, and `git diff next -- metadata` shows only intended changes;
 - the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed.
@@ -115,6 +116,7 @@ Each stage's pull request merges when that stage's checks pass.
 - **The adversarial test** over #7, #8 and stages 0 to 4 (#7's item 24).
 - **A clean install:** a new database gets the app through `mj app install`, which runs migrations only, and both harnesses pass on it.
 - **The release's metadata migration and the PostgreSQL migrations,** made by the build engineer at release from a clean database. Neither is hand-written in a feature pull request.
+- **The pin:** a published MemberJunction release that carries everything the app uses, pinned with the lockfile, so CI goes green and a host can install the app.
 - **The wrap-up** (#7's item 52): the README, `docs/HOW_THE_SYSTEM_WORKS.md`, the extensibility plan and each package's README, current.
 - **Amith's calls:** who owns the app, and its license and publish path (the plan's open decisions 1 and 2).
 
@@ -126,7 +128,7 @@ Colin builds [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/
 - **Dashboards embed in a space,** on its data tab or its Overview. These are the user dashboards people build in MemberJunction's Data Explorer. Properties make each one reusable in any context that binds them.
 - **Skip's generated components stay an option** beside them, where a view or dashboard isn't enough.
 
-When a release carries MJ#4789, a pull request pins it and opens the grants [#8's plan § 4](pr8-plan.md#4-what-it-depends-on) holds closed. The plan's § 10 rows 13, 15, 16 and 19 then pass open, with row 23's approved side and row 24 on a view. A19 also closes a gap the chat has today: until it ships, someone with a contributing seat can save a message in a space's conversation as someone else, or as the agent.
+Once MJ#4789 merges into MJ's `next`, a pull request on the workspace opens the grants [#8's plan § 4](pr8-plan.md#4-what-it-depends-on) holds closed (D39). The plan's § 10 rows 13, 15, 16 and 19 then pass open, with row 23's approved side and row 24 on a view. A19 also closes a gap the chat has today: until it ships, someone with a contributing seat can save a message in a space's conversation as someone else, or as the agent.
 
 ## 7. The rest of the plan
 
@@ -152,11 +154,12 @@ After stage 5, in [the plan's § 9](plan.md#9-sequencing) order. Most of it need
 - **Every `Save()` and `Delete()` is checked,** in tests and cleanup too, and cleanup asserts that what it removed is gone. A check that leaves rows behind breaks the next run.
 - **Only MemberJunction's semantic tokens.** `node scripts/check-mj-tokens.mjs` checks the names, and no hex goes outside a `var()` fallback.
 - **Nothing environment-specific** in code, documents or seeds: no real accounts, hosts or database names. The walkthrough's login comes from its environment.
-- **Each push's comment reports evidence, not intent:** CI's result on the head, each package's `pnpm test` count from a clean copy, both harnesses' tallies after a purge and a fresh load, and the screenshots committed in the branch. The review checks each claim against the code.
+- **Work in the workspace on MJ `next`** ([§ 3.1](#31-working-on-mj-next)): no version pin, no lockfile churn, and a database of your own.
+- **Each push's comment reports evidence, not intent:** each package's `pnpm test` count in the workspace, both harnesses' tallies after a purge and a fresh load, and the screenshots committed in the branch. The review checks each claim against the code.
 
 ## 10. Day one
 
-1. **Read,** in this order: this plan; [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958); the plan's [§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings) (D26 to D35), [§ 3.6](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat) (D38), [§ 5](plan.md#5-the-security-doctrine) and [§ 9](plan.md#9-sequencing); [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md); [#8's plan](pr8-plan.md) § 4, § 6 and § 12; [how the system works](../docs/HOW_THE_SYSTEM_WORKS.md); and the repo's `CLAUDE.md`.
-2. **Check out** PR 9's branch, `claude/hopeful-bell-6ldk4v`, and set it up as the README's [*Develop it*](../README.md#develop-it) says, against MJ `next` until the pin.
+1. **Read,** in this order: this plan; [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958); the plan's [§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings) (D26 to D35), [§ 3.6](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat) (D38 and D39), [§ 5](plan.md#5-the-security-doctrine) and [§ 9](plan.md#9-sequencing); [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md); [#8's plan](pr8-plan.md) § 4, § 6 and § 12; [how the system works](../docs/HOW_THE_SYSTEM_WORKS.md); and the repo's `CLAUDE.md`.
+2. **Set up the workspace** ([§ 3.1](#31-working-on-mj-next)), with PR 9's branch, `claude/hopeful-bell-6ldk4v`, as the collaboration clone.
 3. **Load the world** ([the data guide](../docs/reviewing-the-data.md)) from a purge, run both harnesses, and post the tallies and each package's `pnpm test` count as PR 9's first comment. They're the baseline every punch list compares against.
-4. **Start stage 0:** the pin if the release is out, and the review's items, the UI pass and the extension model either way.
+4. **Start stage 0** with #8's final review ([§ 3.2](#32-8s-final-review)). The UI pass and the extension model come once its items are closed.

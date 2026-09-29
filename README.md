@@ -232,7 +232,7 @@ The UX gallery, the example plug-ins and the integration checks are private pack
 |---|---|
 | **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
 | **Done: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area: conversations started when someone asks for one, and agent turns run on the server, bounded by the conversation's audience |
-| **Now: PR 9** | Finishing the chat, with MemberJunction's edge release pinned, and testing the extension model end to end; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host ([its plan](plans/pr9-plan.md)) |
+| **Now: PR 9** | Finishing the chat, on MemberJunction's latest `next`, and testing the extension model end to end; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host ([its plan](plans/pr9-plan.md)) |
 | **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open the closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
 
 The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
