@@ -754,6 +754,64 @@ describe('SpaceEntityServer type change', () => {
         assert.deepEqual(oldDriver.judged[0].oldValues, { SpaceTypeID: OLD_TYPE_ID });
     });
 
+    it("passes when both types' drivers accept, and both see the change (the new one with oldValues)", async () => {
+        const newDriver = reset({});
+        void newDriver;
+        const previous = drivers.get(OLD_TYPE_ID) as SpyDriver;
+        const next = new SpyDriver({ ok: true });
+        drivers.set(NEW_TYPE_ID, next);
+        const space = savedSpaceChangingType();
+        // A provider that can answer the write graph for an owner of this space
+        const OWNER_ROLE = '69090145-C214-4C16-83C5-9D0F1F3B6DE4';
+        const answers = (entityName: string, filter = ''): unknown[] => {
+            if (entityName.endsWith('Space Members')) {
+                return filter.includes('<>') || filter.includes("Status = 'Active'")
+                    ? []
+                    : [{ SpaceID: SPACE_ID, UserID: OWNER_ID, Status: 'Active', Band: 'Team', SpaceRoleTypeID: OWNER_ROLE }];
+            }
+            if (entityName.endsWith('Space Role Types')) {
+                return [{ ID: OWNER_ROLE, Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true }];
+            }
+            if (entityName.endsWith('Space Types')) return [{ ID: NEW_TYPE_ID, InviteApproval: 'Approve', MemberCap: null }];
+            if (entityName.endsWith('Spaces')) return [{ ID: SPACE_ID, ParentID: null, InheritsMembership: true, OwnerID: OWNER_ID, AgentRetrieval: 'Included', SpaceTypeID: NEW_TYPE_ID }];
+            return [];
+        };
+        const provider = {
+            async RunView(params: { EntityName: string; ExtraFilter?: string }) { return { Success: true, Results: answers(params.EntityName, params.ExtraFilter ?? '') }; },
+            async RunViews(params: { EntityName: string; ExtraFilter?: string }[]) { return params.map((q) => ({ Success: true, Results: answers(q.EntityName, q.ExtraFilter ?? '') })); },
+            GetEntityObject: async () => ({}),
+            EntityByID: () => ({}),
+            EntityByName: () => ({}),
+            Entities: [],
+            CurrentUser: owner,
+        };
+        Object.defineProperties(space, {
+            ProviderToUse: { value: provider, writable: true },
+            RunViewProviderToUse: { value: provider, writable: true },
+            ParentID: { value: null, writable: true },
+            OwnerID: { value: OWNER_ID, writable: true },
+            ClosedAt: { value: null, writable: true },
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Errors.length, 0, res.Errors.map((e) => `${e.Source}: ${e.Message}`).join('; '));
+        assert.equal(previous.judged.length, 1, "the previous type's driver judged it");
+        assert.equal(next.judged.length, 1, "the new type's driver judged it");
+        assert.deepEqual(next.judged[0].oldValues, { SpaceTypeID: OLD_TYPE_ID });
+        assert.equal(next.judged[0].kind, 'Update');
+    });
+
+    it('refuses a saved space whose new type is missing or not a UUID, instead of skipping the type checks', async () => {
+        reset({});
+        const space = savedSpaceChangingType();
+        Object.defineProperties(space, {
+            SpaceTypeID: { value: null, writable: true },
+            Fields: { value: [{ Name: 'SpaceTypeID', Dirty: true, OldValue: OLD_TYPE_ID, Value: null }, { Name: 'OwnerID', Dirty: false }], writable: true },
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, false);
+        assert.match(res.Errors.find((e) => e.Source === 'SpaceTypeID')?.Message ?? '', /the space type id is not valid/);
+    });
+
     it('does not treat a save that leaves the type alone as a type change', async () => {
         const oldDriver = reset({ configure: false });
         const space = savedSpaceChangingType();

@@ -13,7 +13,7 @@ import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
-import { registerChecks } from './cleanup-helpers.js';
+import { deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
@@ -276,11 +276,7 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    const loaded = await use.Load(createdUseId);
-                    Assert(loaded === true, `LB7 cleanup: loading Item Use ${createdUseId} must succeed`);
-                    const deleted = await use.Delete();
-                    Assert(deleted === true, `LB7 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, ITEM_USE_ENTITY, createdUseId, 'an item use');
                 }
             }
         },
@@ -398,42 +394,10 @@ const checks: NamedCheck[] = [
 registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        const errors: string[] = [];
-        while (createdItemIds.length > 0) {
-            const id = createdItemIds.pop();
-            if (id) {
-                try {
-                    const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-                    if (await item.Load(id)) {
-                        const deleted = await item.Delete();
-                        if (!deleted) {
-                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        while (createdFileIds.length > 0) {
-            const fid = createdFileIds.pop();
-            if (fid) {
-                try {
-                    const file = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
-                    if (await file.Load(fid)) {
-                        const deleted = await file.Delete();
-                        if (!deleted) {
-                            errors.push(`Failed to delete File ${fid}: ${file.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting File ${fid}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        if (errors.length > 0) {
-            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
-        }
-    },
+    // Every step runs and reads back, newest first; the first failure is thrown at the end
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            ...createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+            ...createdFileIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'a library file')),
+        ]),
 });

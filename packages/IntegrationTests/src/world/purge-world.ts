@@ -53,9 +53,13 @@ export async function purgeWorld(): Promise<void> {
         options: { trustServerCertificate: true, encrypt: false },
     });
     // Spaces a check created and did not clean up (its run died first) go with the world; they carry the check marker
-    const markedSpaces = await pool.request().query<{ ID: string }>(
-        `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE '${CHECK_SPACE_PREFIX.replace(/'/g, "''")}%'`,
-    );
+    // Only those a check could have made: owned by a world persona, and either a root or a child of a world space
+    const personaIds = readCsv(join(dir, 'personas.csv')).map((row) => sqlUuid(row.ID, 'persona')).join(',');
+    const markedSpaces = await pool.request()
+        .input('prefix', sql.NVarChar, `${CHECK_SPACE_PREFIX.replace(/[%_[]/g, '[$&]')}%`)
+        .query<{ ID: string }>(
+            `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE @prefix AND OwnerID IN (${personaIds}) AND (ParentID IS NULL OR ParentID IN (${worldSpaceIds}))`,
+        );
     const spaceIds = [worldSpaceIds, ...(markedSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'check space'))].join(',');
     const stored = await pool.request().query(`
         SELECT f.ProviderKey AS ProviderKey
@@ -225,8 +229,8 @@ export async function purgeWorld(): Promise<void> {
                 if (row.ProviderKey) {
                     try {
                         await boxStorage.DeleteObject(row.ProviderKey);
-                    } catch {
-                        // Best-effort cleanup for individual files
+                    } catch (deleteError) {
+                        console.error(`Box storage cleanup could not delete ${row.ProviderKey}: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
                     }
                 }
             }

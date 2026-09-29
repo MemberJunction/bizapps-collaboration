@@ -10,10 +10,11 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
-import { buildSettingsModel, changedSettings } from './logic/settings-model.js';
+import { applySettingsChanges, buildSettingsModel, SettingsSession } from './logic/settings-model.js';
 import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
-import { isSelectionCurrent } from './logic/selection-guard.js';
+import { LatestOnly } from './logic/latest-only.js';
+import { guardedLoad, isSelectionCurrent } from './logic/selection-guard.js';
 import {
     CollaborationClient,
     type GraphQLExecutor,
@@ -857,7 +858,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                 <mjc-space-work
                                                                     [Tasks]="spaceTasks"
                                                                     [SpaceName]="spaceTitle"
-                                                                    [DefaultBand]="bandChoice?.start ?? spaceAudienceBand"
+                                                                    [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
                                                                     [CanCreateTask]="!isSpaceClosed && canContribute"
                                                                     (TaskSelectRequested)="onTaskSelected($event)"
                                                                     (TaskToggleRequested)="onTaskToggled($event)"
@@ -1016,21 +1017,28 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      */
     public readonly bothBands: readonly SpaceBand[] = ['Shared', 'Team'];
     public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
+    /** The seat the caller reaches the current space through, once resolved; null until then or when they have none. */
+    private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
+    /** The current space type's default band for new material and tasks: the Work tab's default while the seat is unresolved. */
+    public typeDefaultBand: SpaceBand | null = null;
 
     private async updateBandChoice(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
         let choice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
+        let resolved: typeof this.callerSeat = null;
+        const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
         try {
             const user = this.currentUser;
-            const seat = user ? await CollaborationEngineBase.Instance.ReachedSeat(user, space.ID, this.ProviderToUse) : null;
-            if (seat) {
-                const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
-                choice = uploadBandChoice(type?.DefaultBand ?? null, seat.role.canSeeTeamBand, seat.role.canPromoteBand);
+            resolved = user ? await CollaborationEngineBase.Instance.ReachedSeat(user, space.ID, this.ProviderToUse) : null;
+            if (resolved) {
+                choice = uploadBandChoice(type?.DefaultBand ?? null, resolved.role.canSeeTeamBand, resolved.role.canPromoteBand);
             }
         } catch (error) {
             LogError(`Failed to resolve the caller's seat on space ${space.ID}: ${error instanceof Error ? error.message : String(error)}`);
         }
         if (!isCurrent()) return;
         this.bandChoice = choice;
+        this.callerSeat = resolved;
+        this.typeDefaultBand = type?.DefaultBand ?? null;
     }
 
     public isUploading = false;
@@ -1182,8 +1190,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return !!space?.ClosedAt;
     }
 
+    /**
+     * Whether the caller may contribute here. The seat they reach the space through decides, an inherited one on an ancestor
+     * included (Ada and Sam reach Discovery through Northwind). Until it is resolved, only a seat on the space itself counts.
+     */
     public get canContribute(): boolean {
         if (!this.currentUser) return false;
+        if (this.callerSeat) return this.callerSeat.role.canContribute;
         const currentUserId = this.currentUser.ID;
         const member = this.spaceMembers.find(m => UUIDsEqual(m.userId, currentUserId));
         if (!member || member.status !== 'Active') {
@@ -1334,8 +1347,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         typeDefaultRetention: 'Indefinite',
         status: 'Active',
     };
-    /** What the Settings screen showed when it opened: a save writes only what differs from it. */
-    private settingsBaseline: SpaceSettingsModel = { ...this.spaceSettings };
+    /** What the Settings screen shows and what a save is measured against: a save writes only what differs from it. */
+    private settingsSession = new SettingsSession(this.spaceSettings);
     public isSavingSettings = false;
     public settingsSaveSuccess = '';
 
@@ -1472,6 +1485,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
         this.bandChoice = null;
+        this.callerSeat = null;
+        this.typeDefaultBand = null;
+        this.inviteOutcome = null;
 
         // Reset host rules immediately so previous space's buttons / ask box do not linger
         this.hostRulesRequestId++;
@@ -1483,6 +1499,24 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.chatMentionPeople = [];
         this.canStartConversation = false;
         this.canStartConversationKinds = [];
+
+        // Everything else the previous space left on screen goes too: its people, library, tasks and the right to configure
+        this.spaceMembers = [];
+        this.headerTotalPeople = 0;
+        this.headerStaffAvatars = [];
+        this.headerOutsideAvatars = [];
+        this.headerAudienceSummary = '';
+        this.libraryRows = [];
+        this.libraryTotalCount = 0;
+        this.librarySharedCount = 0;
+        this.libraryTeamCount = 0;
+        this.overviewSharedItems = [];
+        this.overviewTeamItems = [];
+        this.libraryCollections = [];
+        this.librarySmartViews = [];
+        this.spaceTasks = [];
+        this.taskCount = 0;
+        this.canConfigureCurrentSpace = false;
 
         // Refresh space record from server to ensure ClosedAt and status are completely fresh
         try {
@@ -1565,7 +1599,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             color: typeDef?.color ?? null,
             defaultRetention: CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.DefaultRetention ?? null,
         });
-        this.settingsBaseline = { ...this.spaceSettings };
+        this.settingsSession.Open(this.spaceSettings);
+        this.spaceSettings = this.settingsSession.Shown;
 
         await this.updateCanConfigureCurrentSpace();
         if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
@@ -1579,8 +1614,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!isCurrent()) return;
         await this.loadSpaceConversations(spaceId, isCurrent, pendingConvId);
         if (!isCurrent()) return;
-        // Cleared only once this selection is known to be the current one, so a stale load can't drop a deep link
-        this._pendingConvId = null;
+        // Cleared only once this selection is known to be the current one, and only if it is still the value applied: a deep link
+        // that arrived while the load ran is a different one, and waits for its own selection
+        if (this._pendingConvId === (pendingConvId ?? null)) this._pendingConvId = null;
         await this.loadSpaceTasks(spaceId, isCurrent);
         if (!isCurrent()) return;
         await this.loadSpaceMembers(spaceId, isCurrent);
@@ -1833,7 +1869,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.chatAudienceBand = activeItem?.band === 'Team' ? 'Team' : 'Shared';
 
             if (this.activeConversationId) {
-                await this.loadOverviewMessages(this.activeConversationId);
+                await this.loadOverviewMessages(this.activeConversationId, isCurrent);
             } else {
                 this.overviewRoomMessages = [];
             }
@@ -1842,39 +1878,55 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    private async loadOverviewMessages(convId: string): Promise<void> {
+    private readonly overviewReads = new LatestOnly();
+
+    /**
+     * Loads the Overview's latest messages for a conversation. Only the newest read of these may write, and only while the
+     * space it was started for is still the one shown; a failed read is logged and clears the messages of the conversation
+     * before it, which would otherwise stay under the new one.
+     */
+    private async loadOverviewMessages(convId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(convId)) return;
+        const isLatest = this.overviewReads.Begin();
         try {
             const rv = new RunView(this.RunViewToUse);
-            const detailRes = await rv.RunView<{
-                ID: string;
-                Role: string;
-                Message: string;
-                User?: string;
-                __mj_CreatedAt: string;
-            }>({
-                EntityName: 'MJ: Conversation Details',
-                ExtraFilter: `ConversationID = '${convId}'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                ResultType: 'simple',
-                MaxRows: 25,
-            });
-            if (detailRes?.Success && detailRes.Results) {
-                const chronological = [...detailRes.Results].reverse();
-                const mapped: RoomMiniMessage[] = chronological.map(d => ({
-                    id: d.ID,
-                    senderName: d.Role === 'AI' ? 'Assistant' : (d.User || 'Team Member'),
-                    senderInitials: d.Role === 'AI' ? 'AI' : (d.User ? d.User.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'TM'),
-                    senderColorClass: d.Role === 'AI' ? 'c1' : 'c2',
-                    isOutside: false,
-                    isAssistant: d.Role === 'AI',
-                    timestamp: this.formatDate(d.__mj_CreatedAt),
-                    text: d.Message,
-                }));
-                this.overviewRoomMessages = mapped.slice(-5);
-            }
+            await guardedLoad(
+                () => isLatest() && isCurrent(),
+                () => rv.RunView<{
+                    ID: string;
+                    Role: string;
+                    Message: string;
+                    User?: string;
+                    __mj_CreatedAt: string;
+                }>({
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID = '${convId}'`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    ResultType: 'simple',
+                    MaxRows: 25,
+                }),
+                (detailRes) => {
+                    if (!detailRes?.Success || !detailRes.Results) {
+                        LogError(`Failed to load the Overview's messages for conversation ${convId}: ${detailRes?.ErrorMessage ?? 'unknown error'}`);
+                        this.overviewRoomMessages = [];
+                        return;
+                    }
+                    const chronological = [...detailRes.Results].reverse();
+                    this.overviewRoomMessages = chronological.map(d => ({
+                        id: d.ID,
+                        senderName: d.Role === 'AI' ? 'Assistant' : (d.User || 'Team Member'),
+                        senderInitials: d.Role === 'AI' ? 'AI' : (d.User ? d.User.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'TM'),
+                        senderColorClass: d.Role === 'AI' ? 'c1' : 'c2',
+                        isOutside: false,
+                        isAssistant: d.Role === 'AI',
+                        timestamp: this.formatDate(d.__mj_CreatedAt),
+                        text: d.Message,
+                    } satisfies RoomMiniMessage)).slice(-5);
+                },
+            );
         } catch (err) {
             LogError('Error loading overview messages: ' + (err instanceof Error ? err.message : String(err)));
+            if (isLatest() && isCurrent()) this.overviewRoomMessages = [];
         }
     }
 
@@ -1968,6 +2020,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         } catch (err) {
             LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
+            if (isCurrent()) {
+                this.spaceTasks = [];
+                this.taskCount = 0;
+            }
         }
     }
 
@@ -2062,6 +2118,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         } catch (err) {
             LogError('Error loading space members: ' + (err instanceof Error ? err.message : String(err)));
+            if (isCurrent()) {
+                this.spaceMembers = [];
+                this.headerTotalPeople = 0;
+                this.headerStaffAvatars = [];
+                this.headerOutsideAvatars = [];
+                this.headerAudienceSummary = '';
+            }
         }
     }
 
@@ -2178,7 +2241,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (this.activeSpaceId && !UUIDsEqual(prevConvId, params['conv'])) {
                     // Back and forward change the conversation in the URL: the Overview's messages follow it, so the new band
                     // is never shown over the previous conversation's messages
-                    void this.loadOverviewMessages(params['conv']);
+                    void this.loadOverviewMessages(params['conv'], this.currentSelection());
                     void this.loadSpaceChatHostRules(this.activeSpaceId, params['conv']);
                 }
             }
@@ -2281,7 +2344,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.activeTab = 'Chat';
         this.UpdateQueryParams({ tab: 'chat', conv: convId });
-        void this.loadOverviewMessages(convId);
+        void this.loadOverviewMessages(convId, this.currentSelection());
         void this.loadSpaceChatHostRules(this.activeSpaceId, convId);
         this.syncStateWithAgent();
         this.RefreshView();
@@ -2396,7 +2459,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return;
         }
         this.shareDialogTitle = 'Share with Shared Band';
-        const outsideMembers = this.spaceMembers.filter(m => m.band === 'Shared');
+        // Only people who can see it now: an invited or removed seat is not somebody the file would reach
+        const outsideMembers = this.spaceMembers.filter(m => m.status === 'Active' && m.band === 'Shared');
         this.shareAudienceHeader = 'Participants who will gain access';
         this.shareAudienceStaffSub = outsideMembers.length > 0
             ? `${outsideMembers.length} outside participant${outsideMembers.length === 1 ? '' : 's'}`
@@ -2538,12 +2602,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onSubmitNewConversation(payload: NewConversationSubmitPayload): Promise<void> {
+        // The space and the selection this conversation is for, taken before the first await: the person may move on while it is created
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
         this.isCreatingConversation = true;
         this.RefreshView();
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.CreateSpaceConversation({
-                SpaceID: this.activeSpaceId,
+                SpaceID: spaceId,
                 Name: payload.name,
                 Kind: payload.kind,
             });
@@ -2554,15 +2621,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
 
-            this.isNewConversationDialogOpen = false;
             SharedService.Instance.CreateSimpleNotification('Conversation created.', 'info', 3000);
+            if (!isCurrent()) return; // it belongs to a space no longer shown: nothing on screen changes
+            this.isNewConversationDialogOpen = false;
 
-            await this.loadSpaceConversations(this.activeSpaceId, this.currentSelection(), res.ConversationID ?? undefined);
+            await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID ?? undefined);
+            if (!isCurrent()) return;
             if (res.ConversationID) {
                 this.activeConversationId = res.ConversationID;
                 this.activeTab = 'Chat';
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
-                await this.loadSpaceChatHostRules(this.activeSpaceId, res.ConversationID);
+                await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+                if (!isCurrent()) return;
             }
             this.syncStateWithAgent();
             this.RefreshView();
@@ -2577,6 +2647,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     private async loadSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<void> {
+        // Rules for a space the person has left must not replace the rules of the one shown now
+        if (!UUIDsEqual(spaceId, this.activeSpaceId)) return;
         const requestId = ++this.hostRulesRequestId;
         // Reset to safe defaults first
         this.chatAgentReplyMode = 'MentionOnly';
@@ -2746,18 +2818,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return;
         }
 
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
         this.isSubmittingAsk = true;
         this.RefreshView();
         const name = text.length > 50 ? `${text.slice(0, 47)}...` : text;
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.CreateSpaceConversation({
-                SpaceID: this.activeSpaceId,
+                SpaceID: spaceId,
                 Name: name,
                 Kind: 'General',
             });
 
-            if (res.Success && res.ConversationID) {
+            if (res.Success && res.ConversationID && !isCurrent()) {
+                // Started in a space the person has left: the conversation exists there, and nothing on this screen changes
+                SharedService.Instance.CreateSimpleNotification('Conversation started in the space you left.', 'info', 3000);
+            } else if (res.Success && res.ConversationID) {
                 this.spaceOverviewComponent?.clearAskBox();
                 const defaultAgentId = this.chatDefaultAgentId;
                 if (defaultAgentId) {
@@ -2768,8 +2845,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
                 this.pendingChatMessageConversationId = res.ConversationID;
                 this.activeConversationId = res.ConversationID;
-                await this.loadSpaceConversations(this.activeSpaceId, this.currentSelection(), res.ConversationID);
-                await this.loadSpaceChatHostRules(this.activeSpaceId, res.ConversationID);
+                await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID);
+                await this.loadSpaceChatHostRules(spaceId, res.ConversationID);
+                if (!isCurrent()) return;
                 this.activeTab = 'Chat';
                 this.UpdateQueryParams({ tab: 'chat', conv: res.ConversationID });
                 this.RefreshView();
@@ -2819,7 +2897,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             // On success the server's message says what happened: seated, Invited awaiting approval, already seated, and whether a link was sent
-            const message = result.ErrorMessage || 'They are seated.';
+            const message = result.Message || 'They are seated.';
             this.inviteOutcome = { ok: true, message };
             SharedService.Instance.CreateSimpleNotification(message, 'info', 6000);
             await this.loadSpaceMembers(this.activeSpaceId, this.currentSelection());
@@ -2838,11 +2916,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
             return;
         }
+        // Everything this save needs from the screen is taken before the first await: the copy that counts as saved (an edit made
+        // during the save must not), what changed, and which space and selection it belongs to
+        const savedCopy: SpaceSettingsModel = { ...settings };
+        const changes = this.settingsSession.Changes(savedCopy);
+        const stillShown = this.currentSelection();
         this.isSavingSettings = true;
         this.settingsSaveSuccess = '';
         this.RefreshView();
         try {
-            const targetId = settings.id || this.activeSpaceId;
+            const targetId = savedCopy.id || this.activeSpaceId;
             if (!targetId || !isValidUuid(targetId)) {
                 const msg = 'Cannot save space settings: invalid or missing space ID';
                 LogError(msg);
@@ -2850,20 +2933,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.isSavingSettings = false;
                 return;
             }
+            if (Object.keys(changes).length === 0) {
+                this.isSavingSettings = false;
+                this.settingsSaveSuccess = 'No changes to save.';
+                SharedService.Instance.CreateSimpleNotification(this.settingsSaveSuccess, 'info', 3000);
+                this.RefreshView();
+                return;
+            }
             const md = this.ProviderToUse;
             const spaceEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
             if (await spaceEntity.Load(targetId)) {
                 // Write only what the person changed from what the screen showed them, so a rename can't turn
                 // a type-default retention into a chosen one
-                const changes = changedSettings(this.settingsBaseline, settings);
-                if (Object.keys(changes).length === 0) {
-                    this.isSavingSettings = false;
-                    this.settingsSaveSuccess = 'No changes to save.';
-                    SharedService.Instance.CreateSimpleNotification(this.settingsSaveSuccess, 'info', 3000);
-                    this.RefreshView();
-                    return;
-                }
-                Object.assign(spaceEntity, changes);
+                applySettingsChanges(spaceEntity, changes);
                 const saveOk = await spaceEntity.Save();
                 if (!saveOk) {
                     const errMsg = spaceEntity.LatestResult?.CompleteMessage || 'Failed to save space settings.';
@@ -2874,28 +2956,32 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     return;
                 }
 
-                this.settingsBaseline = { ...settings };
-                this.spaceTitle = settings.name;
-                this.spaceSubtitle = settings.description;
-                this.headerTypeIcon = settings.iconClass;
-                this.headerTypeColor = settings.color;
-                this.headerBackgroundImageUrl = settings.backgroundImageUrl || null;
-
+                // The space's own row is what was saved, whichever space is on screen now
                 const raw = this.rawSpaces.find(s => UUIDsEqual(s.ID, targetId));
                 if (raw) {
-                    raw.Name = settings.name;
-                    raw.Description = settings.description;
-                    raw.IconClass = settings.iconClass;
-                    raw.Color = settings.color;
-                    raw.BackgroundImageURL = settings.backgroundImageUrl || null;
-                    raw.InheritsMembership = settings.inheritsMembership;
-                    raw.AgentRetrieval = settings.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-                    raw.Retention = (settings.retention || null) as mjBizAppsCollaborationSpaceEntity['Retention'];
+                    raw.Name = savedCopy.name;
+                    raw.Description = savedCopy.description;
+                    raw.IconClass = savedCopy.iconClass;
+                    raw.Color = savedCopy.color;
+                    raw.BackgroundImageURL = savedCopy.backgroundImageUrl || null;
+                    raw.InheritsMembership = savedCopy.inheritsMembership;
+                    raw.AgentRetrieval = savedCopy.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
+                    raw.Retention = (savedCopy.retention || null) as mjBizAppsCollaborationSpaceEntity['Retention'];
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                 }
 
-                this.settingsSaveSuccess = 'Space settings saved successfully.';
-                SharedService.Instance.CreateSimpleNotification(this.settingsSaveSuccess, 'info', 3000);
+                // The screen, its baseline and the header change only if this space is still the one shown; otherwise they belong to another
+                if (stillShown()) {
+                    this.settingsSession.Saved(savedCopy);
+                    this.spaceSettings = this.settingsSession.Shown;
+                    this.spaceTitle = savedCopy.name;
+                    this.spaceSubtitle = savedCopy.description;
+                    this.headerTypeIcon = savedCopy.iconClass;
+                    this.headerTypeColor = savedCopy.color;
+                    this.headerBackgroundImageUrl = savedCopy.backgroundImageUrl || null;
+                    this.settingsSaveSuccess = 'Space settings saved successfully.';
+                }
+                SharedService.Instance.CreateSimpleNotification('Space settings saved successfully.', 'info', 3000);
             } else {
                 const msg = 'Failed to load space to save settings.';
                 LogError(msg);

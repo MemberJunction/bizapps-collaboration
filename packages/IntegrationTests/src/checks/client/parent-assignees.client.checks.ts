@@ -3,7 +3,7 @@ import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollab
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { PERSON_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ASSIGNMENT_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext, View } from '../../wire.js';
-import { registerChecks } from '../cleanup-helpers.js';
+import { registerChecks, runAllSteps } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -529,29 +529,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('parent-assignees', {
     Setup: async () => {},
     Teardown: async (ctx: IntegrationCheckContext) => {
         const adaCtx = await getPersonaContext(ctx, 'ada');
-        const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-        if (!(await space.Load(DISCOVERY_SPACE_ID))) {
-            throw new Error('parent-assignees Teardown failed to load Discovery space');
-        }
-        if (!space.AllowParentAssignees) {
-            space.AllowParentAssignees = true;
-            const saved = await space.Save();
-            if (!saved) {
-                const err = space.LatestResult?.CompleteMessage ?? 'Save returned false';
-                throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Discovery: ${err}`);
+        const restore = async (spaceId: string, name: string): Promise<void> => {
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await space.Load(spaceId), `parent-assignees Teardown: loading ${name}`);
+            if (!space.AllowParentAssignees) {
+                space.AllowParentAssignees = true;
+                Assert(await space.Save(), `parent-assignees Teardown: restoring AllowParentAssignees on ${name}: ${space.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
             }
-        }
-        const fnSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
-        if (!(await fnSpace.Load(FIELD_NOTES_SPACE_ID))) {
-            throw new Error('parent-assignees Teardown failed to load Field notes space');
-        }
-        if (!fnSpace.AllowParentAssignees) {
-            fnSpace.AllowParentAssignees = true;
-            const saved = await fnSpace.Save();
-            if (!saved) {
-                const err = fnSpace.LatestResult?.CompleteMessage ?? 'Save returned false';
-                throw new Error(`parent-assignees Teardown failed to restore AllowParentAssignees on Field notes: ${err}`);
-            }
-        }
+            const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+            Assert(await verify.Load(spaceId), `parent-assignees Teardown: reading ${name} back`);
+            Assert(verify.AllowParentAssignees === true, `parent-assignees Teardown: ${name} must have AllowParentAssignees on again`);
+        };
+        // Both restores run, even when the first fails; the first failure is thrown at the end
+        await runAllSteps([() => restore(DISCOVERY_SPACE_ID, 'Discovery'), () => restore(FIELD_NOTES_SPACE_ID, 'Field notes')]);
     },
 });

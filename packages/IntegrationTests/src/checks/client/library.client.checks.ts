@@ -1,8 +1,8 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient, mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, mjBizAppsCollaborationItemUseEntity } from '@mj-biz-apps/collaboration-entities';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, SameID } from '../../wire.js';
-import { registerChecks } from '../cleanup-helpers.js';
+import { deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
@@ -227,11 +227,7 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    const loaded = await use.Load(createdUseId);
-                    Assert(loaded === true, `client LB5 cleanup: loading Item Use ${createdUseId} must succeed`);
-                    const deleted = await use.Delete();
-                    Assert(deleted === true, `client LB5 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, ITEM_USE_ENTITY, createdUseId, 'an item use');
                 }
             }
         },
@@ -266,6 +262,8 @@ const checks: NamedCheck[] = [
             const refused = await leeClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-refused-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('refused'), Folder: 'Welcome', Band: 'Team' });
             Assert(!refused.Success, 'Lee choosing Team is refused over the wire');
             Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
+            const storedRefused = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name LIKE 'lb6-refused-%'`, ['ID'], undefined, { BypassCache: true });
+            Assert(storedRefused.length === 0, 'A refused upload stores nothing');
         },
     },
     {
@@ -325,26 +323,9 @@ const checks: NamedCheck[] = [
 registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        const errors: string[] = [];
-        while (createdItemIds.length > 0) {
-            const id = createdItemIds.pop();
-            if (id) {
-                try {
-                    const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-                    if (await item.Load(id)) {
-                        const deletedItem = await item.Delete();
-                        if (!deletedItem) {
-                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        if (errors.length > 0) {
-            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
-        }
-    },
+    // Every step runs and reads back, newest first; the first failure is thrown at the end
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps(
+            createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+        ),
 });

@@ -756,7 +756,7 @@ const checks: NamedCheck[] = [
                 Assert(!!sharedName && !!teamName, 'The seeded Shared and Team root tasks have names');
                 const searchAs = async (user: UserInfo, chatId: string, query: string) =>
                     SearchEngine.Instance.Search(
-                        { Query: query, ScopeIDs: [SEARCH_SCOPE_ID], SearchContext: { PrimaryScopeRecordID: chatId }, AIAgentID: AGENT_ID, MaxResults: 20, Mode: 'preview' },
+                        { Query: query, ScopeIDs: [SEARCH_SCOPE_ID], SearchContext: { PrimaryScopeRecordID: chatId }, AIAgentID: AGENT_ID, MaxResults: 100, Mode: 'preview' },
                         user,
                     );
                 const found = (result: Awaited<ReturnType<typeof searchAs>>, root: string): boolean =>
@@ -767,6 +767,9 @@ const checks: NamedCheck[] = [
                 Assert(sharedHits.Success === true && found(sharedHits, sharedRoot), `Bea's search in a General chat finds the Shared task "${sharedName}"`);
                 const teamHitsAsBea = await searchAs(bea, generalChatId, teamName!);
                 Assert(teamHitsAsBea.Success === true && !found(teamHitsAsBea, teamRoot), `Bea's search in a General chat never finds the Team task "${teamName}"`);
+                // Ada in the same General chat doesn't find the Team task either: the chat's audience bounds the search, not who asks
+                const teamHitsAsAdaGeneral = await searchAs(ada, generalChatId, teamName!);
+                Assert(teamHitsAsAdaGeneral.Success === true && !found(teamHitsAsAdaGeneral, teamRoot), `Ada's search in a General chat never finds the Team task "${teamName}" either`);
                 // The negative control: the same words find the Team task when the chat is Internal Only and the asker sees Team
                 const teamHitsAsAda = await searchAs(ada, privateChatId!, teamName!);
                 Assert(teamHitsAsAda.Success === true && found(teamHitsAsAda, teamRoot), `Ada's search in a Private chat finds the Team task "${teamName}", so its absence above is the audience's doing`);
@@ -788,7 +791,7 @@ const checks: NamedCheck[] = [
     {
         Id: 'agent.AG9',
         Name: "AG9 — A client's agent reads stay narrow: no other user's permission row, no agent outside the spaces they reach",
-        RequiresMutation: false,
+        RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await GetPersonaUser(ctx, 'bea');
             const view = View(ctx);
@@ -819,8 +822,9 @@ const checks: NamedCheck[] = [
 
             // Agents: the shipped agent; the test agent, which the bundle attaches to Northwind, an ancestor of Discovery (so Bea may run it
             // there); and no agent that only a space she does not reach runs
+            // BypassCache: the server replays a small unfiltered read for a few seconds, and an attachment doesn't clear it
             const readAgentIds = async (): Promise<string[]> => {
-                const res = await view.RunView<{ ID: string }>({ EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple' }, bea);
+                const res = await view.RunView<{ ID: string }>({ EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, bea);
                 Assert(res.Success === true, `Bea reads AI Agents: ${res.ErrorMessage ?? ''}`);
                 return (res.Results ?? []).map((a) => a.ID.toLowerCase());
             };
@@ -834,16 +838,28 @@ const checks: NamedCheck[] = [
                 `ID NOT IN ('${AGENT_ID}', '${COLLABORATION_TEST_AGENT_ID}') AND Status = 'Active'`,
                 ['ID'],
             );
-            Assert(others.length > 0, 'The host has another active agent to attach to a space Bea does not reach');
-            const elsewhere = others[0].ID;
-            Assert(!before.includes(elsewhere.toLowerCase()), 'Bea does not read an agent that no space of hers runs');
-            const attachmentId = await attachAgentToSpace(ctx, elsewhere, HARBOR_SPACE_ID);
+            const elsewhere = others.find((a) => !before.includes(a.ID.toLowerCase()))?.ID;
+            Assert(!!elsewhere, 'The host has an active agent that no space of Bea\'s runs');
+
+            // The negative: attached to Harbor, which Bea does not reach, the agent is still not one she reads
+            const harbor = await attachAgentToSpace(ctx, elsewhere!, HARBOR_SPACE_ID);
             try {
                 const during = await readAgentIds();
-                Assert(!during.includes(elsewhere.toLowerCase()), 'Attached to Harbor, which Bea does not reach, the agent is still not one she reads');
+                Assert(!during.includes(elsewhere!.toLowerCase()), 'Attached to Harbor, which Bea does not reach, the agent is still not one she reads');
             } finally {
-                await detachTestAgent(ctx, attachmentId);
+                await detachTestAgent(ctx, harbor);
             }
+
+            // The positive control: attached to Discovery, which she reaches, the same read now returns it, so the negative above could fail
+            const discovery = await attachAgentToSpace(ctx, elsewhere!, DISCOVERY_SPACE_ID);
+            try {
+                const during = await readAgentIds();
+                Assert(during.includes(elsewhere!.toLowerCase()), 'Attached to Discovery, which Bea reaches, the agent is one she reads');
+            } finally {
+                await detachTestAgent(ctx, discovery);
+            }
+            const after = await readAgentIds();
+            Assert(!after.includes(elsewhere!.toLowerCase()), 'Once detached, the agent is not one she reads again');
         },
     },
     {
@@ -882,6 +898,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
                     await detachTestAgent(ctx, attachmentId);
                 }
             },
-            ...createdDetailIds.splice(0).map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
+            ...createdDetailIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
         ]),
 });

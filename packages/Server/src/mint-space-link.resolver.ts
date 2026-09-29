@@ -25,6 +25,10 @@ export class MintSpaceLinkPayload {
     @Field({ nullable: true })
     RedemptionUrl?: string;
 
+    /** What happened, on success: seated, Invited awaiting approval, already seated, whether a link went out. */
+    @Field({ nullable: true })
+    Message?: string;
+
     @Field({ nullable: true })
     ErrorMessage?: string;
 }
@@ -60,7 +64,7 @@ export class MintSpaceLinkResolver extends ResolverBase {
                 },
             });
             if (!result.ok) return { Success: false, Sent: false, ErrorMessage: result.message };
-            return { Success: true, Sent: !!result.sent, RedemptionUrl: result.redemptionUrl, ErrorMessage: result.message };
+            return { Success: true, Sent: !!result.sent, RedemptionUrl: result.redemptionUrl, Message: result.message };
         } catch (error) {
             LogError(error);
             return { Success: false, Sent: false, ErrorMessage: 'Invite refused.' };

@@ -3,6 +3,7 @@ import type { mjBizAppsCollaborationSpaceAgentEntity } from '@mj-biz-apps/collab
 import { COLLABORATION_TEST_AGENT_DRIVER_CLASS, COLLABORATION_TEST_AGENT_ID } from '../agents/test-agent.js';
 import { AI_AGENT_ENTITY, SPACE_AGENT_ENTITY } from '../entity-names.js';
 import { FindRows, RequireSave } from '../wire.js';
+import { cleanupStep } from './cleanup-helpers.js';
 
 /**
  * Lets a bundle's turns run on the harness's own test agent without touching a shipped row.
@@ -53,11 +54,14 @@ export async function attachAgentToSpace(ctx: IntegrationCheckContext, agentId: 
 
 /** Removes an attachment and reads it back to confirm it is gone. */
 export async function detachTestAgent(ctx: IntegrationCheckContext, attachmentId: string): Promise<void> {
-    const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENT_ENTITY, ctx.User);
-    if (await attachment.Load(attachmentId)) {
-        const deleted = await attachment.Delete();
-        Assert(deleted, `Space Agent ${attachmentId} delete failed: ${attachment.LatestResult?.CompleteMessage ?? 'unknown'}`);
-    }
-    const left = await FindRows<{ ID: string }>(ctx, SPACE_AGENT_ENTITY, `ID = '${attachmentId}'`, ['ID']);
-    Assert(left.length === 0, `Space Agent ${attachmentId} is still there after its delete`);
+    // A cleanup failure is reported to the running check, so it never replaces the check's own error from a `finally`
+    await cleanupStep(async () => {
+        const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENT_ENTITY, ctx.User);
+        if (await attachment.Load(attachmentId)) {
+            const deleted = await attachment.Delete();
+            Assert(deleted, `Space Agent ${attachmentId} delete failed: ${attachment.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        }
+        const left = await FindRows<{ ID: string }>(ctx, SPACE_AGENT_ENTITY, `ID = '${attachmentId}'`, ['ID'], undefined, { BypassCache: true });
+        Assert(left.length === 0, `Space Agent ${attachmentId} is still there after its delete`);
+    });
 }

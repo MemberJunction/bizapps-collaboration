@@ -196,7 +196,7 @@ async function cleanupSpaceUnguarded(
     const rv = RunView.FromMetadataProvider(provider);
 
     const chats = await rv.RunView<{ ID: string; ConversationID: string }>(
-        { EntityName: SPACE_CHAT_ENTITY, ExtraFilter: `SpaceID = '${spaceId}'`, Fields: ['ID', 'ConversationID'], ResultType: 'simple' },
+        { EntityName: SPACE_CHAT_ENTITY, ExtraFilter: `SpaceID = '${spaceId}'`, Fields: ['ID', 'ConversationID'], ResultType: 'simple', BypassCache: true },
         user,
     );
     Assert(chats.Success === true, `Cleanup could not read the space's chats: ${chats.ErrorMessage ?? 'unknown error'}`);
@@ -217,6 +217,22 @@ async function cleanupSpaceUnguarded(
 
     await deleteRowAndConfirmUnguarded(provider, user, SPACE_ENTITY, spaceId, 'Space');
 }
+
+/** Deletes every row matching a filter, reads the filter back to confirm none is left. A failure is reported to the running check. */
+export const deleteWhere = (
+    provider: IMetadataProvider,
+    user: UserInfo,
+    entityName: string,
+    filter: string,
+    what: string,
+): Promise<void> => cleanupStep(async () => {
+    requireHarnessUser(user);
+    const rv = RunView.FromMetadataProvider(provider);
+    for (const row of await readAll(rv, user, entityName, filter)) {
+        await deleteRowAndConfirmUnguarded(provider, user, entityName, row.ID, what);
+    }
+    await assertNoRows(rv, user, entityName, filter);
+});
 
 /** Deletes one row and reads it back to confirm it is gone (see `deleteRowAndConfirmUnguarded`). A failure is reported to the running check. */
 export const deleteRowAndConfirm = (

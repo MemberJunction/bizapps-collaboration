@@ -13,3 +13,14 @@ export function isSelectionCurrent(
 ): boolean {
     return requestId === currentRequestId && !!activeSpaceId && UUIDsEqual(activeSpaceId, spaceId);
 }
+
+/**
+ * Reads, then writes only if the load is still the one that should write. Every loader follows this order, and the check comes
+ * after the read because that is where the person can have moved on. Returns whether it wrote.
+ */
+export async function guardedLoad<T>(mayWrite: () => boolean, read: () => Promise<T>, write: (value: T) => void): Promise<boolean> {
+    const value = await read();
+    if (!mayWrite()) return false;
+    write(value);
+    return true;
+}

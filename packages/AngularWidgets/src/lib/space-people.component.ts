@@ -65,11 +65,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="spacer"></div>
 
-        <button class="invite-btn" (click)="isInviting = !isInviting">
+        <button class="invite-btn" (click)="ToggleInviteForm()">
           <i class="fa-solid fa-user-plus"></i>
           <span>Invite person</span>
         </button>
       </div>
+
+      @if (InviteOutcome?.ok && !isInviting) {
+        <div class="invite-outcome invite-outcome-ok" role="status">
+          <span>{{ InviteOutcome!.message }}</span>
+          <button type="button" class="cancel-invite-btn" (click)="DismissInviteOutcome()">Dismiss</button>
+        </div>
+      }
 
       <!-- Inline Invite Form -->
       @if (isInviting) {
@@ -97,12 +104,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             >
               {{ IsSendingInvite ? 'Sending…' : 'Send Invite' }}
             </button>
-            <button class="cancel-invite-btn" [disabled]="IsSendingInvite" (click)="isInviting = false">
+            <button class="cancel-invite-btn" [disabled]="IsSendingInvite" (click)="CancelInvite()">
               Cancel
             </button>
           </div>
-          @if (InviteOutcome) {
-            <div class="invite-outcome" [class.invite-outcome-error]="!InviteOutcome.ok" role="status">{{ InviteOutcome.message }}</div>
+          @if (InviteOutcome && !InviteOutcome.ok) {
+            <div class="invite-outcome invite-outcome-error" role="alert">{{ InviteOutcome.message }}</div>
           }
         </div>
       }
@@ -333,6 +340,17 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .invite-outcome-error {
         color: var(--mj-status-error);
       }
+      .invite-outcome-ok {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: var(--mj-radius-md);
+        background: var(--mj-bg-surface);
+      }
       .cancel-invite-btn {
         background: transparent;
         border: none;
@@ -487,16 +505,17 @@ export class CollabSpacePeopleComponent {
   public inviteEmail = '';
   public inviteRole = 'member';
 
+  // The list shows every seat, invited and removed ones too; these counts, like the header's, count only Active ones.
   public get TotalMembers(): number {
-    return this.Members.length;
+    return this.Members.filter((m) => m.status === 'Active').length;
   }
 
   public get TeamCount(): number {
-    return this.Members.filter((m) => m.band === 'Team').length;
+    return this.Members.filter((m) => m.status === 'Active' && m.band === 'Team').length;
   }
 
   public get OutsideCount(): number {
-    return this.Members.filter((m) => m.band === 'Shared').length;
+    return this.Members.filter((m) => m.status === 'Active' && m.band === 'Shared').length;
   }
 
   public get ActiveCount(): number {
@@ -518,6 +537,22 @@ export class CollabSpacePeopleComponent {
 
       return true;
     });
+  }
+
+  /** Opens or closes the form; opening it starts clean, so a refusal from an earlier invite doesn't show. */
+  public ToggleInviteForm(): void {
+    this.isInviting = !this.isInviting;
+    if (this.isInviting) this.outcome = null;
+  }
+
+  /** Closes the form and forgets what the last invite said, so a refusal doesn't greet the next one. */
+  public CancelInvite(): void {
+    this.isInviting = false;
+    this.outcome = null;
+  }
+
+  public DismissInviteOutcome(): void {
+    this.outcome = null;
   }
 
   public submitInvite(): void {

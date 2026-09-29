@@ -1144,6 +1144,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
                     await detachTestAgent(ctx, attachmentId);
                 }
             },
-            ...createdDetailIds.splice(0).map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a room check posted')),
+            ...createdDetailIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a room check posted')),
         ]),
 });

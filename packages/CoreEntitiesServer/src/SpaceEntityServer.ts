@@ -75,7 +75,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const rawTypeId = getFieldVal<string>(this, 'SpaceTypeID');
         const typeId = rawTypeId ? parseUuid(String(rawTypeId)) : null;
 
-        if (!this.IsSaved && !typeId) {
+        // A new space needs a valid type, and so does a saved one whose type is being changed: skipping the type's checks
+        // because the new id doesn't resolve would let the change through unchecked
+        const typeChanging = this.IsSaved && this.Fields.some((f) => f.Name === 'SpaceTypeID' && f.Dirty);
+        if ((!this.IsSaved || typeChanging) && !typeId) {
             return fail(result, 'SpaceTypeID', 'Space change refused: the space type id is not valid.');
         }
 

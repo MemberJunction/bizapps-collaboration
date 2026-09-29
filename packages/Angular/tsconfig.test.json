@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src/lib/logic/**/*.ts"]
+}

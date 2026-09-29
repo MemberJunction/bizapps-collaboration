@@ -12,6 +12,8 @@ export interface MintSpaceLinkPayload {
     Success: boolean;
     Sent?: boolean;
     RedemptionUrl?: string;
+    /** On success: what happened (seated, Invited awaiting approval, already seated, whether a link went out). */
+    Message?: string;
     ErrorMessage?: string;
 }
 
@@ -145,6 +147,7 @@ mutation MintSpaceLink($input: MintSpaceLinkInput!) {
         Success
         Sent
         RedemptionUrl
+        Message
         ErrorMessage
     }
 }

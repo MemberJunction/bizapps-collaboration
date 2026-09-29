@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -905,11 +905,8 @@ describe('CollabSpaceChatComponent', () => {
     expect(comp.AllowAttachments).toBe(false);
   });
 
-  it('handles read-only and closed space states and event emissions', () => {
+  it('emits the new-conversation request', () => {
     const comp = new CollabSpaceChatComponent();
-    expect(comp.IsReadOnly).toBe(false);
-    comp.IsReadOnly = true;
-    expect(comp.IsReadOnly).toBe(true);
 
     let newConvoEmitted = false;
     comp.NewConversationRequested.subscribe(() => {
@@ -1010,16 +1007,46 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(cancelCount).toBe(2);
   });
 
-  it('handles ngOnChanges when IsSubmitting ends', () => {
-    const comp = new CollabNewConversationDialogComponent();
-    comp.IsSubmitting = false;
-    comp.ngOnChanges({
-      IsSubmitting: new SimpleChange(true, false, false),
+  describe('focus after a submit ends', () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** The dialog's ViewChild is private and only set by rendering; a stand-in field is the one cast here. */
+    function withNameInput(comp: CollabNewConversationDialogComponent): () => number {
+      const focus = vi.fn();
+      (comp as unknown as { nameInputElement: { nativeElement: { focus: () => void } } }).nameInputElement = { nativeElement: { focus } };
+      return () => focus.mock.calls.length;
+    }
+
+    it('puts the focus back on the name field when a submit that was running ends', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(true, false, false) });
+      expect(focused()).toBe(0);
+      vi.runAllTimers();
+      expect(focused()).toBe(1);
     });
-    expect(comp.IsSubmitting).toBe(false);
+
+    it('does not move the focus when a submit starts', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(false, true, false) });
+      vi.runAllTimers();
+      expect(focused()).toBe(0);
+    });
+
+    it('does not touch the field after the dialog is destroyed', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(true, false, false) });
+      comp.ngOnDestroy();
+      vi.runAllTimers();
+      expect(focused()).toBe(0);
+    });
   });
 });
-
 
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [
@@ -1032,8 +1059,10 @@ describe('CollabSpacePeopleComponent', () => {
     const comp = new CollabSpacePeopleComponent();
     comp.Members = sampleMembers;
 
-    expect(comp.TotalMembers).toBe(3);
-    expect(comp.TeamCount).toBe(2);
+    // Pat is Invited: still a row in the list, but not counted
+    expect(comp.filteredMembers.map(m => m.name)).toContain('Pat Invited');
+    expect(comp.TotalMembers).toBe(2);
+    expect(comp.TeamCount).toBe(1);
     expect(comp.OutsideCount).toBe(1);
     expect(comp.ActiveCount).toBe(2);
 
@@ -1082,6 +1111,28 @@ describe('CollabSpacePeopleComponent', () => {
       expect(comp.inviteEmail).toBe('newperson@example.com');
       expect(comp.isInviting).toBe(true);
       expect(comp.InviteOutcome?.ok).toBe(false);
+    });
+
+    it("forgets a refusal when the form is cancelled or reopened, so it doesn't greet the next invite", () => {
+      const { comp } = withForm();
+      comp.InviteOutcome = { ok: false, message: 'Invite refused: this role cannot invite.' };
+      comp.CancelInvite();
+      expect(comp.InviteOutcome).toBeNull();
+      comp.isInviting = true;
+      comp.InviteOutcome = { ok: false, message: 'Invite refused again.' };
+      comp.ToggleInviteForm(); // closes
+      comp.ToggleInviteForm(); // reopens, clean
+      expect(comp.isInviting).toBe(true);
+      expect(comp.InviteOutcome).toBeNull();
+    });
+
+    it('keeps a success message until it is dismissed, outside the form that closed', () => {
+      const { comp } = withForm();
+      comp.InviteOutcome = { ok: true, message: 'They are seated.' };
+      expect(comp.isInviting).toBe(false);
+      expect(comp.InviteOutcome?.message).toBe('They are seated.');
+      comp.DismissInviteOutcome();
+      expect(comp.InviteOutcome).toBeNull();
     });
 
     it('sends nothing for a blank email', () => {

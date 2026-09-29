@@ -483,7 +483,11 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     MaxRows: 1,
                 }, user);
 
-                if (!spaceRes.Success || !spaceRes.Results?.[0]) {
+                if (!spaceRes.Success) {
+                    LogError(`ReachedSeat: space ${currentSpaceId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+                    break;
+                }
+                if (!spaceRes.Results?.[0]) {
                     break;
                 }
                 const s = spaceRes.Results[0];
@@ -524,6 +528,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }, user);
 
             if (!memberRes.Success || !memberRes.Results) {
+                LogError(`ReachedSeat: the seats of ${user.ID} could not be read: ${memberRes.ErrorMessage ?? 'unknown error'}`);
                 return null;
             }
 
