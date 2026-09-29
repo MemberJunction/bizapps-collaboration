@@ -167,14 +167,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                       <span class="person-source">
                         Their own seat here is {{ m.ownSeat.status }}
                         @if (m.ownSeat.canApprove && pending?.id !== m.ownSeat.id) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(ownSeatOf(m), 'approve')">Approve</button>
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
                         }
                         @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && pending?.id !== m.ownSeat.id) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(ownSeatOf(m), 'remove')">Withdraw</button>
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
                         }
                         @if (pending?.id === m.ownSeat.id) {
-                          {{ pendingQuestion(ownSeatOf(m)) }}
-                          <button type="button" class="send-invite-btn" [disabled]="Busy" (click)="ConfirmPending()">Confirm</button>
+                          {{ pendingQuestion(OwnSeatOf(m)) }}
+                          <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
                           <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
                         }
                       </span>
@@ -208,7 +208,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
                       @if (pending?.id === m.id) {
                         <span class="fs12">{{ pendingQuestion(m) }}</span>
-                        <button type="button" class="send-invite-btn" [disabled]="Busy" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
                         <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
                       } @else {
                         @if (m.canApprove) {
@@ -608,7 +608,7 @@ export class CollabSpacePeopleComponent {
   /** The action waiting for its confirmation. */
   public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
   /** True while a confirmed change is with the server: Confirm can't be pressed twice. */
-  @Input() Busy = false;
+  @Input() IsBusy = false;
   /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
   public LinkStatus = signal<'idle' | 'copied' | 'failed'>('idle');
   /** Where Copy writes. The browser's clipboard when there is one (there isn't on a plain-HTTP host). */
@@ -624,7 +624,7 @@ export class CollabSpacePeopleComponent {
   }
 
   /** The person's own seat on this space, as a member row, so it can be approved or withdrawn like any seat. */
-  public ownSeatOf(member: SpaceMemberModel): SpaceMemberModel {
+  public OwnSeatOf(member: SpaceMemberModel): SpaceMemberModel {
     const seat = member.ownSeat!;
     return { ...member, id: seat.id, status: seat.status, roleName: seat.roleName, roleCode: seat.roleCode, inherited: false, ownSeat: undefined };
   }
@@ -632,7 +632,7 @@ export class CollabSpacePeopleComponent {
   public pendingQuestion(member: SpaceMemberModel): string {
     switch (this.pending?.kind) {
       case 'approve': return `Approve ${member.name}?`;
-      case 'remove': return `Remove ${member.name}?`;
+      case 'remove': return member.status === 'Invited' ? `Withdraw ${member.name}'s seat?` : `Remove ${member.name}?`;
       case 'role': return `Change ${member.name}'s role?`;
       default: return '';
     }
@@ -649,7 +649,7 @@ export class CollabSpacePeopleComponent {
     const pending = this.pending;
     this.pending = null;
     const listed = this.Members.find((m) => m.id === pending?.id);
-    const member = listed ?? this.Members.filter((m) => m.ownSeat).map((m) => this.ownSeatOf(m)).find((m) => m.id === pending?.id);
+    const member = listed ?? this.Members.filter((m) => m.ownSeat).map((m) => this.OwnSeatOf(m)).find((m) => m.id === pending?.id);
     if (!pending || !member) return;
     if (pending.kind === 'approve') this.ApproveMemberRequested.emit(member);
     else if (pending.kind === 'remove') this.RemoveMemberRequested.emit(member);

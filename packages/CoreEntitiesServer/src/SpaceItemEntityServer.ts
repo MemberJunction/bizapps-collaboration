@@ -58,8 +58,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         };
     }
 
-    /** What validation read, for the reaction that follows: set by validation, taken and cleared by `Save`. */
-    private validatedChange: { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
+    /** What `Save` read, handed to validation so a save has one reading. Validation called on its own reads for itself. */
+    private readingForSave: { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
 
     /** What each changed field held before this save, by field name. System columns are left out. */
     private dirtyOldValues(): Record<string, unknown> {
@@ -75,9 +75,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
-        // Read before the gate rewrites the band and the stamps, so it is the reading `Save` makes too
-        const reading = this.readChange();
-        this.validatedChange = reading;
+        // The reading `Save` took, or one taken here before the gate rewrites the band and the stamps when validation runs on its own
+        const reading = this.readingForSave ?? this.readChange();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const caller = callerUuid(user);
@@ -183,17 +182,16 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
-        // Read here, before the save; validation's own reading (taken before its rewrites) wins when it ran. Dropped when done.
+        // One reading per save: taken here, handed to validation, used by the reaction. Dropped when the save is done.
         const own = this.readChange();
-        this.validatedChange = null;
+        this.readingForSave = own;
         let ok = false;
-        let decided = own;
         try {
             ok = await super.Save(options);
-            decided = this.validatedChange ?? own;
         } finally {
-            this.validatedChange = null;
+            this.readingForSave = null;
         }
+        const decided = own;
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
@@ -205,20 +203,24 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         }
 
         // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
-        if (decided.changed) try {
-            const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
-            await spaceInfo.driver.OnItemChanged({
-                actingUser: user,
-                provider: this.ProviderToUse,
-                space: spaceInfo.space,
-                spaceType: spaceInfo.spaceType,
-                effectiveRules: ResolveSpaceRules(null, null),
-                item: this,
-                kind: decided.kind,
-                oldValues: decided.oldValues,
-            });
-        } catch (driverErr) {
-            LogError(`OnItemChanged of space ${this.SpaceID} failed for item ${this.ID}: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+        if (decided.changed) {
+            let typeCode: string | undefined;
+            try {
+                const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
+                typeCode = spaceInfo.spaceType.Code;
+                await spaceInfo.driver.OnItemChanged({
+                    actingUser: user,
+                    provider: this.ProviderToUse,
+                    space: spaceInfo.space,
+                    spaceType: spaceInfo.spaceType,
+                    effectiveRules: ResolveSpaceRules(null, null),
+                    item: this,
+                    kind: decided.kind,
+                    oldValues: decided.oldValues,
+                });
+            } catch (driverErr) {
+                LogError(`OnItemChanged of space type '${typeCode ?? 'not resolved'}' failed for space ${this.SpaceID} (item ${this.ID}): ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+            }
         }
 
         if (becameShared) {

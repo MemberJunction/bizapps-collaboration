@@ -13,16 +13,25 @@ import { parseUuid } from './uuid.js';
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
 /**
- * The kind of change a seat save is, decided from what changed. Approving an invited seat and reinstating a removed one have no
- * kind of their own: a seat that becomes Active again is an Invite, as it is when it is first made.
+ * The kind of change a seat save is, from what the save asked for. A new seat is an Invite (a Remove when made Removed), and so is
+ * a seat that becomes Active: an approval, or a reinstatement. Otherwise a status made Removed is a Remove, and a role or a band
+ * edit is a RoleChange or a BandChange. A save that touches none of these is no seat change and has no kind.
  */
-export function decideMemberKind(change: { isNew: boolean; status: string; statusChanged: boolean; roleChanged: boolean; bandChanged: boolean }): MemberChangeKind {
-    // A new seat is an Invite (or a Remove, made Removed), whatever else is dirty: the gate derives its band and status itself
+export function decideMemberKind(change: { isNew: boolean; status: string; statusChanged: boolean; roleChanged: boolean; bandChanged: boolean }): MemberChangeKind | null {
+    // A new seat, whatever else is dirty: the gate derives its band and status itself
     if (change.isNew) return change.status === 'Removed' ? 'Remove' : 'Invite';
-    if (change.status === 'Removed' && change.statusChanged) return 'Remove';
+    if (change.statusChanged && change.status === 'Removed') return 'Remove';
+    if (change.statusChanged && change.status === 'Active') return 'Invite';
     if (change.roleChanged) return 'RoleChange';
     if (change.bandChanged) return 'BandChange';
-    return 'Invite';
+    return null;
+}
+
+/** What a seat save changes: its kind (none when it touches no status, role or band), what the fields held, and whether it is a change. */
+interface SeatChangeReading {
+    kind: MemberChangeKind | null;
+    oldValues: Record<string, unknown>;
+    changed: boolean;
 }
 
 @RegisterClass(BaseEntity, ENTITY)
@@ -32,9 +41,8 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
-        // Read before the gate rewrites the status and the band, so it is the reading `Save` makes too
-        const reading = this.readChange();
-        this.validatedChange = reading;
+        // The reading `Save` took, or one taken here before the gate rewrites the status and the band when validation runs on its own
+        const reading = this.readingForSave ?? this.readChange();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const caller = callerUuid(user);
@@ -111,9 +119,11 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
 
-        // Extensibility Driver Validation
-        const refused = await this.judgeWithDriver(user, spaceId, reading.kind, reading.oldValues);
-        if (refused) return fail(result, refused.field, refused.message);
+        // Extensibility Driver Validation: only for a change to the seat itself
+        if (reading.kind) {
+            const refused = await this.judgeWithDriver(user, spaceId, reading.kind, reading.oldValues);
+            if (refused) return fail(result, refused.field, refused.message);
+        }
 
         return result;
     }
@@ -143,20 +153,17 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     }
 
     /** What this save changes, read once. */
-    private readChange(): { kind: MemberChangeKind; oldValues: Record<string, unknown>; changed: boolean } {
+    private readChange(): SeatChangeReading {
         const isNew = !this.IsSaved;
-        return {
-            kind: this.currentKind(),
-            oldValues: isNew ? {} : this.dirtyOldValues(),
-            changed: isNew || this.Fields.some((f) => f.Dirty),
-        };
+        const kind = this.currentKind();
+        return { kind, oldValues: isNew ? {} : this.dirtyOldValues(), changed: kind !== null };
     }
 
-    /** What validation read, for the reaction that follows: set by validation, taken and cleared by `Save`. */
-    private validatedChange: { kind: MemberChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
+    /** What `Save` read, handed to validation so a save has one reading. Validation called on its own reads for itself. */
+    private readingForSave: SeatChangeReading | null = null;
 
     /** The kind of change this save is, from its dirty fields. */
-    private currentKind(): MemberChangeKind {
+    private currentKind(): MemberChangeKind | null {
         return decideMemberKind({
             isNew: !this.IsSaved,
             status: this.Status,
@@ -178,24 +185,25 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
-        // Read here, before the save. If validation ran it read the same fields, before the gate's own rewrites, and its reading is
-        // the one used, so the two can't disagree. Dropped when the save is done, so a retry starts clean.
+        // One reading per save: taken here, before the gate rewrites anything, handed to validation, and used by the reaction.
+        // Dropped when the save is done, so a retry starts clean.
         const own = this.readChange();
-        this.validatedChange = null;
+        this.readingForSave = own;
         let ok = false;
-        let decided = own;
         try {
             ok = await super.Save(options);
-            decided = this.validatedChange ?? own;
         } finally {
-            this.validatedChange = null;
+            this.readingForSave = null;
         }
+        const decided = own;
         if (ok && this.ContextCurrentUser && this.SpaceID) {
             const user = this.ContextCurrentUser;
             // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
-            if (decided.changed) {
+            if (decided.changed && decided.kind) {
+                let typeCodeOfSeat: string | undefined;
                 try {
                     const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
+                    typeCodeOfSeat = spaceInfo.spaceType.Code;
                     await spaceInfo.driver.OnMemberChanged({
                         actingUser: user,
                         provider: this.ProviderToUse,
@@ -207,7 +215,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                         oldValues: decided.oldValues,
                     });
                 } catch (driverErr) {
-                    LogError(`OnMemberChanged of space ${this.SpaceID} failed for seat ${this.ID}: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+                    LogError(`OnMemberChanged of space type '${typeCodeOfSeat ?? 'not resolved'}' failed for space ${this.SpaceID} (seat ${this.ID}): ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
                 }
             }
 

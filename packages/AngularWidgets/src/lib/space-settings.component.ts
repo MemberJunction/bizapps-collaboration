@@ -17,6 +17,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="settings-sub">Manage identity, branding, access inheritance, and AI retrieval behavior for {{ Settings.name }}.</div>
         </div>
 
+        @if (CanEdit) {
         <button
           class="save-btn"
           [disabled]="isSaving"
@@ -30,6 +31,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <span>Save changes</span>
           }
         </button>
+        }
       </div>
 
       @if (bannerVisible && saveSuccessMessage) {
@@ -45,6 +47,19 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
       }
 
+      @if (!CanEdit) {
+        <div class="alert-info" role="status">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>This space is closed and its access has ended, so its settings can no longer be changed. As an owner you can reopen it.</span>
+        </div>
+        <div class="settings-sections">
+          <div class="settings-card">
+            <div class="form-grid">
+              <ng-container *ngTemplateOutlet="lifecycle"></ng-container>
+            </div>
+          </div>
+        </div>
+      } @else {
       <div class="settings-sections" (input)="onEdit()" (change)="onEdit()">
         <!-- 1. Profile & Appearance -->
         <div class="settings-card">
@@ -228,6 +243,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               </div>
             }
 
+            <ng-container *ngTemplateOutlet="lifecycle"></ng-container>
+          </div>
+        </div>
+      </div>
+      }
+
+      <ng-template #lifecycle>
             <div class="form-field full-width">
               <div class="cb-title">Status: {{ formData.status }}</div>
               @if (confirmingLifecycle) {
@@ -238,9 +260,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 <button type="button" class="cancel-lifecycle-btn" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
-          </div>
-        </div>
-      </div>
+      </ng-template>
     </div>
   `,
   styles: [
@@ -519,10 +539,24 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   public bannerVisible = true;
   /** True while a close or reopen is with the server: both buttons are off. */
   @Input() IsBusy = false;
+  /** False when the person may only reopen the space (its access has ended): the form is not shown, and there is nothing to save. */
+  @Input() CanEdit = true;
   private baselineJson = '';
 
+  /** The fields the person changed from what the form was built from. Status is the space's own, not a field they edit. */
+  private changedFields(): Partial<SpaceSettingsModel> {
+    if (!this.formData || !this.baselineJson) return {};
+    const baseline = JSON.parse(this.baselineJson) as Record<string, unknown>;
+    const changed: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(this.formData as unknown as Record<string, unknown>)) {
+      if (key === 'status') continue;
+      if (JSON.stringify(value) !== JSON.stringify(baseline[key])) changed[key] = value;
+    }
+    return changed as Partial<SpaceSettingsModel>;
+  }
+
   private isFormDirty(): boolean {
-    return !!this.formData && JSON.stringify({ ...this.formData, status: this.Settings?.status }) !== this.baselineJson;
+    return Object.keys(this.changedFields()).length > 0;
   }
   public confirmingLifecycle = false;
 
@@ -550,7 +584,8 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
       // The same space's settings arriving again (after a close or reopen) must not throw away what is being typed
       const sameSpace = !!this.formData && this.formData.id === this.Settings.id;
       if (sameSpace && this.isFormDirty()) {
-        this.formData = { ...this.formData, status: this.Settings.status };
+        // The fresh row, with only what the person changed laid over it: another owner's change to a field they left alone stays
+        this.formData = { ...this.Settings, ...this.changedFields() };
       } else {
         this.initFormData();
       }

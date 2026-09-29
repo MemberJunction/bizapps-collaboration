@@ -1,4 +1,5 @@
 import type { Type } from '@angular/core';
+import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
 import type { BaseSpaceTab, SpaceTabDescriptor, TabItem } from '@mj-biz-apps/collaboration-ng-widgets';
 
 /** A tab the app itself provides, with the panel of the space type that switches it on. */
@@ -20,13 +21,15 @@ export const BUILT_IN_TABS: readonly BuiltInTab[] = [
     { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders', sortKey: 100 },
 ];
 
-/** Deep links spelled another way for the same tab. */
-const ALIASES: Readonly<Record<string, string>> = { discussions: 'chat' };
-
-/** One key scheme everywhere: the section, the deep links, the drivers and Labels.Tabs compare without case or padding. */
+/** One key scheme everywhere: Core's rule, shared with the UI drivers and Labels.Tabs. */
 export function tabKey(key: string): string {
-    const normalized = key.trim().toLowerCase();
-    return ALIASES[normalized] ?? normalized;
+    return normalizeContributionKey(key);
+}
+
+/** The tab id a deep link's `tab` names: a built-in tab's own id, else the key as given (a contributed tab, resolved once the space's tabs are known). */
+export function tabIdFromUrl(key: string): string {
+    const wanted = tabKey(key);
+    return BUILT_IN_TABS.find((tab) => tabKey(tab.id) === wanted)?.id ?? key.trim();
 }
 
 export interface SpaceTabModel {

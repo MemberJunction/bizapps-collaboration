@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { SpaceTabDescriptor } from '@mj-biz-apps/collaboration-ng-widgets';
-import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabKey } from './space-tabs.ts';
+import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, tabKey } from './space-tabs.ts';
 
 const allPanels = { MessagingPanel: true, LibraryPanel: true, WorkPanel: true };
 const identity = (defaults: SpaceTabDescriptor[]): SpaceTabDescriptor[] => defaults;
@@ -85,5 +85,12 @@ describe('a UI driver that throws', () => {
     it('gives the driver its tabs when it does not throw', () => {
         const model = buildSpaceTabsSafely({ panels: allPanels, finalize: (d) => d.slice(0, 2), labelFor: keepLabel }, () => { throw new Error('unexpected'); });
         assert.deepEqual(model.tabs.map((tab) => tab.id), ['Overview', 'Library']);
+    });
+
+    it('reads a deep link as the built-in tab it names, in any case, with discussions as Chat, and passes a contributed key through', () => {
+        assert.equal(tabIdFromUrl('library'), 'Library');
+        assert.equal(tabIdFromUrl(' PEOPLE '), 'People');
+        assert.equal(tabIdFromUrl('discussions'), 'Chat');
+        assert.equal(tabIdFromUrl('papers'), 'papers');
     });
 });

@@ -73,6 +73,7 @@ export interface SubSpaceSummary {
           }
 
           <!-- Shared with Client band -->
+          @if (ShowLibraryLink) {
           <div class="card band-card shared-band">
             <div class="band-h">
               <span class="band-ic">
@@ -107,9 +108,10 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
 
           <!-- Team Working Set band -->
-          @if (CanSeeTeamSide) {
+          @if (CanSeeTeamSide && ShowLibraryLink) {
           <div class="card band-card team-band">
             <div class="band-h">
               <span class="band-ic team">
@@ -161,6 +163,7 @@ export interface SubSpaceSummary {
           }
 
           <!-- Discussion Card -->
+          @if (ShowChatLink) {
           <div class="card room-card">
             <div class="card-h">
               <span class="h3">Discussion</span>
@@ -204,6 +207,7 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
 
           <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
           @for (card of UniqueContributedCards; track card.key) {

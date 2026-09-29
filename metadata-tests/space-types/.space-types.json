@@ -40,7 +40,8 @@
           "example-board": {
             "SealedChildNames": [
               "compensation"
-            ]
+            ],
+            "MaxOutsideDirectors": 1
           }
         }
       }

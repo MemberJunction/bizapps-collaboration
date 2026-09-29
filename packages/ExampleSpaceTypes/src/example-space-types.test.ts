@@ -216,29 +216,43 @@ describe('ExampleBoardServerDriver', () => {
         }
     });
 
-    it("ValidateMemberChange refuses an outside role (one that can't see the Team band) on the Team band", () => {
-        const role = (canSeeTeamBand: boolean) => ({ CanSeeTeamBand: canSeeTeamBand }) as unknown as mjBizAppsCollaborationSpaceRoleTypeEntity;
-        const spy = vi.spyOn(CollaborationEngine.Instance, 'SpaceRoleTypeById');
-        const ctxFor = (band: 'Team' | 'Shared'): MemberChangeContext => ({
-            kind: 'Invite',
+    describe('the cap on outside directors', () => {
+        class CountingBoard extends ExampleBoardServerDriver {
+            public seated = 0;
+            protected override async CountOutsideDirectors(): Promise<number> { return this.seated; }
+        }
+        const ctxFor = (config: object | null, band: 'Team' | 'Shared', kind: MemberChangeContext['kind'] = 'Invite'): MemberChangeContext => ({
+            kind,
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
             space: createMockSpace(),
-            member: { Band: band, SpaceRoleTypeID: 'role-1' } as unknown as mjBizAppsCollaborationSpaceMemberEntity,
-            spaceType: createMockSpaceType(),
+            member: { ID: 'seat-1', Band: band, SpaceRoleTypeID: 'role-1' } as unknown as mjBizAppsCollaborationSpaceMemberEntity,
+            spaceType: { ...createMockSpaceType(), Configuration: config ? JSON.stringify({ Extensions: { 'example-board': config } }) : null } as mjBizAppsCollaborationSpaceTypeEntity,
             effectiveRules: createMockRules(),
         });
-        try {
-            spy.mockReturnValue(role(false));
-            const refused = driver.ValidateMemberChange(ctxFor('Team'));
+
+        it('refuses an outside director beyond the type\'s MaxOutsideDirectors, naming the cap', async () => {
+            const board = new CountingBoard();
+            board.seated = 1;
+            const refused = await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared'));
             expect(refused.ok).toBe(false);
-            expect(refused.field).toBe('Band');
-            expect(driver.ValidateMemberChange(ctxFor('Shared')).ok).toBe(true);
-            spy.mockReturnValue(role(true));
-            expect(driver.ValidateMemberChange(ctxFor('Team')).ok).toBe(true);
-        } finally {
-            spy.mockRestore();
-        }
+            expect(refused.message).toBe('This board already has 1 outside director, the most its type allows (1).');
+            board.seated = 0;
+            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared'))).ok).toBe(true);
+        });
+
+        it('has no cap when the type sets none, and looks only at a new outside seat', async () => {
+            const board = new CountingBoard();
+            board.seated = 5;
+            expect((await board.ValidateMemberChange(ctxFor(null, 'Shared'))).ok).toBe(true);
+            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Team'))).ok).toBe(true);
+            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared', 'BandChange'))).ok).toBe(true);
+        });
+
+        it('throws on a cap that is not a whole number, rather than reading it as none', async () => {
+            const board = new CountingBoard();
+            await expect(board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 'two' }, 'Shared'))).rejects.toThrow(/MaxOutsideDirectors/);
+        });
     });
 
     it('BuildAgentContext returns governance instructions and context data', () => {

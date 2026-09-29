@@ -6,6 +6,8 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
 const SEALED = 'C1000001-0000-4000-8000-000000000003';
+const CLOSED_NONE = 'C1000001-0000-4000-8000-000000000009';
+const OTHER_ID = '22222222-2222-4222-8222-222222222222';
 const OWNER_ROLE = 'A0000000-0000-4000-8000-000000000001';
 const MEMBER_ROLE = 'A0000000-0000-4000-8000-000000000002';
 
@@ -15,6 +17,8 @@ interface SpaceRow {
     InheritsMembership: boolean;
     OwnerID: string;
     ClosedAt: string | null;
+    PostCloseAccess?: 'None' | 'ReadOnly';
+    PostCloseAccessDays?: number | null;
 }
 interface SeatRow {
     SpaceID: string;
@@ -28,6 +32,7 @@ const spaces: SpaceRow[] = [
     { ID: NORTHWIND, ParentID: null, InheritsMembership: true, OwnerID: USER_ID, ClosedAt: null },
     { ID: DISCOVERY, ParentID: NORTHWIND, InheritsMembership: true, OwnerID: USER_ID, ClosedAt: null },
     { ID: SEALED, ParentID: NORTHWIND, InheritsMembership: false, OwnerID: USER_ID, ClosedAt: null },
+    { ID: CLOSED_NONE, ParentID: null, InheritsMembership: true, OwnerID: OTHER_ID, ClosedAt: '2026-01-01T00:00:00Z', PostCloseAccess: 'None', PostCloseAccessDays: null },
 ];
 
 /** A provider whose reads answer from `seats` and `spaces`, or fail on request. */
@@ -97,5 +102,16 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
 
     it('is null for an id that is not a UUID', async () => {
         expect(await reachedSeat("x'; DROP TABLE Space; --", providerOver([]))).toBeNull();
+    });
+
+    it("reopens a space whose post-close access ended, for an owner, though the owner no longer reaches it to configure it", async () => {
+        const provider = providerOver([seat(CLOSED_NONE, OWNER_ROLE)]);
+        expect(await reachedSeat(CLOSED_NONE, provider)).toBeNull();
+        expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, provider, roleTypeOf)).toBe(true);
+    });
+
+    it('gives no reopen right to a member who does not own the closed space, or to someone with no seat', async () => {
+        expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([seat(CLOSED_NONE, MEMBER_ROLE)]), roleTypeOf)).toBe(false);
+        expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, providerOver([]), roleTypeOf)).toBe(false);
     });
 });

@@ -280,11 +280,11 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 **The kinds of change.**
 - A space's own driver hears `Create`, `Update`, `Move`, `Close`, `Reopen` and `Delete`.
 - Its parent's driver hears the same change as a sub-space's: `CreateChild`, `UpdateChild`, `ReopenChild`, `MoveChildIn`, `MoveChildOut`, `CloseChild` and `DeleteChild`. A move is one save seen from both parents: the one it joins hears `MoveChildIn`, the one it leaves `MoveChildOut`. A close and a move in one save are refused, so no save is both.
-- A member's driver hears `Invite`, `RoleChange`, `BandChange` and `Remove`. Every new seat is an `Invite`, and so is approving a pending seat or reinstating a removed one: the driver hears the seat come into being, not the route it took.
+- A member's driver hears `Invite`, `RoleChange`, `BandChange` and `Remove`. A new seat is an `Invite` (a `Remove` when it is made Removed), and so is a seat whose status becomes Active: an approval or a reinstatement. A role or band edit is a `RoleChange` or `BandChange`, as asked: a band the gate puts back still reaches the driver as a `BandChange`. A save that touches none of status, role and band raises no seat reaction.
 - Validation and reaction read one reading of the change, taken when validation starts, so they can't disagree about what kind it was. A save that changes nothing raises no reaction. Each reaction runs on its own: a driver that throws is logged with its hook and space, and doesn't silence the next.
-- **Today** the reactions run after the save has committed, not inside its transaction, and a failure is logged and does not undo the save. Moving them inside the transaction is stage 2 (item 79).
+- **Today** the reactions run after the save has committed, not inside its transaction, and a failure is logged and does not undo the save. Moving them inside the transaction is planned for stage 2, with the one resolver for the rules.
 
-| Area | Validate (can refuse) | React (inside the transaction) |
+| Area | Validate (can refuse) | React (after the save commits today; inside the transaction is planned) |
 |---|---|---|
 | Rules | `AdjustRules(ctx, rules)` narrows the effective rules | |
 | The space | `ValidateSpaceChange` | `OnSpaceChanged` |

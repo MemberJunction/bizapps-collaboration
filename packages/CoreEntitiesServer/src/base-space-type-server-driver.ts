@@ -29,6 +29,11 @@ export interface DriverBaseContext {
     subtypeEntityName?: string | null;
 }
 
+/**
+ * What a change to a space means to the space's own driver. A kind is what the save asked for, read before anything rewrites the
+ * row: a create; a close or a reopen (`ClosedAt` set or cleared); a move (the parent changed); else an update. A close or a reopen
+ * that also moves the space is refused, so no save is two of these.
+ */
 export type SpaceChangeKind = 'Create' | 'Update' | 'Move' | 'Close' | 'Reopen' | 'Delete';
 
 export interface SpaceChangeContext extends DriverBaseContext {
@@ -40,6 +45,10 @@ export interface SpaceChangeContext extends DriverBaseContext {
  * What a change to a sub-space means to its parent's driver. A `MoveChildIn` and a `MoveChildOut` are one save seen from the two
  * parents: the one it joins hears the first, the one it leaves the second. A `ReopenChild` is a closed sub-space becoming open
  * again. A save that closes and moves a space at once is refused, so no save is both.
+ *
+ * A rule on which sub-spaces may sit under a space has to judge every kind that leaves a sub-space open under it: `CreateChild`,
+ * `MoveChildIn` and `ReopenChild`, and `UpdateChild` for a retype or a rename. Judging only `CreateChild` lets a move or a reopen
+ * walk around the rule.
  */
 export type ChildSpaceChangeKind = 'CreateChild' | 'UpdateChild' | 'ReopenChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
 
@@ -51,8 +60,11 @@ export interface ChildSpaceChangeContext extends DriverBaseContext {
 }
 
 /**
- * What a change to a seat means to the driver. Every new seat is an `Invite`, and so is approving a pending seat or reinstating a
- * removed one: the driver hears the seat come into being, not the route it took.
+ * What a change to a seat means to the driver, from what the save asked for. A new seat is an `Invite`, or a `Remove` when it is
+ * made Removed. A saved seat whose status becomes Active is an `Invite` too: an approval or a reinstatement is the seat coming into
+ * being, not a route the driver hears. Otherwise a status made Removed is a `Remove`, and a role or a band edit is a `RoleChange`
+ * or a `BandChange`. The kind is what was asked for: a band the gate puts back still reaches the driver as a `BandChange`. A save
+ * that touches none of these four fields raises no seat reaction.
  */
 export type MemberChangeKind = 'Invite' | 'RoleChange' | 'BandChange' | 'Remove';
 
@@ -62,6 +74,10 @@ export interface MemberChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
+/**
+ * What a change to an item means to the driver: a new item is `Add`; a different space is `Move`; a band that became Shared is
+ * `Promote`; any other change (a rename, a note) is `Update`. `Remove` is a delete.
+ */
 export type ItemChangeKind = 'Add' | 'Update' | 'Promote' | 'Move' | 'Remove';
 
 export interface ItemChangeContext extends DriverBaseContext {

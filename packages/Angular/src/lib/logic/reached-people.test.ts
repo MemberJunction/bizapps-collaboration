@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { rosterBySeat, type MemberSnapshot, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { accessChain, nearestSeats, type TreeSpace } from './reached-people.ts';
 
 const id = (n: number): string => `C1000001-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -81,4 +82,41 @@ describe('who reaches a space', () => {
         assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: 30 })).map((c) => c.name), ['Field notes']);
         assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null })).map((c) => c.name), ['Field notes', 'Discovery', 'Northwind relationship']);
     });
+});
+
+describe("the section's list of who reaches a space, held against Core's", () => {
+    const now = new Date();
+    const daysAgo = (days: number): string => new Date(now.getTime() - days * 86_400_000).toISOString();
+    const role = { level: 20, maxGrantableLevel: 10, canInvite: false, canPromoteBand: false, canSeeTeamBand: true, isOwnerRole: false, canContribute: true };
+
+    /** The same tree in the section's shape and in Core's. */
+    function trees(closed: Partial<TreeSpace>): { tree: TreeSpace[]; nodes: SpaceNode[] } {
+        const tree: TreeSpace[] = [
+            { ID: id(1), Name: 'Root', ParentID: null, InheritsMembership: true },
+            { ID: id(2), Name: 'Middle', ParentID: id(1), InheritsMembership: true, ...closed },
+            { ID: id(3), Name: 'Leaf', ParentID: id(2), InheritsMembership: true },
+        ];
+        const nodes: SpaceNode[] = tree.map((space) => ({
+            id: space.ID, parentId: space.ParentID, inheritsMembership: space.InheritsMembership, ownerId: 'owner', agentRetrieval: 'Included',
+            closedAt: space.ClosedAt ?? null, postCloseAccess: space.PostCloseAccess ?? null, postCloseAccessDays: space.PostCloseAccessDays ?? null,
+        }));
+        return { tree, nodes };
+    }
+    const rows = [seat(1, 'ada'), seat(2, 'bea'), seat(3, 'lee'), seat(1, 'bea')];
+    const snapshots: MemberSnapshot[] = rows.map((row) => ({ spaceId: row.SpaceID, userId: row.UserID, status: 'Active', band: 'Team', role }));
+
+    for (const [label, closed] of [
+        ['no space closed', {}],
+        ['a closed middle space with no post-close access', { ClosedAt: daysAgo(10), PostCloseAccess: 'None' as const }],
+        ['a closed middle space still inside its window', { ClosedAt: daysAgo(10), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
+        ['a closed middle space past its window', { ClosedAt: daysAgo(40), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
+    ] as const) {
+        it(`lists the same people under the same seats with ${label}`, () => {
+            const { tree, nodes } = trees(closed);
+            const mine = nearestSeats(rows, accessChain(id(3), tree)).map((reached) => `${reached.row.UserID}@${reached.from.id}`).sort();
+            const walk = rosterBySeat(nodes, snapshots, id(3), now);
+            const core = walk.groups.flatMap((group) => group.members.map((member) => `${member.userId}@${group.spaceId}`)).sort();
+            assert.deepEqual(mine, core);
+        });
+    }
 });

@@ -1,6 +1,6 @@
 import type { Type } from '@angular/core';
 import type { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import type { EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { normalizeContributionKey as normalizeKey, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal, type ClassRegistration } from '@memberjunction/global';
@@ -186,11 +186,9 @@ export class BaseSpaceTypeUIDriver {
     }
 }
 
-/** Keys are compared without case or padding, everywhere: the section, the deep links, the drivers and Labels.Tabs. */
+/** Keys are compared without case or padding, and `discussions` is Chat, everywhere: Core holds the one rule. */
 export function normalizeContributionKey(key: string): string {
-    const normalized = key.trim().toLowerCase();
-    // 'discussions' is another spelling of the Chat tab, in deep links and in Labels.Tabs alike
-    return normalized === 'discussions' ? 'chat' : normalized;
+    return normalizeKey(key);
 }
 
 /**
@@ -258,7 +256,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
             if (existing) LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${reg.Priority}) is used and the other (${existing.reg.Priority}) is ignored.`);
             map.set(key, { reg, meta });
         } else {
-            LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored.`);
+            LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; ${reg.Priority === existing.reg.Priority ? `at the same priority (${reg.Priority}) the first registered is used` : `the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored`}.`);
         }
     }
 

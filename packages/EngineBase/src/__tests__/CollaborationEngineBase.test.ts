@@ -1,5 +1,5 @@
 import { describe, it, beforeEach, expect } from 'vitest';
-import { CollaborationEngineBase, COLLABORATION_APP_ID } from '../CollaborationEngineBase.js';
+import { CollaborationEngineBase, COLLABORATION_APP_ID, MissingAppSettingsError } from '../CollaborationEngineBase.js';
 import type {
     mjBizAppsCollaborationSpaceTypeEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
@@ -209,7 +209,8 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 // A reload that finds the row missing drops the old row's reasons
                 internals._applicationSettings = [];
                 await reload();
-                expect(() => engine.CollaborationSettings).toThrow(/^(?!.*(invalid|Failed to parse))/s);
+                expect(() => engine.CollaborationSettings).toThrow(MissingAppSettingsError);
+                expect(() => engine.CollaborationSettings).not.toThrow(/Failed to parse|invalid/);
 
                 // A reload that finds a good row reads it
                 internals._applicationSettings = held;

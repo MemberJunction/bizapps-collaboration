@@ -1361,6 +1361,49 @@ describe('CollabSpacePeopleComponent', () => {
     { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
   ];
 
+  describe("a person's own pending seat on a space they reach through a parent", () => {
+    const withOwnSeat: SpaceMemberModel = {
+      id: 'inherited-1', userId: 'u4', name: 'Sam Reach', email: 'sam@example.com', initials: 'SR', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active',
+      inherited: true, source: 'Northwind',
+      ownSeat: { id: 'own-1', status: 'Invited', roleName: 'Member', roleCode: 'member', canApprove: true, canRemove: true },
+    };
+
+    it("counts the own Invited seat in Awaiting Approval, beside the listed Invited seats", () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [...sampleMembers, withOwnSeat];
+      expect(comp.InvitedCount).toBe(2);
+    });
+
+    it('asks to withdraw an Invited seat, not to remove a person, and emits the own seat on confirm', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [withOwnSeat];
+      const removed = vi.fn();
+      comp.RemoveMemberRequested.subscribe(removed);
+      comp.Ask(comp.OwnSeatOf(withOwnSeat), 'remove');
+      expect(comp.pendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe("Withdraw Sam Reach's seat?");
+      comp.ConfirmPending();
+      expect(removed).toHaveBeenCalledTimes(1);
+      expect(removed.mock.calls[0][0]).toMatchObject({ id: 'own-1', status: 'Invited', roleCode: 'member' });
+    });
+
+    it('asks to approve, and emits the own seat on confirm', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [withOwnSeat];
+      const approved = vi.fn();
+      comp.ApproveMemberRequested.subscribe(approved);
+      comp.Ask(comp.OwnSeatOf(withOwnSeat), 'approve');
+      expect(comp.pendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe('Approve Sam Reach?');
+      comp.ConfirmPending();
+      expect(approved.mock.calls[0][0]).toMatchObject({ id: 'own-1' });
+    });
+
+    it('still asks to remove a seated person', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Ask(sampleMembers[1], 'remove');
+      expect(comp.pendingQuestion(sampleMembers[1])).toBe('Remove Bea Client?');
+    });
+  });
+
   it('calculates roster counts and filters by audience and search query', () => {
     const comp = new CollabSpacePeopleComponent();
     comp.Members = sampleMembers;
@@ -1492,6 +1535,51 @@ describe('CollabSpaceSettingsComponent', () => {
     expect(saved).not.toBeNull();
     expect(saved!.name).toBe('Northwind strategic relationship');
     expect(saved!.color).toBe('#0284c7');
+  });
+
+  const arrives = (comp: CollabSpaceSettingsComponent, next: SpaceSettingsModel): void => {
+    const previous = comp.Settings;
+    comp.Settings = next;
+    comp.ngOnChanges({ Settings: { previousValue: previous, currentValue: next, firstChange: false, isFirstChange: () => false } });
+  };
+
+  it("keeps only what the person changed when the same space's settings arrive again, so another owner's change to another field stays", () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    comp.formData.description = 'My new description';
+    // Meanwhile another owner renamed the space, and it was closed
+    arrives(comp, { ...initialSettings, name: 'Renamed by someone else', status: 'Closed' });
+    expect(comp.formData.description).toBe('My new description');
+    expect(comp.formData.name).toBe('Renamed by someone else');
+    expect(comp.formData.status).toBe('Closed');
+  });
+
+  it('counts a close or a reopen alone as no edit: the form is built again from the fresh row', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    arrives(comp, { ...initialSettings, name: 'Renamed by someone else', status: 'Closed' });
+    expect(comp.formData.name).toBe('Renamed by someone else');
+  });
+
+  it('asks to close an open space and to reopen a closed one, and is off while busy', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    const closed = vi.fn();
+    const reopened = vi.fn();
+    comp.CloseSpaceRequested.subscribe(closed);
+    comp.ReopenSpaceRequested.subscribe(reopened);
+    comp.confirmLifecycle();
+    expect([closed.mock.calls.length, reopened.mock.calls.length]).toEqual([1, 0]);
+    arrives(comp, { ...initialSettings, status: 'Closed' });
+    comp.confirmLifecycle();
+    expect([closed.mock.calls.length, reopened.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('edits by default, and is read-only only when told the person may just reopen', () => {
+    expect(new CollabSpaceSettingsComponent().CanEdit).toBe(true);
   });
 });
 

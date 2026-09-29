@@ -355,7 +355,10 @@ const checks: NamedCheck[] = [
             const COHORT = 'C1000001-0000-4000-8000-000000000005';
             const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
             const underCohort = await newSpace(ctx, ada, { name: 'EX8-under-cohort', typeId: project!, parentId: COHORT, inherits: true });
-            Assert(!(await underCohort.Save()), 'A project under a cohort must be refused');
+            const cohortSaved = await underCohort.Save();
+            // If the refusal failed the space exists: it is removed before the assertion says so
+            if (cohortSaved) await cleanupSpace(ctx.Provider, ctx.User, underCohort.ID);
+            Assert(!cohortSaved, 'A project under a cohort must be refused');
             Assert(/cannot contain sub-spaces/.test(underCohort.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${underCohort.LatestResult?.CompleteMessage ?? ''}`);
             const underWorkspace = await newSpace(ctx, ada, { name: 'EX8-under-workspace', typeId: project!, parentId: DISCOVERY, inherits: true });
             Assert(await underWorkspace.Save(), `A project under a workspace is accepted: ${underWorkspace.LatestResult?.CompleteMessage ?? ''}`);
@@ -379,7 +382,9 @@ const checks: NamedCheck[] = [
                 created.unshift(first.ID);
                 await seatOwner(ctx, ada, first.ID);
                 const second = await newSpace(ctx, ada, { name: 'EX9-second', typeId: board.ID, parentId: parent.ID });
-                Assert(!(await second.Save()), 'A second open sub-space must be refused (MaxOpen is 1)');
+                const secondSaved = await second.Save();
+                if (secondSaved) created.unshift(second.ID);
+                Assert(!secondSaved, 'A second open sub-space must be refused (MaxOpen is 1)');
                 Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
 
                 // Close the first, file a second in its place, then try to reopen the first: over the cap again
@@ -440,7 +445,8 @@ const checks: NamedCheck[] = [
             const parent = await newSpace(ctx, ada, { name: 'EX11-Board', typeId: board.ID });
             const outsider = await newSpace(ctx, ada, { name: 'EX11-Outsider', typeId: board.ID });
             Assert(await parent.Save() && await outsider.Save(), 'Ada creates two example boards');
-            const created: string[] = [parent.ID, outsider.ID];
+            // Removed first to last: the board that may end up under the parent goes before it, whether the refused move holds or not
+            const created: string[] = [outsider.ID, parent.ID];
             try {
                 await seatOwner(ctx, ada, parent.ID);
                 await seatOwner(ctx, ada, outsider.ID);
@@ -465,9 +471,6 @@ const checks: NamedCheck[] = [
                 Assert(await filing.Load(outsider.ID), 'The closed board loads');
                 filing.ParentID = parent.ID;
                 Assert(await filing.Save(), `A closed board may move under a full one: ${filing.LatestResult?.CompleteMessage ?? ''}`);
-                // Now a sub-space of the parent, so it is removed before it
-                created.splice(created.indexOf(outsider.ID), 1);
-                created.unshift(outsider.ID);
 
                 // The board lists only boards, so a sub-space cannot become a room
                 const retype = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
@@ -476,6 +479,42 @@ const checks: NamedCheck[] = [
                 Assert(!(await retype.Save()), 'Retyping a sub-space to a type its parent does not list must be refused');
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);
+            }
+        },
+    },
+    {
+        Id: 'extensions.EX12',
+        Name: "EX12 — the board's MaxOutsideDirectors caps the outside seats, through a save",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const casey = await GetPersonaUser(ctx, 'casey');
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const outsideRole = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, 'CanSeeTeamBand = 0', ['ID']))[0];
+            Assert(!!outsideRole, 'An outside role (one that cannot see the Team band) exists');
+            const space = await newSpace(ctx, ada, { name: 'EX12-Board', typeId: board.ID });
+            Assert(await space.Save(), `Ada creates an example board: ${space.LatestResult?.CompleteMessage ?? ''}`);
+            try {
+                await seatOwner(ctx, ada, space.ID);
+                const seatOutside = async (who: typeof bea): Promise<mjBizAppsCollaborationSpaceMemberEntity> => {
+                    const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                    seat.NewRecord();
+                    seat.SpaceID = space.ID;
+                    seat.UserID = who.ID;
+                    seat.SpaceRoleTypeID = outsideRole.ID;
+                    seat.Band = 'Shared';
+                    seat.Status = 'Active';
+                    return seat;
+                };
+                const first = await seatOutside(casey);
+                Assert(await first.Save(), `The board's first outside director is seated: ${first.LatestResult?.CompleteMessage ?? ''}`);
+                const second = await seatOutside(bea);
+                const secondSaved = await second.Save();
+                Assert(!secondSaved, 'A second outside director must be refused (MaxOutsideDirectors is 1)');
+                Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
+            } finally {
+                await closeAndRemove(ctx, space.ID);
             }
         },
     },

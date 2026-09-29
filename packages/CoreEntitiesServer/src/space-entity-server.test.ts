@@ -369,6 +369,7 @@ describe('SpaceEntityServer closure and reopening validation', () => {
             IsSaved: { value: true, writable: true },
             ID: { value: '33333333-3333-4333-8333-333333333333', writable: true },
             OwnerID: { value: staffUser.ID, writable: true },
+            ParentID: { value: null, writable: true },
             ClosedAt: { value: closedAt, writable: true },
             Fields: { value: [...fields, { Name: 'OwnerID', Dirty: false }], writable: true },
         });
@@ -393,31 +394,24 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         const space = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, nobody);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Success, false);
-        assert.match(res.Errors.map((e) => e.Message).join(' '), /the date a space closed can not be changed|staff/i);
+        assert.match(res.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: the date a space closed cannot be changed\.$/);
     });
 
-    it('refuses future ClosedAt when closing a space', async () => {
-        const futureDate = new Date(Date.now() + 86400000).toISOString();
-        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
-        Object.defineProperties(space, {
-            ContextCurrentUser: { value: staffUser, writable: true },
-            IsSaved: { value: true, writable: true },
-            ID: { value: '33333333-3333-4333-8333-333333333333', writable: true },
-            OwnerID: { value: staffUser.ID, writable: true },
-            ClosedAt: { value: futureDate, writable: true },
-            Fields: {
-                value: [
-                    { Name: 'ClosedAt', Dirty: true, OldValue: null, Value: futureDate },
-                    { Name: 'OwnerID', Dirty: false },
-                ],
-                writable: true,
-            },
-        });
+    it('lets staff put a new date on a space that is already closed: the world loader backdates on purpose', async () => {
+        const earlier = new Date(Date.now() - 86_400_000 * 30).toISOString();
+        const later = new Date(Date.now() - 60_000).toISOString();
+        const space = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, staffUser);
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Errors.find((e) => e.Source === 'ClosedAt'), undefined);
+    });
+
+    it('refuses a space created with a ClosedAt: a space is created open, and closed later', async () => {
+        const closed = new Date(Date.now() - 60_000).toISOString();
+        const space = closingSpace([{ Name: 'ClosedAt', Dirty: false, OldValue: null, Value: closed }], closed, staffUser);
+        Object.defineProperty(space, 'IsSaved', { value: false, writable: true });
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Success, false);
-        const err = res.Errors.find((e) => e.Source === 'ClosedAt');
-        assert.ok(err, 'Expected error on ClosedAt');
-        assert.equal(err?.Message, 'Space change refused: ClosedAt cannot be in the future.');
+        assert.equal(res.Errors.find((e) => e.Source === 'ClosedAt')?.Message, 'Space change refused: a space is created open, and closed later.');
     });
 
     it('refuses modifying other fields when reopening a space', async () => {
@@ -566,6 +560,7 @@ describe('SpaceEntityServer close and reopen chat archiving and restoration', ()
 
         Object.defineProperties(space, {
             ID: { value: spaceId, writable: true },
+            IsSaved: { value: true, writable: true },
             ContextCurrentUser: { value: { ID: 'caller-1', Name: 'Caller' } as UserInfo, writable: true },
             ClosedAt: { value: closedAtDate, writable: true },
             Fields: {
@@ -775,10 +770,10 @@ describe('SpaceEntityServer type change', () => {
         }
         const configurationMessage = (res: Awaited<ReturnType<typeof saveWithConfiguration>>) => res.Errors.find((e) => e.Source === 'Configuration')?.Message ?? '';
 
-        it("refuses a Labels.Tabs a type that doesn't list Labels leaves out, and names the rule", async () => {
+        it("refuses a Labels.Tabs when the type doesn't list Labels or Labels.Tabs, and names the rule", async () => {
             const res = await saveWithConfiguration({ SpaceOverridable: ['Chats.WhoCanStart'] }, { Labels: { Tabs: { library: 'Papers' } } });
             assert.equal(res.Success, false);
-            assert.match(configurationMessage(res), /^Invalid space configuration: /);
+            assert.match(configurationMessage(res), /^Invalid space configuration: .*Labels\.Tabs cannot be overridden by space/);
         });
 
         it('refuses a Labels key nothing reads, even when the type lists Labels', async () => {

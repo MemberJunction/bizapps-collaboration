@@ -84,12 +84,15 @@ export function utcCalendarDaysBetween(d1: Date, d2: Date): number {
     return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
+/** The fields of a space that decide its post-close access: all the check reads. */
+export type PostCloseFields = Pick<SpaceNode, 'closedAt' | 'postCloseAccess' | 'postCloseAccessDays' | 'spaceTypePostCloseAccess' | 'spaceTypePostCloseAccessDays'>;
+
 /**
  * Checks whether post-close access is permitted for a space based on its
  * PostCloseAccess mode and PostCloseAccessDays window (aligning with fnCollaborationAccess).
  */
 export function isPostCloseAccessPermitted(
-    space: SpaceNode,
+    space: PostCloseFields,
     now: Date = new Date()
 ): boolean {
     if (!space.closedAt) {
@@ -113,7 +116,7 @@ export function isPostCloseAccessPermitted(
 }
 
 export function isAgentPostCloseAccessPermitted(
-    space: SpaceNode,
+    space: PostCloseFields,
     now: Date = new Date()
 ): boolean {
     if (!space.closedAt) {
@@ -206,7 +209,7 @@ export interface RosterGroup {
     members: MemberSnapshot[];
 }
 
-export type RosterStop = 'root' | 'sealed' | 'unloaded-parent';
+export type RosterStop = 'root' | 'sealed' | 'unloaded-parent' | 'closed';
 
 export interface RosterWalk {
     groups: RosterGroup[];
@@ -218,12 +221,14 @@ export interface RosterWalk {
  * Everyone who reaches `targetId`, grouped by the space they sit on.
  * Each person is listed once, under their nearest active seat. That is the
  * seat `membershipReaches` returns. The walk stops at a root, at a sealed
- * space, or at a parent the caller did not load.
+ * space, at a closed parent whose post-close access has ended (as `membershipReaches` stops there), or at a parent the caller
+ * did not load.
  */
 export function rosterBySeat(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     targetId: string,
+    now: Date = new Date(),
 ): RosterWalk {
     const index = byId(spaces);
     const groups: RosterGroup[] = [];
@@ -257,6 +262,11 @@ export function rosterBySeat(
         const parent = index.get(idKey(current.parentId));
         if (!parent) {
             stop = 'unloaded-parent';
+            break;
+        }
+        // A closed parent that no longer lets anyone in doesn't reach this space, and neither does anything above it
+        if (parent.closedAt && !isPostCloseAccessPermitted(parent, now)) {
+            stop = 'closed';
             break;
         }
         current = parent;

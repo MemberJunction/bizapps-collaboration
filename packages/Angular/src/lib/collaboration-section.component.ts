@@ -17,7 +17,7 @@ import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
-import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, type SpaceTabModel } from './logic/space-tabs.js';
+import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
@@ -999,7 +999,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeamSide]="canSeeTeamSide"
                                                     [RoleOptions]="grantableRoleOptions"
                                                     [CanManageSeats]="canInviteHere"
-                                                    [Busy]="isChangingSeat"
+                                                    [IsBusy]="isChangingSeat"
                                                     (InviteMemberRequested)="onInviteMember($event)"
                                                     (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
                                                     (ApproveMemberRequested)="onApproveMember($event)"
@@ -1015,6 +1015,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [saveInfoMessage]="settingsInfoMessage"
                                                     [IsRootSpace]="!activeSpaceRecord?.ParentID"
                                                     [IsBusy]="isChangingLifecycle"
+                                                    [CanEdit]="canConfigureCurrentSpace"
                                                     (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
                                                     (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
                                                     (SaveSettingsRequested)="onSaveSettings($event)"
@@ -1177,35 +1178,50 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public breadcrumbs: BreadcrumbItem[] = [];
 
     public canConfigureCurrentSpace = false;
+    /** An owner may reopen a closed space even when its post-close access has ended and they can no longer configure it. */
+    public canReopenCurrentSpace = false;
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
         if (!this.currentUser || !this.activeSpaceId) {
             this.canConfigureCurrentSpace = false;
+            this.canReopenCurrentSpace = false;
             return;
         }
         const spaceIdAtStart = this.activeSpaceId;
         let canConfig = false;
+        let canReopen = false;
         try {
             canConfig = await CollaborationEngineBase.Instance.UserCanConfigureSpaces(
                 this.currentUser,
                 spaceIdAtStart,
                 this.ProviderToUse
             );
+            // Only a closed space is reopened, and only there does the right differ from configuring
+            if (this.activeSpaceRecord?.ClosedAt) {
+                canReopen = await CollaborationEngineBase.Instance.UserCanReopenSpace(this.currentUser, spaceIdAtStart, this.ProviderToUse);
+            }
         } catch (e) {
             LogError('Error checking space configuration authorization: ' + (e instanceof Error ? e.message : String(e)));
             canConfig = false;
+            canReopen = false;
         }
         if (!UUIDsEqual(this.activeSpaceId, spaceIdAtStart)) {
             return;
         }
         this.canConfigureCurrentSpace = canConfig;
-        if (!this.canConfigureCurrentSpace && this.activeTab === 'Settings') {
+        this.canReopenCurrentSpace = canReopen;
+        if (!this.showsSettings && this.activeTab === 'Settings') {
             this.activeTab = 'Overview';
             this.UpdateQueryParams({ tab: 'overview' });
         }
         this.RefreshView();
+    }
+
+    /** Settings is offered to someone who may configure the space, and to an owner who may only reopen it (read-only, with Reopen). */
+    public get showsSettings(): boolean {
+        return this.canConfigureCurrentSpace || this.canReopenCurrentSpace;
     }
 
     /** The tabs of the space shown: the built-in ones its type's panels allow, plus what the type and other apps contribute. */
@@ -1215,7 +1231,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             finalize: (defaults) => defaults,
             labelFor: (_key, label) => label,
         });
-        return model.tabs.filter(tab => tab.id !== 'Settings' || this.canConfigureCurrentSpace);
+        return model.tabs.filter(tab => tab.id !== 'Settings' || this.showsSettings);
     }
 
     /** The tab model of the space shown, built when it is selected. Null until then. */
@@ -1257,6 +1273,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
      * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
      */
+    /** What has been logged already, by key: the tabs and the header are built more than once per selection, and a fault reads once. */
+    private readonly loggedOnceKeys = new Set<string>();
+    private logOnce(key: string, message: string): void {
+        if (this.loggedOnceKeys.has(key)) return;
+        this.loggedOnceKeys.add(key);
+        LogError(message);
+    }
+
     private buildSpaceUi(space: RawSpaceRecord): void {
         const engine = CollaborationEngineBase.Instance;
         const type = engine.SpaceTypeById(space.SpaceTypeID);
@@ -1265,7 +1289,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             this.uiDriver = UIDriverRegistry.Instance.ResolveDriver(type?.UIDriverClass);
         } catch (err) {
-            LogError(`The UI driver of space type '${code}' could not be created: ${err instanceof Error ? err.message : String(err)}`);
+            this.logOnce(`driver:${space.ID}`, `The UI driver of space type '${code}' could not be created for space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
             this.uiDriver = UIDriverRegistry.Instance.GetDefaultDriver();
         }
         let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: structuredClone(DEFAULT_SPACE_RULES) };
@@ -1289,7 +1313,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             panels,
             finalize: (defaults) => this.uiDriver.GetTabs(ctx, assembleSpaceContributions(BaseSpaceTab, code, defaults, tabFactory)),
             labelFor: (key, label) => this.uiDriver.GetTabLabel(ctx, key, label),
-            onDropped: (key) => LogError(`A tab keyed '${key}' in space type '${code}' names no built-in tab and has no component, so it was dropped (space ${space.ID}).`),
+            onDropped: (key) => this.logOnce(`dropped:${code}:${key}`, `A tab keyed '${key}' in space type '${code}' names no built-in tab and has no component, so it is dropped (first seen in space ${space.ID}).`),
         }, (err) => LogError(`The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
@@ -1379,11 +1403,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return !!space?.ClosedAt;
     }
 
-    /** Whether the seat the caller reaches this space through may see the Team band. Unknown until the seat is resolved: not shown. */
+    /** The people in this space who are on the Shared band only: outside participants. */
     public get outsideParticipantCount(): number {
         return this.spaceMembers.filter(m => m.status === 'Active' && m.band === 'Shared').length;
     }
 
+    /** Whether the seat the caller reaches this space through may see the Team band. Unknown until the seat is resolved: not shown. */
     public get canSeeTeamSide(): boolean {
         return this.callerSeat?.role.canSeeTeamBand ?? false;
     }
@@ -1733,7 +1758,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const endLoading = quiet ? () => undefined : this.selectionLoading.Begin();
         this.RefreshView();
         try {
-            await this.selectSpaceBody(spaceId, requestId);
+            await this.selectSpaceBody(spaceId, requestId, quiet);
         } finally {
             endLoading();
             this.RefreshView();
@@ -1745,7 +1770,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
         const resolvedType = space.SpaceType || typeDef?.name;
         if (!resolvedType) {
-            LogError(`Missing space type for space ID: ${space.ID}`);
+            this.logOnce(`type:${space.ID}`, `Missing space type for space ID: ${space.ID}`);
         }
         this.spaceTitle = space.Name;
         this.spaceSubtitle = space.Description || '';
@@ -1765,9 +1790,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
     }
 
-    private async selectSpaceBody(spaceId: string, requestId: number): Promise<void> {
-        this.activeSpaceId = spaceId;
-        this._loadedSpaceId = spaceId;
+    /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
+    private resetForSelection(spaceId: string): void {
         this.activeConversationId = '';
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
@@ -1804,6 +1828,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceTasks = [];
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
+        this.canReopenCurrentSpace = false;
         // The last space's save message must not greet the next space's Settings, its drawer is closed, and both bands start narrow
         Object.assign(this, freshSelectionState());
         this.spaceTabModel = null;
@@ -1821,6 +1846,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.previewMeta = '';
         this.previewBandLabel = '';
         this.previewAudienceSub = '';
+    }
+
+    private async selectSpaceBody(spaceId: string, requestId: number, quiet: boolean): Promise<void> {
+        this.activeSpaceId = spaceId;
+        this._loadedSpaceId = spaceId;
+        // A quiet re-read of the space already shown (after a close or a reopen) keeps everything on screen until the new reads
+        // arrive: Settings stays in the tabs, and the counts don't fall to 0. A new selection starts from nothing.
+        if (!quiet) this.resetForSelection(spaceId);
 
         // Refresh space record from server to ensure ClosedAt and status are completely fresh
         try {
@@ -2515,19 +2548,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         super.ngOnInit();
         const params = this.GetQueryParams();
         if (params['tab']) {
-            const rawTab = params['tab'].toLowerCase();
-            const tabMap: Record<string, string> = {
-                overview: 'Overview',
-                library: 'Library',
-                work: 'Work',
-                chat: 'Chat',
-                discussions: 'Chat',
-                people: 'People',
-                settings: 'Settings',
-            };
-            if (tabMap[rawTab]) {
-                this.activeTab = tabMap[rawTab];
-            }
+            this.activeTab = tabIdFromUrl(params['tab']);
         }
         this.syncStateWithAgent();
         void this.loadRealData();
@@ -2570,19 +2591,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
 
         if (params['tab']) {
-            const rawTab = params['tab'].toLowerCase();
-            const tabMap: Record<string, string> = {
-                overview: 'Overview',
-                library: 'Library',
-                work: 'Work',
-                chat: 'Chat',
-                discussions: 'Chat',
-                people: 'People',
-                settings: 'Settings',
-            };
-            if (tabMap[rawTab]) {
-                this.activeTab = tabMap[rawTab];
-            }
+            this.activeTab = tabIdFromUrl(params['tab']);
         }
 
         if (params['conv'] && isValidUuid(params['conv'])) {
@@ -2632,7 +2641,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.previewRecentUses = [];
         }
 
-        if (this.activeTab === 'Settings' && !this.canConfigureCurrentSpace) {
+        if (this.activeTab === 'Settings' && !this.showsSettings) {
             this.activeTab = 'Overview';
             this.UpdateQueryParams({ tab: 'overview' });
         }
@@ -2648,14 +2657,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public onTabSelectRequested(tabId: string): void {
         this.activeView = 'space';
-        if (tabId === 'Settings' && !this.canConfigureCurrentSpace) {
+        if (tabId === 'Settings' && !this.showsSettings) {
             tabId = 'Overview';
             SharedService.Instance.CreateSimpleNotification('You do not have permission to configure this space.', 'warning', 3000);
         }
         this.setTab(tabId);
         this.settingsSaveSuccess = '';
         this.settingsInfoMessage = '';
-        this.UpdateQueryParams({ view: 'space', tab: tabId.toLowerCase() });
+        // The URL names the tab that opened, which is the Overview when the type has no such tab
+        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase() });
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -2710,8 +2720,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onOpenChatRequested(): void {
         this.setTab('Chat');
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
-        this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
-        this.UpdateQueryParams({ tab: 'chat', conv: this.activeConversationId || null });
+        // With no conversation open the band stays what it was: "no conversation" is not Shared
+        if (item) this.chatAudienceBand = item.band === 'Team' ? 'Team' : 'Shared';
+        this.UpdateQueryParams({ tab: this.activeTab.toLowerCase(), conv: this.activeConversationId || null });
         this.RefreshView();
     }
 
@@ -2721,7 +2732,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
         this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.setTab('Chat');
-        this.UpdateQueryParams({ view: 'space', tab: 'chat', conv: convId });
+        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase(), conv: convId });
         void this.loadOverviewMessages(convId, this.currentSelection());
         void this.loadSpaceChatHostRules(this.activeSpaceId, convId);
         this.syncStateWithAgent();
@@ -2973,6 +2984,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onUploadDialogSubmit(payload: CollabUploadSubmitPayload): Promise<void> {
+        // The space and the selection this upload is for, taken before the first await: the person can move to another space while
+        // the file is read, and the file, in the band they chose, belongs to the space they chose it for
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        const spaceName = this.rawSpaces.find((sp) => UUIDsEqual(sp.ID, spaceId))?.Name ?? 'the space it was for';
         this.isUploading = true;
         this.RefreshView();
         try {
@@ -2990,7 +3006,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
                 const client = new CollaborationClient(this.graphQLExecutor);
                 const uploadRes = await client.UploadSpaceFile({
-                    SpaceID: this.activeSpaceId,
+                    SpaceID: spaceId,
                     FileName: payload.fileName || payload.title,
                     MimeType: payload.fileType || 'application/octet-stream',
                     Base64Data: base64Data,
@@ -3000,9 +3016,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!uploadRes.Success) {
                     throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');
                 }
-                await this.loadSpaceItems(this.activeSpaceId, this.currentSelection());
                 this.isUploadDialogOpen = false;
-                SharedService.Instance.CreateSimpleNotification('File uploaded successfully.', 'info', 3000);
+                if (isCurrent()) {
+                    await this.loadSpaceItems(spaceId, isCurrent);
+                    SharedService.Instance.CreateSimpleNotification('File uploaded successfully.', 'info', 3000);
+                } else {
+                    // The person has moved on: the file went where they chose it, and the notice says where
+                    SharedService.Instance.CreateSimpleNotification(`File uploaded to ${spaceName}.`, 'info', 4000);
+                }
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -3446,20 +3467,21 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return this.changeSeat(change.member, (seat) => { seat.SpaceRoleTypeID = roleId; }, 'change the role');
     }
 
-    /** Closes or reopens the space shown. A reopen carries no other change, so it is saved on its own. */
     /** True while a close or reopen is with the server. */
     public isChangingLifecycle = false;
 
+    /** Closes or reopens the space shown. A reopen carries no other change, so it is saved on its own. */
     public async onChangeSpaceLifecycle(closing: boolean): Promise<void> {
         if (this.isChangingLifecycle) return;
-        this.isChangingLifecycle = true;
-        const spaceId = this.activeSpaceId;
-        const isCurrent = this.currentSelection();
         const verb = closing ? 'close' : 'reopen';
-        if (!this.canConfigureCurrentSpace) {
+        // The right is checked before the lock is taken, so a refusal can't leave Close and Reopen disabled
+        if (!(closing ? this.canConfigureCurrentSpace : this.canReopenCurrentSpace)) {
             SharedService.Instance.CreateSimpleNotification(`You do not have permission to ${verb} this space.`, 'warning', 4000);
             return;
         }
+        this.isChangingLifecycle = true;
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
         try {
             const spaceEntity = await this.ProviderToUse.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
             if (!isValidUuid(spaceId) || !(await spaceEntity.Load(spaceId))) {
@@ -3480,9 +3502,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             if (isCurrent()) {
                 // Read the space again as it now is: the header, the caller's seat and bands, the host rules and the conversations
-                // (a close archives them) all followed its old state
-                await this.selectSpaceInternal(spaceId, true);
-                if (isCurrent()) {
+                // (a close archives them) all followed its old state. The re-read is a new selection, counted when it starts, so the
+                // check for "still here" is taken right after starting it and before waiting for it.
+                const reread = this.selectSpaceInternal(spaceId, true);
+                const stillHere = this.currentSelection();
+                await reread;
+                if (stillHere()) {
                     this.settingsSaveSuccess = closing ? 'The space is closed.' : 'The space is open again.';
                     this.settingsInfoMessage = '';
                 }

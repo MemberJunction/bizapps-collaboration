@@ -451,8 +451,24 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return true;
         }
 
-        // An owner keeps the right to configure, and to reopen, a space that has closed: the post-close filter is not applied here
-        const reached = await this.ReachedSeat(user, spaceId, md, undefined, true);
+        // The post-close filter applies: on a space closed with its access ended, the server refuses every change but a reopen
+        const reached = await this.ReachedSeat(user, spaceId, md);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
+     * Whether a user may reopen a closed space: an owner seat on it or on an ancestor it inherits from, reached even when the
+     * space's post-close access has ended. That is the right the server gives a reopen, and only a reopen (it asks for no
+     * 'Configure Spaces' authorization). `UserCanConfigureSpaces` keeps the post-close filter, so on such a space an owner may
+     * reopen but not configure.
+     */
+    public async UserCanReopenSpace(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+    ): Promise<boolean> {
+        const reached = await this.ReachedSeat(user, spaceId, provider ?? Metadata.Provider, roleTypeOf, true);
         return !!reached?.role.isOwnerRole;
     }
 

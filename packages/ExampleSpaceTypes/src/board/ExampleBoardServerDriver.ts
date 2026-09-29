@@ -21,7 +21,7 @@ import {
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CollaborationEngine } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readExtension, stringList } from '../extension-config.js';
 
@@ -104,24 +104,43 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     }
 
     /**
-     * Validates board membership changes:
-     * - Outside directors must not be given Team band
+     * Validates board membership changes: a board may seat only so many outside directors. The most is the type's
+     * `Extensions.example-board.MaxOutsideDirectors`; with none set there is no cap. An outside seat is one on the Shared band, which
+     * the seat gate sets from the role before it asks this driver, so the rule sees the band the seat will have.
      */
-    public override ValidateMemberChange(
+    public override async ValidateMemberChange(
         ctx: MemberChangeContext
-    ): DriverValidationResult {
-        if (ctx.kind === 'Invite' || ctx.kind === 'BandChange' || ctx.kind === 'RoleChange') {
-            // An outside role is one that can't see the Team band, from the seat's own role type
-            const role = CollaborationEngine.Instance.SpaceRoleTypeById(ctx.member.SpaceRoleTypeID);
-            if (ctx.member.Band === 'Team' && role && !role.CanSeeTeamBand) {
-                return {
-                    ok: false,
-                    message: 'Outside directors cannot be assigned to the Team band.',
-                    field: 'Band',
-                };
-            }
+    ): Promise<DriverValidationResult> {
+        if (ctx.kind !== 'Invite' || ctx.member.Band !== 'Shared') return { ok: true };
+        const cap = readExtension(ctx.spaceType.Configuration, KEY)['MaxOutsideDirectors'];
+        if (cap === undefined) return { ok: true };
+        if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0) {
+            const message = `The extension setting MaxOutsideDirectors of "${KEY}" must be a whole number, not ${JSON.stringify(cap)}.`;
+            LogError(message);
+            throw new Error(message);
+        }
+        const seated = await this.CountOutsideDirectors(ctx);
+        if (seated >= cap) {
+            return {
+                ok: false,
+                message: `This board already has ${seated} outside director${seated === 1 ? '' : 's'}, the most its type allows (${cap}).`,
+                field: 'SpaceRoleTypeID',
+            };
         }
         return { ok: true };
+    }
+
+    /** The seats on the Shared band of this board that are not removed, other than the one being saved. */
+    protected async CountOutsideDirectors(ctx: MemberChangeContext): Promise<number> {
+        const own = ctx.member.ID ? ` AND ID <> '${ctx.member.ID}'` : '';
+        const result = await RunView.FromMetadataProvider(ctx.provider as IMetadataProvider).RunView<{ ID: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `SpaceID = '${ctx.space.ID}' AND Band = 'Shared' AND Status <> 'Removed'${own}`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, ctx.actingUser);
+        if (!result.Success) throw new Error(`The outside directors could not be counted: ${result.ErrorMessage ?? 'unknown error'}`);
+        return result.Results?.length ?? 0;
     }
 
     public override OnMemberChanged(_ctx: MemberChangeContext): void {

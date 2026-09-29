@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it, mock } from 'node:test';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import {
     BaseSpaceTypeServerDriver,
@@ -175,13 +175,22 @@ describe('what each reaction hears, through Save', () => {
         assert.deepEqual(driverFor(SPACE).heard[0].oldValues, { Name: 'Old' });
     });
 
-    it("lets the next driver hear when one throws, and names the hook and the space in the log", async () => {
+    it("lets the next driver hear when one throws, and names the hook, the type and the space in the log", async () => {
         drivers.clear();
         const own = driverFor(SPACE);
         own.OnSpaceChanged = () => { throw new Error('the space driver broke'); };
-        await SpaceEntityServer.prototype.Save.call(spaceEntity({ ParentID: PARENT }, { ParentID: OLD_PARENT }));
+        const logged: string[] = [];
+        const spy = mock.method(console, 'error', (...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
+        try {
+            await SpaceEntityServer.prototype.Save.call(spaceEntity({ ParentID: PARENT }, { ParentID: OLD_PARENT }));
+        } finally {
+            spy.mock.restore();
+        }
         assert.deepEqual(driverFor(PARENT).heard.map((h) => h.kind), ['MoveChildIn']);
         assert.deepEqual(driverFor(OLD_PARENT).heard.map((h) => h.kind), ['MoveChildOut']);
+        const line = logged.find((l) => l.includes('OnSpaceChanged'));
+        assert.ok(line, `the failure is logged: ${logged.join(' | ')}`);
+        assert.match(line!, new RegExp(`OnSpaceChanged of space type 'test-type' failed for space ${SPACE}: the space driver broke`));
     });
 
     it('starts clean on the retry after a refused save', async () => {
@@ -196,7 +205,7 @@ describe('what each reaction hears, through Save', () => {
         assert.deepEqual(driverFor(SPACE).heard.map((h) => h.kind), ['Update']);
     });
 
-    it("stamps the server's clock on a close by anyone but staff, and lets staff backdate one", async () => {
+    it("stamps the server's clock on a close by anyone, unless staff backdate it: a date ahead of the server is the server's own time", async () => {
         const backdated = new Date(Date.now() - 24 * 3600 * 1000);
         const participant = { ID: ACTOR, Name: 'Actor', UserRoles: [{ Role: 'Space Participant' }] };
         const staff = { ID: ACTOR, Name: 'Staff', UserRoles: [{ Role: 'Developer' }] };
@@ -206,6 +215,12 @@ describe('what each reaction hears, through Save', () => {
             await saveAndHear(target);
             const stamped = (target as unknown as { ClosedAt: Date }).ClosedAt.getTime();
             assert.ok(Math.abs(stamped - Date.now()) < 5000, `sent ${minutes} minutes from now, stored ${new Date(stamped).toISOString()}`);
+        }
+        for (const minutes of [1, 24 * 60]) {
+            const ahead = spaceEntity({ ClosedAt: new Date(Date.now() + minutes * 60_000), ContextCurrentUser: staff }, { ClosedAt: null });
+            await saveAndHear(ahead);
+            const stamped = (ahead as unknown as { ClosedAt: Date }).ClosedAt.getTime();
+            assert.ok(Math.abs(stamped - Date.now()) < 5000, `staff sent ${minutes} minutes ahead, stored ${new Date(stamped).toISOString()}`);
         }
         const kept = spaceEntity({ ClosedAt: backdated, ContextCurrentUser: staff }, { ClosedAt: null });
         await saveAndHear(kept);

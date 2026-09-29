@@ -88,6 +88,7 @@ export interface CollabUploadSubmitPayload {
                   (drop)="onFileDrop($event)"
                   role="button"
                   tabindex="0"
+                  data-autofocus
                   aria-label="Choose a file to upload"
                   (click)="fileInput.click()"
                   (keydown.enter)="fileInput.click()"

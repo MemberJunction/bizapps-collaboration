@@ -20,8 +20,11 @@ export interface ChainSpace {
 
 /**
  * The spaces whose seats reach `spaceId`, nearest first: the space itself, then each parent while the child inherits
- * membership. A sealed space (one that doesn't inherit) stops the walk. A parent the viewer can't read still counts (its Active
- * seats are readable): it joins the chain unnamed, and the walk ends there, since nothing is known of what lies above it.
+ * membership. A sealed space (one that doesn't inherit) stops the walk, and so does a closed parent whose post-close access has
+ * ended (Core's `rosterBySeat` stops there too, and a test holds the two together). A parent the viewer can't read joins the chain
+ * unnamed and the walk ends there, since nothing is known of what lies above it. Its seats are readable only below an open
+ * space that allows parent assignees, or when the viewer reaches the parent themselves: elsewhere they are missing from the list,
+ * until the server reads the reaching seats.
  */
 export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): ChainSpace[] {
     const chain: ChainSpace[] = [];
@@ -39,7 +42,6 @@ export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): Chai
         }
         // A closed parent whose post-close access has ended (or is None) no longer lets anyone in, and neither does what lies above it
         if (parent.ClosedAt && !isPostCloseAccessPermitted({
-            id: parent.ID, parentId: parent.ParentID, inheritsMembership: parent.InheritsMembership, ownerId: '', agentRetrieval: 'Included',
             closedAt: parent.ClosedAt, postCloseAccess: parent.PostCloseAccess, postCloseAccessDays: parent.PostCloseAccessDays,
         })) break;
         current = parent;

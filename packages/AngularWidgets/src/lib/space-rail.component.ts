@@ -875,7 +875,6 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() Conversations: SpaceConversationItem[] = [];
   @Input() ActiveConversationId = '';
 
-  /** The URL keeps the casing it was given and the rows keep the database's, so compare IDs, never strings. */
   /** Whether the tree row is the open space. Ids are compared as UUIDs: the URL keeps the casing it was given. */
   public IsActiveSpace(spaceId: string): boolean {
     return !!this.ActiveSpaceId && UUIDsEqual(spaceId, this.ActiveSpaceId);

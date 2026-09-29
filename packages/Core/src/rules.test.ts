@@ -232,6 +232,19 @@ describe('rosterBySeat', () => {
         assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
     });
 
+    it('stops the list at a closed parent whose post-close access has ended, as membershipReaches does', () => {
+        const now = new Date('2026-06-01T00:00:00Z');
+        const closedNone = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-01-01T00:00:00Z', postCloseAccess: 'None' as const } : node);
+        const walk = rosterBySeat(closedNone, seated, 'grandchild', now);
+        assert.equal(walk.stop, 'closed');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild']);
+        assert.equal(membershipReaches(closedNone, seated, 'bea', 'grandchild', now), null);
+        // Within its window a closed parent still lets its people in, on both
+        const closedReadOnly = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-05-30T00:00:00Z', postCloseAccess: 'ReadOnly' as const, postCloseAccessDays: 30 } : node);
+        assert.deepEqual(rosterBySeat(closedReadOnly, seated, 'grandchild', now).groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.equal(membershipReaches(closedReadOnly, seated, 'ada', 'grandchild', now)?.spaceId, 'root');
+    });
+
     it('reports a parent the viewer was not given, the way a row filter hides it', () => {
         const visible = tree.filter((space) => space.id === 'child' || space.id === 'grandchild');
         const visibleMembers = seated.filter((member) => member.spaceId === 'child' || member.spaceId === 'grandchild');

@@ -26,6 +26,7 @@ import { BreadcrumbItem } from './types';
         <mjc-type-tile
           [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
           [Color]="TypeColor || ''"
+          [IsClosed]="Status === 'Closed'"
           Size="xl">
         </mjc-type-tile>
         <div class="grow">
