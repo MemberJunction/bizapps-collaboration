@@ -5,6 +5,7 @@
   },
   "directoryOrder": [
     "agents",
+    "space-types",
     "tests",
     "test-suites"
   ],

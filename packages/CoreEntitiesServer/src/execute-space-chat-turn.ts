@@ -19,6 +19,7 @@ import { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { filterRoomReplyItems } from './post-space-message.js';
+import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 
 const DETAILS = 'MJ: Conversation Details';
@@ -111,6 +112,10 @@ async function runClaimedTurn(
 
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
+
+    // A type whose driver is missing refuses the turn (fail closed)
+    const driver = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!driver.ok) return { ok: false, message: driver.message };
 
     // 1. Verify space is open
     const spaceRes = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({

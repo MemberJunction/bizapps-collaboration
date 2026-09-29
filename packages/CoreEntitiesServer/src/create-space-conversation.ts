@@ -10,6 +10,7 @@ import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
+import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
@@ -123,6 +124,17 @@ export async function createSpaceConversation(
     if (!startPerms.allowedConversationKinds.includes(targetKind)) {
         return { ok: false, message: `Caller cannot start a ${targetKind} conversation.` };
     }
+
+    // The space type's driver has the last word, and a type whose driver is missing refuses (fail closed)
+    const resolved = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!resolved.ok) return { ok: false, message: resolved.message };
+    const chatRefusal = refusalOf(await resolved.call.driver.ValidateChatChange({
+        ...resolved.call.base,
+        chatName: cleanName,
+        chatKind: targetKind,
+        isNew: true,
+    }));
+    if (chatRefusal) return { ok: false, message: chatRefusal };
 
 
     // 2. Create Conversation and SpaceChat in one transaction owned by system user

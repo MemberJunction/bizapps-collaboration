@@ -10,17 +10,24 @@ import {
     type UserInfo,
     type UserRoleInfo,
 } from '@memberjunction/core';
+import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
+import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { SpaceItemEntityServer, vouchStoredFile, releaseStoredFile } from '../dist/SpaceItemEntityServer.js';
 
 describe('SpaceItemEntityServer file ownership and validation', () => {
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
+    let origResolveSpaceAndType: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     before(() => {
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
+        // A delete asks the space type's driver first; these tests are about files, so the space's driver is the default one
+        origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = (async () => ({ driver: new BaseSpaceTypeServerDriver(), space: {}, spaceType: {} })) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = origResolveSpaceAndType;
     });
 
     const partialUser: Partial<UserInfo> = {
@@ -330,6 +337,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
         Object.defineProperties(item, {
             ID: { value: 'item-1', writable: true },
+            SpaceID: { value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', writable: true },
             IsSaved: { value: true, writable: true },
             TransactionGroup: { value: undefined, writable: true },
             EntityID: { value: FILES_ENTITY_ID, writable: true },
@@ -362,6 +370,7 @@ describe('SpaceItemEntityServer file ownership and validation', () => {
         const item = Object.create(SpaceItemEntityServer.prototype) as SpaceItemEntityServer;
         Object.defineProperties(item, {
             ID: { value: 'item-1', writable: true },
+            SpaceID: { value: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2', writable: true },
             IsSaved: { value: true, writable: true },
             ProviderToUse: { value: providerMock as unknown as IMetadataProvider, writable: true },
             ContextCurrentUser: { value: user, writable: true },

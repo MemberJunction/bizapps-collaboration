@@ -1,9 +1,10 @@
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { mayFileRootTask, type Band } from '@mj-biz-apps/collaboration-core';
 import { deleteActivitiesThenTask, fileRootTask } from './file-root-task.js';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+import { resolveSpaceDriver } from './space-driver-call.js';
 import { callerPersonId } from './task-attribution.js';
 import { parseUuid } from './uuid.js';
 
@@ -39,7 +40,7 @@ export async function createSpaceTask(
     }
     const system = await requireSystemUser(probe);
     const authorId = await callerPersonId(probe, user);
-    return fileRootTask(user, system, {
+    const filed = await fileRootTask(user, system, {
         gate: async () => mayFileRootTask({
             callerUserId: user.ID,
             spaceId: input.spaceId,
@@ -91,6 +92,27 @@ export async function createSpaceTask(
         },
         deleteTask: (actor, taskId) => removeUnfiledTask(provider, actor, taskId),
     });
+    if (filed.ok) await announceTaskFiled(probe, provider, user, input.spaceId, filed.taskId, input.name, filed.band);
+    return filed;
+}
+
+/** Tells the space type's driver a task was filed. A failing reaction is logged: the task is already filed. */
+async function announceTaskFiled(
+    probe: SpaceItemEntityServer,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    spaceId: string,
+    taskId: string,
+    taskTitle: string,
+    band: Band,
+): Promise<void> {
+    const resolved = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!resolved.ok) return;
+    try {
+        await resolved.call.driver.OnTaskFiled({ ...resolved.call.base, taskId, taskTitle, band });
+    } catch (error) {
+        LogError(`OnTaskFiled failed for task ${taskId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 /** Deletes the task's activities, then the task. Both run as the given user. */

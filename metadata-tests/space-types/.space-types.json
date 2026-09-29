@@ -1,0 +1,90 @@
+[
+  {
+    "primaryKey": {
+      "ID": "5F2B9112-5CB3-442A-8D12-BF0BDEB0B90B"
+    },
+    "fields": {
+      "Code": "example-board",
+      "Name": "Example board",
+      "Vocabulary": "board",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-landmark",
+      "Color": "#37474f",
+      "ServerDriverClass": "example-board",
+      "UIDriverClass": "example-board",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "example-board"
+          ]
+        },
+        "Chats": {
+          "AgentReplyMode": "MentionOnly"
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart"
+        ],
+        "Extensions": {
+          "example-board": {
+            "SealedChildNames": [
+              "compensation"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8D9E6543-0760-4174-B983-A80BB49DA4C4"
+    },
+    "fields": {
+      "Code": "example-room",
+      "Name": "Example room",
+      "Vocabulary": "room",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-handshake",
+      "Color": "#6d4c41",
+      "ServerDriverClass": "example-room",
+      "UIDriverClass": "example-room",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": []
+        },
+        "SpaceOverridable": [],
+        "Extensions": {
+          "example-room": {
+            "AnchorEntities": [
+              "deals",
+              "opportunities"
+            ],
+            "BlockedPhrases": [
+              "internal margin target",
+              "confidential deal floor"
+            ]
+          }
+        }
+      }
+    }
+  }
+]

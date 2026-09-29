@@ -11,6 +11,8 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
+import type { ItemChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -28,8 +30,31 @@ export function releaseStoredFile(item: object): void {
     vouchedItems.delete(item);
 }
 
+/**
+ * The kind of change an item save is, decided from what changed: a new item is Add; a different space is Move; a band that became
+ * Shared is Promote; any other change (a rename, a note) is Update.
+ */
+export function decideItemKind(change: { isNew: boolean; spaceChanged: boolean; bandChanged: boolean; band: string }): ItemChangeKind {
+    if (change.isNew) return 'Add';
+    if (change.spaceChanged) return 'Move';
+    if (change.bandChanged && change.band === 'Shared') return 'Promote';
+    return 'Update';
+}
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
+    /** What validation decided about this save, for the reaction that follows it. */
+    private decidedChange: { kind: ItemChangeKind; oldValues: Record<string, unknown> } | null = null;
+
+    /** What each changed field held before this save, by field name. System columns are left out. */
+    private dirtyOldValues(): Record<string, unknown> {
+        const old: Record<string, unknown> = {};
+        for (const field of this.Fields) {
+            if (field.Dirty && !field.Name.startsWith('__mj_')) old[field.Name] = field.OldValue;
+        }
+        return old;
+    }
+
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
     }
@@ -118,14 +143,10 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
             const spaceChanged = this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty);
 
-            let itemKind: 'Add' | 'Promote' | 'Move' | 'Remove' = 'Add';
-            if (spaceChanged) {
-                itemKind = 'Move';
-            } else if (bandChanged && this.Band === 'Shared') {
-                itemKind = 'Promote';
-            } else if (isNew) {
-                itemKind = 'Add';
-            }
+            const itemKind = decideItemKind({ isNew, spaceChanged, bandChanged, band: this.Band });
+            const oldValues = isNew ? {} : this.dirtyOldValues();
+            // Decided once, here, and handed to the reaction after the save
+            this.decidedChange = { kind: itemKind, oldValues };
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
                 actingUser: user,
@@ -135,6 +156,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 effectiveRules: ResolveSpaceRules(null, null),
                 item: this,
                 kind: itemKind,
+                oldValues,
             });
             if (!driverValidation.ok) {
                 return fail(result, driverValidation.message ?? 'Item change refused by driver.');
@@ -149,6 +171,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
+        // Taken and cleared before the save, so a second save of this object starts clean
+        const decided = this.decidedChange;
+        this.decidedChange = null;
         const ok = await super.Save(options);
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
@@ -169,7 +194,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 spaceType: spaceInfo.spaceType,
                 effectiveRules: ResolveSpaceRules(null, null),
                 item: this,
-                kind: becameShared ? 'Promote' : wasNew ? 'Add' : 'Move',
+                kind: decided?.kind ?? (becameShared ? 'Promote' : wasNew ? 'Add' : 'Update'),
+                oldValues: decided?.oldValues,
             });
         } catch (driverErr) {
             LogError(`Item driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
@@ -212,6 +238,15 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         const currentItemId = this.ID;
         if (!currentItemId || !this.IsSaved) {
             return super.Delete(options);
+        }
+
+        // The space type's driver judges the removal, as Remove
+        const removalUser = this.ContextCurrentUser;
+        if (removalUser && this.SpaceID) {
+            const resolved = await resolveSpaceDriver(this, this.ProviderToUse, removalUser, this.SpaceID);
+            if (!resolved.ok) return this.failDelete(resolved.message);
+            const refusal = refusalOf(await resolved.call.driver.ValidateItemChange({ ...resolved.call.base, item: this, kind: 'Remove' }));
+            if (refusal) return this.failDelete(refusal);
         }
 
         const provider = asMetadata(this.ProviderToUse);

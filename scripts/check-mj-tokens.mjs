@@ -62,7 +62,7 @@ function walkHex(dir) {
         }
     }
 }
-for (const root of ['packages/Angular/src', 'packages/AngularWidgets/src']) walkHex(root);
+for (const root of ['packages/Angular/src', 'packages/AngularWidgets/src', 'packages/ExampleSpaceTypes/src']) walkHex(root);
 if (hexProblems.length) {
     for (const problem of hexProblems) console.error(`hex outside a var() fallback: ${problem}`);
     console.error(`${hexProblems.length} hex literal(s) found. Use a token, or mark the line "hex-ok" with a reason.`);

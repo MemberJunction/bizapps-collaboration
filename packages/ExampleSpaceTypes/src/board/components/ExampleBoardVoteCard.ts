@@ -19,7 +19,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
     template: `
         <div class="card vote-card" style="border: 1px solid var(--mj-status-warning); border-radius: 12px; background: var(--mj-bg-surface-card); padding: 16px;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span style="padding: 4px 10px; background: #fef3c7; color: #92400e; border-radius: 99px; font-size: 12px; font-weight: 700;">
+                <span style="padding: 4px 10px; background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); border-radius: 99px; font-size: 12px; font-weight: 700;">
                     <i class="fa-solid fa-gavel" style="margin-right: 6px;"></i>Your vote is needed
                 </span>
                 <span style="font-size: 12px; color: var(--mj-text-muted);">Closes Wed 5:00 PM</span>
@@ -32,7 +32,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
                 <span style="font-size: 12px; color: var(--mj-text-secondary);">4 of 7 have voted</span>
                 <div style="flex: 1; height: 6px; background: var(--mj-border-subtle); border-radius: 99px; overflow: hidden;">
-                    <div style="width: 57%; height: 100%; background: #d97706; border-radius: 99px;"></div>
+                    <div style="width: 57%; height: 100%; background: var(--mj-status-warning); border-radius: 99px;"></div>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px;">

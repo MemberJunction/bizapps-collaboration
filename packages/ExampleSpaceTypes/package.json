@@ -13,7 +13,7 @@
   "mjUILayer": "widgets",
   "scripts": {
     "build": "ngc",
-    "test": "vitest run"
+    "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {
     "@angular/common": "^21.2.22",
@@ -31,6 +31,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.23",
     "@angular/compiler-cli": "21.2.23",
+    "@types/node": "24.10.11",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"
   }

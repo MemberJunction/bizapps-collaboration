@@ -5,6 +5,8 @@ export {
     BaseSpaceTypeUIDriver,
     UIDriverRegistry,
     assembleSpaceContributions,
+    normalizeContributionKey,
+    overlayDescriptors,
 } from './lib/base-space-type-ui-driver';
 export type {
     SpaceUIContext,

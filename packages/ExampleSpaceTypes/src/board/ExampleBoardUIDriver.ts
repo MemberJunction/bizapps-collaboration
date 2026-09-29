@@ -7,6 +7,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseSpaceTypeUIDriver,
+    overlayDescriptors,
     type SpaceUIContext,
     type SpaceTabDescriptor,
     type SpaceOverviewCardDescriptor,
@@ -15,7 +16,6 @@ import {
     type SpaceSettingsSectionDescriptor,
     type SpaceNewStepDescriptor,
     type SpaceDetailsFormDescriptor,
-    type BeforeCloseSpaceEvent,
     type BeforeCreateChildSpaceEvent,
     type AfterSpaceOpenedEvent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
@@ -35,9 +35,9 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
      */
     public override GetTabs(
         _ctx: SpaceUIContext,
-        _defaultTabs: SpaceTabDescriptor[]
+        defaultTabs: SpaceTabDescriptor[]
     ): SpaceTabDescriptor[] {
-        const result: SpaceTabDescriptor[] = [
+        const own: SpaceTabDescriptor[] = [
             {
                 key: 'overview',
                 label: 'Overview',
@@ -82,7 +82,8 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 sortKey: 60,
             },
         ];
-        return result;
+        // What other apps contributed to boards stays: the board replaces the parts it names, and keeps the rest
+        return overlayDescriptors(defaultTabs, own);
     }
 
     /**
@@ -91,9 +92,9 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
      */
     public override GetOverviewCards(
         _ctx: SpaceUIContext,
-        _defaultCards: SpaceOverviewCardDescriptor[]
+        defaultCards: SpaceOverviewCardDescriptor[]
     ): SpaceOverviewCardDescriptor[] {
-        return [
+        return overlayDescriptors(defaultCards, [
             {
                 key: 'next-meeting',
                 title: 'Next Meeting',
@@ -118,7 +119,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 sortKey: 40,
                 component: ExampleBoardMembersCard,
             },
-        ];
+        ]);
     }
 
     /**
@@ -203,22 +204,13 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
         };
     }
 
-    /**
-     * Cancels space close if there are active votes/motions.
-     */
-    public override BeforeCloseSpace(
-        event: BeforeCloseSpaceEvent
-    ): void {
-        if (event.spaceId.includes('active-vote')) {
-            event.cancel = true;
-            event.cancelReason = 'Cannot close Board space while motions are open for voting.';
-        }
-    }
+    // Closing a board with motions open is refused on the server, from the space's own configuration
+    // (ExampleBoardServerDriver.ValidateSpaceChange); the screen has nothing more to add.
 
     public override BeforeCreateChildSpace(
         event: BeforeCreateChildSpaceEvent
     ): void {
-        if (event.childTypeCode === 'deal-room') {
+        if (event.childTypeCode === 'example-room') {
             event.cancel = true;
             event.cancelReason = 'Boards cannot contain Deal Rooms.';
         }

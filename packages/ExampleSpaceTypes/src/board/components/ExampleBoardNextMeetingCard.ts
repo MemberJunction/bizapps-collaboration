@@ -39,7 +39,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
                 </div>
             </div>
             <div class="pack" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-                <span style="width: 36px; height: 36px; border-radius: 8px; background: #fee2e2; color: #dc2626; display: grid; place-items: center; font-size: 16px;">
+                <span style="width: 36px; height: 36px; border-radius: 8px; background: var(--mj-status-error-bg); color: var(--mj-status-error-text); display: grid; place-items: center; font-size: 16px;">
                     <i class="fa-solid fa-file-pdf"></i>
                 </span>
                 <div style="flex: 1 1 0%; min-width: 0;">
@@ -47,7 +47,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
                     <div style="font-size: 12px; color: var(--mj-text-muted);">42 pages · published today by Ada Lovell, committee secretary</div>
                     <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
                         <div style="flex: 1; max-width: 260px; height: 6px; background: var(--mj-border-subtle); border-radius: 99px; overflow: hidden;">
-                            <div style="width: 29%; height: 100%; background: #d97706; border-radius: 99px;"></div>
+                            <div style="width: 29%; height: 100%; background: var(--mj-status-warning); border-radius: 99px;"></div>
                         </div>
                         <span style="font-size: 12px; color: var(--mj-text-secondary);">You’ve read 12 of 42 pages</span>
                     </div>

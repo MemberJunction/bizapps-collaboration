@@ -22,6 +22,7 @@ const ALL_BUNDLES = [
     'parent-assignees',
     'room',
     'write-gates',
+    'extensions',
     'row-filters',
     'library',
     'agent',

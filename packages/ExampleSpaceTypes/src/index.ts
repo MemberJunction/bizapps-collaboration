@@ -17,3 +17,6 @@ export * from './board/components/ExampleBoardMembersCard.js';
 // Room UI Plug-in & Components
 export * from './room/ExampleRoomUIDriver.js';
 export * from './room/ExampleRoomDealSummaryCard.js';
+
+// A contribution any app could make: a card on every space type
+export * from './ExampleAnySpaceNoticeCard.js';

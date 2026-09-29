@@ -226,6 +226,30 @@ describe('Configuration & ResolveSpaceRules', () => {
             assert.equal(resolved.PostCloseAccess, 'ReadOnly');
         });
 
+        it("refuses an app row that leaves a key unset or misspells a value", () => {
+            const complete = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' } };
+            assert.equal(ValidateCollaborationSettings(complete, 'app').valid, true);
+            const partial = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Anyone' } }, 'app');
+            assert.equal(partial.valid, false);
+            assert.ok(partial.errors.some((e) => /must set PostCloseAccess/.test(e)));
+            assert.ok(partial.errors.some((e) => /must set Agents.ListMode/.test(e)));
+            const misspelled = ValidateCollaborationSettings({ ...complete, Chats: { ...complete.Chats, WhoCanStart: 'Owner' } }, 'app');
+            assert.equal(misspelled.valid, false);
+            // A type may leave keys to the app: only the app's row is held to "every key"
+            assert.equal(ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Owners' } }, 'type').valid, true);
+        });
+
+        it('refuses on a space the keys only a type or the app can hold, and Labels unless the type allows them', () => {
+            const type: CollaborationSettings = { SpaceOverridable: ['Chats.WhoCanStart'] };
+            for (const key of ['Children', 'Admin', 'SpaceOverridable']) {
+                const res = ValidateCollaborationSettings({ [key]: key === 'SpaceOverridable' ? ['Chats'] : {} }, 'space', type);
+                assert.equal(res.valid, false, key);
+                assert.match(res.errors.join(' '), new RegExp(`${key} cannot be set on a space`));
+            }
+            assert.equal(ValidateCollaborationSettings({ Labels: { Tabs: { library: 'Papers' } } }, 'space', type).valid, false);
+            assert.equal(ValidateCollaborationSettings({ Labels: { Tabs: { library: 'Papers' } } }, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
+        });
+
         it('validates settings and refuses bad values and unknown keys', () => {
             // Bad top-level key
             const res1 = ValidateCollaborationSettings({ FooBar: 'baz' }, 'type');

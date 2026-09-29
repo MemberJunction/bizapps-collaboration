@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
     ExampleBoardUIDriver,
@@ -25,12 +25,14 @@ import {
 import type { Type } from '@angular/core';
 import {
     assembleSpaceContributions,
+    overlayDescriptors,
+    normalizeContributionKey,
     BaseSpaceTab,
     BaseSpaceOverviewCard,
     type SpaceUIContext,
     type SpaceTabDescriptor,
     type SpaceOverviewCardDescriptor,
-    type BeforeCloseSpaceEvent,
+    type BeforeCreateChildSpaceEvent,
     type BeforeInviteEvent,
     type BeforePostMessageEvent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
@@ -50,6 +52,8 @@ import {
     type mjBizAppsCollaborationSpaceMemberEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { CollaborationEngine } from '@mj-biz-apps/collaboration-core-entities-server';
+import type { mjBizAppsCollaborationSpaceRoleTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
 // Mock context factory helpers
 function createMockUser(id: string = 'user-1', name: string = 'Test User'): UserInfo {
@@ -61,47 +65,33 @@ function createMockUser(id: string = 'user-1', name: string = 'Test User'): User
     } as unknown as UserInfo;
 }
 
-function createMockSpace(id: string = 'space-1', name: string = 'Audit Committee', closedAt: Date | null = null): mjBizAppsCollaborationSpaceEntity {
+function createMockSpace(id: string = 'space-1', name: string = 'Audit Committee', closedAt: Date | null = null, configuration: string | null = null): mjBizAppsCollaborationSpaceEntity {
     return {
         ID: id,
         Name: name,
         ClosedAt: closedAt,
         InheritsMembership: true,
+        Configuration: configuration,
     } as unknown as mjBizAppsCollaborationSpaceEntity;
 }
 
-function createMockSpaceType(code: string = 'example-board'): mjBizAppsCollaborationSpaceTypeEntity {
+function createMockSpaceType(code: string = 'example-board', extensions: Record<string, unknown> = {}): mjBizAppsCollaborationSpaceTypeEntity {
     return {
         Code: code,
         Name: 'Board',
+        Configuration: JSON.stringify({ Extensions: { [code]: extensions } }),
     } as unknown as mjBizAppsCollaborationSpaceTypeEntity;
 }
 
 function createMockRules(): EffectiveSpaceRules {
     return {
-        spaceTypeCode: 'example-board',
-        vocabulary: 'committee',
-        discoverability: 'Hidden',
-        joinMode: 'InviteOnly',
-        defaultBand: 'Team',
-        inviteApproval: 'Approve',
-        memberCap: null,
-        messagingPanel: true,
-        libraryPanel: true,
-        workPanel: true,
-        governancePanel: false,
-        defaultRetention: 'Indefinite',
-        defaultAgentRetrieval: 'Included',
-        defaultAllowParentAssignees: true,
-        inheritsMembership: false,
-        postCloseAccess: 'ReadOnly',
-        postCloseAccessDays: null,
         Chats: {
             WhoCanStart: 'Anyone',
             AgentReplyMode: 'MentionOrOneToOne',
             HistoryOnAdd: 'None',
         },
-        SpaceOverridable: [],
+        Agents: { ListMode: 'Extend' },
+        Extensions: {},
     };
 }
 
@@ -120,18 +110,34 @@ describe('ExampleBoardServerDriver', () => {
         expect(instance).toBeInstanceOf(ExampleBoardServerDriver);
     });
 
-    it('AdjustRules preserves and populates board chat rules', () => {
-        const rules = createMockRules();
+    it("AdjustRules narrows who may start a conversation: anyone becomes contributors, and owners-only stays owners-only", () => {
         const baseCtx = {
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
             space: createMockSpace(),
             spaceType: createMockSpaceType(),
-            effectiveRules: rules,
+            effectiveRules: createMockRules(),
         };
-        const adjusted = driver.AdjustRules(baseCtx, rules);
-        expect(adjusted.Chats.WhoCanStart).toBe('Anyone');
-        expect(adjusted.Chats.AgentReplyMode).toBe('MentionOrOneToOne');
+        const anyone = createMockRules();
+        expect(driver.AdjustRules(baseCtx, anyone).Chats.WhoCanStart).toBe('Contributors');
+        const owners = { ...createMockRules(), Chats: { ...createMockRules().Chats, WhoCanStart: 'Owners' as const } };
+        expect(driver.AdjustRules(baseCtx, owners).Chats.WhoCanStart).toBe('Owners');
+        expect(driver.AdjustRules(baseCtx, anyone).Chats.AgentReplyMode).toBe('MentionOrOneToOne');
+    });
+
+    it('ValidateSpaceChange refuses closing a board whose configuration says motions are open, and allows it when none are', () => {
+        const closeCtx = (openMotions: number): SpaceChangeContext => ({
+            kind: 'Close',
+            actingUser: createMockUser(),
+            provider: {} as unknown as IMetadataProvider,
+            space: createMockSpace('b-1', 'Audit Committee', null, JSON.stringify({ Extensions: { 'example-board': { OpenMotions: openMotions } } })),
+            spaceType: createMockSpaceType(),
+            effectiveRules: createMockRules(),
+        });
+        const refused = driver.ValidateSpaceChange(closeCtx(2));
+        expect(refused.ok).toBe(false);
+        expect(refused.message).toContain('motions are open');
+        expect(driver.ValidateSpaceChange(closeCtx(0)).ok).toBe(true);
     });
 
     it('ValidateSpaceChange refuses deleting active board space', () => {
@@ -163,66 +169,73 @@ describe('ExampleBoardServerDriver', () => {
         expect(res.ok).toBe(true);
     });
 
-    it('ValidateChildSpaceChange enforces InheritsMembership=false for sealed Compensation sub-committees', () => {
-        const parentSpace = createMockSpace('b-1', 'Full Board');
-        const childCompInheriting = {
-            Name: 'Compensation Committee',
-            InheritsMembership: true,
-        } as unknown as mjBizAppsCollaborationSpaceEntity;
-
-        const ctxRefused: ChildSpaceChangeContext = {
-            kind: 'CreateChild',
+    it("ValidateChildSpaceChange refuses a sealed sub-committee named in the type's configuration that inherits membership", () => {
+        const type = createMockSpaceType('example-board', { SealedChildNames: ['Compensation'] });
+        const child = (name: string, inherits: boolean) => ({ Name: name, InheritsMembership: inherits, SpaceTypeID: 'board-type' }) as unknown as mjBizAppsCollaborationSpaceEntity;
+        const ctxFor = (childSpace: mjBizAppsCollaborationSpaceEntity, kind: ChildSpaceChangeContext['kind'] = 'CreateChild'): ChildSpaceChangeContext => ({
+            kind,
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
-            space: parentSpace,
-            childSpace: childCompInheriting,
-            spaceType: createMockSpaceType(),
+            space: createMockSpace('b-1', 'Full Board'),
+            childSpace,
+            spaceType: type,
             effectiveRules: createMockRules(),
-        };
-        const res1 = driver.ValidateChildSpaceChange(ctxRefused);
-        expect(res1.ok).toBe(false);
-        expect(res1.field).toBe('InheritsMembership');
-
-        const childCompSealed = {
-            Name: 'Compensation Committee',
-            InheritsMembership: false,
-        } as unknown as mjBizAppsCollaborationSpaceEntity;
-        const ctxAllowed: ChildSpaceChangeContext = {
-            ...ctxRefused,
-            childSpace: childCompSealed,
-        };
-        const res2 = driver.ValidateChildSpaceChange(ctxAllowed);
-        expect(res2.ok).toBe(true);
+        });
+        const refused = driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true)));
+        expect(refused.ok).toBe(false);
+        expect(refused.field).toBe('InheritsMembership');
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', false))).ok).toBe(true);
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Audit Committee', true))).ok).toBe(true);
+        // A configuration that names nothing seals nothing
+        const unconfigured = { ...ctxFor(child('Compensation Committee', true)), spaceType: createMockSpaceType('example-board') };
+        expect(driver.ValidateChildSpaceChange(unconfigured).ok).toBe(true);
+        // A move into the board is judged the same way as a create
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true), 'MoveChildIn')).ok).toBe(false);
     });
 
-    it('ValidateMemberChange refuses assigning Outside Director to Team band', () => {
-        const memberRefused = {
-            Band: 'Team',
-        } as unknown as mjBizAppsCollaborationSpaceMemberEntity;
+    it('ValidateChildSpaceChange refuses a room under a board, by the child\'s type code', () => {
+        const spy = vi.spyOn(CollaborationEngine.Instance, 'SpaceTypeById').mockReturnValue({ Code: 'example-room' } as unknown as ReturnType<typeof CollaborationEngine.Instance.SpaceTypeById>);
+        try {
+            const ctx: ChildSpaceChangeContext = {
+                kind: 'CreateChild',
+                actingUser: createMockUser(),
+                provider: {} as unknown as IMetadataProvider,
+                space: createMockSpace('b-1', 'Full Board'),
+                childSpace: { Name: 'Acme deal', InheritsMembership: false, SpaceTypeID: 'room-type' } as unknown as mjBizAppsCollaborationSpaceEntity,
+                spaceType: createMockSpaceType(),
+                effectiveRules: createMockRules(),
+            };
+            const res = driver.ValidateChildSpaceChange(ctx);
+            expect(res.ok).toBe(false);
+            expect(res.message).toContain('Boards cannot contain Deal Rooms');
+        } finally {
+            spy.mockRestore();
+        }
+    });
 
-        const ctxRefused: MemberChangeContext = {
+    it("ValidateMemberChange refuses an outside role (one that can't see the Team band) on the Team band", () => {
+        const role = (canSeeTeamBand: boolean) => ({ CanSeeTeamBand: canSeeTeamBand }) as unknown as mjBizAppsCollaborationSpaceRoleTypeEntity;
+        const spy = vi.spyOn(CollaborationEngine.Instance, 'SpaceRoleTypeById');
+        const ctxFor = (band: 'Team' | 'Shared'): MemberChangeContext => ({
             kind: 'Invite',
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
             space: createMockSpace(),
-            member: memberRefused,
-            oldValues: { RoleTypeName: 'Outside Director' },
+            member: { Band: band, SpaceRoleTypeID: 'role-1' } as unknown as mjBizAppsCollaborationSpaceMemberEntity,
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
-        };
-        const res1 = driver.ValidateMemberChange(ctxRefused);
-        expect(res1.ok).toBe(false);
-        expect(res1.field).toBe('Band');
-
-        const memberAllowed = {
-            Band: 'Shared',
-        } as unknown as mjBizAppsCollaborationSpaceMemberEntity;
-        const ctxAllowed: MemberChangeContext = {
-            ...ctxRefused,
-            member: memberAllowed,
-        };
-        const res2 = driver.ValidateMemberChange(ctxAllowed);
-        expect(res2.ok).toBe(true);
+        });
+        try {
+            spy.mockReturnValue(role(false));
+            const refused = driver.ValidateMemberChange(ctxFor('Team'));
+            expect(refused.ok).toBe(false);
+            expect(refused.field).toBe('Band');
+            expect(driver.ValidateMemberChange(ctxFor('Shared')).ok).toBe(true);
+            spy.mockReturnValue(role(true));
+            expect(driver.ValidateMemberChange(ctxFor('Team')).ok).toBe(true);
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it('BuildAgentContext returns governance instructions and context data', () => {
@@ -297,21 +310,11 @@ describe('ExampleBoardUIDriver and Contributions', () => {
         expect(actions.some((a) => a.key === 'download-pack')).toBe(true);
     });
 
-    it('BeforeCloseSpace cancels when space has active votes', () => {
-        const event: BeforeCloseSpaceEvent = {
-            cancel: false,
-            spaceId: 'space-with-active-vote',
-        };
-        uiDriver.BeforeCloseSpace(event);
-        expect(event.cancel).toBe(true);
-        expect(event.cancelReason).toContain('motions are open for voting');
-    });
-
     it('BeforeCreateChildSpace prevents adding deal rooms under a board', () => {
-        const event = {
+        const event: BeforeCreateChildSpaceEvent = {
             cancel: false,
             parentSpaceId: 'board-1',
-            childTypeCode: 'deal-room',
+            childTypeCode: 'example-room',
             name: 'Acme Deal',
         };
         uiDriver.BeforeCreateChildSpace(event);
@@ -351,6 +354,60 @@ describe('ExampleBoardUIDriver and Contributions', () => {
         );
         expect(assembledCards.some((c) => c.key === 'next-meeting')).toBe(true);
         expect(assembledCards.some((c) => c.key === 'agenda')).toBe(true);
+    });
+});
+
+describe('cross-app contributions and their rules', () => {
+    const cardFor = (typeCode: string, defaults: SpaceOverviewCardDescriptor[] = []) => assembleSpaceContributions(
+        BaseSpaceOverviewCard,
+        typeCode,
+        defaults,
+        (reg, meta) => ({ key: meta.contributionKey, title: meta.title ?? meta.contributionKey, sortKey: meta.sortKey, component: reg.SubClass as Type<BaseSpaceOverviewCard> }),
+    );
+
+    it("shows another app's '*' card in an example-board space and in a workspace", () => {
+        expect(cardFor('example-board').some((c) => c.key === 'example-notice')).toBe(true);
+        expect(cardFor('workspace').some((c) => c.key === 'example-notice')).toBe(true);
+        expect(cardFor('workspace').some((c) => c.key === 'next-meeting')).toBe(false);
+    });
+
+    it("keeps that card when the board's own driver names its parts: it replaces its own keys and keeps the rest", () => {
+        const uiCtx = { spaceTypeCode: 'example-board', rules: createMockRules(), space: createMockSpace(), type: createMockSpaceType(), viewer: createMockUser() };
+        const assembled = cardFor('example-board');
+        const cards = new ExampleBoardUIDriver().GetOverviewCards(uiCtx, assembled);
+        expect(cards.map((c) => c.key)).toEqual(expect.arrayContaining(['next-meeting', 'agenda', 'vote', 'members', 'example-notice']));
+    });
+
+    it('refuses a contribution whose key clashes with a built-in part, and logs it', () => {
+        const builtIn: SpaceOverviewCardDescriptor[] = [{ key: 'Example-Notice', title: 'Built-in', sortKey: 1 }];
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const cards = cardFor('workspace', builtIn);
+            expect(cards.filter((c) => normalizeContributionKey(c.key) === 'example-notice')).toEqual(builtIn);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('was refused'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it("lets the type's own driver replace a built-in part: the board's 'overview' replaces the built-in 'Overview'", () => {
+        const builtIn: SpaceTabDescriptor[] = [{ key: 'Overview', label: 'Built-in overview', sortKey: 10 }, { key: 'Library', label: 'Library', sortKey: 20 }];
+        const uiCtx = { spaceTypeCode: 'example-board', rules: createMockRules(), space: createMockSpace(), type: createMockSpaceType(), viewer: createMockUser() };
+        const tabs = new ExampleBoardUIDriver().GetTabs(uiCtx, builtIn);
+        expect(tabs.filter((t) => normalizeContributionKey(t.key) === 'overview')).toHaveLength(1);
+        expect(tabs.find((t) => normalizeContributionKey(t.key) === 'overview')?.label).toBe('Overview');
+        expect(tabs.some((t) => t.key === 'Library')).toBe(true);
+    });
+
+    it('relabels a tab by its key without regard to case', () => {
+        const uiCtx = { spaceTypeCode: 'workspace', rules: { ...createMockRules(), Labels: { Tabs: { library: 'Documents' } } }, space: createMockSpace(), type: createMockSpaceType('workspace'), viewer: createMockUser() } as unknown as SpaceUIContext;
+        expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'Library', 'Library')).toBe('Documents');
+        expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'People', 'People')).toBe('People');
+    });
+
+    it('overlayDescriptors sorts by sortKey', () => {
+        const merged = overlayDescriptors([{ key: 'b', sortKey: 20 }], [{ key: 'a', sortKey: 10 }]);
+        expect(merged.map((d) => d.key)).toEqual(['a', 'b']);
     });
 });
 
@@ -398,37 +455,38 @@ describe('ExampleRoomServerDriver', () => {
         driver = new ExampleRoomServerDriver();
     });
 
-    it('ValidateAnchor enforces valid Deal recordId and entityName', () => {
+    it("ValidateAnchor takes the record and an entity from the type's configuration", () => {
         const user = createMockUser();
         const provider = {} as unknown as IMetadataProvider;
-        const type = createMockSpaceType('example-room');
+        const configured = createMockSpaceType('example-room', { AnchorEntities: ['Deals', 'Opportunities'] });
+        const ctxFor = (entityName: string, recordId: string, type = configured): AnchorContext => ({ actingUser: user, provider, spaceType: type, entityName, recordId });
 
-        const noRecordCtx: AnchorContext = {
-            actingUser: user,
-            provider,
-            spaceType: type,
-            entityName: 'Deals',
-            recordId: '',
-        };
-        expect(driver.ValidateAnchor(noRecordCtx).ok).toBe(false);
+        expect(driver.ValidateAnchor(ctxFor('Deals', '')).ok).toBe(false);
+        expect(driver.ValidateAnchor(ctxFor('UnrelatedEntity', 'deal-123')).ok).toBe(false);
+        expect(driver.ValidateAnchor(ctxFor('deals', 'deal-123')).ok).toBe(true);
+        expect(driver.ValidateAnchor(ctxFor('Opportunities', 'opp-1')).ok).toBe(true);
+        // A type that lists no anchor entity accepts none, and says so
+        const refused = driver.ValidateAnchor(ctxFor('Deals', 'deal-123', createMockSpaceType('example-room')));
+        expect(refused.ok).toBe(false);
+        expect(refused.message).toContain('none is configured');
+    });
 
-        const badEntityCtx: AnchorContext = {
-            actingUser: user,
-            provider,
-            spaceType: type,
-            entityName: 'UnrelatedEntity',
-            recordId: 'deal-123',
-        };
-        expect(driver.ValidateAnchor(badEntityCtx).ok).toBe(false);
-
-        const validCtx: AnchorContext = {
-            actingUser: user,
-            provider,
-            spaceType: type,
-            entityName: 'Deals',
-            recordId: 'deal-123',
-        };
-        expect(driver.ValidateAnchor(validCtx).ok).toBe(true);
+    it("ValidateMemberChange refuses seating a contact the room's configuration lists as opted out", () => {
+        const optedOut = createMockSpace('room-1', 'Acme Deal Room', null, JSON.stringify({ Extensions: { 'example-room': { OptedOutUserIds: ['USER-OPTED-OUT'] } } }));
+        const ctxFor = (userId: string, kind: MemberChangeContext['kind'] = 'Invite'): MemberChangeContext => ({
+            kind,
+            actingUser: createMockUser(),
+            provider: {} as unknown as IMetadataProvider,
+            space: optedOut,
+            member: { UserID: userId } as unknown as mjBizAppsCollaborationSpaceMemberEntity,
+            spaceType: createMockSpaceType('example-room'),
+            effectiveRules: createMockRules(),
+        });
+        const refused = driver.ValidateMemberChange(ctxFor('user-opted-out'));
+        expect(refused.ok).toBe(false);
+        expect(refused.field).toBe('UserID');
+        expect(driver.ValidateMemberChange(ctxFor('someone-else')).ok).toBe(true);
+        expect(driver.ValidateMemberChange(ctxFor('user-opted-out', 'Remove')).ok).toBe(true);
     });
 
     it('ValidateChildSpaceChange refuses creating sub-spaces in a Deal Room', () => {
@@ -448,12 +506,12 @@ describe('ExampleRoomServerDriver', () => {
         expect(res.message).toContain('Deal Rooms cannot contain child spaces');
     });
 
-    it('ValidateMessage refuses confidential pricing floor codes in messages', () => {
+    it("ValidateMessage refuses the phrases the type's configuration blocks", () => {
         const baseCtx: MessageValidationContext = {
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
             space: createMockSpace(),
-            spaceType: createMockSpaceType('example-room'),
+            spaceType: createMockSpaceType('example-room', { BlockedPhrases: ['confidential deal floor', 'Internal margin target'] }),
             effectiveRules: createMockRules(),
             chatId: 'chat-1',
             messageText: 'Hello team, the confidential deal floor is 100k.',
@@ -461,12 +519,9 @@ describe('ExampleRoomServerDriver', () => {
         const res1 = driver.ValidateMessage(baseCtx);
         expect(res1.ok).toBe(false);
         expect(res1.message).toContain('Cannot post confidential margin');
-
-        const res2 = driver.ValidateMessage({
-            ...baseCtx,
-            messageText: 'Please review the updated deliverables proposal.',
-        });
-        expect(res2.ok).toBe(true);
+        expect(driver.ValidateMessage({ ...baseCtx, messageText: 'The INTERNAL MARGIN TARGET moved.' }).ok).toBe(false);
+        expect(driver.ValidateMessage({ ...baseCtx, messageText: 'Please review the updated deliverables proposal.' }).ok).toBe(true);
+        expect(driver.ValidateMessage({ ...baseCtx, spaceType: createMockSpaceType('example-room'), messageText: 'the confidential deal floor' }).ok).toBe(true);
     });
 
     it('BuildAgentContext omits win probability and margins when buyer contact (Shared band) is in chat', () => {
@@ -507,19 +562,21 @@ describe('ExampleRoomServerDriver', () => {
         expect(teamResult.contextData?.['isSharedAudience']).toBe(false);
     });
 
-    it('SyncSeats filters out contacts who opted out of outreach', async () => {
-        const space = createMockSpace('deal-space-1');
-        const user = createMockUser();
-        const provider = {} as unknown as IMetadataProvider;
-
+    it("SyncSeats hands the base only the contacts the room's configuration does not list as opted out", async () => {
+        const space = createMockSpace('deal-space-1', 'Deal', null, JSON.stringify({ Extensions: { 'example-room': { OptedOutEmails: ['Unsubscribed.Contact@acme.com'] } } }));
         const people = [
             { Email: 'buyer.lead@acme.com', RoleTypeName: 'Buyer Contact' },
-            { Email: 'unsubscribed.contact@acme.com-optout', RoleTypeName: 'Buyer Contact' },
+            { Email: 'unsubscribed.contact@acme.com', RoleTypeName: 'Buyer Contact' },
             { Email: 'sales.exec@ourfirm.com', RoleTypeName: 'Deal Lead' },
         ];
-
-        const res = await driver.SyncSeats(space, 'crm:roster', people, user, provider);
-        expect(res).toBeDefined();
+        const base = vi.spyOn(BaseSpaceTypeServerDriver.prototype, 'SyncSeats').mockResolvedValue({ added: 0, updated: 0, removed: 0, invited: 0, errors: [] });
+        try {
+            await driver.SyncSeats(space, 'crm:roster', people, createMockUser(), {} as unknown as IMetadataProvider);
+            const handed = base.mock.calls[0][2].map((p) => p.Email);
+            expect(handed).toEqual(['buyer.lead@acme.com', 'sales.exec@ourfirm.com']);
+        } finally {
+            base.mockRestore();
+        }
     });
 });
 
@@ -560,6 +617,7 @@ describe('ExampleRoomUIDriver', () => {
     it('BeforePostMessage cancels if message contains confidential deal floor', () => {
         const event: BeforePostMessageEvent = {
             cancel: false,
+            spaceId: 'room-1',
             chatId: 'chat-1',
             messageText: 'Note: internal margin target is confidential.',
         };

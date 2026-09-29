@@ -8,6 +8,8 @@ import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/ex
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
+import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { seedAppSettings } from './app-settings.test-support.ts';
 
 /** The mock hands back whatever row type its caller asked for; this and `stubOf` are the two places a cast is made. */
@@ -46,7 +48,12 @@ describe('executeSpaceChatTurn', () => {
     let origRunAgent: typeof AgentRunner.prototype.RunAgent;
 
     let restoreAppSettings: () => void = () => undefined;
+    /** The type's driver as the turn resolves it; a test sets it to throw, as an unregistered driver does. */
+    let resolveDriver: () => Promise<{ space: object; spaceType: object; driver: BaseSpaceTypeServerDriver }> = async () => ({ space: {}, spaceType: {}, driver: new BaseSpaceTypeServerDriver() });
+    let origResolveSpaceAndType: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     before(() => {
+        origResolveSpaceAndType = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = (() => resolveDriver()) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
         restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
@@ -74,6 +81,7 @@ describe('executeSpaceChatTurn', () => {
     });
 
     after(() => {
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = origResolveSpaceAndType;
         restoreAppSettings();
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
         AgentRunner.prototype.RunAgent = origRunAgent;
@@ -425,6 +433,20 @@ describe('executeSpaceChatTurn', () => {
         conversationId: CONVERSATION_ID,
         userMessageId: USER_MESSAGE_ID,
     };
+
+    it("refuses a turn in a space whose type names a driver that is not registered", async () => {
+        const held = resolveDriver;
+        resolveDriver = async () => { throw new Error('Space driver class "no-such-driver" is not registered on the server.'); };
+        try {
+            const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} help` });
+            const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+            assert.equal(result.ok, false);
+            assert.match(result.message, /not registered/);
+            assert.equal(provider.savedDetails.length, 0, 'nothing is written for a refused turn');
+        } finally {
+            resolveDriver = held;
+        }
+    });
 
     it('refuses when user ID on message does not match caller (someone elses message)', async () => {
         const provider = createMockProvider({ messageUserId: OTHER_USER_ID });

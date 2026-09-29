@@ -57,6 +57,14 @@ const normalizeKey = (key: string | null | undefined): string => (key ?? '').tri
 export const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
 
+/** The application's settings row exists but doesn't validate. Settings-dependent writes and turns refuse until it is fixed. */
+export class InvalidAppSettingsError extends Error {
+    constructor(public readonly Errors: readonly string[]) {
+        super(`The application's CollaborationSettings are invalid: ${Errors.join('; ')}`);
+        this.name = 'InvalidAppSettingsError';
+    }
+}
+
 /** The parts of a role type the seat rules read. The engine's own role types satisfy it; a test can pass plain values. */
 export interface RoleTypeFlags {
     Level: number;
@@ -277,15 +285,16 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
             const validation = ValidateCollaborationSettings(parsed, 'app');
             if (!validation.valid) {
-                console.error(
-                    'Invalid CollaborationSettings in Application Settings:',
-                    validation.errors.join(', ')
-                );
+                // Fail closed: a row that doesn't validate is not a configuration, and resolving with it would let a typo
+                // ('Owner' for 'Owners') quietly widen who may start a conversation
+                LogError(`Invalid CollaborationSettings in Application Settings: ${validation.errors.join(', ')}`);
+                throw new InvalidAppSettingsError(validation.errors);
             }
             this._cachedParsedSettings = parsed as CollaborationSettings;
             return this._cachedParsedSettings;
         } catch (e) {
             this._cachedParsedSettings = null;
+            if (e instanceof InvalidAppSettingsError) throw e;
             throw new MissingAppSettingsError(
                 `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`
             );

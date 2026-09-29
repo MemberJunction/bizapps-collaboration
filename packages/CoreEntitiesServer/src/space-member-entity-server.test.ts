@@ -145,6 +145,63 @@ describe('a member leaving a space', () => {
     });
 });
 
+describe('a seat being deleted', () => {
+    let systemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
+    let resolveSpace: typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
+    let driver: SpyDriver = new SpyDriver({ ok: true });
+
+    before(() => {
+        systemUser = WellKnownUserSource.Instance.GetSystemUser.bind(WellKnownUserSource.Instance);
+        WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' } as UserInfo);
+        resolveSpace = ServerDriverRegistry.Instance.ResolveSpaceAndType.bind(ServerDriverRegistry.Instance);
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = async () => ({
+            driver,
+            space: stubOf<mjBizAppsCollaborationSpaceEntity>({}),
+            spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}),
+        });
+    });
+    after(() => {
+        WellKnownUserSource.Instance.GetSystemUser = systemUser;
+        ServerDriverRegistry.Instance.ResolveSpaceAndType = resolveSpace;
+    });
+
+    function seat() {
+        const entity = Object.create(SpaceMemberEntityServer.prototype) as SpaceMemberEntityServer;
+        const history: unknown[] = [];
+        Object.defineProperties(entity, {
+            ContextCurrentUser: { value: { ID: OWNER, Name: 'Owner', UserRoles: [] }, writable: true },
+            IsSaved: { value: true, writable: true },
+            ID: { value: members[0].ID, writable: true },
+            SpaceID: { value: SPACE, writable: true },
+            ProviderToUse: { value: provider, writable: true },
+            RegisterResultHistoryEntry: { value: (entry: unknown) => history.push(entry), writable: true },
+        });
+        return { entity, history };
+    }
+
+    it("is judged by the space type's driver, as a Remove, and refused when the type says no", async () => {
+        driver = new SpyDriver({ ok: false, message: 'A board seat can only be removed by vote.' });
+        const { entity, history } = seat();
+        const deleted = await SpaceMemberEntityServer.prototype.Delete.call(entity);
+        assert.equal(deleted, false);
+        assert.equal(driver.judged.length, 1);
+        assert.equal(driver.judged[0].kind, 'Remove');
+        assert.match(JSON.stringify(history), /removed by vote/);
+    });
+
+    it('is refused when the space type cannot be resolved', async () => {
+        const registry = ServerDriverRegistry.Instance;
+        const held = registry.ResolveSpaceAndType;
+        registry.ResolveSpaceAndType = async () => { throw new Error('The space type has no driver.'); };
+        try {
+            const { entity } = seat();
+            assert.equal(await SpaceMemberEntityServer.prototype.Delete.call(entity), false);
+        } finally {
+            registry.ResolveSpaceAndType = held;
+        }
+    });
+});
+
 describe('the kind of change the driver hears about after a save', () => {
     it('is the kind validation decided, which the saved row no longer shows', () => {
         assert.equal(reportedMemberChangeKind('BandChange', 'Active', false), 'BandChange');

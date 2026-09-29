@@ -426,8 +426,28 @@ export function ValidateCollaborationSettings(
         }
     }
 
+    if (level === 'app') {
+        // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
+        // half-written row would look like a working configuration (extensibility plan § 4)
+        const requiredKeys: Array<[string, unknown]> = [
+            ['PostCloseAccess', c['PostCloseAccess']],
+            ['PostCloseAccessDays', c['PostCloseAccessDays']],
+            ['Chats.WhoCanStart', (c['Chats'] as Record<string, unknown> | undefined)?.['WhoCanStart']],
+            ['Chats.AgentReplyMode', (c['Chats'] as Record<string, unknown> | undefined)?.['AgentReplyMode']],
+            ['Chats.HistoryOnAdd', (c['Chats'] as Record<string, unknown> | undefined)?.['HistoryOnAdd']],
+            ['Agents.ListMode', (c['Agents'] as Record<string, unknown> | undefined)?.['ListMode']],
+        ];
+        for (const [key, value] of requiredKeys) {
+            if (value === undefined) errors.push(`The application's settings must set ${key}.`);
+        }
+    }
+
     if (level === 'space') {
         const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
+        // Keys that only a type or the app can hold: on a space they would do nothing, so they are refused instead
+        for (const typeOnly of ['Children', 'Admin', 'SpaceOverridable']) {
+            if (c[typeOnly] !== undefined) errors.push(`${typeOnly} cannot be set on a space: it belongs to the space type.`);
+        }
         const isAllowed = (dottedKey: string): boolean => {
             if (overridable.has(dottedKey)) return true;
             const prefix = dottedKey.split('.')[0];
@@ -467,6 +487,9 @@ export function ValidateCollaborationSettings(
                     errors.push(`Extensions.${appName} cannot be overridden by space: not in type's SpaceOverridable.`);
                 }
             }
+        }
+        if (c['Labels'] !== undefined && !isAllowed('Labels')) {
+            errors.push("Labels cannot be overridden by space: not in type's SpaceOverridable.");
         }
     }
 

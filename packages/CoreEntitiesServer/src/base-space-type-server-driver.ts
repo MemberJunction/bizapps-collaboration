@@ -36,9 +36,13 @@ export interface SpaceChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
+export type ChildSpaceChangeKind = 'CreateChild' | 'UpdateChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
+
 export interface ChildSpaceChangeContext extends DriverBaseContext {
     childSpace: mjBizAppsCollaborationSpaceEntity;
-    kind: 'CreateChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
+    kind: ChildSpaceChangeKind;
+    /** What the child's changed fields held before this save. Empty for a create. */
+    oldValues?: Record<string, unknown>;
 }
 
 export type MemberChangeKind = 'Invite' | 'RoleChange' | 'BandChange' | 'Remove';
@@ -49,7 +53,7 @@ export interface MemberChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
-export type ItemChangeKind = 'Add' | 'Promote' | 'Move' | 'Remove';
+export type ItemChangeKind = 'Add' | 'Update' | 'Promote' | 'Move' | 'Remove';
 
 export interface ItemChangeContext extends DriverBaseContext {
     item: mjBizAppsCollaborationSpaceItemEntity;
@@ -129,7 +133,7 @@ export class BaseSpaceTypeServerDriver {
         return { ok: true };
     }
 
-    /** React to a change to the space (runs inside the save transaction). */
+    /** React to a change to the space (runs after the save commits; a failure is logged and the save stands). */
     public OnSpaceChanged(_ctx: SpaceChangeContext): Promise<void> | void {}
 
     /** Validate a child space under this space (runs on parent's type driver). */

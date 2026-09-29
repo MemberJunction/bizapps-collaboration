@@ -20,7 +20,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
         <div class="card deal-summary-card" style="border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface-card); padding: 16px;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <span style="font-size: 16px; font-weight: 700;">Deal Overview</span>
-                <span style="padding: 3px 8px; background: #e0f2fe; color: #0369a1; border-radius: 6px; font-size: 12px; font-weight: 600;">Proposal Review</span>
+                <span style="padding: 3px 8px; background: var(--mj-status-info-bg); color: var(--mj-status-info-text); border-radius: 6px; font-size: 12px; font-weight: 600;">Proposal Review</span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px;">
                 <div>

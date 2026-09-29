@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
+import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -46,6 +48,7 @@ export interface SubSpaceSummary {
     CollabAskBoxComponent,
     MJEmptyStateComponent,
     MJClickableDirective,
+    NgComponentOutlet,
   ],
   template: `
     <div class="page ov">
@@ -197,6 +200,13 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+
+          <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
+          @for (card of ContributedCards; track card.key) {
+            @if (card.component) {
+              <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+            }
+          }
 
           <!-- Sub-spaces -->
           @if (SubSpaces && SubSpaces.length > 0) {
@@ -426,6 +436,9 @@ export interface SubSpaceSummary {
 })
 export class CollabSpaceOverviewComponent {
   @Input() public SpaceName = '';
+  @Input() public SpaceId = '';
+  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
+  @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
   @Input() public FirmName = '';
   @Input() public ClientOrgName = '';
   @Input() public ClientPersonaName = '';

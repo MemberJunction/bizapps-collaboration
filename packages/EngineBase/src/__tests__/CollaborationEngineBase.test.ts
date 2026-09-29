@@ -157,6 +157,22 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             expect(() => engine.ResolveSettingsForSpace([], 'TYPE-BAD')).toThrow(/has a configuration that does not parse/);
         });
 
+        it('refuses to resolve when the app settings row does not validate, instead of using it anyway', () => {
+            const internals = engine as unknown as Internals;
+            const held = internals._applicationSettings;
+            internals._applicationSettings = [{
+                ApplicationID: 'unused', Application: 'Collaboration', Name: 'CollaborationSettings',
+                Value: JSON.stringify({ Chats: { WhoCanStart: 'Owner' } }),
+            }];
+            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            try {
+                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow(/CollaborationSettings are invalid/);
+            } finally {
+                internals._applicationSettings = held;
+                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            }
+        });
+
         it('refuses to resolve when the app settings row is missing, instead of falling back to defaults', () => {
             const internals = engine as unknown as Internals;
             const held = internals._applicationSettings;

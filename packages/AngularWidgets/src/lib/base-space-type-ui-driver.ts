@@ -180,11 +180,29 @@ export class BaseSpaceTypeUIDriver {
 
     public GetTabLabel(ctx: SpaceUIContext, tabKey: string, defaultLabel: string): string {
         const labels = ctx.rules?.Labels?.Tabs;
-        if (labels && labels[tabKey]) {
-            return labels[tabKey];
-        }
-        return defaultLabel;
+        const wanted = normalizeContributionKey(tabKey);
+        const match = labels ? Object.keys(labels).find((key) => normalizeContributionKey(key) === wanted) : undefined;
+        return match && labels?.[match] ? labels[match] : defaultLabel;
     }
+}
+
+/** Keys are compared without case or padding, everywhere: the section, the deep links, the drivers and Labels.Tabs. */
+export function normalizeContributionKey(key: string): string {
+    return key.trim().toLowerCase();
+}
+
+/**
+ * The type's own driver has the final say over the parts it is handed: what it names replaces the part with the same key, and the
+ * rest (the built-in parts and what other apps contributed) stays. Sorted by `sortKey`.
+ */
+export function overlayDescriptors<TDescriptor extends { key: string; sortKey?: number }>(
+    defaults: readonly TDescriptor[],
+    own: readonly TDescriptor[],
+): TDescriptor[] {
+    const merged = new Map<string, TDescriptor>();
+    for (const item of defaults) merged.set(normalizeContributionKey(item.key), item);
+    for (const item of own) merged.set(normalizeContributionKey(item.key), item);
+    return [...merged.values()].sort((a, b) => (a.sortKey ?? 100) - (b.sortKey ?? 100));
 }
 
 // ============================================================================
@@ -219,7 +237,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         return spaceTypes.some((t) => t === '*' || t.toLowerCase().trim() === normalizedCode);
     });
 
-    // Deduplicate on contributionKey: highest Priority wins (if tied, latest)
+    // Deduplicate on contributionKey (compared without case): highest Priority wins (if tied, latest)
     const map = new Map<string, { reg: ClassRegistration; meta: SpaceContributionMetadata }>();
     for (const reg of registrations) {
         const raw = reg.Metadata as Record<string, string | number | boolean | string[] | undefined>;
@@ -232,7 +250,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
             icon: typeof raw['icon'] === 'string' ? raw['icon'] : undefined,
             title: typeof raw['title'] === 'string' ? raw['title'] : undefined,
         };
-        const key = meta.contributionKey;
+        const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
         if (!existing || reg.Priority > existing.reg.Priority) {
             map.set(key, { reg, meta });
@@ -245,13 +263,19 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         contributedItems.push(desc);
     }
 
-    // Merge default items with contributed items (contributions override defaults on key collision)
+    // Contributions only add. One whose key clashes with a built-in part is refused and logged: any installed app could otherwise
+    // remove the chat from every space. Only the type's own UI driver may replace a built-in part (see overlayDescriptors).
     const mergedMap = new Map<string, TDescriptor>();
     for (const def of defaultItems) {
-        mergedMap.set(def.key, def);
+        mergedMap.set(normalizeContributionKey(def.key), def);
     }
     for (const contrib of contributedItems) {
-        mergedMap.set(contrib.key, contrib);
+        const key = normalizeContributionKey(contrib.key);
+        if (mergedMap.has(key)) {
+            console.warn(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
+            continue;
+        }
+        mergedMap.set(key, contrib);
     }
 
     const result = Array.from(mergedMap.values());

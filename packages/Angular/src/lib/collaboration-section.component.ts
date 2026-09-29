@@ -11,11 +11,12 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { type CollaborationSettings, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
+import { buildSpaceTabs, resolveTabId, tabKey, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
 import { accessChain, nearestSeats } from './logic/reached-people.js';
@@ -61,6 +62,16 @@ import {
     CollabNewConversationDialogComponent,
     type NewConversationSubmitPayload,
     type TabItem,
+    assembleSpaceContributions,
+    BaseSpaceOverviewCard,
+    BaseSpaceTab,
+    type BaseSpaceTypeUIDriver,
+    type BeforeInviteEvent,
+    type BeforeStartChatEvent,
+    type SpaceOverviewCardDescriptor,
+    type SpaceTabDescriptor,
+    type SpaceUIContext,
+    UIDriverRegistry,
     type RailSpaceNode,
     type BreadcrumbItem,
     type NeedsYouItemModel,
@@ -101,6 +112,7 @@ interface RawSpaceRecord {
     Retention?: mjBizAppsCollaborationSpaceEntity['Retention'];
     ClosedAt?: mjBizAppsCollaborationSpaceEntity['ClosedAt'];
     OwnerID?: mjBizAppsCollaborationSpaceEntity['OwnerID'];
+    Configuration?: mjBizAppsCollaborationSpaceEntity['Configuration'];
 }
 
 /** What the load-error page says: the cause goes to the log, not to the person. */
@@ -815,6 +827,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @case ('Overview') {
                                                 <mjc-space-overview
                                                     #spaceOverview
+                                                    [SpaceId]="activeSpaceId"
+                                                    [ContributedCards]="overviewContributedCards"
                                                     [SpaceName]="spaceTitle"
                                                     [FirmName]="firmName"
                                                     [ClientOrgName]="clientOrgName"
@@ -975,6 +989,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
                                                     (SaveSettingsRequested)="onSaveSettings($event)"
                                                 />
+                                            }
+                                            @default {
+                                                @if (contributedTabComponent; as tabComponent) {
+                                                    <ng-container *ngComponentOutlet="tabComponent; inputs: { SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode }"></ng-container>
+                                                }
                                             }
                                         }
                                         }
@@ -1158,18 +1177,70 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
+    /** The tabs of the space shown: the built-in ones its type's panels allow, plus what the type and other apps contribute. */
     public get tabs(): TabItem[] {
-        const list: TabItem[] = [
-            { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' },
-            { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open' },
-            { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check' },
-            { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' },
-            { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group' },
-        ];
-        if (this.canConfigureCurrentSpace) {
-            list.push({ id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' });
+        const model = this.spaceTabModel ?? buildSpaceTabs({
+            panels: { MessagingPanel: true, LibraryPanel: true, WorkPanel: true },
+            finalize: (defaults) => defaults,
+            labelFor: (_key, label) => label,
+        });
+        return model.tabs.filter(tab => tab.id !== 'Settings' || this.canConfigureCurrentSpace);
+    }
+
+    /** The tab model of the space shown, built when it is selected. Null until then. */
+    private spaceTabModel: SpaceTabModel | null = null;
+    /** The type's UI driver for the space shown. */
+    private uiDriver: BaseSpaceTypeUIDriver = UIDriverRegistry.Instance.GetDefaultDriver();
+    /** Cards the type and other apps add to the Overview of the space shown. */
+    public overviewContributedCards: SpaceOverviewCardDescriptor[] = [];
+
+    /** The code of the space shown's type. */
+    public get activeSpaceTypeCode(): string {
+        const space = this.activeSpaceRecord;
+        return (space && CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.Code) || '';
+    }
+
+    /** The component of the contributed tab that is open, or null when a built-in tab is. */
+    public get contributedTabComponent(): SpaceTabDescriptor['component'] | null {
+        return this.spaceTabModel?.contributed.get(this.activeTab) ?? null;
+    }
+
+    /**
+     * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
+     * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
+     */
+    private buildSpaceUi(space: RawSpaceRecord): void {
+        const engine = CollaborationEngineBase.Instance;
+        const type = engine.SpaceTypeById(space.SpaceTypeID);
+        const code = type?.Code ?? '';
+        this.uiDriver = UIDriverRegistry.Instance.ResolveDriver(type?.UIDriverClass);
+        let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: { Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Extensions: {} } };
+        try {
+            const spaceConfig = space.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
+            const resolved = engine.ResolveSettingsForSpace([spaceConfig], space.SpaceTypeID);
+            ctx = { ...ctx, rules: { Chats: resolved.Chats, Agents: resolved.Agents, Labels: resolved.Labels, Extensions: resolved.Extensions ?? {} } };
+        } catch (err) {
+            LogError(`Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
         }
-        return list;
+        const tabFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
+            key: meta.contributionKey,
+            label: meta.label ?? meta.contributionKey,
+            icon: meta.icon,
+            sortKey: meta.sortKey,
+            component: reg.SubClass as SpaceTabDescriptor['component'],
+        });
+        this.spaceTabModel = buildSpaceTabs({
+            panels: { MessagingPanel: type?.MessagingPanel ?? true, LibraryPanel: type?.LibraryPanel ?? true, WorkPanel: type?.WorkPanel ?? true },
+            finalize: (defaults) => this.uiDriver.GetTabs(ctx, assembleSpaceContributions(BaseSpaceTab, code, defaults, tabFactory)),
+            labelFor: (key, label) => this.uiDriver.GetTabLabel(ctx, key, label),
+        });
+        const cardFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; title?: string; sortKey?: number }): SpaceOverviewCardDescriptor => ({
+            key: meta.contributionKey,
+            title: meta.title ?? meta.contributionKey,
+            sortKey: meta.sortKey,
+            component: reg.SubClass as SpaceOverviewCardDescriptor['component'],
+        });
+        this.overviewContributedCards = this.uiDriver.GetOverviewCards(ctx, assembleSpaceContributions(BaseSpaceOverviewCard, code, [], cardFactory));
     }
 
     // Navigation Rail data
@@ -1644,6 +1715,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.canConfigureCurrentSpace = false;
         // The last space's save message must not greet the next space's Settings, its drawer is closed, and both bands start narrow
         Object.assign(this, freshSelectionState());
+        this.spaceTabModel = null;
+        this.overviewContributedCards = [];
+        this.uiDriver = UIDriverRegistry.Instance.GetDefaultDriver();
         this.overviewSubSpaces = [];
         // The header shows the space's own name at once, from what is already loaded
         const cachedSpace = this.rawSpaces.find(sp => UUIDsEqual(sp.ID, spaceId));
@@ -1741,6 +1815,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
         this.settingsSession.Open(this.spaceSettings);
         this.spaceSettings = this.settingsSession.Shown;
+        // What the type's UI driver and other apps contribute: the tabs and the Overview cards
+        this.buildSpaceUi(space);
 
         await this.updateCanConfigureCurrentSpace();
         if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
@@ -2420,6 +2496,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             await this.selectSpaceInternal(targetSpaceId);
         }
 
+        // A tab the type or another app contributed can only be resolved once the space's tabs are built
+        if (this.spaceTabModel) {
+            const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
+            if (named) this.activeTab = named;
+            else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
+        }
+
         if (params['item'] && isValidUuid(params['item'])) {
             this.selectedItemId = params['item'];
             this.isDrawerOpen = true;
@@ -2823,6 +2906,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // The space and the selection this conversation is for, taken before the first await: the person may move on while it is created
         const spaceId = this.activeSpaceId;
         const isCurrent = this.currentSelection();
+        const beforeStart: BeforeStartChatEvent = { cancel: false, spaceId, name: payload.name, kind: payload.kind };
+        this.uiDriver.BeforeStartChat(beforeStart);
+        if (beforeStart.cancel) {
+            SharedService.Instance.CreateSimpleNotification(beforeStart.cancelReason ?? 'This space does not allow a new conversation.', 'warning', 5000);
+            return;
+        }
         this.isCreatingConversation = true;
         this.RefreshView();
         try {
@@ -3046,6 +3135,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const isCurrent = this.currentSelection();
         // The assistant to ask is this space's, so it is read before the await; the person can have moved to another space by then
         const askedMessage = this.askMessage(text);
+        const beforeAsk: BeforeStartChatEvent = { cancel: false, spaceId, name: text.slice(0, 50), kind: 'General' };
+        this.uiDriver.BeforeStartChat(beforeAsk);
+        if (beforeAsk.cancel) {
+            SharedService.Instance.CreateSimpleNotification(beforeAsk.cancelReason ?? 'This space does not allow a new conversation.', 'warning', 5000);
+            return;
+        }
         this.isSubmittingAsk = true;
         this.RefreshView();
         const name = text.length > 50 ? `${text.slice(0, 47)}...` : text;
@@ -3115,6 +3210,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (isCurrent()) this.inviteOutcome = { ok: false, message };
             SharedService.Instance.CreateSimpleNotification(message, 'error', 5000);
         };
+        // The type's UI driver may cancel the invite before it is sent; the server's driver still enforces its own rules
+        const before: BeforeInviteEvent = { cancel: false, spaceId, email: payload.email, role: payload.role };
+        this.uiDriver.BeforeInvite(before);
+        if (before.cancel) {
+            failed(before.cancelReason ?? 'This space does not allow that invite.');
+            this.RefreshView();
+            return;
+        }
         this.isSendingInvite = true;
         this.inviteOutcome = null;
         this.inviteRedemptionUrl = null;

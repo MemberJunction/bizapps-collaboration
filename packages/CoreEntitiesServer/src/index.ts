@@ -18,6 +18,7 @@ export type {
     AnchorContext,
     ChatChangeContext,
     ChildSpaceChangeContext,
+    ChildSpaceChangeKind,
     DriverBaseContext,
     DriverValidationResult,
     ItemChangeContext,

@@ -22,12 +22,16 @@ import {
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { CollaborationEngine } from '@mj-biz-apps/collaboration-core-entities-server';
+import { readExtension, stringList } from '../extension-config.js';
+
+const KEY = 'example-board';
 
 @RegisterClass(BaseSpaceTypeServerDriver, 'example-board')
 export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     /**
-     * Narrows or adjusts rules for board spaces:
-     * - Configures chat rules for governance
+     * Narrows the rules for board spaces: only contributors start a conversation, where the rules would let anyone. A driver
+     * narrows; it never widens what the type or the app set.
      */
     public override AdjustRules(
         _ctx: DriverBaseContext,
@@ -37,9 +41,7 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
             ...rules,
             Chats: {
                 ...rules.Chats,
-                WhoCanStart: rules.Chats?.WhoCanStart ?? 'Anyone',
-                AgentReplyMode: rules.Chats?.AgentReplyMode ?? 'MentionOrOneToOne',
-                HistoryOnAdd: rules.Chats?.HistoryOnAdd ?? 'None',
+                WhoCanStart: rules.Chats?.WhoCanStart === 'Anyone' ? 'Contributors' : rules.Chats?.WhoCanStart,
             },
         };
     }
@@ -51,6 +53,10 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     public override ValidateSpaceChange(
         ctx: SpaceChangeContext
     ): DriverValidationResult {
+        // A board with motions open (the count comes from the space's own configuration, kept by whatever runs the votes) stays open
+        if (ctx.kind === 'Close' && Number(readExtension(ctx.space.Configuration, KEY)['OpenMotions'] ?? 0) > 0) {
+            return { ok: false, message: 'Cannot close a Board space while motions are open for voting.' };
+        }
         if (ctx.kind === 'Delete') {
             const isClosed = ctx.space.ClosedAt != null;
             if (!isClosed) {
@@ -69,20 +75,25 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
 
     /**
      * Validates child spaces under the board:
-     * - Sealed sub-committees (such as Compensation) must have InheritsMembership = false.
+     * - A room can't sit under a board (by the child's type code).
+     * - Sub-committees the type names as sealed (`Extensions.example-board.SealedChildNames`) must not inherit membership.
      */
     public override ValidateChildSpaceChange(
         ctx: ChildSpaceChangeContext
     ): DriverValidationResult {
-        if (ctx.kind === 'CreateChild') {
-            const childName = (ctx.childSpace.Name ?? '').toLowerCase();
-            if (childName.includes('compensation') && ctx.childSpace.InheritsMembership) {
-                return {
-                    ok: false,
-                    message: 'Sealed sub-committees (e.g. Compensation) must not inherit membership.',
-                    field: 'InheritsMembership',
-                };
-            }
+        if (ctx.kind !== 'CreateChild' && ctx.kind !== 'MoveChildIn' && ctx.kind !== 'UpdateChild') return { ok: true };
+        const childTypeCode = CollaborationEngine.Instance.SpaceTypeById(ctx.childSpace.SpaceTypeID)?.Code;
+        if (childTypeCode === 'example-room') {
+            return { ok: false, message: 'Boards cannot contain Deal Rooms.', field: 'ParentID' };
+        }
+        const sealedNames = stringList(readExtension(ctx.spaceType.Configuration, KEY)['SealedChildNames']);
+        const childName = (ctx.childSpace.Name ?? '').toLowerCase();
+        if (ctx.childSpace.InheritsMembership && sealedNames.some((name) => childName.includes(name))) {
+            return {
+                ok: false,
+                message: 'Sealed sub-committees (for example Compensation) must not inherit membership.',
+                field: 'InheritsMembership',
+            };
         }
         return { ok: true };
     }
@@ -99,9 +110,9 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
         ctx: MemberChangeContext
     ): DriverValidationResult {
         if (ctx.kind === 'Invite' || ctx.kind === 'BandChange' || ctx.kind === 'RoleChange') {
-            // Check if member is marked with outside director role via oldValues or SyncSource/PersonID
-            const roleName = String(ctx.oldValues?.['RoleTypeName'] ?? '');
-            if (ctx.member.Band === 'Team' && roleName.toLowerCase().includes('outside')) {
+            // An outside role is one that can't see the Team band, from the seat's own role type
+            const role = CollaborationEngine.Instance.SpaceRoleTypeById(ctx.member.SpaceRoleTypeID);
+            if (ctx.member.Band === 'Team' && role && !role.CanSeeTeamBand) {
                 return {
                     ok: false,
                     message: 'Outside directors cannot be assigned to the Team band.',

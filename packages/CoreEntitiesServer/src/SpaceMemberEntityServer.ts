@@ -4,6 +4,7 @@ import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, stra
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import type { MemberChangeKind } from './base-space-type-server-driver.js';
+import { failDelete, refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
@@ -203,7 +204,18 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         return ok;
     }
 
+    /** Asks the space type's driver before a seat is deleted, as Remove. Null when it accepts. */
+    private async driverRefusalForDelete(): Promise<string | null> {
+        const user = this.ContextCurrentUser;
+        if (!user || !this.SpaceID || !this.IsSaved) return null;
+        const resolved = await resolveSpaceDriver(this, this.ProviderToUse, user, this.SpaceID);
+        if (!resolved.ok) return resolved.message;
+        return refusalOf(await resolved.call.driver.ValidateMemberChange({ ...resolved.call.base, member: this, kind: 'Remove' }));
+    }
+
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const refusal = await this.driverRefusalForDelete();
+        if (refusal) return failDelete(this, refusal);
         const spaceId = this.SpaceID;
         const provider = this.ProviderToUse;
         const ok = await super.Delete(options);
