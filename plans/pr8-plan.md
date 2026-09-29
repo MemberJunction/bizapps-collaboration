@@ -1,6 +1,6 @@
 # PR #8: anchors, grants, data reach, notes and pins
 
-**Status: merged.** #8 merged into `next` on 2026-09-29 at `ad5ffef` (Amith, [the plan's D38](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat)), after the chat, its first job, with CI red only for D37. The chat's remaining defects, [stages 1 to 4](#6-stage-1-the-schema) and the rest of [§ 1's table](#what-7-moved-here) moved to PR 9 and the pull requests after it, in [PR 9's plan](pr9-plan.md)'s order. The stages keep their detail here: read "PR #8" in them as the stage's own pull request.
+**Status: merged.** #8 merged into `next` on 2026-09-29 at `ad5ffef` (merge commit `bdecddc`; Amith, [the plan's D38](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat)), after the chat, its first job, with CI red only for D37. The chat's remaining defects, [stages 1 to 4](#6-stage-1-the-schema) and the rest of [§ 1's table](#what-7-moved-here) moved to PR 9 and the pull requests after it, in [PR 9's plan](pr9-plan.md)'s order. The stages keep their detail here: read "PR #8" in them as the stage's own pull request.
 
 **What this is.** The build plan for PR #8, the pull request after #7. It's a differential plan: it starts from the app as #7 leaves it, and lists what #8 changes, in order, with each change's acceptance checks. The reasons and the rules are in [the plan](plan.md), v0.5: its decisions D26 to D35 ([§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)) and its items B14 to B24 and A14 to A18. This document is the how and the order.
 
