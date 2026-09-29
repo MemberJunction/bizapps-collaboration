@@ -152,11 +152,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="form-grid">
             <div class="form-field full-width">
               <div class="field-label" id="settings-retrieval-label">Agent Retrieval</div>
+              @if (!CanAdminister) {
+                <div class="radio-sub" id="settings-retrieval-note">Only someone with the Administer Spaces authorization can change this.</div>
+              }
               <div class="radio-group" role="radiogroup" aria-labelledby="settings-retrieval-label">
                 <label class="radio-label">
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="Included"
                     [(ngModel)]="formData.agentRetrieval"
                   />
@@ -171,6 +175,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="ExcludedFromParentScope"
                     [(ngModel)]="formData.agentRetrieval"
                   />
@@ -185,6 +190,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="ExcludedEntirely"
                     [(ngModel)]="formData.agentRetrieval"
                   />
@@ -545,6 +551,8 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() CanEdit = true;
   /** Whether the person may close (or, on a closed space, reopen) it: the button is offered only then. */
   @Input() CanChangeLifecycle = true;
+  /** Whether the person holds 'Administer Spaces': the settings only that authorization may change (agent retrieval) are offered only then. */
+  @Input() CanAdminister = false;
   /** Said above the read-only view: what the person may do instead. */
   @Input() ReadOnlyNote = '';
   /** What closing does under this space's post-close access, shown where the close is confirmed. */

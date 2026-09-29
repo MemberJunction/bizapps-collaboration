@@ -1020,6 +1020,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [IsBusy]="isChangingLifecycle"
                                                     [CanEdit]="settingsAccessNow.canEdit"
                                                     [CanChangeLifecycle]="settingsAccessNow.canChangeLifecycle"
+                                                    [CanAdminister]="mayAdministerSpaces"
                                                     [ReadOnlyNote]="settingsAccessNow.readOnlyNote"
                                                     [CloseConsequence]="closeConsequenceText"
                                                     (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
@@ -1405,6 +1406,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
+
+    /** Whether the person holds 'Administer Spaces': the page offers what only that authorization may do, and the server refuses the rest. */
+    public get mayAdministerSpaces(): boolean {
+        if (!this.currentUser) return false;
+        try {
+            return CollaborationEngineBase.Instance.UserMayAdministerSpaces(this.currentUser, this.ProviderToUse);
+        } catch (err) {
+            this.logOnce('administer', `Could not check the Administer Spaces authorization: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
 
     /** What Home counts across every space the person reaches, from one approved MJ query the server runs for them. */
     public homeSharedFiles = 0;

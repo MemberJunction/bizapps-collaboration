@@ -251,7 +251,7 @@ export class BaseSpaceTypeServerDriver {
             updated: 0,
             removed: 0,
             invited: 0,
-            errors: ['SyncSeats is not implemented in PR #7; scheduled for PR #8 external roster sync.'],
+            errors: ['SyncSeats is not built yet: no roster sync exists for a type today.'],
         };
     }
 }

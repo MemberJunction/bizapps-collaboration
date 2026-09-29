@@ -23,6 +23,12 @@
     "filter": "Name IN ('Collaboration Space Subtree', 'Collaboration Home Counts')",
     "externalizeFields": [],
     "ignoreNullFields": true,
-    "ignoreVirtualFields": true
+    "ignoreVirtualFields": true,
+    "relatedEntities": {
+      "MJ: Query Permissions": {
+        "entity": "MJ: Query Permissions",
+        "foreignKey": "QueryID"
+      }
+    }
   }
 }

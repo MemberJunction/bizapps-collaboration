@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import type { UserInfo } from '@memberjunction/core';
+import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
+import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabNewConversationDialogComponent } from './new-conversation-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
@@ -75,6 +80,31 @@ describe('Settings, rendered', () => {
     await fixture.whenStable();
     const ask = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) => b.textContent?.includes('Close…'))!;
     expect(ask.disabled).toBe(true);
+  });
+});
+
+describe('agent retrieval in Settings, rendered', () => {
+  const radios = (host: HTMLElement) => Array.from(host.querySelectorAll<HTMLInputElement>('input[name="agentRetrieval"]'));
+
+  it("is offered only to someone who holds the Administer Spaces authorization: the rest see it off, with the reason", async () => {
+    const without = TestBed.createComponent(CollabSpaceSettingsComponent);
+    without.componentRef.setInput('Settings', settings);
+    without.componentRef.setInput('CanEdit', true);
+    await without.whenStable();
+    const host = without.nativeElement as HTMLElement;
+    expect(radios(host).length).toBeGreaterThan(0);
+    expect(radios(host).every((radio) => radio.disabled)).toBe(true);
+    expect(host.textContent).toContain('Only someone with the Administer Spaces authorization can change this.');
+    without.destroy();
+
+    const withIt = TestBed.createComponent(CollabSpaceSettingsComponent);
+    withIt.componentRef.setInput('Settings', settings);
+    withIt.componentRef.setInput('CanEdit', true);
+    withIt.componentRef.setInput('CanAdminister', true);
+    await withIt.whenStable();
+    const allowed = withIt.nativeElement as HTMLElement;
+    expect(radios(allowed).every((radio) => !radio.disabled)).toBe(true);
+    expect(allowed.textContent).not.toContain('Only someone with the Administer Spaces authorization');
   });
 });
 
@@ -312,5 +342,39 @@ describe('the dialogs, rendered', () => {
     const tab = tabFrom(container, true);
     expect(tab.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(container);
+  });
+});
+
+/** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
+@Component({
+  selector: 'mj-conversation-chat-area',
+  standalone: true,
+  template: '<ng-content></ng-content>',
+  inputs: [
+    'environmentId', 'currentUser', 'conversationId', 'applicationScope', 'applicationId', 'linkedEntityId', 'linkedRecordId', 'defaultAgentId',
+    'assistantDisplayName', 'allowMentions', 'allowAgentMentions', 'allowEntityMentions', 'allowSkillCommands', 'allowAttachments', 'AllowRealtime',
+    'AllowPinning', 'AllowMessageEdit', 'AllowMessageDelete', 'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
+    'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
+  ],
+})
+class ChatAreaStub {
+  public AllowRealtime = true;
+  @Input() public unusedForTypeCheck = '';
+  @Output() public ComposerDraftConsumed = new EventEmitter<void>();
+  @Output() public PendingMessageConsumed = new EventEmitter<void>();
+}
+
+describe("a space's conversation, rendered", () => {
+  it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area');
+    expect(area).not.toBeNull();
+    // MJ's chat area defaults AllowRealtime to true; the space must turn it off
+    expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
   });
 });

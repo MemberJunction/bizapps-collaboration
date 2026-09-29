@@ -1,3 +1,4 @@
+import { RunQuery } from '@memberjunction/core';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
@@ -208,6 +209,22 @@ const checks: NamedCheck[] = [
                 const open = ids.length === 0 ? [] : await read('MJ_BizApps_Tasks: Tasks', `ID IN (${ids.map((id) => `'${id}'`).join(',')}) AND Status NOT IN ('Completed', 'Cancelled')`, ['ID']);
                 Assert(counts.OpenTasks === open.length, `${key}: open tasks match their own reads, a cancelled task not counted (${counts.OpenTasks} vs ${open.length})`);
             }
+        },
+    },
+    {
+        Id: 'lifecycle.LC5',
+        Name: "LC5 — Home's query can't be run directly by a participant, who could otherwise count someone else's spaces with a UserID of their choosing",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await getPersonaClientContext(ctx, 'bea');
+            const ada = await getPersonaContext(ctx, 'ada');
+            const run = await new RunQuery(bea.GraphQLProvider).RunQuery(
+                { QueryName: 'Collaboration Home Counts', CategoryPath: 'Collaboration', Parameters: { UserID: ada.User.ID } },
+                bea.User,
+            ).catch((error: unknown) => ({ Success: false, ErrorMessage: error instanceof Error ? error.message : String(error), Results: [] as unknown[] }));
+            Assert(!run.Success, "A participant running Home's query directly, for Ada, is refused");
+            Assert(/permission|not allowed|denied/i.test(run.ErrorMessage ?? ''), `The refusal says why: ${run.ErrorMessage ?? ''}`);
+            Assert((run.Results ?? []).length === 0, "and is given no counts");
         },
     },
 ];

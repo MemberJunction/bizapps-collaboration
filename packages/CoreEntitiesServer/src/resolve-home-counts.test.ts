@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import type { IMetadataProvider, IRunQueryProvider, UserInfo } from '@memberjunction/core';
+import { after, before, describe, it } from 'node:test';
+import { WellKnownUserSource, type IMetadataProvider, type IRunQueryProvider, type UserInfo } from '@memberjunction/core';
 import { resolveHomeCounts } from '../dist/resolve-home-counts.js';
 
 const user = { ID: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE5', Name: 'Ada' } as unknown as UserInfo;
@@ -17,13 +17,19 @@ function providerAnswering(result: object) {
     return { provider, asked };
 }
 
+const SYSTEM = '00000000-0000-0000-0000-000000000000';
+
 describe("Home's counts", () => {
-    it('runs the approved query for the signed-in person, with their own id, and returns the three counts as numbers', async () => {
+    const held = WellKnownUserSource.Instance.GetSystemUser;
+    before(() => { WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: SYSTEM, Name: 'System' }) as UserInfo; });
+    after(() => { WellKnownUserSource.Instance.GetSystemUser = held; });
+
+    it('runs the approved query as the system user with the signed-in person\'s own id and no other, and returns the three counts as numbers', async () => {
         const { provider, asked } = providerAnswering({ Success: true, Results: [{ SharedFiles: '4', OpenTasks: 7, AwaitingApproval: 2 }] });
         assert.deepEqual(await resolveHomeCounts(provider, user), { sharedFiles: 4, openTasks: 7, awaitingApproval: 2 });
         assert.equal(asked.length, 1);
         assert.equal(asked[0].params.QueryName, 'Collaboration Home Counts');
-        assert.equal(asked[0].who, user.ID);
+        assert.equal(asked[0].who, SYSTEM, 'run as the system user: the query is for the Integration role only');
         assert.deepEqual(asked[0].params.Parameters, { UserID: user.ID }, "the acting user's own id, set on the server: no caller says whose counts they are");
     });
 

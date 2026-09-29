@@ -47,6 +47,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           [allowEntityMentions]="false"
           [allowSkillCommands]="false"
           [allowAttachments]="AllowAttachments && !IsReadOnly"
+          [AllowRealtime]="false"
           [AllowPinning]="!IsReadOnly"
           [AllowMessageEdit]="!IsReadOnly"
           [AllowMessageDelete]="!IsReadOnly"
