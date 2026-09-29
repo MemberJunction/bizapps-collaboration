@@ -26,9 +26,9 @@ when `mj` is not on the path of the member you are in.
    Do not commit what this regenerates in MJ.
 2. **bizapps-common, then bizapps-tasks:** `mj migrate --schema <schema> --dir ./migrations` in each
    (`__mj_BizAppsCommon`, `__mj_BizAppsTasks`).
-3. **Common's People setting:** from bizapps-common, `mj sync push --dir=metadata --include=entities`. Common's own full push
-   currently fails on a record of its own ("Display Name cannot be null"), so push only this directory. The push writes
-   `sync` blocks back into common's files; put them back as they were.
+3. **Common's People setting:** from bizapps-common, `mj sync push --dir=metadata --include=entities`. A full push of common
+   failed on a record of its own ("Display Name cannot be null") until common fixed that record, and pushing only this directory
+   works either way. The push writes `sync` blocks back into common's files; put them back as they were.
 4. **This app's migrations:** `pnpm run mj:migrate`.
 5. **A Create grant on row filters, in the database only.** A fresh MemberJunction database grants no role Create on
    `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Name = 'System'`. Developer is enough:
@@ -53,19 +53,28 @@ when `mj` is not on the path of the member you are in.
 
    A second full `mj sync push --dir=metadata` then reports nothing to do. `strip-sync-blocks.mjs` removes the `sync` blocks the push
    writes back and restores each file's final newline; `--check` fails if either is wrong (CI runs it).
-7. **The harness's own agent:** `pnpm run mj:push:tests` (see [reviewing the data](reviewing-the-data.md#the-test-agent)).
+7. **The test metadata:** `pnpm run mj:push:tests` pushes the harness's stub agent and three example space types
+   (`metadata-tests/agents` and `metadata-tests/space-types`; see [reviewing the data](reviewing-the-data.md#the-test-agent)). The
+   `extensions` and `lifecycle` checks need the types. Then run `node scripts/strip-sync-blocks.mjs` again: it cleans
+   `metadata-tests/` too.
 8. **The sample world:** build the integration package, then purge and load, as
    [reviewing the data](reviewing-the-data.md#loading-it) says.
 
 ## Running the harnesses
 
-- **Server:** `pnpm run test:integration:server`. It needs only the database.
+- **Server:** `pnpm run test:integration:server`. It needs only the database, built through step 8.
 - **Client:** `pnpm run test:integration:client`. It needs an MJAPI on the same database with this app's packages loaded, started with the
   test agent's and the storage driver's entries imported (the start command is in [reviewing the data](reviewing-the-data.md#files) and [the test agent](reviewing-the-data.md#the-test-agent)), `MJ_API_KEY`, and `MJAPI_URL` or
   `GRAPHQL_PORT`. Pick a port outside the fetch specification's blocked list: Node's `fetch` refuses 4190, for one.
 - Run each **from a purge and a fresh load, and then a second time** on that load.
 - Unset the four `STORAGE_BOX_*` variables to store files in the local directory. A run against real Box storage depends on Box's
   latency and limits; report it on its own line.
+
+## A database built before closing and reopening had their own authorization
+
+Push `authorizations`, then `authorization-roles` (the loop in step 6 does both, in order), run `pnpm run mj:migrate` for any
+migration added since, and restart the host so it reloads its metadata. Until then every close and reopen is refused, and the world
+loader stops at its first close.
 
 ## A database built with the old catch-all agent grants
 

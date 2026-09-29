@@ -4,7 +4,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 
 - **Layer:** `surface` (L3), the only layer that touches Explorer.
 - **In `mj-app.json`:** client, `bootstrap`, with `startupExport` `LoadBizAppsCollaborationClient`.
-- **Depends on:** `collaboration-core`, `collaboration-entities` and `collaboration-ng-widgets`. Peers: Angular 21 (`common`, `core`, `forms`), MJ's `core`, `core-entities`, `global`, `ng-base-application`, `ng-base-forms`, `ng-conversations`, `ng-entity-viewer`, `ng-link-directives`, `ng-shared` and `ng-ui-components`, and bizapps-tasks' `tasks-entities` and `tasks-ng`.
+- **Depends on:** `collaboration-core`, `collaboration-engine-base`, `collaboration-entities` and `collaboration-ng-widgets`. Peers: Angular 21 (`common`, `core`, `forms`), MJ's `conversations-runtime`, `core`, `core-entities`, `global`, `ng-base-application`, `ng-base-forms`, `ng-conversations`, `ng-entity-viewer`, `ng-link-directives`, `ng-shared`, `ng-shared-generic` and `ng-ui-components`, and bizapps-tasks' `tasks-entities` and `tasks-ng`.
 
 ## What's in it
 
@@ -12,12 +12,18 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 
 **`CollaborationSectionResource`** (`src/lib/collaboration-section.component.ts`, selector `mjc-collaboration-section`) is the Explorer resource behind the app's one nav item.
 - It's registered with `@RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')`, the `DriverClass` that `metadata/applications/` names.
-- Its tab is named "Spaces", with the `fa-people-group` icon.
-- Today it's an empty page: `mj-page-layout` and `mj-page-body` around a placeholder, and it calls `NotifyLoadComplete()` when it starts.
+- Its tab shows the open space's name, or "Spaces", with the `fa-people-group` icon.
+- It's the whole Explorer surface:
+  - Home (the spaces you reach, with counts), Inbox, My Tasks and Files;
+  - a space's page, with Overview, Library, Work (list, board and timeline), Chat, People, Settings, and any tabs a type or another app contributes;
+  - the share, upload and new-conversation dialogs.
+- Settings closes and reopens a space, and the confirmation shows what `GetCloseConsequence` says a close will do.
+- The query parameters are `view`, `space`, `tab`, `item`, `conv` and `workView`, and back and forward restore them. It calls `SetAgentContext` and `NotifyLoadComplete()`.
+- The page's decisions that don't need Angular live in `src/lib/logic/`, as plain functions with their own tests.
 
 **`CollaborationNoAccessComponent`** (`src/lib/no-access.component.ts`, selector `mjc-no-access`) is the branded page for someone with no seat on a space. It uses MJ's `mj-empty-state`, and its text comes from `lockoutMessage` in `collaboration-core`: a pending invite, a removed seat, or how to get one. Its inputs are `Seats` and `CustomMessage`.
 
-**Generated forms** (`src/lib/generated/`, from CodeGen) for the seven entities, in `generated-forms.module.ts`. Never edit them by hand.
+**Generated forms** (`src/lib/generated/`, from CodeGen) for the eleven entities, in `generated-forms.module.ts`. Never edit them by hand.
 
 ## Build and test
 
@@ -25,11 +31,10 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. There are no tests yet.
+The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 19 `node:test` files in `src/lib/logic/`, and the root `pnpm test` runs them too.
 
 ## Not done yet
 
-The space page itself. Slice A of [the UI plan](../../docs/ux/IMPLEMENTATION_PLAN.md) builds it here:
-- the page hosted by `CollaborationSectionResource`, with `NavigationService` and the query parameters `view`, `space`, `tab` and `item`;
-- `SetAgentContext(...)`, and `mjc-no-access` for a viewer with no seat;
-- the Work tab, on bizapps-tasks' own components, comes in a later slice.
+- The New Space screen with a type's own fields, Settings → Details and an About card, for a type with its own table (the plan's D42).
+- Header chips, needs-you items and agenda items from contributions.
+- Home's counts from one query run on the server (the plan's D45).

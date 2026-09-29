@@ -33,7 +33,7 @@ It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-fo
 | 4 | The types allowed under a type live in its configuration, by type code, not in a join table. | [4](#4-configuration-one-bag-per-type-and-per-space) |
 | 5 | Plug-ins follow MJ's forms pattern: base classes with hooks to override, resolved through ClassFactory, and contributions registered with metadata. | [5](#5-server-drivers), [6](#6-ui-drivers-and-contributions) |
 | 6 | IsA's lookup cost is accepted. Collaboration reads lists as plain rows, and an MJ pull request removes the per-record probe when an entity already knows its subtype. | [7](#7-isa-subtypes-and-their-forms), [9](#9-mj-changes) |
-| 7 | Anyone in a space can start a chat, read-only guests included, unless the type or the space narrows it. An agent replies when it's tagged, or to every message in a chat that holds one person and one agent. | [8](#8-chats-history-and-agents) |
+| 7 | Anyone in a space with a seat that can post can start a chat, unless the type or the space narrows it to owners (the plan's D43). A read-only guest can't start one. An agent replies when it's tagged, or to every message in a chat that holds one person and one agent. | [8](#8-chats-history-and-agents) |
 | 8 | Whoever adds a person to an existing chat chooses how much history they see: none, all, or from a date. It's the `HistoryFrom` on MJ core's conversation participant row. Nothing else in a space is time-limited: a seat opens everything its band allows, from the start. Sub-spaces keep their own membership. | [8](#8-chats-history-and-agents) |
 | 9 | The audience of an answer decides what the agent may use (the plan's D2). In a chat with two or more people, the agent sees only what every person in it can see now. In a private chat, it uses the caller's union of reach, narrowed by a scope control. | [8](#8-chats-history-and-agents) |
 | 10 | Allowed agents resolve top-down: the app's default, the space's type, the root space, down to the space. Each level extends or replaces the list above, and a level without its own rows inherits it. MJ's agent Run permission stays the security boundary. An app supplies its own agent the same way, through its type's rows, with `IsDefault`. **Amended by 28:** the chain restarts where the type changes, and the rows are grants. | [8](#8-chats-history-and-agents) |
@@ -184,8 +184,8 @@ export type ConfigurationValue =
 
 export interface ISpaceRules {
     Chats?: {
-        /** Who may start a chat. Default 'Anyone': every seat, read-only guests included. */
-        WhoCanStart?: 'Anyone' | 'Contributors' | 'Owners';
+        /** Who may start a chat. Default 'Anyone': every seat that can post. 'Owners': owner seats only. */
+        WhoCanStart?: 'Anyone' | 'Owners';
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
@@ -439,7 +439,7 @@ This section's rules come from Amith's answers of 2026-09-25 and 2026-09-26, and
 
 ### Starting a chat and adding people
 
-- **Anyone in the space can start a chat,** read-only guests included. The rule is `Chats.WhoCanStart` in the configuration ([§ 4](#4-configuration-one-bag-per-type-and-per-space)): `Anyone` by default, and a type or a space can narrow it to `Contributors` or `Owners`.
+- **Anyone in the space with a seat that can post can start a chat** (the plan's D43). A read-only guest can't, since they couldn't post in it. The rule is `Chats.WhoCanStart` in the configuration ([§ 4](#4-configuration-one-bag-per-type-and-per-space)): `Anyone` by default, and a type or a space can narrow it to `Owners`. The server checks it when the conversation is created (`CreateSpaceConversation`).
 - **A chat can hold several people and several agents.**
   - People must already reach the space. Someone from outside is invited to the space first, so there's one access model.
   - Agents must be on the space's allowed list.

@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19. On 2026-09-29, #8 merged after the chat, and PR 9 takes the rest, on MJ `next` with no version pin for now ([§ 3.6](#36-decided-on-2026-09-29-8-merges-after-the-chat)).
+**Version:** v0.6 · 2026-09-29. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19. On 2026-09-29, #8 merged after the chat, and PR 9 takes the rest, on MJ `next` with no version pin for now ([§ 3.6](#36-decided-on-2026-09-29-8-merges-after-the-chat)). Later that day Amith settled PR 9's open questions on rights, subtypes and Home ([§ 3.7](#37-decided-on-2026-09-29-rights-subtypes-and-home), D40 to D47).
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -86,6 +86,8 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
   - **It merged into `next` on 2026-09-29,** at `ad5ffef` (merge commit `bdecddc`), after the chat (Amith, D38), with CI red only for D37. The chat's remaining defects and its stages 1 to 4 moved to PR 9.
 - **PR 9,** on `claude/hopeful-bell-6ldk4v`, finishes the chat, on MJ `next` in a local workspace with no version pin for now (D39), then carries #8's stages and the rest of this plan, from [its own plan](pr9-plan.md). Ian runs it with the builder. It merges when its stage 0 is done, and each later stage is its own pull request.
+  - **Where it stands** on 2026-09-29, at `368456e`: #8's final-review items are closed but the screenshots; the pass through the UI and the extension-model test have run, and most of what they found is fixed; closing and reopening have their own authorization (D40); a close's confirmation reads from the server what the close will do; and the dialogs draw through MJ's `mj-dialog`. [PR 9's plan § 3.6](pr9-plan.md#36-where-stage-0-stands) has the detail and what's left.
+  - **Amith's calls of 2026-09-29** ([§ 3.7](#37-decided-on-2026-09-29-rights-subtypes-and-home)) settle the rest of its scope: rights by authorization, never by a role's name (D40, D41); subtypes end to end, screens included (D42); and Home's counts from one MJ query (D45).
 - **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, A18's and A19's. Colin builds it (Amith, 2026-09-28), after #7 and #8 (D36). Until a release carries it, Collaboration builds on MemberJunction as released, and a follow-up pins that release.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
@@ -96,7 +98,7 @@ At `b539790`, reviewed in round 94:
 - **The container:** seven entities (`SpaceType`, `Space`, `SpaceMember`, `SpaceRoleType`, `SpaceItem`, `ItemUse` and `ShareNotice`) and three access functions (`fnCollaborationAccess`, `fnCollaborationTasks` and `fnCollaborationAncestorMembers`).
 - **Reads:**
   - the `Space Participant` role, with a row-level security filter on every one of its 57 read grants;
-  - field rules on People, so a client reads only a person's name and email, with People's field-level flag in bizapps-common#186 (still open);
+  - field rules on People, so a client reads only a person's name and email, with People's field-level flag in bizapps-common#186, which merges (D46);
   - empty reads for the core entities the shell loads, regenerated on every MJ upgrade.
 - **Writes:** gates on spaces, seats, items, item uses and share notices, and on bizapps-tasks' tasks, comments, decisions and assignments. The rules they call are pure functions in `collaboration-core`.
 - **Features:**
@@ -336,7 +338,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
 - **No professional-services types.** Engagement, Client Relationship, Workshop and the like belong to BC's professional-services layer, which builds them on the extension points (B8).
 - **Seven ship:** Workspace (the default), Team, Project, Working Group, Event, Community and Cohort. Their join modes, bands and nesting are in the [extensibility plan's § 10.3](../docs/EXTENSIBILITY_PLAN.md#103-examples-in-collaboration-itself). None sets a setting (D20) or names a driver.
 - **The sample world keeps its own copies** of any type its checks need.
-- **The screens' words are generic too.** A band's name and description come from the type's labels, never from copy that says *client*.
+- **The screens' words are generic too,** never copy that says *client*. A type's own words for its bands (`Labels.Bands`) wait for a type that needs them, such as Committees'; until then every type uses the app's words.
 
 **D19. One engine caches Collaboration's metadata.**
 - **`CollaborationEngineBase`,** modeled on MJ's `AIEngineBase`: a `BaseEngine` subclass, safe in the browser and on the server, that caches every Collaboration metadata set, with typed getters and lookups by ID and by code. It lives in its own package, like bizapps-accounting's `EngineBase`.
@@ -494,6 +496,28 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 - **CI installs published packages,** so it stays red on the types that exist only on `next` until a release carrying them is pinned, which is [PR 9's plan's stage 5](pr9-plan.md#5-stage-5-ready-for-a-first-host). Each push is judged by the workspace's build, the unit tests and both harnesses.
 - **Work that needs MJ#4789 can start once it merges into MJ `next`,** rather than once a release carries it, as D36 said (Amith to confirm).
 - **Each agent uses a database of its own.**
+
+### 3.7 Decided on 2026-09-29: rights, subtypes and Home
+
+Amith, on PR 9's open questions.
+
+**D40. Closing and reopening are a right of their own.** A space closes and reopens under the MJ Authorization *Close and Reopen Spaces*, a child of *Collaboration*, together with an owner seat on the space. It's apart from *Configure Spaces*, which changes a space's settings and stays with the Developer role.
+- **Granted by default to Space Participant, UI, Developer and Integration,** so any owner can close a space they own. A host narrows it in MJ's authorizations, with no code change. The page offers what the server allows, and no more.
+- **What a close does:** it stamps the post-close access resolved from the space, then each ancestor, then the type, then the app. Once a closed space's access has ended, only its `OwnerID` still reads it (as do the Developer and Integration roles, which no row filter binds), and that person can reopen it only while holding an owner seat and the authorization. Before the close, the server tells the person closing what it will do, and who can undo it.
+
+**D41. No right is decided by a role's name.** The server's remaining checks on the UI, Developer and Integration roles by name move onto one MJ Authorization under *Collaboration*, granted by default to those three roles, so nothing changes for anyone until a host edits the grants. They are: creating a top-level space, moving a space to the top level, the `AllowParentAssignees` and `AgentRetrieval` settings, giving a task to someone seated above the space when the space doesn't allow it, and backdating a close. In PR 9.
+
+**D42. Subtypes are done end to end in PR 9, screens included.** The example types become real IsA children of `Space`, with their own schema, and Spaces get a subtype resolver. A type is paired with its subtype, and a subtype whose reads aren't bound by the space's row filter is refused. The screens come too: New Space with the subtype's fields, Settings → Details, and an About card. This brings B13's subtype screens forward, ahead of D16's order.
+
+**D43. "Anyone can start a chat" means anyone with a seat that can post.** A guest who can't post can't start a conversation either. The code already works this way, and the extensibility plan's words now say so.
+
+**D44. A type's message hooks wait for A19.** `ValidateMessage` and `OnMessagePosted` can't be enforced while clients write chat messages to MJ's Conversation Details directly. They're enforced once a message records who wrote it (A19, in MJ#4789). A Collaboration server class for Conversation Details would replace MJ's own for every conversation on a host, so it isn't the route.
+
+**D45. Home's counts come from one MJ query, run on the server.** Home counts, across every space a person reaches, the Shared files, the open tasks and the invitations waiting for their approval. One approved MJ query, built on the access function, answers all three in one round trip, and the server runs it for the signed-in person: no client says whose counts they are. Only a file counts as a file, and only a task that is neither completed nor cancelled counts as open.
+
+**D46. People's field-level security is bizapps-common's.** It's turned on by bizapps-common's own metadata, in its pull request 186, which merges. Until it does, the People check (FLS3) fails on a fresh database. The teams whose apps read People are told.
+
+**D47. Core defects found here are fixed in MemberJunction.** PR 9 files what it finds in MJ with a proposed fix: `mj sync push` against an empty database, row-filter grants on a fresh database, a read-only chat area, and `mj-dialog`'s focus and name. bizapps-common's own empty-database push failure turned out to be fixed there already.
 
 ## 4. The model
 
@@ -836,6 +860,8 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
 
 **Accept:** in a conversation shared with `Edit`, a message saved with another person's `UserID` is refused, and so is one with `Role` `AI`, and an agent still replies.
 
+**Collaboration waits on it** for a type's message hooks (D44).
+
 ## 7. Workstream B: Collaboration
 
 ### B0. Land PR #3
@@ -887,14 +913,14 @@ A8 in the space: a staff member sees *Proposed by the Assistant* items in *Needs
 
 The contract for Committees and for private extensions. The design is the [extensibility plan](../docs/EXTENSIBILITY_PLAN.md).
 
-**Today:** `BaseSpaceTab` and `BaseSpaceOverviewCard` (AngularWidgets), and `NeedsYouProvider`, `AgendaProvider` and `SpaceHeaderChipProvider` (`packages/Core/src/view-models.ts`). No code loads any of them yet, and `SpaceHeaderChipProvider.getChips` receives a space and a type code but not the viewer.
+**Today** (PR 9): space types name server and UI drivers, and the server and the section load them. Every save of a space, a sub-space, a seat or an item runs its type's Validate hook on the server, and a named driver that isn't registered refuses the write; reactions and lifecycle subscribers run after the commit. The section draws the type's tabs and Overview cards and other apps' contributions, which only add: only a type's own UI driver replaces a built-in part. Each Overview card declares its side, Shared or Team, and a card that doesn't say is a Team card. The example types, `example-board` and `example-room`, exercise both halves. What's left is [PR 9's plan § 3.4](pr9-plan.md#34-the-extension-model-end-to-end)'s.
 
 1. **Wire them.** Space types name server and UI driver classes. Contributions register with `RegisterClassEx` metadata and are found with `GetAllRegistrationsByMetadata` (the extensibility plan's § 6), not v0.3's `GetAllRegistrations` filtered by type code and ordered by `Sequence`. Every provider receives the space and the viewer.
 2. **Add:**
    - **The agent binding is the allowed-agent list.** An extension supplies its agent, or a parent agent with sub-agents, through `SpaceAgent` rows at the type level, with `IsDefault` (the extensibility plan's § 8). There are no `SpaceType.DefaultAgentID` or `Space.AgentID` columns. D27 moves the list into `SpaceGrant` (B15).
    - **Knowledge bindings:** a type or a space lists the Content Sources (A10) its agent may use beyond the space's own items. D27 moves them into `SpaceGrant` too.
    - **Lifecycle events** that any extension can subscribe to: `AfterSpaceClosed`, `AfterMemberAdded`, `AfterMemberRemoved` and `AfterItemPromoted`, on the server. They're a contribution, beside the type's own driver hooks. That's how an extension turns a closed engagement into a case-study draft, or notifies a team.
-   - **Access after close** (D21): `PostCloseAccess` (`ReadOnly`, `ReadOnlyWithAgent` or `None`) and `PostCloseAccessDays` (empty means indefinite) are settings (D20). The app's default is `ReadOnly` with no end, and a type, a space or a sub-space can set its own. When a space closes, the server stamps the resolved value on the space. They replace what `DefaultRetention` and `Space.Retention` meant, and round 94's tasks 8 and 9: `ReadOnlyWithAgent` is task 9's agent for former clients. They're enforced in `fnCollaborationAccess` through `ClosedAt`. Today only `fnCollaborationAncestorMembers` honors `ClosedAt`; fix that drift here. How access is priced or granted beyond the window is an extension's business, not the engine's.
+   - **Access after close** (D21): `PostCloseAccess` (`ReadOnly`, `ReadOnlyWithAgent` or `None`) and `PostCloseAccessDays` (empty means indefinite) are settings (D20). The app's default is `ReadOnly` with no end, and a type, a space or a sub-space can set its own. When a space closes, the server stamps the resolved value on the space. They replace what `DefaultRetention` and `Space.Retention` meant, and round 94's tasks 8 and 9: `ReadOnlyWithAgent` is task 9's agent for former clients. They're enforced in `fnCollaborationAccess` through `ClosedAt`, and `fnCollaborationAncestorMembers` honors them at every hop (PR 9). How access is priced or granted beyond the window is an extension's business, not the engine's.
    - **Outreach sources:** a server-side `SpaceSignalProvider` base class. An extension registers providers that produce dated observations about a space, such as "a public filing changed". The engine stores them as Team-band items, and only A8 can turn one into a post.
    - **Sub-spaces inherit only when asked** (D22): `Space.InheritsMembership` defaults to 0, and the creator chooses. No type-level default.
    - **The metadata engine** (D19), **the settings chain** (D20) and **settings rights** (D23).
@@ -936,7 +962,7 @@ Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-orde
 - **Slice C (people):** B9's identity door.
 - **Slice E (work):** task 3's assignee picker ([§ 2.4](#24-what-moves-to-the-next-pull-request)), task 10 (start a plan from a template), and task 12 (what's left of bizapps-tasks#73).
 - **Slice G (Assistant settings):** the allowed agents and the knowledge bindings (B8.2), which are the UI plan's gap 9.
-- **Slice H (new space):** the UI plan's gap 2, tab labels per type.
+- **Slice H (new space):** the UI plan's gap 2, tab labels per type. Its subtype screens, New Space with the subtype's fields, Settings → Details and the About card, are in PR 9 (D42).
 - **Slice I (extension points):** frame 08 through the example plug-in (B8). The UI plan's gap 10, the committee removal, is B0.11: begun in PR #3 and finished here (item 18).
 
 **B14 to B24** are D26 to D35's Collaboration work, built in PR 9's stages 1 to 4 (D38) from [#8's plan](pr8-plan.md), except B23, which waits for workstream T. They change the extensibility plan's schema, which #7 built, before any version ships (D35). Each data change is proposed in a pull request comment before its migration, as the extensibility plan's § 3 asks.
@@ -1176,7 +1202,7 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 
 | When | MJ core (A) | Collaboration (B) | bizapps-tasks (T) | Committees (C) |
 |---|---|---|---|---|
-| **PR 9, stage 0: finish the chat** | MJ `next`, in a local workspace, with no pin (D39); the MJ pull request, built by Colin (D36) | #8's final review, a pass through the UI, and the extension model tested end to end | T1's schema, proposed for review | C0 |
+| **PR 9, stage 0: finish the chat** | MJ `next`, in a local workspace, with no pin (D39); the MJ pull request, built by Colin (D36); the core fixes PR 9 found (D47) | #8's final review, a pass through the UI, and the extension model tested end to end, with subtypes and their screens (D42), rights by authorization (D40, D41) and Home's query (D45) | T1's schema, proposed for review | C0 |
 | **Stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
 | **Stage 2: the server** | | B16, B17, B18, and B24's example type, with #8's plan's § 4 grants closed | T1 | |
 | **Stage 3: agents** | | B20 | T3 | |

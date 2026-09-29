@@ -1,6 +1,8 @@
 # Building the Collaboration UI from the frames
 
-This is the builder's plan. Read the [storyboard](README.md) first: it explains what each frame shows and why. This document says how to build it the MemberJunction way.
+This was the plan for building the UI. Read the [storyboard](README.md) first: it explains what each frame shows and why. This document says how to build it the MemberJunction way.
+
+**Where it stands:** it's a record of how the UI was planned. Each package's README describes what was built; where the two differ, the READMEs are current.
 
 The rule behind every section below comes from MJ's [UI Layering Guide](https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md) (`guides/UI_LAYERING_GUIDE.md` in the MJ repo):
 
@@ -32,7 +34,7 @@ The rule behind every section below comes from MJ's [UI Layering Guide](https://
 
 ## 2. What to delete, and what to keep
 
-These paths are on `feat/collaboration-phase-0-2`.
+This section is done: the old UI is gone, and the new resource and the no-access page reuse two of these file names.
 
 **Delete:**
 - `packages/Angular/src/lib/collaboration-section.component.ts`
@@ -52,9 +54,10 @@ These paths are on `feat/collaboration-phase-0-2`.
 |---|---|---|---|
 | **L0 runtime** | `@mj-biz-apps/collaboration-entities` (`packages/Entities`) | `runtime` | CodeGen entities, which already exist |
 | **L0 runtime** | `@mj-biz-apps/collaboration-core` (`packages/Core`) | `runtime` | Pure TypeScript view models and rules, plus the non-visual extension contracts ([§ 5.1](#51-l0--collaboration-core)) |
+| **L0 runtime** | `@mj-biz-apps/collaboration-engine-base` (`packages/EngineBase`) | `runtime` | The metadata engine: space types, role types, the app's settings and the Collaboration authorizations, cached once, for the browser and the server |
 | **L1 + L2 widgets** | **new** `@mj-biz-apps/collaboration-ng-widgets` (`packages/AngularWidgets`) | `widgets` | Every widget and composite in [§ 5.2](#52-l1--widgets-props-in-events-out) and [§ 5.3](#53-l2--composites-load-through-providertouse-emit-intent) |
 | **L3 Explorer surface** | `@mj-biz-apps/collaboration-ng` (`packages/Angular`) | `surface` | The Explorer resource, the generated forms, the Work tab and the bizapps-tasks panels ([§ 4](#4-how-explorer-hosts-it-l3)) |
-| none | **new, private** `packages/UXGallery` | none (it is an app) | A plain Angular app with no Explorer that renders every frame from fixtures. It proves the widgets work in any Angular app and hosts the visual tests ([§ 10](#10-visual-tests-how-pixel-perfect-is-checked)). |
+| shell | **new, private** `packages/UXGallery` | `shell` (it is an app) | A plain Angular app with no Explorer that renders every frame from fixtures. It proves the widgets work in any Angular app and hosts the visual tests ([§ 10](#10-visual-tests-how-pixel-perfect-is-checked)). |
 
 **Allowed dependencies** (guide § 7):
 
@@ -97,7 +100,8 @@ These paths are on `feat/collaboration-phase-0-2`.
     - `space` = `<id>`;
     - `tab` = `overview`, `library`, `work`, `chat`, `people`, `settings`, or an extension key;
     - `item` = `<id>`;
-    - `chat` = `<id>`.
+    - `conv` = `<id>`, the open conversation;
+    - `workView` = `list`, `kanban` or `gantt`.
 
     Override `OnQueryParamsChanged`, and call `UpdateQueryParams` when an L2 composite emits `SpaceOpenRequested`, `TabChangeRequested`, `ChatOpenRequested` and similar.
   - **Opening a record in its own Explorer tab.** A file's or task's *Open* calls `NavigationService.OpenEntityRecord`. This is the only place that happens.
@@ -105,7 +109,7 @@ These paths are on `feat/collaboration-phase-0-2`.
   - **`SetAgentContext(...)`** with the current space and chat, so Explorer's own agent knows where the user is. MJ's dashboard rules require it.
 - **Outside participants** use the same resource, not a separate app. The view model decides the portal from the viewer's membership (frames 07 and 12): no Team side, no settings, only their spaces. A magic-link session already locks app switching (`appSwitchingLocked`).
 - **The Work tab** (frame 10) is composed here, because it reuses bizapps-tasks' own components (Amith, 2026-09-23).
-  - `<bizapps-task-kanban>`, `<bizapps-task-list>` and `<bizapps-task-gantt>` from `tasks-ng` draw *Board*, *List* and *Timeline*.
+  - `<bizapps-task-kanban>`, `<bizapps-task-list>` and `<bizapps-task-gantt>` from `tasks-ng` draw *Board*, *List* and *Timeline*. (As built, *List* is Collaboration's own `mjc-space-work`, *Board* and *Timeline* are bizapps-tasks' kanban and gantt, and there is no `mjc-work-toolbar` or `mjc-task-card`.)
   - Each gets the space's task set through `ExtraFilter`: the tasks linked to the space through `SpaceItem`. What a viewer may read is still decided by the server's permissions, never by this filter.
   - The toolbar above them is the L1 `mjc-work-toolbar`.
   - The board's cards are Collaboration's `mjc-task-card`, passed in as the board's card template ([§ 6](#6-mj-components-to-use-and-the-five-gaps), gap 3).
@@ -189,7 +193,7 @@ A composite can take a key (a space ID) or an already-loaded model. The session-
 
 The Work tab (frame 10) is not an L2 composite. It hosts bizapps-tasks' own components, which are an L3 dependency, so L3 composes it ([§ 4](#4-how-explorer-hosts-it-l3)).
 
-**The chat (frames 05 and 11)** is `mj-conversation-chat-area` from `@memberjunction/ng-conversations` 6.1.3. It is `standalone: false`, so import `ConversationsModule`, and its inputs are camelCase. Set these inputs:
+**The chat (frames 05 and 11)** is `mj-conversation-chat-area` from `@memberjunction/ng-conversations`, as MemberJunction's `next` has it since [MJ#4788](https://github.com/MemberJunction/MJ/pull/4788): the host rules come from `GetSpaceChatHostRules`, and agent turns go through its `AgentTurnHandler` to `ExecuteSpaceChatTurn`. What follows was written for 6.1.3. It is `standalone: false`, so import `ConversationsModule`, and its inputs are camelCase. Set these inputs:
 
 - `environmentId`, `currentUser`, `conversationId`;
 - `applicationScope="Application"` with `applicationId`;
@@ -274,7 +278,7 @@ Use MJ's piece wherever one exists. The frames are drawn to these components' ex
 
 ## 8. Data the frames need
 
-**Already in place** on `feat/collaboration-phase-0-2`:
+**Already in place** when this plan was written:
 
 - `Space`, with parent, `InheritsMembership`, `StartedAt` / `ClosedAt` and retention.
 - `SpaceType`, with vocabulary, panel flags, defaults, invite approval and member cap.
@@ -284,7 +288,7 @@ Use MJ's piece wherever one exists. The frames are drawn to these components' ex
 - `ItemUse` and `ShareNotice`.
 - MJ Files and Conversations, and bizapps-tasks.
 
-**Gaps.** Each is proposed here and needs confirming with Amith before its migration. Schema changes are a migration plus CodeGen; seed and lookup rows are `metadata/` JSON, never a migration.
+**Gaps.** Gaps 1 to 4 are built: `SpaceType.IconClass` and `Color`, `Labels.Tabs`, `Space.PlannedCloseAt`, and the Milestone task type. The rest are proposals, each confirmed before its migration. Schema changes are a migration plus CodeGen; seed and lookup rows are `metadata/` JSON, never a migration.
 
 | # | Gap | Frames | Proposal |
 |---|---|---|---|

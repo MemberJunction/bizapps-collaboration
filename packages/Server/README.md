@@ -10,20 +10,24 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 
 **`src/index.ts`**
 - Imports the entity and action packages, then the server gates, so the gates' subclasses replace the generated classes.
-- `LoadBizAppsCollaborationServer()` calls each gate's `Load…` function, so none is tree-shaken.
+- `LoadBizAppsCollaborationServer()` calls the gates' `Load…` functions, so they aren't tree-shaken. It doesn't call `LoadSpaceTypeEntityServer` yet; importing the package registers that gate anyway.
 - `RESOLVER_PATHS` lists the resolver files for the host's schema builder. Importing a resolver isn't enough for MJAPI to serve it.
 - Also exports `mintSpaceLink`.
 
-**The generated resolvers** (`src/generated/`, from CodeGen): read and write resolvers for the seven entities. Never edit them by hand.
+**The generated resolvers** (`src/generated/`, from CodeGen): read and write resolvers for the eleven entities. Never edit them by hand.
 
-**Five mutations,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
+**Six mutations and two queries,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
 
-| Mutation | Input | What it does |
+| Operation | Input | What it does |
 |---|---|---|
 | `MintSpaceLink` | `SpaceID`, `Email`, `RoleID` | Seats a person by email. The seat is saved through the member gate, so the invitation ceiling, approval and cap apply. It creates the MJ user and Person when needed, grants `Space Participant`, and issues a one-use magic link of kind `app-session` for an Active seat. The link is emailed, returned to a host issuer, or withheld (see the host's `magicLink` settings in the root README). |
 | `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder`, `Band?` | Stores the file and files it as a space item, in the band the person chose (Shared or Team; a band the seat cannot hold is refused), or the space type's default when none is chosen. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. |
 | `CreateSpaceTask` | `SpaceID`, `Name`, `Band` | Creates a root task and files it in the space. |
-| `PostSpaceMessage` | `SpaceID`, `Text`, `ConversationID?`, `ExecuteAgent?` | Posts the caller's message to the space's room, optionally running the agent when requested or triggered. |
+| `PostSpaceMessage` | `SpaceID`, `Text`, `ConversationID?` | Posts the caller's message to one of the space's conversations, as the system user, which owns them. An Internal Only conversation needs a seat that sees Team. It runs no agent. |
+| `CreateSpaceConversation` | `SpaceID`, `Name`, `Kind?` | Starts a conversation in the space: General (the default), Topic, or Internal Only (`Private`), under `Chats.WhoCanStart`, the seat's band and the type's driver. |
+| `ExecuteSpaceChatTurn` | `SpaceID`, `ConversationID`, `UserMessageID`, `AgentID?` | Runs the space's agent on a saved message, as the asking user, and writes the reply. The conversation's kind bounds what the reply may use. |
+| `GetSpaceChatHostRules` (query) | `spaceId`, `conversationId?` | The chat area's rules for this person here: the allowed agents and the default, the reply mode, whom `@` offers, the history floor, and whether they may start a conversation and of which kinds. |
+| `GetCloseConsequence` (query) | `spaceId` | What closing the space would do: the access it would stamp, whose row it keeps, and whether they could reopen it. |
 
 **`src/mint-space-link.ts`** holds the invitation logic behind `MintSpaceLink`. Its header says why the link is an app session rather than a resource share: access ends when the seat is removed.
 
@@ -33,4 +37,4 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 pnpm --filter @mj-biz-apps/collaboration-server run build
 ```
 
-The build is `tsc`, into `dist/`. The package has no unit tests. The operations it calls are tested in `collaboration-core-entities-server`, and the client harness in `test-harnesses/` calls `UploadSpaceFile`, `CreateSpaceTask` and `PostSpaceMessage` over GraphQL.
+The build is `tsc`, into `dist/`. Its `test` script runs `upload-limit.test.ts` (the upload cap), and so does the root `pnpm test`. The operations it calls are tested in `collaboration-core-entities-server`, and the client harness in `test-harnesses/` calls them over GraphQL.

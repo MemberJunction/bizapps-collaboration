@@ -1,6 +1,6 @@
 # PR 9: finish the chat, then anchors, grants, data reach, notes and pins
 
-**What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.5, with its D38. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
+**What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.6, with its D38 to D47. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
 
 **Who does what.**
 - **Ian runs it,** with an AI coding agent as the builder: the builder writes the code, and Ian supervises it and decides.
@@ -39,7 +39,7 @@ It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of t
 
 | Stage | What | Pull request | Starts after |
 |---|---|---|---|
-| **0** | Finish the chat, on MJ `next` in a local workspace: fix #8's final review first, then walk the UI for what isn't built and test the extension model end to end. It ends with a review of the findings | PR 9 | #8's merge |
+| **0** | Finish the chat, on MJ `next` in a local workspace: fix #8's final review first, then walk the UI for what isn't built and test the extension model end to end, with subtypes and their screens (D42), rights by authorization (D40, D41) and Home's query (D45). It ends with a review of the findings | PR 9 | #8's merge |
 | **1** | The schema: B14, B15, B21's and B22's tables, `DataReach`, one baseline, CI against a database | Its own | Stage 0 |
 | **2** | The server: B16, B17, B18 and B24, with [#8's plan § 4](pr8-plan.md#4-what-it-depends-on)'s grants closed | Its own | Stage 1 |
 | **3** | Agents: B20 | Its own | Stage 2 |
@@ -54,7 +54,7 @@ It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of t
 For now there's no version pin (Amith, 2026-09-29; the plan's D39). The work runs in a local pnpm workspace where MemberJunction's `next` branch and the app repos sit side by side, so every change builds against MJ's latest source:
 1. **A plain parent folder of sibling clones:** MJ on `next`; bizapps-collaboration on this pull request's branch, `claude/hopeful-bell-6ldk4v`; the repos it depends on, bizapps-common and bizapps-tasks; and any other repo you change.
 2. **One workspace over them,** made by `mj dev workspace`, as [MJ's quickstart](https://github.com/MemberJunction/MJ/blob/next/guides/DEV_WORKSPACE_QUICKSTART.md) says: build MJ once, run the generator from the parent, and let it remove the members' own installs. Install and build only from the parent. Never install inside a member, and never hand-link packages.
-3. **No pin and no lockfile churn.** Leave the `@memberjunction/*` versions in every `package.json`, and the repo's own `pnpm-lock.yaml`, as they are: the workspace links MJ's source whatever they say.
+3. **No MJ pin, and no lockfile churn for it.** Leave the `@memberjunction/*` versions in every `package.json` as they are: the workspace links MJ's source whatever they say. When you add or change any other dependency, update the repo's own `pnpm-lock.yaml` from a standalone clone of this repo (`pnpm install --lockfile-only`), so CI's frozen install still passes. A lockfile install inside the workspace writes the parent's lockfile, not this one.
 4. **A database of your own.** Two agents migrating or pushing metadata to one database break each other. Apply MJ core's migrations, then bizapps-common's and bizapps-tasks', then this app's (`pnpm run mj:migrate`) and its metadata (`pnpm run mj:push`), and load the world ([the data guide](../docs/reviewing-the-data.md)).
 
 CI installs published packages, so it stays red on the `next`-only types (D37) until a release carrying them is pinned, which is [stage 5](#5-stage-5-ready-for-a-first-host)'s job. Judge each push by the workspace's build, the unit tests (`pnpm test`) and both harnesses (`pnpm run test:integration`; its client half needs MJAPI running with this app loaded).
@@ -83,7 +83,7 @@ Much of what's left is found by using the app. Click through every screen, as st
 ### 3.4 The extension model, end to end
 
 Collaboration's promise is that a new kind of space is configuration and a plug-in, not a fork of the app. Test that it works as intended, starting from the private example types, `example-board` and `example-room` ([the extensibility plan § 10.3](../docs/EXTENSIBILITY_PLAN.md#103-examples-in-collaboration-itself)):
-- **Subtypes (IsA):** a type whose spaces are a subtype of `Space`, with its own table and columns, created, edited and loaded through the space's screens ([§ 7](../docs/EXTENSIBILITY_PLAN.md#7-isa-subtypes-and-their-forms)).
+- **Subtypes (IsA):** a type whose spaces are a subtype of `Space`, with its own table and columns, created, edited and loaded through the space's screens ([§ 7](../docs/EXTENSIBILITY_PLAN.md#7-isa-subtypes-and-their-forms)). All of it is in PR 9, the screens included (the plan's D42).
 - **Server drivers:** a type's server driver running its rules and lifecycle hooks, such as creating a sub-space, changing a seat, closing and reopening, on the server, where the browser can't skip them ([§ 5](../docs/EXTENSIBILITY_PLAN.md#5-server-drivers)).
 - **UI drivers and contributions:** a type adding its own tabs to a space and its own cards to the Overview tab, and another app contributing a tab or a card to a type it doesn't own ([§ 6](../docs/EXTENSIBILITY_PLAN.md#6-ui-drivers-and-contributions)).
 - **Configuration:** a type that sets only what differs from the app's defaults, and a space that overrides what its type allows ([§ 4](../docs/EXTENSIBILITY_PLAN.md#4-configuration-one-bag-per-type-and-per-space)).
@@ -99,7 +99,22 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 - the push's comment gives each package's `pnpm test` count, and both harnesses' tallies after a purge and a fresh load of the world;
 - the five screenshots from #8's item 23 are taken again in Explorer, as named users, with the real agent answering. They're committed under `docs/screenshots/pr9/` with the Playwright script that takes them, and embedded in the comment;
 - `metadata/` has no `sync` block, every file in it ends in a newline, and `git diff next -- metadata` shows only intended changes;
-- the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed.
+- the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed;
+- D41's authorization has replaced every check on a role's name, an `example-board` space is created, edited, reloaded and deleted through the screens (D42), and D45's query answers Home's counts, each with its tests.
+
+### 3.6 Where stage 0 stands
+
+At `368456e`, on 2026-09-29:
+- **#8's final review:** every item is closed but the screenshots, which wait on sign-ins for the named users.
+- **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the dialogs' last points (57), Home's counts (60), the screenshot row (70) and the hand-built controls (73).
+- **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
+  - **server drivers work in part:** every save runs its type's Validate hook, and reactions in the transaction and one resolver are stage 2's (79, 81);
+  - **UI drivers' tabs and Overview cards are wired in the section,** contributions only add, and each Overview card declares its side. The page asks a driver before an invite; its other hooks (header chips and actions, settings sections, new-space steps, the details form, and the checks before a message or a new sub-space) aren't called yet;
+  - **configuration works,** with `Admin.RoleNames` removed and `Labels.Bands` left for a type that needs it;
+  - **subtypes** are D42's work, still to do (75, 76, 77).
+- **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
+- **Tests:** Core's 132, EngineBase's 18, CoreEntitiesServer's 212, Server's 10, IntegrationTests' 52, the page's 108 and the example types' 44 pass, and so do the widgets' 125 in a clean install. Both harnesses pass twice from one load of the world, with 71 checks on the server and 58 on the client.
+- **To finish:** the latest review's items; D41, D42 and D45; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
 
 ## 4. Stages 1 to 4
 
@@ -117,7 +132,7 @@ Each stage's pull request merges when that stage's checks pass.
 - **A clean install:** a new database gets the app through `mj app install`, which runs migrations only, and both harnesses pass on it.
 - **The release's metadata migration and the PostgreSQL migrations,** made by the build engineer at release from a clean database. Neither is hand-written in a feature pull request.
 - **The pin:** a published MemberJunction release that carries everything the app uses, pinned with the lockfile, so CI goes green and a host can install the app.
-- **The wrap-up** (#7's item 52): the README, `docs/HOW_THE_SYSTEM_WORKS.md`, the extensibility plan and each package's README, current.
+- **The wrap-up** (#7's item 52): the README, `docs/HOW_THE_SYSTEM_WORKS.md`, the extensibility plan and each package's README, current. They were brought up to date on 2026-09-29, in PR 9, and each stage keeps them so.
 - **Amith's calls:** who owns the app, and its license and publish path (the plan's open decisions 1 and 2).
 
 ## 6. After MJ#4789 ships: views and dashboards with properties

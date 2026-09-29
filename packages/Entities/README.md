@@ -19,12 +19,16 @@ The generated entity classes for Collaboration's schema, the typed client for it
 | `MJ_BizApps_Collaboration: Space Items` | `mjBizAppsCollaborationSpaceItemEntity` |
 | `MJ_BizApps_Collaboration: Item Uses` | `mjBizAppsCollaborationItemUseEntity` |
 | `MJ_BizApps_Collaboration: Share Notices` | `mjBizAppsCollaborationShareNoticeEntity` |
+| `MJ_BizApps_Collaboration: Space Chats` | `mjBizAppsCollaborationSpaceChatEntity` |
+| `MJ_BizApps_Collaboration: Space Agents` | `mjBizAppsCollaborationSpaceAgentEntity` |
+| `MJ_BizApps_Collaboration: Space Agent Skills` | `mjBizAppsCollaborationSpaceAgentSkillEntity` |
+| `MJ_BizApps_Collaboration: Space Knowledge Sources` | `mjBizAppsCollaborationSpaceKnowledgeSourceEntity` |
 
-On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Space types and role types are metadata rows and have no server subclass.
+On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Space Types, Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Role types, chats, agents, skills and knowledge sources have none.
 
-**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's four GraphQL mutations: `MintSpaceLink`, `UploadSpaceFile` (which takes the band the person chose), `CreateSpaceTask` and `PostSpaceMessage`. A library file opens in MemberJunction's own viewer, which loads it as the caller; there is no mutation for it here.
-- Pass it an executor: any object with `ExecuteGQL`, such as MJ's GraphQL data provider.
-- Without one, it falls back to the global `Metadata.Provider`. `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
+**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's six GraphQL mutations and two queries: `MintSpaceLink`, `UploadSpaceFile` (which takes the band the person chose), `CreateSpaceTask`, `PostSpaceMessage`, `CreateSpaceConversation`, `ExecuteSpaceChatTurn`, `GetSpaceChatHostRules` and `GetCloseConsequence`. A library file opens in MemberJunction's own viewer, which loads it as the caller; there is no mutation for it here.
+- Pass it an executor: any object with `ExecuteGQL`, such as a component's `ProviderToUse` or MJ's GraphQL data provider. It throws without one.
+- `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
 
 **`CollaborationSpacePermissionProvider`** (`src/space-permission-provider.ts`) answers MJ's permission checks for the `Collaboration Spaces` permission domain and the `Space` resource type, both seeded in `metadata/`.
 - It's registered with `@RegisterClass(PermissionProviderBase, 'CollaborationSpacePermissionProvider')`, the class name the domain's metadata row names.
@@ -39,7 +43,3 @@ pnpm --filter @mj-biz-apps/collaboration-entities run build
 ```
 
 The build is `tsc`, into `dist/`. The package has no tests of its own. Its `test` script runs `collaboration-core`'s tests.
-
-## Not done yet
-
-- `CollaborationClient` doesn't yet accept a component's `ProviderToUse` directly, so an L2 composite would fall back to the global provider. That comes with the composites.

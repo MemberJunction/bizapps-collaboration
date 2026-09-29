@@ -1,10 +1,10 @@
 # How Collaboration works
 
 This page states the rules Collaboration enforces. Each rule is marked:
-- **built:** in the code on PR #8's head (`claude/hopeful-bell-6ldk4v-pr8`), which carries everything PR #7 merged;
-- **planned:** with the item in [the plan](../plans/plan.md) that builds it (PR #8 or later).
+- **built:** in the code as it stands, which carries everything #7 and #8 merged;
+- **planned:** with the item in [the plan](../plans/plan.md) that builds it. [PR 9's plan](../plans/pr9-plan.md) orders what's left.
 
-D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for PR #7.
+D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for #7 and by D40 to D47 for PR 9 ([its § 3.7](../plans/plan.md#37-decided-on-2026-09-29-rights-subtypes-and-home)).
 
 ## Spaces and reach
 
@@ -13,15 +13,23 @@ A space is a tree. The root is a relationship: a client, a board, a cohort. The 
 - **Reach (D1). Built.** An active seat on a space reaches that space and every descendant whose `InheritsMembership` is 1. A space with `InheritsMembership = 0` is sealed: only its own seats reach it, and a seat above it never does.
 - **A person reads the union of what their seats reach (D1). Built.** That's everything any of their seats reaches, anywhere in the tree, not the subtree of the page they're on. So sub-spaces don't only narrow: a director seated on a board and on its sealed compensation committee reads both, and a director seated only on the board doesn't reach the committee.
 - **The nearest seat governs. Built.** When several seats reach the same space, the one the fewest steps above it decides the role's flags there.
-- **One walk, in three places. Built.** `membershipReaches` in `packages/Core/src/rules.ts`, the server's write gates, and `fnCollaborationAccess` in the database. `fnCollaborationTasks` and `fnCollaborationAncestorMembers` build on the same walk. `Space.ParentID` doesn't carry MJ's `IsHierarchy` flag, so CodeGen emits no path columns or traversal functions for it.
-- **Sub-spaces inherit only when explicitly chosen (D22). Built.** `Space.InheritsMembership` defaults to 0 (sealed). Physical removal of `SpaceType.DefaultInheritsMembership` is scheduled for the single-baseline migration in PR #8 (items 14 and 38).
-- **Access after close (D21). Built.** `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, on the space and falling back to type, are enforced by `fnCollaborationAccess` for SQL reads and in `membershipReaches` for in-memory graph resolution. Full write gating after close and reopen rules are enforced in space and task write gates. Agent retrieval scoping post-close is enforced in PR #7 (item 40).
+- **One walk, in three places. Built.** `membershipReaches` in `packages/Core/src/rules.ts`, the server's write gates, and `fnCollaborationAccess` in the database. `fnCollaborationTasks`, `fnCollaborationAncestorMembers`, `fnCollaborationCommonAccess` and `fnCollaborationSpaceAndAncestors` build on the same walk. `Space.ParentID` doesn't carry MJ's `IsHierarchy` flag, so CodeGen emits no path columns or traversal functions for it.
+- **Sub-spaces inherit only when explicitly chosen (D22). Built.** `Space.InheritsMembership` defaults to 0 (sealed). The unused `SpaceType.DefaultInheritsMembership` column is dropped in the single baseline, stage 1 of [PR 9's plan](../plans/pr9-plan.md).
+- **Access after close (D21). Built.** `PostCloseAccess` (`None`, `ReadOnly` or `ReadOnlyWithAgent`) and `PostCloseAccessDays`, stamped on the space when it closes, are enforced by `fnCollaborationAccess` for SQL reads and by `membershipReaches` in memory.
+  - A seat that reaches a closed space may read it, but not invite or contribute. The space and task write gates refuse other changes until it reopens.
+  - An agent uses a closed space only while its access is `ReadOnlyWithAgent` and hasn't ended (`agentMayQuote`).
+  - `fnCollaborationAncestorMembers` applies the same test at every step up, so a parent whose access has ended no longer lists its people under a sub-space.
 - **Generic space types (D18). Built.** Only generic space types ship with the app: Workspace, Team, Project, Working Group, Event, Community, and Cohort; role types include generic Outside Admin and Outside Member.
-- **Closing stamp. Built.** Closing a space stamps `ClosedAt` (the server's clock; only staff may backdate it), resolving and stamping `PostCloseAccess` and `PostCloseAccessDays` from the space's own settings, then each ancestor's, then its type's and the app's. Reopening clears `ClosedAt`.
-- **Closing and reopening: their own authorization. Built.** A close or a reopen needs the `Close and Reopen Spaces` authorization and an owner seat on the space (or on an ancestor it inherits from). It is granted apart from `Configure Spaces`, which changes a space's settings. A space created open is closed later; a create with a `ClosedAt` is refused.
-- **Who keeps a space whose access has ended. Built.** Once a space's post-close access has ended, only its `OwnerID` still reads its row (the `Collaboration: Visible Spaces` filter shows a closed space's row to its `OwnerID` and, while access runs, to those `fnCollaborationAccess` reaches). So an owner by seat who isn't the `OwnerID` loses the space, and only the `OwnerID` can reopen it, and only while they still hold an owner seat and the authorization. The confirmation before a close says this, worked out by the server (`GetCloseConsequence`).
+- **Closing stamp. Built.** Closing a space stamps `ClosedAt` (the server's clock; only staff may backdate it), and stamps `PostCloseAccess` and `PostCloseAccessDays` resolved from the space's settings, then each ancestor's, then its type's and the app's.
+  - A space's or an ancestor's value counts only when the type lists the key in `SpaceOverridable`. No shipped type does, so today the type or the app decides, and the app's setting is `ReadOnly` with no day limit.
+  - Closing archives the space's active conversations and removes their Edit grants. Reopening clears `ClosedAt` and restores both.
+- **Closing and reopening: their own authorization. Built.** A close or a reopen needs the `Close and Reopen Spaces` authorization and an owner seat on the space (or on an ancestor it inherits from). It is granted apart from `Configure Spaces`, which changes a space's settings, and by default to Space Participant, UI, Developer and Integration (D40). A space created open is closed later; a create with a `ClosedAt` is refused.
+- **Who keeps a space whose access has ended. Built.** Space Participant and UI read spaces through the `Collaboration: Visible Spaces` filter. It shows a closed space's row to its `OwnerID` and, while access runs, to those `fnCollaborationAccess` reaches. So once the access has ended, only the `OwnerID` still reads the row: an owner by seat who isn't the `OwnerID` loses the space, and only the `OwnerID` can reopen it, while they still hold an owner seat and the authorization. Developer and Integration read every space row, because their grants on Spaces carry no filter. The confirmation before a close says this, worked out by the server (`GetCloseConsequence`).
 - **One metadata engine (D19). Built.** `CollaborationEngineBase` and `CollaborationEngine` cache space types, role types, and authorizations, providing synchronous, strongly-typed lookups without per-request roundtrips.
-- **Settings rights: authorization tree (D23). Built.** Settings tabs and space-type management are gated by the `Configure Spaces` authorization hierarchy via `CollaborationEngine.UserCanConfigureSpaces`.
+- **Settings rights (D23). Built.** A space's settings (its `Configuration`, its post-close fields outside a close, and a change of type) need `Configure Spaces` and an owner seat on the space (`UserCanConfigureSpaces`). Space types need `Configure Space Types` (`UserCanConfigureSpaceTypes`). Both sit under the `Collaboration` authorization, and only Developer holds them by default.
+- **Checks that still go by role name. Built; moving (D41).** These go by MemberJunction role, UI, Developer or Integration (`isStaffUser` in `load-graph.ts`): creating a top-level space or moving a space to the top level, changing `AllowParentAssignees` or `AgentRetrieval`, assigning a task to someone seated above a space whose switch is off, and backdating a close. PR 9 moves them onto one authorization, granted to those three roles by default.
+- **Space types and their drivers. Built.** A type can name a server driver and a UI driver. The server asks the type's driver before a change to a space, its sub-spaces, its seats, its items, its conversations or its tasks, and about anchors, and the driver can refuse. A type whose driver isn't registered on the server refuses every write to its spaces. A type's `Configuration` sets `Children.AllowedTypeCodes`, `Children.MaxOpen` and `SpaceOverridable`. `packages/ExampleSpaceTypes` has two examples, a board and a deal room.
+  - **Not yet:** a type's own table as an IsA subtype of Space, with its screens, is in PR 9 (D42). A type's message hooks (`ValidateMessage`, `OnMessagePosted`) aren't called yet: they wait for MemberJunction to record who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), D44).
 
 ## Bands
 
@@ -42,7 +50,7 @@ A space is a tree. The root is a relationship: a client, a board, a cohort. The 
 
 **Fixed in PR #3 (B0.1, `6786bd0`):** a change to someone else's seat was checked against the role being saved, not the seat's current role, so a signer could remove someone above them by lowering the role and setting `Removed` in one save. Now the target's current role must also fit within the signer's ceiling. PR #3's unit cases and its WG2 checks test it since `002c2c5`.
 
-The engine reads role flags. It never compares role names.
+The engine reads space-role flags. It never compares space-role names.
 
 ## Items
 
@@ -57,13 +65,13 @@ The engine reads role flags. It never compares role names.
 **Built.**
 - **`fnCollaborationAccess(@UserID)`** is the reach walk in SQL. It returns each reachable space with `CanSeeTeam`, `CanInvite` and `CanContribute` from the nearest seat. Its current definition is in `migrations/V202609262200__v0.1.x__Extensibility_Schema_And_Tables.sql`.
 - **Row-level security filters** are metadata: `metadata/row-level-security-filters/`, bound to the **Space Participant** role in `metadata/entity-permissions/`.
-  - Every one of the role's 57 read grants carries a filter, and none is NULL. A NULL filter on a grant a person holds exempts them from row-level security for that operation.
+  - Every one of the role's 64 read grants carries a filter, and none is NULL. A NULL filter on a grant a person holds exempts them from row-level security for that operation.
   - A share notice is readable only by the member it's addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either carries a create filter, and the server subclass is the rest of the gate.
   - MJ 6.1.3 checks a create filter on every new row, before and after the before-save hooks.
 - **People:** Space Participant's field rules on People allow reading a person's name fields, email and linked user, and nothing else, once People's field-level flag is on (bizapps-common#186, still open). Its Deny rows also hold for a participant who has another role.
 - **A space's conversations** are MJ conversations owned by the system user, each with a `SpaceChat` row that holds its space, kind and status. There's no room: a space has no conversation until someone starts one through `CreateSpaceConversation`, which applies `Chats.WhoCanStart` and needs a seat that can post in the kind chosen (D25).
   - **General and Topic** conversations are read by everyone who reaches the space, whatever their band. **Internal Only** ones (kind `Private`) are read only by those who see the Team band.
-  - **Who can start a conversation (`CanStartConversation`):** Evaluated by `resolveSpaceChatHostRules` -> `evaluateCanStartSpaceConversation`. A user must reach the space through an active seat (`SpaceMember`), the space must not be closed, the user's role must have `CanContribute: true`, and the role must satisfy `Chats.WhoCanStart` (e.g. `Owners` vs `Anyone`). This permission directly controls the `+` button in the space navigation rail and "New Conversation" actions in the UI.
+  - **Who can start a conversation (`CanStartConversation`):** Evaluated by `resolveSpaceChatHostRules` -> `evaluateCanStartSpaceConversation`. A user must reach the space through an active seat (`SpaceMember`), the space must not be closed, the user's role must have `CanContribute: true`, and the role must satisfy `Chats.WhoCanStart`: `Anyone`, the default, means any seat that can post, and `Owners` narrows it to owners (D43). Internal Only also needs `CanSeeTeamBand`, and the space type's driver has the last word. This permission directly controls the `+` button in the space navigation rail and "New Conversation" actions in the UI.
   - **Posting messages (`MJConversationDetailEntityExtended`):** All space conversations are owned by the `System` user (`MJ: Conversations.UserID = SystemUser`). When any user posts a message detail, `MJConversationDetailEntityExtended.currentUserMayWrite()` requires that non-owners hold an approved `Edit` or `Owner` grant in `MJ: Resource Permissions` (`ResourceType = Conversations`).
   - **Grant synchronization (`syncRoomEditGrantsForSpace`):** The server automatically creates and maintains these `Resource Permissions` grants:
     - Active contributing seats (`CanContribute = true`) receive `Edit` grants on all `General` and `Topic` chats in their reached spaces.
@@ -81,9 +89,9 @@ The engine reads role flags. It never compares role names.
 **Built:**
 - **`agentMayQuote`** in `rules.ts` is the rule an agent calls before it quotes an item. The caller must be able to read it, a Team item needs `CanSeeTeam`, and the item must be in the subtree of the space the question was asked in. `ExcludedEntirely` on the item's space or any ancestor drops it for every agent; `ExcludedFromParentScope` drops it when the question comes from above that space.
 - **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
-- **Agent turns.** An agent answers in a space's conversation through `ExecuteSpaceChatTurn`, which checks again from the saved message that the caller can post in the conversation, that the agent is allowed and, under `MentionOnly`, tagged in the message. Bounding the agent's search by the conversation's audience is planned for PR #8 (D2, B2).
+- **Agent turns.** An agent answers in a space's conversation through `ExecuteSpaceChatTurn`, which checks again from the saved message that the caller can post in the conversation, that the agent is allowed and, under `MentionOnly`, tagged in the message. The search runs as the asking user, and the conversation's kind bounds what the reply may use: in General or Topic, only the space's own Shared items; in Internal Only, its Shared and Team items. Bounding it by every participant's reach (D2) is planned (A6, B2).
 
-**Planned: the audience of an answer decides what the agent may use (D2; A6, B2 in PR #8 and later).**
+**Planned: the audience of an answer decides what the agent may use (D2; A6 and B2, in a later stage).**
 - **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
 - **In a shared conversation** (two or more people), it uses the intersection of what every current participant can read, with each participant's band. Nobody can change it, the asker included.
 - In both, the agent runs as the asking user, never as a service account, and the space's `AgentRetrieval` still applies. Its own memory follows the same rule.
@@ -103,7 +111,7 @@ The engine reads role flags. It never compares role names.
 
 ## Data a space doesn't own, and what it grants
 
-**Planned: PR #8** (the plan's D26 to D34; B14 to B20). The parts that need MJ's A14 to A17 open in a follow-up, once an MJ release carries them (D36). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
+**Planned: the stages after the chat** ([PR 9's plan](../plans/pr9-plan.md); the plan's D26 to D34, B14 to B20). The parts that need MJ's A14 to A17 wait for [MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (D36, D39). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
 - **Anchors (D26; B14).** A space can be anchored to one or more records it's about, each with a role, at most one primary. An anchor grants nothing by itself.
 - **Data reach (D28; B18).** A type declares which other apps' entities its participants may read, by a path to an anchor role, with a band and a field allow-list. A script turns the declarations into the Space Participant role's row-level security filters, one per entity, reviewed in `metadata/`. Reads stay in SQL, and a type that declares no reach on an entity gives its participants nothing from it.
 - **Grants (D27, D31; B15, B20).** A type, a space or a sub-space grants agents, actions, queries, views, dashboards, components and knowledge sources. A grant's bindings are filled in by the server from the space, its anchors and the caller: the model never sees a bound parameter, a client value for one is refused and logged, and a binding that doesn't resolve refuses the run. A grant on the Team band isn't offered in a chat where anyone can't see Team.
@@ -133,7 +141,7 @@ pnpm test                    # the unit tests
 pnpm run test:integration    # both integration harnesses, against a database
 ```
 
-- `pnpm test` runs 326 unit tests across all packages: 116 in `collaboration-core`, 4 in `collaboration-engine-base`, 82 in `collaboration-core-entities-server`, 41 in `collaboration-integration-tests`, 56 in `collaboration-ng-widgets`, and 27 in `collaboration-example-space-types`.
-- The integration harnesses run 43 server checks and 44 client checks, in nine bundles each, and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata and the sample world; the client harness also needs a running MJAPI.
+- `pnpm test` runs every package's unit tests: `node:test` in `collaboration-core`, `collaboration-core-entities-server`, `collaboration-server` and `collaboration-ng`, and Vitest in the others. It runs the repo scripts' self-tests first.
+- The integration harnesses run 71 server checks and 58 client checks, in ten bundles each (`extensions` runs only on the server, `lifecycle` only on the client), and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata, the test metadata (`pnpm run mj:push:tests`) and the sample world; the client harness also needs a running MJAPI.
 - `scripts/persona-check.sql` checks the Space Participant role's grants against a database.
 
