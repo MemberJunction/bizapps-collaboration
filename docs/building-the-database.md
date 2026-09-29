@@ -31,7 +31,7 @@ when `mj` is not on the path of the member you are in.
    `sync` blocks back into common's files; put them back as they were.
 4. **This app's migrations:** `pnpm run mj:migrate`.
 5. **A Create grant on row filters, in the database only.** A fresh MemberJunction database grants no role Create on
-   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Type = 'Owner'`. Developer is enough:
+   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Name = 'System'`. Developer is enough:
 
    ```sql
    UPDATE ep SET CanCreate = 1, CanUpdate = 1, CanDelete = 1

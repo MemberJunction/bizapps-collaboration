@@ -104,11 +104,11 @@ export async function postSpaceMessage(
 }
 
 /**
- * Room replies are visible to everyone who reaches the space (including participants
- * who can only see Shared items). The room reply therefore strictly names items
- * that everyone in the room can read: this space's own Shared items only.
+ * An agent's chat reply is visible to everyone who reaches the space (including participants
+ * who can only see Shared items). The reply therefore names only items
+ * that everyone in the space can read: this space's own Shared items.
  * Items in sub-spaces (even if Shared) have their own audience and cannot be quoted
- * in this space's room reply.
+ * in this space's reply.
  */
 export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[], roomSpaceId: string): SpaceAgentCandidateItem[] {
     const normRoomId = roomSpaceId.trim().toUpperCase();

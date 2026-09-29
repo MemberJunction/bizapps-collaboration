@@ -807,6 +807,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [RoomMessages]="overviewRoomMessages"
                                                     [SubSpaces]="overviewSubSpaces"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
+                                                    [AgentAvailable]="chatDefaultAgentId !== null"
                                                     [IsSubmittingAsk]="isSubmittingAsk"
                                                     [DiscussionBand]="chatAudienceBand"
                                                     (OpenLibraryRequested)="onOpenLibraryRequested()"

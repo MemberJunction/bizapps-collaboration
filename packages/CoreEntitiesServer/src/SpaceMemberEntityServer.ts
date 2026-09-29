@@ -107,6 +107,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         } else if (bandChanged) {
             memberKind = 'BandChange';
         }
+        this.pendingKind = memberKind;
         const refused = await this.judgeWithDriver(user, spaceId, memberKind);
         if (refused) return fail(result, refused.field, refused.message);
 
@@ -132,6 +133,9 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
     }
 
+    /** The kind of change Validate decided on, so Save tells the driver the same thing (Dirty flags are gone after the save). */
+    private pendingKind: MemberChangeKind | null = null;
+
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
@@ -147,7 +151,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     spaceType: spaceInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
                     member: this,
-                    kind: this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange',
+                    kind: this.pendingKind ?? (this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange'),
                 });
             } catch (driverErr) {
                 LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);

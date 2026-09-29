@@ -31,14 +31,6 @@ export function storedContentType(claimed: string | null | undefined): string {
     return 'application/octet-stream';
 }
 
-/** How the browser may show a stored type. Anything else is a download. */
-export function openMode(stored: string | null | undefined): 'inline' | 'text' | 'download' {
-    const mime = (stored ?? '').split(';')[0].trim().toLowerCase();
-    if (INLINE_TYPES.has(mime)) return 'inline';
-    if (mime === 'text/plain') return 'text';
-    return 'download';
-}
-
 /**
  * The band a new item asks for. The space type's default is used when this
  * role may place an item there. Otherwise the request is Team, and the item

@@ -37,11 +37,11 @@ export type ExecuteSpaceChatTurnResult =
     | { ok: false; message: string };
 
 /**
- * Executes a server turn for an agent in a space's Room chat.
+ * Executes a server turn for an agent in a space's chat.
  *
  * Verifies all security and context boundaries against the persisted user message:
  * 1. Caller reaches the space and can contribute (closed spaces refuse).
- * 2. conversationId belongs to the space's active Room.
+ * 2. conversationId belongs to the space's space.
  * 3. userMessageId exists, matches the conversation, and was authored by the caller.
  * 4. Checks that the user message does not already have an agent run (refuses if read fails).
  * 5. Mention rule: decide from saved message alone via MentionParser. Under Always without tag,
@@ -209,7 +209,7 @@ async function runClaimedTurn(
     } catch (agentsError) {
         return { ok: false, message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.' };
     }
-    const resolvedDefault = parseUuid(allowed.defaultAgentId) ?? COLLABORATION_DEFAULT_AGENT_ID;
+    const resolvedDefault = parseUuid(allowed.defaultAgentId);
 
     // Load agent entities for allowed agents to supply MentionParser
     let availableAgents: MJAIAgentEntityExtended[] = [];
@@ -239,6 +239,9 @@ async function runClaimedTurn(
     if (taggedAgentId) {
         targetAgentId = taggedAgentId;
     } else if (agentReplyMode === 'Always') {
+        if (!resolvedDefault) {
+            return { ok: false, message: 'No assistant is available in this space right now.' };
+        }
         targetAgentId = resolvedDefault;
     } else {
         // Under MentionOnly without a tagged agent: refuse!

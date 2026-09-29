@@ -250,6 +250,18 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         assert.equal(result.defaultAgentId, CHILD_AGENT_ID);
     });
 
+    it('returns no default and no agents when not even the shipped agent is Active', async () => {
+        currentOptions = {
+            agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
+            inactiveAgentIds: [APP_AGENT_ID, COLLABORATION_DEFAULT_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, []);
+        assert.equal(result.defaultAgentId, null);
+    });
+
     it('uses the shipped agent as the last resort when nothing configured is Active', async () => {
         currentOptions = {
             agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],

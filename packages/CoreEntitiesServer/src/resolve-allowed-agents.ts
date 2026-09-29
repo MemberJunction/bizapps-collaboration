@@ -14,7 +14,8 @@ export interface SpaceAgentItem {
 
 export interface ResolvedAllowedAgentsResult {
     allowedAgentIds: string[];
-    defaultAgentId: string;
+    /** Null when no agent is Active, so nothing is tagged by default and the ask box has nothing to run. */
+    defaultAgentId: string | null;
     agents: SpaceAgentItem[];
 }
 
@@ -212,7 +213,7 @@ export async function resolveAllowedAgents(
 
     const allowedAgentIds = currentList.map((a) => a.agentId);
     const defaultItem = currentList.find((a) => a.isDefault) ?? currentList[0];
-    const defaultAgentId = defaultItem?.agentId ?? COLLABORATION_DEFAULT_AGENT_ID;
+    const defaultAgentId = defaultItem?.agentId ?? null;
 
     return {
         allowedAgentIds,

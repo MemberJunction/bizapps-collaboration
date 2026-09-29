@@ -130,7 +130,7 @@ export interface SubSpaceSummary {
 
         <div class="col">
           <!-- Ask Box -->
-          @if (CanStartConversation) {
+          @if (CanStartConversation && AgentAvailable) {
             <mjc-ask-box
               #askBox
               [Title]="'Ask about ' + SpaceName"
@@ -422,6 +422,8 @@ export class CollabSpaceOverviewComponent {
   @Input() public SubSpaces: SubSpaceSummary[] = [];
   @Input() public AskSuggestions: string[] = [];
   @Input() public CanStartConversation = false;
+  /** False when no assistant is Active for this space, so the ask box (which asks one) is not offered. */
+  @Input() public AgentAvailable = true;
   @Input() public IsSubmittingAsk = false;
   @Input() public DiscussionBand: SpaceBand = 'Shared';
 

@@ -21,7 +21,7 @@ The server's write gates, the browser and the SQL function `fnCollaborationAcces
 - **Retention:** `retentionDeadline` turns `Month`, `Year` or `Indefinite` into a date.
 
 **`src/phase2.ts`: the library.**
-- `SPACE_UPLOAD_MAX_BYTES` (10 MB), `storedContentType` (the stored type never carries script) and `openMode` (inline, text or download).
+- `SPACE_UPLOAD_MAX_BYTES` (10 MB), and `storedContentType` (the stored type never carries script).
 - `requestedItemBand` picks a new upload's band from the type's default.
 - `authorizeUseWrite` and `authorizeNoticeWrite` gate item uses and share notices, and `shareRecipients` lists who hears about a share.
 - `foldersIn` lists a space's folders, and `recordUse` builds an item-use record.
