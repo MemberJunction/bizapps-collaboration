@@ -18,7 +18,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </span>
         <div>
           <div class="fw7 fs14">{{ Title }}</div>
-          <div class="fs12 muted">{{ Subtitle }}</div>
+          @if (Subtitle) {
+            <div class="fs12 muted">{{ Subtitle }}</div>
+          }
         </div>
       </div>
       <div class="ask-in">
@@ -26,15 +28,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           type="text"
           [placeholder]="Placeholder"
           [(ngModel)]="Query"
+          [disabled]="IsSubmitting"
           (keydown.enter)="onSend()"
         />
-        <button type="button" class="send" (click)="onSend()" aria-label="Send query">
+        <button
+          type="button"
+          class="send"
+          [disabled]="IsSubmitting || !Query.trim()"
+          (click)="onSend()"
+          aria-label="Send query"
+        >
           <i class="fa-solid fa-arrow-up"></i>
         </button>
       </div>
       <div class="ask-scope">
-        <i class="fa-solid fa-lock"></i>
-        <span>Only you will see this. It can use <b>Team and Shared</b> material.</span>
+        <i class="fa-solid fa-users"></i>
+        <span>Starts a General conversation. Everyone in the space will read the question. The assistant uses <b>Shared</b> materials.</span>
       </div>
       @if (Suggestions && Suggestions.length > 0) {
         <div class="sugs">
@@ -173,21 +182,27 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 })
 export class CollabAskBoxComponent {
   @Input() public Title = '';
-  @Input() public Subtitle = 'One assistant, bounded by who’s asking';
+  @Input() public Subtitle = '';
   @Input() public Placeholder = 'Ask anything about this space…';
   @Input() public Suggestions: string[] = [];
 
   @Input() public Query = '';
+  @Input() public IsSubmitting = false;
   @Output() public AskRequested = new EventEmitter<string>();
 
   public onSend(): void {
+    if (this.IsSubmitting) return;
     if (this.Query.trim()) {
       this.AskRequested.emit(this.Query.trim());
-      this.Query = '';
     }
   }
 
+  public clear(): void {
+    this.Query = '';
+  }
+
   public onSelectSuggestion(sug: string): void {
+    if (this.IsSubmitting) return;
     this.Query = sug;
     this.onSend();
   }

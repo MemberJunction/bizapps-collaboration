@@ -1,10 +1,18 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  EventEmitter,
   Input,
+  Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
-import { ConversationsModule } from '@memberjunction/ng-conversations';
+import {
+  ConversationsModule,
+  type AgentReplyMode,
+  type AgentTurnHandler,
+} from '@memberjunction/ng-conversations';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -13,9 +21,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule],
+  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
-    <div class="chat-container">
+    <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
       @if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
           [environmentId]="EnvironmentId"
@@ -27,18 +35,32 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           [linkedRecordId]="SpaceId"
           [defaultAgentId]="DefaultAgentId"
           [assistantDisplayName]="'Assistant'"
-          [allowMentions]="AllowMentions"
-          [allowAgentMentions]="true"
+          [allowMentions]="AllowMentions && !IsReadOnly"
+          [allowAgentMentions]="!IsReadOnly"
           [allowEntityMentions]="false"
           [allowSkillCommands]="false"
-          [allowAttachments]="AllowAttachments">
+          [allowAttachments]="AllowAttachments && !IsReadOnly"
+          [AllowPinning]="!IsReadOnly"
+          [AllowMessageEdit]="!IsReadOnly"
+          [AllowMessageDelete]="!IsReadOnly"
+          [AgentReplyMode]="AgentReplyMode"
+          [AllowedAgentIDs]="AllowedAgentIDs"
+          [MentionPeople]="MentionPeople"
+          [AgentHistoryFrom]="AgentHistoryFrom"
+          [AgentTurnHandler]="AgentTurnHandler"
+          [AutoNameConversation]="AutoNameConversation"
+          [ComposerDraft]="ComposerDraft"
+          [PendingMessage]="PendingMessage"
+          [PendingMessageConversationId]="PendingMessageConversationId"
+          (ComposerDraftConsumed)="onComposerDraftConsumed()"
+          (PendingMessageConsumed)="onPendingMessageConsumed()">
           
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-slot">
               <div class="header-left">
                 <div class="title-row">
                   <i class="fa-solid fa-hashtag hash-icon"></i>
-                  <span class="chat-title">{{ ConversationName || SpaceName + ' Room' }}</span>
+                  <span class="chat-title">{{ ConversationName || (SpaceName ? SpaceName + ' General' : 'General') }}</span>
                   <mjc-band-chip [Band]="AudienceBand" />
                 </div>
                 <div class="subtitle-row">
@@ -57,20 +79,67 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>{{ ParticipantCount }}</span>
                   </div>
                 }
+                @if (CanStartConversation && !IsReadOnly) {
+                  <button
+                    type="button"
+                    mjButton
+                    variant="primary"
+                    size="sm"
+                    class="btn-new-convo-header"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Conversation</span>
+                  </button>
+                }
               </div>
             </div>
           </ng-template>
 
         </mj-conversation-chat-area>
+        @if (IsReadOnly) {
+          <div class="space-closed-banner" role="status">
+            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            <span>This space is closed. Conversations are read-only.</span>
+          </div>
+        }
       } @else {
         <div class="no-conversation-state">
           <div class="empty-icon-wrap">
             <i class="fa-solid fa-comments"></i>
           </div>
-          <h3 class="empty-title">Select a Conversation</h3>
-          <p class="empty-desc">
-            Choose a channel from the space sidebar to begin chatting.
-          </p>
+          @if (HasConversations) {
+            <h3 class="empty-title">Select a Conversation</h3>
+            <p class="empty-desc">
+              @if (CanStartConversation) {
+                Choose a channel from the space sidebar or start a new conversation.
+              } @else {
+                Choose a channel from the space sidebar to view the conversation.
+              }
+            </p>
+          } @else {
+            <h3 class="empty-title">No conversations yet</h3>
+            <p class="empty-desc">
+              @if (CanStartConversation) {
+                Start a new conversation to begin collaborating.
+              } @else {
+                There are no conversations in this space.
+              }
+            </p>
+          }
+          @if (CanStartConversation && !IsReadOnly) {
+            <button
+              type="button"
+              mjButton
+              variant="primary"
+              size="md"
+              class="btn-new-convo"
+              (click)="onNewConversation()">
+              <i class="fa-solid fa-plus"></i>
+              <span>New Conversation</span>
+            </button>
+          }
         </div>
       }
     </div>
@@ -193,10 +262,45 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         line-height: 1.5;
         margin-bottom: 20px;
       }
+
+      .btn-new-convo-header {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .btn-new-convo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .read-only-chat ::ng-deep .message-input-container-wrapper {
+        display: none !important;
+      }
+
+      .space-closed-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background-color: var(--mj-status-warning-bg, #fffbeb);
+        color: var(--mj-status-warning-text, #92400e);
+        border-top: 1px solid var(--mj-status-warning-border, #fde68a);
+        font-size: var(--mj-font-sm, 13px);
+        font-weight: 500;
+        z-index: 10;
+      }
+
+      .space-closed-banner i {
+        font-size: 14px;
+        color: var(--mj-status-warning-icon, #d97706);
+      }
     `,
   ],
 })
 export class CollabSpaceChatComponent {
+  @Input() public IsReadOnly = false;
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';
@@ -210,4 +314,33 @@ export class CollabSpaceChatComponent {
   @Input() public ParticipantCount = 0;
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = false;
+  @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
+  @Input() public AllowedAgentIDs: readonly string[] = [];
+  @Input() public CanStartConversation = false;
+  @Input() public HasConversations = false;
+  @Input() public MentionPeople: readonly MentionPerson[] | null = null;
+  @Input() public AgentHistoryFrom: Date | null = null;
+  @Input() public AgentTurnHandler: AgentTurnHandler | null = null;
+  @Input() public AutoNameConversation: boolean = false;
+  @Input() public ComposerDraft: string | null = null;
+  @Input() public PendingMessage: string | null = null;
+  @Input() public PendingMessageConversationId: string | null = null;
+
+  @Output() public NewConversationRequested = new EventEmitter<void>();
+  @Output() public ComposerDraftConsumed = new EventEmitter<void>();
+  @Output() public PendingMessageConsumed = new EventEmitter<void>();
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
+  }
+
+  public onComposerDraftConsumed(): void {
+    this.ComposerDraft = null;
+    this.ComposerDraftConsumed.emit();
+  }
+
+  public onPendingMessageConsumed(): void {
+    this.PendingMessage = null;
+    this.PendingMessageConsumed.emit();
+  }
 }

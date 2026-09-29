@@ -122,6 +122,11 @@ export async function purgeWorld(): Promise<void> {
                 DELETE FROM __mj_BizAppsTasks.Task WHERE ID IN (SELECT ID FROM #tasks) OR CreatedByPersonID IN (SELECT ID FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds}));
             END
 
+            CREATE TABLE #chatConvs (ID UNIQUEIDENTIFIER);
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceChat') IS NOT NULL
+                INSERT INTO #chatConvs (ID)
+                SELECT ConversationID FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds}) AND ConversationID IS NOT NULL;
+
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
@@ -131,7 +136,7 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
 
-            SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds});
+            SELECT ID INTO #conv FROM [${core}].Conversation WHERE UserID IN (${userIds}) OR LinkedRecordID IN (${spaceIds}) OR ID IN (SELECT ID FROM #chatConvs);
             SELECT ID INTO #details FROM [${core}].ConversationDetail WHERE ConversationID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
 
             IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceChat') IS NOT NULL
@@ -159,6 +164,9 @@ export async function purgeWorld(): Promise<void> {
             FROM [${core}].Conversation AS conversation
             WHERE conversation.ID IN (SELECT ID FROM #conv)
                OR conversation.LastConversationID IN (SELECT ID FROM #conv);
+
+            IF OBJECT_ID('[${core}].ResourcePermission') IS NOT NULL
+                DELETE FROM [${core}].ResourcePermission WHERE ResourceRecordID IN (SELECT ID FROM #conv) OR UserID IN (${userIds});
 
             DELETE FROM [${core}].Conversation WHERE ID IN (SELECT ID FROM #conv);
 

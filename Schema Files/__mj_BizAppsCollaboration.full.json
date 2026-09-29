@@ -339,6 +339,12 @@
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bArchivedOnSpaceClose\b", 
+                    "Description": "\bIndicates\b \bwhether\b \bthis\b \bspace\b \bchat\b \bconversation\b \bwas\b \barchived\b \bwhen\b \bits\b \bspace\b \bwas\b \bclosed\b \bso\b \bit\b \bcan\b \bbe\b \brestored\b \bon\b \breopen\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
                     "Name": "\bSpace\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",

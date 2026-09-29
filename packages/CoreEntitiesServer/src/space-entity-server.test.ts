@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
+import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import { isStaffUser, STAFF_ROLES } from '../dist/load-graph.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
@@ -110,6 +110,8 @@ describe('SpaceEntityServer create path validation', () => {
         typeLookupSuccess?: boolean;
         defaultAllow?: boolean;
         defaultAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
+        newRecordAllow?: boolean;
+        newRecordAgent?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
     }) {
         if (options.typeLookupSuccess === false) {
             currentMockType = undefined;
@@ -164,9 +166,17 @@ describe('SpaceEntityServer create path validation', () => {
             SpaceTypeID: { value: TYPE_ID, writable: true },
             AllowParentAssignees: { value: options.allowParentAssignees ?? true, writable: true },
             AgentRetrieval: { value: options.agentRetrieval ?? 'Included', writable: true },
+            _callerSpecifiedAllowParentAssignees: { value: !!options.allowDirty, writable: true },
+            _callerSpecifiedAgentRetrieval: { value: !!options.agentDirty, writable: true },
+            _newRecordAllowParentAssignees: { value: options.newRecordAllow ?? true, writable: true },
+            _newRecordAgentRetrieval: { value: options.newRecordAgent ?? 'Included', writable: true },
             Fields: { value: fields, writable: true },
             RunViewProviderToUse: { value: rvMock, writable: true },
             ProviderToUse: { value: mockProvider, writable: true },
+            init: { value: () => undefined, writable: true },
+            notifyEmbeddedNewRecord: { value: () => undefined, writable: true },
+            RaiseEvent: { value: () => undefined, writable: true },
+            EntityInfo: { value: { PrimaryKeys: [], Fields: [{ Name: 'AllowParentAssignees' }, { Name: 'AgentRetrieval' }] }, writable: true },
         });
         return space;
     }
@@ -249,6 +259,98 @@ describe('SpaceEntityServer create path validation', () => {
         const err = res.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.ok(err, 'Expected error on AgentRetrieval');
         assert.equal(err?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+    });
+
+    it("keeps the loader's explicit value", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            agentRetrieval: 'ExcludedFromParentScope',
+            defaultAgent: 'Included',
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
+    });
+
+    it("gets the type's defaults when SetMany() leaves fields at column defaults", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: true, // column default
+            agentRetrieval: 'Included', // column default
+            defaultAllow: false,        // type default differs
+            defaultAgent: 'ExcludedFromParentScope', // type default differs
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
+    });
+
+    it('keeps explicit value passed to NewRecord matching column default when space type default differs', async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: true, // caller explicitly chose column default true
+            allowDirty: true,           // caller specified it in NewRecord
+            agentRetrieval: 'Included', // caller explicitly chose column default Included
+            agentDirty: true,           // caller specified it in NewRecord
+            defaultAllow: false,        // type default differs
+            defaultAgent: 'ExcludedFromParentScope', // type default differs
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, true, 'Explicit AllowParentAssignees=true must be kept');
+        assert.equal(space.AgentRetrieval, 'Included', 'Explicit AgentRetrieval=Included must be kept');
+    });
+
+    it('keeps an explicit non-default from staff', async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            allowParentAssignees: false,
+            agentRetrieval: 'ExcludedEntirely',
+            defaultAllow: true,
+            defaultAgent: 'Included',
+        });
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedEntirely');
+    });
+
+    it('refuses an explicit non-default from someone who is not staff', async () => {
+        const spaceAllow = mockCreateSpace({
+            user: participantUser,
+            allowParentAssignees: false,
+            defaultAllow: true,
+        });
+        const resAllow = await SpaceEntityServer.prototype.ValidateAsync.call(spaceAllow);
+        assert.equal(resAllow.Success, false);
+        const allowErr = resAllow.Errors.find((e) => e.Source === 'AllowParentAssignees');
+        assert.ok(allowErr, 'Expected error on AllowParentAssignees');
+        assert.equal(allowErr?.Message, 'Space change refused: only staff may change the allow-parent-assignees setting.');
+
+        const spaceAgent = mockCreateSpace({
+            user: participantUser,
+            agentRetrieval: 'ExcludedEntirely',
+            defaultAgent: 'Included',
+        });
+        const resAgent = await SpaceEntityServer.prototype.ValidateAsync.call(spaceAgent);
+        assert.equal(resAgent.Success, false);
+        const agentErr = resAgent.Errors.find((e) => e.Source === 'AgentRetrieval');
+        assert.ok(agentErr, 'Expected error on AgentRetrieval');
+        assert.equal(agentErr?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+    });
+
+    it("applies the type's defaults after NewRecord() with no sets", async () => {
+        const space = mockCreateSpace({
+            user: staffUser,
+            defaultAllow: false,
+            defaultAgent: 'ExcludedFromParentScope',
+        });
+        space.NewRecord();
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, true, `Validation should succeed: ${res.Errors.map((e) => e.Message).join(', ')}`);
+        assert.equal(space.AllowParentAssignees, false);
+        assert.equal(space.AgentRetrieval, 'ExcludedFromParentScope');
     });
 });
 
@@ -346,5 +448,182 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         const reopenReach = membershipReaches(spaces, memberships, coOwnerUserId, spaceId, new Date(), true);
         assert.ok(reopenReach);
         assert.equal(reopenReach?.role.isOwnerRole, true);
+    });
+});
+
+interface MockSpaceChatEntity {
+    ID: string;
+    Status: string;
+    ArchivedOnSpaceClose: boolean;
+    Load(id: string): Promise<boolean>;
+    Save(): Promise<boolean>;
+    LatestResult: { CompleteMessage: string };
+}
+
+describe('SpaceEntityServer close and reopen chat archiving and restoration', () => {
+    const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+    let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
+    let origBaseSave: typeof BaseEntity.prototype.Save;
+
+    before(() => {
+        const src = WellKnownUserSource.Instance;
+        origGetSystemUser = src.GetSystemUser.bind(src);
+        src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
+
+        origBaseSave = BaseEntity.prototype.Save;
+        BaseEntity.prototype.Save = async function () {
+            return true;
+        };
+    });
+
+    after(() => {
+        WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
+        BaseEntity.prototype.Save = origBaseSave;
+    });
+
+    it('archives active chats with ArchivedOnSpaceClose flag when space closes', async () => {
+        const archivedChats: Array<{ id: string; status: string; archivedOnSpaceClose: boolean }> = [];
+
+        const mockSpaceChat: MockSpaceChatEntity = {
+            ID: 'chat-active-1',
+            Status: 'Active',
+            ArchivedOnSpaceClose: false,
+            async Load(id: string) {
+                return id === 'chat-active-1';
+            },
+            async Save() {
+                archivedChats.push({
+                    id: this.ID,
+                    status: this.Status,
+                    archivedOnSpaceClose: this.ArchivedOnSpaceClose,
+                });
+                return true;
+            },
+            LatestResult: { CompleteMessage: '' },
+        };
+
+        const spaceId = 'space-close-test-1';
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        const closedAtDate = new Date();
+
+        const mockProvider = {
+            EntityByName() { return { ID: 'mock-id' }; },
+            EntityByID() { return { Name: 'mock' }; },
+            async GetEntityObject(entityName: string) {
+                if (entityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return mockSpaceChat;
+                }
+                return mockSpaceChat;
+            },
+            async RunView(params: { EntityName: string; ExtraFilter: string }) {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    if (params.ExtraFilter.includes(`SpaceID = '${spaceId}' AND Status = 'Active'`)) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'chat-active-1' }],
+                        };
+                    }
+                }
+                return { Success: true, Results: [] };
+            },
+        };
+
+        Object.defineProperties(space, {
+            ID: { value: spaceId, writable: true },
+            ContextCurrentUser: { value: { ID: 'caller-1', Name: 'Caller' } as UserInfo, writable: true },
+            ClosedAt: { value: closedAtDate, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'ClosedAt', Value: closedAtDate, OldValue: null, Dirty: true },
+                    { Name: 'ParentID', Value: null, OldValue: null, Dirty: false },
+                    { Name: 'InheritsMembership', Value: false, OldValue: false, Dirty: false },
+                ],
+                writable: true,
+            },
+            ProviderToUse: { value: mockProvider, writable: true },
+            RunViewProviderToUse: { value: mockProvider, writable: true },
+        });
+
+        // ACT: Execute the actual SpaceEntityServer.Save() method
+        const saveOk = await space.Save();
+        assert.equal(saveOk, true);
+
+        // ASSERT: The chat was archived and marked ArchivedOnSpaceClose by SpaceEntityServer.Save()
+        assert.equal(archivedChats.length, 1);
+        assert.equal(archivedChats[0].status, 'Archived');
+        assert.equal(archivedChats[0].archivedOnSpaceClose, true);
+    });
+
+    it('restores archived chats where ArchivedOnSpaceClose was 1 when space reopens', async () => {
+        const restoredChats: Array<{ id: string; status: string; archivedOnSpaceClose: boolean }> = [];
+
+        const mockSpaceChat: MockSpaceChatEntity = {
+            ID: 'chat-archived-1',
+            Status: 'Archived',
+            ArchivedOnSpaceClose: true,
+            async Load(id: string) {
+                return id === 'chat-archived-1';
+            },
+            async Save() {
+                restoredChats.push({
+                    id: this.ID,
+                    status: this.Status,
+                    archivedOnSpaceClose: this.ArchivedOnSpaceClose,
+                });
+                return true;
+            },
+            LatestResult: { CompleteMessage: '' },
+        };
+
+        const spaceId = 'space-reopen-test-1';
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        const prevClosedAt = new Date();
+
+        const mockProvider = {
+            EntityByName() { return { ID: 'mock-id' }; },
+            EntityByID() { return { Name: 'mock' }; },
+            async GetEntityObject(entityName: string) {
+                if (entityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    return mockSpaceChat;
+                }
+                return mockSpaceChat;
+            },
+            async RunView(params: { EntityName: string; ExtraFilter: string }) {
+                if (params.EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
+                    if (params.ExtraFilter.includes('ArchivedOnSpaceClose = 1')) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'chat-archived-1' }],
+                        };
+                    }
+                }
+                return { Success: true, Results: [] };
+            },
+        };
+
+        Object.defineProperties(space, {
+            ID: { value: spaceId, writable: true },
+            ContextCurrentUser: { value: { ID: 'caller-1', Name: 'Caller' } as UserInfo, writable: true },
+            ClosedAt: { value: null, writable: true },
+            Fields: {
+                value: [
+                    { Name: 'ClosedAt', Value: null, OldValue: prevClosedAt, Dirty: true },
+                    { Name: 'ParentID', Value: null, OldValue: null, Dirty: false },
+                    { Name: 'InheritsMembership', Value: false, OldValue: false, Dirty: false },
+                ],
+                writable: true,
+            },
+            ProviderToUse: { value: mockProvider, writable: true },
+            RunViewProviderToUse: { value: mockProvider, writable: true },
+        });
+
+        // ACT: Execute the actual SpaceEntityServer.Save() method
+        const saveOk = await space.Save();
+        assert.equal(saveOk, true);
+
+        // ASSERT: The chat was restored to Active and ArchivedOnSpaceClose reset to false
+        assert.equal(restoredChats.length, 1);
+        assert.equal(restoredChats[0].status, 'Active');
+        assert.equal(restoredChats[0].archivedOnSpaceClose, false);
     });
 });

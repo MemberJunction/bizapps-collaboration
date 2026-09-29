@@ -46,6 +46,7 @@ export { CollabSpaceOverviewComponent, RoomMiniMessage, SubSpaceSummary } from '
 export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from './lib/space-library.component';
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
+export { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './lib/new-conversation-dialog.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
 export { CollabSpaceChatComponent } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';

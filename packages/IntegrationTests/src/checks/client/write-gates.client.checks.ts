@@ -1,4 +1,5 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     CollaborationClient,
     mjBizAppsCollaborationSpaceEntity,
@@ -7,7 +8,6 @@ import {
     mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import {
     SPACE_ENTITY,
     SPACE_MEMBER_ENTITY,
@@ -19,10 +19,10 @@ import {
     TASK_ENTITY,
     TASK_LINK_ENTITY,
     TASK_ACTIVITY_ENTITY,
-    CONVERSATION_DETAIL_ENTITY,
 } from '../../entity-names.js';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
+import { cleanupConversation } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -512,34 +512,38 @@ const checks: NamedCheck[] = [
             }
 
             // 2. Authorized room post over wire: Ada (staff) and Bea (outside participant) posting to Discovery room
-            const createdDetailIds: string[] = [];
+            let wg6ConvId: string | undefined;
+            let wg6ChatId: string | undefined;
             try {
                 const adaClientCtx = await getPersonaClientContext(ctx, 'ada');
                 const adaClient = new CollaborationClient(adaClientCtx.GraphQLProvider);
+                const startRes = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-wg6-general-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(startRes.Success === true && !!startRes.ConversationID, 'Start on-demand General conversation for WG6 over wire');
+                wg6ConvId = startRes.ConversationID!;
+                wg6ChatId = startRes.SpaceChatID;
+
                 const adaPostRes = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: wg6ConvId,
                     Text: 'WG6 client acceptance test message from Ada (staff)',
                 });
                 Assert(adaPostRes.Success, `Authorized room post over wire must succeed: ${adaPostRes.ErrorMessage ?? ''}`);
-                if (adaPostRes.Success && adaPostRes.DetailID) {
-                    createdDetailIds.push(adaPostRes.DetailID);
-                }
 
                 const beaClientCtx = await getPersonaClientContext(ctx, 'bea');
                 const beaClient = new CollaborationClient(beaClientCtx.GraphQLProvider);
                 const beaPostRes = await beaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: wg6ConvId,
                     Text: 'WG6 client acceptance test message from Bea (outside participant)',
                 });
                 Assert(beaPostRes.Success, `Authorized Bea room post over wire must succeed: ${beaPostRes.ErrorMessage ?? ''}`);
-                if (beaPostRes.Success && beaPostRes.DetailID) {
-                    createdDetailIds.push(beaPostRes.DetailID);
-                }
             } finally {
-                for (const detailId of createdDetailIds) {
-                    const cleanupDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                    Assert(await cleanupDetail.Load(detailId), 'Loading posted message detail for cleanup over wire must succeed');
-                    Assert(await cleanupDetail.Delete(), 'Deleting posted message detail cleanup over wire must succeed');
+                if (wg6ConvId || wg6ChatId) {
+                    await cleanupConversation(ctx.Provider, ctx.User, wg6ConvId, wg6ChatId);
                 }
             }
 
@@ -677,14 +681,34 @@ const checks: NamedCheck[] = [
             Assert(ownerRoles.length === 1, 'Owner space role type found');
             const ownerRoleId = ownerRoles[0].ID;
 
-            const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
-            devMember.NewRecord();
-            devMember.SpaceID = DISCOVERY_SPACE_ID;
-            devMember.UserID = devCtx.User.ID;
-            devMember.SpaceRoleTypeID = ownerRoleId;
-            devMember.Band = 'Team';
-            devMember.Status = 'Active';
-            Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery over wire must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+            const existingDevMembers = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_MEMBER_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID = '${devCtx.User.ID}'`,
+                ['ID'],
+            );
+            let devMemberId: string | null = null;
+            let devMemberCreated = false;
+            if (existingDevMembers.length > 0) {
+                devMemberId = existingDevMembers[0].ID;
+                const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+                Assert(await devMember.Load(devMemberId), 'Load existing Dev member on Discovery over wire');
+                devMember.SpaceRoleTypeID = ownerRoleId;
+                devMember.Band = 'Team';
+                devMember.Status = 'Active';
+                Assert(await devMember.Save(), 'Update existing Dev member as owner over wire');
+            } else {
+                const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+                devMember.NewRecord();
+                devMember.SpaceID = DISCOVERY_SPACE_ID;
+                devMember.UserID = devCtx.User.ID;
+                devMember.SpaceRoleTypeID = ownerRoleId;
+                devMember.Band = 'Team';
+                devMember.Status = 'Active';
+                Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery over wire must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+                devMemberId = devMember.ID;
+                devMemberCreated = true;
+            }
 
             try {
                 const devDiscovery = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
@@ -702,9 +726,12 @@ const checks: NamedCheck[] = [
                     Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
                 }
             } finally {
-                const cleanupDevMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
-                Assert(await cleanupDevMember.Load(devMember.ID), 'Loading Dev space member over wire for cleanup must succeed');
-                Assert(await cleanupDevMember.Delete(), 'Deleting Dev space member over wire cleanup must succeed');
+                if (devMemberCreated && devMemberId) {
+                    const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                    if (await cleanupDevMember.Load(devMemberId)) {
+                        await cleanupDevMember.Delete();
+                    }
+                }
             }
         },
     },

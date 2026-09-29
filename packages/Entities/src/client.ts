@@ -45,16 +45,61 @@ export interface CreateSpaceTaskPayload {
 export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
-    ExecuteAgent?: boolean;
     ConversationID?: string;
 }
 
 export interface PostSpaceMessageGraphQLPayload {
     Success: boolean;
     DetailID?: string;
-    AssistantDetailID?: string;
-    AssistantError?: string;
     ErrorMessage?: string;
+}
+
+export interface ExecuteSpaceChatTurnGraphQLInput {
+    SpaceID: string;
+    ConversationID: string;
+    UserMessageID: string;
+    AgentID?: string;
+}
+
+export interface ExecuteSpaceChatTurnGraphQLPayload {
+    Success: boolean;
+    ReplyDetailIDs?: string[];
+    AgentRunID?: string;
+    QuotedCount?: number;
+    AllowedItemNames?: string[];
+    ErrorMessage?: string;
+}
+
+export interface CreateSpaceConversationGraphQLInput {
+    SpaceID: string;
+    Name: string;
+    Kind?: 'General' | 'Topic' | 'Private';
+}
+
+export interface CreateSpaceConversationGraphQLPayload {
+    Success: boolean;
+    ConversationID?: string;
+    SpaceChatID?: string;
+    Name?: string;
+    Kind?: string;
+    ErrorMessage?: string;
+}
+
+export interface SpaceChatHostRulesGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    AgentReplyMode: 'Always' | 'MentionOnly';
+    AllowedAgentIDs: string[];
+    DefaultAgentID?: string;
+    DefaultAgentName?: string;
+    AgentHistoryFrom?: string;
+    CanStartConversation: boolean;
+    AllowedConversationKinds: string[];
+    MentionPeople: {
+        ID: string;
+        Name: string;
+        Email?: string;
+    }[];
 }
 
 export interface OpenSpaceFilePayload {
@@ -65,6 +110,40 @@ export interface OpenSpaceFilePayload {
     Mode?: string;
     ErrorMessage?: string;
 }
+
+const CREATE_SPACE_CONVERSATION_MUTATION = `
+mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
+    CreateSpaceConversation(input: $input) {
+        Success
+        ConversationID
+        SpaceChatID
+        Name
+        Kind
+        ErrorMessage
+    }
+}
+`;
+
+const GET_SPACE_CHAT_HOST_RULES_QUERY = `
+query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
+    GetSpaceChatHostRules(spaceId: $spaceId, conversationId: $conversationId) {
+        Success
+        ErrorMessage
+        AgentReplyMode
+        AllowedAgentIDs
+        DefaultAgentID
+        DefaultAgentName
+        AgentHistoryFrom
+        CanStartConversation
+        AllowedConversationKinds
+        MentionPeople {
+            ID
+            Name
+            Email
+        }
+    }
+}
+`;
 
 const MINT_SPACE_LINK_MUTATION = `
 mutation MintSpaceLink($input: MintSpaceLinkInput!) {
@@ -103,8 +182,19 @@ mutation PostSpaceMessage($input: PostSpaceMessageInput!) {
     PostSpaceMessage(input: $input) {
         Success
         DetailID
-        AssistantDetailID
-        AssistantError
+        ErrorMessage
+    }
+}
+`;
+
+const EXECUTE_SPACE_CHAT_TURN_MUTATION = `
+mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
+    ExecuteSpaceChatTurn(input: $input) {
+        Success
+        ReplyDetailIDs
+        AgentRunID
+        QuotedCount
+        AllowedItemNames
         ErrorMessage
     }
 }
@@ -166,8 +256,30 @@ export class CollaborationClient {
         return (res?.PostSpaceMessage as PostSpaceMessageGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
+    async ExecuteSpaceChatTurn(input: ExecuteSpaceChatTurnGraphQLInput): Promise<ExecuteSpaceChatTurnGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(EXECUTE_SPACE_CHAT_TURN_MUTATION, { input });
+        return (res?.ExecuteSpaceChatTurn as ExecuteSpaceChatTurnGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async CreateSpaceConversation(input: CreateSpaceConversationGraphQLInput): Promise<CreateSpaceConversationGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_CONVERSATION_MUTATION, { input });
+        return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
     async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
         const res = await this.activeExecutor.ExecuteGQL(OPEN_SPACE_FILE_MUTATION, { itemId });
         return (res?.OpenSpaceFile as OpenSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_CHAT_HOST_RULES_QUERY, { spaceId, conversationId });
+        return (res?.GetSpaceChatHostRules as SpaceChatHostRulesGraphQLPayload) ?? {
+            Success: false,
+            ErrorMessage: 'No payload returned',
+            AgentReplyMode: 'MentionOnly',
+            MentionPeople: [],
+            CanStartConversation: false,
+            AllowedConversationKinds: [],
+        };
     }
 }

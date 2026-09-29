@@ -185,6 +185,8 @@ export interface LibrarySmartView {
           [ShareButtonLabel]="PreviewShareButtonLabel"
           [RecentUses]="PreviewRecentUses"
           [FileId]="SelectedRow?.fileId || ''"
+          [IsOpeningFile]="IsOpeningFile"
+          [OpeningLabel]="OpeningLabel"
           (CloseRequested)="onCloseDrawer()"
           (ShareRequested)="onShareFromPreview()"
           (OpenFileRequested)="onOpenFile($event)"
@@ -485,6 +487,8 @@ export class CollabSpaceLibraryComponent {
   @Input() public PreviewShareButtonLabel = '';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
   @Input() public TeamBandLegend = '';
+  @Input() public IsOpeningFile = false;
+  @Input() public OpeningLabel = 'Opening...';
 
   @Output() public FolderSelectRequested = new EventEmitter<string>();
   @Output() public BandFilterChangeRequested = new EventEmitter<'All' | 'Shared' | 'Team'>();

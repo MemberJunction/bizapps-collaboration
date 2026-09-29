@@ -5,6 +5,7 @@ import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaborat
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
+import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
@@ -168,6 +169,32 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     timestamp: new Date(),
                     data: { memberId: this.ID, userId: this.UserID, personId: this.PersonID },
                 });
+            }
+
+            try {
+                const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.SpaceID);
+                if (!syncRes.ok) {
+                    LogError(`Room edit grants sync failed on member change for space ${this.SpaceID}: ${syncRes.message ?? ''}`);
+                }
+            } catch (syncErr) {
+                LogError(`Room edit grants sync failed on member change for space ${this.SpaceID}: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
+            }
+        }
+        return ok;
+    }
+
+    public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        const spaceId = this.SpaceID;
+        const provider = this.ProviderToUse;
+        const ok = await super.Delete(options);
+        if (ok && spaceId) {
+            try {
+                const syncRes = await syncRoomEditGrantsForSpace(provider, spaceId);
+                if (!syncRes.ok) {
+                    LogError(`Room edit grants sync failed on member delete for space ${spaceId}: ${syncRes.message ?? ''}`);
+                }
+            } catch (syncErr) {
+                LogError(`Room edit grants sync failed on member delete for space ${spaceId}: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
             }
         }
         return ok;

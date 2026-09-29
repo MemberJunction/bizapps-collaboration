@@ -22,6 +22,8 @@ import { CollabSpaceWorkComponent } from './space-work.component.ts';
 import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
+import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
+import { SimpleChange } from '@angular/core';
 import {
   FindingModel,
   LibraryRowModel,
@@ -295,6 +297,42 @@ describe('CollabSpaceRailComponent', () => {
     // Descendants are visible again
     expect(comp.visibleSpaces.map(s => s.id)).toEqual(['northwind', 'discovery', 'fieldnotes', 'delivery', 'closed', 'committee']);
   });
+
+  it('toggles collapsed rail state and emits NewConversationRequested', () => {
+    const comp = new CollabSpaceRailComponent();
+    expect(comp.isCollapsed).toBe(false);
+    comp.toggleCollapse();
+    expect(comp.isCollapsed).toBe(true);
+    comp.toggleCollapse();
+    expect(comp.isCollapsed).toBe(false);
+
+    let newConvoEmitted = false;
+    comp.NewConversationRequested.subscribe(() => {
+      newConvoEmitted = true;
+    });
+    comp.onNewConversation();
+    expect(newConvoEmitted).toBe(true);
+  });
+
+  it('binds conversations with unread counts and bands', () => {
+    const comp = new CollabSpaceRailComponent();
+    comp.Conversations = [
+      { id: 'c1', name: 'General', kind: 'General', band: 'Shared', unreadCount: 3 },
+      { id: 'c2', name: 'Internal Sync', kind: 'Private', band: 'Team', unreadCount: 0 },
+    ];
+    comp.ActiveConversationId = 'c1';
+
+    let selectedConv = '';
+    comp.ConversationSelectRequested.subscribe(id => {
+      selectedConv = id;
+    });
+
+    comp.onConversationClick('c2');
+    expect(selectedConv).toBe('c2');
+    expect(comp.Conversations[0].unreadCount).toBe(3);
+    expect(comp.Conversations[0].band).toBe('Shared');
+    expect(comp.Conversations[1].band).toBe('Team');
+  });
 });
 
 describe('CollabFileIconComponent', () => {
@@ -374,7 +412,7 @@ describe('CollabItemRowComponent', () => {
 });
 
 describe('CollabAskBoxComponent', () => {
-  it('emits AskRequested when query is provided and clears query', () => {
+  it('emits AskRequested when query is provided and preserves query until clear()', () => {
     const comp = new CollabAskBoxComponent();
     let queryResult = '';
     comp.AskRequested.subscribe(q => {
@@ -384,6 +422,8 @@ describe('CollabAskBoxComponent', () => {
     comp.Query = 'What is the readout schedule?';
     comp.onSend();
     expect(queryResult).toBe('What is the readout schedule?');
+    expect(comp.Query).toBe('What is the readout schedule?');
+    comp.clear();
     expect(comp.Query).toBe('');
   });
 
@@ -452,6 +492,32 @@ describe('CollabItemPreviewComponent', () => {
       { text: 'Meridian team', isBold: true },
       { text: ' for review', isBold: false },
     ]);
+  });
+
+  it('emits OpenFileRequested with FileId when clicked and not opening', () => {
+    const comp = new CollabItemPreviewComponent();
+    comp.FileId = 'file-abc-123';
+    comp.IsOpeningFile = false;
+    let emitted: string | null = null;
+    comp.OpenFileRequested.subscribe(id => {
+      emitted = id;
+    });
+
+    comp.onOpenFile();
+    expect(emitted).toBe('file-abc-123');
+  });
+
+  it('does NOT emit OpenFileRequested when IsOpeningFile is true', () => {
+    const comp = new CollabItemPreviewComponent();
+    comp.FileId = 'file-abc-123';
+    comp.IsOpeningFile = true;
+    let emitted: string | null = null;
+    comp.OpenFileRequested.subscribe(id => {
+      emitted = id;
+    });
+
+    comp.onOpenFile();
+    expect(emitted).toBeNull();
   });
 });
 
@@ -768,6 +834,120 @@ describe('CollabSpaceChatComponent', () => {
     const comp = new CollabSpaceChatComponent();
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(false);
+  });
+
+  it('handles read-only and closed space states and event emissions', () => {
+    const comp = new CollabSpaceChatComponent();
+    expect(comp.IsReadOnly).toBe(false);
+    comp.IsReadOnly = true;
+    expect(comp.IsReadOnly).toBe(true);
+
+    let newConvoEmitted = false;
+    comp.NewConversationRequested.subscribe(() => {
+      newConvoEmitted = true;
+    });
+    comp.onNewConversation();
+    expect(newConvoEmitted).toBe(true);
+
+    let draftConsumed = false;
+    comp.ComposerDraft = 'Draft text';
+    comp.ComposerDraftConsumed.subscribe(() => {
+      draftConsumed = true;
+    });
+    comp.onComposerDraftConsumed();
+    expect(comp.ComposerDraft).toBeNull();
+    expect(draftConsumed).toBe(true);
+
+    let pendingConsumed = false;
+    comp.PendingMessage = 'Hello world';
+    comp.PendingMessageConsumed.subscribe(() => {
+      pendingConsumed = true;
+    });
+    comp.onPendingMessageConsumed();
+    expect(comp.PendingMessage).toBeNull();
+    expect(pendingConsumed).toBe(true);
+  });
+});
+
+describe('CollabNewConversationDialogComponent', () => {
+  it('initializes with default values and trims input names', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    expect(comp.name).toBe('');
+    expect(comp.kind).toBe('General');
+    expect(comp.IsSubmitting).toBe(false);
+    expect(comp.AllowedKinds).toEqual(['General', 'Topic']);
+    expect(comp.canShowPrivate).toBe(false);
+
+    comp.name = '   Weekly Sync   ';
+    expect(comp.trimmedName).toBe('Weekly Sync');
+  });
+
+  it('allows Private kind only when explicitly permitted in AllowedKinds', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.AllowedKinds = ['General', 'Topic', 'Private'];
+    expect(comp.canShowPrivate).toBe(true);
+  });
+
+  it('emits SubmitRequested with cleaned name and selected kind', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.name = '  Sprint Planning  ';
+    comp.kind = 'Topic';
+
+    let submitted: NewConversationSubmitPayload | null = null;
+    comp.SubmitRequested.subscribe(payload => {
+      submitted = payload;
+    });
+
+    comp.onSubmit();
+    expect(submitted).toEqual({
+      name: 'Sprint Planning',
+      kind: 'Topic',
+    });
+  });
+
+  it('does not emit SubmitRequested when name is empty or IsSubmitting is true', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    let emitted = false;
+    comp.SubmitRequested.subscribe(() => {
+      emitted = true;
+    });
+
+    comp.name = '   ';
+    comp.onSubmit();
+    expect(emitted).toBe(false);
+
+    comp.name = 'Valid Name';
+    comp.IsSubmitting = true;
+    comp.onSubmit();
+    expect(emitted).toBe(false);
+  });
+
+  it('emits CancelRequested on cancel and escape only when not submitting', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    let cancelCount = 0;
+    comp.CancelRequested.subscribe(() => {
+      cancelCount++;
+    });
+
+    comp.onCancel();
+    expect(cancelCount).toBe(1);
+
+    comp.onEscape();
+    expect(cancelCount).toBe(2);
+
+    comp.IsSubmitting = true;
+    comp.onCancel();
+    comp.onEscape();
+    expect(cancelCount).toBe(2);
+  });
+
+  it('handles ngOnChanges when IsSubmitting ends', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.IsSubmitting = false;
+    comp.ngOnChanges({
+      IsSubmitting: new SimpleChange(true, false, false),
+    });
+    expect(comp.IsSubmitting).toBe(false);
   });
 });
 

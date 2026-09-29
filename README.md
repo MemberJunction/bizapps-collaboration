@@ -6,189 +6,254 @@
   </picture>
 </p>
 
-<h1 align="center">BizApps Collaboration</h1>
+<h1 align="center">Collaboration</h1>
 
 <p align="center">
-  Spaces for client, committee and cohort work, as a <a href="https://github.com/MemberJunction/MJ">MemberJunction</a> Open App.
+  <strong>Spaces where your people, your partners, your data and your AI work inside one boundary.</strong>
 </p>
 
 <p align="center">
-  <a href="#what-collaboration-is">What it is</a> &middot;
-  <a href="#packages">Packages</a> &middot;
-  <a href="#installing-it-on-a-host">Installing</a> &middot;
-  <a href="#development">Development</a> &middot;
-  <a href="#migrations-metadata-and-codegen">Migrations and metadata</a> &middot;
-  <a href="#testing">Testing</a> &middot;
-  <a href="#documents">Documents</a> &middot;
-  <a href="#status">Status</a>
+  A free <a href="https://github.com/MemberJunction/MJ">MemberJunction</a> Open App for client portals, boards and committees,<br>
+  chapters and cohorts, sponsors and outside reviewers.
 </p>
+
+<p align="center">
+  <a href="https://github.com/MemberJunction/bizapps-collaboration/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MemberJunction/bizapps-collaboration/actions/workflows/ci.yml/badge.svg?branch=next"></a>
+  <img alt="MemberJunction Open App" src="https://img.shields.io/badge/MemberJunction-Open%20App-264FAF">
+  <img alt="Price: free" src="https://img.shields.io/badge/price-free-2e7d32">
+  <img alt="Status: pre-release" src="https://img.shields.io/badge/status-pre--release-f57c00">
+</p>
+
+<p align="center">
+  <a href="#why-collaboration">Why</a> &middot;
+  <a href="#one-boundary">One boundary</a> &middot;
+  <a href="#built-for">Built for</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#how-it-works">How it works</a> &middot;
+  <a href="#get-started">Get started</a> &middot;
+  <a href="#extend-it">Extend it</a> &middot;
+  <a href="#roadmap">Roadmap</a> &middot;
+  <a href="#documentation">Docs</a>
+</p>
+
+<!-- Screenshots: add real Explorer captures from docs/screenshots/pr8/ once PR #8's walkthrough lands. -->
 
 ---
 
-Collaboration is a free MemberJunction Open App. Its manifest is [`mj-app.json`](mj-app.json): the app `mj-bizapps-collaboration`, version 0.1.0, schema `__mj_BizAppsCollaboration`. Version 0.1 hasn't been released yet.
+## Why Collaboration
 
-## What Collaboration is
+Every organization works with people it doesn't employ: clients, board members, volunteers, chapter leaders, sponsors, reviewers. The tools for that work are rented one project at a time. Board portals charge per seat and sell AI as an extra. Client portals keep your files and your chat in someone else's cloud, and forget everything when the project ends. And none of them has an AI assistant that's bounded by the same thing that bounds who can see what.
 
-**A space** is a bounded group of people, some of them from outside the firm, working on a bounded set of material. A client engagement, an association committee and a learning cohort are all spaces. What differs between them is a **space type**, which is a metadata row, not code.
+**Collaboration puts that work inside your own MemberJunction instance.** A space is a bounded group of people, some of them from outside your organization, working on a bounded set of material. It holds the library, the tasks, the conversations, and the assistant, and it decides, in one place, who may read each of them. It runs on your database, next to the rest of your data, and it costs nothing: no tiers, no per-seat price, no separate price for the agent.
 
-**Spaces form a tree.** A root lasts as long as the relationship, such as a client. Sub-spaces hold the work inside it: engagements, workstreams, committees, cohorts. Closing a sub-space sets `ClosedAt`. The root stays open.
+## One boundary
 
-**Seats.** A seat (`SpaceMember`) puts one MJ user on one space with one role (`SpaceRoleType`). Staff and outside people sit on the same roster. The engine reads the role's flags, never its name:
-- `CanInvite` and `MaxGrantableLevel`: who a member may invite, and at what level;
-- `CanPromoteBand` and `CanSeeTeamBand`: see the bands below;
-- `CanContribute`: may add and move material;
-- `IsOwnerRole`: may change the space.
+Most products bolt permissions onto documents, chat onto permissions, and an AI onto chat. Collaboration starts from one object, the **space**, and makes everything else answer to it.
 
-**Bands.** Every item in a space is on one of two bands:
-- **Team:** the firm's working material. Only a role with `CanSeeTeamBand` sees it.
-- **Shared:** everyone who reaches the space sees it.
+```mermaid
+flowchart TB
+  subgraph S["A space: one boundary"]
+    direction TB
+    P["People<br/>staff and outsiders, on one roster"]
+    M["Material<br/>files, tasks, notes"]
+    C["Conversations<br/>shared and private"]
+    A["The assistant<br/>answers only from what its audience may read"]
+    D["Your data<br/>approved views, dashboards and queries"]
+  end
+  P --> M
+  P --> C
+  C --> A
+  M --> A
+  D --> A
+  P --> D
+```
 
-Moving an item from Team to Shared is a promotion. It needs `CanPromoteBand`, and the item records who promoted it and when.
+- **The people** are one roster: your staff and your outside participants, each with a role whose flags, never its name, decide what they can do.
+- **The material** is on one of two **bands**: *Team*, your working material, and *Shared*, what your outside participants see. Moving something to Shared is an audited act.
+- **The conversations** belong to the space. People start them when they need them: open to everyone in the space, internal to the team, or a chat for a few.
+- **The assistant** answers from what the space holds, bounded by the **audience of the answer**. In a private chat it uses what you can read. In a shared conversation it uses only what *everyone in it* can read, so it can't repeat your team's notes to a client who's in the conversation.
+- **Your data** comes in through the space too: a chapter's members, a sponsor's booth leads, an institution's accreditation status, shown through views and dashboards your organization approved.
 
-**Inherited or sealed sub-spaces.** A seat reaches its space and every sub-space below it that inherits membership (`InheritsMembership = 1`). A sealed sub-space (`InheritsMembership = 0`) is reached only by its own seats. The same walk runs in three places: `membershipReaches` in `packages/Core`, the server's write gates, and the SQL function `fnCollaborationAccess`.
+Who reads what is decided **in the database**, by row-level security, never by a screen hiding a button. An outside participant gets one narrow role, and the same rules hold in the browser, over the API, and for the agent.
 
-**The library.** A space item (`SpaceItem`) points at any MJ record through `EntityID` and `RecordID`, such as a file, a task or a conversation. Each record is in at most one space. Files are uploaded through the `UploadSpaceFile` operation into MJ Storage. Opening a file records an item use. Sharing an item notifies the people who reach the space.
+## Built for
 
-**Tasks** are bizapps-tasks tasks. A root task is filed in a space as an item, and its subtasks belong to the same space.
+| | |
+|---|---|
+| 🤝 **Client portals** | A professional-services firm runs every client relationship as a space, with a sub-space per engagement. The portal outlives the project, and the firm's own knowledge can inform every answer without one client's material reaching another. |
+| 🏛️ **Boards and committees** | Seat outside directors who aren't staff. A compensation committee under the board stays sealed from directors who don't sit on it, while a director who sits on both works across both. |
+| 🎓 **Cohorts and communities** | Learning cohorts, mastermind groups, task forces and volunteer crews, with join requests and a directory. Each kind is a space type, a row of metadata, not a new feature. |
+| 🗺️ **Federations and chapters** | A national's chapters each get a room that shows the chapter's own members, renewals and events through the national's approved definitions, next to the national's playbooks. The chapter doesn't have to run on the national's system. |
+| 🏢 **Sponsors, exhibitors and accreditation** | Relationships you deliver to another organization over time: booth leads, ad performance and renewal history for a sponsor; submission status and reviewer findings for an institution. The room outlives staff turnover on either side. |
+| 🔍 **Reviews by outsiders** | Standards development, peer review, certification item writing and award juries: outside experts see exactly the material they review, and nothing else. |
 
-**The room.** Each space has one MJ conversation, linked to it by `LinkedEntityID` and `LinkedRecordID` and owned by the system user. Members post through the `PostSpaceMessage` operation. The `Space Participant` role can read the room but can't create conversation rows itself.
+## Features
 
-**The agent.** `metadata/` defines one agent for spaces, with its prompt, skills and search scope. The retrieval module that bounds what it may quote is in `packages/CoreEntitiesServer`. No model runs yet: the room's assistant reply is a fixed sentence (see [Status](#status)).
+Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code today, 🚧 is in progress, and 🗺️ is planned. The [roadmap](#roadmap) says when.
 
-**Who reads what** is decided in SQL, by row-level security filters. Every read grant the `Space Participant` role holds has a filter, and MJ's `UI` role reads Collaboration's own entities through the same filters. Writes are checked by server subclasses of the entities. The rules are in [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md).
+### Spaces and people
 
-## Packages
+| | Feature |
+|---|---|
+| ✅ | **Spaces in a tree.** A root lasts as long as the relationship; sub-spaces hold the engagements, committees, cohorts and workstreams inside it. Closing a sub-space ends that piece of work, and access after close is a setting. |
+| ✅ | **Sealed or inheriting sub-spaces.** A sub-space is sealed unless its creator asks for its parent's members. A person reads the union of what their seats reach, and a seat never reaches into a sealed sub-space from above. |
+| ✅ | **One roster for staff and outsiders,** with roles defined by flags: who may invite, promote, see the Team band, or contribute, up to a ceiling a member can't exceed. |
+| ✅ | **Invitations by email link,** through MemberJunction's magic links. Outsiders get the narrow Space Participant role, never a staff role. |
+| ✅ | **Seven generic space types:** Workspace, Team, Project, Working Group, Event, Community and Cohort. Every one is metadata; add your own without code. |
 
-There are nine packages under `packages/`, plus the Playwright project in `e2e/`. Each package declares its layer in `mjUILayer`, and MJ's `ui-layers` check enforces the layers ([`.mj-standards.json`](.mj-standards.json)).
+### Library and work
 
-| Folder | npm name | Layer | In `mj-app.json` | What it holds |
-|---|---|---|---|---|
-| [`Core`](packages/Core/README.md) | `@mj-biz-apps/collaboration-core` | `runtime` (L0) | shared, library | The rules as pure functions, the view models and the extension contracts |
-| [`Entities`](packages/Entities/README.md) | `@mj-biz-apps/collaboration-entities` | `runtime` (L0) | shared, library | The generated entity classes, the typed GraphQL client and the permission domain |
-| [`Actions`](packages/Actions/README.md) | `@mj-biz-apps/collaboration-actions` | `runtime` | shared, library | CodeGen's action subclasses (none yet) |
-| [`CoreEntitiesServer`](packages/CoreEntitiesServer/README.md) | `@mj-biz-apps/collaboration-core-entities-server` | `runtime` | server, library | The write gates and the server operations |
-| [`Server`](packages/Server/README.md) | `@mj-biz-apps/collaboration-server` | `runtime` | server, bootstrap | `LoadBizAppsCollaborationServer` and the GraphQL resolvers |
-| [`AngularWidgets`](packages/AngularWidgets/README.md) | `@mj-biz-apps/collaboration-ng-widgets` | `widgets` (L1, L2) | client, library | Angular widgets that work in any Angular app |
-| [`Angular`](packages/Angular/README.md) | `@mj-biz-apps/collaboration-ng` | `surface` (L3) | client, bootstrap | `LoadBizAppsCollaborationClient`, the Explorer resource and the generated forms |
-| [`UXGallery`](packages/UXGallery/README.md) | `@mj-biz-apps/collaboration-ux-gallery` | `shell` | not listed (private) | An Angular app that draws the design frames from fixtures, for the visual tests |
-| [`IntegrationTests`](packages/IntegrationTests/README.md) | `@mj-biz-apps/collaboration-integration-tests` | `runtime` | not listed (private) | The integration check bundles and the sample world |
+| | Feature |
+|---|---|
+| ✅ | **A library per space,** on MemberJunction Storage: upload, open, promote from Team to Shared with a recorded stamp, share notices, and a record of who used what. |
+| ✅ | **Tasks filed in spaces,** on [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), in lists, boards and timelines. |
+| 🚧 | **Where files are stored is a setting,** per app, type, space or sub-space, so each relationship's files can live in its own storage account. |
+| 🗺️ | **Notes:** quick notes in a space, Shared, Team or private to their author, that the assistant can use in the right audience. |
+| 🗺️ | **Pins and stars:** pin the files, notes, views and dashboards you use to the top of a space, see your pins across spaces on Home, and star the spaces you live in. |
+| 🗺️ | **Meetings and agendas,** from BizApps Tasks, with Outlook and Google Calendar sync, agendas built in the app, and notes and proposed tasks drafted from the transcript. |
 
-**The layers** follow MJ's UI layering guide:
-- **L0** is TypeScript with no Angular.
-- **L1 and L2** are widgets and composites. They never import `@angular/router`, `@memberjunction/ng-shared` or an Explorer package, and never navigate.
-- **L3** is the only layer that touches Explorer.
+### Conversations and the assistant
 
-The UI's own plan is [`docs/ux/IMPLEMENTATION_PLAN.md`](docs/ux/IMPLEMENTATION_PLAN.md).
+| | Feature |
+|---|---|
+| 🚧 | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
+| 🚧 | **Chats inside a space,** with the people you choose. Whoever adds someone decides how much history they see. |
+| 🚧 | **An assistant bounded by its audience.** In a private chat it uses your reach, narrowed by a scope control; in a shared conversation, only what every participant can read, band by band. |
+| 🚧 | **Per-space agents,** skills and knowledge sources, set down the tree by admins. |
+| 🗺️ | **Citations and sealing.** Every answer records its sources. Someone added to a conversation later sees an answer built on material they can't read as sealed, with a way to request access. Copying an answer across an audience boundary warns. |
+| 🗺️ | **The same bounded assistant** over MCP, Slack and Teams, with a real identity on every channel or a refusal. |
+| 🗺️ | **Digests and proposed posts.** Members subscribe to what changed; anything unsolicited an agent drafts for outsiders waits for a named person to approve it. |
 
-## Installing it on a host
+### Your data, bounded by the space
 
-**Requirements,** from `mj-app.json`:
-- MemberJunction `>=6.1.2 <7.0.0`;
-- bizapps-common `>=5.46.0 <6.0.0` and bizapps-tasks `>=1.5.0 <2.0.0`;
-- SQL Server. The access functions and the row-level security filters are T-SQL. PostgreSQL isn't supported yet, and there is no `migrations-pg/` folder.
+| | Feature |
+|---|---|
+| 🗺️ | **Anchors.** A space points at the records it's about, such as a chapter, a sponsor's company, or a deal, each with a role. |
+| 🗺️ | **Grants.** A space type, a space or a sub-space offers agents, actions, queries, views, dashboards, interactive components and knowledge sources, each filled in from the space: a *Members* view that shows only this chapter's members. |
+| 🗺️ | **Bound values the AI can't change.** A chapter ID bound from the space never appears in the agent's tools, and a value the model or the browser tries to supply is refused and logged. |
+| 🗺️ | **Data reach, in SQL.** A space type declares which of your entities its outsiders may read and by what path; the row-level security filters are generated, reviewed and shipped as metadata. |
+| 🗺️ | **The Canon.** Anything shown to outsiders through a query, view or dashboard is approved and tested first, so a chapter leader who asks how many members they have gets your organization's definition of a member. |
 
-**What a host gets:** the migrations under `migrations/`, and the npm packages the manifest lists. MJAPI loads `LoadBizAppsCollaborationServer`, and MJExplorer loads `LoadBizAppsCollaborationClient`. The host's own MJAPI and MJExplorer run the app; this repo ships no API or Explorer app of its own.
+### Security and administration
 
-**Email invitations** need MJ's magic links. `MintSpaceLink` reads the host's `magicLink` settings:
-- `enabled` must be true, and `Space Participant` must be in `grantableRoleNames`;
-- leave `restrictedRoleName` as the host's own default, so other apps are unchanged;
-- `communicationProvider` and `fromAddress` let it email the sign-in link;
-- without an email channel, the raw link is returned only to an Owner-type user or to a role in `inviteIssuerRoleNames`. A space owner who is neither gets the seat and no link;
-- `defaultExpiresInHours` sets the link's lifetime (72 when unset).
+| | Feature |
+|---|---|
+| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name and email. |
+| ✅ | **Every write checked on the server,** in the entity classes, so the API, MCP and the screens obey the same rules. |
+| ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space, changed only by holders of Collaboration's *Configure Space Types* and *Configure Spaces* authorizations. |
+| 🗺️ | **PostgreSQL,** beside SQL Server. |
 
-**Never give a space participant MJ's `UI` role.** Row-level security fails open for a user with any unfiltered grant on an entity, and `UI` carries many of them.
+### Extensibility
 
-## Development
+| | Feature |
+|---|---|
+| ✅ | **Space types as plug-ins.** A type names server and browser driver classes and, optionally, a table of its own that extends Space through MemberJunction's IsA, so another app adds behavior without Collaboration knowing it exists. |
+| ✅ | **Contributions:** tabs, overview cards, header chips, needs-you items, agenda items, lifecycle subscribers and signal providers any app can add to any type. |
+| ✅ | **Widgets that run anywhere:** the space's components run in any Angular app, such as a learning portal, not only in MemberJunction Explorer. |
+| 🚧 | **Spaces for other apps' records:** one call opens, or finds, the space for a record another app owns, such as a room for a deal. |
 
-This is a pnpm 10 workspace: [`pnpm-workspace.yaml`](pnpm-workspace.yaml) lists `packages/*` and `e2e`. CI uses Node 22.
+## How it works
+
+**A space type is data.** Its vocabulary, bands, join mode, the types allowed under it, its settings and its plug-in classes are all metadata. The engine reads flags, never names.
+
+**Reach.** An active seat reaches its space and every descendant that inherits membership. A sealed sub-space is reached only by its own seats. A person reads the union of what their seats reach, anywhere in the tree. The same walk runs in three places, the rules module, the server's write gates and the database's `fnCollaborationAccess`, so they can't disagree.
+
+**The audience rule.** What the assistant may use depends on who will see its answer, not on where the asker is standing. One person with the assistant: that person's reach, which they can narrow. Two or more people: the intersection of what each of them can read, and nobody can widen it, the asker included. The assistant always runs as the asking user, never as a service account.
+
+**Reads in SQL, writes in the entity classes.** Every read grant the Space Participant role holds carries a row-level security filter, and every write is checked by a server subclass of the entity, so a forged API call meets the same rule as a click.
+
+The full set of rules, each marked built or planned, is in [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md).
+
+## Get started
+
+### Install it on a MemberJunction host
+
+**Requirements** (from [`mj-app.json`](mj-app.json)):
+- MemberJunction `>=6.1.2 <7.0.0`, on SQL Server. PostgreSQL is on the roadmap.
+- [BizApps Common](https://github.com/MemberJunction/bizapps-common) and [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), which the installer brings in.
+
+```bash
+mj app install https://github.com/MemberJunction/bizapps-collaboration
+```
+
+The host gets Collaboration's migrations and its npm packages: MJAPI loads the server package, and MJExplorer loads the client. Collaboration ships no API or Explorer of its own; it runs inside yours.
+
+**Inviting outsiders** uses MemberJunction's magic links, through the host's `magicLink` settings:
+- `enabled` is true, and `Space Participant` is in `grantableRoleNames`;
+- `restrictedRoleName` stays the host's own default, so other apps are unchanged;
+- `communicationProvider` and `fromAddress` let Collaboration email the sign-in link. Without them, the raw link goes only to an `Owner` user or to a role in `inviteIssuerRoleNames`;
+- `defaultExpiresInHours` sets the link's lifetime, 72 hours when unset.
+
+Never give an outside participant MemberJunction's `UI` role: one unfiltered grant exempts a user from every filter on that entity.
+
+### Develop it
+
+This is a pnpm workspace; CI uses Node 22.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run build            # every package under packages/
-pnpm test                 # the unit tests (see Testing)
-pnpm --filter @mj-biz-apps/collaboration-core run build   # one package
+pnpm run build        # every package
+pnpm test             # the unit tests
+pnpm run mj:migrate   # the migrations, into __mj_BizAppsCollaboration
+pnpm run mj:push      # the metadata, while developing
 ```
 
-Add a dependency to the package's own `package.json`, then run `pnpm install` at the root. The published packages declare MJ as peer dependencies with caret ranges, and pin the exact version they build against (6.1.3 today) in `devDependencies`.
+The integration checks run against a real database with the sample world loaded; [the data guide](docs/reviewing-the-data.md) describes its people and spaces and how to load them.
 
-**Database settings** come from the environment, read by [`mj.config.cjs`](mj.config.cjs): `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_TRUST_SERVER_CERTIFICATE` and `MJ_CORE_SCHEMA`. The integration harnesses also read a `.env` at the repo root, then `../MJ/.env`.
+## Extend it
 
-## Migrations, metadata and CodeGen
+Collaboration is a base other apps build on. To add a kind of space:
 
-**Migrations** are in `migrations/`, run by Skyway: one baseline (`B202609222230…Schema.sql`) and fifteen versioned files.
-- A migration carries DDL (tables, columns, views, functions, constraints, extended properties) and the CodeGen output appended below it.
-- Placeholders: `${flyway:defaultSchema}` for this app's schema and `${mjSchema}` for MJ core.
-- Apply them with `pnpm run mj:migrate`, which runs `mj migrate --schema __mj_BizAppsCollaboration`.
+1. **Ship a space type** as metadata, with its vocabulary, bands, settings and allowed children.
+2. **Add behavior,** if it needs any, with a server driver (rules and reactions inside the save's transaction) and a UI driver (its tabs, cards and chips).
+3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`.
+4. **Offer your data** through anchors and grants, bounded by the space.
 
-**Metadata** rows are JSON under `metadata/`:
-- the space types and role types;
-- the `Space Participant` role and its application role, and the application with its nav item;
-- entity permissions for the participant role and for MJ's `UI` role, and the field rules on People;
-- the row-level security filters;
-- the schema info, the resource type, the permission domain and the notification type;
-- the agent, with its prompt, template, skills, search scope, query and query category.
-- Push them while developing with `pnpm run mj:push` (`mj sync push --dir=metadata`).
-- Don't commit `sync` blocks. `scripts/strip-sync-blocks.mjs` removes them.
-- A migration never writes metadata rows. A feature pull request never writes a `*__Metadata_Sync.sql` either: the build engineer generates one for each release, from a clean database.
+The rules, the hooks and three worked examples (a committee, a deal room, and Collaboration's own private example plug-ins) are in the [extensibility plan](docs/EXTENSIBILITY_PLAN.md). BizApps Committees will be rebuilt this way.
 
-**CodeGen** is configured in `mj.config.cjs`. It generates only `__mj_BizAppsCollaboration` (`includeSchemas`), with entity names prefixed `MJ_BizApps_Collaboration: `. It writes the entity classes, the GraphQL resolvers, the Angular forms, the action subclasses and the schema JSON in `Schema Files/`. Never edit a `generated/` folder by hand.
+## Packages
 
-**Upgrading MJ.** `Space Participant` gets an empty read (`1 = 0`) on the core entities that MJ's startup engines load. That list changes between MJ versions, so regenerate it on every upgrade:
+| Package | Layer | What it holds |
+|---|---|---|
+| [`@mj-biz-apps/collaboration-core`](packages/Core/README.md) | L0 | The rules as pure functions, the view models and the extension contracts |
+| [`@mj-biz-apps/collaboration-entities`](packages/Entities/README.md) | L0 | The entity classes, the typed GraphQL client and the permission domain |
+| [`@mj-biz-apps/collaboration-engine-base`](packages/EngineBase) | L0 | The metadata engine, safe in the browser and on the server |
+| [`@mj-biz-apps/collaboration-actions`](packages/Actions/README.md) | L0 | The app's actions |
+| [`@mj-biz-apps/collaboration-core-entities-server`](packages/CoreEntitiesServer/README.md) | server | The write gates, the drivers and the server operations |
+| [`@mj-biz-apps/collaboration-server`](packages/Server/README.md) | server | The server bootstrap and the GraphQL resolvers |
+| [`@mj-biz-apps/collaboration-ng-widgets`](packages/AngularWidgets/README.md) | L1, L2 | Angular widgets that run in any Angular app |
+| [`@mj-biz-apps/collaboration-ng`](packages/Angular/README.md) | L3 | The Explorer surface and the client bootstrap |
 
-```bash
-node scripts/generate-core-permissions.mjs
-pnpm run mj:push
-```
+The UX gallery, the example plug-ins and the integration checks are private packages in the same workspace. Every package declares its UI layer, and MemberJunction's layer check enforces it.
 
-## Testing
+## Roadmap
 
-**Unit tests:** `pnpm test` runs 191 tests: 89 in Core, 48 in CoreEntitiesServer, 37 in IntegrationTests and 17 in AngularWidgets. Along the way it builds CoreEntitiesServer and IntegrationTests, and typechecks the CoreEntitiesServer test files.
+| When | What |
+|---|---|
+| **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
+| **Now: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area, with agent turns; then anchors, grants, data reach, notes and pins ([its plan](plans/pr8-plan.md)), and the screens, walked end to end |
+| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open #8's closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
 
-**Integration checks** run against a real database with the migrations, the metadata and the sample world loaded. [`docs/reviewing-the-data.md`](docs/reviewing-the-data.md) describes the world and how to load it.
-- **Server harness:** `pnpm run test:integration:server` runs `test-harnesses/integration.mjs`, in process, with the server classes loaded. Eight bundles, 38 checks.
-- **Client harness:** `pnpm run test:integration:client` runs `test-harnesses/integration-client.mjs` over GraphQL, against a running MJAPI that has this app's server package loaded. It signs in as each persona with a user API key, and loads no server package itself. Eight bundles, 39 checks.
-- `pnpm run test:integration` runs both. `scripts/assert-check-count.mjs` fails a run when fewer checks ran than `expected-bundles.ts` declares.
-- `metadata-tests/` holds the `BizApps Collaboration Integration` suite records for `mj test`, and `mj.config.cjs` points `testing.checkModules` at the check package.
+The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
 
-**Persona check:** [`scripts/persona-check.sql`](scripts/persona-check.sql) inserts fixtures for one participant, asserts what that person can see, and rolls back. Run it by hand against a database with the migrations and metadata.
-
-**Visual test:** `pnpm run test:e2e` runs the Playwright spec in `e2e/specs/`. It serves the UX gallery and compares frame 02's chrome with `docs/ux/screens/02-space-overview.png`. The budget is 100 pixels on CI. The full-frame comparison is marked as an expected failure until slice A builds the frame's body.
-
-**Standards and tokens:** `pnpm exec mj standards check` runs MJ's `ui-layers` check. `node scripts/check-mj-tokens.mjs` checks that every `--mj-*` token the packages use exists in MJ's token sheet.
-
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) installs, builds, runs the unit tests, the token check and the standards check, syntax-checks both integration harnesses, runs the visual test, and uploads `e2e/test-results/` as an artifact. It doesn't run the integration checks or the persona check, because it has no database.
-
-## Documents
+## Documentation
 
 | Document | What it covers |
 |---|---|
-| [`plans/plan.md`](plans/plan.md) | The plan: the model, the security doctrine, the roadmap and the open decisions |
-| [`docs/HOW_THE_SYSTEM_WORKS.md`](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share |
-| [`docs/EXTENSIBILITY_PLAN.md`](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |
-| [`docs/ux/README.md`](docs/ux/README.md) | The UX storyboard: fourteen frames and what each shows |
-| [`docs/ux/IMPLEMENTATION_PLAN.md`](docs/ux/IMPLEMENTATION_PLAN.md) | How the UI is built: packages and layers, components, data, visual tests, order of work |
-| [`docs/reviewing-the-data.md`](docs/reviewing-the-data.md) | The sample world's people and spaces |
+| [The plan](plans/plan.md) | What's being built and why: the model, the security doctrine, every decision, the roadmap and the open questions |
+| [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
+| [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
+| [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |
+| [The data guide](docs/reviewing-the-data.md) | The sample world's people and spaces |
 
-## Status
+## Contributing
 
-**Built in this wave:**
-- The seven entities (`SpaceType`, `Space`, `SpaceMember`, `SpaceRoleType`, `SpaceItem`, `ItemUse`, `ShareNotice`) and the access functions `fnCollaborationAccess`, `fnCollaborationTasks` and `fnCollaborationAncestorMembers`.
-- The `Space Participant` role, with a row-level security filter on every entity it reads, field rules on People, and empty reads for the core entities the shell loads.
-- The write gates for spaces, seats, items, item uses, share notices and bizapps-tasks' tasks, comments, decisions and assignments.
-- Invitations by email link, the library (upload, open, promotion, share notices, item uses), tasks filed in spaces, and the room.
-- The agent's metadata and its bounded retrieval module.
-- Every metadata row moved out of the migrations into `metadata/` JSON.
-- The tests: the unit tests, both integration harnesses, the persona check and the visual test.
-- The new UI's first steps: the scaffold, the widgets package, the UX gallery, and frame 02's chrome matching its target on CI.
+Feature work goes to `next`, the integration branch; `main` is the release branch. A migration carries DDL and its CodeGen output only: roles, permissions, filters, space types and other seed rows are JSON under `metadata/`. [`CLAUDE.md`](CLAUDE.md) and each package's README have the conventions.
 
-**Not built yet:**
-- The agent run. The room's reply is a fixed sentence, and no model runs.
-- The space page and its tabs. `CollaborationSectionResource` is an empty page for now; slice A builds frames 02 to 04.
-- The extension points. `BaseSpaceTab`, `BaseSpaceOverviewCard` and the three provider classes in `collaboration-core` exist, but no code loads them yet.
-- PostgreSQL.
+## Built on MemberJunction
 
-What comes next, and in what order, is in [`plans/plan.md`](plans/plan.md).
+Collaboration is a [MemberJunction](https://github.com/MemberJunction/MJ) Open App. It uses MemberJunction's entities and row-level security, its storage, its conversations and agents, its actions, queries, views and dashboards, and BizApps Tasks and Common, rather than rebuilding them. It adds the container and the rules that bind them together.
 
 ## License
 
-Not chosen. Distribution is free; the license is an open decision in the plan. Until it's settled, `mj-app.json` and the published packages say `UNLICENSED`, and the repo has no `LICENSE` file.
+Collaboration is free: no tiers and no per-seat price. Its license is still being chosen; until it is, the packages and `mj-app.json` say `UNLICENSED`, and the repository has no `LICENSE` file.

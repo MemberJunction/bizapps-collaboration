@@ -1,13 +1,15 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationSpaceChatEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { postSpaceMessage, createSpaceTask } from '@mj-biz-apps/collaboration-core-entities-server';
+import { MJConversationDetailEntity, MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
+import { postSpaceMessage, createSpaceTask, createSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import {
     SPACE_ENTITY,
@@ -21,8 +23,12 @@ import {
     TASK_LINK_ENTITY,
     TASK_ACTIVITY_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
+    CONVERSATION_ENTITY,
+    SPACE_CHAT_ENTITY,
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
+
+import { cleanupConversation } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -508,30 +514,34 @@ const checks: NamedCheck[] = [
             }
 
             // 2. Authorized room post: staff member (Ada) and outside participant (Bea) posting to Discovery room
-            const createdDetailIds: string[] = [];
+            let wg6ConvId: string | undefined;
+            let wg6ChatId: string | undefined;
             try {
+                const startRes = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-wg6-general-${Date.now()}`,
+                    Kind: 'General',
+                });
+                Assert(startRes.ok === true && !!startRes.conversationId, 'Start on-demand General conversation for WG6');
+                wg6ConvId = startRes.conversationId!;
+                wg6ChatId = startRes.spaceChatId;
+
                 const adaPostRes = await postSpaceMessage(ctx.Provider, ada, {
                     spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: wg6ConvId,
                     text: 'WG6 acceptance test message from Ada (staff)',
                 });
                 Assert(adaPostRes.ok, `Authorized staff room post must succeed: ${adaPostRes.ok ? '' : adaPostRes.message}`);
-                if (adaPostRes.ok && adaPostRes.detailId) {
-                    createdDetailIds.push(adaPostRes.detailId);
-                }
 
                 const beaPostRes = await postSpaceMessage(ctx.Provider, bea, {
                     spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: wg6ConvId,
                     text: 'WG6 acceptance test message from Bea (outside participant)',
                 });
                 Assert(beaPostRes.ok, `Authorized outside participant room post must succeed: ${beaPostRes.ok ? '' : beaPostRes.message}`);
-                if (beaPostRes.ok && beaPostRes.detailId) {
-                    createdDetailIds.push(beaPostRes.detailId);
-                }
             } finally {
-                for (const detailId of createdDetailIds) {
-                    const cleanupDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                    Assert(await cleanupDetail.Load(detailId), `Loading posted message detail ${detailId} for cleanup must succeed`);
-                    Assert(await cleanupDetail.Delete(), `Deleting posted message detail ${detailId} cleanup must succeed`);
+                if (wg6ConvId || wg6ChatId) {
+                    await cleanupConversation(ctx.Provider, ctx.User, wg6ConvId, wg6ChatId);
                 }
             }
 
@@ -667,14 +677,34 @@ const checks: NamedCheck[] = [
             Assert(ownerRoles.length === 1, 'Owner space role type found');
             const ownerRoleId = ownerRoles[0].ID;
 
-            const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
-            devMember.NewRecord();
-            devMember.SpaceID = DISCOVERY_SPACE_ID;
-            devMember.UserID = dev.ID;
-            devMember.SpaceRoleTypeID = ownerRoleId;
-            devMember.Band = 'Team';
-            devMember.Status = 'Active';
-            Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+            const existingDevMembers = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_MEMBER_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID = '${dev.ID}'`,
+                ['ID'],
+            );
+            let devMemberId: string | null = null;
+            let devMemberCreated = false;
+            if (existingDevMembers.length > 0) {
+                devMemberId = existingDevMembers[0].ID;
+                const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                Assert(await devMember.Load(devMemberId), 'Load existing Dev member on Discovery');
+                devMember.SpaceRoleTypeID = ownerRoleId;
+                devMember.Band = 'Team';
+                devMember.Status = 'Active';
+                Assert(await devMember.Save(), 'Update existing Dev member as owner');
+            } else {
+                const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                devMember.NewRecord();
+                devMember.SpaceID = DISCOVERY_SPACE_ID;
+                devMember.UserID = dev.ID;
+                devMember.SpaceRoleTypeID = ownerRoleId;
+                devMember.Band = 'Team';
+                devMember.Status = 'Active';
+                Assert(await devMember.Save(), `Ada seating Dev as owner on Discovery must succeed: ${devMember.LatestResult?.CompleteMessage ?? ''}`);
+                devMemberId = devMember.ID;
+                devMemberCreated = true;
+            }
 
             try {
                 const devDiscovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
@@ -692,9 +722,12 @@ const checks: NamedCheck[] = [
                     Assert(restoredConfig, `Restoring Discovery Configuration as Dev must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
                 }
             } finally {
-                const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
-                Assert(await cleanupDevMember.Load(devMember.ID), 'Loading Dev space member for cleanup must succeed');
-                Assert(await cleanupDevMember.Delete(), 'Deleting Dev space member cleanup must succeed');
+                if (devMemberCreated && devMemberId) {
+                    const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                    if (await cleanupDevMember.Load(devMemberId)) {
+                        await cleanupDevMember.Delete();
+                    }
+                }
             }
         },
     },

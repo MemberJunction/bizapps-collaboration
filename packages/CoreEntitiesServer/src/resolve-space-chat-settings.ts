@@ -1,0 +1,79 @@
+import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import {
+    type CollaborationSettings,
+    type ResolvedCollaborationSettings,
+    ValidateCollaborationSettings,
+} from '@mj-biz-apps/collaboration-core';
+import { CollaborationEngine } from './CollaborationEngine.js';
+
+export interface ResolvedSpaceChatSettings {
+    resolvedSettings: ResolvedCollaborationSettings;
+    agentReplyMode: 'Always' | 'MentionOnly';
+    historyOnAdd: 'None' | 'All' | 'Since';
+    typeConfig: CollaborationSettings | null;
+}
+
+/**
+ * Unifies space chat settings resolution for host rules query and agent turn (Items 16 & 20).
+ * Resolves Chats settings through the engine's LoadSpaceSettingsChain (parents included)
+ * and validates each space's configuration against the space type.
+ */
+export async function resolveSpaceChatSettings(
+    provider: IMetadataProvider,
+    spaceId: string,
+    contextUser?: UserInfo,
+): Promise<ResolvedSpaceChatSettings> {
+    await CollaborationEngine.Instance.EnsureLoaded(contextUser, provider);
+
+    const spaceChain = await CollaborationEngine.Instance.LoadSpaceSettingsChain(
+        spaceId,
+        provider,
+        contextUser
+    );
+
+    const spaceType = spaceChain.typeId
+        ? CollaborationEngine.Instance.SpaceTypeById(spaceChain.typeId)
+        : undefined;
+
+    let typeConfig: CollaborationSettings | null = null;
+    if (spaceType?.Configuration) {
+        try {
+            typeConfig = typeof spaceType.Configuration === 'string'
+                ? (JSON.parse(spaceType.Configuration) as CollaborationSettings)
+                : (spaceType.Configuration as CollaborationSettings);
+        } catch (err) {
+            LogError(
+                `resolveSpaceChatSettings: Failed to parse type configuration for space type ${spaceChain.typeId}: ${err instanceof Error ? err.message : String(err)}`
+            );
+            typeConfig = null;
+        }
+    }
+
+    const validConfigs: CollaborationSettings[] = [];
+    for (const cfg of spaceChain.configs) {
+        const val = ValidateCollaborationSettings(cfg, 'space', typeConfig ?? undefined);
+        if (val.valid) {
+            validConfigs.push(cfg);
+        } else {
+            LogError(
+                `resolveSpaceChatSettings: Invalid space configuration in chain for space ${spaceId}: ${val.errors.join(', ')}`
+            );
+        }
+    }
+
+    const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
+        validConfigs,
+        spaceChain.typeId
+    );
+
+    const rawReplyMode = resolvedSettings.Chats?.AgentReplyMode ?? 'MentionOrOneToOne';
+    const agentReplyMode: 'Always' | 'MentionOnly' = rawReplyMode === 'Always' ? 'Always' : 'MentionOnly';
+    const historyOnAdd: 'None' | 'All' | 'Since' = resolvedSettings.Chats?.HistoryOnAdd ?? 'None';
+
+    return {
+        resolvedSettings,
+        agentReplyMode,
+        historyOnAdd,
+        typeConfig,
+    };
+}

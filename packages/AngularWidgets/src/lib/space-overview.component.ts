@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import type { ItemCardModel, ItemRowModel, NeedsYouItemModel } from './types';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabTypeTileComponent } from './type-tile.component';
@@ -130,17 +130,21 @@ export interface SubSpaceSummary {
 
         <div class="col">
           <!-- Ask Box -->
-          <mjc-ask-box
-            [Title]="'Ask about ' + SpaceName"
-            [Suggestions]="AskSuggestions"
-            (AskRequested)="onAskRequested($event)"
-          />
+          @if (CanStartConversation) {
+            <mjc-ask-box
+              #askBox
+              [Title]="'Ask about ' + SpaceName"
+              [Suggestions]="AskSuggestions"
+              [IsSubmitting]="IsSubmittingAsk"
+              (AskRequested)="onAskRequested($event)"
+            />
+          }
 
-          <!-- Room Card -->
+          <!-- Discussion Card -->
           <div class="card room-card">
             <div class="card-h">
-              <span class="h3">Room</span>
-              <mjc-band-chip Band="Shared" [Label]="'Everyone · ' + AudienceCount" />
+              <span class="h3">Discussion</span>
+              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Internal Only' : 'Everyone') + ' · ' + AudienceCount" />
               <a class="link open-chat-link" (click)="onOpenChat($event)">Open chat</a>
             </div>
             <div class="mini-msgs">
@@ -417,6 +421,11 @@ export class CollabSpaceOverviewComponent {
   @Input() public RoomMessages: RoomMiniMessage[] = [];
   @Input() public SubSpaces: SubSpaceSummary[] = [];
   @Input() public AskSuggestions: string[] = [];
+  @Input() public CanStartConversation = false;
+  @Input() public IsSubmittingAsk = false;
+  @Input() public DiscussionBand: SpaceBand = 'Shared';
+
+  @ViewChild('askBox') public askBoxComponent?: CollabAskBoxComponent;
 
   @Output() public NeedsYouActionRequested = new EventEmitter<NeedsYouItemModel>();
   @Output() public ItemSelectRequested = new EventEmitter<ItemCardModel | ItemRowModel>();
@@ -427,6 +436,10 @@ export class CollabSpaceOverviewComponent {
   @Output() public NewSubSpaceRequested = new EventEmitter<void>();
   @Output() public SubSpaceSelectRequested = new EventEmitter<SubSpaceSummary>();
   @Output() public AskRequested = new EventEmitter<string>();
+
+  public clearAskBox(): void {
+    this.askBoxComponent?.clear();
+  }
 
   public onNeedsYouAction(item: NeedsYouItemModel): void {
     this.NeedsYouActionRequested.emit(item);

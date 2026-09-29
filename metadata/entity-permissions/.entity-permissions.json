@@ -238,11 +238,12 @@
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Details",
       "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
       "Type": "Allow",
-      "CanCreate": 0,
+      "CanCreate": 1,
       "CanRead": 1,
       "CanUpdate": 0,
       "CanDelete": 0,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details In Reach"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details In Reach",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details Create In Reach"
     }
   },
   {
@@ -633,6 +634,21 @@
       "CanUpdate": 0,
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Task Catalog"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B835CD61-714F-4B52-82CD-93D45A7601BC"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Chats",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Chats In Reach"
     }
   }
 ]

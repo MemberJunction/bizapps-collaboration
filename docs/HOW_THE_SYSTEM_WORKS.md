@@ -1,7 +1,7 @@
 # How Collaboration works
 
 This page states the rules Collaboration enforces. Each rule is marked:
-- **built:** in the code on PR #7's head (`claude/hopeful-bell-6ldk4v`);
+- **built:** in the code on PR #8's head (`claude/hopeful-bell-6ldk4v-pr8`), which carries everything PR #7 merged;
 - **planned:** with the item in [the plan](../plans/plan.md) that builds it (PR #8 or later).
 
 D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for PR #7.
@@ -59,18 +59,28 @@ The engine reads role flags. It never compares role names.
   - A share notice is readable only by the member it's addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either carries a create filter, and the server subclass is the rest of the gate.
   - MJ 6.1.3 checks a create filter on every new row, before and after the before-save hooks.
 - **People:** Space Participant's field rules on People allow reading a person's name fields, email and linked user, and nothing else, once People's field-level flag is on (bizapps-common#186, still open). Its Deny rows also hold for a participant who has another role.
-- **The room** is an MJ conversation linked to its space and owned by the system user. Everyone who reaches the space reads it and its messages, whatever their band. The space Chat tab renders MJ's chat area; the Overview ask box calls `PostSpaceMessage` (which runs agent execution when space rules or parameters dictate). Row-level security filter *Conversations In Reach* reads conversations linked to reachable spaces.
+- **A space's conversations** are MJ conversations owned by the system user, each with a `SpaceChat` row that holds its space, kind and status. There's no room: a space has no conversation until someone starts one through `CreateSpaceConversation`, which applies `Chats.WhoCanStart` and needs a seat that can post in the kind chosen (D25).
+  - **General and Topic** conversations are read by everyone who reaches the space, whatever their band. **Internal Only** ones (kind `Private`) are read only by those who see the Team band.
+  - **Who can start a conversation (`CanStartConversation`):** Evaluated by `resolveSpaceChatHostRules` -> `evaluateCanStartSpaceConversation`. A user must reach the space through an active seat in `collab.SpaceMember`, the space must not be closed, the user's role must have `CanContribute: true`, and the role must satisfy `Chats.WhoCanStart` (e.g. `Owners` vs `Anyone`). This permission directly controls the `+` button in the space navigation rail and "New Conversation" actions in the UI.
+  - **Posting messages (`MJConversationDetailEntityExtended`):** All space conversations are owned by the `System` user (`MJ: Conversations.UserID = SystemUser`). When any user posts a message detail, `MJConversationDetailEntityExtended.currentUserMayWrite()` requires that non-owners hold an approved `Edit` or `Owner` grant in `MJ: Resource Permissions` (`ResourceType = Conversations`).
+  - **Grant synchronization (`syncRoomEditGrantsForSpace`):** The server automatically creates and maintains these `Resource Permissions` grants:
+    - Active contributing seats (`CanContribute = true`) receive `Edit` grants on all `General` and `Topic` chats in their reached spaces.
+    - Active contributing seats that also see the Team band (`CanSeeTeamBand = true`) receive `Edit` grants on `Private` (Internal Only) chats.
+    - When a user is not seated in `collab.SpaceMember`, they have no `Resource Permissions` grant; any attempt to post a message into the conversation is refused with `"You do not have access to this conversation."`
+  - Row-level security filters *Conversations In Reach* and *Conversation Details In Reach* apply those rules by kind. A create filter lets a contributing seat post its own `User` messages in an active conversation.
+  - The space's Chat tab renders MJ's chat area, and the Overview's ask box starts a General conversation.
+- **Testing and Automation Users:** Integration test and automation accounts (such as `da-robot-tester@bluecypress.io`) must be seated in `collab.SpaceMember` with an active `Owner` role across spaces to participate, start conversations, and send messages.
 - **The `Space` resource type** and the `Collaboration Spaces` permission domain are metadata too. `CollaborationSpacePermissionProvider` answers the domain from the roster. An email invitation doesn't use them: access comes from the seat.
 - **The owner of a space** can read it before its first seat exists. A magic-link scope (`{{ScopeResourceID}}`) could read one space, but this app's invitations are app sessions, not resource shares, so a removed seat takes effect at once.
 
-**Never give a participant MJ's `UI` role.** `UI` carries unfiltered grants, and one unfiltered grant exempts the user from every filter on that entity.
+**Never give a participant MJ's `UI` role.** `UI` carries unfiltered grants, and one unfiltered grant exempts the user from every filter on that entity. Even staff users with `UI` or `Developer` roles need an explicit seat in `collab.SpaceMember` to start conversations or send messages within a specific space.
 
 ## What an agent may use
 
 **Built:**
 - **`agentMayQuote`** in `rules.ts` is the rule an agent calls before it quotes an item. The caller must be able to read it, a Team item needs `CanSeeTeam`, and the item must be in the subtree of the space the question was asked in. `ExcludedEntirely` on the item's space or any ancestor drops it for every agent; `ExcludedFromParentScope` drops it when the question comes from above that space.
 - **The retrieval module** (`space-agent-retrieval.ts`) calls `agentMayQuote` on every candidate, as the asking user. The agent, its prompt, skills and search scope are metadata.
-- **Room posts and agent replies.** The room's posts go through `PostSpaceMessage`. An agent reply can be triggered by `ExecuteAgent` or space rules (`Chats.AgentReplyMode`). A failed reply comes back as `AssistantError`. Full model-driven audience-bounded retrieval is planned for PR #8.
+- **Agent turns.** An agent answers in a space's conversation through `ExecuteSpaceChatTurn`, which checks again from the saved message that the caller can post in the conversation, that the agent is allowed and, under `MentionOnly`, tagged in the message. Bounding the agent's search by the conversation's audience is planned for PR #8 (D2, B2).
 
 **Planned: the audience of an answer decides what the agent may use (D2; A6, B2 in PR #8 and later).**
 - **In a private conversation** (one person, plus agents), the agent uses the caller's union of reach, narrowed by a scope control: *this space*, *this space and its sub-spaces*, or *everything I can reach*.
@@ -89,6 +99,16 @@ The engine reads role flags. It never compares role names.
 **Planned.**
 - **Identity (D6; A9, B5):** a space's agent over MCP, Slack or Teams must resolve the person to an MJ user and apply D2 for the channel's audience, or refuse. Today the messaging adapters fall back to a service account, and MCP's `mode=none` and its system API key run as the system user.
 - **Proposed posts (D7; A8, B7):** an unsolicited agent message to outside participants is a draft until a named staff member approves or edits it. A digest a member subscribed to needs no approval.
+
+## Data a space doesn't own, and what it grants
+
+**Planned: PR #8** (the plan's D26 to D34; B14 to B20). The parts that need MJ's A14 to A17 open in a follow-up, once an MJ release carries them (D36). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
+- **Anchors (D26; B14).** A space can be anchored to one or more records it's about, each with a role, at most one primary. An anchor grants nothing by itself.
+- **Data reach (D28; B18).** A type declares which other apps' entities its participants may read, by a path to an anchor role, with a band and a field allow-list. A script turns the declarations into the Space Participant role's row-level security filters, one per entity, reviewed in `metadata/`. Reads stay in SQL, and a type that declares no reach on an entity gives its participants nothing from it.
+- **Grants (D27, D31; B15, B20).** A type, a space or a sub-space grants agents, actions, queries, views, dashboards, components and knowledge sources. A grant's bindings are filled in by the server from the space, its anchors and the caller: the model never sees a bound parameter, a client value for one is refused and logged, and a binding that doesn't resolve refuses the run. A grant on the Team band isn't offered in a chat where anyone can't see Team.
+- **Granted queries (D29; B17, A17).** A participant never holds MJ's general right to run queries. They run one only through `RunSpaceQuery`, which checks reach and band, binds and locks the scope parameters, and logs the run.
+- **The Canon (D34).** Anything granted to a type that seats outsiders is approved and tested first.
+- **One configuration (D30; B16).** Settings, grants and agent settings resolve through the space's same-type run of ancestors, restarting where the type changes.
 
 ## The All query
 

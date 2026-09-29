@@ -191,7 +191,30 @@ interface SpaceNavPref {
             @if (!isCollapsed) {
               <div class="section-title-row">
                 <span class="section-title">CONVERSATIONS</span>
+                @if (CanStartConversation) {
+                  <button
+                    type="button"
+                    class="btn-add-section"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                }
               </div>
+            } @else {
+              @if (CanStartConversation) {
+                <div class="collapsed-add-row">
+                  <button
+                    type="button"
+                    class="btn-collapsed-add"
+                    (click)="onNewConversation()"
+                    title="New Conversation"
+                    aria-label="New Conversation">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              }
             }
 
             <div class="nav-links-list">
@@ -221,6 +244,8 @@ interface SpaceNavPref {
                       [class.team]="c.band === 'Team'"
                       [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
                     </span>
+                  } @else if (c.unreadCount) {
+                    <span class="collapsed-unread-dot" [title]="c.unreadCount + ' unread'"></span>
                   }
                 </button>
               }
@@ -231,7 +256,7 @@ interface SpaceNavPref {
 
         @if (!isCollapsed) {
           <div class="space-nav-footer">
-            <span class="footer-sync"><i class="fa-solid fa-cloud-check"></i> Preferences synced</span>
+            <span class="footer-sync"><i class="fa-solid fa-cloud"></i> Preferences synced</span>
           </div>
         }
 
@@ -533,6 +558,52 @@ interface SpaceNavPref {
       justify-content: space-between;
       padding: 4px 10px 2px;
     }
+    .section-title-row .section-title {
+      padding: 0;
+    }
+
+    .btn-add-section {
+      background: transparent;
+      border: none;
+      color: var(--mj-text-muted, #94a3b8);
+      cursor: pointer;
+      font-size: 11px;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-add-section:hover {
+      color: var(--mj-text-primary, #0f172a);
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+
+    .collapsed-add-row {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .btn-collapsed-add {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px dashed #64748b;
+      color: var(--mj-text-secondary, #475569);
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      font-size: 12px;
+      transition: all 0.15s ease;
+    }
+    .btn-collapsed-add:hover {
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+      color: var(--mj-text-primary, #0f172a);
+      border-color: var(--mj-brand-primary, #0076b6);
+    }
 
     .nav-links-list {
       display: flex;
@@ -601,7 +672,22 @@ interface SpaceNavPref {
     }
     .link-badge.unread {
       background: var(--mj-brand-primary, #0076b6);
-      color: #ffffff;
+      color: var(--mj-brand-on-primary, #ffffff);
+    }
+    :host-context([data-theme="dark"]) .link-badge.unread,
+    :host-context(.dark) .link-badge.unread,
+    [data-theme="dark"] .link-badge.unread {
+      background: var(--mj-brand-primary, #2699cc);
+      color: #0b1528;
+    }
+    .collapsed-unread-dot {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mj-brand-primary, #0076b6);
     }
 
     .convo-link {
@@ -852,6 +938,7 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() MemberCount = 0;
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
+  @Input() CanStartConversation = false;
 
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();
@@ -861,6 +948,7 @@ export class CollabSpaceRailComponent implements OnInit {
 
   @Output() TabSelectRequested = new EventEmitter<string>();
   @Output() ConversationSelectRequested = new EventEmitter<string>();
+  @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
 
   public navWidth = 280;
@@ -871,6 +959,10 @@ export class CollabSpaceRailComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  public onNewConversation(): void {
+    this.NewConversationRequested.emit();
   }
 
   private loadLayoutPreference(): void {

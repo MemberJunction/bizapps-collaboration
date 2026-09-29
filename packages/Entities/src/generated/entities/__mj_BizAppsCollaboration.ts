@@ -249,7 +249,7 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: Subject
         * * Display Name: Subject
         * * SQL Data Type: nvarchar(500)`),
-    Kind: z.union([z.literal('General'), z.literal('Private'), z.literal('Room'), z.literal('Topic')]).describe(`
+    Kind: z.union([z.literal('General'), z.literal('Private'), z.literal('Topic')]).describe(`
         * * Field Name: Kind
         * * Display Name: Kind
         * * SQL Data Type: nvarchar(50)
@@ -258,7 +258,6 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
     * * Possible Values 
     *   * General
     *   * Private
-    *   * Room
     *   * Topic`),
     Status: z.union([z.literal('Active'), z.literal('Archived')]).describe(`
         * * Field Name: Status
@@ -279,6 +278,12 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArchivedOnSpaceClose: z.boolean().describe(`
+        * * Field Name: ArchivedOnSpaceClose
+        * * Display Name: Archived On Space Close
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -1592,13 +1597,12 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     * * Possible Values 
     *   * General
     *   * Private
-    *   * Room
     *   * Topic
     */
-    get Kind(): 'General' | 'Private' | 'Room' | 'Topic' {
+    get Kind(): 'General' | 'Private' | 'Topic' {
         return this.Get('Kind');
     }
-    set Kind(value: 'General' | 'Private' | 'Room' | 'Topic') {
+    set Kind(value: 'General' | 'Private' | 'Topic') {
         this.Set('Kind', value);
     }
 
@@ -1637,6 +1641,20 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ArchivedOnSpaceClose
+    * * Display Name: Archived On Space Close
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.
+    */
+    get ArchivedOnSpaceClose(): boolean {
+        return this.Get('ArchivedOnSpaceClose');
+    }
+    set ArchivedOnSpaceClose(value: boolean) {
+        this.Set('ArchivedOnSpaceClose', value);
     }
 
     /**
