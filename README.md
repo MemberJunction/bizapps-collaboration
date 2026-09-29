@@ -151,7 +151,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **Space types as plug-ins.** A type names server and browser driver classes, so another app adds behavior without Collaboration knowing it exists. The server asks the type's driver before every write to its spaces. |
+| ✅ | **Space types as plug-ins.** A type names server and browser driver classes, so another app adds behavior without Collaboration knowing it exists. The server asks the type's driver before a write to its spaces, seats and items, and before a conversation starts. |
 | 🚧 | **A type's own data,** in a table that extends Space through MemberJunction's IsA, created, edited and shown through the space's own screens, including a New Space screen. |
 | ✅ | **Contributions:** tabs and overview cards any app can add to any type, each card on the Shared or the Team side, and lifecycle subscribers on the server. |
 | 🚧 | **More contributions:** header chips, needs-you items, agenda items and signal providers. The contracts and examples exist; the screens don't show them yet. |
@@ -211,7 +211,7 @@ The integration checks run against a real database with the sample world loaded;
 Collaboration is a base other apps build on. To add a kind of space:
 
 1. **Ship a space type** as metadata, with its vocabulary, bands, settings and allowed children.
-2. **Add behavior,** if it needs any, with a server driver (rules and reactions inside the save's transaction) and a UI driver (its tabs and overview cards; header chips are coming). A type's message hooks take effect once MemberJunction records who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)).
+2. **Add behavior,** if it needs any, with a server driver (rules checked before a save, and reactions after it) and a UI driver (its tabs and Overview cards, and checks before an invite or a new conversation; header chips and more are coming). A type's message hooks take effect once MemberJunction records who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)).
 3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`. This path is being finished in [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9).
 4. **Offer your data** through anchors and grants, bounded by the space.
 
