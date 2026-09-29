@@ -30,7 +30,7 @@ The server's write gates, the browser and the SQL function `fnCollaborationAcces
 
 **`src/retrieval.ts`: the audience rule.** `effectiveRetrievalScope` works out what an agent may search for a question: the caller's reach, narrowed by a scope, or the intersection of every participant's.
 
-**`src/detail-fields.ts`: a subtype's own fields.** `detailFields` picks, from a subtype entity's columns, the ones it adds to a space (not the key, a column of the space, a view-only column or a `__mj_` column), in the entity's order, and marks those a space can't be saved without as required. `visibleDetailFields` applies a UI driver's hidden fields (never a required one) and `missingDetails` lists the required ones still empty. For a subtype's generated form, `subtypeFormSections` names the sections that hold only the subtype's own columns, keyed as CodeGen keys them (`sectionKeyOf`, `sectionKeyOfCategory`), or returns null when one of them also holds a column of the space.
+**`src/detail-fields.ts`: a subtype's own fields.** `detailFields` picks, from a subtype entity's columns, the ones it adds to a space (not the key, a column of the space, a view-only column or a `__mj_` column), in the entity's order, and marks those a space can't be saved without as required. `visibleDetailFields` applies a UI driver's hidden fields (never a required one) and `missingDetails` lists the required ones still empty. For a subtype's generated form, `subtypeFormSections` names the sections that hold only the subtype's own columns, keyed as CodeGen keys them (`sectionKeyOf`, `sectionKeyOfCategory`), or returns null when one of them also holds a column of the space, or a column of the space sits in the form's top area, which shows whatever sections are asked for.
 
 **`src/view-models.ts`: view models and extension contracts.**
 - `avatarColorClass`, `summarizeAudience` (the audience pill and composer lines) and `computeSpaceProgress` ("Week 7 of 10").
@@ -45,7 +45,7 @@ The server's write gates, the browser and the SQL function `fnCollaborationAcces
 pnpm --filter @mj-biz-apps/collaboration-core run build
 ```
 
-The build is `tsc`, into `dist/`. The tests use `node:test`: `rules`, `phase0`, `view-models`, `configuration`, `detail-fields` and `retrieval`, 145 tests in all. The root `pnpm test` runs all six. This package's own `test` script runs `rules.test.ts` only.
+The build is `tsc`, into `dist/`. The tests use `node:test`: `rules`, `phase0`, `view-models`, `configuration`, `detail-fields` and `retrieval`, 146 tests in all. The root `pnpm test` runs all six. This package's own `test` script runs `rules.test.ts` only.
 
 ## Not done yet
 

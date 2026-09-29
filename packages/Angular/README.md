@@ -33,7 +33,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. Its `test` script typechecks, runs 23 of the 24 `node:test` files in `src/lib/logic/` (136 tests; `new-space-picks.test.ts` isn't in the list), then runs Vitest on the rendered tests (`*.render.test.ts`, in jsdom: five of the details view, with stand-ins for MJ's form host and fields). The root `pnpm test` runs them too.
+The build is `ngc`, into `dist/`. Its `test` script typechecks, runs every `node:test` file in `src/lib/logic/` through a glob (`'src/lib/logic/*.test.ts'`, 140 tests), then runs Vitest on the rendered tests (`*.render.test.ts`, in jsdom: five of the details view, with stand-ins for MJ's form host and fields). The root `pnpm test` runs them too.
 
 ## Not done yet
 
