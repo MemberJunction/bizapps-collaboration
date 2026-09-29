@@ -203,9 +203,10 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
         _ctx: SpaceUIContext,
         _defaultForm?: SpaceDetailsFormDescriptor
     ): SpaceDetailsFormDescriptor | undefined {
+        // The board keeps its term, cadence, quorum and charter in its subtype; the next meeting has its own card on the Overview
         return {
-            entityName: 'ExampleBoard',
-            hiddenSectionKeys: ['SpaceCore'],
+            entityName: 'MJ_BizApps_Collaboration_Examples: Example Boards',
+            hiddenFieldNames: ['NextMeetingDate', 'NextMeetingLocation'],
         };
     }
 

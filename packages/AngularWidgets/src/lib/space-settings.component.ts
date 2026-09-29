@@ -255,6 +255,45 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
       }
 
+      @if (HasDetails) {
+        <!-- The details the space's type keeps of its own: drawn by the host, saved on their own -->
+        <div class="settings-sections details-section" aria-labelledby="settings-details-title">
+          <div class="settings-card">
+            <div class="card-title-row">
+              <i class="fa-solid fa-list-check section-ic" aria-hidden="true"></i>
+              <span class="card-title" id="settings-details-title">{{ DetailsTitle || 'Details' }}</span>
+            </div>
+            <div class="details-fields">
+              <ng-content select="[mjcSettingsDetails]"></ng-content>
+            </div>
+            @if (DetailsMessage) {
+              <div class="alert-success" role="status">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                <span>{{ DetailsMessage }}</span>
+              </div>
+            }
+            @if (DetailsError) {
+              <div class="alert-error" role="alert">
+                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                <span>{{ DetailsError }}</span>
+              </div>
+            }
+            @if (DetailsEditable) {
+              <div class="details-actions">
+                <button type="button" class="save-btn" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" (click)="SaveDetailsRequested.emit()">
+                  @if (IsSavingDetails) {
+                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> <span>Saving...</span>
+                  } @else {
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> <span>Save details</span>
+                  }
+                </button>
+                <button type="button" class="cancel-lifecycle-btn discard-btn" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <ng-template #lifecycle>
         @if (CanChangeLifecycle) {
             <div class="form-field full-width">
@@ -336,6 +375,30 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         border-radius: 6px;
         font-size: 13px;
         font-weight: 500;
+      }
+      .details-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .details-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .details-actions .discard-btn {
+        margin-top: 0;
+      }
+      .alert-error {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--mj-status-error-bg);
+        border: 1px solid var(--mj-status-error-border);
+        color: var(--mj-status-error-text);
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 13px;
       }
       .cancel-lifecycle-btn {
         margin-top: 8px;
@@ -539,6 +602,20 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() saveInfoMessage = '';
   /** A root space has no parent, so the sub-space options aren't offered. */
   @Input() IsRootSpace = false;
+
+  /** The space's type keeps details of its own (a subtype): the host draws them in the `[mjcSettingsDetails]` slot. */
+  @Input() HasDetails = false;
+  @Input() DetailsTitle = '';
+  /** The person may change them: Save and Discard are offered. False shows them read-only. */
+  @Input() DetailsEditable = false;
+  @Input() DetailsDirty = false;
+  /** A required detail is empty: Save waits. */
+  @Input() DetailsIncomplete = false;
+  @Input() IsSavingDetails = false;
+  @Input() DetailsMessage = '';
+  @Input() DetailsError = '';
+  @Output() SaveDetailsRequested = new EventEmitter<void>();
+  @Output() DiscardDetailsRequested = new EventEmitter<void>();
 
   @Output() CloseSpaceRequested = new EventEmitter<void>();
   @Output() ReopenSpaceRequested = new EventEmitter<void>();

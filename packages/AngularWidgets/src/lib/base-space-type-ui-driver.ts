@@ -76,9 +76,16 @@ export interface SpaceNewStepDescriptor {
     component?: Type<BaseAngularComponent>;
 }
 
+/**
+ * The details a type keeps of its own (its subtype's columns), as the New space dialog, Settings → Details and the Overview's About
+ * card draw them. By default every column the subtype adds is shown. A driver returns `undefined` to show none, or names fields to
+ * hide; a field the space can't be saved without is shown regardless.
+ */
 export interface SpaceDetailsFormDescriptor {
+    /** The subtype entity the details are of. */
     entityName: string;
-    hiddenSectionKeys?: string[];
+    /** Subtype fields left out of the form (an optional field only). */
+    hiddenFieldNames?: string[];
 }
 
 // ============================================================================

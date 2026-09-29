@@ -217,6 +217,18 @@ export interface SubSpaceSummary {
             }
           }
 
+          <!-- What the space's type keeps of its own (a subtype), read-only; drawn by the host -->
+          @if (HasAbout) {
+            <div class="card about-card">
+              <div class="card-h">
+                <span class="h3">{{ AboutTitle || 'About' }}</span>
+              </div>
+              <div class="about-fields">
+                <ng-content select="[mjcAbout]"></ng-content>
+              </div>
+            </div>
+          }
+
           <!-- Sub-spaces -->
           @if (SubSpaces && SubSpaces.length > 0) {
             <div class="card sub-card">
@@ -342,6 +354,13 @@ export interface SubSpaceSummary {
       padding: 4px 8px 8px;
     }
 
+    .about-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px 24px;
+      padding: 4px 18px 16px;
+    }
+
     .card-h {
       display: flex;
       align-items: center;
@@ -450,6 +469,9 @@ export class CollabSpaceOverviewComponent {
   @Input() public ShowLibraryLink = true;
   @Input() public ShowChatLink = true;
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
+  /** The space's type keeps details of its own (a subtype): the host draws them, read-only, in the `[mjcAbout]` slot. */
+  @Input() public HasAbout = false;
+  @Input() public AboutTitle = '';
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
 
   /** The contributed cards this viewer may see, one per key: a driver may append what an earlier one already gave, and a key draws once. */

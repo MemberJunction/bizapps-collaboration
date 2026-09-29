@@ -10,7 +10,9 @@ import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
 import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabNewConversationDialogComponent } from './new-conversation-dialog.component.ts';
+import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
@@ -376,5 +378,200 @@ describe("a space's conversation, rendered", () => {
     expect(area).not.toBeNull();
     // MJ's chat area defaults AllowRealtime to true; the space must turn it off
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
+  });
+});
+
+describe('New space, rendered', () => {
+  const types: NewSpaceTypeOption[] = [
+    { id: 't-board', name: 'Board', description: 'A governing body', iconClass: 'fa-solid fa-landmark', color: '#0076b6' },
+    { id: 't-workspace', name: 'Workspace', description: '', iconClass: 'fa-solid fa-briefcase', color: '#059669' },
+  ];
+  const render = (inputs: Record<string, unknown> = {}) => {
+    const fixture = TestBed.createComponent(CollabNewSpaceDialogComponent);
+    fixture.componentRef.setInput('Types', types);
+    for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+    fixture.detectChanges();
+    return fixture;
+  };
+  const primary = (host: HTMLElement): HTMLButtonElement =>
+    Array.from(host.querySelectorAll<HTMLButtonElement>('mj-dialog-actions button')).find((b) => b.textContent?.includes('Create space'))!;
+
+  it('offers each kind as a radio and shows no name until one is chosen', async () => {
+    const fixture = render();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[role="radiogroup"]')?.getAttribute('aria-labelledby')).toBe('new-space-kind-label');
+    expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+    expect(host.textContent).toContain('A governing body');
+    expect(host.querySelector('#new-space-name')).toBeNull();
+    expect(primary(host).disabled).toBe(true);
+  });
+
+  it('asks the host for the kind that was picked, and does not select it itself', async () => {
+    const fixture = render();
+    await fixture.whenStable();
+    const picked = vi.fn();
+    fixture.componentInstance.TypeSelected.subscribe(picked);
+    const radios = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[0].dispatchEvent(new Event('change'));
+    expect(picked).toHaveBeenCalledWith('t-board');
+    expect(fixture.componentInstance.SelectedTypeId).toBe('');
+  });
+
+  it('shows name and description once a kind is chosen, and submits the trimmed name with the kind', async () => {
+    const fixture = render({ SelectedTypeId: 't-workspace' });
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const submitted = vi.fn();
+    fixture.componentInstance.SubmitRequested.subscribe(submitted);
+    fixture.componentInstance.name = '  Northwind  ';
+    fixture.componentInstance.description = ' the account ';
+    fixture.detectChanges();
+    expect(primary(host).disabled).toBe(false);
+    primary(host).click();
+    expect(submitted).toHaveBeenCalledWith({ typeId: 't-workspace', name: 'Northwind', description: 'the account' });
+  });
+
+  it('holds Create off until the name is filled in, and while the kind\'s own details are incomplete', async () => {
+    const fixture = render({ SelectedTypeId: 't-board', HasDetails: true, DetailsTitle: 'Board details', DetailsIncomplete: true });
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('Board details');
+    fixture.componentInstance.name = 'Board 2026';
+    fixture.detectChanges();
+    expect(primary(host).disabled).toBe(true);
+    fixture.componentRef.setInput('DetailsIncomplete', false);
+    fixture.detectChanges();
+    expect(primary(host).disabled).toBe(false);
+  });
+
+  it('shows the refusal the server gave and keeps the dialog open', async () => {
+    const fixture = render({ SelectedTypeId: 't-workspace', ErrorMessage: 'A board may not sit under a workspace.' });
+    await fixture.whenStable();
+    const alert = (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('A board may not sit under a workspace.');
+  });
+
+  it('turns every control off while it saves, and ignores Escape', async () => {
+    const fixture = render({ SelectedTypeId: 't-workspace', IsSubmitting: true });
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const cancelled = vi.fn();
+    fixture.componentInstance.CancelRequested.subscribe(cancelled);
+    expect(Array.from(host.querySelectorAll<HTMLInputElement>('input')).every((i) => i.disabled)).toBe(true);
+    escape();
+    expect(cancelled).not.toHaveBeenCalled();
+  });
+
+  it('says so when there is no kind to start', async () => {
+    const fixture = render({ Types: [] });
+    await fixture.whenStable();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('There is no kind of space you can start.');
+  });
+
+  it('moves focus to the name when a kind is chosen', async () => {
+    vi.useFakeTimers();
+    const fixture = render();
+    vi.runAllTimers();
+    fixture.componentRef.setInput('SelectedTypeId', 't-workspace');
+    fixture.detectChanges();
+    vi.runAllTimers();
+    expect((document.activeElement as HTMLElement).id).toBe('new-space-name');
+  });
+});
+
+describe('A space\'s own details, rendered', () => {
+  @Component({
+    standalone: true,
+    imports: [CollabSpaceSettingsComponent],
+    template: `
+      <mjc-space-settings [Settings]="settings" [HasDetails]="hasDetails" DetailsTitle="Board details" [DetailsEditable]="editable"
+        [DetailsDirty]="dirty" [DetailsIncomplete]="incomplete" [IsSavingDetails]="saving" [DetailsMessage]="message" [DetailsError]="error"
+        (SaveDetailsRequested)="saved()" (DiscardDetailsRequested)="discarded()">
+        <div mjcSettingsDetails id="projected-field">Term</div>
+      </mjc-space-settings>`,
+  })
+  class SettingsHost {
+    public settings = settings;
+    public hasDetails = true;
+    public editable = true;
+    public dirty = false;
+    public incomplete = false;
+    public saving = false;
+    public message = '';
+    public error = '';
+    public saved = vi.fn();
+    public discarded = vi.fn();
+  }
+
+  const renderSettings = async (over: Partial<SettingsHost> = {}) => {
+    const fixture = TestBed.createComponent(SettingsHost);
+    Object.assign(fixture.componentInstance, over);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  };
+  const buttonNamed = (host: HTMLElement, text: string): HTMLButtonElement | undefined =>
+    Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes(text));
+
+  it('draws what the host projects under the details title, and no card when the space has none', async () => {
+    const withDetails = await renderSettings();
+    const host = withDetails.nativeElement as HTMLElement;
+    expect(host.querySelector('#settings-details-title')?.textContent).toContain('Board details');
+    expect(host.querySelector('.details-fields #projected-field')).not.toBeNull();
+    const without = await renderSettings({ hasDetails: false });
+    expect((without.nativeElement as HTMLElement).querySelector('#settings-details-title')).toBeNull();
+  });
+
+  it('holds Save and Discard off until a detail changes, and Save off while a required one is empty or a save is under way', async () => {
+    const clean = await renderSettings();
+    const cleanHost = clean.nativeElement as HTMLElement;
+    expect(buttonNamed(cleanHost, 'Save details')!.disabled).toBe(true);
+    expect(buttonNamed(cleanHost, 'Discard changes')!.disabled).toBe(true);
+    const dirty = await renderSettings({ dirty: true });
+    expect(buttonNamed(dirty.nativeElement, 'Save details')!.disabled).toBe(false);
+    expect(buttonNamed(dirty.nativeElement, 'Discard changes')!.disabled).toBe(false);
+    expect(buttonNamed((await renderSettings({ dirty: true, incomplete: true })).nativeElement, 'Save details')!.disabled).toBe(true);
+    expect(buttonNamed((await renderSettings({ dirty: true, saving: true })).nativeElement, 'Saving')!.disabled).toBe(true);
+  });
+
+  it('asks the host to save or discard, and says what came of a save', async () => {
+    const fixture = await renderSettings({ dirty: true, message: 'Details saved.' });
+    const host = fixture.nativeElement as HTMLElement;
+    buttonNamed(host, 'Save details')!.click();
+    buttonNamed(host, 'Discard changes')!.click();
+    expect(fixture.componentInstance.saved).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.discarded).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.alert-success')?.textContent).toContain('Details saved.');
+    const failed = await renderSettings({ error: 'Quorum must be between 1 and 100.' });
+    expect((failed.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain('Quorum must be between 1 and 100.');
+  });
+
+  it('shows the details read-only, with no Save, to someone who may not change settings', async () => {
+    const fixture = await renderSettings({ editable: false });
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#projected-field')).not.toBeNull();
+    expect(buttonNamed(host, 'Save details')).toBeUndefined();
+  });
+
+  it('shows an About card on the Overview only when the space has details, titled by the host', async () => {
+    @Component({
+      standalone: true,
+      imports: [CollabSpaceOverviewComponent],
+      template: `<mjc-space-overview [HasAbout]="has" AboutTitle="About this board"><span mjcAbout id="about-field">Term</span></mjc-space-overview>`,
+    })
+    class OverviewHost {
+      public has = true;
+    }
+    const shown = TestBed.createComponent(OverviewHost);
+    shown.detectChanges();
+    await shown.whenStable();
+    const host = shown.nativeElement as HTMLElement;
+    expect(host.querySelector('.about-card')?.textContent).toContain('About this board');
+    expect(host.querySelector('.about-card #about-field')).not.toBeNull();
+    shown.componentInstance.has = false;
+    shown.changeDetectorRef.markForCheck();
+    shown.detectChanges();
+    expect(host.querySelector('.about-card')).toBeNull();
   });
 });

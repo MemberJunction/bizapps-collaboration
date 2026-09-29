@@ -5,6 +5,7 @@ import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
@@ -19,6 +20,8 @@ import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
 import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
+import { NewSpaceDraft, SpaceDetails, visibleDetailFields, type DetailField } from './logic/space-details.js';
+import { newSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
@@ -66,7 +69,9 @@ import {
     CollabSpacePeopleComponent,
     CollabSpaceSettingsComponent,
     CollabNewConversationDialogComponent,
+    CollabNewSpaceDialogComponent,
     type NewConversationSubmitPayload,
+    type NewSpaceSubmitPayload,
     type TabItem,
     assembleSpaceContributions,
     BaseSpaceOverviewCard,
@@ -98,6 +103,7 @@ import {
     type TaskItemModel,
     type SpaceMemberModel,
     type SpaceSettingsModel,
+    type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MentionParser, type MentionPerson } from '@memberjunction/conversations-runtime';
@@ -144,6 +150,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CommonModule,
         FormsModule,
         SharedGenericModule,
+        BaseFormsModule,
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
@@ -163,6 +170,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabSpacePeopleComponent,
         CollabSpaceSettingsComponent,
         CollabNewConversationDialogComponent,
+        CollabNewSpaceDialogComponent,
         CollaborationNoAccessComponent,
         TaskKanbanComponent,
         TaskGanttComponent,
@@ -601,6 +609,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [TaskCount]="taskCount"
                             [MemberCount]="headerTotalPeople"
                             [InboxCount]="inboxCount"
+                            [CanCreateSpace]="canCreateSpace"
+                            (SpaceCreateRequested)="openNewSpaceDialog()"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
                             (SpaceToggleRequested)="onSpaceToggleRequested($event)"
                             (NavSelectRequested)="onNavSelectRequested($event)"
@@ -875,13 +885,23 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AgentAvailable]="chatDefaultAgentId !== null"
                                                     [IsSubmittingAsk]="isSubmittingAsk"
                                                     [DiscussionBand]="chatAudienceBand"
+                                                    [HasAbout]="hasDetails"
+                                                    [AboutTitle]="aboutTitle"
                                                     (OpenLibraryRequested)="onOpenLibraryRequested()"
                                                     (OpenChatRequested)="onOpenChatRequested()"
                                                     (ItemSelectRequested)="onItemSelected($event)"
                                                     (ShareRequested)="onShareRequested($event)"
                                                     (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
                                                     (AskRequested)="onOverviewAskRequested($event)"
-                                                />
+                                                >
+                                                    <div mjcAbout style="display: contents">
+                                                        @if (spaceDetails; as details) {
+                                                            @for (field of detailFieldsShown; track field.name) {
+                                                                <mj-form-field [Record]="details.Leaf" [FieldName]="field.name" [EditMode]="false" />
+                                                            }
+                                                        }
+                                                    </div>
+                                                </mjc-space-overview>
                                             }
                                             @case ('Library') {
                                                 <mjc-space-library
@@ -1023,10 +1043,33 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanAdminister]="mayAdministerSpaces"
                                                     [ReadOnlyNote]="settingsAccessNow.readOnlyNote"
                                                     [CloseConsequence]="closeConsequenceText"
+                                                    [HasDetails]="hasDetails"
+                                                    [DetailsTitle]="detailsTitle"
+                                                    [DetailsEditable]="settingsAccessNow.canEdit"
+                                                    [DetailsDirty]="!!spaceDetails?.Dirty"
+                                                    [DetailsIncomplete]="detailsIncomplete"
+                                                    [IsSavingDetails]="isSavingDetails"
+                                                    [DetailsMessage]="detailsMessage"
+                                                    [DetailsError]="detailsError"
+                                                    (SaveDetailsRequested)="onSaveDetails()"
+                                                    (DiscardDetailsRequested)="onDiscardDetails()"
                                                     (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
                                                     (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
                                                     (SaveSettingsRequested)="onSaveSettings($event)"
-                                                />
+                                                >
+                                                    <div mjcSettingsDetails class="details-form" style="display: contents">
+                                                        @if (spaceDetails; as details) {
+                                                            @for (field of detailFieldsShown; track field.name) {
+                                                                <mj-form-field
+                                                                    [Record]="details.Leaf"
+                                                                    [FieldName]="field.name"
+                                                                    [EditMode]="settingsAccessNow.canEdit && !isSavingDetails"
+                                                                    (ValueChange)="onDetailChanged()"
+                                                                />
+                                                            }
+                                                        }
+                                                    </div>
+                                                </mjc-space-settings>
                                             }
                                             @default {
                                                 @if (contributedTabComponent; as tabComponent) {
@@ -1075,6 +1118,34 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 (CancelRequested)="onUploadDialogCancel()"
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
+                        }
+
+                        @if (isNewSpaceDialogOpen) {
+                            <mjc-new-space-dialog
+                                [Types]="newSpaceKinds"
+                                [SelectedTypeId]="newSpaceTypeId"
+                                [HasDetails]="!!newSpaceDraft?.HasDetails"
+                                [DetailsTitle]="newSpaceDetailsTitle"
+                                [DetailsIncomplete]="newSpaceDetailsIncomplete"
+                                [IsSubmitting]="isCreatingSpace"
+                                [ErrorMessage]="newSpaceError"
+                                (TypeSelected)="onNewSpaceTypeSelected($event)"
+                                (CancelRequested)="closeNewSpaceDialog()"
+                                (SubmitRequested)="onSubmitNewSpace($event)"
+                            >
+                                <div mjcDetails class="new-space-details">
+                                    @if (newSpaceDraft; as draft) {
+                                        @for (field of draft.DetailFields; track field.name) {
+                                            <mj-form-field
+                                                [Record]="draft.Leaf"
+                                                [FieldName]="field.name"
+                                                [EditMode]="!isCreatingSpace"
+                                                (ValueChange)="onNewSpaceDetailChanged()"
+                                            />
+                                        }
+                                    }
+                                </div>
+                            </mjc-new-space-dialog>
                         }
 
                         @if (isNewConversationDialogOpen) {
@@ -1159,6 +1230,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public get isUploadingHere(): boolean {
         return this.uploadingSpaceIds.some((id) => UUIDsEqual(id, this.activeSpaceId));
     }
+    public isNewSpaceDialogOpen = false;
+    public isCreatingSpace = false;
+    public newSpaceKinds: NewSpaceKind[] = [];
+    public newSpaceTypeId = '';
+    public newSpaceDraft: NewSpaceDraft | null = null;
+    public newSpaceError = '';
+    /** The required details of the kind chosen that are still empty: Create waits for them. */
+    public newSpaceDetailsIncomplete = false;
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
     public composerDraft: string | null = null;
@@ -1298,6 +1377,41 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** The tab model of the space shown, built when it is selected. Null until then. */
     private spaceTabModel: SpaceTabModel | null = null;
+    /** What the type's UI driver was last asked, so it can be asked again about the space's details. */
+    private uiContext: SpaceUIContext | null = null;
+    /** The details the space shown keeps of its own (its type names a subtype), or null for a plain space. */
+    public spaceDetails: SpaceDetails | null = null;
+    /** What the UI driver makes of those details: undefined when it shows none. */
+    public detailsForm: SpaceDetailsFormDescriptor | undefined;
+    public isSavingDetails = false;
+    public detailsMessage = '';
+    public detailsError = '';
+
+    /** The details fields the space shown draws, after the driver's form has left some out. */
+    public get detailFieldsShown(): DetailField[] {
+        return this.spaceDetails && this.detailsForm ? visibleDetailFields(this.spaceDetails.Fields, this.detailsForm.hiddenFieldNames) : [];
+    }
+
+    public get hasDetails(): boolean {
+        return this.detailFieldsShown.length > 0;
+    }
+
+    public get detailsIncomplete(): boolean {
+        return (this.spaceDetails?.MissingDetails(this.detailsForm?.hiddenFieldNames).length ?? 0) > 0;
+    }
+
+    private get typeNameOfActiveSpace(): string {
+        return CollaborationEngineBase.Instance.SpaceTypeById(this.activeSpaceRecord?.SpaceTypeID)?.Name ?? '';
+    }
+
+    public get detailsTitle(): string {
+        return this.typeNameOfActiveSpace ? `${this.typeNameOfActiveSpace} details` : 'Details';
+    }
+
+    public get aboutTitle(): string {
+        return this.typeNameOfActiveSpace ? `About this ${this.typeNameOfActiveSpace.toLowerCase()}` : 'About';
+    }
+
     /** The type's UI driver for the space shown. */
     private uiDriver: BaseSpaceTypeUIDriver = UIDriverRegistry.Instance.GetDefaultDriver();
     /** Cards the type and other apps add to the Overview of the space shown. */
@@ -1312,6 +1426,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** Opens a tab of the space shown. A tab the space doesn't have (its type turned the panel off) opens the Overview instead. */
     private setTab(id: string): void {
         const resolved = this.spaceTabModel ? resolveTabId(this.spaceTabModel, id) : id;
+        // Details changed in Settings and not saved are not carried to the Overview's About card
+        if (this.activeTab === 'Settings' && resolved !== 'Settings' && this.spaceDetails?.Dirty) {
+            this.spaceDetails.Discard();
+            this.detailsMessage = '';
+            this.detailsError = '';
+        }
         this.activeTab = resolved ?? 'Overview';
     }
 
@@ -1385,6 +1505,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             side: meta.side,
             component: reg.SubClass as SpaceOverviewCardDescriptor['component'],
         });
+        this.uiContext = ctx;
         try {
             this.overviewContributedCards = this.uiDriver.GetOverviewCards(ctx, assembleSpaceContributions(BaseSpaceOverviewCard, code, [], cardFactory));
         } catch (err) {
@@ -1933,6 +2054,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.overviewContributedCards = [];
         this.uiDriver = UIDriverRegistry.Instance.GetDefaultDriver();
         this.overviewSubSpaces = [];
+        this.spaceDetails = null;
+        this.detailsForm = undefined;
+        this.detailsMessage = '';
+        this.detailsError = '';
         // The header shows the space's own name at once, from what is already loaded
         const cachedSpace = this.rawSpaces.find(sp => UUIDsEqual(sp.ID, spaceId));
         if (cachedSpace) {
@@ -2027,6 +2152,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         await this.updateCanConfigureCurrentSpace();
         if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        await this.loadSpaceDetails(space, () => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId));
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         await this.updateBandChoice(space, () => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId));
 
         // Each loader checks the selection itself, before it writes: a slow read for a space
@@ -2049,6 +2176,85 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         this.syncStateWithAgent();
         this.RefreshView();
+    }
+
+    /**
+     * Reads the details a space keeps in its subtype, when its type names one, and asks the type's UI driver what to show of them.
+     * A quiet re-read keeps the details being edited: they are read again only when nothing was changed.
+     */
+    private async loadSpaceDetails(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
+        const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
+        const user = this.currentUser;
+        if (!type?.SpaceExtensionEntity || !user) {
+            this.spaceDetails = null;
+            this.detailsForm = undefined;
+            return;
+        }
+        if (this.spaceDetails?.Dirty) return;
+        try {
+            const details = await SpaceDetails.Load(this.ProviderToUse, user, space.ID);
+            if (!isCurrent()) return;
+            this.spaceDetails = details;
+            this.detailsForm = details ? this.detailsFormFor(details.Leaf.EntityInfo.Name) : undefined;
+        } catch (err) {
+            if (!isCurrent()) return;
+            this.spaceDetails = null;
+            this.detailsForm = undefined;
+            this.logOnce(`details:${space.ID}`, `The details of space ${space.ID} could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** What the type's UI driver makes of the subtype's details. A driver that throws leaves the default: every field the subtype adds. */
+    private detailsFormFor(entityName: string): SpaceDetailsFormDescriptor | undefined {
+        const fallback: SpaceDetailsFormDescriptor = { entityName };
+        if (!this.uiContext) return fallback;
+        try {
+            return this.uiDriver.GetDetailsForm(this.uiContext, fallback);
+        } catch (err) {
+            this.logOnce(`details-form:${this.uiContext.spaceTypeCode}`, `The UI driver of space type '${this.uiContext.spaceTypeCode}' failed building the details form: ${err instanceof Error ? err.message : String(err)}`);
+            return fallback;
+        }
+    }
+
+    public onDetailChanged(): void {
+        this.detailsMessage = '';
+        this.detailsError = '';
+        this.RefreshView();
+    }
+
+    public onDiscardDetails(): void {
+        this.spaceDetails?.Discard();
+        this.detailsMessage = '';
+        this.detailsError = '';
+        this.RefreshView();
+    }
+
+    public async onSaveDetails(): Promise<void> {
+        const details = this.spaceDetails;
+        if (!details || this.isSavingDetails || !this.settingsAccessNow.canEdit) return;
+        const stillShown = this.currentSelection();
+        this.isSavingDetails = true;
+        this.detailsMessage = '';
+        this.detailsError = '';
+        this.RefreshView();
+        try {
+            const outcome = await details.Save();
+            if (!stillShown()) return;
+            if (outcome.ok) {
+                this.detailsMessage = 'Details saved.';
+                SharedService.Instance.CreateSimpleNotification('Details saved.', 'info', 3000);
+            } else {
+                LogError(`Failed to save the details of space ${this.activeSpaceId}: ${outcome.message}`);
+                this.detailsError = outcome.message;
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Error saving the details of space ${this.activeSpaceId}: ${msg}`);
+            if (stillShown()) this.detailsError = `Could not save the details: ${msg}`;
+        } finally {
+            this.isSavingDetails = false;
+            this.RefreshView();
+        }
     }
 
     /** A test that is true only while the space and the selection request in force now are still the ones in force. */
@@ -3150,6 +3356,126 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (own >= 0) this.uploadingSpaceIds.splice(own, 1);
             this.RefreshView();
         }
+    }
+
+    /** Whether the rail offers New space: who may create a top-level space (Administer Spaces) and may create Space rows at all. */
+    public get canCreateSpace(): boolean {
+        if (!this.currentUser || !this.mayAdministerSpaces) return false;
+        try {
+            return !!this.ProviderToUse.EntityByName('MJ_BizApps_Collaboration: Spaces')?.GetUserPermisions(this.currentUser).CanCreate;
+        } catch (err) {
+            this.logOnce('create-space', `Could not check the right to create a space: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    public get newSpaceDetailsTitle(): string {
+        const kind = this.newSpaceKinds.find((k) => UUIDsEqual(k.id, this.newSpaceTypeId));
+        return kind ? `${kind.name} details` : 'Details';
+    }
+
+    public openNewSpaceDialog(): void {
+        if (!this.canCreateSpace) {
+            SharedService.Instance.CreateSimpleNotification('You do not have permission to create a space.', 'warning', 3000);
+            return;
+        }
+        this.newSpaceKinds = newSpaceKinds(CollaborationEngineBase.Instance.SpaceTypes);
+        this.newSpaceTypeId = '';
+        this.newSpaceDraft = null;
+        this.newSpaceError = '';
+        this.newSpaceDetailsIncomplete = false;
+        this.isNewSpaceDialogOpen = true;
+        this.RefreshView();
+    }
+
+    public closeNewSpaceDialog(): void {
+        this.isNewSpaceDialogOpen = false;
+        this.newSpaceDraft = null;
+        this.RefreshView();
+    }
+
+    /** A kind was chosen: the draft is made now, so its subtype's fields can be drawn and filled in before Create. */
+    public async onNewSpaceTypeSelected(typeId: string): Promise<void> {
+        const type = CollaborationEngineBase.Instance.SpaceTypeById(typeId);
+        if (!type || !this.currentUser) return;
+        this.newSpaceError = '';
+        try {
+            const draft = await NewSpaceDraft.Start(this.ProviderToUse, this.currentUser, type);
+            // A second pick during the first draft's start wins: the earlier draft is dropped
+            if (!this.isNewSpaceDialogOpen) return;
+            this.newSpaceDraft = draft;
+            this.newSpaceTypeId = type.ID;
+            this.newSpaceDetailsIncomplete = draft.MissingDetails().length > 0;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Could not start a ${type.Name} space: ${msg}`);
+            this.newSpaceError = `Could not start a ${type.Name} space: ${msg}`;
+        }
+        this.RefreshView();
+    }
+
+    public onNewSpaceDetailChanged(): void {
+        this.newSpaceDetailsIncomplete = (this.newSpaceDraft?.MissingDetails().length ?? 0) > 0;
+        this.RefreshView();
+    }
+
+    public async onSubmitNewSpace(payload: NewSpaceSubmitPayload): Promise<void> {
+        const draft = this.newSpaceDraft;
+        const user = this.currentUser;
+        if (!draft || !user || this.isCreatingSpace) return;
+        this.isCreatingSpace = true;
+        this.newSpaceError = '';
+        this.RefreshView();
+        try {
+            const ownerRoleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode('owner')?.ID;
+            const outcome = await draft.Save(this.ProviderToUse, user, { name: payload.name, description: payload.description, ownerRoleId });
+            if (outcome.status === 'refused') {
+                LogError(`Could not create the space: ${outcome.message}`);
+                this.newSpaceError = outcome.message;
+                return;
+            }
+            const spaceId = outcome.spaceId;
+            this.closeNewSpaceDialog();
+            try {
+                await this.addNewSpaceToRail(spaceId);
+            } catch (readErr) {
+                // The space is written: the person is told, and a reload of the page shows it
+                const why = readErr instanceof Error ? readErr.message : String(readErr);
+                LogError(`Could not show the new space: ${why}`);
+                SharedService.Instance.CreateSimpleNotification(`${payload.name} was created, but it could not be opened here: ${why}. Reload the page to see it.`, 'warning', 8000);
+                return;
+            }
+            if (outcome.status === 'created') {
+                SharedService.Instance.CreateSimpleNotification(`${payload.name} created.`, 'info', 3000);
+            } else {
+                LogError(outcome.message);
+                SharedService.Instance.CreateSimpleNotification(outcome.message, 'error', 8000);
+            }
+            this.onSpaceOpenRequested(spaceId);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Error creating a space: ${msg}`);
+            this.newSpaceError = `Could not create the space: ${msg}`;
+        } finally {
+            this.isCreatingSpace = false;
+            this.RefreshView();
+        }
+    }
+
+    /** Reads the space that was just made and puts it in the rail, so it can be opened before the next full load. */
+    private async addNewSpaceToRail(spaceId: string): Promise<void> {
+        const rv = new RunView(this.RunViewToUse);
+        const res = await rv.RunView<RawSpaceRecord>({
+            EntityName: 'MJ_BizApps_Collaboration: Spaces',
+            ExtraFilter: `ID = '${spaceId}'`,
+            ResultType: 'simple',
+            BypassCache: true,
+        });
+        if (!res.Success) throw new Error(res.ErrorMessage || 'The new space could not be read back.');
+        const [row] = res.Results ?? [];
+        if (!row) throw new Error('The new space was created but cannot be read by you yet.');
+        this.rawSpaces = [...this.rawSpaces.filter((sp) => !UUIDsEqual(sp.ID, row.ID)), row];
+        this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
     }
 
     public openNewConversationDialog(): void {
