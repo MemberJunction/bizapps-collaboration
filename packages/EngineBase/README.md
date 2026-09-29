@@ -15,6 +15,7 @@ Collaboration's metadata engine: the space types, the role types, the app's sett
   - `UserCanConfigureSpaceTypes`: *Configure Space Types*.
   - `UserCanConfigureSpaces`: *Configure Spaces*, and an owner seat on the space when one is named.
   - `UserHoldsLifecycleAuthorization`, `UserCanCloseSpace` and `UserCanReopenSpace`: *Close and Reopen Spaces*, and an owner seat. A reopen finds the owner seat even when the space's access after close has ended.
+  - `UserMayAdministerSpaces`: *Administer Spaces*, the rights beyond an owner's: a top-level space, the `AllowParentAssignees` and `AgentRetrieval` settings, a task for someone seated above its space, and backdating a close. UI, Developer and Integration hold it by default.
   - `FindCollaborationAuthorization` finds a child of the `Collaboration` root by name, and nothing outside it.
 - **`ReachedSeat`:** the seat through which a person reaches a space, their own or one on an ancestor it inherits from, by the same walk as `membershipReaches` in `collaboration-core`.
 - `COLLABORATION_APP_ID` and `COLLABORATION_SETTINGS_NAME`.
