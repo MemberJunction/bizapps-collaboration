@@ -592,6 +592,7 @@ These are in the plan's workstream A:
 - Bound view and dashboard properties, hidden action parameters and locked query parameters (A14 to A17, in MJ#4789), which grants and a granted query need ([§ 11](#11-security-rules-for-plug-ins)).
 - A read-only chat area for a closed space ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Until that's in MJ `next`, Collaboration hides the composer itself.
 - An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), for the same pull request). Until that's in MJ `next`, Collaboration's server hands a space's delete to its subtype itself.
+- `EnsureISAChild()` on a new record reads a child row that can't exist yet and logs a load error ([MJ#4859](https://github.com/MemberJunction/MJ/issues/4859), for the same pull request). Nothing is wrong, and each new space of a type with its own table logs one until the fix is in.
 
 ## 10. Examples
 
