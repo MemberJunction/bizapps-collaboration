@@ -34,3 +34,6 @@ export const AI_SKILL_ENTITY = 'MJ: AI Skills';
 export const AI_AGENT_PROMPT_ENTITY = 'MJ: AI Agent Prompts';
 export const AI_AGENT_PERMISSION_ENTITY = 'MJ: AI Agent Permissions';
 
+export const ENTITY_PERMISSION_ENTITY = 'MJ: Entity Permissions';
+export const ROW_LEVEL_SECURITY_FILTER_ENTITY = 'MJ: Row Level Security Filters';
+export const SEARCH_SCOPE_PERMISSION_ENTITY = 'MJ: Search Scope Permissions';

@@ -650,5 +650,50 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Chats In Reach"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "322075FB-107F-4248-A8CF-B95E841101A9"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Agents In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "94BA7691-12B1-476A-AE32-5B131EE949C1"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Search Scopes",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Agent Scope Assignments"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3F499367-0290-41D5-A96B-FE99D5684225"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Search Scope Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Scope Permissions For The Caller"
+    }
   }
 ]

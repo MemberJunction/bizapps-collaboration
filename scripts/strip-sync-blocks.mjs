@@ -1,67 +1,73 @@
+/**
+ * Cleans what `mj sync push` writes back into metadata JSON: it strips every `sync` block and
+ * restores each file's final newline (the push drops it).
+ *
+ *   node scripts/strip-sync-blocks.mjs           rewrite the files
+ *   node scripts/strip-sync-blocks.mjs --check   change nothing; exit 1 if any file has a sync block or no final newline
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 
-function stripSync(obj) {
-    if (Array.isArray(obj)) {
-        return obj.map(stripSync);
-    }
-    if (obj !== null && typeof obj === 'object') {
-        const out = {};
-        for (const [k, v] of Object.entries(obj)) {
-            if (k === 'sync') continue;
-            out[k] = stripSync(v);
+const checkOnly = process.argv.includes('--check');
+const skippedDirs = new Set(['node_modules', '.backups', 'sql_logging']);
+const problems = [];
+
+/** Returns the value without `sync` keys, and whether it held any. */
+function withoutSync(value) {
+    let found = false;
+    const strip = (val) => {
+        if (Array.isArray(val)) return val.map(strip);
+        if (val !== null && typeof val === 'object') {
+            const out = {};
+            for (const [key, child] of Object.entries(val)) {
+                if (key === 'sync') {
+                    found = true;
+                    continue;
+                }
+                out[key] = strip(child);
+            }
+            return out;
         }
-        return out;
-    }
-    return obj;
+        return val;
+    };
+    return { cleaned: strip(value), found };
+}
+
+function processFile(file) {
+    const text = fs.readFileSync(file, 'utf-8');
+    const { cleaned, found } = withoutSync(JSON.parse(text));
+    const missingNewline = !text.endsWith('\n');
+    if (found) problems.push(`${file}: has a sync block`);
+    if (missingNewline) problems.push(`${file}: no final newline`);
+    if (checkOnly || (!found && !missingNewline)) return;
+    fs.writeFileSync(file, found ? JSON.stringify(cleaned, null, 2) + '\n' : text + '\n');
 }
 
 function processDir(dir) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-            if (entry.name !== 'node_modules' && entry.name !== '.backups' && entry.name !== 'sql_logging') {
-                processDir(full);
-            }
+            if (!skippedDirs.has(entry.name)) processDir(full);
         } else if (entry.isFile() && entry.name.endsWith('.json')) {
             try {
-                const text = fs.readFileSync(full, 'utf-8');
-                const parsed = JSON.parse(text);
-                let hadSync = false;
-                function checkAndStrip(val) {
-                    if (Array.isArray(val)) {
-                        return val.map(checkAndStrip);
-                    }
-                    if (val !== null && typeof val === 'object') {
-                        const out = {};
-                        for (const [k, v] of Object.entries(val)) {
-                            if (k === 'sync') {
-                                hadSync = true;
-                                continue;
-                            }
-                            out[k] = checkAndStrip(v);
-                        }
-                        return out;
-                    }
-                    return val;
-                }
-                const cleaned = checkAndStrip(parsed);
-                if (hadSync) {
-                    fs.writeFileSync(full, JSON.stringify(cleaned, null, 2) + '\n');
-                }
-            } catch (err) {
-                console.error(`Error parsing JSON in ${full}:`, err);
+                processFile(full);
+            } catch (error) {
+                problems.push(`${full}: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
     }
 }
 
-const metadataDir = path.resolve('metadata');
-processDir(metadataDir);
-const metadataTestsDir = path.resolve('metadata-tests');
-if (fs.existsSync(metadataTestsDir)) {
-    processDir(metadataTestsDir);
+for (const dir of ['metadata', 'metadata-tests']) {
+    if (fs.existsSync(path.resolve(dir))) processDir(path.resolve(dir));
 }
-console.log('Stripped sync blocks from metadata and metadata-tests');
 
+if (checkOnly) {
+    if (problems.length > 0) {
+        console.error(`Metadata is not clean:\n  ${problems.join('\n  ')}\nRun: node scripts/strip-sync-blocks.mjs`);
+        process.exit(1);
+    }
+    console.log('Metadata is clean: no sync blocks, every file ends in a newline.');
+} else {
+    console.log('Stripped sync blocks and restored final newlines in metadata and metadata-tests.');
+}

@@ -25,6 +25,7 @@ jobs:
       - run: pnpm run build
       - run: pnpm test
       - run: node scripts/check-mj-tokens.mjs
+      - run: node scripts/strip-sync-blocks.mjs --check
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
       - run: node --check test-harnesses/integration.mjs && node --check test-harnesses/integration-client.mjs

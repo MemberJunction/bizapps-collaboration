@@ -10,12 +10,13 @@ import {
 import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { randomUUID } from 'node:crypto';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
-import { FindRows, GetPersonaUser } from '../wire.js';
+import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
 import { registerChecks } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
 const createdItemIds: string[] = [];
 const createdFileIds: string[] = [];
 
@@ -282,6 +283,62 @@ const checks: NamedCheck[] = [
                     Assert(deleted === true, `LB7 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
                 }
             }
+        },
+    },
+    {
+        Id: 'library.LB8',
+        Name: 'LB8 — an upload lands in the band its uploader chose: Team in a Shared-default space stays hidden from a learner, and a seat that cannot see Team cannot choose it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const lee = await GetPersonaUser(ctx, 'lee');
+
+            const upload = async (user: typeof ada, chosen: 'Shared' | 'Team' | null, name: string) =>
+                uploadSpaceFile({
+                    user,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: COHORT_SPACE_ID,
+                    folder: 'Welcome',
+                    fileName: name,
+                    mimeType: 'text/plain',
+                    content: Buffer.from(`LB8 ${name}`),
+                    gate: () => decideUploadBand(ctx.Provider, user, COHORT_SPACE_ID, chosen),
+                });
+
+            // The cohort type's default band is Shared, so an owner who says nothing publishes to every seat
+            const byDefault = await upload(ada, null, `lb8-default-${Date.now()}.txt`);
+            Assert(byDefault.ok, `Ada's upload with no band chosen: ${byDefault.ok ? '' : byDefault.message}`);
+            if (!byDefault.ok) throw new Error(byDefault.message);
+            createdItemIds.push(byDefault.itemId);
+            createdFileIds.push(byDefault.fileId);
+            const defaultItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.itemId}'`, ['Band']);
+            Assert(defaultItem[0]?.Band === 'Shared', `An upload with no band chosen takes the type's default, Shared (saw ${defaultItem[0]?.Band})`);
+
+            // Choosing Team keeps the file internal, and the learner cannot read the item
+            const internal = await upload(ada, 'Team', `lb8-team-${Date.now()}.txt`);
+            Assert(internal.ok, `Ada's upload with Team chosen: ${internal.ok ? '' : internal.message}`);
+            if (!internal.ok) throw new Error(internal.message);
+            createdItemIds.push(internal.itemId);
+            createdFileIds.push(internal.fileId);
+            const teamItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${internal.itemId}'`, ['Band']);
+            Assert(teamItem[0]?.Band === 'Team', `An upload with Team chosen lands on Team (saw ${teamItem[0]?.Band})`);
+            const learnerRead = await View(ctx).RunView<{ ID: string }>(
+                { EntityName: SPACE_ITEM_ENTITY, ExtraFilter: `SpaceID = '${COHORT_SPACE_ID}'`, Fields: ['ID'], ResultType: 'simple' },
+                lee,
+            );
+            Assert(learnerRead.Success === true, `Lee reads the cohort's items: ${learnerRead.ErrorMessage ?? ''}`);
+            const learnerIds = (learnerRead.Results ?? []).map((r) => r.ID.toLowerCase());
+            Assert(learnerIds.includes(byDefault.itemId.toLowerCase()), 'Lee reads the Shared upload');
+            Assert(!learnerIds.includes(internal.itemId.toLowerCase()), 'Lee cannot read the Team upload');
+
+            // A seat that cannot see Team cannot choose it, and nothing is stored
+            const refused = await upload(lee, 'Team', `lb8-refused-${Date.now()}.txt`);
+            Assert(!refused.ok, 'Lee choosing Team is refused');
+            Assert(!refused.ok && refused.message === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ok ? '' : refused.message}`);
         },
     },
 ];

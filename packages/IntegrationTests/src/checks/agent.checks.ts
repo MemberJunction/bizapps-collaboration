@@ -1,4 +1,4 @@
-import { RunView } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
@@ -10,14 +10,18 @@ import {
     AI_AGENT_PROMPT_ENTITY,
     AI_AGENT_SEARCH_SCOPE_ENTITY,
     AI_AGENT_SKILL_ENTITY,
+    ENTITY_PERMISSION_ENTITY,
+    ROW_LEVEL_SECURITY_FILTER_ENTITY,
+    SEARCH_SCOPE_PERMISSION_ENTITY,
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
     FILE_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
+    TASK_ENTITY,
 } from '../entity-names.js';
-import { FindRows, GetPersonaUser, isClientTransport } from '../wire.js';
+import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wire.js';
 import { cleanupConversation, registerChecks } from './cleanup-helpers.js';
 import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
@@ -638,6 +642,7 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             if (isClientTransport(ctx)) return; // ExplainScope has no GraphQL endpoint in MJ 6.1.3; the server harness covers it
             const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
 
             // A space item points at a record: the two files the world seeds in Discovery, one Shared and one Team.
             const files = await FindRows<{ ID: string; Name: string }>(
@@ -687,16 +692,17 @@ const checks: NamedCheck[] = [
                 privateChatId = priv.spaceChatId;
 
                 await SearchEngine.Instance.Config({}, ada);
-                const laneFilters = async (chatId: string): Promise<{ items: string; tasks: string }> => {
+                const laneFilters = async (chatId: string, asUser: UserInfo = ada): Promise<{ items: string; tasks: string }> => {
                     const explained = await SearchEngine.Instance.ExplainScope(
                         {
                             ScopeIDs: [SEARCH_SCOPE_ID],
                             SearchContext: { PrimaryScopeRecordID: chatId },
                             AIAgentID: AGENT_ID,
                         },
-                        ada,
+                        asUser,
                     );
                     Assert(explained.length === 1, 'One scope explanation');
+                    Assert(explained[0].Entitlement?.Allowed === true, `${asUser.Name} may search this scope (saw ${JSON.stringify(explained[0].Entitlement)})`);
                     const items = explained[0].Lanes.find((l) => l.Target.includes('Space Items'));
                     const tasks = explained[0].Lanes.find((l) => l.Target.includes('Tasks'));
                     Assert(!!items?.RenderedFilter && items.Status === 'Active', `Space Items lane is Active with a rendered filter (saw ${items?.Status})`);
@@ -708,7 +714,31 @@ const checks: NamedCheck[] = [
                 const laneRows = (filter: string) =>
                     FindRows<{ RecordID: string; Band: string; SpaceID: string }>(ctx, SPACE_ITEM_ENTITY, filter, ['RecordID', 'Band', 'SpaceID']);
 
+                // The Tasks lane, on the real Tasks table: the world files a Shared and a Team root task in Discovery
+                const taskEntity = ctx.Provider.EntityByName(TASK_ENTITY);
+                Assert(!!taskEntity, 'Task entity found');
+                const taskItems = await FindRows<{ RecordID: string; Band: string }>(
+                    ctx,
+                    SPACE_ITEM_ENTITY,
+                    `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${taskEntity?.ID}'`,
+                    ['RecordID', 'Band'],
+                );
+                const rootId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId).toLowerCase();
+                const sharedRoots = new Set(taskItems.filter((t) => t.Band === 'Shared').map((t) => rootId(t.RecordID)));
+                const teamRoots = new Set(taskItems.filter((t) => t.Band === 'Team').map((t) => rootId(t.RecordID)));
+                Assert(sharedRoots.size > 0 && teamRoots.size > 0, 'Discovery holds a Shared and a Team root task, so the Tasks lane has something to exclude');
+                const laneTasks = (filter: string) => FindRows<{ ID: string; RootParentID: string | null }>(ctx, TASK_ENTITY, filter, ['ID', 'RootParentID']);
+                const rootOf = (t: { ID: string; RootParentID: string | null }): string => (t.RootParentID ?? t.ID).toLowerCase();
+
                 const generalLanes = await laneFilters(generalChatId);
+                const generalTasks = await laneTasks(generalLanes.tasks);
+                Assert(generalTasks.length > 0 && generalTasks.every((t) => sharedRoots.has(rootOf(t))), 'General Tasks lane reaches only tasks under a Shared root');
+                Assert(!generalTasks.some((t) => teamRoots.has(rootOf(t))), 'General Tasks lane never reaches a task under a Team root');
+
+                // Bea, a client, gets the same General lane, and MemberJunction lets her search: the agent, its scope
+                // assignment and the scope's permission rows are the three things it reads as her
+                const beaGeneralLanes = await laneFilters(generalChatId, bea);
+                Assert(beaGeneralLanes.items === generalLanes.items && beaGeneralLanes.tasks === generalLanes.tasks, "Bea's General lanes are Ada's General lanes");
                 const generalRows = await laneRows(generalLanes.items);
                 Assert(generalRows.length > 0, 'General lane reaches at least one item');
                 Assert(reaches(generalRows, photoFileId), 'General lane reaches the Shared site-photo.png');
@@ -725,11 +755,78 @@ const checks: NamedCheck[] = [
                 Assert(reaches(privateRows, photoFileId), 'Private lane reaches the Shared site-photo.png');
                 Assert(reaches(privateRows, briefFileId), 'Private lane reaches the Team discovery-brief.pdf');
                 Assert(privateRows.every((r) => r.Band === 'Shared' || r.Band === 'Team'), 'Private lane reaches Shared and Team, and no other band');
-                Assert(privateLanes.tasks.includes('Shared') && privateLanes.tasks.includes('Team'), `Private Tasks lane allows Shared and Team (got: ${privateLanes.tasks})`);
+                const privateTasks = await laneTasks(privateLanes.tasks);
+                Assert(privateTasks.some((t) => sharedRoots.has(rootOf(t))) && privateTasks.some((t) => teamRoots.has(rootOf(t))), 'Private Tasks lane reaches tasks under a Shared root and under a Team root');
+                Assert(privateTasks.every((t) => sharedRoots.has(rootOf(t)) || teamRoots.has(rootOf(t))), 'Private Tasks lane stays inside the Discovery roots');
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, generalConvId, generalChatId);
                 if (privateConvId) await cleanupConversation(ctx.Provider, ctx.User, privateConvId, privateChatId);
             }
+        },
+    },
+    {
+        Id: 'agent.AG9',
+        Name: "AG9 — A client's agent reads stay narrow: no other user's permission row, no agent outside the spaces they reach",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            if (isClientTransport(ctx)) return;
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const view = View(ctx);
+            const beaRoleIds = new Set(bea.UserRoles.map((r) => r.RoleID.toLowerCase()));
+            Assert(beaRoleIds.size > 0, 'Bea holds a role');
+
+            // Scope permission rows: only ones that name Bea or a role she holds
+            const scopePerms = await view.RunView<{ ID: string; UserID: string | null; RoleID: string | null }>(
+                { EntityName: SEARCH_SCOPE_PERMISSION_ENTITY, Fields: ['ID', 'UserID', 'RoleID'], ResultType: 'simple' },
+                bea,
+            );
+            Assert(scopePerms.Success === true, `Bea reads Search Scope Permissions: ${scopePerms.ErrorMessage ?? ''}`);
+            const permRows = scopePerms.Results ?? [];
+            Assert(permRows.length > 0, 'Bea reads at least the permission row her own role holds');
+            Assert(
+                permRows.every((r) => (r.UserID && SameID(r.UserID, bea.ID)) || (r.RoleID && beaRoleIds.has(r.RoleID.toLowerCase()))),
+                'Every Search Scope Permissions row Bea reads names her or a role she holds',
+            );
+            const allPerms = await FindRows<{ ID: string }>(ctx, SEARCH_SCOPE_PERMISSION_ENTITY, '1=1', ['ID']);
+            Assert(allPerms.length > permRows.length, 'The scope has permission rows for other roles that Bea does not read');
+
+            // Agent permission rows: no grant at all
+            const agentPerms = await view.RunView<{ ID: string }>(
+                { EntityName: AI_AGENT_PERMISSION_ENTITY, Fields: ['ID'], ResultType: 'simple' },
+                bea,
+            );
+            Assert(!agentPerms.Success || (agentPerms.Results?.length ?? 0) === 0, 'Bea reads no AI Agent Permissions row');
+
+            // Agents: the shipped agent, and none that no reached space runs. The test agent is attached to Northwind, which Bea does not
+            // reach, but it is an ancestor of Discovery, which she does, so she may run it; a second row proves the negative.
+            const agents = await view.RunView<{ ID: string }>(
+                { EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple' },
+                bea,
+            );
+            Assert(agents.Success === true, `Bea reads AI Agents: ${agents.ErrorMessage ?? ''}`);
+            const agentIds = (agents.Results ?? []).map((a) => a.ID.toLowerCase());
+            Assert(agentIds.includes(AGENT_ID.toLowerCase()), 'Bea reads the shipped space agent');
+            const everyAgent = await FindRows<{ ID: string }>(ctx, AI_AGENT_ENTITY, '1=1', ['ID']);
+            Assert(everyAgent.length > agentIds.length, `The host has agents Bea does not read (host ${everyAgent.length}, Bea ${agentIds.length})`);
+        },
+    },
+    {
+        Id: 'agent.AG10',
+        Name: 'AG10 — No Space Participant grant still uses the retired "Collaboration: Agent Catalog" filter',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const filters = await FindRows<{ ID: string }>(ctx, ROW_LEVEL_SECURITY_FILTER_ENTITY, `Name = 'Collaboration: Agent Catalog'`, ['ID']);
+            Assert(
+                filters.length === 0,
+                'The retired "Collaboration: Agent Catalog" row filter (1 = 1) is still in this database. It lets a client read every agent and scope permission. Clean it up as docs/reviewing-the-data.md says.',
+            );
+            const grants = await FindRows<{ ID: string }>(
+                ctx,
+                ENTITY_PERMISSION_ENTITY,
+                `ReadRLSFilterID IN (SELECT ID FROM [${ctx.Schema}].[vwRowLevelSecurityFilters] WHERE Name = 'Collaboration: Agent Catalog')`,
+                ['ID'],
+            );
+            Assert(grants.length === 0, `${grants.length} entity permission(s) still use the retired "Collaboration: Agent Catalog" filter. Clean them up as docs/reviewing-the-data.md says.`);
         },
     },
 ];

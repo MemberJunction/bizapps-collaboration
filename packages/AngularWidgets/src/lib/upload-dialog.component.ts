@@ -171,6 +171,7 @@ export interface CollabUploadSubmitPayload {
             <div class="form-group half">
               <label class="f-label">Who can see this?</label>
               <div class="band-options">
+                @if (IsBandAllowed('Shared')) {
                 <label class="band-option" [class.selected]="selectedBand === 'Shared'">
                   <input
                     type="radio"
@@ -186,7 +187,9 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-sub">Visible to all participants</div>
                   </div>
                 </label>
+                }
 
+                @if (IsBandAllowed('Team')) {
                 <label class="band-option" [class.selected]="selectedBand === 'Team'">
                   <input
                     type="radio"
@@ -202,6 +205,7 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-sub">Internal team only</div>
                   </div>
                 </label>
+                }
               </div>
             </div>
           </div>
@@ -508,6 +512,22 @@ export class CollabUploadDialogComponent {
   @Input() ClientOrgName = '';
   @Input() IsSubmitting = false;
   @Input() AllowLinks = false;
+
+  /** The bands this seat may choose. The server refuses any other, so the dialog offers only these. */
+  @Input() set AllowedBands(bands: readonly SpaceBand[]) {
+    this.allowedBands = bands;
+    if (bands.length > 0 && !bands.includes(this.selectedBand)) {
+      this.selectedBand = bands[0];
+    }
+  }
+  get AllowedBands(): readonly SpaceBand[] {
+    return this.allowedBands;
+  }
+  private allowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
+
+  public IsBandAllowed(band: SpaceBand): boolean {
+    return this.allowedBands.includes(band);
+  }
 
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() SubmitRequested = new EventEmitter<CollabUploadSubmitPayload>();

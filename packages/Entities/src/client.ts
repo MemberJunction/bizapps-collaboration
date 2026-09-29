@@ -21,6 +21,8 @@ export interface UploadSpaceFileInput {
     MimeType?: string;
     Base64Data: string;
     Folder?: string | null;
+    /** The band the person chose. Left out, the space type's default applies. */
+    Band?: 'Shared' | 'Team';
 }
 
 export interface UploadSpaceFilePayload {

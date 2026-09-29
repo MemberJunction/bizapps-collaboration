@@ -1,10 +1,11 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaClientContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext, SameID } from '../../wire.js';
 import { registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
 const createdItemIds: string[] = [];
 
 const checks: NamedCheck[] = [
@@ -233,6 +234,38 @@ const checks: NamedCheck[] = [
                     Assert(deleted === true, `client LB5 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
                 }
             }
+        },
+    },
+    {
+        Id: 'library.LB6',
+        Name: 'LB6 — an upload over the wire lands in the band its uploader chose, and a seat that cannot see Team cannot choose it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const leeCtx = await getPersonaClientContext(ctx, 'lee');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const leeClient = new CollaborationClient(leeCtx.GraphQLProvider);
+            const content = (name: string) => Buffer.from(`LB6 ${name}`).toString('base64');
+
+            // The cohort type's default band is Shared: with nothing chosen the file is Shared, with Team chosen it stays internal
+            const byDefault = await adaClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-default-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('default'), Folder: 'Welcome' });
+            Assert(byDefault.Success === true && !!byDefault.ItemID, `Ada uploads with no band chosen: ${byDefault.ErrorMessage ?? ''}`);
+            if (byDefault.ItemID) createdItemIds.push(byDefault.ItemID);
+            const internal = await adaClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-team-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('team'), Folder: 'Welcome', Band: 'Team' });
+            Assert(internal.Success === true && !!internal.ItemID, `Ada uploads with Team chosen: ${internal.ErrorMessage ?? ''}`);
+            if (internal.ItemID) createdItemIds.push(internal.ItemID);
+
+            const bands = await FindRows<{ ID: string; Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID IN ('${byDefault.ItemID}', '${internal.ItemID}')`, ['ID', 'Band']);
+            Assert(bands.find((r) => SameID(r.ID, byDefault.ItemID))?.Band === 'Shared', "No band chosen takes the type's default, Shared");
+            Assert(bands.find((r) => SameID(r.ID, internal.ItemID))?.Band === 'Team', 'Team chosen lands on Team');
+
+            const learnerRead = await FindRows<{ ID: string }>(leeCtx, SPACE_ITEM_ENTITY, `SpaceID = '${COHORT_SPACE_ID}'`, ['ID'], leeCtx.User, { BypassCache: true });
+            Assert(learnerRead.some((r) => SameID(r.ID, byDefault.ItemID)), 'Lee reads the Shared upload');
+            Assert(!learnerRead.some((r) => SameID(r.ID, internal.ItemID)), 'Lee cannot read the Team upload');
+
+            const refused = await leeClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-refused-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('refused'), Folder: 'Welcome', Band: 'Team' });
+            Assert(!refused.Success, 'Lee choosing Team is refused over the wire');
+            Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
         },
     },
 ];

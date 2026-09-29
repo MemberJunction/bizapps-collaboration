@@ -969,6 +969,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [SpaceId]="activeSpaceId"
                                 [ClientOrgName]="clientOrgName"
                                 [IsSubmitting]="isUploading"
+                                [AllowedBands]="uploadAllowedBands"
                                 (CancelRequested)="onUploadDialogCancel()"
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
@@ -1005,6 +1006,20 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isDrawerOpen = false;
     public isShareDialogOpen = false;
     public isUploadDialogOpen = false;
+
+    /**
+     * The bands the caller's own seat on this space may choose for an upload. A seat that can't see Team
+     * can only share; one that can see Team but not promote can only keep material on Team. When the caller's
+     * seat isn't in the loaded list (an inherited seat), both are offered and the server decides.
+     */
+    public get uploadAllowedBands(): readonly SpaceBand[] {
+        const currentUserId = this.currentUser?.ID;
+        const member = currentUserId ? this.spaceMembers.find(m => UUIDsEqual(m.userId, currentUserId)) : undefined;
+        const roleType = member?.roleId ? CollaborationEngineBase.Instance.SpaceRoleTypeById(member.roleId) : null;
+        if (!roleType) return ['Shared', 'Team'];
+        if (!roleType.CanSeeTeamBand) return ['Shared'];
+        return roleType.CanPromoteBand ? ['Shared', 'Team'] : ['Team'];
+    }
     public isUploading = false;
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
@@ -2494,6 +2509,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     MimeType: payload.fileType || 'application/octet-stream',
                     Base64Data: base64Data,
                     Folder: payload.folder || 'Deliverables',
+                    Band: payload.band,
                 });
                 if (!uploadRes.Success) {
                     throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');

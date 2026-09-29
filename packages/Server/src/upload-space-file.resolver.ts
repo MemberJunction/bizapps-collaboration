@@ -2,7 +2,7 @@ import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBas
 import { LogError } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { openMode, SPACE_UPLOAD_MAX_BYTES, storedContentType } from '@mj-biz-apps/collaboration-core';
+import { openMode, SPACE_UPLOAD_MAX_BYTES, storedContentType, type Band } from '@mj-biz-apps/collaboration-core';
 import { collaborationFileStore, decideUploadBand, recordItemUse, requireSystemUser, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 
@@ -24,6 +24,10 @@ export class UploadSpaceFileInput {
 
     @Field({ nullable: true })
     Folder?: string;
+
+    /** Shared or Team: the band the person chose. Left out, the space type's default applies. */
+    @Field({ nullable: true })
+    Band?: string;
 }
 
 @ObjectType()
@@ -76,6 +80,10 @@ export class UploadSpaceFileResolver extends ResolverBase {
     ): Promise<UploadSpaceFilePayload> {
         const provider = GetReadWriteProvider(context.providers);
         const user = this.GetUserFromPayload(context.userPayload);
+        if (input.Band != null && input.Band !== 'Shared' && input.Band !== 'Team') {
+            return { Success: false, ErrorMessage: 'Upload refused: the band must be Shared or Team.' };
+        }
+        const chosenBand: Band | null = input.Band === 'Shared' || input.Band === 'Team' ? input.Band : null;
         const maxBytes = configuredMaxBytes();
         if ((input.Base64Data?.length ?? 0) > Math.ceil(maxBytes * 4 / 3) + 8) {
             return { Success: false, ErrorMessage: `Upload refused: files are limited to ${maxBytes} bytes.` };
@@ -93,7 +101,7 @@ export class UploadSpaceFileResolver extends ResolverBase {
             mimeType: input.MimeType,
             content: new Uint8Array(Buffer.from(input.Base64Data ?? '', 'base64')),
             maxBytes,
-            gate: () => decideUploadBand(provider, user, input.SpaceID),
+            gate: () => decideUploadBand(provider, user, input.SpaceID, chosenBand),
         });
         if ('message' in outcome) {
             return { Success: false, ErrorMessage: outcome.message };
