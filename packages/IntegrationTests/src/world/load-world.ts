@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
-import { MJAIAgentEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import '@mj-biz-apps/common-entities';
@@ -30,10 +30,10 @@ import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
+    mjBizAppsCollaborationSpaceAgentEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
-    COLLABORATION_DEFAULT_AGENT_ID,
     CollaborationEngine,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
@@ -53,6 +53,8 @@ import { seedWorldPlan } from './seed-plan.js';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
+const SPACE_AGENTS = 'MJ_BizApps_Collaboration: Space Agents';
+const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
 const USER_ROLES = 'MJ: User Roles';
@@ -135,6 +137,7 @@ export async function loadWorld(): Promise<void> {
     const typeRows = readCsv(join(dir, 'types.csv'));
     const spaceRows = readCsv(join(dir, 'spaces.csv'));
     const memberRows = readCsv(join(dir, 'members.csv'));
+    const agentRows = readCsv(join(dir, 'agents.csv'));
 
     const people = new Map<string, Persona>();
     for (const persona of personas) {
@@ -270,7 +273,8 @@ export async function loadWorld(): Promise<void> {
         const space = spaceRows.find((item) => item.Key === row.Space);
         if (!space) throw new Error(`Member row names unknown space ${row.Space}.`);
         const inviter = row.Status === 'Invited' ? nonOwnerInviter(row.Space) : space.Owner;
-        const who = actor(row.Role === 'owner' ? row.Person : inviter);
+        // The space's own owner seats themselves first; any other owner is seated by the space's owner
+        const who = actor(row.Role === 'owner' && row.Person === space.Owner ? row.Person : inviter);
         let record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, who);
         const existing = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${userId}'`, system);
         if (!existing) {
@@ -318,7 +322,30 @@ export async function loadWorld(): Promise<void> {
             }
         }
     }
+    // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
+
+    // The agents a space allows (`agents.csv`): a person can tag them in its chat. A row on a space reaches its sub-spaces. The agent is
+    // MemberJunction's own, found by name, so a database without it stops here with the name rather than loading a world nobody can ask.
+    for (const row of agentRows) {
+        const spaceId = requireMap(spaceIds, row.Space, 'space');
+        const agentId = await findId(provider, AI_AGENTS, `Name = '${quote(row.Agent)}' AND Status = 'Active'`, system);
+        if (!agentId) throw new Error(`agents.csv names the agent ${row.Agent}, and this database has no active agent of that name.`);
+        if (await findId(provider, SPACE_AGENTS, `SpaceID = '${spaceId}' AND AgentID = '${agentId}'`, system)) continue;
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENTS, system);
+        record.NewRecord();
+        record.SpaceID = spaceId;
+        record.AgentID = agentId;
+        record.IsDefault = row.IsDefault === '1';
+        if (!(await record.Save())) throw new Error(`agent ${row.Agent} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    }
+
+    // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer only for an open
+    // conversation (a closed space's banner shows without one, and its archived conversation is read-only). Closed this month's is made
+    // before the close below, which archives it.
+    await seedSpaceConversations('studio', 'ada', 'sam', true);
+    await seedSpaceConversations('sealed-child', 'sam', 'ada', true);
+    await seedSpaceConversations('closed-recent', 'ada', 'bea', true);
 
     for (const space of spaceRows.filter((s) => s.ClosedAt)) {
         const spaceId = spaceIds.get(space.Key);
@@ -356,9 +383,10 @@ export async function loadWorld(): Promise<void> {
 
 
     async function seedSpaceConversations(
-        spaceKey: 'discovery' | 'northwind' | 'committee',
+        spaceKey: string,
         teamActorKey: string,
-        otherActorKey: string
+        otherActorKey: string,
+        generalOnly = false,
     ) {
         const targetSpaceId = spaceIds.get(spaceKey);
         if (!targetSpaceId) {
@@ -419,6 +447,9 @@ export async function loadWorld(): Promise<void> {
             ]
         );
 
+        // Spaces the UI pass opens need a conversation to show the composer, and a closed one its archived chat
+        if (generalOnly) return;
+
         // 2. Topic conversation
         await ensureConvoAndPosts(
             `${spaceKey}-deliverables`,
@@ -454,55 +485,10 @@ export async function loadWorld(): Promise<void> {
     }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
-    await ensureRobotTesterSeated(provider, system, spaceIds);
-    await ensureTestAgentDriver(system);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
     console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
     console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
     await pool.close();
-}
-
-async function ensureTestAgentDriver(system: UserInfo): Promise<void> {
-    const md = new Metadata();
-    const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', system);
-    if (await agent.Load(COLLABORATION_DEFAULT_AGENT_ID)) {
-        if (agent.DriverClass !== 'CollaborationSpaceAgentDriver') {
-            agent.DriverClass = 'CollaborationSpaceAgentDriver';
-            const saved = await agent.Save();
-            if (!saved) {
-                throw new Error('Failed to set test agent DriverClass');
-            }
-        }
-    }
-}
-
-async function ensureRobotTesterSeated(
-    provider: SQLServerDataProvider,
-    system: UserInfo,
-    spaceIds: Map<string, string>,
-): Promise<void> {
-    const robotEmail = 'da-robot-tester@bluecypress.io';
-    const robotId = await findId(provider, USERS, `Email = '${robotEmail}'`, system);
-    if (!robotId) return;
-
-    const ownerRoleId = await findId(provider, ROLES, `Code = 'owner'`, system);
-    if (!ownerRoleId) return;
-
-    const md = new Metadata();
-    for (const spaceId of spaceIds.values()) {
-        const existingSeat = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${robotId}'`, system);
-        if (!existingSeat) {
-            const memberObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, system);
-            memberObj.NewRecord();
-            memberObj.SpaceID = spaceId;
-            memberObj.UserID = robotId;
-            memberObj.SpaceRoleTypeID = ownerRoleId;
-            memberObj.Band = 'Team';
-            memberObj.Status = 'Active';
-            await memberObj.Save();
-        }
-        await syncRoomEditGrantsForSpace(provider, spaceId);
-    }
 }
 
 function asBool(value: unknown): boolean {
@@ -644,7 +630,7 @@ async function assertCatalog(
 
     const chatsCheck = await view.RunView<{ ID: string; SpaceID: string; Name: string; Kind: string; Status: string }>({
         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-        ExtraFilter: `SpaceID IN (${['discovery', 'northwind', 'committee'].map(k => `'${spaceIds.get(k)}'`).join(',')}) AND Status = 'Active'`,
+        ExtraFilter: `SpaceID IN (${['discovery', 'northwind', 'committee', 'studio', 'sealed-child'].map(k => `'${spaceIds.get(k)}'`).join(',')}) AND Status = 'Active'`,
         Fields: ['ID', 'SpaceID', 'Name', 'Kind', 'Status'],
         ResultType: 'simple',
     }, user);
@@ -661,9 +647,20 @@ async function assertCatalog(
         { space: 'committee', name: 'committee-general', kind: 'General' },
         { space: 'committee', name: 'committee-deliverables', kind: 'Topic' },
         { space: 'committee', name: 'committee-internal', kind: 'Private' },
+        { space: 'studio', name: 'studio-general', kind: 'General' },
+        { space: 'sealed-child', name: 'sealed-child-general', kind: 'General' },
     ];
     if (chatsCheck.Results.length !== expectedChats.length) {
         throw new Error(`Expected ${expectedChats.length} active space chats, found ${chatsCheck.Results.length}.`);
+    }
+    const closedChat = await view.RunView<{ Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID = '${spaceIds.get('closed-recent')}' AND Name = 'closed-recent-general'`,
+        Fields: ['Status'],
+        ResultType: 'simple',
+    }, user);
+    if (!closedChat.Success || closedChat.Results?.[0]?.Status?.trim() !== 'Archived') {
+        throw new Error(`Closed this month's conversation must exist and be Archived by the close, saw ${JSON.stringify(closedChat.Results)}.`);
     }
     for (const ec of expectedChats) {
         const sid = spaceIds.get(ec.space);

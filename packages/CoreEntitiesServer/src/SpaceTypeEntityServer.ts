@@ -9,6 +9,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { ValidateCollaborationSettings, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
+import { refuseSubtypeEntity, type SubtypeEntityShape } from './subtype-rules.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { asMetadata } from './uuid.js';
 
@@ -90,6 +91,11 @@ export class SpaceTypeEntityServer extends mjBizAppsCollaborationSpaceTypeEntity
             if (!extEntity) {
                 return fail(result, 'SpaceExtensionEntity', `Extension entity "${this.SpaceExtensionEntity}" does not exist in MemberJunction.`);
             }
+            const spaces = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
+            if (!spaces) return fail(result, 'SpaceExtensionEntity', 'The Spaces entity could not be read, so the subtype cannot be checked.');
+            const shape = (info: NonNullable<typeof spaces>): SubtypeEntityShape => ({ ID: info.ID, Name: info.Name, ParentID: info.ParentID ?? null, Permissions: info.Permissions });
+            const refusal = refuseSubtypeEntity(shape(spaces), shape(extEntity), (id) => { const found = md.EntityByID(id); return found ? shape(found) : undefined; });
+            if (refusal) return fail(result, 'SpaceExtensionEntity', refusal);
         }
 
         // 3. Clear driver registry cache when type is validated/saved

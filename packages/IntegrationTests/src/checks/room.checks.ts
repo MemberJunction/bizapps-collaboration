@@ -1,25 +1,26 @@
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
-import { postSpaceMessage, uploadSpaceFile, decideUploadBand, collaborationFileStore, createSpaceConversation, executeSpaceChatTurn } from '@mj-biz-apps/collaboration-core-entities-server';
-import { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_CHAT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
+import { collaborationFileStore, createSpaceConversation, decideUploadBand, executeSpaceChatTurn, postSpaceMessage, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
+import { CONVERSATION_DETAIL_ENTITY, CONVERSATION_ENTITY, SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
+import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import { CHECK_SPACE_PREFIX } from '../world/ids.js';
+import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
-const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
-const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
 const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
-const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
+const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
-import { cleanupConversation, cleanupSpace } from './cleanup-helpers.js';
 
 const createdDetailIds: string[] = [];
+let testAgentAttachmentId: string | null = null;
 
 const checks: NamedCheck[] = [
     {
@@ -319,7 +320,7 @@ const checks: NamedCheck[] = [
 
             const closedTestSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             closedTestSpace.NewRecord();
-            closedTestSpace.Name = `RM4-Closed-Test-${Date.now()}`;
+            closedTestSpace.Name = `${CHECK_SPACE_PREFIX}RM4-Closed-Test-${Date.now()}`;
             closedTestSpace.SpaceTypeID = typeId;
             closedTestSpace.ParentID = NORTHWIND_SPACE_ID;
             closedTestSpace.InheritsMembership = true;
@@ -328,7 +329,6 @@ const checks: NamedCheck[] = [
             Assert(spaceSaved && !!closedTestSpace.ID, `Created closed test space for RM4: ${closedTestSpace.LatestResult?.CompleteMessage ?? ''}`);
 
             let closedConvId: string | undefined;
-            let closedChatId: string | undefined;
             try {
                 const closedStartRes = await createSpaceConversation(ctx.Provider, ada, {
                     SpaceID: closedTestSpace.ID,
@@ -337,7 +337,6 @@ const checks: NamedCheck[] = [
                 });
                 Assert(closedStartRes.ok === true && !!closedStartRes.conversationId, `Ada starts General conversation in test space: ${closedStartRes.message ?? ''}`);
                 closedConvId = closedStartRes.conversationId!;
-                closedChatId = closedStartRes.spaceChatId;
 
                 // Close the space
                 closedTestSpace.ClosedAt = new Date();
@@ -414,7 +413,7 @@ const checks: NamedCheck[] = [
                 const adaRes = await postSpaceMessage(ctx.Provider, ada, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: discConvId,
-                    text: '@Collaboration Space Agent summarize materials in this space',
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize materials in this space`,
                 });
                 Assert(adaRes.ok === true, 'Ada postSpaceMessage succeeds');
                 if (!adaRes.ok) throw new Error(`Ada postSpaceMessage failed: ${adaRes.message}`);
@@ -490,7 +489,7 @@ const checks: NamedCheck[] = [
                 const samPostRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: NORTHWIND_SPACE_ID,
                     conversationId: nwConvId,
-                    text: '@Collaboration Space Agent summarize all materials in this space',
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize all materials in this space`,
                 });
                 Assert(samPostRes.ok === true, 'Sam postSpaceMessage in Northwind room succeeds');
                 if (!samPostRes.ok) throw new Error(`Sam postSpaceMessage failed: ${samPostRes.message}`);
@@ -533,7 +532,7 @@ const checks: NamedCheck[] = [
                 const samSealedRes = await postSpaceMessage(ctx.Provider, sam, {
                     spaceId: SEALED_BRANCH_SPACE_ID,
                     conversationId: sealedConvId,
-                    text: '@Collaboration Space Agent summarize materials in this space',
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize materials in this space`,
                 });
                 Assert(samSealedRes.ok === true, 'Sam postSpaceMessage in Sealed branch room succeeds');
                 if (!samSealedRes.ok) throw new Error(`Sam postSpaceMessage failed: ${samSealedRes.message}`);
@@ -563,14 +562,7 @@ const checks: NamedCheck[] = [
                 Assert(sealedReplyMsg.includes(uniqueFileName), `Sealed branch room reply must name its own Shared file ${uniqueFileName}`);
             } finally {
                 if (sealedItemId) {
-                    try {
-                        const itemToDelete = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-                        if (await itemToDelete.Load(sealedItemId)) {
-                            await itemToDelete.Delete();
-                        }
-                    } catch (cleanupErr) {
-                        console.error(`Cleanup failed for sealed item: ${cleanupErr}`);
-                    }
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, sealedItemId, 'the sealed branch item');
                 }
                 await cleanupConversation(ctx.Provider, ctx.User, discConvId, discChatId);
                 if (nwConvId || nwChatId) {
@@ -607,7 +599,7 @@ const checks: NamedCheck[] = [
 
             const closedSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             closedSpace.NewRecord();
-            closedSpace.Name = `RM6-Closed-Space-${Date.now()}`;
+            closedSpace.Name = `${CHECK_SPACE_PREFIX}RM6-Closed-Space-${Date.now()}`;
             closedSpace.SpaceTypeID = typeId;
             closedSpace.ParentID = NORTHWIND_SPACE_ID;
             closedSpace.InheritsMembership = true;
@@ -622,7 +614,6 @@ const checks: NamedCheck[] = [
             });
             Assert(closedConvRes.ok && !!closedConvRes.conversationId, 'Created conversation in closed test space');
             const closedConvId = closedConvRes.conversationId!;
-            const closedChatId = closedConvRes.spaceChatId;
 
             closedSpace.ClosedAt = new Date();
             const closedOk = await closedSpace.Save();
@@ -748,6 +739,8 @@ const checks: NamedCheck[] = [
             devMember.Status = 'Active';
             Assert(await devMember.Save(), 'Seating Dev as owner on Discovery must succeed');
 
+            // Discovery's configuration is NULL on a fresh world, so "restore" means writing back whatever was there, NULL included
+            let configCaptured = false;
             let origConfig: string | null = null;
             let adaConvId: string | undefined;
             let adaChatId: string | undefined;
@@ -755,6 +748,7 @@ const checks: NamedCheck[] = [
                 const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
                 Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space as dev');
                 origConfig = space.Configuration;
+                configCaptured = true;
 
                 const configObj = origConfig ? JSON.parse(origConfig) : {};
                 configObj.Chats = { ...(configObj.Chats ?? {}), WhoCanStart: 'Owners' };
@@ -776,33 +770,26 @@ const checks: NamedCheck[] = [
                     Name: `discovery-ada-allowed-${Date.now()}`,
                     Kind: 'General',
                 });
-                Assert(adaRes.ok === true && !!adaRes.conversationId, `Ada (owner) must be permitted when WhoCanStart is Owners: ${adaRes.message ?? ''}`);
                 adaConvId = adaRes.conversationId;
                 adaChatId = adaRes.spaceChatId;
+                Assert(adaRes.ok === true && !!adaRes.conversationId, `Ada (owner) must be permitted when WhoCanStart is Owners: ${adaRes.message ?? ''}`);
             } finally {
-                try {
-                    if (adaConvId || adaChatId) {
-                        await cleanupConversation(ctx.Provider, ctx.User, adaConvId, adaChatId);
-                    }
-                    if (origConfig !== null) {
+                if (adaConvId || adaChatId) {
+                    await cleanupConversation(ctx.Provider, ctx.User, adaConvId, adaChatId);
+                }
+                if (configCaptured) {
+                    await cleanupStep(async () => {
                         const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                        if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
-                            restoreSpace.Configuration = origConfig;
-                            const restored = await restoreSpace.Save();
-                            Assert(restored, 'Restoring original Discovery space configuration must succeed');
-                        }
-                    }
-                } finally {
-                    if (devMember.ID) {
-                        const cleanupDev = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
-                        if (await cleanupDev.Load(devMember.ID)) {
-                            const delOk = await cleanupDev.Delete();
-                            Assert(delOk === true, 'Harness delete of Dev seat on Discovery must succeed');
-                        }
-                        const verifyGone = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
-                        const reloaded = await verifyGone.Load(devMember.ID);
-                        Assert(!reloaded, 'Dev seat on Discovery must be deleted');
-                    }
+                        Assert(await restoreSpace.Load(DISCOVERY_SPACE_ID), 'Reload Discovery to restore its configuration');
+                        restoreSpace.Configuration = origConfig;
+                        Assert(await restoreSpace.Save(), `Restoring Discovery's configuration must succeed: ${restoreSpace.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                        Assert(await verify.Load(DISCOVERY_SPACE_ID), 'Read Discovery back after the restore');
+                        Assert(verify.Configuration === origConfig, `Discovery's configuration must be back to ${origConfig === null ? 'NULL' : 'its original text'}`);
+                    });
+                }
+                if (devMember.ID) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devMember.ID, "Dev's seat on Discovery");
                 }
             }
         },
@@ -879,8 +866,7 @@ const checks: NamedCheck[] = [
                 Assert(!beaPostPriv.ok && beaPostPriv.message === 'Caller cannot post in this internal conversation without Team visibility.', `Bea refused posting in Private with correct message: ${!beaPostPriv.ok ? beaPostPriv.message : ''}`);
             } finally {
                 if (beaDetailId) {
-                    const d = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                    if (await d.Load(beaDetailId)) await d.Delete();
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, beaDetailId, "Bea's message");
                 }
                 await cleanupConversation(ctx.Provider, ctx.User, adaGenRes.conversationId, adaGenRes.spaceChatId);
                 await cleanupConversation(ctx.Provider, ctx.User, adaPrivRes.conversationId, adaPrivRes.spaceChatId);
@@ -901,7 +887,7 @@ const checks: NamedCheck[] = [
 
             const testSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             testSpace.NewRecord();
-            testSpace.Name = `RM10-New-Space-${Date.now()}`;
+            testSpace.Name = `${CHECK_SPACE_PREFIX}RM10-New-Space-${Date.now()}`;
             testSpace.SpaceTypeID = typeId;
             testSpace.ParentID = DISCOVERY_SPACE_ID;
             testSpace.OwnerID = ada.ID;
@@ -959,7 +945,7 @@ const checks: NamedCheck[] = [
             // Create child space under Northwind (Sam inherits contributing Team membership)
             const testSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             testSpace.NewRecord();
-            testSpace.Name = `RM11-Close-Reopen-${Date.now()}`;
+            testSpace.Name = `${CHECK_SPACE_PREFIX}RM11-Close-Reopen-${Date.now()}`;
             testSpace.SpaceTypeID = typeId;
             testSpace.ParentID = NORTHWIND_SPACE_ID;
             testSpace.InheritsMembership = true;
@@ -1059,26 +1045,105 @@ const checks: NamedCheck[] = [
             }
         },
     },
-];
+    {
+        Id: 'room.RM12',
+        Name: "RM12 — a parent's narrowing override binds a sealed child whoever asks: a seat that cannot see the parent is refused under WhoCanStart=Owners",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const nora = await GetPersonaUser(ctx, 'nora');
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
-IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
-    Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        // Clean up messages created in RM5
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`room Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`room Teardown failed to delete detail ${id}: ${err}`);
-                    }
+            const roles = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code IN ('owner', 'member')", ['ID', 'Code']);
+            const ownerRoleId = roles.find((r) => r.Code === 'owner')?.ID;
+            const memberRoleId = roles.find((r) => r.Code === 'member')?.ID;
+            Assert(!!ownerRoleId && !!memberRoleId, 'Owner and member space role types found');
+
+            const seat = async (as: typeof ada, spaceId: string, userId: string, roleId: string) => {
+                const member = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, as);
+                member.NewRecord();
+                member.SpaceID = spaceId;
+                member.UserID = userId;
+                member.SpaceRoleTypeID = roleId;
+                member.Band = 'Team';
+                member.Status = 'Active';
+                Assert(await member.Save(), `Seating ${userId} on ${spaceId}: ${member.LatestResult?.CompleteMessage ?? ''}`);
+                return member.ID;
+            };
+
+            const seatIds: string[] = [];
+            let configCaptured = false;
+            let originalConfig: string | null = null;
+            let samConvId: string | undefined;
+            let samChatId: string | undefined;
+            try {
+                // Dev, who holds Configure Spaces, owns Northwind for the check. Nora reaches the sealed child and nothing above it.
+                seatIds.push(await seat(ada, NORTHWIND_SPACE_ID, dev.ID, ownerRoleId!));
+                seatIds.push(await seat(sam, SEALED_CHILD_SPACE_ID, nora.ID, memberRoleId!));
+
+                const northwind = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await northwind.Load(NORTHWIND_SPACE_ID), 'Dev loads Northwind');
+                originalConfig = northwind.Configuration;
+                configCaptured = true;
+                const config = originalConfig ? JSON.parse(originalConfig) : {};
+                config.Chats = { ...(config.Chats ?? {}), WhoCanStart: 'Owners' };
+                northwind.Configuration = JSON.stringify(config);
+                Assert(await northwind.Save(), `Dev narrows Northwind to WhoCanStart=Owners: ${northwind.LatestResult?.CompleteMessage ?? ''}`);
+
+                // Nora cannot read Northwind, so a chain read as her would skip its override and let her start a chat
+                const noraRes = await createSpaceConversation(ctx.Provider, nora, { SpaceID: SEALED_CHILD_SPACE_ID, Name: `sealed-nora-${Date.now()}`, Kind: 'General' });
+                Assert(
+                    !noraRes.ok && noraRes.message === 'Caller is not permitted to start a conversation in this space.',
+                    `Nora, a member who cannot see Northwind, is refused under Northwind's WhoCanStart=Owners: ${noraRes.ok ? 'she was allowed' : noraRes.message}`,
+                );
+                if (noraRes.ok) {
+                    await cleanupConversation(ctx.Provider, ctx.User, noraRes.conversationId, noraRes.spaceChatId);
+                }
+
+                // Sam owns the sealed child, so the same override lets him
+                const samRes = await createSpaceConversation(ctx.Provider, sam, { SpaceID: SEALED_CHILD_SPACE_ID, Name: `sealed-sam-${Date.now()}`, Kind: 'General' });
+                samConvId = samRes.conversationId;
+                samChatId = samRes.spaceChatId;
+                Assert(samRes.ok === true, `Sam, the sealed child's owner, may start a conversation: ${samRes.message ?? ''}`);
+            } finally {
+                if (samConvId || samChatId) {
+                    await cleanupConversation(ctx.Provider, ctx.User, samConvId, samChatId);
+                }
+                if (configCaptured) {
+                    await cleanupStep(async () => {
+                        const restore = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                        Assert(await restore.Load(NORTHWIND_SPACE_ID), 'Reload Northwind to restore its configuration');
+                        restore.Configuration = originalConfig;
+                        Assert(await restore.Save(), `Restoring Northwind's configuration: ${restore.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                        Assert(await verify.Load(NORTHWIND_SPACE_ID), 'Read Northwind back after the restore');
+                        Assert(verify.Configuration === originalConfig, "Northwind's configuration is back to what it was");
+                    });
+                }
+                for (const id of seatIds.reverse()) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, id, 'the RM12 seat');
                 }
             }
-        }
+        },
     },
+];
+
+registerChecks(checks);
+IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
+    // The turns run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
+    Setup: async (ctx: IntegrationCheckContext) => {
+        testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
+    },
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
+                }
+            },
+            ...createdDetailIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a room check posted')),
+        ]),
 });

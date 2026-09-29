@@ -1,4 +1,4 @@
-import { RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { membershipReaches, type MemberSnapshot, type RoleFlags, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngine } from './CollaborationEngine.js';
@@ -239,9 +239,11 @@ export function callerUuid(user: UserInfo | null | undefined): string | null {
     return parseUuid(user?.ID);
 }
 
-export const STAFF_ROLES = new Set(['UI', 'Developer', 'Integration']);
-
-export function isStaffUser(user: { UserRoles?: { Role?: string }[] } | null | undefined): boolean {
-    if (!user?.UserRoles) return false;
-    return user.UserRoles.some((role) => !!role.Role && STAFF_ROLES.has(role.Role));
+/**
+ * Whether the user holds the 'Administer Spaces' authorization, read through the entity's own provider. No check anywhere looks at
+ * a role's name: the UI, Developer and Integration roles hold it by default, and a host edits the grants.
+ */
+export function mayAdminister(entity: BaseEntity, user: UserInfo | null | undefined): boolean {
+    if (!user) return false;
+    return CollaborationEngine.Instance.UserMayAdministerSpaces(user, asMetadata(entity.ProviderToUse) ?? Metadata.Provider);
 }

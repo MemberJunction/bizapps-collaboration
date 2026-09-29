@@ -13,10 +13,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     <div class="settings-container">
       <div class="settings-header">
         <div>
-          <div class="settings-title">Space Settings</div>
+          <div class="settings-title">Settings</div>
           <div class="settings-sub">Manage identity, branding, access inheritance, and AI retrieval behavior for {{ Settings.name }}.</div>
         </div>
 
+        @if (CanEdit) {
         <button
           class="save-btn"
           [disabled]="isSaving"
@@ -30,16 +31,36 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <span>Save changes</span>
           }
         </button>
+        }
       </div>
 
-      @if (saveSuccessMessage) {
-        <div class="alert-success">
-          <i class="fa-solid fa-circle-check"></i>
+      @if (bannerVisible && saveSuccessMessage) {
+        <div class="alert-success" role="status">
+          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
           <span>{{ saveSuccessMessage }}</span>
         </div>
       }
+      @if (bannerVisible && saveInfoMessage) {
+        <div class="alert-info" role="status">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>{{ saveInfoMessage }}</span>
+        </div>
+      }
 
-      <div class="settings-sections">
+      @if (!CanEdit) {
+        <div class="alert-info" role="status">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>{{ ReadOnlyNote || "You can't change this space's settings." }}</span>
+        </div>
+        <div class="settings-sections">
+          <div class="settings-card">
+            <div class="form-grid">
+              <ng-container *ngTemplateOutlet="lifecycle"></ng-container>
+            </div>
+          </div>
+        </div>
+      } @else {
+      <div class="settings-sections" (input)="onEdit()" (change)="onEdit()">
         <!-- 1. Profile & Appearance -->
         <div class="settings-card">
           <div class="card-title-row">
@@ -49,19 +70,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field full-width">
-              <label class="field-label">Space Name</label>
+              <label class="field-label" for="settings-name">Space Name</label>
               <input
                 type="text"
                 class="form-input"
+                id="settings-name"
                 [(ngModel)]="formData.name"
                 placeholder="e.g. Northwind relationship"
               />
             </div>
 
             <div class="form-field full-width">
-              <label class="field-label">Description</label>
+              <label class="field-label" for="settings-description">Description</label>
               <textarea
                 class="form-textarea"
+                id="settings-description"
                 [(ngModel)]="formData.description"
                 placeholder="Describe what this space is for..."
                 rows="2"
@@ -69,40 +92,44 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field">
-              <label class="field-label">Icon Class (FontAwesome)</label>
+              <label class="field-label" for="settings-icon">Icon</label>
               <div class="input-with-icon">
                 <i [class]="formData.iconClass || 'fa-solid fa-compass'" class="icon-preview"></i>
                 <input
                   type="text"
                   class="form-input with-prefix"
-                  [(ngModel)]="formData.iconClass"
+                  id="settings-icon"
+                [(ngModel)]="formData.iconClass"
                   placeholder="fa-solid fa-compass"
                 />
               </div>
             </div>
 
             <div class="form-field">
-              <label class="field-label">Theme Color</label>
+              <label class="field-label" for="settings-color-text">Theme Color</label>
               <div class="color-picker-row">
                 <input
                   type="color"
+                  aria-label="Theme color picker"
                   class="color-input"
                   [(ngModel)]="formData.color"
                 />
                 <input
                   type="text"
                   class="form-input color-text"
+                  id="settings-color-text"
                   [(ngModel)]="formData.color"
-                  placeholder="#0076b6"
+                  placeholder="#RRGGBB"
                 />
               </div>
             </div>
 
             <div class="form-field full-width">
-              <label class="field-label">Background Banner Image URL</label>
+              <label class="field-label" for="settings-banner">Background Banner Image URL</label>
               <input
                 type="url"
                 class="form-input"
+                id="settings-banner"
                 [(ngModel)]="formData.backgroundImageUrl"
                 placeholder="https://images.unsplash.com/..."
               />
@@ -124,12 +151,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field full-width">
-              <label class="field-label">Agent Retrieval</label>
-              <div class="radio-group">
+              <div class="field-label" id="settings-retrieval-label">Agent Retrieval</div>
+              @if (!CanAdminister) {
+                <div class="radio-sub" id="settings-retrieval-note">Only someone with the Administer Spaces authorization can change this.</div>
+              }
+              <div class="radio-group" role="radiogroup" aria-labelledby="settings-retrieval-label" [attr.aria-describedby]="CanAdminister ? null : 'settings-retrieval-note'">
                 <label class="radio-label">
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="Included"
                     [(ngModel)]="formData.agentRetrieval"
                   />
@@ -139,23 +170,27 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   </div>
                 </label>
 
+                @if (!IsRootSpace) {
                 <label class="radio-label">
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="ExcludedFromParentScope"
                     [(ngModel)]="formData.agentRetrieval"
                   />
                   <div>
                     <div class="radio-title">Excluded from Parent Scope</div>
-                    <div class="radio-sub">Files remain searchable directly within this space, but will not bleed into parent space questions.</div>
+                    <div class="radio-sub">Files remain searchable directly within this space, but will not be included in questions asked in the parent space.</div>
                   </div>
                 </label>
+                }
 
                 <label class="radio-label">
                   <input
                     type="radio"
                     name="agentRetrieval"
+                    [disabled]="!CanAdminister"
                     value="ExcludedEntirely"
                     [(ngModel)]="formData.agentRetrieval"
                   />
@@ -178,8 +213,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field">
-              <label class="field-label">Retention Policy</label>
-              <select [(ngModel)]="formData.retention" class="form-select">
+              <label class="field-label" for="settings-retention">Retention Policy</label>
+              <select id="settings-retention" [(ngModel)]="formData.retention" class="form-select">
+                <option value="">Type default ({{ formData.typeDefaultRetention || 'Indefinite' }})</option>
                 <option value="Indefinite">Indefinite (No automatic archiving)</option>
                 <option value="Year">1 Year</option>
                 <option value="Month">1 Month</option>
@@ -187,31 +223,91 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field">
-              <label class="field-label">Space Type</label>
+              <label class="field-label" for="settings-type">Space Type</label>
               <input
                 type="text"
                 class="form-input"
+                id="settings-type"
                 [value]="formData.spaceType"
                 disabled
               />
             </div>
 
-            <div class="form-field full-width">
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="formData.inheritsMembership"
-                  class="checkbox-input"
-                />
-                <div>
-                  <div class="cb-title">Inherit parent space membership</div>
-                  <div class="cb-sub">Members of the parent space automatically receive access to this sub-space.</div>
-                </div>
-              </label>
-            </div>
+            @if (!IsRootSpace) {
+              <div class="form-field full-width">
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="formData.inheritsMembership"
+                    class="checkbox-input"
+                  />
+                  <div>
+                    <div class="cb-title">Inherit parent space membership</div>
+                    <div class="cb-sub">Members of the parent space automatically receive access to this sub-space.</div>
+                  </div>
+                </label>
+              </div>
+            }
+
+            <ng-container *ngTemplateOutlet="lifecycle"></ng-container>
           </div>
         </div>
       </div>
+      }
+
+      @if (HasDetails) {
+        <!-- The details the space's type keeps of its own: drawn by the host, saved on their own -->
+        <section class="settings-sections details-section" aria-labelledby="settings-details-title">
+          <div class="settings-card">
+            <div class="card-title-row">
+              <i class="fa-solid fa-list-check section-ic" aria-hidden="true"></i>
+              <span class="card-title" id="settings-details-title">{{ DetailsTitle || 'Details' }}</span>
+            </div>
+            <div class="details-fields">
+              <ng-content select="[mjcSettingsDetails]"></ng-content>
+            </div>
+            @if (DetailsMessage) {
+              <div class="alert-success" role="status">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                <span>{{ DetailsMessage }}</span>
+              </div>
+            }
+            @if (DetailsError) {
+              <div class="alert-error" role="alert">
+                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                <span>{{ DetailsError }}</span>
+              </div>
+            }
+            @if (DetailsEditable) {
+              <div class="details-actions">
+                <button type="button" class="save-btn" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" (click)="SaveDetailsRequested.emit()">
+                  @if (IsSavingDetails) {
+                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> <span>Saving...</span>
+                  } @else {
+                    <i class="fa-solid fa-check" aria-hidden="true"></i> <span>Save details</span>
+                  }
+                </button>
+                <button type="button" class="cancel-lifecycle-btn discard-btn" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <ng-template #lifecycle>
+        @if (CanChangeLifecycle) {
+            <div class="form-field full-width">
+              <div class="cb-title">Status: {{ formData.status }}</div>
+              @if (confirmingLifecycle) {
+                <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
+                <button type="button" class="save-btn" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = false">Cancel</button>
+              } @else {
+                <button type="button" class="cancel-lifecycle-btn" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+              }
+            </div>
+        }
+      </ng-template>
     </div>
   `,
   styles: [
@@ -250,7 +346,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         align-items: center;
         gap: 6px;
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 8px 20px;
         border-radius: 6px;
@@ -268,13 +364,58 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         cursor: not-allowed;
       }
 
+      .alert-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--mj-status-info-bg);
+        border: 1px solid var(--mj-status-info-border);
+        color: var(--mj-status-info-text);
+        padding: 10px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .details-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .details-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .details-actions .discard-btn {
+        margin-top: 0;
+      }
+      .alert-error {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--mj-status-error-bg);
+        border: 1px solid var(--mj-status-error-border);
+        color: var(--mj-status-error-text);
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .cancel-lifecycle-btn {
+        margin-top: 8px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
       .alert-success {
         display: flex;
         align-items: center;
         gap: 8px;
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #166534;
+        background: var(--mj-status-success-bg);
+        border: 1px solid var(--mj-status-success-border);
+        color: var(--mj-status-success-text);
         padding: 10px 16px;
         border-radius: 6px;
         font-size: 13px;
@@ -309,7 +450,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-brand-primary, #0076b6);
       }
       .section-ic.ai-ic {
-        color: #6366f1;
+        color: var(--mjc-ai-to);
       }
       .card-title {
         font-size: 15px;
@@ -457,6 +598,70 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() Settings!: SpaceSettingsModel;
   @Input() isSaving = false;
   @Input() saveSuccessMessage = '';
+  /** Something to say that isn't a success, such as "No changes to save.". */
+  @Input() saveInfoMessage = '';
+  /** A root space has no parent, so the sub-space options aren't offered. */
+  @Input() IsRootSpace = false;
+
+  /** The space's type keeps details of its own (a subtype): the host draws them in the `[mjcSettingsDetails]` slot. */
+  @Input() HasDetails = false;
+  @Input() DetailsTitle = '';
+  /** The person may change them: Save and Discard are offered. False shows them read-only. */
+  @Input() DetailsEditable = false;
+  @Input() DetailsDirty = false;
+  /** A required detail is empty: Save waits. */
+  @Input() DetailsIncomplete = false;
+  @Input() IsSavingDetails = false;
+  @Input() DetailsMessage = '';
+  @Input() DetailsError = '';
+  @Output() SaveDetailsRequested = new EventEmitter<void>();
+  @Output() DiscardDetailsRequested = new EventEmitter<void>();
+
+  @Output() CloseSpaceRequested = new EventEmitter<void>();
+  @Output() ReopenSpaceRequested = new EventEmitter<void>();
+
+  /** The banner shows a message until the person edits, and again for the next message. */
+  public bannerVisible = true;
+  /** True while a close or reopen is with the server: both buttons are off. */
+  @Input() IsBusy = false;
+  /** False when the person may reopen the space but not change its settings: the form is not shown, and there is nothing to save. */
+  @Input() CanEdit = true;
+  /** Whether the person may close (or, on a closed space, reopen) it: the button is offered only then. */
+  @Input() CanChangeLifecycle = true;
+  /** Whether the person holds 'Administer Spaces': the settings only that authorization may change (agent retrieval) are offered only then. */
+  @Input() CanAdminister = false;
+  /** Said above the read-only view: what the person may do instead. */
+  @Input() ReadOnlyNote = '';
+  /** What closing does under this space's post-close access, shown where the close is confirmed. */
+  @Input() CloseConsequence = 'It becomes read-only for everyone.';
+  private baselineJson = '';
+
+  /** The fields the person changed from what the form was built from. Status is the space's own, not a field they edit. */
+  private changedFields(): Partial<SpaceSettingsModel> {
+    if (!this.formData || !this.baselineJson) return {};
+    const baseline = JSON.parse(this.baselineJson) as Record<string, unknown>;
+    const changed: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(this.formData as unknown as Record<string, unknown>)) {
+      if (key === 'status') continue;
+      if (JSON.stringify(value) !== JSON.stringify(baseline[key])) changed[key] = value;
+    }
+    return changed as Partial<SpaceSettingsModel>;
+  }
+
+  private isFormDirty(): boolean {
+    return Object.keys(this.changedFields()).length > 0;
+  }
+  public confirmingLifecycle = false;
+
+  public onEdit(): void {
+    this.bannerVisible = false;
+  }
+
+  public confirmLifecycle(): void {
+    this.confirmingLifecycle = false;
+    if (this.formData.status === 'Closed') this.ReopenSpaceRequested.emit();
+    else this.CloseSpaceRequested.emit();
+  }
 
   @Output() SaveSettingsRequested = new EventEmitter<SpaceSettingsModel>();
 
@@ -464,12 +669,23 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
 
   public ngOnInit(): void {
     this.initFormData();
+    this.baselineJson = JSON.stringify(this.Settings);
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['Settings'] && this.Settings) {
-      this.initFormData();
+      // The same space's settings arriving again (after a close or reopen) must not throw away what is being typed
+      const sameSpace = !!this.formData && this.formData.id === this.Settings.id;
+      if (sameSpace && this.isFormDirty()) {
+        // The fresh row, with only what the person changed laid over it: another owner's change to a field they left alone stays
+        this.formData = { ...this.Settings, ...this.changedFields() };
+      } else {
+        this.initFormData();
+      }
+      this.baselineJson = JSON.stringify(this.Settings);
+      this.confirmingLifecycle = false;
     }
+    if (changes['saveSuccessMessage'] || changes['saveInfoMessage']) this.bannerVisible = true;
   }
 
   private initFormData(): void {

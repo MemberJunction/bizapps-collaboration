@@ -36,7 +36,7 @@
   <a href="#documentation">Docs</a>
 </p>
 
-<!-- Screenshots: add real Explorer captures from docs/screenshots/pr8/ once PR #8's walkthrough lands. -->
+<!-- Screenshots: add real Explorer captures once the walkthrough lands (PR 9's plan, stage 4). -->
 
 ---
 
@@ -70,7 +70,7 @@ flowchart TB
 
 - **The people** are one roster: your staff and your outside participants, each with a role whose flags, never its name, decide what they can do.
 - **The material** is on one of two **bands**: *Team*, your working material, and *Shared*, what your outside participants see. Moving something to Shared is an audited act.
-- **The conversations** belong to the space. People start them when they need them: open to everyone in the space, internal to the team, or a chat for a few.
+- **The conversations** belong to the space. People start them when they need them: open to everyone in the space, on a topic, or internal to the team.
 - **The assistant** answers from what the space holds, bounded by the **audience of the answer**. In a private chat it uses what you can read. In a shared conversation it uses only what *everyone in it* can read, so it can't repeat your team's notes to a client who's in the conversation.
 - **Your data** comes in through the space too: a chapter's members, a sponsor's booth leads, an institution's accreditation status, shown through views and dashboards your organization approved.
 
@@ -82,7 +82,7 @@ Who reads what is decided **in the database**, by row-level security, never by a
 |---|---|
 | 🤝 **Client portals** | A professional-services firm runs every client relationship as a space, with a sub-space per engagement. The portal outlives the project, and the firm's own knowledge can inform every answer without one client's material reaching another. |
 | 🏛️ **Boards and committees** | Seat outside directors who aren't staff. A compensation committee under the board stays sealed from directors who don't sit on it, while a director who sits on both works across both. |
-| 🎓 **Cohorts and communities** | Learning cohorts, mastermind groups, task forces and volunteer crews, with join requests and a directory. Each kind is a space type, a row of metadata, not a new feature. |
+| 🎓 **Cohorts and communities** | Learning cohorts, mastermind groups, task forces and volunteer crews, with join requests and a directory to come. Each kind is a space type, a row of metadata, not a new feature. |
 | 🗺️ **Federations and chapters** | A national's chapters each get a room that shows the chapter's own members, renewals and events through the national's approved definitions, next to the national's playbooks. The chapter doesn't have to run on the national's system. |
 | 🏢 **Sponsors, exhibitors and accreditation** | Relationships you deliver to another organization over time: booth leads, ad performance and renewal history for a sponsor; submission status and reviewer findings for an institution. The room outlives staff turnover on either side. |
 | 🔍 **Reviews by outsiders** | Standards development, peer review, certification item writing and award juries: outside experts see exactly the material they review, and nothing else. |
@@ -95,11 +95,13 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **Spaces in a tree.** A root lasts as long as the relationship; sub-spaces hold the engagements, committees, cohorts and workstreams inside it. Closing a sub-space ends that piece of work, and access after close is a setting. |
+| ✅ | **Spaces in a tree.** A root lasts as long as the relationship; sub-spaces hold the engagements, committees, cohorts and workstreams inside it. Closing a space ends that piece of work and archives its conversations, and reopening restores them. |
+| ✅ | **Access after a close is a setting:** read-only (the default), read-only with the assistant, or none, for a number of days or for good. Once it ends, only the space's owner still sees it, and the confirmation before a close says what will happen. |
 | ✅ | **Sealed or inheriting sub-spaces.** A sub-space is sealed unless its creator asks for its parent's members. A person reads the union of what their seats reach, and a seat never reaches into a sealed sub-space from above. |
 | ✅ | **One roster for staff and outsiders,** with roles defined by flags: who may invite, promote, see the Team band, or contribute, up to a ceiling a member can't exceed. |
 | ✅ | **Invitations by email link,** through MemberJunction's magic links. Outsiders get the narrow Space Participant role, never a staff role. |
 | ✅ | **Seven generic space types:** Workspace, Team, Project, Working Group, Event, Community and Cohort. Every one is metadata; add your own without code. |
+| 🚧 | **Home across your spaces:** the spaces you reach, with counts of shared files, open tasks and invitations awaiting approval, from one query run on the server. |
 
 ### Library and work
 
@@ -116,7 +118,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| 🚧 | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
+| ✅ | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
 | 🚧 | **Chats inside a space,** with the people you choose. Whoever adds someone decides how much history they see. |
 | 🚧 | **An assistant bounded by its audience.** In a private chat it uses your reach, narrowed by a scope control; in a shared conversation, only what every participant can read, band by band. |
 | 🚧 | **Per-space agents,** skills and knowledge sources, set down the tree by admins. |
@@ -138,17 +140,21 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name and email. |
+| ✅ | **Row-level security on every read** an outside participant can make, one filter per entity, and field rules on people, so outsiders see only a person's name and email once BizApps Common turns on field-level security for People. |
 | ✅ | **Every write checked on the server,** in the entity classes, so the API, MCP and the screens obey the same rules. |
-| ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space, changed only by holders of Collaboration's *Configure Space Types* and *Configure Spaces* authorizations. |
+| ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space. |
+| ✅ | **Rights through MemberJunction's Authorizations:** changing a space type needs *Configure Space Types*; changing a space's settings needs *Configure Spaces* and an owner seat; closing or reopening needs *Close and Reopen Spaces* and an owner seat. |
+| ✅ | **No right decided by a role's name:** one authorization, *Administer Spaces*, decides creating a top-level space, two settings, assigning across levels and backdating a close. UI, Developer and Integration hold it by default, and a host edits the grants. |
 | 🗺️ | **PostgreSQL,** beside SQL Server. |
 
 ### Extensibility
 
 | | Feature |
 |---|---|
-| ✅ | **Space types as plug-ins.** A type names server and browser driver classes and, optionally, a table of its own that extends Space through MemberJunction's IsA, so another app adds behavior without Collaboration knowing it exists. |
-| ✅ | **Contributions:** tabs, overview cards, header chips, needs-you items, agenda items, lifecycle subscribers and signal providers any app can add to any type. |
+| ✅ | **Space types as plug-ins.** A type names server and browser driver classes, so another app adds behavior without Collaboration knowing it exists. The server asks the type's driver before a write to its spaces, seats and items, and before a conversation starts. |
+| 🚧 | **A type's own data,** in a table that extends Space through MemberJunction's IsA, created, edited and shown through the space's own screens, including a New Space screen. |
+| ✅ | **Contributions:** tabs and overview cards any app can add to any type, each card on the Shared or the Team side, and lifecycle subscribers on the server. |
+| 🚧 | **More contributions:** header chips, needs-you items, agenda items and signal providers. The contracts and examples exist; the screens don't show them yet. |
 | ✅ | **Widgets that run anywhere:** the space's components run in any Angular app, such as a learning portal, not only in MemberJunction Explorer. |
 | 🚧 | **Spaces for other apps' records:** one call opens, or finds, the space for a record another app owns, such as a room for a deal. |
 
@@ -169,7 +175,7 @@ The full set of rules, each marked built or planned, is in [How Collaboration wo
 ### Install it on a MemberJunction host
 
 **Requirements** (from [`mj-app.json`](mj-app.json)):
-- MemberJunction `>=6.1.2 <7.0.0`, on SQL Server. PostgreSQL is on the roadmap.
+- MemberJunction `>=6.1.2 <7.0.0`, on SQL Server. PostgreSQL is on the roadmap. For now the code also uses chat-area inputs that exist only on MemberJunction's `next` ([MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)); a release that carries them is pinned before a first install.
 - [BizApps Common](https://github.com/MemberJunction/bizapps-common) and [BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks), which the installer brings in.
 
 ```bash
@@ -188,14 +194,14 @@ Never give an outside participant MemberJunction's `UI` role: one unfiltered gra
 
 ### Develop it
 
-This is a pnpm workspace; CI uses Node 22.
+This is a pnpm workspace; CI uses Node 22. For now it builds against MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 9's plan § 3.1](plans/pr9-plan.md#31-working-on-mj-next)). Install from that parent folder, not here. CI installs published packages, so it fails on the `next`-only types until a release is pinned.
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm run build        # every package
-pnpm test             # the unit tests
-pnpm run mj:migrate   # the migrations, into __mj_BizAppsCollaboration
-pnpm run mj:push      # the metadata, while developing
+pnpm run build             # every package
+pnpm test                  # the unit tests
+pnpm run mj:migrate        # the migrations, into __mj_BizAppsCollaboration
+pnpm run mj:push           # the metadata, while developing
+pnpm run test:integration  # both harnesses; the client half needs MJAPI running
 ```
 
 The integration checks run against a real database with the sample world loaded; [the data guide](docs/reviewing-the-data.md) describes its people and spaces and how to load them.
@@ -205,8 +211,8 @@ The integration checks run against a real database with the sample world loaded;
 Collaboration is a base other apps build on. To add a kind of space:
 
 1. **Ship a space type** as metadata, with its vocabulary, bands, settings and allowed children.
-2. **Add behavior,** if it needs any, with a server driver (rules and reactions inside the save's transaction) and a UI driver (its tabs, cards and chips).
-3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`.
+2. **Add behavior,** if it needs any, with a server driver (rules checked before a save, and reactions after it) and a UI driver (its tabs and Overview cards, and checks before an invite or a new conversation; header chips and more are coming). A type's message hooks take effect once MemberJunction records who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)).
+3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`. This path is being finished in [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9).
 4. **Offer your data** through anchors and grants, bounded by the space.
 
 The rules, the hooks and three worked examples (a committee, a deal room, and Collaboration's own private example plug-ins) are in the [extensibility plan](docs/EXTENSIBILITY_PLAN.md). BizApps Committees will be rebuilt this way.
@@ -217,22 +223,23 @@ The rules, the hooks and three worked examples (a committee, a deal room, and Co
 |---|---|---|
 | [`@mj-biz-apps/collaboration-core`](packages/Core/README.md) | L0 | The rules as pure functions, the view models and the extension contracts |
 | [`@mj-biz-apps/collaboration-entities`](packages/Entities/README.md) | L0 | The entity classes, the typed GraphQL client and the permission domain |
-| [`@mj-biz-apps/collaboration-engine-base`](packages/EngineBase) | L0 | The metadata engine, safe in the browser and on the server |
+| [`@mj-biz-apps/collaboration-engine-base`](packages/EngineBase/README.md) | L0 | The metadata engine and the rights, safe in the browser and on the server |
 | [`@mj-biz-apps/collaboration-actions`](packages/Actions/README.md) | L0 | The app's actions |
 | [`@mj-biz-apps/collaboration-core-entities-server`](packages/CoreEntitiesServer/README.md) | server | The write gates, the drivers and the server operations |
 | [`@mj-biz-apps/collaboration-server`](packages/Server/README.md) | server | The server bootstrap and the GraphQL resolvers |
 | [`@mj-biz-apps/collaboration-ng-widgets`](packages/AngularWidgets/README.md) | L1, L2 | Angular widgets that run in any Angular app |
 | [`@mj-biz-apps/collaboration-ng`](packages/Angular/README.md) | L3 | The Explorer surface and the client bootstrap |
 
-The UX gallery, the example plug-ins and the integration checks are private packages in the same workspace. Every package declares its UI layer, and MemberJunction's layer check enforces it.
+The [UX gallery](packages/UXGallery/README.md), the [example plug-ins](packages/ExampleSpaceTypes/README.md) and the [integration checks](packages/IntegrationTests/README.md) are private packages in the same workspace. Every package declares its UI layer, and MemberJunction's layer check enforces it.
 
 ## Roadmap
 
 | When | What |
 |---|---|
 | **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
-| **Now: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area, with agent turns; then anchors, grants, data reach, notes and pins ([its plan](plans/pr8-plan.md)), and the screens, walked end to end |
-| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open #8's closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
+| **Done: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area: conversations started when someone asks for one, and agent turns run on the server, bounded by the conversation's audience |
+| **Now: [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9)** | Finishing the chat, on MemberJunction's latest `next`; testing the extension model end to end, with subtypes and their screens; closing and reopening as a right of their own, and no right decided by a role's name; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host ([its plan](plans/pr9-plan.md)) |
+| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open the closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
 
 The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
 
@@ -241,6 +248,7 @@ The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/p
 | Document | What it covers |
 |---|---|
 | [The plan](plans/plan.md) | What's being built and why: the model, the security doctrine, every decision, the roadmap and the open questions |
+| [PR 9's plan](plans/pr9-plan.md) | Finishing the chat, then #8's stages and the rest of the plan, in order |
 | [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
 | [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
 | [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |

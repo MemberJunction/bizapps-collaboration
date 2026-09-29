@@ -13,6 +13,8 @@ import { toNode, type SpaceRow } from '../dist/load-graph.js';
 const ROOT_AUTH_ID = '11111111-1111-4111-8111-111111111111';
 const TYPES_AUTH_ID = '22222222-2222-4222-8222-222222222222';
 const SPACES_AUTH_ID = '33333333-3333-4333-8333-333333333333';
+const LIFECYCLE_AUTH_ID = '99999999-9999-4999-8999-999999999999';
+const ADMINISTER_AUTH_ID = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
 const SPACE_ID = '44444444-4444-4444-8444-444444444444';
 const TYPE_ID = '55555555-5555-4555-8555-555555555555';
 const USER_ID = '66666666-6666-4666-8666-666666666666';
@@ -22,6 +24,8 @@ const MEMBER_ROLE_ID = '88888888-8888-4888-8888-888888888888';
 function createMockAuthorizations(grants: {
     typesAllowedRoles: string[];
     spacesAllowedRoles: string[];
+    lifecycleAllowedRoles?: string[];
+    administerAllowedRoles?: string[];
 }) {
     const root = new AuthorizationInfo();
     root.ID = ROOT_AUTH_ID;
@@ -50,7 +54,25 @@ function createMockAuthorizations(grants: {
         },
     });
 
-    return [root, typesAuth, spacesAuth];
+    const lifecycleAuth = new AuthorizationInfo();
+    lifecycleAuth.ID = LIFECYCLE_AUTH_ID;
+    lifecycleAuth.Name = 'Close and Reopen Spaces';
+    lifecycleAuth.ParentID = ROOT_AUTH_ID;
+    lifecycleAuth.IsActive = true;
+    Object.defineProperty(lifecycleAuth, 'UserCanExecute', {
+        value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.lifecycleAllowedRoles ?? []).includes(r.Role)) ?? false,
+    });
+
+    const administerAuth = new AuthorizationInfo();
+    administerAuth.ID = ADMINISTER_AUTH_ID;
+    administerAuth.Name = 'Administer Spaces';
+    administerAuth.ParentID = ROOT_AUTH_ID;
+    administerAuth.IsActive = true;
+    Object.defineProperty(administerAuth, 'UserCanExecute', {
+        value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.administerAllowedRoles ?? []).includes(r.Role)) ?? false,
+    });
+
+    return [root, typesAuth, spacesAuth, lifecycleAuth, administerAuth];
 }
 
 function createMockProvider(options: {
@@ -206,6 +228,71 @@ describe('CollaborationEngine authorization checks', () => {
         const engine = CollaborationEngine.Instance;
         const res = await engine.UserCanConfigureSpaces(adminUser, SPACE_ID, provider);
         assert.equal(res, true, 'User with Configure Spaces and owner role must be allowed');
+    });
+});
+
+describe("the 'Administer Spaces' authorization", () => {
+    const withRoles = (...roles: string[]) => ({ ID: USER_ID, UserRoles: roles.map((Role) => ({ Role }) as Partial<UserRoleInfo> as UserRoleInfo) }) as Partial<UserInfo> as UserInfo;
+    const grantedTo = (roles: string[]) => createMockProvider({ authorizations: createMockAuthorizations({ typesAllowedRoles: [], spacesAllowedRoles: [], administerAllowedRoles: roles }) });
+
+    it('is held through the authorization, whatever a role is called: a host that edits the grants moves who may administer', () => {
+        const engine = CollaborationEngine.Instance;
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('UI'), grantedTo(['UI', 'Developer', 'Integration'])), true);
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('Space Participant'), grantedTo(['UI', 'Developer', 'Integration'])), false);
+        // The grants are the host's to edit: a role no code knows by name may hold it, and the shipped roles may not
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('Community Manager'), grantedTo(['Community Manager'])), true);
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('UI'), grantedTo(['Community Manager'])), false);
+    });
+
+    it('is refused when the authorization is missing, rather than assumed', () => {
+        assert.equal(CollaborationEngine.Instance.UserMayAdministerSpaces(withRoles('UI'), createMockProvider({ authorizations: [] })), false);
+    });
+});
+
+describe("the close and reopen rights of a space's owner", () => {
+    const participant = { ID: USER_ID, UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+    const grantedTo = (roles: string[]) => createMockAuthorizations({ typesAllowedRoles: [], spacesAllowedRoles: [], lifecycleAllowedRoles: roles });
+    const roleTypeOf = (id: string) => id === OWNER_ROLE_ID
+        ? { Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true }
+        : { Level: 20, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true };
+
+    it("holds only with the 'Close and Reopen Spaces' authorization, whatever the seat", () => {
+        const engine = CollaborationEngine.Instance;
+        assert.equal(engine.UserHoldsLifecycleAuthorization(participant, createMockProvider({ authorizations: grantedTo(['Space Participant']), isOwnerMember: true })), true);
+        assert.equal(engine.UserHoldsLifecycleAuthorization(participant, createMockProvider({ authorizations: grantedTo(['Developer']), isOwnerMember: true })), false);
+    });
+
+    it('lets an owner with the authorization close and reopen, and refuses a member, or an owner without it', async () => {
+        const engine = CollaborationEngineBase.Instance;
+        const owner = createMockProvider({ authorizations: grantedTo(['Space Participant']), isOwnerMember: true });
+        assert.equal(await engine.UserCanCloseSpace(participant, SPACE_ID, owner, roleTypeOf), true);
+        assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, owner, roleTypeOf), true);
+        const member = createMockProvider({ authorizations: grantedTo(['Space Participant']), isOwnerMember: false });
+        assert.equal(await engine.UserCanCloseSpace(participant, SPACE_ID, member, roleTypeOf), false);
+        assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, member, roleTypeOf), false);
+        const unauthorized = createMockProvider({ authorizations: grantedTo([]), isOwnerMember: true });
+        assert.equal(await engine.UserCanCloseSpace(participant, SPACE_ID, unauthorized, roleTypeOf), false);
+        assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, unauthorized, roleTypeOf), false);
+    });
+
+    it("keeps the post-close filter on configuring but not on reopening: an owner of a space closed with no access reopens, and does not configure", async () => {
+        // 'Configure Spaces' is granted too, so the only difference between the two rights is the filter
+        const spaces = createMockAuthorizations({ typesAllowedRoles: [], spacesAllowedRoles: ['Space Participant'], lifecycleAllowedRoles: ['Space Participant'] });
+        const base = createMockProvider({ authorizations: spaces, isOwnerMember: true });
+        const closed = Object.create(base) as IMetadataProvider;
+        (closed as unknown as { RunView: unknown }).RunView = async (params: { EntityName: string; ExtraFilter?: string }) => {
+            const result = await (base as unknown as { RunView: (p: unknown) => Promise<{ Results: Array<Record<string, unknown>> }> }).RunView(params);
+            if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
+                return { ...result, Results: result.Results.map((row) => ({ ...row, ClosedAt: '2026-01-01T00:00:00Z', PostCloseAccess: 'None' })) };
+            }
+            return result;
+        };
+        const engine = CollaborationEngineBase.Instance;
+        assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, closed, roleTypeOf), true);
+        assert.equal(await engine.UserCanConfigureSpaces(participant, SPACE_ID, closed, roleTypeOf), false);
+        // The same owner of a space that is still open configures it
+        const open = createMockProvider({ authorizations: spaces, isOwnerMember: true });
+        assert.equal(await engine.UserCanConfigureSpaces(participant, SPACE_ID, open, roleTypeOf), true);
     });
 });
 

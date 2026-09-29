@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import type { FindingModel, FileKind, RecipientPersonModel } from './types';
-import { MJButtonDirective, MJSwitchComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -12,20 +11,20 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FormsModule,
     CollabAvatarComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
     MJButtonDirective,
-    MJSwitchComponent,
   ],
   template: `
-    <div class="m-h mj-dialog-titlebar">
+    <div class="m-h" [class.mj-dialog-titlebar]="Framed">
       <span class="m-ic">
         <i class="fa-solid fa-share-from-square"></i>
       </span>
       <div class="grow">
-        <div class="fw7 title">{{ Title }}</div>
+        @if (Framed) {
+          <div class="fw7 title">{{ Title }}</div>
+        }
         <div class="row gap6 fs13 secondary subtitle">
           <mjc-file-icon [Kind]="Kind" Size="sm" />
           <b class="item-name">{{ ItemName }}</b>
@@ -35,9 +34,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <mjc-band-chip Band="Shared" Label="Shared" />
         </div>
       </div>
-      <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
-        <i class="fa-solid fa-xmark muted"></i>
-      </button>
+      @if (Framed) {
+        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
+          <i class="fa-solid fa-xmark muted"></i>
+        </button>
+      }
     </div>
 
     <div class="m-b">
@@ -111,35 +112,38 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           }
         </div>
       } @else {
-        <div class="no-findings-banner">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>No policy findings</span>
-        </div>
+        @if (ReviewCompleted) {
+          <div class="no-findings-banner">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>No policy findings</span>
+          </div>
+        } @else {
+          <div class="no-findings-banner not-reviewed">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Not reviewed. No policy check has run on this item.</span>
+          </div>
+        }
       }
 
       <div class="m-sec">
-        <div class="fw7 fs13 note-title">
-          <span>Note to {{ ClientOrgName }}</span>
-          <span class="muted fw5">&nbsp;(sent with the notification)</span>
-        </div>
-        <textarea class="mj-textarea textarea note-textarea" [(ngModel)]="Note"></textarea>
         <div class="effects">
           <div class="eff">
-            <mj-switch [(ngModel)]="NotifyRecipients" class="switch" />
-            <span>Notify the {{ RecipientCount }} people at {{ ClientOrgName }}</span>
+            <i class="fa-solid fa-bell"></i>
+            <span>Everyone who can see this space is told it was shared.</span>
           </div>
           <div class="eff">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>The Assistant can quote it in chats that include {{ ClientOrgName }}</span>
+            <span>The Assistant can quote it in this space's chats.</span>
           </div>
           <div class="eff">
             <i class="fa-solid fa-signature"></i>
-            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. You can move it back to Team; a sent notification can’t be recalled.</span>
+            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. A sent notification can’t be recalled.</span>
           </div>
         </div>
       </div>
     </div>
 
+    @if (Framed) {
     <div class="m-f mj-dialog-actions">
       @if (Findings && Findings.length > 0) {
         <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
@@ -155,6 +159,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
+    }
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
@@ -357,36 +362,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       color: var(--mj-status-success-text);
     }
 
-    .note-title {
-      margin-bottom: 8px;
-    }
-
-    .note-textarea {
-      min-height: 80px;
-      height: 80px;
-      width: 100%;
-      box-sizing: border-box;
-      resize: none;
-      display: block;
-    }
-
-    .textarea {
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-sm);
-      background: var(--mj-bg-surface);
-      padding: 8px 12px;
-      font-size: var(--mj-text-sm);
-      color: var(--mj-text-primary);
-      line-height: 1.5;
-      font-family: inherit;
-      outline: none;
-
-      &:focus {
-        border-color: var(--mj-brand-primary);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-      }
-    }
-
     .effects {
       display: flex;
       flex-direction: column;
@@ -564,6 +539,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckComponent {
+  /**
+   * True (the default) when the component draws its own title, close button and actions. Inside an `mj-dialog`, which draws the
+   * title and the close button and holds the actions in its footer, it is false: the host calls `onApplyAndShare`, `onShareAsIs`
+   * and `onCancel` from its own actions.
+   */
+  @Input() public Framed = true;
   @Input() public Title = '';
   @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';
@@ -575,13 +556,14 @@ export class CollabShareCheckComponent {
   @Input() public ReviewHeader = '';
   @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
-  @Input() public Note = '';
+  /** True only when a policy review ran and found nothing; with no review, the dialog says it wasn't reviewed. */
+  @Input() public ReviewCompleted = false;
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';
   @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
-  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
+  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; notify: boolean }>();
   @Output() public CancelRequested = new EventEmitter<void>();
 
   public get pendingCount(): number {
@@ -619,7 +601,6 @@ export class CollabShareCheckComponent {
   public onApplyAndShare(): void {
     this.ShareRequested.emit({
       applyFixes: true,
-      note: this.Note,
       notify: this.NotifyRecipients,
     });
   }
@@ -627,7 +608,6 @@ export class CollabShareCheckComponent {
   public onShareAsIs(): void {
     this.ShareRequested.emit({
       applyFixes: false,
-      note: this.Note,
       notify: this.NotifyRecipients,
     });
   }

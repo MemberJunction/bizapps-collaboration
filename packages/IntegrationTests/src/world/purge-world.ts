@@ -13,10 +13,10 @@ import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
-import { coreSchema, sqlUuid } from './ids.js';
+import { CHECK_SPACE_PREFIX, coreSchema, INVITEE_EMAIL_DOMAIN, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
-import { COLLABORATION_BOX_PROVIDER_ID, COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
 
 function storedObjectPath(root: string, providerKey: string | null): string | null {
     const cleaned = (providerKey ?? '').replace(/^[/\\]+/, '');
@@ -41,7 +41,7 @@ export async function purgeWorld(): Promise<void> {
     if (!DB_HOST || !DB_DATABASE || !DB_USERNAME || !DB_PASSWORD) throw new Error('Set DB_HOST, DB_DATABASE, DB_USERNAME and DB_PASSWORD.');
     const dir = dataDir();
     const userIds = idList(readCsv(join(dir, 'personas.csv')), 'persona');
-    const spaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
+    const worldSpaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
     const typeIds = idList(readCsv(join(dir, 'types.csv')), 'space type');
     const core = coreSchema();
     const pool = await sql.connect({
@@ -52,6 +52,15 @@ export async function purgeWorld(): Promise<void> {
         password: DB_PASSWORD,
         options: { trustServerCertificate: true, encrypt: false },
     });
+    // Spaces a check created and did not clean up (its run died first) go with the world; they carry the check marker
+    // Only those a check could have made: owned by a world persona, and either a root or a child of a world space
+    const personaIds = readCsv(join(dir, 'personas.csv')).map((row) => sqlUuid(row.ID, 'persona')).join(',');
+    const markedSpaces = await pool.request()
+        .input('prefix', sql.NVarChar, `${CHECK_SPACE_PREFIX.replace(/[%_[]/g, '[$&]')}%`)
+        .query<{ ID: string }>(
+            `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE @prefix AND OwnerID IN (${personaIds}) AND (ParentID IS NULL OR ParentID IN (${worldSpaceIds}))`,
+        );
+    const spaceIds = [worldSpaceIds, ...(markedSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'check space'))].join(',');
     const stored = await pool.request().query(`
         SELECT f.ProviderKey AS ProviderKey
         FROM [${core}].[File] AS f
@@ -130,8 +139,17 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgentSkill') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAgentSkill WHERE SpaceID IN (${spaceIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgent') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAgent WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
+            -- The example subtypes' rows go before the spaces they specialise: their keys are foreign keys to Space, with no cascade
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleBoard') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleBoard WHERE ID IN (${spaceIds});
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleRoom') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleRoom WHERE ID IN (${spaceIds});
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});
@@ -174,6 +192,21 @@ export async function purgeWorld(): Promise<void> {
                 DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds});
             DELETE FROM [${core}].UserRole WHERE UserID IN (${userIds});
 
+            -- Accounts an invite check made: the system user can't delete their notifications, so the purge does, with the rest of what hangs on them
+            SELECT ID INTO #invitees FROM [${core}].[User] WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}';
+            DELETE FROM [${core}].UserNotification WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE RecipientUserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE UserID IN (SELECT ID FROM #invitees);
+            IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].UserRole WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].UserApplication WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].MagicLinkInviteRole WHERE InviteID IN (SELECT ID FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}');
+            DELETE FROM [${core}].MagicLinkInviteApplication WHERE InviteID IN (SELECT ID FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}');
+            DELETE FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}';
+            DELETE FROM [${core}].[User] WHERE ID IN (SELECT ID FROM #invitees);
+
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
             DELETE FROM [${core}].FileStorageAccount WHERE ID = '${COLLABORATION_STORAGE_ACCOUNT_ID}';
@@ -201,8 +234,8 @@ export async function purgeWorld(): Promise<void> {
                 if (row.ProviderKey) {
                     try {
                         await boxStorage.DeleteObject(row.ProviderKey);
-                    } catch {
-                        // Best-effort cleanup for individual files
+                    } catch (deleteError) {
+                        console.error(`Box storage cleanup could not delete ${row.ProviderKey}: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
                     }
                 }
             }

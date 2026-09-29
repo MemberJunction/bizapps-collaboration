@@ -9,6 +9,8 @@ This refactor shifts the mental model to a **Space-Centric Workspace**:
 - Navigation between spaces is facilitated by clear breadcrumbs and a fast space-switcher.
 - Inside each space, the chat experience is upgraded from a single hardcoded scratch chat to **full multi-conversation support** powered by `@memberjunction/ng-conversations` (`mj-conversation-chat-area` and `mj-conversation-list`).
 
+**Outcome:** this is built. Inside a space, the rail holds its tabs and conversations, resizes and collapses, and saves that per person as `mjc.spaceNav.state`. The chat is `mj-conversation-chat-area`; the rail lists the space's conversations itself, so `mj-conversation-list` isn't used.
+
 ---
 
 ## 2. Core Personas

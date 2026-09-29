@@ -43,7 +43,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
                 <div class="ag-row" style="display: flex; align-items: center; gap: 14px; padding: 8px 0; border-top: 1px solid var(--mj-border-subtle);">
                     <span style="width: 38px; font-size: 12.5px; font-weight: 650; color: var(--mj-text-secondary);">4:50</span>
                     <div style="flex: 1;"><div style="font-weight: 600; font-size: 13px;">Motion 2026-14: appoint the external auditor</div><div style="font-size: 12px; color: var(--mj-text-muted);">Margaret Cole</div></div>
-                    <span style="padding: 3px 8px; background: #fef3c7; color: #92400e; border-radius: 6px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-gavel" style="margin-right: 4px;"></i>Vote</span>
+                    <span style="padding: 3px 8px; background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); border-radius: 6px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-gavel" style="margin-right: 4px;"></i>Vote</span>
                 </div>
                 <div class="ag-row" style="display: flex; align-items: center; gap: 14px; padding: 8px 0; border-top: 1px solid var(--mj-border-subtle);">
                     <span style="width: 38px; font-size: 12.5px; font-weight: 650; color: var(--mj-text-secondary);">5:10</span>
@@ -53,7 +53,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
                 <div class="ag-row" style="display: flex; align-items: center; gap: 14px; padding: 8px 0; border-top: 1px solid var(--mj-border-subtle);">
                     <span style="width: 38px; font-size: 12.5px; font-weight: 650; color: var(--mj-text-secondary);">5:25</span>
                     <div style="flex: 1;"><div style="font-weight: 600; font-size: 13px;">Closed session — members only</div><div style="font-size: 12px; color: var(--mj-text-muted);">Staff and guests leave</div></div>
-                    <span style="padding: 3px 8px; background: #e0e7ff; color: #3730a3; border-radius: 6px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-lock" style="margin-right: 4px;"></i>Members</span>
+                    <span style="padding: 3px 8px; background: var(--mj-status-info-bg); color: var(--mj-status-info-text); border-radius: 6px; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-lock" style="margin-right: 4px;"></i>Members</span>
                 </div>
             </div>
         </div>

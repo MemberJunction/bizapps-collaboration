@@ -1,6 +1,8 @@
-import { Component, EventEmitter, Input, Output, OnInit, HostListener } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output, OnInit, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LogError } from '@memberjunction/core';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -11,6 +13,15 @@ interface SpaceNavPref {
   width: number;
   collapsed: boolean;
 }
+
+const DEFAULT_RAIL_TABS: TabItem[] = [
+  { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-chart-pie' },
+  { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open' },
+  { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check' },
+  { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' },
+  { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group' },
+  { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' },
+];
 
 @Component({
   selector: 'mjc-space-rail',
@@ -42,7 +53,7 @@ interface SpaceNavPref {
                 type="button"
                 class="btn-back-spaces"
                 (click)="onBackToSpaces()"
-                title="Return to Spaces Directory">
+                title="Back to all spaces">
                 <i class="fa-solid fa-arrow-left"></i>
                 <span>All Spaces</span>
               </button>
@@ -60,6 +71,7 @@ interface SpaceNavPref {
           } @else {
             <div
               class="space-avatar-tile collapsed-tile"
+              [mjClickable]="'Return to All Spaces from ' + SpaceTitle"
               (click)="onBackToSpaces()"
               [title]="SpaceTitle + ' - Click to return to All Spaces'">
               <i class="fa-solid" [class]="SpaceIcon || 'fa-shapes'"></i>
@@ -85,108 +97,31 @@ interface SpaceNavPref {
             }
 
             <div class="nav-links-list">
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Overview'"
-                (click)="onTabClick('Overview')"
-                [title]="isCollapsed ? 'Overview' : ''">
-                <i class="fa-solid fa-chart-pie link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Overview</span>
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Library'"
-                (click)="onTabClick('Library')"
-                [title]="isCollapsed ? 'Documents' : ''">
-                <i class="fa-solid fa-folder-open link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Documents</span>
-                  @if (LibraryCount > 0) {
-                    <span class="link-badge">{{ LibraryCount }}</span>
-                  }
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Work'"
-                (click)="onTabClick('Work')"
-                [title]="isCollapsed ? 'Work & Tasks' : ''">
-                <i class="fa-solid fa-list-check link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Work &amp; Tasks</span>
-                  @if (TaskCount > 0) {
-                    <span class="link-badge">{{ TaskCount }}</span>
-                  }
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Chat'"
-                (click)="onTabClick('Chat')"
-                [title]="isCollapsed ? 'Discussion & AI' : ''">
-                <i class="fa-solid fa-comments link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Discussion &amp; AI</span>
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'People'"
-                (click)="onTabClick('People')"
-                [title]="isCollapsed ? 'People & Access' : ''">
-                <i class="fa-solid fa-user-group link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">People &amp; Access</span>
-                  @if (MemberCount > 0) {
-                    <span class="link-badge">{{ MemberCount }}</span>
-                  }
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Settings'"
-                (click)="onTabClick('Settings')"
-                [title]="isCollapsed ? 'Settings & Assistant' : ''">
-                <i class="fa-solid fa-sliders link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Settings &amp; Assistant</span>
-                }
-              </button>
-
-              <!-- Dynamic Plugin Tabs (from drivers e.g. Meetings, Papers, Motions) -->
-              @for (tab of ExtraTabs; track tab.id) {
-                <button
-                  type="button"
-                  class="space-nav-link"
-                  [class.active]="ActiveTab === tab.id"
-                  (click)="onTabClick(tab.id)"
-                  [title]="isCollapsed ? tab.label : ''">
-                  <i class="fa-solid link-icon" [class]="tab.iconClass || 'fa-layer-group'"></i>
-                  @if (!isCollapsed) {
-                    <span class="link-label">{{ tab.label }}</span>
-                    @if (tab.count) {
-                      <span class="link-badge">{{ tab.count }}</span>
+              @for (tab of Tabs; track tab.id) {
+                @if (tab.id !== 'Settings' || CanConfigure) {
+                  <button
+                    type="button"
+                    class="space-nav-link"
+                    [class.active]="ActiveTab === tab.id"
+                    [attr.aria-current]="ActiveTab === tab.id ? 'page' : null"
+                    (click)="onTabClick(tab.id)"
+                    [title]="isCollapsed ? tab.label : ''"
+                    [attr.aria-label]="isCollapsed ? tab.label : null">
+                    <i class="fa-solid link-icon" [class]="tab.iconClass || 'fa-layer-group'" aria-hidden="true"></i>
+                    @if (!isCollapsed) {
+                      <span class="link-label">{{ tab.label }}</span>
+                      @if (BadgeFor(tab) > 0) {
+                        <span class="link-badge">{{ BadgeFor(tab) }}</span>
+                      }
                     }
-                  }
-                </button>
+                  </button>
+                }
               }
             </div>
           </div>
 
-          <!-- Space Conversations Section -->
+          <!-- Space Conversations Section: only for a space whose type has Chat -->
+          @if (HasChatTab) {
           <div class="nav-section-group">
             @if (!isCollapsed) {
               <div class="section-title-row">
@@ -222,7 +157,7 @@ interface SpaceNavPref {
                 <button
                   type="button"
                   class="space-nav-link convo-link"
-                  [class.active]="ActiveTab === 'Chat' && ActiveConversationId === c.id"
+                  [class.active]="ActiveTab === 'Chat' && IsActiveConversation(c.id)"
                   (click)="onConversationClick(c.id)"
                   [title]="c.name">
                   @if (c.kind === 'Private') {
@@ -235,22 +170,18 @@ interface SpaceNavPref {
 
                   @if (!isCollapsed) {
                     <span class="link-label">{{ c.name }}</span>
-                    @if (c.unreadCount) {
-                      <span class="link-badge unread">{{ c.unreadCount }}</span>
-                    }
                     <span
                       class="band-dot"
                       [class.shared]="c.band === 'Shared'"
                       [class.team]="c.band === 'Team'"
-                      [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
+                      [title]="c.band === 'Shared' ? 'Everyone in this space can see it' : 'Team only'">
                     </span>
-                  } @else if (c.unreadCount) {
-                    <span class="collapsed-unread-dot" [title]="c.unreadCount + ' unread'"></span>
                   }
                 </button>
               }
             </div>
           </div>
+          }
 
         </div>
 
@@ -267,7 +198,7 @@ interface SpaceNavPref {
         <div class="jump" [mjClickable]="'Jump to a space'" (click)="onJumpClick()">
           <i class="fa-solid fa-magnifying-glass"></i>
           <span>Jump to a space</span>
-          <span class="kbd">⌘J</span>
+          <span class="kbd">{{ JumpHint }}</span>
         </div>
 
         <button
@@ -314,20 +245,22 @@ interface SpaceNavPref {
 
         <div class="nav-section">
           <span>Spaces</span>
-          <button
-            type="button"
-            class="icon-btn-inline"
-            (click)="SpaceCreateRequested.emit()"
-            title="New Space"
-            aria-label="New Space">
-            <i class="fa-solid fa-plus"></i>
-          </button>
+          @if (CanCreateSpace) {
+            <button
+              type="button"
+              class="icon-btn-inline"
+              (click)="SpaceCreateRequested.emit()"
+              title="New Space"
+              aria-label="New Space">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          }
         </div>
 
         <div class="tree-list">
           @for (s of visibleSpaces; track s.id) {
             <div
-              class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
+              class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ IsActiveSpace(s.id) ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
               [mjClickable]="s.name"
               [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
               (keydown.arrowright)="onArrowRight(s, $event)"
@@ -344,13 +277,14 @@ interface SpaceNavPref {
               <mjc-type-tile
                 [IconClass]="s.iconClass"
                 [Color]="s.color || ''"
+                [IsClosed]="!!s.isLocked"
                 Size="sm">
               </mjc-type-tile>
               <span class="ellipsis">{{ s.name }}</span>
               @if (s.unread) {
                 <span class="unread"></span>
               } @else if (s.isLocked) {
-                <span class="meta"><i class="fa-solid fa-lock"></i></span>
+                <span class="meta"><i class="fa-solid fa-lock" aria-hidden="true"></i><span class="sr-only">(closed)</span></span>
               } @else if (s.meta !== undefined && s.meta !== null && s.meta !== '') {
                 <span class="meta">{{ s.meta }}</span>
               }
@@ -358,25 +292,36 @@ interface SpaceNavPref {
           }
         </div>
 
-        <div class="nav-footer">
-          <button
-            type="button"
-            class="nav-item"
-            [class.active]="ActiveNav === 'assistant'"
-            (click)="selectNav('assistant')">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>Assistant</span>
-          </button>
-          <button
-            type="button"
-            class="nav-item"
-            [class.active]="ActiveNav === 'settings'"
-            (click)="selectNav('settings')">
-            <i class="fa-solid fa-gear"></i>
-            <span>Settings</span>
-          </button>
-        </div>
       </nav>
+    }
+
+    @if (jumpOpen) {
+      <div class="jump-scrim" (click)="closeJump()"></div>
+      <div class="jump-palette" role="dialog" aria-modal="true" aria-label="Jump to a space">
+        <input
+          #jumpInput
+          type="text"
+          class="jump-input"
+          placeholder="Jump to a space"
+          aria-label="Jump to a space"
+          [value]="jumpQuery"
+          (input)="onJumpInput($event)"
+          (keydown.enter)="jumpToFirst()"
+          (keydown.escape)="closeJump()"
+        />
+        <ul class="jump-list">
+          @for (match of jumpMatches; track match.id) {
+            <li>
+              <button type="button" class="jump-item" (click)="jumpTo(match)">
+                <span>{{ match.name }}</span>
+              </button>
+            </li>
+          }
+          @if (jumpMatches.length === 0) {
+            <li class="jump-none">No space matches.</li>
+          }
+        </ul>
+      </div>
     }
   `,
   styles: [
@@ -473,7 +418,7 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 8px;
       background: linear-gradient(135deg, var(--mj-brand-secondary, #0891b2), var(--mj-brand-primary, #0076b6));
-      color: #ffffff;
+      color: var(--mj-text-inverse);
       display: grid;
       place-items: center;
       font-size: 14px;
@@ -591,7 +536,7 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 6px;
       background: transparent;
-      border: 1px dashed #64748b;
+      border: 1px dashed var(--mj-text-muted);
       color: var(--mj-text-secondary, #475569);
       cursor: pointer;
       display: inline-grid;
@@ -670,26 +615,6 @@ interface SpaceNavPref {
       border-radius: 99px;
       font-family: var(--mj-font-family-mono, monospace);
     }
-    .link-badge.unread {
-      background: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-brand-on-primary, #ffffff);
-    }
-    :host-context([data-theme="dark"]) .link-badge.unread,
-    :host-context(.dark) .link-badge.unread,
-    [data-theme="dark"] .link-badge.unread {
-      background: var(--mj-brand-primary, #2699cc);
-      color: #0b1528;
-    }
-    .collapsed-unread-dot {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--mj-brand-primary, #0076b6);
-    }
-
     .convo-link {
       padding-left: 12px;
     }
@@ -745,6 +670,16 @@ interface SpaceNavPref {
       height: 100%;
       user-select: none;
     }
+    .jump-scrim { position: fixed; inset: 0; background: var(--mj-bg-overlay); z-index: 1000; }
+    .jump-palette {
+      position: fixed; top: 96px; left: 50%; transform: translateX(-50%); width: 420px; max-width: calc(100vw - 32px);
+      background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 10px; z-index: 1001; padding: 8px;
+    }
+    .jump-input { width: 100%; box-sizing: border-box; padding: 8px 10px; }
+    .jump-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 320px; overflow: auto; }
+    .jump-item { width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; cursor: pointer; color: var(--mj-text-primary); border-radius: 6px; }
+    .jump-item:hover, .jump-item:focus { background: var(--mj-bg-surface-sunken); }
+    .jump-none { padding: 8px 10px; color: var(--mj-text-muted); }
     .jump {
       display: flex;
       align-items: center;
@@ -905,19 +840,21 @@ interface SpaceNavPref {
       background: var(--mj-brand-primary);
       flex: none;
     }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
     .tree-item .meta {
       margin-left: auto;
       font-size: 11.5px;
       color: var(--mj-text-muted);
-    }
-    .nav-footer {
-      margin-top: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding-top: 8px;
-      border-top: 1px solid var(--mj-border-default);
-      flex: none;
     }
     `
   ]
@@ -930,15 +867,30 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() SpaceIcon = 'fa-shapes';
   @Input() SpaceBand: SpaceBand = 'Shared';
   @Input() ActiveTab = 'Overview';
-  @Input() ExtraTabs: TabItem[] = [];
+  /** The tabs of the space shown, as its type arranged them: the rail lists exactly these, with these labels. */
+  @Input() Tabs: TabItem[] = DEFAULT_RAIL_TABS;
+
+  /** Whether the caller may configure this space. Settings is offered only to those who can. */
+  @Input() CanConfigure = false;
   @Input() Conversations: SpaceConversationItem[] = [];
   @Input() ActiveConversationId = '';
+
+  /** Whether the tree row is the open space. Ids are compared as UUIDs: the URL keeps the casing it was given. */
+  public IsActiveSpace(spaceId: string): boolean {
+    return !!this.ActiveSpaceId && UUIDsEqual(spaceId, this.ActiveSpaceId);
+  }
+
+  public IsActiveConversation(conversationId: string): boolean {
+    return !!this.ActiveConversationId && UUIDsEqual(this.ActiveConversationId, conversationId);
+  }
   @Input() LibraryCount = 0;
   @Input() TaskCount = 0;
   @Input() MemberCount = 0;
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
   @Input() CanStartConversation = false;
+  /** The new-space dialog isn't built yet, so the + is offered only when a host provides one. */
+  @Input() CanCreateSpace = false;
 
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();
@@ -951,6 +903,8 @@ export class CollabSpaceRailComponent implements OnInit {
   @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
 
+  @ViewChild('jumpInput') private jumpInput?: ElementRef<HTMLInputElement>;
+
   public navWidth = 280;
   public isCollapsed = false;
   private isDraggingResizer = false;
@@ -959,6 +913,27 @@ export class CollabSpaceRailComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  /** Whether the space's type has a Chat tab: without one the rail lists no conversations. */
+  public get HasChatTab(): boolean {
+    return this.Tabs.some((tab) => tab.id === 'Chat');
+  }
+
+  /** The shortcut shown for the palette: ⌘J on a Mac, Ctrl+J elsewhere. */
+  public get JumpHint(): string {
+    const platform = typeof navigator !== 'undefined' ? navigator.platform ?? '' : '';
+    return /mac|iphone|ipad/i.test(platform) ? '⌘J' : 'Ctrl+J';
+  }
+
+  /** The count a tab's link shows: the library's items, the tasks, the people, or the tab's own. */
+  public BadgeFor(tab: TabItem): number {
+    switch (tab.id) {
+      case 'Library': return this.LibraryCount;
+      case 'Work': return this.TaskCount;
+      case 'People': return this.MemberCount;
+      default: return tab.count ?? 0;
+    }
   }
 
   public onNewConversation(): void {
@@ -977,8 +952,9 @@ export class CollabSpaceRailComponent implements OnInit {
           this.isCollapsed = parsed.collapsed;
         }
       }
-    } catch {
-      // ignore parsing error
+    } catch (error) {
+      // A saved layout that doesn't parse leaves the default one, and is said so
+      LogError(`The saved rail layout could not be read: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1040,8 +1016,51 @@ export class CollabSpaceRailComponent implements OnInit {
     this.SpaceOpenRequested.emit(id);
   }
 
+  public jumpOpen = false;
+  public jumpQuery = '';
+
+  /** The spaces whose names contain what was typed, in the tree's order. */
+  public get jumpMatches(): RailSpaceNode[] {
+    const needle = this.jumpQuery.trim().toLowerCase();
+    return this.Spaces.filter((s) => !needle || s.name.toLowerCase().includes(needle));
+  }
+
   public onJumpClick(): void {
+    this.OpenJump();
+  }
+
+  public OpenJump(): void {
+    this.jumpOpen = true;
+    this.jumpQuery = '';
     this.JumpOpenRequested.emit();
+    setTimeout(() => this.jumpInput?.nativeElement.focus());
+  }
+
+  public closeJump(): void {
+    this.jumpOpen = false;
+  }
+
+  public onJumpInput(event: Event): void {
+    this.jumpQuery = (event.target as HTMLInputElement).value;
+  }
+
+  public jumpToFirst(): void {
+    const first = this.jumpMatches[0];
+    if (first) this.jumpTo(first);
+  }
+
+  public jumpTo(space: RailSpaceNode): void {
+    this.jumpOpen = false;
+    this.SpaceOpenRequested.emit(space.id);
+  }
+
+  /** ⌘J (Ctrl+J elsewhere) opens the palette from anywhere on the page. */
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeyDown(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'preventDefault'>): void {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+      event.preventDefault();
+      this.OpenJump();
+    }
   }
 
   public toggleSpace(s: RailSpaceNode, event: Event): void {

@@ -20,9 +20,15 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "Name = 'Collaboration Space Subtree'",
+    "filter": "Name IN ('Collaboration Space Subtree', 'Collaboration Home Counts', 'Collaboration Home Invitations', 'Collaboration Home Open Tasks')",
     "externalizeFields": [],
     "ignoreNullFields": true,
-    "ignoreVirtualFields": true
+    "ignoreVirtualFields": true,
+    "relatedEntities": {
+      "MJ: Query Permissions": {
+        "entity": "MJ: Query Permissions",
+        "foreignKey": "QueryID"
+      }
+    }
   }
 }

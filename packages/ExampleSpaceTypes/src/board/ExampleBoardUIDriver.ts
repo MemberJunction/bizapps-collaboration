@@ -7,6 +7,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseSpaceTypeUIDriver,
+    overlayDescriptors,
     type SpaceUIContext,
     type SpaceTabDescriptor,
     type SpaceOverviewCardDescriptor,
@@ -15,7 +16,6 @@ import {
     type SpaceSettingsSectionDescriptor,
     type SpaceNewStepDescriptor,
     type SpaceDetailsFormDescriptor,
-    type BeforeCloseSpaceEvent,
     type BeforeCreateChildSpaceEvent,
     type AfterSpaceOpenedEvent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
@@ -31,13 +31,14 @@ import { ExampleBoardMembersCard } from './components/ExampleBoardMembersCard.js
 export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
     /**
      * Relabels and orders tabs for board governance:
-     * Overview, Meetings (4), Papers (18), Motions (1), Members (7), Chat.
+     * Overview, Meetings (4), Papers (18), Motions (1), Members, Chat, then the tabs the app keeps (Library, Work, Settings).
+     * The Members tab carries no count of its own: the rail and the header show the real one.
      */
     public override GetTabs(
         _ctx: SpaceUIContext,
-        _defaultTabs: SpaceTabDescriptor[]
+        defaultTabs: SpaceTabDescriptor[]
     ): SpaceTabDescriptor[] {
-        const result: SpaceTabDescriptor[] = [
+        const own: SpaceTabDescriptor[] = [
             {
                 key: 'overview',
                 label: 'Overview',
@@ -49,7 +50,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Meetings',
                 icon: 'fa-solid fa-calendar-days',
                 badgeCount: 4,
-                sortKey: 20,
+                sortKey: 11,
                 component: ExampleBoardMeetingsTab,
             },
             {
@@ -57,7 +58,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Papers',
                 icon: 'fa-solid fa-folder-open',
                 badgeCount: 18,
-                sortKey: 30,
+                sortKey: 12,
                 component: ExampleBoardPapersTab,
             },
             {
@@ -65,60 +66,65 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Motions',
                 icon: 'fa-solid fa-gavel',
                 badgeCount: 1,
-                sortKey: 40,
+                sortKey: 13,
                 component: ExampleBoardMotionsTab,
             },
             {
-                key: 'members',
+                key: 'people',
                 label: 'Members',
                 icon: 'fa-solid fa-user-group',
-                badgeCount: 7,
                 sortKey: 50,
             },
             {
                 key: 'chat',
                 label: 'Chat',
                 icon: 'fa-solid fa-comments',
-                sortKey: 60,
+                sortKey: 55,
             },
         ];
-        return result;
+        // What other apps contributed to boards stays: the board replaces the parts it names, and keeps the rest
+        return overlayDescriptors(defaultTabs, own);
     }
 
     /**
-     * Returns board overview cards corresponding to Frame 08:
-     * Next meeting, Agenda, Active vote, and Members list.
+     * Returns board overview cards corresponding to Frame 08: Next meeting, Agenda, Active vote, and Members list. Frame 08 is an
+     * outside director's view (on the Shared band), so each card is a Shared card: a board that kept them Team-only would show that
+     * director none of them.
      */
     public override GetOverviewCards(
         _ctx: SpaceUIContext,
-        _defaultCards: SpaceOverviewCardDescriptor[]
+        defaultCards: SpaceOverviewCardDescriptor[]
     ): SpaceOverviewCardDescriptor[] {
-        return [
+        return overlayDescriptors(defaultCards, [
             {
                 key: 'next-meeting',
                 title: 'Next Meeting',
                 sortKey: 10,
+                side: 'Shared',
                 component: ExampleBoardNextMeetingCard,
             },
             {
                 key: 'agenda',
                 title: 'Agenda',
                 sortKey: 20,
+                side: 'Shared',
                 component: ExampleBoardAgendaCard,
             },
             {
                 key: 'vote',
                 title: 'Active Vote',
                 sortKey: 30,
+                side: 'Shared',
                 component: ExampleBoardVoteCard,
             },
             {
                 key: 'members',
                 title: 'Members',
                 sortKey: 40,
+                side: 'Shared',
                 component: ExampleBoardMembersCard,
             },
-        ];
+        ]);
     }
 
     /**
@@ -197,28 +203,20 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
         _ctx: SpaceUIContext,
         _defaultForm?: SpaceDetailsFormDescriptor
     ): SpaceDetailsFormDescriptor | undefined {
+        // The board keeps its term, cadence, quorum and charter in its subtype; the next meeting has its own card on the Overview
         return {
-            entityName: 'ExampleBoard',
-            hiddenSectionKeys: ['SpaceCore'],
+            entityName: 'MJ_BizApps_Collaboration_Examples: Example Boards',
+            hiddenFieldNames: ['NextMeetingDate', 'NextMeetingLocation'],
         };
     }
 
-    /**
-     * Cancels space close if there are active votes/motions.
-     */
-    public override BeforeCloseSpace(
-        event: BeforeCloseSpaceEvent
-    ): void {
-        if (event.spaceId.includes('active-vote')) {
-            event.cancel = true;
-            event.cancelReason = 'Cannot close Board space while motions are open for voting.';
-        }
-    }
+    // Closing a board with motions open is refused on the server, from the space's own configuration
+    // (ExampleBoardServerDriver.ValidateSpaceChange); the screen has nothing more to add.
 
     public override BeforeCreateChildSpace(
         event: BeforeCreateChildSpaceEvent
     ): void {
-        if (event.childTypeCode === 'deal-room') {
+        if (event.childTypeCode === 'example-room') {
             event.cancel = true;
             event.cancelReason = 'Boards cannot contain Deal Rooms.';
         }

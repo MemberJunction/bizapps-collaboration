@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { before, after, describe, it } from 'node:test';
 import {
     WellKnownUserSource,
+    type BaseEntity,
+    type EntityInfo,
+    type EntityUserPermissionInfo,
     type IMetadataProvider,
     type IRunViewProvider,
     type RunViewParams,
@@ -9,12 +13,32 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
-import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
+import { seedAppSettings } from './app-settings.test-support.ts';
 
-function mockResult<T>(results: T[]): RunViewResult<T> {
+/** The shipped agent, read from the metadata that ships it: the resolver's own fallback constant can't vouch for itself. */
+const SHIPPED_AGENT = (
+    JSON.parse(readFileSync(new URL('../../../metadata/agents/.collaboration-agent.json', import.meta.url), 'utf8')) as Array<{
+        primaryKey: { ID: string };
+        fields: { Name: string };
+    }>
+)[0];
+const SHIPPED_AGENT_ID = SHIPPED_AGENT.primaryKey.ID;
+const SHIPPED_AGENT_NAME = SHIPPED_AGENT.fields.Name;
+const OTHER_AGENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const OTHER_AGENT_NAME = 'Other Space Agent';
+const MISSING_AGENT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const DISABLED_AGENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+/** A stand-in for a metadata class the resolver only reads a few members of. */
+function stubOf<T extends object>(partial: Partial<T>): T {
+    return partial as T;
+}
+
+/** The mock hands back whatever row type its caller asked for; this is the one place that cast is made. */
+function mockResult<T>(results: readonly object[]): RunViewResult<T> {
     return {
         Success: true,
-        Results: results,
+        Results: results as unknown as T[],
         RowCount: results.length,
         TotalRowCount: results.length,
         ExecutionTime: 0,
@@ -35,13 +59,16 @@ describe('resolveSpaceChatHostRules', () => {
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;
 
+    let restoreAppSettings: () => void = () => undefined;
     before(() => {
+        restoreAppSettings = seedAppSettings();
         const src = WellKnownUserSource.Instance;
         origGetSystemUser = src.GetSystemUser.bind(src);
         src.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID, Name: 'System' } as UserInfo);
     });
 
     after(() => {
+        restoreAppSettings();
         WellKnownUserSource.Instance.GetSystemUser = origGetSystemUser;
     });
 
@@ -52,6 +79,23 @@ describe('resolveSpaceChatHostRules', () => {
         chatStatus?: string;
         chatKind?: string;
         conversationNotFound?: boolean;
+        spaceAgents?: ReadonlyArray<{ AgentID: string; IsDefault: boolean }>;
+        spaceConfiguration?: string;
+    }
+
+    /** The agents table: a filter returns only the rows it names, as a database would. */
+    const AGENT_ROWS = [
+        { ID: SHIPPED_AGENT_ID, Name: SHIPPED_AGENT_NAME, Status: 'Active' },
+        { ID: OTHER_AGENT_ID, Name: OTHER_AGENT_NAME, Status: 'Active' },
+        { ID: DISABLED_AGENT_ID, Name: 'Disabled Space Agent', Status: 'Disabled' },
+    ];
+    function agentsMatching(filter: string | undefined): readonly object[] {
+        const named = filter?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
+        const activeOnly = !!filter && /Status = 'Active'/.test(filter);
+        const byStatus = activeOnly ? AGENT_ROWS.filter((row) => row.Status === 'Active') : AGENT_ROWS;
+        if (!named) return byStatus;
+        const wanted = new Set(named.map((id) => id.toLowerCase()));
+        return byStatus.filter((row) => wanted.has(row.ID.toLowerCase()));
     }
 
     function createMockProvider(options: MockHostRulesOptions = {}): IMetadataProvider {
@@ -61,22 +105,21 @@ describe('resolveSpaceChatHostRules', () => {
         const chatStatus = options.chatStatus ?? 'Active';
         const chatKind = options.chatKind ?? 'General';
         const conversationNotFound = options.conversationNotFound === true;
+        const spaceAgents = options.spaceAgents ?? [];
+        const spaceConfiguration = options.spaceConfiguration ?? null;
 
         const provider: Partial<IMetadataProvider & IRunViewProvider> = {
             EntityByName() {
-                return {
+                return stubOf<EntityInfo>({
                     ID: 'mock-entity-id',
-                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
-                } as never;
+                    GetUserPermisions: () => stubOf<EntityUserPermissionInfo>({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                });
             },
             EntityByID() {
-                return { Name: 'mock-entity' } as never;
+                return stubOf<EntityInfo>({ Name: 'mock-entity' });
             },
-            async GetEntityObject(entityName: string) {
-                return {
-                    RunViewProviderToUse: provider,
-                    ProviderToUse: provider,
-                } as never;
+            async GetEntityObject<T extends BaseEntity>(): Promise<T> {
+                return stubOf<T>({ RunViewProviderToUse: provider, ProviderToUse: provider } as Partial<T>);
             },
             async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
                 const { EntityName, ExtraFilter } = params;
@@ -90,8 +133,8 @@ describe('resolveSpaceChatHostRules', () => {
                             OwnerID: CALLER_ID,
                             ClosedAt: closedAt,
                             SpaceTypeID: TYPE_ID,
-                            Configuration: null,
-                        } as unknown as T,
+                            Configuration: spaceConfiguration,
+                        },
                     ]);
                 }
 
@@ -109,7 +152,7 @@ describe('resolveSpaceChatHostRules', () => {
                             Band: callerCanSeeTeam ? 'Team' : 'Shared',
                             Status: 'Active',
                             __mj_CreatedAt: new Date().toISOString(),
-                        } as unknown as T,
+                        },
                         {
                             ID: 'mem-2',
                             SpaceID: SPACE_ID,
@@ -119,7 +162,7 @@ describe('resolveSpaceChatHostRules', () => {
                             Band: 'Team',
                             Status: 'Active',
                             __mj_CreatedAt: new Date().toISOString(),
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -134,7 +177,7 @@ describe('resolveSpaceChatHostRules', () => {
                             CanSeeTeamBand: true,
                             IsOwnerRole: true,
                             CanContribute: true,
-                        } as unknown as T,
+                        },
                         {
                             ID: ROLE_SHARED_ID,
                             Level: 10,
@@ -144,7 +187,7 @@ describe('resolveSpaceChatHostRules', () => {
                             CanSeeTeamBand: false,
                             IsOwnerRole: false,
                             CanContribute: true,
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -152,8 +195,9 @@ describe('resolveSpaceChatHostRules', () => {
                     return mockResult<T>([
                         {
                             ID: TYPE_ID,
-                            Configuration: null,
-                        } as unknown as T,
+                            // The engine caches types for the whole file, so the type is the same in every test: a space may set its agent list mode
+                            Configuration: JSON.stringify({ SpaceOverridable: ['Agents.ListMode'] }),
+                        },
                     ]);
                 }
 
@@ -170,25 +214,18 @@ describe('resolveSpaceChatHostRules', () => {
                             Kind: chatKind,
                             Status: chatStatus,
                             ArchivedOnSpaceClose: false,
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
-                    return mockResult<T>([]);
+                    return mockResult<T>(
+                        spaceAgents.map((row, index) => ({ ID: `space-agent-${index}`, AgentID: row.AgentID, SpaceID: SPACE_ID, IsDefault: row.IsDefault })),
+                    );
                 }
 
                 if (EntityName === 'MJ: AI Agents') {
-                    const filterStr = typeof ExtraFilter === 'string' ? ExtraFilter : '';
-                    if (!ExtraFilter || filterStr.includes(COLLABORATION_DEFAULT_AGENT_ID)) {
-                        return mockResult<T>([
-                            {
-                                ID: COLLABORATION_DEFAULT_AGENT_ID,
-                                Name: 'Collaboration Space Agent',
-                            } as unknown as T,
-                        ]);
-                    }
-                    return mockResult<T>([]);
+                    return mockResult<T>(agentsMatching(typeof ExtraFilter === 'string' ? ExtraFilter : undefined));
                 }
 
                 if (EntityName === 'MJ: Application Settings') {
@@ -197,8 +234,8 @@ describe('resolveSpaceChatHostRules', () => {
 
                 if (EntityName === 'MJ: Users') {
                     return mockResult<T>([
-                        { ID: CALLER_ID, Name: 'Caller User', Email: 'caller@example.com' } as unknown as T,
-                        { ID: OTHER_USER_ID, Name: 'Other Team User', Email: 'other@example.com' } as unknown as T,
+                        { ID: CALLER_ID, Name: 'Caller User', Email: 'caller@example.com' },
+                        { ID: OTHER_USER_ID, Name: 'Other Team User', Email: 'other@example.com' },
                     ]);
                 }
 
@@ -228,8 +265,8 @@ describe('resolveSpaceChatHostRules', () => {
         assert.ok(result.allowedConversationKinds.includes('Topic'));
         assert.ok(result.allowedConversationKinds.includes('Private'));
         assert.equal(result.agentReplyMode, 'MentionOnly');
-        assert.equal(result.defaultAgentId, COLLABORATION_DEFAULT_AGENT_ID);
-        assert.equal(result.defaultAgentName, 'Collaboration Space Agent');
+        assert.equal(result.defaultAgentId, SHIPPED_AGENT_ID);
+        assert.equal(result.defaultAgentName, SHIPPED_AGENT_NAME);
     });
 
     it('excludes Private kind for outside member who cannot see Team band', async () => {
@@ -264,5 +301,52 @@ describe('resolveSpaceChatHostRules', () => {
         assert.equal(result.canStartConversation, false);
         assert.deepEqual(result.allowedConversationKinds, []);
         assert.deepEqual(result.allowedAgentIds, []);
+    });
+    it("names the space's own default agent, not the shipped one", async () => {
+        const provider = createMockProvider({
+            spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            spaceAgents: [{ AgentID: OTHER_AGENT_ID, IsDefault: true }],
+        });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, true);
+        assert.equal(result.defaultAgentId, OTHER_AGENT_ID);
+        assert.equal(result.defaultAgentName, OTHER_AGENT_NAME);
+        assert.deepEqual(result.allowedAgentIds, [OTHER_AGENT_ID]);
+    });
+
+    it('names no default and lists no agent when a space that replaced the list has no Active agent: the shipped one does not stand in', async () => {
+        const provider = createMockProvider({
+            spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            spaceAgents: [{ AgentID: DISABLED_AGENT_ID, IsDefault: true }],
+        });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, true);
+        assert.equal(result.defaultAgentId, null);
+        assert.deepEqual(result.allowedAgentIds, []);
+    });
+
+    it('drops an agent that does not exist from the list', async () => {
+        const provider = createMockProvider({
+            spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            spaceAgents: [{ AgentID: MISSING_AGENT_ID, IsDefault: true }],
+        });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, true);
+        assert.equal(result.allowedAgentIds.includes(MISSING_AGENT_ID), false);
+    });
+
+    it('does not tell a caller without Team that an internal conversation is archived', async () => {
+        const provider = createMockProvider({ callerCanSeeTeam: false, chatKind: 'Private', chatStatus: 'Archived' });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID, CONVERSATION_ID);
+        assert.equal(result.ok, false);
+        assert.equal(result.message, 'Caller does not have access to this internal conversation.');
+    });
+
+    it('answers read-only for a caller with Team when the internal conversation is archived', async () => {
+        const provider = createMockProvider({ callerCanSeeTeam: true, chatKind: 'Private', chatStatus: 'Archived' });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID, CONVERSATION_ID);
+        assert.equal(result.ok, true);
+        assert.equal(result.message, 'The conversation is archived.');
+        assert.equal(result.canStartConversation, false);
     });
 });

@@ -2,7 +2,7 @@
   {
     "_comments": [
       "UI role permissions for Collaboration entities, matching the row-level security boundaries.",
-      "RELEASE SEED NOTE FOR BUILD ENGINEER: The UI entity permission rows for Collaboration entities (Spaces, Space Members, Space Items, Share Notices, Item Uses) come from the CodeGen output appended to this repo's migrations (V202609222231__v0.1.x__Tables.sql and V202609230620__v0.1.x__Library_CodeGen.sql). Because they are inserted without fixed IDs, every host has its own IDs. When generating the release Metadata_Sync SQL, ensure updates to these permissions are keyed by EntityID and RoleID (matching UI role) rather than capture-database permission IDs, so that CodeGen's default unfiltered UI permissions are properly updated with these RLS filters on every target host (following the bizapps-forms pattern)."
+      "RELEASE SEED NOTE FOR BUILD ENGINEER: The UI entity permission rows for Collaboration entities (Spaces, Space Members, Space Items, Share Notices, Item Uses) come from the CodeGen output appended to this repo's migrations (V202609222231__v0.1.x__Tables.sql and V202609230620__v0.1.x__Library_CodeGen.sql). Because they are inserted without fixed IDs, every host has its own IDs. When generating the release Metadata_Sync SQL, ensure updates to these permissions are keyed by EntityID and RoleID (matching UI role) rather than capture-database permission IDs, so that CodeGen's default unfiltered UI permissions are properly updated with these RLS filters on every target host (following the pattern other apps already use)."
     ],
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"
@@ -144,10 +144,6 @@
             "CanUpdate": 0,
             "CanDelete": 0,
             "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Space Chats In Reach"
-          },
-          "sync": {
-            "lastModified": "2026-09-28T23:51:17.498Z",
-            "checksum": "b6938ce52dfeae9c72af6ac1f4e0f3a7ea69ea2a2bdc2ce06bcc1dfcb02f0eb2"
           }
         }
       ]

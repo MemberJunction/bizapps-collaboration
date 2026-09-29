@@ -11,7 +11,7 @@ import {
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import type { ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -19,29 +19,60 @@ import { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { filterRoomReplyItems } from './post-space-message.js';
+import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 
+/** How a turn ended, told to whoever is watching it once its reply row is final. */
+export interface TurnOutcome {
+    /** The reply row: In-Progress while the agent worked, Complete or Error now. */
+    replyDetailId: string;
+    success: boolean;
+    /** The agent's run, when it got as far as making one. */
+    agentRun: MJAIAgentRunEntity | null;
+    /** The reason, when it failed. It is for the log and for whoever watches: the conversation itself says only that the assistant could not answer. */
+    errorMessage?: string;
+}
+
+/**
+ * Who is watching a turn, when it doesn't end before the call returns (`background`): the run's progress and streamed text as they
+ * happen, and its end. The caller hands them on to the browser that asked (MemberJunction's chat area follows the reply row from them).
+ */
+export interface TurnObserver {
+    OnProgress?: AgentExecutionProgressCallback;
+    OnStreaming?: AgentExecutionStreamingCallback;
+    OnFinished?: (outcome: TurnOutcome) => void;
+}
+
 export interface ExecuteSpaceChatTurnInput {
     spaceId: string;
     conversationId: string;
     userMessageId: string;
     agentId?: string;
+    /**
+     * Return as soon as the reply row is written In-Progress, and run the agent after that: the caller shows the row, and the
+     * observer's callbacks carry the run's progress to it. Without it the call returns when the reply is final.
+     */
+    background?: boolean;
+    observer?: TurnObserver;
 }
 
 export type ExecuteSpaceChatTurnResult =
     | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[] }
     | { ok: false; message: string };
 
+/** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
+const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please try again.';
+
 /**
- * Executes a server turn for an agent in a space's Room chat.
+ * Executes a server turn for an agent in a space's chat.
  *
  * Verifies all security and context boundaries against the persisted user message:
  * 1. Caller reaches the space and can contribute (closed spaces refuse).
- * 2. conversationId belongs to the space's active Room.
+ * 2. conversationId belongs to this space.
  * 3. userMessageId exists, matches the conversation, and was authored by the caller.
  * 4. Checks that the user message does not already have an agent run (refuses if read fails).
  * 5. Mention rule: decide from saved message alone via MentionParser. Under Always without tag,
@@ -54,6 +85,33 @@ export async function executeSpaceChatTurn(
     provider: IMetadataProvider,
     user: UserInfo,
     input: ExecuteSpaceChatTurnInput
+): Promise<ExecuteSpaceChatTurnResult> {
+    // Two calls for one message can both pass the "already replied" reads before either writes its reply, so a message is
+    // claimed here for the length of its turn. This holds within one server; a second server would need a database constraint.
+    const claim = parseUuid(input.userMessageId);
+    if (claim) {
+        if (turnsInFlight.has(claim)) {
+            return { ok: false, message: 'This message has already been processed by an agent turn.' };
+        }
+        turnsInFlight.add(claim);
+    }
+    // A turn that runs on after the call returns keeps its claim until it ends
+    const handoff = { released: false, release: () => { if (claim) turnsInFlight.delete(claim); }, runsOn: false };
+    try {
+        return await runClaimedTurn(provider, user, input, handoff);
+    } finally {
+        if (!handoff.runsOn) handoff.release();
+    }
+}
+
+/** Messages whose turn is running now. */
+const turnsInFlight = new Set<string>();
+
+async function runClaimedTurn(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    input: ExecuteSpaceChatTurnInput,
+    handoff: { release: () => void; runsOn: boolean },
 ): Promise<ExecuteSpaceChatTurnResult> {
     const spaceId = parseUuid(input.spaceId);
     const conversationId = parseUuid(input.conversationId);
@@ -84,6 +142,10 @@ export async function executeSpaceChatTurn(
 
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
+
+    // A type whose driver is missing refuses the turn (fail closed)
+    const driver = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!driver.ok) return { ok: false, message: driver.message };
 
     // 1. Verify space is open
     const spaceRes = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
@@ -169,13 +231,23 @@ export async function executeSpaceChatTurn(
     }
 
     // 5. Unified settings resolution (Item 16)
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    } catch (settingsError) {
+        return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
+    }
     const agentReplyMode = chatSettings.agentReplyMode;
     const historyOnAdd = chatSettings.historyOnAdd;
 
     // 6. Resolve allowed agents
-    const allowed = await resolveAllowedAgents(provider, spaceId, system);
-    const resolvedDefault = parseUuid(allowed.defaultAgentId) ?? COLLABORATION_DEFAULT_AGENT_ID;
+    let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
+    try {
+        allowed = await resolveAllowedAgents(provider, spaceId, system);
+    } catch (agentsError) {
+        return { ok: false, message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.' };
+    }
+    const resolvedDefault = parseUuid(allowed.defaultAgentId);
 
     // Load agent entities for allowed agents to supply MentionParser
     let availableAgents: MJAIAgentEntityExtended[] = [];
@@ -205,6 +277,9 @@ export async function executeSpaceChatTurn(
     if (taggedAgentId) {
         targetAgentId = taggedAgentId;
     } else if (agentReplyMode === 'Always') {
+        if (!resolvedDefault) {
+            return { ok: false, message: 'No assistant is available in this space right now.' };
+        }
         targetAgentId = resolvedDefault;
     } else {
         // Under MentionOnly without a tagged agent: refuse!
@@ -264,117 +339,153 @@ export async function executeSpaceChatTurn(
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to initialize assistant detail record.';
         LogError(`executeSpaceChatTurn: ${errMsg}`);
-        return { ok: false, message: errMsg };
+        return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
     }
 
-    let agentSuccess = false;
-    let agentErrorMessage: string | null = null;
-    let agentRunId: string | undefined;
-    let agentReplyText: string | null = null;
-
-    try {
-        // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
-        const windowRows = await ConversationEngine.LoadWindowRowsFresh(
-            conversationId,
-            user,
-            provider,
-            conversationHistoryFrom
-        );
-        const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
-            excludeDetailIds: [assistantDetail.ID],
-            historyFrom: conversationHistoryFrom ?? null,
-            maxTailMessages: 20,
-        });
-        const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
-            role: m.role,
-            content: m.content,
-        }));
-
-        const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
-        if (agentEntity && (await agentEntity.Load(targetAgentId))) {
-            const runner = new AgentRunner(provider);
-            const runnerParams: ExecuteAgentParams = {
-                agent: agentEntity,
-                contextUser: user,
-                userId: user.ID,
-                conversationId,
-                conversationDetailId: assistantDetail.ID,
-                ConversationHistoryFrom: conversationHistoryFrom,
-                PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
-                PrimaryScopeRecordID: foundChat.ID,
-                data: {
-                    spaceId,
-                    conversationId,
-                    audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
-                    allowedItems: audienceQuoted,
-                },
-                conversationMessages: assembledMessages,
-                onAgentRunCreated: async (createdRunId: string) => {
-                    agentRunId = createdRunId;
-                    try {
-                        const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
-                        if (runObj && (await runObj.Load(createdRunId))) {
-                            runObj.ExternalReferenceID = userMessageId;
-                            const stampSaved = await runObj.Save();
-                            if (!stampSaved) {
-                                LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${runObj.LatestResult?.CompleteMessage ?? ''}`);
-                            }
-                        }
-                    } catch (stampErr) {
-                        LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${stampErr}`);
-                    }
-                },
-            };
-
-            const runResult = await runner.RunAgent(runnerParams);
-            if (runResult?.agentRun?.ID) {
-                agentRunId = runResult.agentRun.ID;
-            }
-
-            if (runResult?.success) {
-                agentSuccess = true;
-                agentReplyText =
-                    runResult.agentRun?.Message ||
-                    (typeof runResult.payload === 'string' ? runResult.payload : null) ||
-                    'Completed successfully.';
-            } else {
-                agentErrorMessage =
-                    runResult?.agentRun?.ErrorMessage ||
-                    runResult?.errorMessage ||
-                    'Agent execution did not produce a result.';
-            }
-        } else {
-            agentErrorMessage = `Failed to load agent ${targetAgentId}.`;
+    /** The observer hears how the turn ended; a fault in it never becomes the turn's own. */
+    const tellFinished = (outcome: TurnOutcome): void => {
+        try {
+            input.observer?.OnFinished?.(outcome);
+        } catch (observerError) {
+            LogError(`executeSpaceChatTurn: the turn's observer failed: ${observerError instanceof Error ? observerError.message : String(observerError)}`);
         }
-    } catch (agentErr) {
-        agentErrorMessage = agentErr instanceof Error ? agentErr.message : String(agentErr);
-        LogError(`executeSpaceChatTurn: AgentRunner execution error: ${agentErrorMessage}`);
-    }
-
-    if (!agentSuccess || !agentReplyText) {
-        assistantDetail.Status = 'Error';
-        assistantDetail.Message = agentErrorMessage ?? 'Agent execution failed.';
-        const errorSaved = await assistantDetail.Save();
-        if (!errorSaved) {
-            LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
-        }
-        return { ok: false, message: agentErrorMessage ?? 'Agent execution failed.' };
-    }
-
-    // Save final assistant reply as system user
-    assistantDetail.Status = 'Complete';
-    assistantDetail.Message = agentReplyText;
-    if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
-        const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to save assistant reply';
-        LogError(`executeSpaceChatTurn: failed to save assistant reply: ${errMsg}`);
-        return { ok: false, message: errMsg };
-    }
-
-    return {
-        ok: true,
-        replyDetailIds: [assistantDetail.ID],
-        agentRunId,
-        quotedCount: audienceQuoted.length,
-        allowedItemNames: audienceQuoted.map((item) => item.Name),
     };
+
+    const finishTurn = async (): Promise<ExecuteSpaceChatTurnResult> => {
+        let agentSuccess = false;
+        let agentErrorMessage: string | null = null;
+        let agentRunId: string | undefined;
+        let agentReplyText: string | null = null;
+        let finishedRun: MJAIAgentRunEntity | null = null;
+
+        try {
+            // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
+            const windowRows = await ConversationEngine.LoadWindowRowsFresh(
+                conversationId,
+                user,
+                provider,
+                conversationHistoryFrom
+            );
+            const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
+                excludeDetailIds: [assistantDetail.ID],
+                historyFrom: conversationHistoryFrom ?? null,
+                maxTailMessages: 20,
+            });
+            const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
+                role: m.role,
+                content: m.content,
+            }));
+
+            const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
+            if (agentEntity && (await agentEntity.Load(targetAgentId))) {
+                const runner = new AgentRunner(provider);
+                const runnerParams: ExecuteAgentParams = {
+                    agent: agentEntity,
+                    contextUser: user,
+                    userId: user.ID,
+                    conversationId,
+                    conversationDetailId: assistantDetail.ID,
+                    ConversationHistoryFrom: conversationHistoryFrom,
+                    PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                    PrimaryScopeRecordID: foundChat.ID,
+                    data: {
+                        spaceId,
+                        conversationId,
+                        audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
+                        allowedItems: audienceQuoted,
+                    },
+                    conversationMessages: assembledMessages,
+                    onProgress: input.observer?.OnProgress,
+                    onStreaming: input.observer?.OnStreaming,
+                    onAgentRunCreated: async (createdRunId: string) => {
+                        agentRunId = createdRunId;
+                        try {
+                            const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
+                            if (runObj && (await runObj.Load(createdRunId))) {
+                                runObj.ExternalReferenceID = userMessageId;
+                                const stampSaved = await runObj.Save();
+                                if (!stampSaved) {
+                                    LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${runObj.LatestResult?.CompleteMessage ?? ''}`);
+                                }
+                            }
+                        } catch (stampErr) {
+                            LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${stampErr}`);
+                        }
+                    },
+                };
+
+                const runResult = await runner.RunAgent(runnerParams);
+                if (runResult?.agentRun?.ID) {
+                    agentRunId = runResult.agentRun.ID;
+                    finishedRun = runResult.agentRun;
+                }
+
+                if (runResult?.success) {
+                    agentSuccess = true;
+                    agentReplyText =
+                        runResult.agentRun?.Message ||
+                        (typeof runResult.payload === 'string' ? runResult.payload : null) ||
+                        'Completed successfully.';
+                } else {
+                    agentErrorMessage =
+                        runResult?.agentRun?.ErrorMessage ||
+                        runResult?.errorMessage ||
+                        'Agent execution did not produce a result.';
+                    LogError(`executeSpaceChatTurn: the agent run failed: ${agentErrorMessage}`);
+                }
+            } else {
+                agentErrorMessage = `Failed to load agent ${targetAgentId}.`;
+                LogError(`executeSpaceChatTurn: ${agentErrorMessage}`);
+            }
+        } catch (agentErr) {
+            agentErrorMessage = agentErr instanceof Error ? agentErr.message : String(agentErr);
+            LogError(`executeSpaceChatTurn: AgentRunner execution error: ${agentErrorMessage}`);
+        }
+
+        if (!agentSuccess || !agentReplyText) {
+            assistantDetail.Status = 'Error';
+            assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
+            const errorSaved = await assistantDetail.Save();
+            if (!errorSaved) {
+                LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: agentErrorMessage ?? ASSISTANT_FAILED_MESSAGE });
+            return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
+        }
+
+        // Save final assistant reply as system user
+        assistantDetail.Status = 'Complete';
+        assistantDetail.Message = agentReplyText;
+        if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
+            const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to save assistant reply';
+            LogError(`executeSpaceChatTurn: failed to save assistant reply: ${errMsg}`);
+            // Don't leave the reply at In-Progress: mark it Error, so the conversation shows the turn failed
+            assistantDetail.Status = 'Error';
+            assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
+            if (!(await assistantDetail.Save())) {
+                LogError(`executeSpaceChatTurn: failed to mark the reply Error after its save failed: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: errMsg });
+            return { ok: false, message: errMsg };
+        }
+
+        tellFinished({ replyDetailId: assistantDetail.ID, success: true, agentRun: finishedRun });
+        return {
+            ok: true,
+            replyDetailIds: [assistantDetail.ID],
+            agentRunId,
+            quotedCount: audienceQuoted.length,
+            allowedItemNames: audienceQuoted.map((item) => item.Name),
+        };
+    };
+
+    if (input.background) {
+        // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
+        handoff.runsOn = true;
+        void finishTurn()
+            .catch((error: unknown) => LogError(`executeSpaceChatTurn: the background turn failed: ${error instanceof Error ? error.message : String(error)}`))
+            .finally(handoff.release);
+        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name) };
+    }
+    return finishTurn();
 }

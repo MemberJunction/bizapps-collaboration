@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { CollabDialogBase } from './dialog-base';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -10,7 +11,8 @@ import type { FileKind, SpaceBand } from './types';
 export interface CollabUploadSubmitPayload {
   mode: 'upload' | 'link';
   title: string;
-  band: SpaceBand;
+  /** The band the person has on screen, or null when they made no choice and the space type's default applies. */
+  band: SpaceBand | null;
   folder: string;
   fileName?: string;
   fileSize?: number;
@@ -28,21 +30,15 @@ export interface CollabUploadSubmitPayload {
     CommonModule,
     FormsModule,
     MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
   ],
   template: `
-    <div class="overlay" (click)="onBackdropClick($event)">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-        <header class="d-header">
-          <div class="d-title-group">
-            <h2 id="dialog-title" class="d-title">Add document to {{ SpaceName || 'Space' }}</h2>
-            <p class="d-sub">Upload a local file to storage or link a cloud document (Google Docs, Microsoft 365, SharePoint).</p>
-          </div>
-          <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </header>
+    <mj-dialog [Visible]="true" [Title]="'Add document to ' + (SpaceName || 'Space')" [Width]="540" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+      <div class="dialog">
+        <p class="d-sub">{{ AllowLinks ? 'Upload a local file or link a cloud document.' : 'Upload a file from your computer.' }}</p>
 
         <!-- Segmented Tab switcher -->
         @if (AllowLinks) {
@@ -84,7 +80,13 @@ export interface CollabUploadSubmitPayload {
                   (dragover)="onDragOver($event)"
                   (dragleave)="onDragLeave($event)"
                   (drop)="onFileDrop($event)"
+                  role="button"
+                  tabindex="0"
+                  data-autofocus
+                  aria-label="Choose a file to upload"
                   (click)="fileInput.click()"
+                  (keydown.enter)="fileInput.click()"
+                  (keydown.space)="fileInput.click(); $event.preventDefault()"
                 >
                   <input
                     #fileInput
@@ -94,7 +96,10 @@ export interface CollabUploadSubmitPayload {
                   />
                   <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
                   <div class="drop-text"><b>Click to upload</b> or drag and drop</div>
-                  <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to 50MB)</div>
+                  <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to {{ formatBytes(MaxBytes) }})</div>
+                  @if (fileError) {
+                    <div class="file-error" role="alert">{{ fileError }}</div>
+                  }
                 </div>
               } @else {
                 <div class="file-chosen-bar">
@@ -138,7 +143,7 @@ export interface CollabUploadSubmitPayload {
 
           <!-- Common fields: Title, Folder, Band -->
           <div class="form-group">
-            <label for="doc-title-input" class="f-label">Title</label>
+            <label for="doc-title-input" class="f-label">Name</label>
             <input
               id="doc-title-input"
               type="text"
@@ -155,22 +160,21 @@ export interface CollabUploadSubmitPayload {
                 id="doc-folder-input"
                 type="text"
                 class="mj-input"
-                placeholder="e.g. Deliverables, Briefs, Discovery"
+                placeholder="e.g. Contracts, Photos"
                 list="folder-suggestions"
                 [(ngModel)]="docFolder"
               />
               <datalist id="folder-suggestions">
-                <option value="Deliverables"></option>
-                <option value="Briefs"></option>
-                <option value="Discovery"></option>
-                <option value="Working Papers"></option>
-                <option value="Reports"></option>
+                @for (name of FolderSuggestions; track name) {
+                  <option [value]="name"></option>
+                }
               </datalist>
             </div>
 
             <div class="form-group half">
-              <label class="f-label">Who can see this?</label>
-              <div class="band-options">
+              <div class="f-label" id="band-choice-label">Who can see this?</div>
+              <div class="band-options" role="radiogroup" aria-labelledby="band-choice-label">
+                @if (IsBandAllowed('Shared')) {
                 <label class="band-option" [class.selected]="selectedBand === 'Shared'">
                   <input
                     type="radio"
@@ -186,7 +190,9 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-sub">Visible to all participants</div>
                   </div>
                 </label>
+                }
 
+                @if (IsBandAllowed('Team')) {
                 <label class="band-option" [class.selected]="selectedBand === 'Team'">
                   <input
                     type="radio"
@@ -199,18 +205,21 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-title">
                       <mjc-band-chip Band="Team" Label="Team" />
                     </div>
-                    <div class="b-opt-sub">Internal team only</div>
+                    <div class="b-opt-sub">Only the team can see it</div>
                   </div>
                 </label>
+                }
+                @if (selectedBand === null) {
+                  <div class="b-opt-note">No choice made: this space type's default applies.</div>
+                }
               </div>
             </div>
           </div>
         </div>
 
-        <footer class="d-footer">
-          <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
-            Cancel
-          </button>
+
+      </div>
+        <mj-dialog-actions>
           <button
             mjButton
             variant="primary"
@@ -225,59 +234,18 @@ export interface CollabUploadSubmitPayload {
               {{ activeMode === 'upload' ? 'Upload file' : 'Link document' }}
             }
           </button>
-        </footer>
-      </div>
-    </div>
+          <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
+            Cancel
+          </button>
+        </mj-dialog-actions>
+    </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(2px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      box-sizing: border-box;
+      display: contents;
     }
     .dialog {
-      position: relative;
-      background: var(--mj-bg-surface-card, #ffffff);
-      border-radius: var(--mj-radius-lg, 12px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-      width: 100%;
-      max-width: 540px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
       font-family: var(--mj-font-family, Inter, sans-serif);
-      color: var(--mj-text-primary, #0f172a);
-    }
-    .d-header {
-      padding: 18px 20px 14px;
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-    }
-    .d-title-group {
-      flex: 1;
-    }
-    .d-title {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 700;
-      line-height: 1.3;
       color: var(--mj-text-primary, #0f172a);
     }
     .d-sub {
@@ -285,19 +253,6 @@ export interface CollabUploadSubmitPayload {
       font-size: 12.5px;
       color: var(--mj-text-muted, #64748b);
       line-height: 1.4;
-    }
-    .btn-close {
-      background: transparent;
-      border: none;
-      font-size: 16px;
-      color: var(--mj-text-muted, #64748b);
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 6px;
-    }
-    .btn-close:hover {
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
     }
     .tab-strip {
       display: flex;
@@ -327,12 +282,9 @@ export interface CollabUploadSubmitPayload {
       border-radius: 6px 6px 0 0;
     }
     .d-body {
-      padding: 18px 20px;
       display: flex;
       flex-direction: column;
       gap: 14px;
-      max-height: calc(85vh - 160px);
-      overflow-y: auto;
     }
     .form-group {
       display: flex;
@@ -407,6 +359,7 @@ export interface CollabUploadSubmitPayload {
       border-color: var(--mj-brand-primary, #0076b6);
       background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, transparent);
     }
+    .file-error { color: var(--mj-status-error); font-size: 12px; margin-top: 6px; }
     .hidden-file-input {
       display: none;
     }
@@ -456,8 +409,8 @@ export interface CollabUploadSubmitPayload {
       border-radius: 4px;
     }
     .btn-clear:hover {
-      color: #ef4444;
-      background: rgba(239, 68, 68, 0.1);
+      color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
     }
     .band-options {
       display: flex;
@@ -483,17 +436,13 @@ export interface CollabUploadSubmitPayload {
       flex-direction: column;
       gap: 2px;
     }
+    .b-opt-note {
+      font-size: var(--mj-text-xs, 12px);
+      color: var(--mj-text-muted);
+    }
     .b-opt-sub {
       font-size: 11px;
       color: var(--mj-text-muted, #64748b);
-    }
-    .d-footer {
-      padding: 14px 20px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      border-top: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
     }
     .ellipsis {
       overflow: hidden;
@@ -502,12 +451,35 @@ export interface CollabUploadSubmitPayload {
     }
   `],
 })
-export class CollabUploadDialogComponent {
+export class CollabUploadDialogComponent extends CollabDialogBase {
+  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
+
   @Input() SpaceName = '';
   @Input() SpaceId = '';
   @Input() ClientOrgName = '';
   @Input() IsSubmitting = false;
   @Input() AllowLinks = false;
+  /** The largest file the server takes. A bigger one is refused here, before it is read. */
+  @Input() MaxBytes = 10 * 1024 * 1024;
+  /** The space's own folders, offered as suggestions. */
+  @Input() FolderSuggestions: readonly string[] = [];
+  public fileError = '';
+
+  /** The bands this seat may choose. The server refuses any other, so the dialog offers only these. */
+  @Input() AllowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
+
+  /**
+   * The band the dialog starts on: the space type's default for this seat. When it's null the seat wasn't resolved, nothing
+   * is selected, and an upload with no choice made takes the space type's default on the server.
+   */
+  @Input() set StartBand(band: SpaceBand | null) {
+    this.selectedBand = band;
+  }
+
+  public IsBandAllowed(band: SpaceBand): boolean {
+    return this.AllowedBands.includes(band);
+  }
 
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() SubmitRequested = new EventEmitter<CollabUploadSubmitPayload>();
@@ -516,8 +488,8 @@ export class CollabUploadDialogComponent {
   public selectedFile: File | null = null;
   public linkUrl = '';
   public docTitle = '';
-  public docFolder = 'Deliverables';
-  public selectedBand: SpaceBand = 'Shared';
+  public docFolder = 'General';
+  public selectedBand: SpaceBand | null = null;
   public detectedKind: FileKind = 'doc';
   public detectedService: { label: string; icon: string } | null = null;
   public isDragging = false;
@@ -527,13 +499,9 @@ export class CollabUploadDialogComponent {
     this.updateDetection();
   }
 
-  public onBackdropClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement).classList.contains('overlay')) {
-      this.onCancel();
-    }
-  }
-
+  /** Closing is refused while the upload is saving, from the close button and the backdrop as well as Escape. */
   public onCancel(): void {
+    if (this.IsSubmitting) return;
     this.CancelRequested.emit();
   }
 
@@ -568,6 +536,11 @@ export class CollabUploadDialogComponent {
   }
 
   private handleFile(file: File): void {
+    if (file.size > this.MaxBytes) {
+      this.fileError = `That file is ${this.formatBytes(file.size)}. Files can be up to ${this.formatBytes(this.MaxBytes)}.`;
+      return;
+    }
+    this.fileError = '';
     this.selectedFile = file;
     if (!this.docTitle) {
       // Strip extension for title
@@ -650,7 +623,7 @@ export class CollabUploadDialogComponent {
       band: this.selectedBand,
       folder: this.docFolder.trim() || 'General',
       kind: this.detectedKind,
-      fileName: this.selectedFile?.name,
+      fileName: this.selectedFile ? this.fileNameFromTitle(this.selectedFile.name) : undefined,
       fileSize: this.selectedFile?.size,
       fileType: this.selectedFile?.type,
       file: this.selectedFile || undefined,
@@ -658,6 +631,13 @@ export class CollabUploadDialogComponent {
     };
 
     this.SubmitRequested.emit(payload);
+  }
+
+  /** The stored file takes the name typed here, keeping the original's extension. */
+  private fileNameFromTitle(original: string): string {
+    const extension = /\.[^/.]+$/.exec(original)?.[0] ?? '';
+    const title = this.docTitle.trim();
+    return title.toLowerCase().endsWith(extension.toLowerCase()) ? title : `${title}${extension}`;
   }
 
   public formatBytes(bytes: number): string {

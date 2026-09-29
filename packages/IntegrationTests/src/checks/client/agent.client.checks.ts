@@ -1,4 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
+import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
     AI_AGENT_PERMISSION_ENTITY,
@@ -7,22 +9,18 @@ import {
     AI_AGENT_SKILL_ENTITY,
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
-    CONVERSATION_ENTITY,
+    FILE_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
     SPACE_ITEM_ENTITY,
-    SPACE_CHAT_ENTITY,
-    FILE_ENTITY,
 } from '../../entity-names.js';
-import type { MJConversationEntity, MJConversationDetailEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
-import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
-import { FindRows, getPersonaContext, getPersonaClientContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
+import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
+import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const createdDetailIds: string[] = [];
+let testAgentAttachmentId: string | null = null;
 
-import { cleanupConversation } from '../cleanup-helpers.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
@@ -91,17 +89,18 @@ const checks: NamedCheck[] = [
             }
 
             // 3. Verify Collaboration Space Agent
-            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean }>(
+            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean; DriverClass: string | null }>(
                 ctx,
                 AI_AGENT_ENTITY,
                 `ID = '${AGENT_ID}'`,
-                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction'],
+                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction', 'DriverClass'],
             );
             Assert(agents.length === 1, 'Collaboration Space Agent exists');
             Assert(agents[0].Name === 'Collaboration Space Agent', 'Agent name matches');
             Assert(agents[0].AcceptsSkills === 'Limited', 'Agent AcceptsSkills is Limited');
             Assert(agents[0].SkillActivationMode === 'Auto', 'Agent SkillActivationMode is Auto');
             Assert(agents[0].ExposeAsAction === false, 'Agent ExposeAsAction is false (isolated from global chat area)');
+            Assert(agents[0].DriverClass === null, `The shipped agent has no DriverClass; no test changes a shipped row (saw ${agents[0].DriverClass})`);
 
             // 4. Verify 3 assigned skills
             const assignedSkills = await FindRows<{ ID: string; SkillID: string }>(
@@ -156,7 +155,7 @@ const checks: NamedCheck[] = [
             Assert(agentScopes.length === 1, 'Agent is linked to 1 Search Scope');
             Assert(agentScopes[0].SearchScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Linked to Collaboration Space Scope');
 
-            // Note: ExplainScope has no GraphQL endpoint in MJ 6.1.3; covered on server harness.
+            // Note: ExplainScope has no GraphQL endpoint on MJ next; the server harness covers it.
         },
     },
     {
@@ -325,7 +324,7 @@ const checks: NamedCheck[] = [
                 const genMsg = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
-                    Text: `@Collaboration Space Agent summarize available documents`,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 Assert(genMsg.Success === true && !!genMsg.DetailID, `Ada posted tagged message in General: ${genMsg.ErrorMessage ?? ''}`);
                 if (genMsg.DetailID) createdDetailIds.push(genMsg.DetailID);
@@ -334,7 +333,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: genMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(genTurnRes.Success === true, `Agent turn in General succeeded: ${genTurnRes.ErrorMessage ?? ''}`);
                 if (genTurnRes.ReplyDetailIDs) createdDetailIds.push(...genTurnRes.ReplyDetailIDs);
@@ -358,7 +357,7 @@ const checks: NamedCheck[] = [
                 const privMsg = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: privConvId,
-                    Text: `@Collaboration Space Agent summarize available documents`,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 Assert(privMsg.Success === true && !!privMsg.DetailID, `Ada posted tagged message in Private: ${privMsg.ErrorMessage ?? ''}`);
                 if (privMsg.DetailID) createdDetailIds.push(privMsg.DetailID);
@@ -367,7 +366,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: privConvId,
                     UserMessageID: privMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(privTurnRes.Success === true, `Agent turn in Private succeeded: ${privTurnRes.ErrorMessage ?? ''}`);
                 if (privTurnRes.ReplyDetailIDs) createdDetailIds.push(...privTurnRes.ReplyDetailIDs);
@@ -388,7 +387,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: untaggedMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!untaggedTurnRes.Success, 'Untagged message with AgentID under MentionOnly must be refused a turn over wire');
                 Assert(untaggedTurnRes.ErrorMessage === 'The message does not mention an agent.', `Untagged refusal matches: ${untaggedTurnRes.ErrorMessage}`);
@@ -398,7 +397,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: genMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!secondTurnRes.Success, 'Second turn on already-processed UserMessageID must be refused over wire');
                 Assert(secondTurnRes.ErrorMessage === 'This message has already been processed by an agent turn.', `Second turn refusal matches: ${secondTurnRes.ErrorMessage}`);
@@ -410,23 +409,22 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
-    Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`agent client Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`agent client Teardown failed to delete detail ${id}: ${err}`);
-                    }
-                }
-            }
-        }
+    // The turn checks run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
+    // The MJAPI this harness talks to must load the test agent's driver (docs/reviewing-the-data.md).
+    Setup: async (ctx: IntegrationCheckContext) => {
+        testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
     },
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
+                }
+            },
+            ...createdDetailIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
+        ]),
 });

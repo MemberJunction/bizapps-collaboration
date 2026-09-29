@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
+import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
+import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -7,6 +10,7 @@ import { CollabNeedsYouCardComponent } from './needs-you-card.component';
 import { CollabItemCardComponent } from './item-card.component';
 import { CollabItemRowComponent } from './item-row.component';
 import { CollabAskBoxComponent } from './ask-box.component';
+import { MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface RoomMiniMessage {
@@ -43,6 +47,9 @@ export interface SubSpaceSummary {
     CollabItemCardComponent,
     CollabItemRowComponent,
     CollabAskBoxComponent,
+    MJEmptyStateComponent,
+    MJClickableDirective,
+    NgComponentOutlet,
   ],
   template: `
     <div class="page ov">
@@ -67,19 +74,25 @@ export interface SubSpaceSummary {
           }
 
           <!-- Shared with Client band -->
+          @if (ShowLibraryLink) {
           <div class="card band-card shared-band">
             <div class="band-h">
               <span class="band-ic">
                 <i class="fa-solid fa-eye"></i>
               </span>
               <div class="grow">
-                <div class="fw7 fs14">{{ SharedBandTitle }}</div>
-                <div class="fs12 band-sub">{{ SharedBandSubtitle }}</div>
+                <div class="fw7 fs14">{{ SharedTitle }}</div>
+                <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
               </div>
-              <a class="link fs12 preview-link" (click)="onPreviewAsPersona($event)">
-                <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
-              </a>
+              @if (ShowPreviewAs && ClientPersonaName) {
+                <a class="link fs12 preview-link" [mjClickable]="'Preview as ' + ClientPersonaName" (click)="onPreviewAsPersona($event)">
+                  <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
+                </a>
+              }
             </div>
+            @if (SharedItems.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-folder-open" Title="Nothing shared yet" Message="Files shared to everyone in this space appear here."></mj-empty-state>
+            }
             <div class="deliv-grid">
               @for (item of SharedItems; track item.id) {
                 <mjc-item-card
@@ -96,19 +109,26 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
 
           <!-- Team Working Set band -->
+          @if (CanSeeTeamSide && ShowLibraryLink) {
           <div class="card band-card team-band">
             <div class="band-h">
               <span class="band-ic team">
                 <i class="fa-solid fa-lock"></i>
               </span>
               <div class="grow">
-                <div class="fw7 fs14">Team working set</div>
-                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Internal team only' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
+                <div class="fw7 fs14">Team only</div>
+                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
               </div>
-              <a class="link fs12 open-lib-link" (click)="onOpenLibrary($event)">Open library</a>
+              @if (ShowLibraryLink) {
+                <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+              }
             </div>
+            @if (TeamItems.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
+            }
             <div class="trows">
               @for (item of TeamItems; track item.id) {
                 <mjc-item-row
@@ -126,11 +146,12 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
         </div>
 
         <div class="col">
           <!-- Ask Box -->
-          @if (CanStartConversation) {
+          @if (CanStartConversation && AgentAvailable) {
             <mjc-ask-box
               #askBox
               [Title]="'Ask about ' + SpaceName"
@@ -138,15 +159,23 @@ export interface SubSpaceSummary {
               [IsSubmitting]="IsSubmittingAsk"
               (AskRequested)="onAskRequested($event)"
             />
+          } @else if (CanStartConversation) {
+            <div class="card ask-unavailable" role="status">No assistant is available in this space right now.</div>
           }
 
           <!-- Discussion Card -->
+          @if (ShowChatLink) {
           <div class="card room-card">
             <div class="card-h">
               <span class="h3">Discussion</span>
-              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Internal Only' : 'Everyone') + ' · ' + AudienceCount" />
-              <a class="link open-chat-link" (click)="onOpenChat($event)">Open chat</a>
+              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
+              @if (ShowChatLink) {
+                <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
+              }
             </div>
+            @if (RoomMessages.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" [Message]="CanStartConversation ? 'Start a conversation from the ask box or the Chat tab.' : 'No messages yet.'"></mj-empty-state>
+            }
             <div class="mini-msgs">
               @for (msg of RoomMessages; track msg.id || $index) {
                 <div class="mm">
@@ -179,16 +208,38 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
+
+          <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
+          @for (card of UniqueContributedCards; track card.key) {
+            @if (card.component) {
+              <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
+            }
+          }
+
+          <!-- What the space's type keeps of its own (a subtype), read-only; drawn by the host -->
+          @if (HasAbout) {
+            <div class="card about-card">
+              <div class="card-h">
+                <span class="h3">{{ AboutTitle || 'About' }}</span>
+              </div>
+              <div class="about-fields">
+                <ng-content select="[mjcAbout]"></ng-content>
+              </div>
+            </div>
+          }
 
           <!-- Sub-spaces -->
           @if (SubSpaces && SubSpaces.length > 0) {
             <div class="card sub-card">
               <div class="card-h">
                 <span class="h3">Inside {{ SpaceName }}</span>
-                <a class="link add-sub-link" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                @if (CanAddSubSpace) {
+                  <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                }
               </div>
               @for (sub of SubSpaces; track sub.id) {
-                <div class="sub-row" (click)="onSubSpaceSelected(sub)">
+                <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
                   <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
                   <div class="grow">
                     <div class="fw6 fs13">{{ sub.name }}</div>
@@ -303,6 +354,13 @@ export interface SubSpaceSummary {
       padding: 4px 8px 8px;
     }
 
+    .about-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px 24px;
+      padding: 4px 18px 16px;
+    }
+
     .card-h {
       display: flex;
       align-items: center;
@@ -406,13 +464,43 @@ export interface SubSpaceSummary {
 })
 export class CollabSpaceOverviewComponent {
   @Input() public SpaceName = '';
+  @Input() public SpaceId = '';
+  /** False when the space's type has no Library (or Chat): the entry points to it aren't offered. */
+  @Input() public ShowLibraryLink = true;
+  @Input() public ShowChatLink = true;
+  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
+  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
+  @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
+
+  /** The contributed cards this viewer may see, one per key: a driver may append what an earlier one already gave, and a key draws once. */
+  public get UniqueContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+    const seen = new Set<string>();
+    return this.ContributedCards.filter((card) => {
+      // A card that doesn't say its side is a Team card: it doesn't reach someone who can't see the Team band
+      if ((card.side ?? 'Team') === 'Team' && !this.CanSeeTeamSide) return false;
+      const key = normalizeContributionKey(card.key);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  /** The space's type keeps details of its own (a subtype): the host draws them, read-only, in the `[mjcAbout]` slot. */
+  @Input() public HasAbout = false;
+  @Input() public AboutTitle = '';
   @Input() public FirmName = '';
   @Input() public ClientOrgName = '';
   @Input() public ClientPersonaName = '';
   @Input() public AudienceCount = 0;
+  /** Everyone who can see the Shared band, whichever conversation is open: the Shared card counts these. */
+  @Input() public SharedAudienceCount = 0;
 
   @Input() public SharedBandTitle = '';
   @Input() public SharedBandSubtitle = '';
+  /** "Preview as" and "+ Sub-space" are offered only when the host builds them (the preview and the sub-space dialog come later). */
+  @Input() public ShowPreviewAs = false;
+  @Input() public CanAddSubSpace = false;
+  /** False for a seat that can't see the Team band: the Team card is not drawn for them at all. */
+  @Input() public CanSeeTeamSide = false;
 
   @Input() public NeedsYouItems: NeedsYouItemModel[] = [];
   @Input() public SharedItems: ItemCardModel[] = [];
@@ -422,6 +510,8 @@ export class CollabSpaceOverviewComponent {
   @Input() public SubSpaces: SubSpaceSummary[] = [];
   @Input() public AskSuggestions: string[] = [];
   @Input() public CanStartConversation = false;
+  /** False when no assistant is Active for this space, so the ask box (which asks one) is not offered. */
+  @Input() public AgentAvailable = true;
   @Input() public IsSubmittingAsk = false;
   @Input() public DiscussionBand: SpaceBand = 'Shared';
 
@@ -436,6 +526,17 @@ export class CollabSpaceOverviewComponent {
   @Output() public NewSubSpaceRequested = new EventEmitter<void>();
   @Output() public SubSpaceSelectRequested = new EventEmitter<SubSpaceSummary>();
   @Output() public AskRequested = new EventEmitter<string>();
+
+  /** The Shared card's title: what the host set, else who the space is shared with. */
+  public get SharedTitle(): string {
+    if (this.SharedBandTitle) return this.SharedBandTitle;
+    return this.ClientOrgName ? `Shared with ${this.ClientOrgName}` : 'Shared with everyone in this space';
+  }
+
+  public get SharedSubtitle(): string {
+    if (this.SharedBandSubtitle) return this.SharedBandSubtitle;
+    return `${this.SharedAudienceCount} ${this.SharedAudienceCount === 1 ? 'person' : 'people'} can see these`;
+  }
 
   public clearAskBox(): void {
     this.askBoxComponent?.clear();

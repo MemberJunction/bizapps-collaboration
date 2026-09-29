@@ -21,11 +21,14 @@ LoadShareNoticeEntityServer();
 LoadItemUseEntityServer();
 LoadCollaborationTaskEntityServer();
 
+import './agents/index.js';
 import './checks/collab-world.checks.js';
 import './checks/people-fls.checks.js';
 import './checks/parent-assignees.checks.js';
 import './checks/room.checks.js';
 import './checks/write-gates.checks.js';
+import './checks/extensions.checks.js';
+import './checks/subtypes.checks.js';
 import './checks/row-filters.checks.js';
 import './checks/library.checks.js';
 import './checks/agent.checks.js';

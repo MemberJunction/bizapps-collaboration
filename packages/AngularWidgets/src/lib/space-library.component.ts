@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { AvatarItem, LibraryRowModel, SpaceBand } from './types';
-import { MJButtonDirective, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJClickableDirective, MJEmptyStateComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
+import { filterLibraryRows } from './library-filter';
 import { CollabAvatarStackComponent } from './avatar-stack.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -30,8 +32,9 @@ export interface LibrarySmartView {
     CollabBandChipComponent,
     CollabFileIconComponent,
     CollabItemPreviewComponent,
-    MJButtonDirective,
+    MJEmptyStateComponent,
     MJTabNavComponent,
+    MJClickableDirective,
   ],
   template: `
     <div class="lib">
@@ -39,7 +42,9 @@ export interface LibrarySmartView {
       <aside class="folders">
         <div
           class="fold"
+          [mjClickable]="'All material'"
           [class.on]="ActiveFolderId === 'all'"
+          [attr.aria-current]="ActiveFolderId === 'all' ? 'true' : null"
           (click)="onSelectFolder('all')"
         >
           <i class="fa-solid fa-layer-group"></i>
@@ -51,7 +56,9 @@ export interface LibrarySmartView {
         @for (col of Collections; track col.id) {
           <div
             class="fold"
+            [mjClickable]="col.name"
             [class.on]="ActiveFolderId === col.id"
+            [attr.aria-current]="ActiveFolderId === col.id ? 'true' : null"
             (click)="onSelectFolder(col.id)"
           >
             <i class="fa-solid fa-folder"></i>
@@ -65,7 +72,9 @@ export interface LibrarySmartView {
         @for (view of SmartViews; track view.id) {
           <div
             class="fold"
+            [mjClickable]="view.name"
             [class.on]="ActiveFolderId === view.id"
+            [attr.aria-current]="ActiveFolderId === view.id ? 'true' : null"
             (click)="onSelectFolder(view.id)"
           >
             <i [class]="view.iconClass"></i>
@@ -79,10 +88,12 @@ export interface LibrarySmartView {
             <mjc-band-chip Band="Shared" Label="Shared" />
             <span class="fs12 muted">Shared band</span>
           </div>
-          <div class="row gap8">
-            <mjc-band-chip Band="Team" Label="Team" />
-            <span class="fs12 muted">{{ TeamBandLegend || 'Team only' }}</span>
-          </div>
+          @if (CanSeeTeamSide) {
+            <div class="row gap8">
+              <mjc-band-chip Band="Team" Label="Team" />
+              <span class="fs12 muted">{{ TeamBandLegend || 'Team only' }}</span>
+            </div>
+          }
         </div>
       </aside>
 
@@ -91,18 +102,16 @@ export interface LibrarySmartView {
         <div class="lib-tools">
           <div class="input search-input">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="mj-input" placeholder="Search the library" />
+            <input type="text" class="mj-input" placeholder="Search the library" aria-label="Search the library" [value]="SearchText" (input)="onSearchInput($event)" />
           </div>
-          <mj-tab-nav
-            class="seg"
-            [Tabs]="bandNavTabs"
-            [ActiveKey]="ActiveBandFilter"
-            (TabChange)="onFilterBand($event)"
-          />
-          <button mjButton variant="secondary" size="sm" class="btn sm filter-btn" (click)="onOpenFilter()">
-            <i class="fa-solid fa-sliders"></i>
-            <span>Filter</span>
-          </button>
+          @if (CanSeeTeamSide) {
+            <mj-tab-nav
+              class="seg"
+              [Tabs]="bandNavTabs"
+              [ActiveKey]="ActiveBandFilter"
+              (TabChange)="onFilterBand($event)"
+            />
+          }
         </div>
 
         <div class="card table-card">
@@ -111,15 +120,16 @@ export interface LibrarySmartView {
               <tr>
                 <th style="padding-top:12px">Name</th>
                 <th style="padding-top:12px;width:150px">Who can see it</th>
-                <th style="padding-top:12px;width:130px">Used by</th>
-                <th style="width:36px"></th>
+                @if (ShowUsedBy) {
+                  <th style="padding-top:12px;width:130px">Used by</th>
+                }
               </tr>
             </thead>
             <tbody>
               @for (row of FilteredRows; track row.id) {
-                <tr [class.sel]="row.id === SelectedRowId" (click)="onSelectRow(row)">
+                <tr [class.sel]="IsSelected(row.id)" (click)="onSelectRow(row)">
                   <td>
-                    <div class="row gap10">
+                    <div class="row gap10" [mjClickable]="row.name" [attr.aria-current]="IsSelected(row.id) ? 'true' : null">
                       <mjc-file-icon [Kind]="row.kind" Size="sm" />
                       <div class="grow">
                         <div class="fw6 fs13 ellipsis title">{{ row.name }}</div>
@@ -142,6 +152,7 @@ export interface LibrarySmartView {
                       }
                     </div>
                   </td>
+                  @if (ShowUsedBy) {
                   <td>
                     <div class="row gap8">
                       @if (row.openers && row.openers.length > 0) {
@@ -158,13 +169,18 @@ export interface LibrarySmartView {
                       }
                     </div>
                   </td>
-                  <td style="text-align:right;width:36px">
-                    <i class="fa-solid fa-ellipsis muted"></i>
-                  </td>
+                  }
                 </tr>
               }
             </tbody>
           </table>
+          @if (FilteredRows.length === 0) {
+            <mj-empty-state
+              Icon="fa-solid fa-folder-open"
+              [Title]="Rows.length === 0 ? 'No files yet' : 'Nothing matches'"
+              [Message]="Rows.length === 0 ? 'Files added to this space appear here.' : 'Try another search, collection or view.'"
+            ></mj-empty-state>
+          }
         </div>
       </section>
 
@@ -182,7 +198,8 @@ export interface LibrarySmartView {
           [FlagCount]="SelectedRow?.flagCount || 0"
           [FlagTitle]="PreviewFlagTitle"
           [FlagDescription]="PreviewFlagDescription"
-          [ShareButtonLabel]="PreviewShareButtonLabel"
+          [ShareButtonLabel]="PreviewShareButtonLabel || 'Share'"
+          [CanShare]="CanShareItems && SelectedRow?.band === 'Team'"
           [RecentUses]="PreviewRecentUses"
           [FileId]="SelectedRow?.fileId || ''"
           [IsOpeningFile]="IsOpeningFile"
@@ -487,6 +504,12 @@ export class CollabSpaceLibraryComponent {
   @Input() public PreviewShareButtonLabel = '';
   @Input() public PreviewRecentUses: Array<{ id: string; isSpark?: boolean; avatar?: AvatarItem; text: string; timestamp: string }> = [];
   @Input() public TeamBandLegend = '';
+  /** The typed search text; the list narrows as it changes. */
+  @Input() public SearchText = '';
+  /** False for a seat that can't see the Team band: no Team tab, legend or smart view. */
+  @Input() public CanSeeTeamSide = true;
+  /** Whether the seat may share a Team item to the Shared band. */
+  @Input() public CanShareItems = true;
   @Input() public IsOpeningFile = false;
   @Input() public OpeningLabel = 'Opening...';
 
@@ -495,7 +518,6 @@ export class CollabSpaceLibraryComponent {
   @Output() public RowSelectRequested = new EventEmitter<LibraryRowModel>();
   @Output() public ShareRequested = new EventEmitter<LibraryRowModel>();
   @Output() public CloseDrawerRequested = new EventEmitter<void>();
-  @Output() public FilterButtonClickRequested = new EventEmitter<void>();
   @Output() public OpenFileRequested = new EventEmitter<string>();
 
   public onOpenFile(fileId: string): void {
@@ -503,10 +525,26 @@ export class CollabSpaceLibraryComponent {
   }
 
   public get FilteredRows(): LibraryRowModel[] {
-    if (this.ActiveBandFilter === 'All') {
-      return this.Rows;
-    }
-    return this.Rows.filter((r) => r.band === this.ActiveBandFilter);
+    return filterLibraryRows(this.Rows, {
+      band: this.ActiveBandFilter,
+      search: this.SearchText,
+      folderId: this.ActiveFolderId,
+      collections: this.Collections,
+    });
+  }
+
+  /** Whether the row is the selected one. Ids are compared as UUIDs: the URL keeps the casing it was given, the rows the database's. */
+  public IsSelected(rowId: string): boolean {
+    return !!this.SelectedRowId && UUIDsEqual(rowId, this.SelectedRowId);
+  }
+
+  /** The "Used by" column shows once any row has who opened it or what the assistant saw. */
+  public get ShowUsedBy(): boolean {
+    return this.Rows.some((r) => (r.openers?.length ?? 0) > 0 || !!r.aiSeenCount);
+  }
+
+  public onSearchInput(event: Event): void {
+    this.SearchText = (event.target as HTMLInputElement).value;
   }
 
   public get bandNavTabs(): TabConfig[] {
@@ -518,7 +556,7 @@ export class CollabSpaceLibraryComponent {
   }
 
   public get SelectedRow(): LibraryRowModel | undefined {
-    return this.Rows.find((r) => r.id === this.SelectedRowId);
+    return this.Rows.find((r) => this.IsSelected(r.id));
   }
 
   public onSelectFolder(id: string): void {
@@ -547,9 +585,5 @@ export class CollabSpaceLibraryComponent {
     if (this.SelectedRow) {
       this.ShareRequested.emit(this.SelectedRow);
     }
-  }
-
-  public onOpenFilter(): void {
-    this.FilterButtonClickRequested.emit();
   }
 }

@@ -9,8 +9,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [CommonModule],
   template: `
     <span
-      class="chip {{ isShared ? 'shared' : 'team' }} {{ Size === 'md' ? 'lg' : '' }}"
-      role="status">
+      class="chip {{ isShared ? 'shared' : 'team' }} {{ Size === 'md' ? 'lg' : '' }}">
       @if (ShowIcon) {
         <i [class]="isShared ? 'fa-solid fa-eye' : 'fa-solid fa-lock'"></i>
       }

@@ -1,6 +1,6 @@
 # Collaboration: the UX storyboard
 
-This folder is the design target for the Collaboration UI. The builder turns it into code by following [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+This folder is the Collaboration UI's original design storyboard. Its frames are no longer the reference (the plan's D24), so a screen that differs from them isn't a regression. The model and the rules below still hold, and each package's README describes what was built.
 
 Collaboration gives a firm and the people it works with one place for each piece of work, called a **space**. A space has its own people, files, chats and tasks, and it has two sides:
 
@@ -11,7 +11,7 @@ Every screen tells you which side you are looking at and who can see it. One fir
 
 | Path | What it is |
 |---|---|
-| [`screens/`](screens/) | 14 frames, 1440×900 at 2× resolution. **These are the target.** |
+| [`screens/`](screens/) | 14 frames, 1440×900 at 2× resolution. **Retired as the reference.** |
 | [`mockup/html/`](mockup/html/) | The same frames as HTML pages. Open one in a browser to inspect exact sizes, spacing and colors. |
 | [`mockup/`](mockup/) | The source that generates the pages and the PNGs ([how to re-render](mockup/README.md)). |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | How to build it the MJ way: packages and layers, a component inventory per frame, data, extension points, visual tests and the order of work. |
@@ -301,13 +301,13 @@ flowchart LR
 |---|---|
 | Spaces, types, members, roles, sides | Collaboration's tables: `Space`, `SpaceType`, `SpaceMember`, `SpaceRoleType`, `SpaceItem` |
 | Files | MJ Files, attached to a space through `SpaceItem`, which carries the side |
-| Chats | MJ Conversations, attached through `SpaceItem`. The chat UI is `@memberjunction/ng-conversations`. |
+| Chats | MJ Conversations, attached through `SpaceChat`, which carries the conversation's kind. The chat UI is `@memberjunction/ng-conversations`. |
 | Tasks and milestones | bizapps-tasks, attached through `SpaceItem` |
 | Who opened what, share notices | Collaboration's `ItemUse` and `ShareNotice` |
-| Assistant answers, digest, share check | The firm's MJ agent, with per-space notes, skills and scope (the task 6 design) |
+| Assistant answers, digest, share check | The firm's MJ agent, with agents, skills and knowledge sources set per type or space (`SpaceAgent`, `SpaceAgentSkill`, `SpaceKnowledgeSource`) |
 | Meetings, papers, motions, votes (frame 08) | The Committees app, through Collaboration's extension points |
 
-A few things in the frames have no column yet: a type's icon and color, a planned close date, invite provenance and share-check findings. [IMPLEMENTATION_PLAN.md § Data the frames need](IMPLEMENTATION_PLAN.md#8-data-the-frames-need) lists each one with a proposal.
+A few things in the frames have no column yet: invite provenance and share-check findings. [IMPLEMENTATION_PLAN.md § Data the frames need](IMPLEMENTATION_PLAN.md#8-data-the-frames-need) lists each one with a proposal.
 
 ### Where calendar items come from
 

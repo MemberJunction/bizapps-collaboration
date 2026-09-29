@@ -1,5 +1,5 @@
 import { describe, it, beforeEach, expect } from 'vitest';
-import { CollaborationEngineBase, COLLABORATION_APP_ID } from '../CollaborationEngineBase.js';
+import { CollaborationEngineBase, COLLABORATION_APP_ID, MissingAppSettingsError } from '../CollaborationEngineBase.js';
 import type {
     mjBizAppsCollaborationSpaceTypeEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
@@ -146,5 +146,80 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         );
         expect(resolved.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
         expect(resolved.PostCloseAccess).toBe('ReadOnly'); // from app default
+    });
+
+    describe('settings fail closed', () => {
+        type Internals = { _spaceTypes: Array<Partial<mjBizAppsCollaborationSpaceTypeEntity>>; _applicationSettings: unknown[] };
+
+        it('refuses to resolve when a space type configuration does not parse', () => {
+            const internals = engine as unknown as Internals;
+            internals._spaceTypes.push({ ID: 'TYPE-BAD', Code: 'bad', Name: 'Bad', Configuration: '{ not json' });
+            expect(() => engine.ResolveSettingsForSpace([], 'TYPE-BAD')).toThrow(/has a configuration that does not parse/);
+        });
+
+        it('refuses to resolve when the app settings row does not validate, instead of using it anyway', () => {
+            const internals = engine as unknown as Internals;
+            const held = internals._applicationSettings;
+            internals._applicationSettings = [{
+                ApplicationID: 'unused', Application: 'Collaboration', Name: 'CollaborationSettings',
+                Value: JSON.stringify({ Chats: { WhoCanStart: 'Owner' } }),
+            }];
+            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            try {
+                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow(/CollaborationSettings are invalid/);
+            } finally {
+                internals._applicationSettings = held;
+                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            }
+        });
+
+        it('refuses to resolve when the app settings row is missing, instead of falling back to defaults', () => {
+            const internals = engine as unknown as Internals;
+            const held = internals._applicationSettings;
+            internals._applicationSettings = [];
+            (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            try {
+                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow();
+            } finally {
+                internals._applicationSettings = held;
+                (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
+            }
+        });
+
+        it('says the same thing on every read of a refused row, and reads a fixed row after a reload', async () => {
+            const internals = engine as unknown as Internals;
+            const reload = () => (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+            const held = internals._applicationSettings;
+            const rowWith = (value: string) => [{
+                ApplicationID: 'unused', Application: 'Collaboration', Name: 'CollaborationSettings', Value: value,
+            }];
+            try {
+                // An invalid row: both reads name the reasons
+                internals._applicationSettings = rowWith(JSON.stringify({ Chats: { WhoCanStart: 'Owner' } }));
+                await reload();
+                expect(() => engine.CollaborationSettings).toThrow(/CollaborationSettings are invalid/);
+                expect(() => engine.CollaborationSettings).toThrow(/CollaborationSettings are invalid/);
+
+                // An unparseable row: both reads say it didn't parse, not that the row is missing
+                internals._applicationSettings = rowWith('{ not json');
+                await reload();
+                expect(() => engine.CollaborationSettings).toThrow(/Failed to parse/);
+                expect(() => engine.CollaborationSettings).toThrow(/Failed to parse/);
+
+                // A reload that finds the row missing drops the old row's reasons
+                internals._applicationSettings = [];
+                await reload();
+                expect(() => engine.CollaborationSettings).toThrow(MissingAppSettingsError);
+                expect(() => engine.CollaborationSettings).not.toThrow(/Failed to parse|invalid/);
+
+                // A reload that finds a good row reads it
+                internals._applicationSettings = held;
+                await reload();
+                expect(engine.CollaborationSettings.PostCloseAccess).toBe('ReadOnly');
+            } finally {
+                internals._applicationSettings = held;
+                await reload();
+            }
+        });
     });
 });

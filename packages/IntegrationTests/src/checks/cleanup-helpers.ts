@@ -1,170 +1,261 @@
-import { Assert } from '@memberjunction/testing-integration/registry';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
-import {
-    mjBizAppsCollaborationSpaceItemEntity,
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceChatEntity,
-} from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     CONVERSATION_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
+    PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
+    USER_ENTITY,
+    USER_ROLE_ENTITY,
 } from '../entity-names.js';
 
-export async function cleanupConversation(
+/** The harness signs its cleanups as the system user: it owns the rows the checks create. */
+export function requireHarnessUser(user: UserInfo): void {
+    Assert(
+        user.Type.trim() === 'Owner',
+        `Cleanup must run as the harness's system user (type Owner); ${user.Email ?? user.ID} is type ${user.Type}.`,
+    );
+}
+
+/** Every row of a read, or a failed check: a read that fails must not look like "nothing to clean up". */
+async function readAll<T extends { ID: string }>(
+    rv: RunView,
+    user: UserInfo,
+    entityName: string,
+    extraFilter: string,
+): Promise<T[]> {
+    // BypassCache: a provider replays an identical read for a few seconds, and rows the server wrote (a turn's agent run) would be missing from it
+    const res = await rv.RunView<T>({ EntityName: entityName, ExtraFilter: extraFilter, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
+    Assert(res.Success === true, `Cleanup could not read ${entityName} where ${extraFilter}: ${res.ErrorMessage ?? 'unknown error'}`);
+    return res.Results ?? [];
+}
+
+/** Reads a filter back and fails while any row is still there. */
+async function assertNoRows(rv: RunView, user: UserInfo, entityName: string, extraFilter: string): Promise<void> {
+    const left = await readAll(rv, user, entityName, extraFilter);
+    Assert(left.length === 0, `Cleanup left ${left.length} ${entityName} row(s) where ${extraFilter}`);
+}
+
+/**
+ * Deletes one row and reads it back to confirm it is gone. A row that won't load is not "already gone":
+ * the read-back decides. Use it for every row a check creates outside `cleanupConversation` and `cleanupSpace`.
+ */
+async function deleteRowAndConfirmUnguarded(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    entityName: string,
+    id: string,
+    what: string,
+): Promise<void> {
+    const entity = await provider.GetEntityObject<BaseEntity>(entityName, user);
+    // A space may be a subtype (an IsA child): a full `Load` finds its child, so the delete goes through the leaf and takes both rows.
+    // `InnerLoad` skips that discovery, and deleting the parent under a live child row is not a delete this app makes.
+    const loaded = entity instanceof mjBizAppsCollaborationSpaceEntity ? await entity.Load(id) : await entity.InnerLoad(CompositeKey.FromID(id));
+    if (loaded) {
+        // A space with its subtype attached is deleted through the subtype: `Delete()` on the parent never returns (MJ#4850). The server's
+        // Space class hands the delete over itself; a client-side entity object has no such class, so the leaf is asked here.
+        const target = entity instanceof mjBizAppsCollaborationSpaceEntity ? entity.LeafEntity : entity;
+        const deleted = await target.Delete();
+        // Over GraphQL the server deletes a subtype's space along with the subtype, and the client then sends the space's delete too, which
+        // finds nothing: `Delete()` answers false with the space already gone. The read-back below is what decides.
+        if (!deleted && target === entity) {
+            Assert(false, `Delete of ${what} ${id} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+    await assertNoRows(RunView.FromMetadataProvider(provider), user, entityName, `ID = '${id}'`);
+}
+
+/**
+ * A failed assert in a cleanup runs in a `finally`, where it would replace the check's own error.
+ * So a cleanup reports a failure to the check that is running: the check's first error is the one thrown,
+ * and a cleanup failure fails the check only when the check had no error of its own.
+ * Outside a registered check there is nobody to report to, so the failure throws.
+ */
+const cleanupFailures = new AsyncLocalStorage<Error[]>();
+
+function reportCleanupFailure(error: unknown): void {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    const sink = cleanupFailures.getStore();
+    if (!sink) throw failure;
+    console.error(`Cleanup failed: ${failure.message}`);
+    sink.push(failure);
+}
+
+/** Runs one cleanup step, reporting a failure to the running check instead of throwing it from a `finally`. */
+export async function cleanupStep(step: () => Promise<void>): Promise<void> {
+    try {
+        await step();
+    } catch (error) {
+        reportCleanupFailure(error);
+    }
+}
+
+/**
+ * Removes what an invite hung on the account it created: its seats, person record, sign-in invites and their child rows, role and
+ * application grants. Every read is checked and every delete read back. The account and its notifications stay until the purge.
+ */
+export async function deleteInvitee(provider: IMetadataProvider, user: UserInfo, email: string): Promise<void> {
+    await cleanupStep(async () => {
+        requireHarnessUser(user);
+        const rv = RunView.FromMetadataProvider(provider);
+        const quoted = email.replace(/'/g, "''");
+        const removeAll = async (entityName: string, filter: string, what: string): Promise<void> => {
+            for (const row of await readAll(rv, user, entityName, filter)) {
+                await deleteRowAndConfirmUnguarded(provider, user, entityName, row.ID, what);
+            }
+        };
+        for (const invite of await readAll(rv, user, 'MJ: Magic Link Invites', `Email = '${quoted}'`)) {
+            await removeAll('MJ: Magic Link Redemptions', `InviteID = '${invite.ID}'`, 'a redemption');
+            await removeAll('MJ: Magic Link Invite Applications', `InviteID = '${invite.ID}'`, "an invite's application");
+            await removeAll('MJ: Magic Link Invite Roles', `InviteID = '${invite.ID}'`, "an invite's role");
+            await deleteRowAndConfirmUnguarded(provider, user, 'MJ: Magic Link Invites', invite.ID, 'a sign-in invite');
+        }
+        for (const account of await readAll(rv, user, USER_ENTITY, `Email = '${quoted}'`)) {
+            await removeAll(SPACE_MEMBER_ENTITY, `UserID = '${account.ID}'`, "the invitee's seat");
+            await removeAll(PERSON_ENTITY, `LinkedUserID = '${account.ID}'`, "the invitee's person record");
+            await removeAll(USER_ROLE_ENTITY, `UserID = '${account.ID}'`, "the invitee's role grant");
+            await removeAll('MJ: User Applications', `UserID = '${account.ID}'`, "the invitee's application grant");
+            // The account itself, and its notifications, stay until the purge: the system user may not delete a notification
+        }
+    });
+}
+
+/**
+ * Runs every step even when one fails, then throws the first failure. A bundle's Teardown uses it so one row that won't delete
+ * doesn't leave the rest behind.
+ */
+export async function runAllSteps(steps: ReadonlyArray<() => Promise<void>>): Promise<void> {
+    let first: unknown;
+    let failed = false;
+    for (const step of steps) {
+        try {
+            await step();
+        } catch (error) {
+            if (!failed) {
+                failed = true;
+                first = error;
+            } else {
+                console.error(`Teardown step also failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+    if (failed) throw first;
+}
+
+/** Registers a bundle's checks, each one reporting its cleanup failures as described on `reportCleanupFailure`. */
+export function registerChecks(checks: readonly NamedCheck[]): void {
+    for (const check of checks) {
+        IntegrationCheckRegistry.Instance.Register({
+            ...check,
+            Fn: async (ctx: IntegrationCheckContext) => {
+                // A check's own error propagates untouched; a cleanup failure fails the check only when it passed
+                const failures: Error[] = [];
+                await cleanupFailures.run(failures, () => check.Fn(ctx));
+                if (failures.length > 0) throw failures[0];
+            },
+        });
+    }
+}
+
+/**
+ * Deletes a conversation and everything a check hangs on it: its agent runs, space chats, details,
+ * resource permissions and the conversation row. Every read and delete is checked, and a last read-back
+ * fails while any of it is still there.
+ */
+async function cleanupConversationUnguarded(
     provider: IMetadataProvider,
     user: UserInfo,
     conversationId?: string | null,
     spaceChatId?: string | null,
 ): Promise<void> {
+    requireHarnessUser(user);
     const rv = RunView.FromMetadataProvider(provider);
     if (conversationId) {
-        // 1. Agent runs created for this conversation
-        const runs = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID = '${conversationId}'`,
-            Fields: ['ID'],
-            MaxRows: 100,
-        }, user);
-        if (runs?.Success && runs.Results) {
-            for (const r of runs.Results) {
-                const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', user);
-                if (await runObj.Load(r.ID)) {
-                    const del = await runObj.Delete();
-                    Assert(del === true, `Failed to delete AI Agent Run ${r.ID}`);
-                }
+        const byConversation = `ConversationID = '${conversationId}'`;
+        const steps: Array<{ entityName: string; filter: string; what: string }> = [
+            { entityName: 'MJ: AI Agent Runs', filter: byConversation, what: 'AI Agent Run' },
+            { entityName: SPACE_CHAT_ENTITY, filter: byConversation, what: 'Space Chat' },
+            { entityName: CONVERSATION_DETAIL_ENTITY, filter: byConversation, what: 'Conversation Detail' },
+            { entityName: 'MJ: Resource Permissions', filter: `ResourceRecordID = '${conversationId}'`, what: 'Resource Permission' },
+        ];
+        for (const step of steps) {
+            for (const row of await readAll(rv, user, step.entityName, step.filter)) {
+                await deleteRowAndConfirmUnguarded(provider, user, step.entityName, row.ID, step.what);
             }
         }
-
-        // 2. Space chats
-        const chats = await rv.RunView<{ ID: string }>({
-            EntityName: SPACE_CHAT_ENTITY,
-            ExtraFilter: `ConversationID = '${conversationId}'`,
-            Fields: ['ID'],
-            MaxRows: 100,
-        }, user);
-        if (chats?.Success && chats.Results) {
-            for (const c of chats.Results) {
-                const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-                if (await chat.Load(c.ID)) {
-                    const del = await chat.Delete();
-                    Assert(del === true, `Failed to delete Space Chat ${c.ID}`);
-                }
-            }
-        }
-
-        // 3. Conversation details
-        const details = await rv.RunView<{ ID: string }>({
-            EntityName: CONVERSATION_DETAIL_ENTITY,
-            ExtraFilter: `ConversationID = '${conversationId}'`,
-            Fields: ['ID'],
-            MaxRows: 1000,
-        }, user);
-        if (details?.Success && details.Results) {
-            for (const d of details.Results) {
-                const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
-                if (await det.Load(d.ID)) {
-                    const del = await det.Delete();
-                    Assert(del === true, `Failed to delete Conversation Detail ${d.ID}`);
-                }
-            }
-        }
-
-        // 4. Resource permissions
-        const grants = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: Resource Permissions',
-            ExtraFilter: `ResourceRecordID = '${conversationId}'`,
-            Fields: ['ID'],
-            MaxRows: 1000,
-        }, user);
-        if (grants?.Success && grants.Results) {
-            for (const g of grants.Results) {
-                const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
-                if (await p.Load(g.ID)) {
-                    const del = await p.Delete();
-                    Assert(del === true, `Failed to delete Resource Permission ${g.ID}`);
-                }
-            }
-        }
-
-        // 5. Conversation record
-        const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
-        if (await conv.Load(conversationId)) {
-            const del = await conv.Delete();
-            Assert(del === true, `Failed to delete Conversation ${conversationId}`);
+        await deleteRowAndConfirmUnguarded(provider, user, CONVERSATION_ENTITY, conversationId, 'Conversation');
+        for (const step of steps) {
+            await assertNoRows(rv, user, step.entityName, step.filter);
         }
     } else if (spaceChatId) {
-        const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-        if (await chat.Load(spaceChatId)) {
-            const del = await chat.Delete();
-            Assert(del === true, `Failed to delete Space Chat ${spaceChatId}`);
-        }
+        await deleteRowAndConfirmUnguarded(provider, user, SPACE_CHAT_ENTITY, spaceChatId, 'Space Chat');
     }
 }
 
-export async function cleanupSpace(
+/** Deletes a space with its conversations, items and seats, checking every read and delete and reading the space back. */
+async function cleanupSpaceUnguarded(
     provider: IMetadataProvider,
     user: UserInfo,
     spaceId: string,
 ): Promise<void> {
+    requireHarnessUser(user);
     const rv = RunView.FromMetadataProvider(provider);
 
-    // 1. Chats & conversations
-    const chats = await rv.RunView<{ ID: string; ConversationID: string }>({
-        EntityName: SPACE_CHAT_ENTITY,
-        ExtraFilter: `SpaceID = '${spaceId}'`,
-        Fields: ['ID', 'ConversationID'],
-        MaxRows: 100,
-    }, user);
-    if (chats?.Success && chats.Results) {
-        for (const c of chats.Results) {
-            await cleanupConversation(provider, user, c.ConversationID, c.ID);
-        }
+    const chats = await rv.RunView<{ ID: string; ConversationID: string }>(
+        { EntityName: SPACE_CHAT_ENTITY, ExtraFilter: `SpaceID = '${spaceId}'`, Fields: ['ID', 'ConversationID'], ResultType: 'simple', BypassCache: true },
+        user,
+    );
+    Assert(chats.Success === true, `Cleanup could not read the space's chats: ${chats.ErrorMessage ?? 'unknown error'}`);
+    for (const chat of chats.Results ?? []) {
+        await cleanupConversationUnguarded(provider, user, chat.ConversationID, chat.ID);
     }
 
-    // 2. Items
-    const items = await rv.RunView<{ ID: string }>({
-        EntityName: SPACE_ITEM_ENTITY,
-        ExtraFilter: `SpaceID = '${spaceId}'`,
-        Fields: ['ID'],
-        MaxRows: 100,
-    }, user);
-    if (items?.Success && items.Results) {
-        for (const item of items.Results) {
-            const itemObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, user);
-            if (await itemObj.Load(item.ID)) {
-                const del = await itemObj.Delete();
-                Assert(del === true, `Failed to delete Space Item ${item.ID}`);
-            }
+    for (const [entityName, what] of [
+        [SPACE_ITEM_ENTITY, 'Space Item'],
+        [SPACE_MEMBER_ENTITY, 'Space Member'],
+    ] as const) {
+        const filter = `SpaceID = '${spaceId}'`;
+        for (const row of await readAll(rv, user, entityName, filter)) {
+            await deleteRowAndConfirmUnguarded(provider, user, entityName, row.ID, what);
         }
+        await assertNoRows(rv, user, entityName, filter);
     }
 
-    // 3. Members
-    const members = await rv.RunView<{ ID: string }>({
-        EntityName: SPACE_MEMBER_ENTITY,
-        ExtraFilter: `SpaceID = '${spaceId}'`,
-        Fields: ['ID'],
-        MaxRows: 100,
-    }, user);
-    if (members?.Success && members.Results) {
-        for (const m of members.Results) {
-            const memObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, user);
-            if (await memObj.Load(m.ID)) {
-                const del = await memObj.Delete();
-                Assert(del === true, `Failed to delete Space Member ${m.ID}`);
-            }
-        }
-    }
-
-    // 4. Space record
-    const spaceObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
-    if (await spaceObj.Load(spaceId)) {
-        const del = await spaceObj.Delete();
-        Assert(del === true, `Failed to delete Space ${spaceId}`);
-    }
+    await deleteRowAndConfirmUnguarded(provider, user, SPACE_ENTITY, spaceId, 'Space');
 }
+
+/** Deletes every row matching a filter, reads the filter back to confirm none is left. A failure is reported to the running check. */
+export const deleteWhere = (
+    provider: IMetadataProvider,
+    user: UserInfo,
+    entityName: string,
+    filter: string,
+    what: string,
+): Promise<void> => cleanupStep(async () => {
+    requireHarnessUser(user);
+    const rv = RunView.FromMetadataProvider(provider);
+    for (const row of await readAll(rv, user, entityName, filter)) {
+        await deleteRowAndConfirmUnguarded(provider, user, entityName, row.ID, what);
+    }
+    await assertNoRows(rv, user, entityName, filter);
+});
+
+/** Deletes one row and reads it back to confirm it is gone (see `deleteRowAndConfirmUnguarded`). A failure is reported to the running check. */
+export const deleteRowAndConfirm = (
+    ...args: Parameters<typeof deleteRowAndConfirmUnguarded>
+): Promise<void> => cleanupStep(() => deleteRowAndConfirmUnguarded(...args));
+
+/** Deletes a conversation and what hangs on it (see `cleanupConversationUnguarded`). A failure is reported to the running check. */
+export const cleanupConversation = (
+    ...args: Parameters<typeof cleanupConversationUnguarded>
+): Promise<void> => cleanupStep(() => cleanupConversationUnguarded(...args));
+
+/** Deletes a space and what hangs on it (see `cleanupSpaceUnguarded`). A failure is reported to the running check. */
+export const cleanupSpace = (
+    ...args: Parameters<typeof cleanupSpaceUnguarded>
+): Promise<void> => cleanupStep(() => cleanupSpaceUnguarded(...args));

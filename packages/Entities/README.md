@@ -19,12 +19,24 @@ The generated entity classes for Collaboration's schema, the typed client for it
 | `MJ_BizApps_Collaboration: Space Items` | `mjBizAppsCollaborationSpaceItemEntity` |
 | `MJ_BizApps_Collaboration: Item Uses` | `mjBizAppsCollaborationItemUseEntity` |
 | `MJ_BizApps_Collaboration: Share Notices` | `mjBizAppsCollaborationShareNoticeEntity` |
+| `MJ_BizApps_Collaboration: Space Chats` | `mjBizAppsCollaborationSpaceChatEntity` |
+| `MJ_BizApps_Collaboration: Space Agents` | `mjBizAppsCollaborationSpaceAgentEntity` |
+| `MJ_BizApps_Collaboration: Space Agent Skills` | `mjBizAppsCollaborationSpaceAgentSkillEntity` |
+| `MJ_BizApps_Collaboration: Space Knowledge Sources` | `mjBizAppsCollaborationSpaceKnowledgeSourceEntity` |
 
-On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Space types and role types are metadata rows and have no server subclass.
+On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Space Types, Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Role types, chats, agents, skills and knowledge sources have none.
 
-**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's five GraphQL mutations: `MintSpaceLink`, `UploadSpaceFile`, `CreateSpaceTask`, `PostSpaceMessage` and `OpenSpaceFile`.
-- Pass it an executor: any object with `ExecuteGQL`, such as MJ's GraphQL data provider.
-- Without one, it falls back to the global `Metadata.Provider`. `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
+**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's seven GraphQL mutations and four queries: `CreateSpace`, `MintSpaceLink`, `UploadSpaceFile` (which takes the band the person chose), `CreateSpaceTask`, `PostSpaceMessage`, `CreateSpaceConversation`, `ExecuteSpaceChatTurn` (`Background` returns once the reply is In-Progress), `GetSpaceChatHostRules`, `GetCloseConsequence`, `GetHomeCounts` and `GetHomeLists`. `CreateSpace` sends a subtype's own columns as a JSON object of field name to value. A library file opens in MemberJunction's own viewer, which loads it as the caller; there is no mutation for it here.
+- Pass it an executor: any object with `ExecuteGQL`, such as a component's `ProviderToUse` or MJ's GraphQL data provider. It throws without one.
+- `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
+
+**`SpaceSubtypeResolver`** (`src/space-subtype-resolver.ts`) tells MemberJunction which subtype a space is: the entity its type names in `SpaceExtensionEntity`, or none.
+- It's registered with `@RegisterClass(EntitySubtypeResolver, 'MJ_BizApps_Collaboration: Spaces')`, so the browser and the server both use it.
+- It answers from `SpaceSubtypeDirectory`, which `collaboration-engine-base` fills whenever it loads the types. The directory is a `BaseSingleton`, so a package loaded twice still has one. `Resolve()`, for a new space, reads the type itself, through the record's own provider, when the types aren't loaded yet; `ResolveLoadHint()`, for a loaded space, answers only from the directory, and never queries.
+- Only MemberJunction's `next` calls `ResolveLoadHint` ([MJ#4787](https://github.com/MemberJunction/MJ/pull/4787)); a release without it never does.
+- `LoadSpaceSubtypeResolver()` keeps it from being tree-shaken; both startup exports (`LoadBizAppsCollaborationServer` and `LoadBizAppsCollaborationClient`) call it.
+
+**`ownDetailFields(leaf)`** (`src/detail-fields.ts`) reads a subtype record's own columns, the ones a space's screens ask for, from its entity metadata, through `collaboration-core`'s `detailFields`. **`ownFormSections(leaf)`**, beside it, names the sections of the subtype's generated form that hold only those columns (`subtypeFormSections`), or returns null when the form can't be shown without the space's own columns.
 
 **`CollaborationSpacePermissionProvider`** (`src/space-permission-provider.ts`) answers MJ's permission checks for the `Collaboration Spaces` permission domain and the `Space` resource type, both seeded in `metadata/`.
 - It's registered with `@RegisterClass(PermissionProviderBase, 'CollaborationSpacePermissionProvider')`, the class name the domain's metadata row names.
@@ -39,7 +51,3 @@ pnpm --filter @mj-biz-apps/collaboration-entities run build
 ```
 
 The build is `tsc`, into `dist/`. The package has no tests of its own. Its `test` script runs `collaboration-core`'s tests.
-
-## Not done yet
-
-- `CollaborationClient` doesn't yet accept a component's `ProviderToUse` directly, so an L2 composite would fall back to the global provider. That comes with the composites.

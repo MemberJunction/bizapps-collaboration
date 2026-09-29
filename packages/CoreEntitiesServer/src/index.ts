@@ -18,6 +18,7 @@ export type {
     AnchorContext,
     ChatChangeContext,
     ChildSpaceChangeContext,
+    ChildSpaceChangeKind,
     DriverBaseContext,
     DriverValidationResult,
     ItemChangeContext,
@@ -52,13 +53,16 @@ export { resolveSpaceKnowledgeSources, resolveSpaceAgentSkills } from './resolve
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
 export { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
-export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult } from './execute-space-chat-turn.js';
+export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult, TurnObserver, TurnOutcome } from './execute-space-chat-turn.js';
 export { resolveSpaceChatHostRules } from './resolve-space-chat-host-rules.js';
+export { createSpace, type CreateSpaceInput, type CreateSpaceResult } from './create-space.js';
+export { resolveHomeCounts, type HomeCounts } from './resolve-home-counts.js';
+export { resolveHomeLists, HOME_LIST_LIMIT, type HomeLists, type HomeInvitation, type HomeOpenTask } from './resolve-home-lists.js';
+export { resolveCloseConsequence, type CloseConsequence } from './resolve-close-consequence.js';
 export type { SpaceChatHostRulesMentionPerson, SpaceChatHostRulesResult } from './resolve-space-chat-host-rules.js';
 export { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 export type { ResolvedSpaceChatSettings } from './resolve-space-chat-settings.js';
 export { createSpaceConversation, evaluateCanStartSpaceConversation } from './create-space-conversation.js';
 export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
-export { CollaborationSpaceAgentDriver } from './CollaborationSpaceAgentDriver.js';
 
 

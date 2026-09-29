@@ -4,7 +4,7 @@
 
 Every Space Type create, update, and delete requires the **Configure Space Types** authorization under the **Collaboration** root authorization tree. 
 
-In MemberJunction, this authorization is granted to the `Developer` role (see `metadata/authorization-roles/.authorization-roles.json`). 
+Collaboration's metadata grants it to the `Developer` role by default (see `metadata/authorization-roles/.authorization-roles.json`). 
 
 Consequently, executing metadata push commands such as:
 ```bash

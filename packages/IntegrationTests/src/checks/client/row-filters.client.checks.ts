@@ -1,6 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY } from '../../entity-names.js';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaContext, View } from '../../wire.js';
+import { registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
@@ -108,7 +109,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('row-filters', {
     Setup: async () => {},
     Teardown: async () => {},

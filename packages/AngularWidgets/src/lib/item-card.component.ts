@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import type { AvatarItem, FileKind, ItemCardModel } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -8,9 +9,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-card',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabAvatarComponent, CollabFileIconComponent],
+  imports: [CollabAvatarComponent, CollabFileIconComponent, MJClickableDirective],
   template: `
-    <div class="deliv" (click)="onSelect()">
+    <div class="deliv" [mjClickable]="Title" (click)="onSelect()">
       <div class="thumb" [class]="kindClass">
         <div class="page-lines"><i></i><i></i><i></i><i></i><i></i></div>
         <mjc-file-icon [Kind]="Kind" Size="sm" />

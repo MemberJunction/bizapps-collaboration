@@ -6,6 +6,7 @@ import {
     ResolveSpaceRules,
     ValidateCollaborationSettings,
     validateSpaceConfiguration,
+    refuseChildType,
     validateSpaceTypeConfiguration,
     type CollaborationSettings,
     type ISpaceConfiguration,
@@ -24,7 +25,7 @@ describe('Configuration & ResolveSpaceRules', () => {
     it('applies type configuration values', () => {
         const typeConfig: ISpaceTypeConfiguration = {
             Chats: {
-                WhoCanStart: 'Contributors',
+                WhoCanStart: 'Owners',
                 AgentReplyMode: 'Always',
                 HistoryOnAdd: 'Since',
             },
@@ -39,7 +40,7 @@ describe('Configuration & ResolveSpaceRules', () => {
         };
 
         const rules = ResolveSpaceRules(typeConfig, null);
-        assert.equal(rules.Chats.WhoCanStart, 'Contributors');
+        assert.equal(rules.Chats.WhoCanStart, 'Owners');
         assert.equal(rules.Chats.AgentReplyMode, 'Always');
         assert.equal(rules.Chats.HistoryOnAdd, 'Since');
         assert.equal(rules.Agents.ListMode, 'Replace');
@@ -49,7 +50,7 @@ describe('Configuration & ResolveSpaceRules', () => {
     it('applies space overrides only for keys in SpaceOverridable', () => {
         const typeConfig: ISpaceTypeConfiguration = {
             Chats: {
-                WhoCanStart: 'Contributors',
+                WhoCanStart: 'Owners',
                 AgentReplyMode: 'MentionOrOneToOne',
                 HistoryOnAdd: 'None',
             },
@@ -226,6 +227,30 @@ describe('Configuration & ResolveSpaceRules', () => {
             assert.equal(resolved.PostCloseAccess, 'ReadOnly');
         });
 
+        it("refuses an app row that leaves a key unset or misspells a value", () => {
+            const complete = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' } };
+            assert.equal(ValidateCollaborationSettings(complete, 'app').valid, true);
+            const partial = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Anyone' } }, 'app');
+            assert.equal(partial.valid, false);
+            assert.ok(partial.errors.some((e) => /must set PostCloseAccess/.test(e)));
+            assert.ok(partial.errors.some((e) => /must set Agents.ListMode/.test(e)));
+            const misspelled = ValidateCollaborationSettings({ ...complete, Chats: { ...complete.Chats, WhoCanStart: 'Owner' } }, 'app');
+            assert.equal(misspelled.valid, false);
+            // A type may leave keys to the app: only the app's row is held to "every key"
+            assert.equal(ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Owners' } }, 'type').valid, true);
+        });
+
+        it('refuses on a space the keys only a type or the app can hold, and Labels unless the type allows them', () => {
+            const type: CollaborationSettings = { SpaceOverridable: ['Chats.WhoCanStart'] };
+            for (const key of ['Children', 'SpaceOverridable']) {
+                const res = ValidateCollaborationSettings({ [key]: key === 'SpaceOverridable' ? ['Chats'] : {} }, 'space', type);
+                assert.equal(res.valid, false, key);
+                assert.match(res.errors.join(' '), new RegExp(`${key} cannot be set on a space`));
+            }
+            assert.equal(ValidateCollaborationSettings({ Labels: { Tabs: { library: 'Papers' } } }, 'space', type).valid, false);
+            assert.equal(ValidateCollaborationSettings({ Labels: { Tabs: { library: 'Papers' } } }, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
+        });
+
         it('validates settings and refuses bad values and unknown keys', () => {
             // Bad top-level key
             const res1 = ValidateCollaborationSettings({ FooBar: 'baz' }, 'type');
@@ -259,5 +284,57 @@ describe('Configuration & ResolveSpaceRules', () => {
             assert.equal(res5.valid, false);
             assert.match(res5.errors[0], /StorageAccountID cannot be overridden by space/);
         });
+    });
+});
+
+describe('which types a space may contain', () => {
+    it('allows any child when the type lists none, exactly the listed ones when it lists some, and none for an empty list', () => {
+        assert.equal(refuseChildType(null, 'project', 0), null);
+        assert.equal(refuseChildType({}, 'project', 0), null);
+        const team = { Children: { AllowedTypeCodes: ['project', 'Working-Group'] } };
+        assert.equal(refuseChildType(team, 'PROJECT', 0), null);
+        assert.equal(refuseChildType(team, 'working-group', 0), null);
+        assert.match(refuseChildType(team, 'cohort', 0) ?? '', /cannot sit under this kind of space/);
+        assert.match(refuseChildType({ Children: { AllowedTypeCodes: [] } }, 'project', 0) ?? '', /cannot contain sub-spaces/);
+    });
+
+    it('refuses a child beyond MaxOpen, and counts only the open ones passed in', () => {
+        const capped = { Children: { MaxOpen: 2 } };
+        assert.equal(refuseChildType(capped, 'project', 1), null);
+        assert.match(refuseChildType(capped, 'project', 2) ?? '', /most its type allows \(2\)/);
+    });
+});
+
+describe('tab labels merge without regard to key case', () => {
+    it("lets a type's 'library' beat the app's 'Library', and a space's 'WORK' beat the app's 'Work' when the type lets it", () => {
+        const app: CollaborationSettings = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Labels: { Tabs: { Library: 'Files', Work: 'Tasks' } } };
+        const type: CollaborationSettings = { Labels: { Tabs: { library: 'Documents' } }, SpaceOverridable: ['Labels'] };
+        const resolved = ResolveCollaborationSettings({ spaces: [{ Labels: { Tabs: { WORK: 'Deliverables' } } }], type, app });
+        assert.deepEqual(resolved.Labels?.Tabs, { library: 'Documents', work: 'Deliverables' });
+    });
+});
+
+describe('a space may set the label keys its type lists', () => {
+    it("accepts Labels.Tabs when the type lists 'Labels.Tabs' or 'Labels', refuses it otherwise, and refuses a Labels key nothing reads", () => {
+        const tabs = { Labels: { Tabs: { library: 'Papers' } } };
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels.Tabs'] }).valid, true);
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Chats.WhoCanStart'] }).valid, false);
+        const bands = ValidateCollaborationSettings({ Labels: { Bands: {} } }, 'space', { SpaceOverridable: ['Labels'] });
+        assert.match(bands.errors.join(' '), /Unknown Labels key: Bands/);
+    });
+});
+
+describe('a key nothing reads is refused', () => {
+    it("refuses Admin, which the app dropped: nothing read it", () => {
+        assert.match(ValidateCollaborationSettings({ Admin: { RoleNames: ['Developer'] } }, 'type').errors.join(' '), /Unknown settings key: Admin/);
+    });
+});
+
+describe("WhoCanStart is 'Anyone' or 'Owners'", () => {
+    it("refuses 'Contributors', which meant the same as 'Anyone' and narrowed nothing", () => {
+        const result = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Contributors' } }, 'app');
+        assert.equal(result.valid, false);
+        assert.match(result.errors.join(' '), /WhoCanStart/);
     });
 });

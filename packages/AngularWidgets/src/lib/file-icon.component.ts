@@ -32,11 +32,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       color: var(--mj-text-secondary);
       position: relative;
 
-      &.pdf { color: #dc2626; background: color-mix(in srgb, #dc2626 9%, var(--mj-bg-surface)); }
-      &.doc { color: #2563eb; background: color-mix(in srgb, #2563eb 9%, var(--mj-bg-surface)); }
-      &.xls { color: #16a34a; background: color-mix(in srgb, #16a34a 9%, var(--mj-bg-surface)); }
-      &.ppt { color: #ea580c; background: color-mix(in srgb, #ea580c 9%, var(--mj-bg-surface)); }
-      &.img { color: #9333ea; background: color-mix(in srgb, #9333ea 9%, var(--mj-bg-surface)); }
+      &.pdf { color: #dc2626; background: color-mix(in srgb, #dc2626 9%, var(--mj-bg-surface)); } /* hex-ok: categorical palette */
+      &.doc { color: #2563eb; background: color-mix(in srgb, #2563eb 9%, var(--mj-bg-surface)); } /* hex-ok: categorical palette */
+      &.xls { color: #16a34a; background: color-mix(in srgb, #16a34a 9%, var(--mj-bg-surface)); } /* hex-ok: categorical palette */
+      &.ppt { color: #ea580c; background: color-mix(in srgb, #ea580c 9%, var(--mj-bg-surface)); } /* hex-ok: categorical palette */
+      &.img { color: #9333ea; background: color-mix(in srgb, #9333ea 9%, var(--mj-bg-surface)); } /* hex-ok: categorical palette */
       &.txt { color: var(--mj-text-secondary); }
       &.sm { width: 24px; height: 28px; font-size: 12px; border-radius: 5px; }
     }

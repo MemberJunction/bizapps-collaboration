@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "AuthorizationID IN (SELECT ID FROM __mj.Authorization WHERE Name IN ('Configure Space Types', 'Configure Spaces'))",
+    "filter": "AuthorizationID IN (SELECT ID FROM __mj.Authorization WHERE Name IN ('Configure Space Types', 'Configure Spaces', 'Close and Reopen Spaces', 'Administer Spaces'))",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

@@ -1,0 +1,93 @@
+[
+  {
+    "primaryKey": {
+      "ID": "8394CDBE-5A93-4185-8A71-B285CC7E3EAD"
+    },
+    "fields": {
+      "Name": "Space Chat Test Stub",
+      "Description": "The Collaboration harness's own agent. Its driver answers a space chat turn from the items the turn allowed, with no model key. Only the harness attaches it to a space.",
+      "Status": "Active",
+      "DriverClass": "CollaborationTestSpaceAgentDriver",
+      "ExecutionOrder": 10,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": false,
+      "IsRestricted": true,
+      "SearchScopeAccess": "None",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "AllowMemoryWrite": false,
+      "AcceptsSkills": "None"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Permissions": [
+        {
+          "primaryKey": {
+            "ID": "23645161-F1B3-4EBD-8CB4-2847CA3FFB65"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "0D162FBB-CD8D-41C9-A991-35C82A19AC1B"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "3C3192C9-6ADA-4102-B2B2-9F91FD725339"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "968B807B-C2E4-431E-A6C6-1A23DB63A27E"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "AC0C809F-8ABB-43DE-BA84-56638C6C1F1D"
+          },
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+            "CanView": true,
+            "CanRun": true,
+            "CanEdit": false,
+            "CanDelete": false
+          }
+        }
+      ]
+    }
+  }
+]

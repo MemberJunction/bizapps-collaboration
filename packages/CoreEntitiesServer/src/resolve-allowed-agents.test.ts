@@ -28,6 +28,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         typeConfig?: string | null;
         spaceConfig?: string | null;
         agentRows?: Array<{ AgentID: string; SpaceTypeID?: string | null; SpaceID?: string | null; IsDefault?: boolean }>;
+        /** Agents whose Status is not Active: the agents read leaves them out. */
+        inactiveAgentIds?: string[];
         knowledgeRows?: Array<{ ContentSourceID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
         skillRows?: Array<{ SkillID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
     }
@@ -42,6 +44,12 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
             const agentRows = currentOptions.agentRows ?? [];
             const knowledgeRows = currentOptions.knowledgeRows ?? [];
             const skillRows = currentOptions.skillRows ?? [];
+
+            if (EntityName === 'MJ: AI Agents') {
+                const wanted = [...ExtraFilter.matchAll(/'([0-9a-f-]{36})'/gi)].map((m) => m[1].toLowerCase());
+                const inactive = new Set((currentOptions.inactiveAgentIds ?? []).map((id) => id.toLowerCase()));
+                return { Success: true, Results: wanted.filter((id) => !inactive.has(id)).map((id) => ({ ID: id })) };
+            }
 
             if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
                 if (ExtraFilter.includes(CHILD_SPACE_ID)) {
@@ -193,6 +201,105 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         assert.deepEqual(result.allowedAgentIds, [CHILD_AGENT_ID]);
         assert.equal(result.defaultAgentId, CHILD_AGENT_ID);
         assert.equal(result.agents[0].source, 'Space');
+    });
+
+    it('leaves a disabled non-default agent out of the list', async () => {
+        currentOptions = {
+            agentRows: [
+                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
+                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
+            ],
+            inactiveAgentIds: [TYPE_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, [APP_AGENT_ID]);
+        assert.equal(result.defaultAgentId, APP_AGENT_ID);
+    });
+
+    it('falls back to the next default when the configured default is disabled', async () => {
+        currentOptions = {
+            typeConfig: JSON.stringify({ Agents: { ListMode: 'Extend' } }),
+            agentRows: [
+                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
+                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
+                { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
+            ],
+            inactiveAgentIds: [TYPE_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.equal(result.allowedAgentIds.some((id) => id === TYPE_AGENT_ID), false, 'the disabled default is not allowed');
+        assert.equal(result.defaultAgentId, CHILD_AGENT_ID, 'the next default takes over');
+    });
+
+    it("falls back to the first Active agent when the disabled default was the only one marked default", async () => {
+        currentOptions = {
+            agentRows: [
+                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
+                { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: false },
+            ],
+            inactiveAgentIds: [APP_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, [CHILD_AGENT_ID]);
+        assert.equal(result.defaultAgentId, CHILD_AGENT_ID);
+    });
+
+    it('returns no default and no agents when not even the shipped agent is Active', async () => {
+        currentOptions = {
+            agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
+            inactiveAgentIds: [APP_AGENT_ID, COLLABORATION_DEFAULT_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, []);
+        assert.equal(result.defaultAgentId, null);
+    });
+
+    it('refuses, rather than skipping a link, when a type configuration does not parse', async () => {
+        currentOptions = { typeConfig: '{ not json' };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+    });
+
+    it('refuses when a space that holds agent rows has a configuration that does not parse', async () => {
+        currentOptions = {
+            spaceConfig: '{ not json',
+            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+    });
+
+    it('gives no agents and no default when a level replaced the list and none of its agents is Active, and the shipped one is Active', async () => {
+        currentOptions = {
+            spaceConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            typeConfig: JSON.stringify({ SpaceOverridable: ['Agents.ListMode'] }),
+            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+            inactiveAgentIds: [CHILD_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+        assert.deepEqual(result.allowedAgentIds, []);
+        assert.equal(result.defaultAgentId, null);
+    });
+
+    it('uses the shipped agent as the last resort when nothing configured is Active', async () => {
+        currentOptions = {
+            agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
+            inactiveAgentIds: [APP_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, [COLLABORATION_DEFAULT_AGENT_ID]);
+        assert.equal(result.defaultAgentId, COLLABORATION_DEFAULT_AGENT_ID);
     });
 
     it('resolves bound knowledge sources across type and space hierarchy', async () => {

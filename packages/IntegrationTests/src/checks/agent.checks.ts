@@ -1,35 +1,39 @@
-import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import { SearchEngine } from '@memberjunction/search-engine';
-import { resolveSpaceAgentRetrieval, postSpaceMessage, executeSpaceChatTurn, createSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
-import type { MJConversationEntity, MJConversationDetailEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
-import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval } from '@mj-biz-apps/collaboration-core-entities-server';
+import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
     AI_AGENT_PERMISSION_ENTITY,
     AI_AGENT_PROMPT_ENTITY,
     AI_AGENT_SEARCH_SCOPE_ENTITY,
     AI_AGENT_SKILL_ENTITY,
+    ENTITY_PERMISSION_ENTITY,
+    ROW_LEVEL_SECURITY_FILTER_ENTITY,
+    SEARCH_SCOPE_PERMISSION_ENTITY,
     AI_SKILL_ENTITY,
     CONVERSATION_DETAIL_ENTITY,
-    CONVERSATION_ENTITY,
+    FILE_ENTITY,
     SEARCH_SCOPE_ENTITY,
     SEARCH_SCOPE_ENTITY_ENTITY,
-    SPACE_CHAT_ENTITY,
+    SPACE_ITEM_ENTITY,
+    TASK_ENTITY,
 } from '../entity-names.js';
-import { FindRows, GetPersonaUser, isClientTransport } from '../wire.js';
+import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wire.js';
+import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import { attachAgentToSpace, attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
 const PROMPT_ID = 'F8DE6158-9A74-4C23-8B39-44F4C68B6E32';
 const EXPANSION_QUERY_ID = 'FA742FD3-00D4-461F-A356-0265D72C39F4';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
+const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
 const FIELD_NOTES_SPACE_ID = 'C1000001-0000-4000-8000-000000000011';
-const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
-const CLOSED_OPEN_SPACE_ID = 'C1000001-0000-4000-8000-000000000009';
 const SEALED_CHILD_SPACE_ID = 'C1000001-0000-4000-8000-000000000015';
 
 const EXPECTED_BEA_DISCOVERY_SPACES = new Set([
@@ -46,8 +50,8 @@ const EXPECTED_ADA_NORTHWIND_SPACES = new Set([
 
 const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
 const createdDetailIds: string[] = [];
+let testAgentAttachmentId: string | null = null;
 
-import { cleanupConversation } from './cleanup-helpers.js';
 
 const checks: NamedCheck[] = [
     {
@@ -91,17 +95,18 @@ const checks: NamedCheck[] = [
             }
 
             // 3. Verify Collaboration Space Agent
-            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean }>(
+            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean; DriverClass: string | null }>(
                 ctx,
                 AI_AGENT_ENTITY,
                 `ID = '${AGENT_ID}'`,
-                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction'],
+                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction', 'DriverClass'],
             );
             Assert(agents.length === 1, 'Collaboration Space Agent exists');
             Assert(agents[0].Name === 'Collaboration Space Agent', 'Agent name matches');
             Assert(agents[0].AcceptsSkills === 'Limited', 'Agent AcceptsSkills is Limited');
             Assert(agents[0].SkillActivationMode === 'Auto', 'Agent SkillActivationMode is Auto');
             Assert(agents[0].ExposeAsAction === false, 'Agent ExposeAsAction is false (isolated from global chat area)');
+            Assert(agents[0].DriverClass === null, `The shipped agent has no DriverClass; no test changes a shipped row (saw ${agents[0].DriverClass})`);
 
             // 4. Verify 3 assigned skills (Ask is prompt, not skill)
             const assignedSkills = await FindRows<{ ID: string; SkillID: string }>(
@@ -161,7 +166,7 @@ const checks: NamedCheck[] = [
 
             // 8. Verify SearchEngine.ExplainScope
             if (isClientTransport(ctx)) {
-                // ExplainScope has no GraphQL endpoint in MJ 6.1.3; covered on server harness
+                // ExplainScope has no GraphQL endpoint on MJ next; covered on the server harness
                 return;
             }
             const bea = await GetPersonaUser(ctx, 'bea');
@@ -412,7 +417,7 @@ const checks: NamedCheck[] = [
                 const postRes = await postSpaceMessage(ctx.Provider, bea, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: convId,
-                    text: '@Collaboration Space Agent what shared materials are available in Discovery?',
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} what shared materials are available in Discovery?`,
                 });
 
                 Assert(postRes.ok === true, 'postSpaceMessage succeeds');
@@ -445,7 +450,7 @@ const checks: NamedCheck[] = [
                 Assert(details.length === 1, 'Assistant conversation detail found');
                 Assert(details[0].Role === 'AI', 'Detail Role is AI');
                 Assert(details[0].HiddenToUser === false, 'Detail is visible to user');
-                Assert(details[0].AgentID?.toLowerCase() === AGENT_ID.toLowerCase(), 'Assistant detail has AgentID set');
+                Assert(details[0].AgentID?.toLowerCase() === COLLABORATION_TEST_AGENT_ID.toLowerCase(), 'Assistant detail names the test agent');
                 Assert(details[0].Message.includes('site-photo.png'), 'Assistant response quotes site-photo.png');
                 Assert(!details[0].Message.includes('discovery-brief.pdf'), 'Assistant response never mentions discovery-brief.pdf');
             } finally {
@@ -484,7 +489,7 @@ const checks: NamedCheck[] = [
                 const adaGenMsg = await postSpaceMessage(ctx.Provider, ada, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: genConvId,
-                    text: `@Collaboration Space Agent summarize available documents`,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 if (!adaGenMsg.ok) {
                     throw new Error(`Ada posted tagged message in General failed: ${adaGenMsg.message}`);
@@ -496,7 +501,7 @@ const checks: NamedCheck[] = [
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: genConvId,
                     userMessageId: adaGenMsg.detailId,
-                    agentId: AGENT_ID,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
                 });
                 if (!genTurnRes.ok) {
                     throw new Error(`Agent turn in General failed: ${genTurnRes.message}`);
@@ -546,7 +551,7 @@ const checks: NamedCheck[] = [
                 const adaPrivMsg = await postSpaceMessage(ctx.Provider, ada, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: privConvId,
-                    text: `@Collaboration Space Agent summarize available documents`,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 if (!adaPrivMsg.ok) {
                     throw new Error(`Ada posted tagged message in Private failed: ${adaPrivMsg.message}`);
@@ -558,7 +563,7 @@ const checks: NamedCheck[] = [
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: privConvId,
                     userMessageId: adaPrivMsg.detailId,
-                    agentId: AGENT_ID,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
                 });
                 if (!privTurnRes.ok) {
                     throw new Error(`Agent turn in Private failed: ${privTurnRes.message}`);
@@ -608,7 +613,7 @@ const checks: NamedCheck[] = [
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: genConvId,
                     userMessageId: untaggedMsg.detailId,
-                    agentId: AGENT_ID,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!untaggedTurnRes.ok, 'Untagged message with AgentID under MentionOnly must be refused a turn');
                 if (untaggedTurnRes.ok) throw new Error('Expected untagged turn to fail');
@@ -619,7 +624,7 @@ const checks: NamedCheck[] = [
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: genConvId,
                     userMessageId: adaGenMsg.detailId,
-                    agentId: AGENT_ID,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!secondTurnRes.ok, 'Second turn on already-processed userMessageId must be refused');
                 if (secondTurnRes.ok) throw new Error('Expected second turn to fail');
@@ -630,25 +635,269 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'agent.AG8',
+        Name: "AG8 — A conversation's kind bounds the search itself: its lane filter, run on the real tables, returns Shared for General and Shared plus Team for Private",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+
+            // A space item points at a record: the two files the world seeds in Discovery, one Shared and one Team.
+            const files = await FindRows<{ ID: string; Name: string }>(
+                ctx,
+                FILE_ENTITY,
+                `Name IN ('site-photo.png', 'discovery-brief.pdf')`,
+                ['ID', 'Name'],
+            );
+            const photoFileId = files.find((f) => f.Name === 'site-photo.png')?.ID;
+            const briefFileId = files.find((f) => f.Name === 'discovery-brief.pdf')?.ID;
+            Assert(!!photoFileId && !!briefFileId, 'The world seeds site-photo.png and discovery-brief.pdf');
+            const reaches = (rows: readonly { RecordID: string }[], fileId: string | undefined): boolean =>
+                !!fileId && rows.some((r) => r.RecordID.toLowerCase().endsWith(fileId.toLowerCase()));
+
+            // The negative control: Discovery holds a Shared item and a Team item, so a missing item below is the filter's doing
+            const discoveryItems = await FindRows<{ RecordID: string; Band: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}'`,
+                ['RecordID', 'Band'],
+            );
+            Assert(
+                reaches(discoveryItems.filter((i) => i.Band === 'Shared'), photoFileId) &&
+                    reaches(discoveryItems.filter((i) => i.Band === 'Team'), briefFileId),
+                'Discovery holds a Shared item (site-photo.png) and a Team item (discovery-brief.pdf), so the filters below have something to exclude',
+            );
+
+            const general = await createSpaceConversation(ctx.Provider, ada, {
+                SpaceID: DISCOVERY_SPACE_ID,
+                Name: `discovery-ag8-gen-${Date.now()}`,
+                Kind: 'General',
+            });
+            Assert(general.ok === true && !!general.conversationId && !!general.spaceChatId, `Ada starts General conversation for AG8: ${general.message ?? ''}`);
+            const generalConvId = general.conversationId!;
+            const generalChatId = general.spaceChatId!;
+            let privateConvId: string | undefined;
+            let privateChatId: string | undefined;
+
+            try {
+                const priv = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag8-priv-${Date.now()}`,
+                    Kind: 'Private',
+                });
+                Assert(priv.ok === true && !!priv.conversationId && !!priv.spaceChatId, `Ada starts Private conversation for AG8: ${priv.message ?? ''}`);
+                privateConvId = priv.conversationId;
+                privateChatId = priv.spaceChatId;
+
+                await SearchEngine.Instance.Config({}, ada);
+                const laneFilters = async (chatId: string, asUser: UserInfo = ada): Promise<{ items: string; tasks: string }> => {
+                    const explained = await SearchEngine.Instance.ExplainScope(
+                        {
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: { PrimaryScopeRecordID: chatId },
+                            AIAgentID: AGENT_ID,
+                        },
+                        asUser,
+                    );
+                    Assert(explained.length === 1, 'One scope explanation');
+                    Assert(explained[0].Entitlement?.Allowed === true, `${asUser.Name} may search this scope (saw ${JSON.stringify(explained[0].Entitlement)})`);
+                    const items = explained[0].Lanes.find((l) => l.Target.includes('Space Items'));
+                    const tasks = explained[0].Lanes.find((l) => l.Target.includes('Tasks'));
+                    Assert(!!items?.RenderedFilter && items.Status === 'Active', `Space Items lane is Active with a rendered filter (saw ${items?.Status})`);
+                    Assert(!!tasks?.RenderedFilter && tasks.Status === 'Active', `Tasks lane is Active with a rendered filter (saw ${tasks?.Status})`);
+                    return { items: items!.RenderedFilter!, tasks: tasks!.RenderedFilter! };
+                };
+                // What the Space Items lane reaches: its own filter, run on the real table by the system user,
+                // so the filter is the only thing between a row and the result.
+                const laneRows = (filter: string) =>
+                    FindRows<{ RecordID: string; Band: string; SpaceID: string }>(ctx, SPACE_ITEM_ENTITY, filter, ['RecordID', 'Band', 'SpaceID']);
+
+                // The Tasks lane, on the real Tasks table: the world files a Shared and a Team root task in Discovery
+                const taskEntity = ctx.Provider.EntityByName(TASK_ENTITY);
+                Assert(!!taskEntity, 'Task entity found');
+                const taskItems = await FindRows<{ RecordID: string; Band: string }>(
+                    ctx,
+                    SPACE_ITEM_ENTITY,
+                    `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${taskEntity?.ID}'`,
+                    ['RecordID', 'Band'],
+                );
+                const rootId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId).toLowerCase();
+                const sharedRoots = new Set(taskItems.filter((t) => t.Band === 'Shared').map((t) => rootId(t.RecordID)));
+                const teamRoots = new Set(taskItems.filter((t) => t.Band === 'Team').map((t) => rootId(t.RecordID)));
+                Assert(sharedRoots.size > 0 && teamRoots.size > 0, 'Discovery holds a Shared and a Team root task, so the Tasks lane has something to exclude');
+                const laneTasks = (filter: string) => FindRows<{ ID: string; RootParentID: string | null }>(ctx, TASK_ENTITY, filter, ['ID', 'RootParentID']);
+                const rootOf = (t: { ID: string; RootParentID: string | null }): string => (t.RootParentID ?? t.ID).toLowerCase();
+
+                const generalLanes = await laneFilters(generalChatId);
+                const generalTasks = await laneTasks(generalLanes.tasks);
+                Assert(generalTasks.length > 0 && generalTasks.every((t) => sharedRoots.has(rootOf(t))), 'General Tasks lane reaches only tasks under a Shared root');
+                Assert(!generalTasks.some((t) => teamRoots.has(rootOf(t))), 'General Tasks lane never reaches a task under a Team root');
+
+                // Bea, a client, gets the same General lane, and MemberJunction lets her search: the agent, its scope
+                // assignment and the scope's permission rows are the three things it reads as her
+                const beaGeneralLanes = await laneFilters(generalChatId, bea);
+                Assert(beaGeneralLanes.items === generalLanes.items && beaGeneralLanes.tasks === generalLanes.tasks, "Bea's General lanes are Ada's General lanes");
+                const generalRows = await laneRows(generalLanes.items);
+                Assert(generalRows.length > 0, 'General lane reaches at least one item');
+                Assert(reaches(generalRows, photoFileId), 'General lane reaches the Shared site-photo.png');
+                Assert(!reaches(generalRows, briefFileId), 'General lane never reaches the Team discovery-brief.pdf');
+                Assert(generalRows.every((r) => r.Band === 'Shared'), `General lane reaches only the Shared band (saw ${[...new Set(generalRows.map((r) => r.Band))].join(',')})`);
+                Assert(
+                    generalRows.every((r) => EXPECTED_BEA_DISCOVERY_SPACES.has(r.SpaceID.toLowerCase())),
+                    'General lane stays inside Discovery and its child',
+                );
+                Assert(generalLanes.tasks.includes("Band IN ('Shared')") && !generalLanes.tasks.includes("'Team'"), `General Tasks lane is bounded to the Shared band (got: ${generalLanes.tasks})`);
+
+                // A real search as Bea, on a General chat: the Tasks lane finds a Shared task by name and never a Team one
+                const nameOf = async (root: string) => (await FindRows<{ Name: string }>(ctx, TASK_ENTITY, `ID = '${root}'`, ['Name']))[0]?.Name;
+                const sharedName = await nameOf([...sharedRoots][0]);
+                const teamName = await nameOf([...teamRoots][0]);
+                Assert(!!sharedName && !!teamName, 'The seeded Shared and Team root tasks have names');
+                const searchAs = async (user: UserInfo, chatId: string, query: string) =>
+                    SearchEngine.Instance.Search(
+                        { Query: query, ScopeIDs: [SEARCH_SCOPE_ID], SearchContext: { PrimaryScopeRecordID: chatId }, AIAgentID: AGENT_ID, MaxResults: 100, Mode: 'preview' },
+                        user,
+                    );
+                const found = (result: Awaited<ReturnType<typeof searchAs>>, root: string): boolean =>
+                    result.Results.some((r) => r.RecordID.toLowerCase().endsWith(root.toLowerCase()));
+                const sharedRoot = [...sharedRoots][0];
+                const teamRoot = [...teamRoots][0];
+                const sharedHits = await searchAs(bea, generalChatId, sharedName!);
+                Assert(sharedHits.Success === true && found(sharedHits, sharedRoot), `Bea's search in a General chat finds the Shared task "${sharedName}"`);
+                const teamHitsAsBea = await searchAs(bea, generalChatId, teamName!);
+                Assert(teamHitsAsBea.Success === true && !found(teamHitsAsBea, teamRoot), `Bea's search in a General chat never finds the Team task "${teamName}"`);
+                // Ada in the same General chat doesn't find the Team task either: the chat's audience bounds the search, not who asks
+                const teamHitsAsAdaGeneral = await searchAs(ada, generalChatId, teamName!);
+                Assert(teamHitsAsAdaGeneral.Success === true && !found(teamHitsAsAdaGeneral, teamRoot), `Ada's search in a General chat never finds the Team task "${teamName}" either`);
+                // The negative control: the same words find the Team task when the chat is Internal Only and the asker sees Team
+                const teamHitsAsAda = await searchAs(ada, privateChatId!, teamName!);
+                Assert(teamHitsAsAda.Success === true && found(teamHitsAsAda, teamRoot), `Ada's search in a Private chat finds the Team task "${teamName}", so its absence above is the audience's doing`);
+
+                const privateLanes = await laneFilters(privateChatId!);
+                const privateRows = await laneRows(privateLanes.items);
+                Assert(reaches(privateRows, photoFileId), 'Private lane reaches the Shared site-photo.png');
+                Assert(reaches(privateRows, briefFileId), 'Private lane reaches the Team discovery-brief.pdf');
+                Assert(privateRows.every((r) => r.Band === 'Shared' || r.Band === 'Team'), 'Private lane reaches Shared and Team, and no other band');
+                const privateTasks = await laneTasks(privateLanes.tasks);
+                Assert(privateTasks.some((t) => sharedRoots.has(rootOf(t))) && privateTasks.some((t) => teamRoots.has(rootOf(t))), 'Private Tasks lane reaches tasks under a Shared root and under a Team root');
+                Assert(privateTasks.every((t) => sharedRoots.has(rootOf(t)) || teamRoots.has(rootOf(t))), 'Private Tasks lane stays inside the Discovery roots');
+            } finally {
+                await cleanupConversation(ctx.Provider, ctx.User, generalConvId, generalChatId);
+                if (privateConvId) await cleanupConversation(ctx.Provider, ctx.User, privateConvId, privateChatId);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG9',
+        Name: "AG9 — A client's agent reads stay narrow: no other user's permission row, no agent outside the spaces they reach",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const view = View(ctx);
+            const beaRoleIds = new Set(bea.UserRoles.map((r) => r.RoleID.toLowerCase()));
+            Assert(beaRoleIds.size > 0, 'Bea holds a role');
+
+            // Scope permission rows: only ones that name Bea or a role she holds
+            const scopePerms = await view.RunView<{ ID: string; UserID: string | null; RoleID: string | null }>(
+                { EntityName: SEARCH_SCOPE_PERMISSION_ENTITY, Fields: ['ID', 'UserID', 'RoleID'], ResultType: 'simple' },
+                bea,
+            );
+            Assert(scopePerms.Success === true, `Bea reads Search Scope Permissions: ${scopePerms.ErrorMessage ?? ''}`);
+            const permRows = scopePerms.Results ?? [];
+            Assert(permRows.length > 0, 'Bea reads at least the permission row her own role holds');
+            Assert(
+                permRows.every((r) => (r.UserID && SameID(r.UserID, bea.ID)) || (r.RoleID && beaRoleIds.has(r.RoleID.toLowerCase()))),
+                'Every Search Scope Permissions row Bea reads names her or a role she holds',
+            );
+            const allPerms = await FindRows<{ ID: string }>(ctx, SEARCH_SCOPE_PERMISSION_ENTITY, '1=1', ['ID']);
+            Assert(allPerms.length > permRows.length, 'The scope has permission rows for other roles that Bea does not read');
+
+            // Agent permission rows: no grant at all
+            const agentPerms = await view.RunView<{ ID: string }>(
+                { EntityName: AI_AGENT_PERMISSION_ENTITY, Fields: ['ID'], ResultType: 'simple' },
+                bea,
+            );
+            Assert(!agentPerms.Success || (agentPerms.Results?.length ?? 0) === 0, 'Bea reads no AI Agent Permissions row');
+
+            // Agents: the shipped agent; the test agent, which the bundle attaches to Northwind, an ancestor of Discovery (so Bea may run it
+            // there); and no agent that only a space she does not reach runs
+            // BypassCache: the server replays a small unfiltered read for a few seconds, and an attachment doesn't clear it
+            const readAgentIds = async (): Promise<string[]> => {
+                const res = await view.RunView<{ ID: string }>({ EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, bea);
+                Assert(res.Success === true, `Bea reads AI Agents: ${res.ErrorMessage ?? ''}`);
+                return (res.Results ?? []).map((a) => a.ID.toLowerCase());
+            };
+            const before = await readAgentIds();
+            Assert(before.includes(AGENT_ID.toLowerCase()), 'Bea reads the shipped space agent');
+            Assert(before.includes(COLLABORATION_TEST_AGENT_ID.toLowerCase()), "Bea reads the test agent, attached to Northwind, an ancestor of Discovery, which she reaches");
+
+            const others = await FindRows<{ ID: string }>(
+                ctx,
+                AI_AGENT_ENTITY,
+                `ID NOT IN ('${AGENT_ID}', '${COLLABORATION_TEST_AGENT_ID}') AND Status = 'Active'`,
+                ['ID'],
+            );
+            const elsewhere = others.find((a) => !before.includes(a.ID.toLowerCase()))?.ID;
+            Assert(!!elsewhere, 'The host has an active agent that no space of Bea\'s runs');
+
+            // The negative: attached to Harbor, which Bea does not reach, the agent is still not one she reads
+            const harbor = await attachAgentToSpace(ctx, elsewhere!, HARBOR_SPACE_ID);
+            try {
+                const during = await readAgentIds();
+                Assert(!during.includes(elsewhere!.toLowerCase()), 'Attached to Harbor, which Bea does not reach, the agent is still not one she reads');
+            } finally {
+                await detachTestAgent(ctx, harbor);
+            }
+
+            // The positive control: attached to Discovery, which she reaches, the same read now returns it, so the negative above could fail
+            const discovery = await attachAgentToSpace(ctx, elsewhere!, DISCOVERY_SPACE_ID);
+            try {
+                const during = await readAgentIds();
+                Assert(during.includes(elsewhere!.toLowerCase()), 'Attached to Discovery, which Bea reaches, the agent is one she reads');
+            } finally {
+                await detachTestAgent(ctx, discovery);
+            }
+            const after = await readAgentIds();
+            Assert(!after.includes(elsewhere!.toLowerCase()), 'Once detached, the agent is not one she reads again');
+        },
+    },
+    {
+        Id: 'agent.AG10',
+        Name: 'AG10 — No Space Participant grant still uses the retired "Collaboration: Agent Catalog" filter',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const filters = await FindRows<{ ID: string }>(ctx, ROW_LEVEL_SECURITY_FILTER_ENTITY, `Name = 'Collaboration: Agent Catalog'`, ['ID']);
+            Assert(
+                filters.length === 0,
+                'The retired "Collaboration: Agent Catalog" row filter (1 = 1) is still in this database. It lets a client read every agent and scope permission. Clean it up as docs/building-the-database.md says.',
+            );
+            const grants = await FindRows<{ ID: string }>(
+                ctx,
+                ENTITY_PERMISSION_ENTITY,
+                `ReadRLSFilterID IN (SELECT ID FROM [${ctx.Schema}].[vwRowLevelSecurityFilters] WHERE Name = 'Collaboration: Agent Catalog')`,
+                ['ID'],
+            );
+            Assert(grants.length === 0, `${grants.length} entity permission(s) still use the retired "Collaboration: Agent Catalog" filter. Clean them up as docs/reviewing-the-data.md says.`);
+        },
+    },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
-    Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`agent Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`agent Teardown failed to delete detail ${id}: ${err}`);
-                    }
-                }
-            }
-        }
+    // The turn checks run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
+    Setup: async (ctx: IntegrationCheckContext) => {
+        testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
     },
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
+                }
+            },
+            ...createdDetailIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
+        ]),
 });

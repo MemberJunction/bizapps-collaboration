@@ -1,5 +1,6 @@
 import '@angular/compiler';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import type { ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -24,6 +25,8 @@ import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
 import { SimpleChange } from '@angular/core';
+import { filterLibraryRows } from './library-filter.ts';
+import { taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status.ts';
 import {
   FindingModel,
   LibraryRowModel,
@@ -183,6 +186,24 @@ describe('CollabSpaceTabsComponent', () => {
   });
 });
 
+describe('CollabSpaceRailComponent open conversation', () => {
+  const ID = 'A1B2C3D4-0000-4000-8000-000000000001';
+
+  it('is the open one when the URL and the row differ only in case', () => {
+    const comp = new CollabSpaceRailComponent();
+    comp.ActiveConversationId = ID.toLowerCase();
+    expect(comp.IsActiveConversation(ID)).toBe(true);
+  });
+
+  it('is not the open one for another conversation, or when none is open', () => {
+    const comp = new CollabSpaceRailComponent();
+    comp.ActiveConversationId = ID;
+    expect(comp.IsActiveConversation('B1B2C3D4-0000-4000-8000-000000000002')).toBe(false);
+    comp.ActiveConversationId = '';
+    expect(comp.IsActiveConversation(ID)).toBe(false);
+  });
+});
+
 describe('CollabSpaceRailComponent', () => {
   it('emits NavSelectRequested when selectNav is called', () => {
     const comp = new CollabSpaceRailComponent();
@@ -222,10 +243,9 @@ describe('CollabSpaceRailComponent', () => {
     });
 
     let stopped = false;
-    const mockEvent = {
-      stopPropagation: () => {
-        stopped = true;
-      }
+    const mockEvent = new Event('click');
+    mockEvent.stopPropagation = () => {
+      stopped = true;
     };
 
     expect(comp.isNodeExpanded(node)).toBe(false);
@@ -314,24 +334,27 @@ describe('CollabSpaceRailComponent', () => {
     expect(newConvoEmitted).toBe(true);
   });
 
-  it('binds conversations with unread counts and bands', () => {
+  it('binds conversations with their bands, and highlights the open one when the URL differs in case', () => {
     const comp = new CollabSpaceRailComponent();
+    const GENERAL = 'A1B2C3D4-0000-4000-8000-00000000000A';
+    const INTERNAL = 'B1B2C3D4-0000-4000-8000-00000000000B';
     comp.Conversations = [
-      { id: 'c1', name: 'General', kind: 'General', band: 'Shared', unreadCount: 3 },
-      { id: 'c2', name: 'Internal Sync', kind: 'Private', band: 'Team', unreadCount: 0 },
+      { id: GENERAL, name: 'General', kind: 'General', band: 'Shared' },
+      { id: INTERNAL, name: 'Internal Sync', kind: 'Private', band: 'Team' },
     ];
-    comp.ActiveConversationId = 'c1';
+    comp.ActiveConversationId = GENERAL.toLowerCase();
 
     let selectedConv = '';
     comp.ConversationSelectRequested.subscribe(id => {
       selectedConv = id;
     });
 
-    comp.onConversationClick('c2');
-    expect(selectedConv).toBe('c2');
-    expect(comp.Conversations[0].unreadCount).toBe(3);
+    comp.onConversationClick(INTERNAL);
+    expect(selectedConv).toBe(INTERNAL);
     expect(comp.Conversations[0].band).toBe('Shared');
     expect(comp.Conversations[1].band).toBe('Team');
+    expect(comp.IsActiveConversation(comp.Conversations[0].id)).toBe(true);
+    expect(comp.IsActiveConversation(comp.Conversations[1].id)).toBe(false);
   });
 });
 
@@ -563,30 +586,28 @@ describe('CollabShareCheckComponent', () => {
 
   it('emits ShareRequested with applyFixes true on onApplyAndShare', () => {
     const comp = new CollabShareCheckComponent();
-    comp.Note = 'Test note';
     comp.NotifyRecipients = true;
 
-    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let result: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
     comp.onApplyAndShare();
-    expect(result).toEqual({ applyFixes: true, note: 'Test note', notify: true });
+    expect(result).toEqual({ applyFixes: true, notify: true });
   });
 
   it('emits ShareRequested with applyFixes false on onShareAsIs', () => {
     const comp = new CollabShareCheckComponent();
-    comp.Note = 'Raw note';
     comp.NotifyRecipients = false;
 
-    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let result: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
     comp.onShareAsIs();
-    expect(result).toEqual({ applyFixes: false, note: 'Raw note', notify: false });
+    expect(result).toEqual({ applyFixes: false, notify: false });
   });
 
   it('emits CancelRequested on cancel', () => {
@@ -599,6 +620,36 @@ describe('CollabShareCheckComponent', () => {
     comp.onCancel();
     expect(cancelled).toBe(true);
   });
+});
+
+describe('CollabSpaceOverviewComponent contributed cards', () => {
+    it('draws one card per key, whatever spelling or order a driver appended them in', () => {
+        const comp = new CollabSpaceOverviewComponent();
+        comp.CanSeeTeamSide = true;
+        comp.ContributedCards = [
+            { key: 'deal-summary', title: 'Deal', sortKey: 15 },
+            { key: 'Deal-Summary', title: 'Deal again', sortKey: 16 },
+            { key: 'notice', title: 'Notice', sortKey: 20 },
+        ];
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Deal', 'Notice']);
+    });
+
+    it('gives a viewer who cannot see the Team band the Shared cards only, and treats a card that names no side as Team', () => {
+        const comp = new CollabSpaceOverviewComponent();
+        comp.ContributedCards = [
+            { key: 'notice', title: 'Notice', sortKey: 10, side: 'Shared' },
+            { key: 'agenda', title: 'Agenda', sortKey: 20, side: 'Team' },
+            { key: 'no-side', title: 'No side', sortKey: 30 },
+        ];
+        comp.CanSeeTeamSide = false;
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Notice']);
+        comp.CanSeeTeamSide = true;
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Notice', 'Agenda', 'No side']);
+    });
+
+    it('is closed to the Team band until the host says otherwise', () => {
+        expect(new CollabSpaceOverviewComponent().CanSeeTeamSide).toBe(false);
+    });
 });
 
 describe('CollabSpaceOverviewComponent', () => {
@@ -693,13 +744,13 @@ describe('CollabShareCheckDialogComponent', () => {
 
   it('emits ShareRequested on onShareRequested', () => {
     const comp = new CollabShareCheckDialogComponent();
-    let payload: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let payload: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(p => {
       payload = p;
     });
 
-    comp.onShareRequested({ applyFixes: true, note: 'Done', notify: true });
-    expect(payload).toEqual({ applyFixes: true, note: 'Done', notify: true });
+    comp.onShareRequested({ applyFixes: true, notify: true });
+    expect(payload).toEqual({ applyFixes: true, notify: true });
   });
 });
 
@@ -760,6 +811,54 @@ describe('CollabUploadDialogComponent', () => {
     });
   });
 
+  describe('the band it starts on and offers', () => {
+    function submitted(comp: CollabUploadDialogComponent): CollabUploadSubmitPayload | null {
+      comp.setMode('link');
+      comp.linkUrl = 'https://docs.google.com/document/d/999/edit';
+      comp.docTitle = 'Plan';
+      let payload: CollabUploadSubmitPayload | null = null;
+      comp.SubmitRequested.subscribe(p => {
+        payload = p;
+      });
+      comp.onSubmit();
+      return payload;
+    }
+
+    it("starts on the band the space type's default gives this seat, and sends it", () => {
+      // Ada in Discovery, a Team-default space, where she may choose either band
+      const ada = new CollabUploadDialogComponent();
+      ada.AllowedBands = ['Shared', 'Team'];
+      ada.StartBand = 'Team';
+      expect(ada.selectedBand).toBe('Team');
+      expect(submitted(ada)?.band).toBe('Team');
+    });
+
+    it('offers a seat that can only keep material on Team just that band', () => {
+      // Sam, a Member in Discovery
+      const sam = new CollabUploadDialogComponent();
+      sam.AllowedBands = ['Team'];
+      sam.StartBand = 'Team';
+      expect(sam.IsBandAllowed('Team')).toBe(true);
+      expect(sam.IsBandAllowed('Shared')).toBe(false);
+      expect(submitted(sam)?.band).toBe('Team');
+    });
+
+    it('offers a client just Shared', () => {
+      const client = new CollabUploadDialogComponent();
+      client.AllowedBands = ['Shared'];
+      client.StartBand = 'Shared';
+      expect(client.IsBandAllowed('Team')).toBe(false);
+      expect(submitted(client)?.band).toBe('Shared');
+    });
+
+    it("sends no band when the seat wasn't resolved and nothing was chosen, so the server applies the type's default", () => {
+      const unknown = new CollabUploadDialogComponent();
+      unknown.StartBand = null;
+      expect(unknown.selectedBand).toBeNull();
+      expect(submitted(unknown)?.band).toBeNull();
+    });
+  });
+
   it('emits CancelRequested on backdrop click or cancel button', () => {
     const comp = new CollabUploadDialogComponent();
     let cancelled = false;
@@ -774,8 +873,8 @@ describe('CollabUploadDialogComponent', () => {
 
 describe('CollabSpaceWorkComponent', () => {
   const sampleTasks: TaskItemModel[] = [
-    { id: 't1', name: 'Draft specification', status: 'In Progress', priority: 'High', band: 'Shared' },
-    { id: 't2', name: 'Internal review', status: 'Not Started', priority: 'Medium', band: 'Team' },
+    { id: 't1', name: 'Draft specification', status: 'InProgress', priority: 'High', band: 'Shared' },
+    { id: 't2', name: 'Internal review', status: 'Open', priority: 'Medium', band: 'Team' },
     { id: 't3', name: 'Sign off document', status: 'Completed', priority: 'Low', band: 'Shared' },
   ];
 
@@ -816,31 +915,292 @@ describe('CollabSpaceWorkComponent', () => {
     });
     comp.newTaskName = 'New delivery milestone';
     comp.newTaskBand = 'Shared';
-    comp.newTaskPriority = 'Urgent';
+    comp.newTaskPriority = 'Critical';
     comp.submitNewTask();
 
     expect(created).toEqual({
       name: 'New delivery milestone',
       band: 'Shared',
-      priority: 'Urgent',
+      priority: 'Critical',
     });
     expect(comp.newTaskName).toBe('');
     expect(comp.isAddingTask).toBe(false);
   });
 });
 
+describe('the Work list follows the seat and the entity', () => {
+  it('reads every stored status and priority as a label with its own badge class', () => {
+    expect(taskStatusLabel('InProgress')).toBe('In progress');
+    expect(taskStatusLabel('Open')).toBe('Open');
+    expect(taskPriorityLabel('Critical')).toBe('Critical');
+    for (const status of ['Open', 'InProgress', 'Blocked', 'Cancelled', 'Completed']) {
+      expect(taskStatusClass(status)).toBe(`status-${status.toLowerCase()}`);
+    }
+    expect(taskPriorityClass('Critical')).toBe('priority-critical');
+  });
+
+  it('counts In progress on the stored value, and treats Cancelled as closed', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.Tasks = [
+      { id: 'a', name: 'A', status: 'InProgress', priority: 'High', band: 'Shared' },
+      { id: 'b', name: 'B', status: 'Cancelled', priority: 'Low', band: 'Shared' },
+    ];
+    expect(comp.InProgressCount).toBe(1);
+    comp.statusFilter = 'active';
+    expect(comp.filteredTasks.map((t) => t.id)).toEqual(['a']);
+  });
+
+  it('does not emit a toggle from a read-only list', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.ReadOnly = true;
+    const toggled = vi.fn();
+    comp.TaskToggleRequested.subscribe(toggled);
+    comp.onToggleTask({ id: 'a', name: 'A', status: 'Open', priority: 'Low', band: 'Shared' });
+    expect(toggled).not.toHaveBeenCalled();
+  });
+
+  it('files a Team-only seat on Team and a Shared-only seat on Shared, whatever the form held', () => {
+    const teamOnly = new CollabSpaceWorkComponent();
+    teamOnly.AllowedBands = ['Team'];
+    teamOnly.DefaultBand = 'Shared';
+    const created = vi.fn();
+    teamOnly.CreateTaskRequested.subscribe(created);
+    teamOnly.newTaskName = 'Internal';
+    teamOnly.newTaskBand = 'Shared';
+    teamOnly.submitNewTask();
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ band: 'Team' }));
+
+    const sharedOnly = new CollabSpaceWorkComponent();
+    sharedOnly.AllowedBands = ['Shared'];
+    sharedOnly.DefaultBand = 'Team';
+    const made = vi.fn();
+    sharedOnly.CreateTaskRequested.subscribe(made);
+    sharedOnly.newTaskName = 'Client note';
+    sharedOnly.newTaskBand = 'Team';
+    sharedOnly.submitNewTask();
+    expect(made).toHaveBeenCalledWith(expect.objectContaining({ band: 'Shared' }));
+  });
+});
+
+describe('the Library narrows by search, collection and view', () => {
+  const rows: LibraryRowModel[] = [
+    { id: 'r1', kind: 'doc', name: 'Brief', folder: 'Contracts', band: 'Shared', who: 'Ada', when: 'x' },
+    { id: 'r2', kind: 'image', name: 'Site photo', folder: 'Photos', band: 'Shared', who: 'Bea', when: 'x' },
+    { id: 'r3', kind: 'doc', name: 'Margin notes', folder: 'Photos', band: 'Team', who: 'Ada', when: 'x' },
+  ];
+  const collections = [{ id: 'folder-0', name: 'Contracts' }, { id: 'folder-1', name: 'Photos' }];
+
+  it('filters by search text over name, folder and author', () => {
+    expect(filterLibraryRows(rows, { band: 'All', search: 'photo', folderId: 'all', collections }).map((r) => r.id)).toEqual(['r2', 'r3']);
+    expect(filterLibraryRows(rows, { band: 'All', search: 'bea', folderId: 'all', collections }).map((r) => r.id)).toEqual(['r2']);
+  });
+
+  it('filters by collection and by smart view', () => {
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'folder-1', collections }).map((r) => r.id)).toEqual(['r2', 'r3']);
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'shared', collections }).map((r) => r.id)).toEqual(['r1', 'r2']);
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'team', collections }).map((r) => r.id)).toEqual(['r3']);
+  });
+
+  it("filters Ada's Discovery Library to Photos, and the band tab narrows it further", () => {
+    expect(filterLibraryRows(rows, { band: 'Shared', search: '', folderId: 'folder-1', collections }).map((r) => r.id)).toEqual(['r2']);
+  });
+
+  it("lists the ten most recently updated first for the Recently updated view", () => {
+    const many: LibraryRowModel[] = Array.from({ length: 12 }, (_, i) => ({ id: `r${i}`, kind: 'doc', name: `n${i}`, folder: 'f', band: 'Shared', who: 'w', when: 'x', updatedAt: new Date(2026, 8, i + 1).toISOString() }));
+    const recent = filterLibraryRows(many, { band: 'All', search: '', folderId: 'recent', collections });
+    expect(recent).toHaveLength(10);
+    expect(recent[0].id).toBe('r11');
+    expect(recent[9].id).toBe('r2');
+  });
+
+  it('marks the selected row and the selected tree row in any casing', () => {
+    const library = new CollabSpaceLibraryComponent();
+    library.Rows = [{ ...rows[0], id: 'ABCDEF00-0000-4000-8000-000000000001' }];
+    library.SelectedRowId = 'abcdef00-0000-4000-8000-000000000001';
+    expect(library.IsSelected('ABCDEF00-0000-4000-8000-000000000001')).toBe(true);
+    expect(library.SelectedRow?.name).toBe('Brief');
+  });
+});
+
+describe('the share dialog says when nothing was reviewed', () => {
+  it('starts as not reviewed, and only a review that ran and found nothing reads clean', () => {
+    const dialog = new CollabShareCheckComponent();
+    expect(dialog.ReviewCompleted).toBe(false);
+    expect(dialog.Findings).toEqual([]);
+  });
+});
+
+describe('the People tab acts on seats and shows the invite the way the seat may make it', () => {
+  const pat: SpaceMemberModel = { id: 'm9', userId: 'u9', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Guest', roleCode: 'guest', band: 'Shared', status: 'Invited', canApprove: true, canRemove: true, canChangeRole: false };
+
+  it('starts the invite form on the highest role the seat may grant', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.RoleOptions = [{ code: 'client-member', label: 'Outside member' }, { code: 'guest', label: 'Guest' }];
+    expect(comp.inviteRole).toBe('client-member');
+    expect(comp.RoleOptions.map((o) => o.code)).toEqual(['client-member', 'guest']);
+  });
+
+  it('asks before it approves, then emits once confirmed, and not at all when cancelled', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.Members = [pat];
+    const approved = vi.fn();
+    comp.ApproveMemberRequested.subscribe(approved);
+    comp.Ask(pat, 'approve');
+    expect(comp.PendingQuestion(pat)).toBe('Approve Pat Invited?');
+    expect(approved).not.toHaveBeenCalled();
+    comp.ConfirmPending();
+    expect(approved).toHaveBeenCalledWith(pat);
+    comp.Ask(pat, 'remove');
+    comp.Pending = null;
+    comp.ConfirmPending();
+    expect(approved).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits a role change only for a different role, once confirmed', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.Members = [pat];
+    const changed = vi.fn();
+    comp.ChangeRoleRequested.subscribe(changed);
+    comp.AskRole(pat, 'guest');
+    expect(comp.Pending).toBeNull();
+    comp.AskRole(pat, 'client-member');
+    comp.ConfirmPending();
+    expect(changed).toHaveBeenCalledWith({ member: pat, roleCode: 'client-member' });
+  });
+
+  it('keeps the sign-in link for the banner when the host has no email channel', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.RedemptionUrl = 'https://host.example/redeem?t=abc';
+    comp.InviteOutcome = { ok: true, message: 'Sign-in link created.' };
+    expect(comp.RedemptionUrl).toBe('https://host.example/redeem?t=abc');
+    expect(comp.InviteOutcome?.ok).toBe(true);
+  });
+});
+
+describe('the rail: Jump to a space and the new-space button', () => {
+  const nodes: RailSpaceNode[] = [
+    { id: 's1', name: 'Northwind relationship', color: '', iconClass: '', level: 0, hasChildren: true, isExpanded: true },
+    { id: 's2', name: 'Discovery', color: '', iconClass: '', level: 1, hasChildren: false, isExpanded: false },
+  ];
+
+  it('opens on ⌘J, narrows by what is typed, and Enter opens the first match', () => {
+    const rail = new CollabSpaceRailComponent();
+    rail.Spaces = nodes;
+    const opened = vi.fn();
+    rail.SpaceOpenRequested.subscribe(opened);
+    const key = { key: 'j', metaKey: true, ctrlKey: false, preventDefault: vi.fn() };
+    rail.onDocumentKeyDown(key);
+    expect(rail.jumpOpen).toBe(true);
+    rail.jumpQuery = 'disc';
+    expect(rail.jumpMatches.map((s) => s.id)).toEqual(['s2']);
+    rail.jumpToFirst();
+    expect(opened).toHaveBeenCalledWith('s2');
+    expect(rail.jumpOpen).toBe(false);
+  });
+
+  it('ignores other keys and closes on Escape', () => {
+    const rail = new CollabSpaceRailComponent();
+    rail.onDocumentKeyDown({ key: 'k', metaKey: true, ctrlKey: false, preventDefault: vi.fn() });
+    expect(rail.jumpOpen).toBe(false);
+    rail.OpenJump();
+    rail.closeJump();
+    expect(rail.jumpOpen).toBe(false);
+  });
+
+  it('does not offer the new-space button until a host provides the dialog', () => {
+    expect(new CollabSpaceRailComponent().CanCreateSpace).toBe(false);
+  });
+});
+
+describe('the upload dialog keeps its promises', () => {
+  const fileOf = (name: string, size: number): File => ({ name, size, type: 'application/pdf' } as File);
+
+  it('refuses a 12 MB file with a readable message, before reading it', () => {
+    const dialog = new CollabUploadDialogComponent();
+    dialog.onFileSelected({ target: { files: [fileOf('big.pdf', 12 * 1024 * 1024)] } } as unknown as Event);
+    expect(dialog.selectedFile).toBeNull();
+    expect(dialog.fileError).toBe('That file is 12 MB. Files can be up to 10 MB.');
+  });
+
+  it('takes a file within the limit, and stores it under the name typed with its own extension', () => {
+    const dialog = new CollabUploadDialogComponent();
+    const submitted = vi.fn();
+    dialog.SubmitRequested.subscribe(submitted);
+    dialog.onFileSelected({ target: { files: [fileOf('scan0042.pdf', 2 * 1024 * 1024)] } } as unknown as Event);
+    dialog.docTitle = 'Signed engagement letter';
+    dialog.onSubmit();
+    expect(dialog.fileError).toBe('');
+    expect(submitted).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'Signed engagement letter.pdf', title: 'Signed engagement letter' }));
+  });
+
+  it('refuses to close while it is saving, whichever way mj-dialog asks (its close button, backdrop and Escape all end in Close)', () => {
+    const dialog = new CollabUploadDialogComponent();
+    const cancelled = vi.fn();
+    dialog.CancelRequested.subscribe(cancelled);
+    dialog.IsSubmitting = true;
+    dialog.onCancel();
+    expect(cancelled).not.toHaveBeenCalled();
+    dialog.IsSubmitting = false;
+    dialog.onCancel();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the share dialog when it is cancelled', () => {
+    const dialog = new CollabShareCheckDialogComponent();
+    const cancelled = vi.fn();
+    dialog.CancelRequested.subscribe(cancelled);
+    dialog.onCancel();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Copy link says how it went', () => {
+  const invited = () => {
+    const people = new CollabSpacePeopleComponent();
+    people.RedemptionUrl = 'https://host.example/redeem?t=abc';
+    return people;
+  };
+
+  it('says Copied when the clipboard takes the link, and resets when the link changes', async () => {
+    const people = invited();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    people.Clipboard = { writeText };
+    await people.CopyLink();
+    expect(writeText).toHaveBeenCalledWith('https://host.example/redeem?t=abc');
+    expect(people.LinkStatus()).toBe('copied');
+    people.RedemptionUrl = 'https://host.example/redeem?t=def';
+    expect(people.LinkStatus()).toBe('idle');
+  });
+
+  it('says it could not copy when the clipboard refuses, or there is none', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const refused = invited();
+      refused.Clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
+      await refused.CopyLink();
+      expect(refused.LinkStatus()).toBe('failed');
+      const none = invited();
+      none.Clipboard = null;
+      await none.CopyLink();
+      expect(none.LinkStatus()).toBe('failed');
+    } finally {
+      quiet.mockRestore();
+    }
+  });
+});
+
+/** The status-push subscription the space's chat starts; these tests don't look at it. */
+const streamingStub = { initialize: () => undefined } as unknown as ConversationStreamingService;
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
-    const comp = new CollabSpaceChatComponent();
+    const comp = new CollabSpaceChatComponent(streamingStub);
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(false);
   });
 
-  it('handles read-only and closed space states and event emissions', () => {
-    const comp = new CollabSpaceChatComponent();
-    expect(comp.IsReadOnly).toBe(false);
-    comp.IsReadOnly = true;
-    expect(comp.IsReadOnly).toBe(true);
+  it('emits the new-conversation request', () => {
+    const comp = new CollabSpaceChatComponent(streamingStub);
 
     let newConvoEmitted = false;
     comp.NewConversationRequested.subscribe(() => {
@@ -922,7 +1282,7 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(emitted).toBe(false);
   });
 
-  it('emits CancelRequested on cancel and escape only when not submitting', () => {
+  it('emits CancelRequested on cancel only when not submitting', () => {
     const comp = new CollabNewConversationDialogComponent();
     let cancelCount = 0;
     comp.CancelRequested.subscribe(() => {
@@ -932,25 +1292,51 @@ describe('CollabNewConversationDialogComponent', () => {
     comp.onCancel();
     expect(cancelCount).toBe(1);
 
-    comp.onEscape();
-    expect(cancelCount).toBe(2);
-
     comp.IsSubmitting = true;
     comp.onCancel();
-    comp.onEscape();
-    expect(cancelCount).toBe(2);
+    expect(cancelCount).toBe(1);
   });
 
-  it('handles ngOnChanges when IsSubmitting ends', () => {
-    const comp = new CollabNewConversationDialogComponent();
-    comp.IsSubmitting = false;
-    comp.ngOnChanges({
-      IsSubmitting: new SimpleChange(true, false, false),
+  describe('focus after a submit ends', () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** The dialog's ViewChild is private and only set by rendering; a stand-in field is the one cast here. */
+    function withNameInput(comp: CollabNewConversationDialogComponent): () => number {
+      const focus = vi.fn();
+      (comp as unknown as { nameInputElement: { nativeElement: { focus: () => void } } }).nameInputElement = { nativeElement: { focus } };
+      return () => focus.mock.calls.length;
+    }
+
+    it('puts the focus back on the name field when a submit that was running ends', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(true, false, false) });
+      expect(focused()).toBe(0);
+      vi.runAllTimers();
+      expect(focused()).toBe(1);
     });
-    expect(comp.IsSubmitting).toBe(false);
+
+    it('does not move the focus when a submit starts', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(false, true, false) });
+      vi.runAllTimers();
+      expect(focused()).toBe(0);
+    });
+
+    it('does not touch the field after the dialog is destroyed', () => {
+      vi.useFakeTimers();
+      const comp = new CollabNewConversationDialogComponent();
+      const focused = withNameInput(comp);
+      comp.ngOnChanges({ IsSubmitting: new SimpleChange(true, false, false) });
+      comp.ngOnDestroy();
+      vi.runAllTimers();
+      expect(focused()).toBe(0);
+    });
   });
 });
-
 
 describe('CollabSpacePeopleComponent', () => {
   const sampleMembers: SpaceMemberModel[] = [
@@ -959,44 +1345,141 @@ describe('CollabSpacePeopleComponent', () => {
     { id: 'm3', userId: 'u3', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Member', roleCode: 'member', band: 'Team', status: 'Invited' },
   ];
 
+  describe("a person's own pending seat on a space they reach through a parent", () => {
+    const withOwnSeat: SpaceMemberModel = {
+      id: 'inherited-1', userId: 'u4', name: 'Sam Reach', email: 'sam@example.com', initials: 'SR', roleName: 'Owner', roleCode: 'owner', band: 'Team', status: 'Active',
+      inherited: true, source: 'Northwind',
+      ownSeat: { id: 'own-1', status: 'Invited', roleName: 'Member', roleCode: 'member', canApprove: true, canRemove: true },
+    };
+
+    it("counts the own Invited seat in Awaiting Approval, beside the listed Invited seats", () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [...sampleMembers, withOwnSeat];
+      expect(comp.InvitedCount).toBe(2);
+    });
+
+    it('asks to withdraw an Invited seat, not to remove a person, and emits the own seat on confirm', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [withOwnSeat];
+      const removed = vi.fn();
+      comp.RemoveMemberRequested.subscribe(removed);
+      comp.Ask(comp.OwnSeatOf(withOwnSeat), 'remove');
+      expect(comp.PendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe("Withdraw Sam Reach's seat?");
+      comp.ConfirmPending();
+      expect(removed).toHaveBeenCalledTimes(1);
+      expect(removed.mock.calls[0][0]).toMatchObject({ id: 'own-1', status: 'Invited', roleCode: 'member' });
+    });
+
+    it('asks to approve, and emits the own seat on confirm', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Members = [withOwnSeat];
+      const approved = vi.fn();
+      comp.ApproveMemberRequested.subscribe(approved);
+      comp.Ask(comp.OwnSeatOf(withOwnSeat), 'approve');
+      expect(comp.PendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe('Approve Sam Reach?');
+      comp.ConfirmPending();
+      expect(approved.mock.calls[0][0]).toMatchObject({ id: 'own-1' });
+    });
+
+    it('still asks to remove a seated person', () => {
+      const comp = new CollabSpacePeopleComponent();
+      comp.Ask(sampleMembers[1], 'remove');
+      expect(comp.PendingQuestion(sampleMembers[1])).toBe('Remove Bea Client?');
+    });
+  });
+
   it('calculates roster counts and filters by audience and search query', () => {
     const comp = new CollabSpacePeopleComponent();
     comp.Members = sampleMembers;
 
-    expect(comp.TotalMembers).toBe(3);
-    expect(comp.TeamCount).toBe(2);
+    // Pat is Invited: still a row in the list, but not counted
+    expect(comp.FilteredMembers.map(m => m.name)).toContain('Pat Invited');
+    expect(comp.TotalMembers).toBe(2);
+    expect(comp.TeamCount).toBe(1);
     expect(comp.OutsideCount).toBe(1);
-    expect(comp.ActiveCount).toBe(2);
+    expect(comp.InvitedCount).toBe(1);
 
     comp.audienceFilter = 'Shared';
-    expect(comp.filteredMembers.length).toBe(1);
-    expect(comp.filteredMembers[0].name).toBe('Bea Client');
+    expect(comp.FilteredMembers.length).toBe(1);
+    expect(comp.FilteredMembers[0].name).toBe('Bea Client');
 
     comp.audienceFilter = 'all';
-    comp.searchQuery = 'lovelace';
-    expect(comp.filteredMembers.length).toBe(1);
-    expect(comp.filteredMembers[0].name).toBe('Ada Lovelace');
+    comp.SearchQuery = 'lovelace';
+    expect(comp.FilteredMembers.length).toBe(1);
+    expect(comp.FilteredMembers[0].name).toBe('Ada Lovelace');
   });
 
-  it('emits InviteMemberRequested with form fields and resets form', () => {
-    const comp = new CollabSpacePeopleComponent();
-    let invited: { email: string; role: string; band: string } | null = null;
-    comp.InviteMemberRequested.subscribe(i => {
-      invited = i;
+  describe('inviting a person', () => {
+    function withForm(): { comp: CollabSpacePeopleComponent; invited: Array<{ email: string; role: string }> } {
+      const comp = new CollabSpacePeopleComponent();
+      const invited: Array<{ email: string; role: string }> = [];
+      comp.InviteMemberRequested.subscribe(i => invited.push(i));
+      comp.isInviting = true;
+      comp.inviteEmail = 'newperson@example.com';
+      comp.inviteRole = 'client-member';
+      return { comp, invited };
+    }
+
+    it('emits the email and the role, and leaves the form as it is until the server answers', () => {
+      const { comp, invited } = withForm();
+      comp.submitInvite();
+      expect(invited).toEqual([{ email: 'newperson@example.com', role: 'client-member' }]);
+      expect(comp.inviteEmail).toBe('newperson@example.com');
+      expect(comp.isInviting).toBe(true);
     });
 
-    comp.inviteEmail = 'newperson@example.com';
-    comp.inviteRole = 'admin';
-    comp.inviteBand = 'Shared';
-    comp.submitInvite();
-
-    expect(invited).toEqual({
-      email: 'newperson@example.com',
-      role: 'admin',
-      band: 'Shared',
+    it('clears and closes the form when the invite succeeded, and shows what the server said', () => {
+      const { comp } = withForm();
+      comp.submitInvite();
+      comp.InviteOutcome = { ok: true, message: 'They are seated as Invited. The sign-in link waits until an owner approves them.' };
+      expect(comp.inviteEmail).toBe('');
+      expect(comp.isInviting).toBe(false);
+      expect(comp.InviteOutcome?.message).toContain('waits until an owner approves');
     });
-    expect(comp.inviteEmail).toBe('');
-    expect(comp.isInviting).toBe(false);
+
+    it('keeps the form open, with the email, when the invite was refused', () => {
+      const { comp } = withForm();
+      comp.submitInvite();
+      comp.InviteOutcome = { ok: false, message: 'Invite refused: this role cannot invite.' };
+      expect(comp.inviteEmail).toBe('newperson@example.com');
+      expect(comp.isInviting).toBe(true);
+      expect(comp.InviteOutcome?.ok).toBe(false);
+    });
+
+    it("forgets a refusal when the form is cancelled or reopened, so it doesn't greet the next invite", () => {
+      const { comp } = withForm();
+      comp.InviteOutcome = { ok: false, message: 'Invite refused: this role cannot invite.' };
+      const dismissed = vi.fn();
+      comp.InviteOutcomeDismissed.subscribe(dismissed);
+      comp.CancelInvite();
+      expect(comp.InviteOutcome).toBeNull();
+      expect(dismissed).toHaveBeenCalledTimes(1);
+      comp.isInviting = true;
+      comp.InviteOutcome = { ok: false, message: 'Invite refused again.' };
+      comp.ToggleInviteForm(); // closes
+      comp.ToggleInviteForm(); // reopens, clean
+      expect(comp.isInviting).toBe(true);
+      expect(comp.InviteOutcome).toBeNull();
+    });
+
+    it('keeps a success message until it is dismissed, outside the form that closed', () => {
+      const { comp } = withForm();
+      comp.InviteOutcome = { ok: true, message: 'They are seated.' };
+      expect(comp.isInviting).toBe(false);
+      expect(comp.InviteOutcome?.message).toBe('They are seated.');
+      const dismissed = vi.fn();
+      comp.InviteOutcomeDismissed.subscribe(dismissed);
+      comp.DismissInviteOutcome();
+      expect(comp.InviteOutcome).toBeNull();
+      expect(dismissed).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends nothing for a blank email', () => {
+      const { comp, invited } = withForm();
+      comp.inviteEmail = '   ';
+      comp.submitInvite();
+      expect(invited).toEqual([]);
+    });
   });
 });
 
@@ -1037,7 +1520,50 @@ describe('CollabSpaceSettingsComponent', () => {
     expect(saved!.name).toBe('Northwind strategic relationship');
     expect(saved!.color).toBe('#0284c7');
   });
+
+  const arrives = (comp: CollabSpaceSettingsComponent, next: SpaceSettingsModel): void => {
+    const previous = comp.Settings;
+    comp.Settings = next;
+    comp.ngOnChanges({ Settings: { previousValue: previous, currentValue: next, firstChange: false, isFirstChange: () => false } });
+  };
+
+  it("keeps only what the person changed when the same space's settings arrive again, so another owner's change to another field stays", () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    comp.formData.description = 'My new description';
+    // Meanwhile another owner renamed the space, and it was closed
+    arrives(comp, { ...initialSettings, name: 'Renamed by someone else', status: 'Closed' });
+    expect(comp.formData.description).toBe('My new description');
+    expect(comp.formData.name).toBe('Renamed by someone else');
+    expect(comp.formData.status).toBe('Closed');
+  });
+
+  it('counts a close or a reopen alone as no edit: the form is built again from the fresh row', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    arrives(comp, { ...initialSettings, name: 'Renamed by someone else', status: 'Closed' });
+    expect(comp.formData.name).toBe('Renamed by someone else');
+  });
+
+  it('asks to close an open space and to reopen a closed one', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    comp.Settings = initialSettings;
+    comp.ngOnInit();
+    const closed = vi.fn();
+    const reopened = vi.fn();
+    comp.CloseSpaceRequested.subscribe(closed);
+    comp.ReopenSpaceRequested.subscribe(reopened);
+    comp.confirmLifecycle();
+    expect([closed.mock.calls.length, reopened.mock.calls.length]).toEqual([1, 0]);
+    arrives(comp, { ...initialSettings, status: 'Closed' });
+    comp.confirmLifecycle();
+    expect([closed.mock.calls.length, reopened.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it('edits and offers close and reopen by default', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    expect([comp.CanEdit, comp.CanChangeLifecycle]).toEqual([true, true]);
+  });
 });
-
-
-

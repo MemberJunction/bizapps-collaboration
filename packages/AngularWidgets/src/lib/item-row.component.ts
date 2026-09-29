@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import type { FileKind, ItemRowModel } from './types';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -7,13 +8,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-row',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabFileIconComponent],
+  imports: [CollabFileIconComponent, MJClickableDirective],
   template: `
     <div class="trow" (click)="onSelect()">
-      <mjc-file-icon [Kind]="Kind" Size="sm" />
-      <div class="grow">
-        <div class="fw6 fs13 ellipsis title">{{ Title }}</div>
-        <div class="fs12 muted sub">{{ Author }}<span class="dotsep"></span>{{ Timestamp }}</div>
+      <!-- The keyboard control is this block, not the whole row: the Share button beside it is a control of its own -->
+      <div class="open-block" [mjClickable]="Title">
+        <mjc-file-icon [Kind]="Kind" Size="sm" />
+        <div class="grow">
+          <div class="fw6 fs13 ellipsis title">{{ Title }}</div>
+          <div class="fs12 muted sub">{{ Author }}<span class="dotsep"></span>{{ Timestamp }}</div>
+        </div>
       </div>
       @if (FlagCount) {
         <span class="chip warn">
@@ -40,6 +44,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       line-height: var(--mjc-line-height);
     }
 
+    .open-block { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
     .trow {
       display: flex;
       align-items: center;
@@ -156,7 +161,7 @@ export class CollabItemRowComponent {
     this.RowSelectRequested.emit();
   }
 
-  public onShareClick(event: MouseEvent): void {
+  public onShareClick(event: Pick<Event, 'stopPropagation'>): void {
     event.stopPropagation();
     this.ShareRequested.emit();
   }

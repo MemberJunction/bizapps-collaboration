@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.server.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src" },
   "include": ["src/**/*"],
-  "exclude": ["dist", "src/**/*.test.ts"]
+  "exclude": ["dist", "src/**/*.test.ts", "src/**/*.test-support.ts"]
 }

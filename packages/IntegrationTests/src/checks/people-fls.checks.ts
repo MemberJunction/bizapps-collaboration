@@ -1,6 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { PERSON_ENTITY, ENTITY_FIELD_ENTITY, ENTITY_FIELD_PERMISSION_ENTITY, ENTITY_ENTITY, USER_ROLE_ENTITY } from '../entity-names.js';
+import { ENTITY_FIELD_ENTITY, ENTITY_FIELD_PERMISSION_ENTITY, PERSON_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
+import { registerChecks } from './cleanup-helpers.js';
 
 const ALLOWED_PEOPLE_FIELDS = new Set([
     'id', 'firstname', 'lastname', 'middlename', 'prefix', 'suffix',
@@ -139,7 +140,7 @@ const checks: NamedCheck[] = [
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('people-fls', {
     Setup: async () => {},
     Teardown: async () => {},

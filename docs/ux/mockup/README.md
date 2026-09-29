@@ -1,6 +1,6 @@
 # Mockup source
 
-These files generate the frames in [`../screens/`](../screens/) and the HTML pages in [`html/`](html/). They are a design reference, not app code. The implementation lives in `packages/`, as [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) describes.
+These files generate the frames in [`../screens/`](../screens/) and the HTML pages in [`html/`](html/). They were the design reference until the frames were retired as the reference (the plan's D24), and they aren't app code. The implementation lives in `packages/`, as [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) describes.
 
 | File | What it holds |
 |---|---|

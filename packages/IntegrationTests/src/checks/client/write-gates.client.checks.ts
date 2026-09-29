@@ -1,75 +1,42 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     CollaborationClient,
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceItemEntity,
-    mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationShareNoticeEntity,
+    mjBizAppsCollaborationSpaceEntity,
+    mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
-    SPACE_ENTITY,
-    SPACE_MEMBER_ENTITY,
-    SPACE_ITEM_ENTITY,
-    SPACE_TYPE_ENTITY,
-    SPACE_ROLE_TYPE_ENTITY,
-    SHARE_NOTICE_ENTITY,
     ITEM_USE_ENTITY,
+    SHARE_NOTICE_ENTITY,
+    SPACE_ENTITY,
+    SPACE_ITEM_ENTITY,
+    SPACE_MEMBER_ENTITY,
+    SPACE_ROLE_TYPE_ENTITY,
+    USER_ENTITY,
+    SPACE_TYPE_ENTITY,
+    TASK_ACTIVITY_ENTITY,
     TASK_ENTITY,
     TASK_LINK_ENTITY,
-    TASK_ACTIVITY_ENTITY,
 } from '../../entity-names.js';
-import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
-import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
-import { cleanupConversation } from '../cleanup-helpers.js';
+import { FindRows, getPersonaClientContext, getPersonaContext, SameID } from '../../wire.js';
+import { INVITEE_EMAIL_DOMAIN } from '../../world/ids.js';
+import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
+import { cleanupConversation, cleanupStep, deleteInvitee, deleteRowAndConfirm, deleteWhere, registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
 const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
 
-async function cleanupTaskAndItem(
-    ctx: IntegrationCheckContext,
-    taskId: string,
-    itemId: string,
-): Promise<void> {
-    const cleanupItem = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-    Assert(await cleanupItem.Load(itemId), `Loading space item ${itemId} for cleanup must succeed`);
-    Assert(await cleanupItem.Delete(), `Deleting space item ${itemId} cleanup must succeed`);
-
-    const rv = View(ctx);
-    const linkRows = await rv.RunView<{ ID: string }>({
-        EntityName: TASK_LINK_ENTITY,
-        ExtraFilter: `TaskID = '${taskId}'`,
-        Fields: ['ID'],
-        ResultType: 'simple',
-    }, ctx.User);
-    if (linkRows.Success && linkRows.Results) {
-        for (const r of linkRows.Results) {
-            const link = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskLinkEntity>(TASK_LINK_ENTITY, ctx.User);
-            Assert(await link.Load(r.ID), `Loading task link ${r.ID} for cleanup must succeed`);
-            Assert(await link.Delete(), `Deleting task link ${r.ID} cleanup must succeed`);
-        }
-    }
-
-    const actRows = await rv.RunView<{ ID: string }>({
-        EntityName: TASK_ACTIVITY_ENTITY,
-        ExtraFilter: `TaskID = '${taskId}'`,
-        Fields: ['ID'],
-        ResultType: 'simple',
-    }, ctx.User);
-    if (actRows.Success && actRows.Results) {
-        for (const r of actRows.Results) {
-            const act = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskActivityEntity>(TASK_ACTIVITY_ENTITY, ctx.User);
-            Assert(await act.Load(r.ID), `Loading task activity ${r.ID} for cleanup must succeed`);
-            Assert(await act.Delete(), `Deleting task activity ${r.ID} cleanup must succeed`);
-        }
-    }
-
-    const cleanupTask = await ctx.Provider.GetEntityObject<mjBizAppsTasksTaskEntity>(TASK_ENTITY, ctx.User);
-    Assert(await cleanupTask.Load(taskId), `Loading task ${taskId} for cleanup must succeed`);
-    Assert(await cleanupTask.Delete(), `Deleting task ${taskId} cleanup must succeed`);
+/** Removes a task a check filed and everything hung on it, each read back. A failure is reported to the running check. */
+async function cleanupTaskAndItem(ctx: IntegrationCheckContext, taskId: string, itemId: string): Promise<void> {
+    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, itemId, 'a WG6 space item');
+    await deleteWhere(ctx.Provider, ctx.User, TASK_LINK_ENTITY, `TaskID = '${taskId}'`, 'a task link');
+    await deleteWhere(ctx.Provider, ctx.User, TASK_ACTIVITY_ENTITY, `TaskID = '${taskId}'`, 'a task activity');
+    await deleteRowAndConfirm(ctx.Provider, ctx.User, TASK_ENTITY, taskId, 'a WG6 task');
 }
 
 const checks: NamedCheck[] = [
@@ -87,7 +54,7 @@ const checks: NamedCheck[] = [
             // 1. Participant (Bea) creating a root space (ParentID = null) is refused
             const rootAttempt = await beaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, beaCtx.User);
             rootAttempt.NewRecord();
-            rootAttempt.Name = 'Bea Root Space';
+            rootAttempt.Name = `${CHECK_SPACE_PREFIX}Bea Root Space`;
             rootAttempt.OwnerID = beaCtx.User.ID;
             rootAttempt.SpaceTypeID = workspaceType.ID;
             rootAttempt.ParentID = null;
@@ -111,7 +78,7 @@ const checks: NamedCheck[] = [
             Assert(!savedRoot, 'Participant creating root space must be refused over the wire');
             const rootReason = rootAttempt.LatestResult?.CompleteMessage ?? '';
             Assert(
-                rootReason.includes('Space change refused: only a staff user may create a root, and they must own it.'),
+                rootReason.includes('Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.'),
                 `Expected root space refusal message, got: ${rootReason}`,
             );
 
@@ -213,7 +180,7 @@ const checks: NamedCheck[] = [
             Assert(!savedStrand, 'Removing last active owner must fail save over the wire');
             const strandReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(
-                strandReason.includes('last owner of this space'),
+                strandReason.includes('last owner seat'),
                 `Expected last owner message, got: ${strandReason}`,
             );
 
@@ -609,11 +576,10 @@ const checks: NamedCheck[] = [
                     `Expected closed space status refusal message over wire, got: ${closedReason}`,
                 );
             } finally {
-                try {
-                    if (closedTaskCreated) {
-                        await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
-                    }
-                } finally {
+                if (closedTaskCreated) {
+                    await cleanupTaskAndItem(ctx, closedTaskCreated.taskId, closedTaskCreated.itemId);
+                }
+                await cleanupStep(async () => {
                     const restoreSpace = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
                     Assert(await restoreSpace.Load(CLOSED_RECENT_SPACE_ID), 'Loading closed-recent space over wire to restore ClosedAt must succeed');
                     const currentTime = restoreSpace.ClosedAt instanceof Date
@@ -626,7 +592,7 @@ const checks: NamedCheck[] = [
                         restoreSpace.ClosedAt = origClosedAt;
                         Assert(await restoreSpace.Save(), 'Restoring closed-recent ClosedAt over wire must succeed');
                     }
-                }
+                });
             }
 
             // 3c. Authorized status change: contributing member Bea updating a task status is accepted over wire
@@ -689,10 +655,13 @@ const checks: NamedCheck[] = [
             );
             let devMemberId: string | null = null;
             let devMemberCreated = false;
+            // A seat Dev already held is put back the way it was; only a seat this check created is deleted
+            let devSeatBefore: Pick<mjBizAppsCollaborationSpaceMemberEntity, 'SpaceRoleTypeID' | 'Band' | 'Status'> | null = null;
             if (existingDevMembers.length > 0) {
                 devMemberId = existingDevMembers[0].ID;
                 const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
                 Assert(await devMember.Load(devMemberId), 'Load existing Dev member on Discovery over wire');
+                devSeatBefore = { SpaceRoleTypeID: devMember.SpaceRoleTypeID, Band: devMember.Band, Status: devMember.Status };
                 devMember.SpaceRoleTypeID = ownerRoleId;
                 devMember.Band = 'Team';
                 devMember.Status = 'Active';
@@ -719,25 +688,117 @@ const checks: NamedCheck[] = [
                     const devSaved = await devDiscovery.Save();
                     Assert(devSaved, `Dev saving Configuration with Configure Spaces authorization must succeed over wire: ${devDiscovery.LatestResult?.CompleteMessage ?? ''}`);
                 } finally {
-                    const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
-                    Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
-                    restoreDev.Configuration = devOrigConfig;
-                    const restoredConfig = await restoreDev.Save();
-                    Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                    await cleanupStep(async () => {
+                        const restoreDev = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                        Assert(await restoreDev.Load(DISCOVERY_SPACE_ID), 'Loading Discovery space to restore Configuration over wire must succeed');
+                        restoreDev.Configuration = devOrigConfig;
+                        const restoredConfig = await restoreDev.Save();
+                        Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                        const verifyRestore = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                        Assert(await verifyRestore.Load(DISCOVERY_SPACE_ID), 'Read Discovery back after restoring its Configuration');
+                        Assert(verifyRestore.Configuration === devOrigConfig, "Discovery's Configuration is back to what it was");
+                    });
                 }
             } finally {
                 if (devMemberCreated && devMemberId) {
-                    const cleanupDevMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
-                    if (await cleanupDevMember.Load(devMemberId)) {
-                        await cleanupDevMember.Delete();
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, devMemberId, "Dev's seat on Discovery");
+                } else if (devMemberId && devSeatBefore) {
+                    const seatBefore = devSeatBefore;
+                    const seatId = devMemberId;
+                    await cleanupStep(async () => {
+                        const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        Assert(await seat.Load(seatId), "Reload Dev's existing seat to put it back");
+                        seat.SpaceRoleTypeID = seatBefore.SpaceRoleTypeID;
+                        seat.Band = seatBefore.Band;
+                        seat.Status = seatBefore.Status;
+                        Assert(await seat.Save(), `Putting Dev's seat back must succeed: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        Assert(await verify.Load(seatId), "Read Dev's seat back after restoring it");
+                        Assert(
+                            SameID(verify.SpaceRoleTypeID, seatBefore.SpaceRoleTypeID) && verify.Band === seatBefore.Band && verify.Status === seatBefore.Status,
+                            "Dev's existing seat must be back to its original role, band and status",
+                        );
+                    });
+                }
+            }
+        },
+    },
+    {
+        Id: 'write-gates.WG7',
+        Name: "WG7 — a space owner changing the space's type is refused: the change needs Configure Spaces",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const space = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, adaCtx.User);
+            Assert(await space.Load(DISCOVERY_SPACE_ID), 'Ada loads Discovery, a space she owns');
+            const others = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, `ID <> '${space.SpaceTypeID}' AND IsActive = 1`, ['ID']);
+            Assert(others.length > 0, 'The world has another active space type to change to');
+            const originalTypeId = space.SpaceTypeID;
+            space.SpaceTypeID = others[0].ID;
+            const saved = await space.Save();
+            Assert(!saved, "Ada, Discovery's owner, changing its type must be refused");
+            Assert(
+                (space.LatestResult?.CompleteMessage ?? '').includes("changing a space's type needs the 'Configure Spaces' authorization"),
+                `The refusal names the missing right: ${space.LatestResult?.CompleteMessage ?? ''}`,
+            );
+            const after = await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ENTITY, `ID = '${DISCOVERY_SPACE_ID}'`, ['SpaceTypeID']);
+            Assert(SameID(after[0]?.SpaceTypeID, originalTypeId), "Discovery's type is unchanged");
+        },
+    },
+    {
+        Id: 'write-gates.WG8',
+        Name: 'WG8 — a staff owner and an outside admin each invite a person with no account, over the wire: the seat is saved, the account is made, and the message says what happened',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const stamp = Date.now();
+            // Discovery's type approves invites: an owner's invitee is Active at once, an outside admin's waits for approval
+            const outsiders = [
+                { persona: 'ada', email: `wg8-ada-${stamp}@${INVITEE_EMAIL_DOMAIN}`, status: 'Active' },
+                { persona: 'casey', email: `wg8-casey-${stamp}@${INVITEE_EMAIL_DOMAIN}`, status: 'Invited' },
+            ];
+            const roles = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'client-member'", ['ID', 'Code']);
+            Assert(roles.length === 1, 'The Outside member role is on this host');
+            try {
+                for (const who of outsiders) {
+                    const personaCtx = await getPersonaClientContext(ctx, who.persona);
+                    const client = new CollaborationClient(personaCtx.GraphQLProvider);
+                    const result = await client.MintSpaceLink({ SpaceID: DISCOVERY_SPACE_ID, Email: who.email, RoleID: roles[0].ID });
+                    Assert(result.Success === true, `${who.persona} inviting a new outside email over the wire: ${result.ErrorMessage ?? ''}`);
+                    Assert((result.Message ?? '').length > 0, `${who.persona}'s invite says what happened (saw an empty message)`);
+                    if (who.status === 'Invited') {
+                        Assert(/approv/i.test(result.Message ?? ''), `Casey's message says the seat waits for an owner's approval: "${result.Message ?? ''}"`);
                     }
+
+                    // The wire may replay an identical read, and the seat was written by the server: read past it
+                    const accounts = await FindRows<{ ID: string }>(ctx, USER_ENTITY, `Email = '${who.email}'`, ['ID'], undefined, { BypassCache: true });
+                    Assert(accounts.length === 1, `An account was made for ${who.email}`);
+                    const seats = await FindRows<{ ID: string; Status: string; Band: string }>(
+                        ctx,
+                        SPACE_MEMBER_ENTITY,
+                        `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID = '${accounts[0].ID}'`,
+                        ['ID', 'Status', 'Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(seats.length === 1, `${who.persona}'s invite saved exactly one seat (saw ${seats.length})`);
+                    Assert(seats[0].Band === 'Shared', `An Outside member's seat is on the Shared band (saw ${seats[0].Band})`);
+                    Assert(seats[0].Status === who.status, `${who.persona}'s invitee is ${who.status} (saw ${seats[0].Status})`);
+                    if (who.status === 'Invited') {
+                        // An Invited seat never gets a sign-in link
+                        const invites = await FindRows<{ ID: string }>(ctx, 'MJ: Magic Link Invites', `Email = '${who.email}'`, ['ID'], undefined, { BypassCache: true });
+                        Assert(invites.length === 0, `No sign-in invite exists for Casey's invitee while the seat is Invited (saw ${invites.length})`);
+                    }
+                }
+            } finally {
+                for (const who of outsiders) {
+                    await deleteInvitee(ctx.Provider, ctx.User, who.email);
                 }
             }
         },
     },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('write-gates', {
     Setup: async () => {},
     Teardown: async () => {},

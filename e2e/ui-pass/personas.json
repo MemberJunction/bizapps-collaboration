@@ -1,0 +1,94 @@
+{
+    "_comment": "What each persona should see. Sign-ins are NOT stored here: each saved sign-in lives in e2e/ui-pass/auth/<name>.json (git-ignored). `spaceId` and `space` (the name in the header) are the seeded world's. `noSpaces` rows expect the Access Restricted page and nothing else. Expectations come from the rules; the first live run confirms them. Dev is seated as owner of Studio in the world (members.csv) so Dev has a rail and Configure Spaces.",
+    "personas": [
+        {
+            "name": "ada",
+            "label": "ada-discovery",
+            "space": "Discovery",
+            "spaceId": "C1000001-0000-4000-8000-000000000002",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "sam",
+            "label": "sam-discovery",
+            "space": "Discovery",
+            "spaceId": "C1000001-0000-4000-8000-000000000002",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "bea",
+            "label": "bea-discovery",
+            "space": "Discovery",
+            "spaceId": "C1000001-0000-4000-8000-000000000002",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "casey",
+            "label": "casey-discovery",
+            "space": "Discovery",
+            "spaceId": "C1000001-0000-4000-8000-000000000002",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "dev",
+            "label": "dev-studio",
+            "space": "Studio",
+            "spaceId": "C1000001-0000-4000-8000-000000000010",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": true
+            }
+        },
+        {
+            "name": "ada",
+            "label": "ada-sealed-child",
+            "space": "Sealed child",
+            "spaceId": "C1000001-0000-4000-8000-000000000015",
+            "expect": {
+                "closedBanner": false,
+                "composer": true,
+                "newConversationButton": true,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "ada",
+            "label": "ada-closed-this-month",
+            "space": "Closed this month",
+            "spaceId": "C1000001-0000-4000-8000-000000000007",
+            "expect": {
+                "closedBanner": true,
+                "composer": false,
+                "newConversationButton": false,
+                "settingsLink": false
+            }
+        },
+        {
+            "name": "nora",
+            "label": "nora-no-spaces",
+            "noSpaces": true
+        }
+    ]
+}

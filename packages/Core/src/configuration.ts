@@ -25,8 +25,8 @@ export interface CollaborationSettings {
     PostCloseAccessDays?: number | null;
     /** Chat behavior rules. */
     Chats?: {
-        /** Who may start a chat. Default 'Anyone': every seat, read-only guests included. */
-        WhoCanStart?: 'Anyone' | 'Contributors' | 'Owners';
+        /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
+        WhoCanStart?: 'Anyone' | 'Owners';
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
@@ -46,10 +46,6 @@ export interface CollaborationSettings {
         AllowedTypeCodes?: string[];
         MaxOpen?: number;
     };
-    /** Roles that administer spaces of this type, beside Collaboration's staff roles. */
-    Admin?: {
-        RoleNames?: string[];
-    };
     /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
     SpaceOverridable?: string[];
     /** Behavior switches that the type's own drivers read, keyed by app. */
@@ -62,7 +58,7 @@ export interface ISpaceConfiguration extends CollaborationSettings {}
 
 export interface EffectiveSpaceRules {
     Chats: {
-        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        WhoCanStart: 'Anyone' | 'Owners';
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
@@ -158,7 +154,7 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
     const c = config as ISpaceTypeConfiguration;
 
     if (c.Chats) {
-        if (c.Chats.WhoCanStart && !['Anyone', 'Contributors', 'Owners'].includes(c.Chats.WhoCanStart)) {
+        if (c.Chats.WhoCanStart && !['Anyone', 'Owners'].includes(c.Chats.WhoCanStart)) {
             errors.push(`Invalid Chats.WhoCanStart: ${c.Chats.WhoCanStart}`);
         }
         if (c.Chats.AgentReplyMode && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(c.Chats.AgentReplyMode)) {
@@ -255,7 +251,7 @@ export interface ResolvedCollaborationSettings {
     PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
     PostCloseAccessDays: number | null;
     Chats: {
-        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        WhoCanStart: 'Anyone' | 'Owners';
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
@@ -268,9 +264,6 @@ export interface ResolvedCollaborationSettings {
     Children?: {
         AllowedTypeCodes?: string[];
         MaxOpen?: number;
-    };
-    Admin?: {
-        RoleNames?: string[];
     };
     Extensions: Record<string, Record<string, ConfigurationValue>>;
 }
@@ -299,7 +292,6 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'Agents',
     'Labels',
     'Children',
-    'Admin',
     'SpaceOverridable',
     'Extensions',
 ]);
@@ -350,7 +342,7 @@ export function ValidateCollaborationSettings(
                     errors.push(`Unknown Chats key: ${k}`);
                 }
             }
-            if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Contributors', 'Owners'].includes(chats['WhoCanStart'] as string)) {
+            if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Owners'].includes(chats['WhoCanStart'] as string)) {
                 errors.push(`Invalid Chats.WhoCanStart: ${String(chats['WhoCanStart'])}`);
             }
             if (chats['AgentReplyMode'] !== undefined && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(chats['AgentReplyMode'] as string)) {
@@ -405,17 +397,6 @@ export function ValidateCollaborationSettings(
         }
     }
 
-    if (c['Admin'] !== undefined) {
-        if (!c['Admin'] || typeof c['Admin'] !== 'object' || Array.isArray(c['Admin'])) {
-            errors.push('Admin must be an object.');
-        } else {
-            const adm = c['Admin'] as Record<string, unknown>;
-            if (adm['RoleNames'] !== undefined && !Array.isArray(adm['RoleNames'])) {
-                errors.push('Admin.RoleNames must be an array of strings.');
-            }
-        }
-    }
-
     if (c['SpaceOverridable'] !== undefined && !Array.isArray(c['SpaceOverridable'])) {
         errors.push('SpaceOverridable must be an array of strings.');
     }
@@ -426,8 +407,28 @@ export function ValidateCollaborationSettings(
         }
     }
 
+    if (level === 'app') {
+        // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
+        // half-written row would look like a working configuration (extensibility plan § 4)
+        const requiredKeys: Array<[string, unknown]> = [
+            ['PostCloseAccess', c['PostCloseAccess']],
+            ['PostCloseAccessDays', c['PostCloseAccessDays']],
+            ['Chats.WhoCanStart', (c['Chats'] as Record<string, unknown> | undefined)?.['WhoCanStart']],
+            ['Chats.AgentReplyMode', (c['Chats'] as Record<string, unknown> | undefined)?.['AgentReplyMode']],
+            ['Chats.HistoryOnAdd', (c['Chats'] as Record<string, unknown> | undefined)?.['HistoryOnAdd']],
+            ['Agents.ListMode', (c['Agents'] as Record<string, unknown> | undefined)?.['ListMode']],
+        ];
+        for (const [key, value] of requiredKeys) {
+            if (value === undefined) errors.push(`The application's settings must set ${key}.`);
+        }
+    }
+
     if (level === 'space') {
         const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
+        // Keys that only a type or the app can hold: on a space they would do nothing, so they are refused instead
+        for (const typeOnly of ['Children', 'SpaceOverridable']) {
+            if (c[typeOnly] !== undefined) errors.push(`${typeOnly} cannot be set on a space: it belongs to the space type.`);
+        }
         const isAllowed = (dottedKey: string): boolean => {
             if (overridable.has(dottedKey)) return true;
             const prefix = dottedKey.split('.')[0];
@@ -465,6 +466,18 @@ export function ValidateCollaborationSettings(
             for (const appName of Object.keys(c['Extensions'])) {
                 if (!isAllowed(`Extensions.${appName}`) && !isAllowed('Extensions')) {
                     errors.push(`Extensions.${appName} cannot be overridden by space: not in type's SpaceOverridable.`);
+                }
+            }
+        }
+        if (c['Labels'] !== undefined) {
+            // Checked the way the resolver reads it: each Labels key on its own ('Labels' allows them all, 'Labels.Tabs' the tabs)
+            const labels = c['Labels'];
+            if (!labels || typeof labels !== 'object' || Array.isArray(labels)) {
+                errors.push('Labels must be an object.');
+            } else {
+                for (const key of Object.keys(labels)) {
+                    if (key !== 'Tabs') errors.push(`Unknown Labels key: ${key}`);
+                    else if (!isAllowed('Labels.Tabs')) errors.push("Labels.Tabs cannot be overridden by space: not in type's SpaceOverridable.");
                 }
             }
         }
@@ -560,14 +573,22 @@ export function ResolveCollaborationSettings(
         DEFAULT_COLLABORATION_SETTINGS.Agents.ListMode
     );
 
-    let tabs: Record<string, string> | undefined = {
-        ...(appConfig.Labels?.Tabs ?? {}),
-        ...(typeConfig?.Labels?.Tabs ?? {}),
+    // Tab keys merge without regard to case: the app's 'Library' and a type's 'library' are one key, and the nearer level wins
+    const mergeTabs = (into: Record<string, string>, from: Record<string, string> | undefined): Record<string, string> => {
+        const merged = { ...into };
+        for (const [key, label] of Object.entries(from ?? {})) {
+            for (const existing of Object.keys(merged)) {
+                if (existing.toLowerCase().trim() === key.toLowerCase().trim()) delete merged[existing];
+            }
+            merged[key.toLowerCase().trim()] = label;
+        }
+        return merged;
     };
+    let tabs: Record<string, string> | undefined = mergeTabs(mergeTabs({}, appConfig.Labels?.Tabs), typeConfig?.Labels?.Tabs);
     if (isOverridable('Labels.Tabs') || isOverridable('Labels')) {
         for (const s of [...spaces].reverse()) {
             if (s.Labels?.Tabs) {
-                tabs = { ...tabs, ...s.Labels.Tabs };
+                tabs = mergeTabs(tabs, s.Labels.Tabs);
             }
         }
     }
@@ -606,7 +627,33 @@ export function ResolveCollaborationSettings(
         },
         Labels: tabs ? { Tabs: tabs } : undefined,
         Children: typeConfig?.Children,
-        Admin: typeConfig?.Admin,
         Extensions: extensions,
     };
+}
+
+/**
+ * Whether a space of `childTypeCode` may sit under a space whose type has `parentTypeConfig`. A type that lists no
+ * `Children.AllowedTypeCodes` allows any child; a listed (even empty) list allows exactly those. `MaxOpen` caps the open children.
+ * Returns the refusal, or null.
+ */
+export function refuseChildType(
+    parentTypeConfig: CollaborationSettings | null | undefined,
+    childTypeCode: string | null | undefined,
+    openSiblings: number,
+): string | null {
+    const children = parentTypeConfig?.Children;
+    if (!children) return null;
+    const allowed = children.AllowedTypeCodes;
+    if (allowed) {
+        const code = (childTypeCode ?? '').toLowerCase().trim();
+        if (!allowed.some((candidate) => candidate.toLowerCase().trim() === code)) {
+            return allowed.length === 0
+                ? 'This kind of space cannot contain sub-spaces.'
+                : `A space of type "${childTypeCode ?? 'unknown'}" cannot sit under this kind of space (allowed: ${allowed.join(', ')}).`;
+        }
+    }
+    if (children.MaxOpen !== undefined && openSiblings >= children.MaxOpen) {
+        return `This space already holds ${openSiblings} open sub-spaces, the most its type allows (${children.MaxOpen}).`;
+    }
+    return null;
 }

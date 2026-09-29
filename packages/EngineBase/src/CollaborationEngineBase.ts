@@ -31,7 +31,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     type AgentRetrieval,
     type CollaborationSettings,
-    DEFAULT_COLLABORATION_SETTINGS,
     type MemberSnapshot,
     membershipReaches,
     MissingAppSettingsError,
@@ -47,6 +46,7 @@ import type {
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { SpaceSubtypeDirectory } from '@mj-biz-apps/collaboration-entities';
 import type {
     MJApplicationSettingEntity,
     MJAuthorizationEntity,
@@ -57,6 +57,25 @@ const normalizeKey = (key: string | null | undefined): string => (key ?? '').tri
 
 export const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
+
+/** The application's settings row exists but doesn't validate. Settings-dependent writes and turns refuse until it is fixed. */
+export class InvalidAppSettingsError extends Error {
+    constructor(public readonly Errors: readonly string[]) {
+        super(`The application's CollaborationSettings are invalid: ${Errors.join('; ')}`);
+        this.name = 'InvalidAppSettingsError';
+    }
+}
+
+/** The parts of a role type the seat rules read. The engine's own role types satisfy it; a test can pass plain values. */
+export interface RoleTypeFlags {
+    Level: number;
+    MaxGrantableLevel: number;
+    CanInvite: boolean;
+    CanPromoteBand: boolean;
+    CanSeeTeamBand: boolean;
+    IsOwnerRole: boolean;
+    CanContribute: boolean;
+}
 
 @RegisterForStartup()
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
@@ -145,6 +164,9 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._spaceRoleTypesByCode = null;
         this._authorizationsByName = null;
         this._cachedParsedSettings = undefined;
+        this._settingsError = null;
+        // The subtype each space type names, for the Spaces subtype resolver: it answers a load's hint from memory, never by a read
+        SpaceSubtypeDirectory.Instance.Replace(this.SpaceTypes.map((type) => ({ ID: type.ID, SpaceExtensionEntity: type.SpaceExtensionEntity })));
     }
 
     // ─── Collections ───────────────────────────────────────────────────────────
@@ -246,10 +268,13 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return match?.Value ?? undefined;
     }
 
+    /** Whichever error the first read of the row threw, so every later read says the same thing until a reload clears it */
+    private _settingsError: MissingAppSettingsError | InvalidAppSettingsError | null = null;
+
     public get CollaborationSettings(): CollaborationSettings {
         if (this._cachedParsedSettings !== undefined) {
             if (this._cachedParsedSettings === null) {
-                throw new MissingAppSettingsError();
+                throw this._settingsError ?? new MissingAppSettingsError();
             }
             return this._cachedParsedSettings;
         }
@@ -259,27 +284,33 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             this.GetApplicationSetting('Settings');
 
         if (!raw) {
-            this._cachedParsedSettings = null;
-            throw new MissingAppSettingsError();
+            return this.refuseSettings(new MissingAppSettingsError());
         }
 
+        let parsed: unknown;
         try {
-            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            const validation = ValidateCollaborationSettings(parsed, 'app');
-            if (!validation.valid) {
-                console.error(
-                    'Invalid CollaborationSettings in Application Settings:',
-                    validation.errors.join(', ')
-                );
-            }
-            this._cachedParsedSettings = parsed as CollaborationSettings;
-            return this._cachedParsedSettings;
+            parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (e) {
-            this._cachedParsedSettings = null;
-            throw new MissingAppSettingsError(
-                `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`
-            );
+            const message = `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`;
+            LogError(message);
+            return this.refuseSettings(new MissingAppSettingsError(message));
         }
+
+        const validation = ValidateCollaborationSettings(parsed, 'app');
+        if (!validation.valid) {
+            // Fail closed: a row that doesn't validate is not a configuration, and resolving with it would let a typo
+            // ('Owner' for 'Owners') quietly widen who may start a conversation
+            LogError(`Invalid CollaborationSettings in Application Settings: ${validation.errors.join(', ')}`);
+            return this.refuseSettings(new InvalidAppSettingsError(validation.errors));
+        }
+        this._cachedParsedSettings = parsed as CollaborationSettings;
+        return this._cachedParsedSettings;
+    }
+
+    private refuseSettings(error: MissingAppSettingsError | InvalidAppSettingsError): never {
+        this._cachedParsedSettings = null;
+        this._settingsError = error;
+        throw error;
     }
 
     public ResolveSettingsForSpace(
@@ -295,19 +326,15 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                         ? (JSON.parse(typeEntity.Configuration) as CollaborationSettings)
                         : (typeEntity.Configuration as CollaborationSettings);
             } catch (err) {
-                LogError(
-                    `ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${err instanceof Error ? err.message : String(err)}`
-                );
-                typeConfig = undefined;
+                const detail = err instanceof Error ? err.message : String(err);
+                LogError(`ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${detail}`);
+                // Fails closed: resolving without the type's narrowing would loosen what it restricts
+                throw new Error(`Space settings refused: the space type ${spaceTypeId} has a configuration that does not parse: ${detail}`);
             }
         }
 
-        let appConfig: CollaborationSettings | undefined;
-        try {
-            appConfig = this.CollaborationSettings;
-        } catch {
-            appConfig = DEFAULT_COLLABORATION_SETTINGS;
-        }
+        // A missing app settings row throws MissingAppSettingsError: the app's defaults are not a silent stand-in for it
+        const appConfig: CollaborationSettings = this.CollaborationSettings;
 
         return ResolveCollaborationSettings({
             spaces: spaceConfigs,
@@ -411,7 +438,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     public async UserCanConfigureSpaces(
         user: UserInfo,
         spaceId?: string | null,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
         const md = provider ?? Metadata.Provider;
         const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
@@ -427,14 +455,95 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return true;
         }
 
+        // The post-close filter applies: on a space closed with its access ended, the server refuses every change but a reopen
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
+     * Whether a user holds the 'Administer Spaces' authorization: the rights beyond an owner's (create or move to a top level,
+     * the allow-parent-assignees and agent-retrieval settings, a task for someone seated above its space, backdating a close).
+     * Granted by default to the UI, Developer and Integration roles, so nothing changes until a host edits the grants; no check
+     * looks at a role's name.
+     */
+    public UserMayAdministerSpaces(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Administer Spaces', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Administer Spaces'");
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /** Whether a user holds the 'Close and Reopen Spaces' authorization. It is granted apart from 'Configure Spaces', which changes settings. */
+    public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Close and Reopen Spaces', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Close and Reopen Spaces'");
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /**
+     * Whether a user may close an open space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space (or on
+     * an ancestor it inherits from), with the post-close filter applied.
+     */
+    public async UserCanCloseSpace(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
+     * Whether a user may reopen a closed space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space or on an
+     * ancestor it inherits from, reached even when the space's post-close access has ended. `UserCanConfigureSpaces` keeps the
+     * post-close filter, so on such a space an owner may reopen but not configure.
+     *
+     * The row filter decides who can read the space once its access has ended: only its `OwnerID`. So in practice this answers true,
+     * for the person who asks, only for the `OwnerID` (an owner by seat who isn't it reads no row, and their seat read finds nothing).
+     * `OwnerID` gives no write right by itself: it must still hold an owner seat and the authorization.
+     */
+    public async UserCanReopenSpace(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf, true);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
+     * The seat through which a user reaches a space: their own seat on it, or one on an ancestor it inherits from.
+     * Null when they don't reach it, or when the tree or the seats can't be read.
+     */
+    public async ReachedSeat(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id),
+        ignorePostCloseFilter: boolean = false
+    ): Promise<ReturnType<typeof membershipReaches>> {
+        const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
-            return false;
+            return null;
         }
 
         try {
             const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
-            if (!memberEntity) return false;
+            if (!memberEntity) return null;
 
             const rv = RunView.FromMetadataProvider(md);
             const spaces: SpaceNode[] = [];
@@ -449,6 +558,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 const spaceRes: RunViewResult<{
                     ID: string;
                     ParentID: string | null;
+                    SpaceTypeID: string | null;
                     InheritsMembership: boolean;
                     OwnerID: string;
                     AgentRetrieval?: AgentRetrieval;
@@ -459,6 +569,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }> = await rv.RunView<{
                     ID: string;
                     ParentID: string | null;
+                    SpaceTypeID: string | null;
                     InheritsMembership: boolean;
                     OwnerID: string;
                     AgentRetrieval?: AgentRetrieval;
@@ -469,12 +580,16 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }>({
                     EntityName: 'MJ_BizApps_Collaboration: Spaces',
                     ExtraFilter: `ID = '${currentSpaceId}'`,
-                    Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
+                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
                     ResultType: 'simple',
                     MaxRows: 1,
                 }, user);
 
-                if (!spaceRes.Success || !spaceRes.Results?.[0]) {
+                if (!spaceRes.Success) {
+                    LogError(`ReachedSeat: space ${currentSpaceId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+                    break;
+                }
+                if (!spaceRes.Results?.[0]) {
                     break;
                 }
                 const s = spaceRes.Results[0];
@@ -488,6 +603,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     closedAt: s.ClosedAt,
                     postCloseAccess: s.PostCloseAccess,
                     postCloseAccessDays: s.PostCloseAccessDays,
+                    spaceTypePostCloseAccess: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccess ?? null,
+                    spaceTypePostCloseAccessDays: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccessDays ?? null,
                 });
                 if (!s.InheritsMembership || !s.ParentID) {
                     break;
@@ -496,7 +613,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }
 
             if (spaces.length === 0) {
-                return false;
+                return null;
             }
 
             const spaceFilter = spaces.map(sp => `'${sp.id}'`).join(',');
@@ -515,11 +632,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }, user);
 
             if (!memberRes.Success || !memberRes.Results) {
-                return false;
+                LogError(`ReachedSeat: the seats of ${user.ID} could not be read: ${memberRes.ErrorMessage ?? 'unknown error'}`);
+                return null;
             }
 
             const memberships: MemberSnapshot[] = memberRes.Results.map(m => {
-                const roleType = this.SpaceRoleTypeById(m.SpaceRoleTypeID);
+                const roleType = roleTypeOf(m.SpaceRoleTypeID);
                 return {
                     spaceId: m.SpaceID,
                     userId: m.UserID,
@@ -537,11 +655,10 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 };
             });
 
-            const reached = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
-            return !!reached?.role.isOwnerRole;
+            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignorePostCloseFilter);
         } catch (e) {
-            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
         }
     }
 }

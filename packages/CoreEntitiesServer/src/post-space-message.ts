@@ -3,6 +3,7 @@ import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
+import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
@@ -59,6 +60,10 @@ export async function postSpaceMessage(
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
 
+    // A type whose driver is missing refuses (fail closed); message hooks wait for MJ to say who wrote a message
+    const driver = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!driver.ok) return { ok: false, message: driver.message };
+
     if (!input.conversationId) {
         return { ok: false, message: 'A conversation ID is required to post a message.' };
     }
@@ -104,11 +109,11 @@ export async function postSpaceMessage(
 }
 
 /**
- * Room replies are visible to everyone who reaches the space (including participants
- * who can only see Shared items). The room reply therefore strictly names items
- * that everyone in the room can read: this space's own Shared items only.
+ * An agent's chat reply is visible to everyone who reaches the space (including participants
+ * who can only see Shared items). The reply therefore names only items
+ * that everyone in the space can read: this space's own Shared items.
  * Items in sub-spaces (even if Shared) have their own audience and cannot be quoted
- * in this space's room reply.
+ * in this space's reply.
  */
 export function filterRoomReplyItems(items: readonly SpaceAgentCandidateItem[], roomSpaceId: string): SpaceAgentCandidateItem[] {
     const normRoomId = roomSpaceId.trim().toUpperCase();

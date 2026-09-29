@@ -140,11 +140,43 @@ export async function resolveSpaceChatHostRules(
     const targetSpace = spaceRes.Results[0];
 
     // 2. Resolve settings & reply mode using unified function (Item 16)
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, systemUser);
+    let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, systemUser);
+    } catch (settingsError) {
+        return {
+            ok: false,
+            message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
+    }
     const agentReplyMode = chatSettings.agentReplyMode;
 
     // 3. Resolve allowed agents & default agent
-    const allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
+    let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
+    try {
+        allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
+    } catch (agentsError) {
+        return {
+            ok: false,
+            message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
+    }
     const allowedAgentIds = allowed.allowedAgentIds;
     const defaultAgentId = allowed.defaultAgentId ?? null;
     let defaultAgentName: string | null = null;
@@ -304,6 +336,7 @@ export async function resolveSpaceChatHostRules(
 
     // If conversationId is specified, check conversation access
     let targetChatKind: string = 'General';
+    let targetChatArchived = false;
     if (conversationId) {
         const parsedConvId = parseUuid(conversationId);
         if (!parsedConvId) {
@@ -355,21 +388,8 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
-        if (chatCheck.Results[0].Status === 'Archived') {
-            return {
-                ok: true,
-                message: 'The conversation is archived.',
-                agentReplyMode: 'MentionOnly',
-                allowedAgentIds: [],
-                defaultAgentId: null,
-                defaultAgentName: null,
-                agentHistoryFrom: null,
-                mentionPeople: [],
-                canStartConversation: false,
-                allowedConversationKinds: [],
-            };
-        }
         targetChatKind = chatCheck.Results[0].Kind;
+        targetChatArchived = chatCheck.Results[0].Status === 'Archived';
     }
 
     if (targetChatKind === 'Private') {
@@ -387,6 +407,22 @@ export async function resolveSpaceChatHostRules(
                 allowedConversationKinds: [],
             };
         }
+    }
+
+    // After the Internal Only check, so a caller who can't see Team never learns that an internal conversation is archived
+    if (targetChatArchived) {
+        return {
+            ok: true,
+            message: 'The conversation is archived.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
     }
 
     // 6. Item 16: Compute viewer's floor from Chats.HistoryOnAdd

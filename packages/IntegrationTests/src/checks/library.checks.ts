@@ -1,7 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { MJFileEntity } from '@memberjunction/core-entities';
-import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import {
     collaborationFileStore,
     decideUploadBand,
@@ -9,12 +7,16 @@ import {
     uploadSpaceFile,
     vouchStoredFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
+import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { randomUUID } from 'node:crypto';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
-import { FindRows, GetPersonaUser } from '../wire.js';
-import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
+import { FindRows, GetPersonaUser, View } from '../wire.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
+import { deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
 const createdItemIds: string[] = [];
 const createdFileIds: string[] = [];
 
@@ -274,56 +276,128 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    const loaded = await use.Load(createdUseId);
-                    Assert(loaded === true, `LB7 cleanup: loading Item Use ${createdUseId} must succeed`);
-                    const deleted = await use.Delete();
-                    Assert(deleted === true, `LB7 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, ITEM_USE_ENTITY, createdUseId, 'an item use');
                 }
             }
         },
     },
+    {
+        Id: 'library.LB8',
+        Name: 'LB8 — an upload lands in the band its uploader chose: Team in a Shared-default space stays hidden from a learner, and a seat that cannot see Team cannot choose it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const lee = await GetPersonaUser(ctx, 'lee');
+
+            const upload = async (user: typeof ada, chosen: 'Shared' | 'Team' | null, name: string) =>
+                uploadSpaceFile({
+                    user,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: COHORT_SPACE_ID,
+                    folder: 'Welcome',
+                    fileName: name,
+                    mimeType: 'text/plain',
+                    content: Buffer.from(`LB8 ${name}`),
+                    gate: () => decideUploadBand(ctx.Provider, user, COHORT_SPACE_ID, chosen),
+                });
+
+            // The cohort type's default band is Shared, so an owner who says nothing publishes to every seat
+            const byDefault = await upload(ada, null, `lb8-default-${Date.now()}.txt`);
+            Assert(byDefault.ok, `Ada's upload with no band chosen: ${byDefault.ok ? '' : byDefault.message}`);
+            if (!byDefault.ok) throw new Error(byDefault.message);
+            createdItemIds.push(byDefault.itemId);
+            createdFileIds.push(byDefault.fileId);
+            const defaultItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.itemId}'`, ['Band']);
+            Assert(defaultItem[0]?.Band === 'Shared', `An upload with no band chosen takes the type's default, Shared (saw ${defaultItem[0]?.Band})`);
+
+            // Choosing Team keeps the file internal, and the learner cannot read the item
+            const internal = await upload(ada, 'Team', `lb8-team-${Date.now()}.txt`);
+            Assert(internal.ok, `Ada's upload with Team chosen: ${internal.ok ? '' : internal.message}`);
+            if (!internal.ok) throw new Error(internal.message);
+            createdItemIds.push(internal.itemId);
+            createdFileIds.push(internal.fileId);
+            const teamItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${internal.itemId}'`, ['Band']);
+            Assert(teamItem[0]?.Band === 'Team', `An upload with Team chosen lands on Team (saw ${teamItem[0]?.Band})`);
+            const learnerRead = await View(ctx).RunView<{ ID: string }>(
+                { EntityName: SPACE_ITEM_ENTITY, ExtraFilter: `SpaceID = '${COHORT_SPACE_ID}'`, Fields: ['ID'], ResultType: 'simple' },
+                lee,
+            );
+            Assert(learnerRead.Success === true, `Lee reads the cohort's items: ${learnerRead.ErrorMessage ?? ''}`);
+            const learnerIds = (learnerRead.Results ?? []).map((r) => r.ID.toLowerCase());
+            Assert(learnerIds.includes(byDefault.itemId.toLowerCase()), 'Lee reads the Shared upload');
+            Assert(!learnerIds.includes(internal.itemId.toLowerCase()), 'Lee cannot read the Team upload');
+
+            // A seat that cannot see Team cannot choose it, and nothing is stored
+            const refusedName = `lb8-refused-${Date.now()}.txt`;
+            const refused = await upload(lee, 'Team', refusedName);
+            Assert(!refused.ok, 'Lee choosing Team is refused');
+            const storedRefused = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID']);
+            Assert(storedRefused.length === 0, 'A refused upload stores nothing');
+            Assert(!refused.ok && refused.message === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ok ? '' : refused.message}`);
+        },
+    },
+    {
+        Id: 'library.LB9',
+        Name: "LB9 — in Discovery, a Team-default space, an upload with no band chosen lands on Team, and a member who can only keep material on Team is refused Shared",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const sam = await GetPersonaUser(ctx, 'sam');
+
+            const upload = async (user: typeof ada, chosen: 'Shared' | 'Team' | null, name: string) =>
+                uploadSpaceFile({
+                    user,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: DISCOVERY_SPACE_ID,
+                    folder: 'Briefs',
+                    fileName: name,
+                    mimeType: 'text/plain',
+                    content: Buffer.from(`LB9 ${name}`),
+                    gate: () => decideUploadBand(ctx.Provider, user, DISCOVERY_SPACE_ID, chosen),
+                });
+
+            // Ada and Sam both reach Discovery through Northwind, an inherited seat. Discovery is a Workspace: its default band is Team.
+            const byDefault = await upload(ada, null, `lb9-default-${Date.now()}.txt`);
+            Assert(byDefault.ok, `Ada's upload with no band chosen: ${byDefault.ok ? '' : byDefault.message}`);
+            if (!byDefault.ok) throw new Error(byDefault.message);
+            createdItemIds.push(byDefault.itemId);
+            createdFileIds.push(byDefault.fileId);
+            const defaultItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.itemId}'`, ['Band']);
+            Assert(defaultItem[0]?.Band === 'Team', `An upload with no band chosen takes Discovery's default, Team (saw ${defaultItem[0]?.Band})`);
+
+            // Sam is a member: he can see Team but not promote, so Shared is a band he may not choose
+            const refusedName = `lb9-refused-${Date.now()}.txt`;
+            const refused = await upload(sam, 'Shared', refusedName);
+            Assert(!refused.ok, 'Sam choosing Shared is refused');
+            Assert(!refused.ok && refused.message === 'Upload refused: this seat cannot place material in the Shared band.', `Refusal names the band: ${refused.ok ? '' : refused.message}`);
+            const stored = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID']);
+            Assert(stored.length === 0, 'A refused upload stores nothing');
+
+            // What he may do is keep it on Team
+            const kept = await upload(sam, 'Team', `lb9-team-${Date.now()}.txt`);
+            Assert(kept.ok, `Sam's upload with Team chosen: ${kept.ok ? '' : kept.message}`);
+            if (!kept.ok) throw new Error(kept.message);
+            createdItemIds.push(kept.itemId);
+            createdFileIds.push(kept.fileId);
+        },
+    },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        const errors: string[] = [];
-        while (createdItemIds.length > 0) {
-            const id = createdItemIds.pop();
-            if (id) {
-                try {
-                    const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-                    if (await item.Load(id)) {
-                        const deleted = await item.Delete();
-                        if (!deleted) {
-                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        while (createdFileIds.length > 0) {
-            const fid = createdFileIds.pop();
-            if (fid) {
-                try {
-                    const file = await ctx.Provider.GetEntityObject<MJFileEntity>(FILE_ENTITY, ctx.User);
-                    if (await file.Load(fid)) {
-                        const deleted = await file.Delete();
-                        if (!deleted) {
-                            errors.push(`Failed to delete File ${fid}: ${file.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting File ${fid}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        if (errors.length > 0) {
-            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
-        }
-    },
+    // Every step runs and reads back, newest first; the first failure is thrown at the end
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            ...createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+            ...createdFileIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'a library file')),
+        ]),
 });

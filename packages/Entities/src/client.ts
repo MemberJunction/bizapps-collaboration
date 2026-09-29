@@ -12,6 +12,8 @@ export interface MintSpaceLinkPayload {
     Success: boolean;
     Sent?: boolean;
     RedemptionUrl?: string;
+    /** On success: what happened (seated, Invited awaiting approval, already seated, whether a link went out). */
+    Message?: string;
     ErrorMessage?: string;
 }
 
@@ -21,6 +23,8 @@ export interface UploadSpaceFileInput {
     MimeType?: string;
     Base64Data: string;
     Folder?: string | null;
+    /** The band the person chose. Left out, the space type's default applies. */
+    Band?: 'Shared' | 'Team';
 }
 
 export interface UploadSpaceFilePayload {
@@ -59,6 +63,11 @@ export interface ExecuteSpaceChatTurnGraphQLInput {
     ConversationID: string;
     UserMessageID: string;
     AgentID?: string;
+    /**
+     * Answer as soon as the reply row is written In-Progress, and send the run's progress and text to this session as it goes
+     * (the messages MemberJunction's chat follows). Without it the call returns when the reply is final.
+     */
+    Background?: boolean;
 }
 
 export interface ExecuteSpaceChatTurnGraphQLPayload {
@@ -95,6 +104,8 @@ export interface SpaceChatHostRulesGraphQLPayload {
     AgentHistoryFrom?: string;
     CanStartConversation: boolean;
     AllowedConversationKinds: string[];
+    /** The largest upload the host takes. */
+    UploadMaxBytes?: number;
     MentionPeople: {
         ID: string;
         Name: string;
@@ -102,14 +113,6 @@ export interface SpaceChatHostRulesGraphQLPayload {
     }[];
 }
 
-export interface OpenSpaceFilePayload {
-    Success: boolean;
-    Base64?: string;
-    MimeType?: string;
-    Name?: string;
-    Mode?: string;
-    ErrorMessage?: string;
-}
 
 const CREATE_SPACE_CONVERSATION_MUTATION = `
 mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
@@ -120,6 +123,117 @@ mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
         Name
         Kind
         ErrorMessage
+    }
+}
+`;
+
+/** What closing a space would do, read from the server. */
+export interface CloseConsequenceGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    /** ReadOnly, ReadOnlyWithAgent or None. */
+    Access?: string;
+    Days?: number;
+    KeeperUserID?: string;
+    KeeperName?: string;
+    KeeperCanReopen?: boolean;
+}
+
+/** A new space: its type, its name, and the subtype's own columns by field name. */
+export interface CreateSpaceGraphQLInput {
+    TypeID: string;
+    Name: string;
+    Description?: string;
+    Details?: Record<string, unknown>;
+}
+
+export interface CreateSpaceGraphQLPayload {
+    Success: boolean;
+    SpaceID?: string;
+    ErrorMessage?: string;
+}
+
+const CREATE_SPACE_MUTATION = `
+mutation CreateSpace($input: CreateSpaceInput!) {
+    CreateSpace(input: $input) {
+        Success
+        SpaceID
+        ErrorMessage
+    }
+}
+`;
+
+/** What Home counts across every space the signed-in person reaches. */
+export interface HomeCountsGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    SharedFiles?: number;
+    OpenTasks?: number;
+    AwaitingApproval?: number;
+}
+
+/** An invitation waiting on an owner. */
+export interface HomeInvitationGraphQL {
+    SeatID: string;
+    SpaceID: string;
+    SpaceName: string;
+    Person: string;
+    RoleName: string;
+    InvitedAt?: string | null;
+}
+
+/** An open task filed in one of the person's spaces. */
+export interface HomeOpenTaskGraphQL {
+    TaskID: string;
+    Name: string;
+    Status: string;
+    Priority?: string | null;
+    DueAt?: string | null;
+    SpaceID: string;
+    SpaceName: string;
+}
+
+/** The rows behind Home's counts. */
+export interface HomeListsGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    Invitations?: HomeInvitationGraphQL[];
+    OpenTasks?: HomeOpenTaskGraphQL[];
+}
+
+const GET_HOME_LISTS_QUERY = `
+query GetHomeLists {
+    GetHomeLists {
+        Success
+        ErrorMessage
+        Invitations { SeatID SpaceID SpaceName Person RoleName InvitedAt }
+        OpenTasks { TaskID Name Status Priority DueAt SpaceID SpaceName }
+    }
+}
+`;
+
+const GET_HOME_COUNTS_QUERY = `
+query GetHomeCounts {
+    GetHomeCounts {
+        Success
+        ErrorMessage
+        SharedFiles
+        OpenTasks
+        AwaitingApproval
+    }
+}
+`;
+
+const GET_CLOSE_CONSEQUENCE_QUERY = `
+query GetCloseConsequence($spaceId: String!) {
+    GetCloseConsequence(spaceId: $spaceId) {
+        Success
+        ErrorMessage
+        Access
+        Days
+        KeeperUserID
+        KeeperName
+        KeeperCanReopen
     }
 }
 `;
@@ -136,6 +250,7 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         AgentHistoryFrom
         CanStartConversation
         AllowedConversationKinds
+        UploadMaxBytes
         MentionPeople {
             ID
             Name
@@ -151,6 +266,7 @@ mutation MintSpaceLink($input: MintSpaceLinkInput!) {
         Success
         Sent
         RedemptionUrl
+        Message
         ErrorMessage
     }
 }
@@ -200,18 +316,6 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
 }
 `;
 
-const OPEN_SPACE_FILE_MUTATION = `
-mutation OpenSpaceFile($itemId: String!) {
-    OpenSpaceFile(itemId: $itemId) {
-        Success
-        Base64
-        MimeType
-        Name
-        Mode
-        ErrorMessage
-    }
-}
-`;
 
 export function hasExecuteGQL(target: object | null | undefined): target is GraphQLExecutor {
     return target != null && 'ExecuteGQL' in target && typeof (target as { ExecuteGQL?: () => Promise<Record<string, object | null | undefined>> }).ExecuteGQL === 'function';
@@ -219,7 +323,7 @@ export function hasExecuteGQL(target: object | null | undefined): target is Grap
 
 /**
  * Typed client for Collaboration GraphQL mutations:
- * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage, OpenSpaceFile.
+ * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage.
  */
 export class CollaborationClient {
     constructor(private readonly executor: GraphQLExecutor) {
@@ -266,9 +370,27 @@ export class CollaborationClient {
         return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
-        const res = await this.activeExecutor.ExecuteGQL(OPEN_SPACE_FILE_MUTATION, { itemId });
-        return (res?.OpenSpaceFile as OpenSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+
+    async GetHomeCounts(): Promise<HomeCountsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_HOME_COUNTS_QUERY, {});
+        return (res?.GetHomeCounts as HomeCountsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    /** Makes a top-level space and seats the signed-in person as its owner, in one transaction. */
+    async CreateSpace(input: CreateSpaceGraphQLInput): Promise<CreateSpaceGraphQLPayload> {
+        const { Details, ...rest } = input;
+        const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_MUTATION, { input: { ...rest, ...(Details ? { Details: JSON.stringify(Details) } : {}) } });
+        return (res?.CreateSpace as CreateSpaceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetHomeLists(): Promise<HomeListsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_HOME_LISTS_QUERY, {});
+        return (res?.GetHomeLists as HomeListsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_CLOSE_CONSEQUENCE_QUERY, { spaceId });
+        return (res?.GetCloseConsequence as CloseConsequenceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {

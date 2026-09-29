@@ -1,0 +1,33 @@
+[
+  {
+    "primaryKey": {
+      "ID": "1BD2DA71-E1E4-4135-89CD-D4D42CF5EA77"
+    },
+    "fields": {
+      "Name": "Collaboration Home Open Tasks",
+      "Description": "The open tasks (neither completed nor cancelled) filed in the spaces a person reaches, each once under the first of those spaces by name (read from the person's items, through the access function once), soonest due first, up to 50: the rows behind the Open Tasks count of Collaboration Home Counts, with the same rules. Only the Integration role may run it: the server runs it as the system user, with the signed-in person's own id, through GetHomeLists.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Collaboration",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "SELECT TOP 50\n    t.ID AS TaskID,\n    t.Name AS TaskName,\n    t.Status,\n    t.Priority,\n    t.DueAt,\n    x.SpaceID,\n    x.SpaceName\nFROM (\n    SELECT TRY_CAST(REPLACE(i.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) AS TaskID,\n           i.SpaceID,\n           s.Name AS SpaceName,\n           ROW_NUMBER() OVER (PARTITION BY TRY_CAST(REPLACE(i.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER) ORDER BY s.Name, s.ID) AS rn\n      FROM [__mj_BizAppsCollaboration].[SpaceItem] i\n      INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = i.SpaceID\n      INNER JOIN [__mj_BizAppsCollaboration].[Space] s ON s.ID = i.SpaceID\n     WHERE i.Band = N'Shared' OR a.CanSeeTeam = 1\n) x\nINNER JOIN [__mj_BizAppsTasks].[Task] t ON t.ID = x.TaskID\nWHERE x.rn = 1\n  AND t.Status NOT IN (N'Completed', N'Cancelled')\nORDER BY CASE WHEN t.DueAt IS NULL THEN 1 ELSE 0 END, t.DueAt, t.Name"
+    },
+    "relatedEntities": {
+      "MJ: Query Permissions": [
+        {
+          "primaryKey": {
+            "ID": "5C0BB63B-15A8-4175-9F4B-D2670B0F01E4"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          }
+        }
+      ]
+    }
+  }
+]

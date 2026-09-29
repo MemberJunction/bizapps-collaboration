@@ -4,7 +4,7 @@ The write gates and the server operations. Everything here runs only on the serv
 
 - **Layer:** `runtime`.
 - **In `mj-app.json`:** server, `library`. `@mj-biz-apps/collaboration-server` loads it.
-- **Depends on:** `collaboration-core` and `collaboration-entities`. Peers: `@memberjunction/core`, `core-entities`, `global`, `notifications` and `storage`, and bizapps-tasks' `tasks-entities` and `tasks-entities-server`.
+- **Depends on:** `collaboration-core`, `collaboration-engine-base` and `collaboration-entities`. Peers: `@memberjunction/core`, `core-entities`, `global`, `notifications`, `storage`, `ai-agents`, `ai-core-plus` and `conversations-runtime`, and bizapps-tasks' `tasks-entities` and `tasks-entities-server`.
 
 Reads are decided by row-level security in SQL. This package decides writes: each gate is a subclass of a generated entity class, and each check runs in `ValidateAsync`, so `Save()` returns false with the gate's message. The checks run for saves from GraphQL, MCP and server code alike.
 
@@ -14,7 +14,8 @@ Each is registered with `@RegisterClass(BaseEntity, '<entity name>')` and sets `
 
 | Class | Entity | What it checks |
 |---|---|---|
-| `SpaceEntityServer` | Spaces | Who may create a root or a child, edit or move a space (`authorizeSpaceWrite`), and no cycles. Only staff may change `AllowParentAssignees` or `AgentRetrieval`; a new space takes both from its type. After a save it binds the space's room: an MJ conversation owned by the system user and scoped to the Collaboration application. |
+| `SpaceTypeEntityServer` | Space Types | *Configure Space Types* on create, update and delete; a valid `Configuration`; and a `SpaceExtensionEntity` that is an IsA child of Spaces, read by no role that can't read Spaces, and under the same row filter Spaces gives that role (`refuseSubtypeEntity`, `subtype-rules.ts`). |
+| `SpaceEntityServer` | Spaces | Who may create a root or a child, edit or move a space (`authorizeSpaceWrite`), and no cycles. Settings need *Configure Spaces* and an owner seat. Closing and reopening need *Close and Reopen Spaces* and an owner seat; a close stamps the access after it and archives the space's conversations, and a reopen restores them. Only someone with *Administer Spaces* (UI, Developer and Integration by default) may create a root or move a space to the top level, change `AllowParentAssignees` or `AgentRetrieval`, or backdate a close; a new space takes both settings from its type. A type that names a subtype and its subtype go together: a space of that type is created as that subtype, a subtype isn't saved under a type that doesn't name it, and a change of type keeps the subtype (`refuseSubtypePairing`). MJ validates a subtype's space only when the space itself changed, so a save that changes only the subtype's own columns is checked here: it needs a signed-in user, *Configure Spaces* and an owner seat, and the type's driver is asked and then told of it as an `Update` (`ValidateSpaceChange`, then `OnSpaceChanged`, the space's own driver only), with the subtype and the columns' old values. That needs the subtype in reach: it is when the subtype was loaded through the space in this process, and a save that changes nothing then asks and tells nobody. A save from a client reaches the server as the subtype's own save, and MJ gives the space it builds for it no link back ([MJ#4870](https://github.com/MemberJunction/MJ/issues/4870)), so the space can't see the subtype: the save is judged as a change with no old values, and the driver can't read the new ones. A space that has its subtype attached is deleted through the subtype, since MJ's own delegation doesn't return ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850)). |
 | `SpaceMemberEntityServer` | Space Members | The invitation ceiling (`refuseInvite`), the member cap, the last active owner, a member removing their own seat, an owner's approval under `InviteApproval = Approve`, and the seat's band from its role. A seat can't move to another space or person. |
 | `SpaceItemEntityServer` | Space Items | The item rules and promotion stamp (`authorizeItemWrite`). A file item can only come from the upload. The signer must be able to read the record an item points at, and a subtask can't be filed at a space's root. `RecordID` is stored in MJ's canonical form. After a save that makes an item Shared, it writes the promotion's item use and the share notices. Its delete removes the item's uses and notices in the same transaction, then the stored file. |
 | `ItemUseEntityServer` | Item Uses | A use is new, recorded as the caller, for an item in the space, on a band the caller can see (`authorizeUseWrite`). |
@@ -31,21 +32,32 @@ The stamping and the root-task rule apply only when the caller holds `Space Part
 | `TaskDecisionEntityServer` | Task Decisions, 2 | Stamps the decider's Person on create. |
 | `TaskAssignmentEntityServer` | Task Assignments, 2 | Stamps who assigned it on create. For a filed task, the assignee must hold a seat that reaches its space (`authorizeTaskAssignment`). |
 
+Each gate also asks the space type's server driver (`BaseSpaceTypeServerDriver`, found through `ServerDriverRegistry`) before a save, tells it after, and notifies the lifecycle subscribers. A type that names a driver nobody registered refuses every write to its spaces. The drivers' message hooks, `ValidateMessage` and `OnMessagePosted`, aren't called yet: they wait for MemberJunction to record who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)).
+
 A class registered later with a higher priority, or with no priority, would win the same key. `reportCollaborationClasses` logs which class holds each key at startup, and logs an error on the first save if Collaboration's class lost it.
 
 ## The operations
 
 The GraphQL resolvers in `@mj-biz-apps/collaboration-server` call these:
 
+- **`createSpace`** (`create-space.ts`): makes a top-level space of a type, through its subtype when the type names one, and seats the caller as its active owner on the Team band, in one transaction on the request's provider (MJ's `DatabaseProviderBase`), rolled back whole when the space or the seat is refused. It accepts a value only for a column the subtype adds (`ownDetailFields`), and turns a date's text into a date. The space's own rules apply, as the caller's save.
 - **`uploadSpaceFile`** (`upload-space-file.ts`): authorizes the caller first, stores the bytes as the system user in MJ Storage through `collaborationFileStore`, then saves the space item as the caller. If the item is refused, the stored object and its file row are removed. `decideUploadBand` picks the band the upload asks for.
 - **`createSpaceTask`** (`create-space-task.ts`, `file-root-task.ts`): creates a root task of the `GENERAL` type and files it in a space as the caller's item. The task and its link are written as the system user. `removeUnfiledTask` cleans up when filing fails.
-- **`postSpaceMessage`** (`post-space-message.ts`): posts a message to the room as the system user, naming the caller. The caller must be able to contribute, the space must be open, and the message must be 1 to 4,000 characters. With `executeAgent`, it also posts the assistant's reply.
+- **`postSpaceMessage`** (`post-space-message.ts`): posts the caller's message to one of the space's conversations as the system user, which owns them. The caller must be able to contribute, the space must be open, an Internal Only conversation needs Team, and the message must be 1 to 4,000 characters. It runs no agent.
+- **`createSpaceConversation`** (`create-space-conversation.ts`): starts a General, Topic or Internal Only conversation, under `Chats.WhoCanStart`, the seat's band and the type's driver, and syncs the seats' Edit grants.
+- **`executeSpaceChatTurn`** (`execute-space-chat-turn.ts`): runs the space's agent on a saved message through MJ's `AgentRunner`, as the asking user, and writes the reply as the system user. The conversation's kind bounds what the reply may use. With `background`, it answers once the reply row is written In-Progress and runs the agent after that, telling an observer the run's progress, streamed text and end; the message's claim holds until the run ends.
+- **`resolveSpaceChatHostRules`** (`resolve-space-chat-host-rules.ts`): the chat area's rules for a person in a space: allowed agents, reply mode, whom `@` offers, the history floor, and which conversations they may start.
+- **`resolveCloseConsequence`** (`resolve-close-consequence.ts`): for someone who may close the space, what closing it would stamp, whose row it keeps, and whether they could reopen it (null when that couldn't be checked).
+- **`resolveHomeCounts`** (`resolve-home-counts.ts`): Home's three counts for the signed-in person, across the spaces they reach, from the approved query *Collaboration Home Counts*. The query's one Query Permission is Integration's, since an MJ query isn't bound by row filters and takes whatever `UserID` it's given, so this runs it as the system user, with the person's own id.
+- **`EnsureSpaceForRecord`** (`ensure-space-for-record.ts`): finds, or creates on the first call, the space of a given type anchored to another app's record.
 - **`resolveSpaceAgentRetrieval`** (`space-agent-retrieval.ts`): lists what the agent may quote for a person asking from a space: the space's subtree, read as that person, then `agentMayQuote` on every candidate. It returns every decision and the spaces it searched.
 - **`recordItemUse` and `recordShare`** (`library-events.ts`): write item uses, and one share notice per recipient with an in-app notification through `NotificationEngine`.
 
 **Helpers:** `loadWriteContext` reads the rows a write needs (the target's ancestor chain, the caller's seats, the roles and the roster count) and refuses the write if a page comes back full. `requireSystemUser` and the functions in `uuid.ts` are shared by the rest.
 
-Each gate has a `Load…EntityServer()` function, so a bundler can't drop it. `LoadBizAppsCollaborationServer` calls them all.
+**`CollaborationEngine`** (`CollaborationEngine.ts`) is the server's engine. It passes through to `CollaborationEngineBase` from `collaboration-engine-base` for the cached metadata and the rights, and adds the server's reads: a space's settings chain and the access a close stamps.
+
+Each gate has a `Load…EntityServer()` function, so a bundler can't drop it. `LoadBizAppsCollaborationServer` calls them all but `LoadSpaceTypeEntityServer`; importing the package registers that gate anyway.
 
 ## Build and test
 
@@ -53,9 +65,9 @@ Each gate has a `Load…EntityServer()` function, so a bundler can't drop it. `L
 pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build
 ```
 
-The build is `tsc`, into `dist/`. The tests use `node:test`, 48 in eight files: `load-graph`, `upload-space-file`, `collaboration-file-store`, `file-root-task`, `task-space`, `space-entity-server`, `space-agent-retrieval` and `space-item-entity-server`. The root `pnpm test` builds the package, typechecks the test files with `tsconfig.test.json`, and runs them.
+The build is `tsc`, into `dist/`. The tests use `node:test`, in twenty-six files, among them the gates (`space-entity-server`, `space-member-entity-server`, `space-item-entity-server`), the subtype rules (`subtype`, `subtype-only-change`, `space-subtype-resolver`), `create-space`, Home's queries (`resolve-home-counts`, `resolve-home-lists`), the drivers (`server-driver-registry`, `delete-driver`, `reactions`), the chat (`execute-space-chat-turn`, `resolve-space-chat-host-rules`, `room-edit-grants`) and `resolve-close-consequence`. The root `pnpm test` builds the package, typechecks the test files with `tsconfig.test.json`, and runs them.
 
 ## Not done yet
 
-- **The agent run.** With `executeAgent`, the reply is a fixed sentence listing the names of the items the asker may quote. No model runs, and the GraphQL mutation never sets `executeAgent`; only the server harness does.
-- **Retrieval at scale.** `resolveSpaceAgentRetrieval` reads at most 2,000 spaces and 2,000 items, and doesn't say when it hits that cap.
+- **Retrieval at scale.** `resolveSpaceAgentRetrieval` reads at most 2,000 spaces and 2,000 items, and refuses when a page comes back full rather than answer from part of it.
+- **Bounding by participants.** The agent's search is bounded by the conversation's kind, not yet by the reach of everyone in it (the plan's D2).

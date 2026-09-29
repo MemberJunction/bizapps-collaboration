@@ -21,13 +21,18 @@ import {
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { CollaborationEngine, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { readExtension, stringList } from '../extension-config.js';
+
+const KEY = 'example-board';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @RegisterClass(BaseSpaceTypeServerDriver, 'example-board')
 export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     /**
-     * Narrows or adjusts rules for board spaces:
-     * - Configures chat rules for governance
+     * Narrows the rules for board spaces: only owners start a conversation, where the rules would let anyone whose seat can post. A
+     * driver narrows; it never widens what the type or the app set.
      */
     public override AdjustRules(
         _ctx: DriverBaseContext,
@@ -37,9 +42,7 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
             ...rules,
             Chats: {
                 ...rules.Chats,
-                WhoCanStart: rules.Chats?.WhoCanStart ?? 'Anyone',
-                AgentReplyMode: rules.Chats?.AgentReplyMode ?? 'MentionOrOneToOne',
-                HistoryOnAdd: rules.Chats?.HistoryOnAdd ?? 'None',
+                WhoCanStart: 'Owners',
             },
         };
     }
@@ -51,6 +54,10 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     public override ValidateSpaceChange(
         ctx: SpaceChangeContext
     ): DriverValidationResult {
+        // A board with motions open (the count comes from the space's own configuration, kept by whatever runs the votes) stays open
+        if (ctx.kind === 'Close' && Number(readExtension(ctx.space.Configuration, KEY)['OpenMotions'] ?? 0) > 0) {
+            return { ok: false, message: 'Cannot close a Board space while motions are open for voting.' };
+        }
         if (ctx.kind === 'Delete') {
             const isClosed = ctx.space.ClosedAt != null;
             if (!isClosed) {
@@ -69,20 +76,26 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
 
     /**
      * Validates child spaces under the board:
-     * - Sealed sub-committees (such as Compensation) must have InheritsMembership = false.
+     * - A room can't sit under a board (by the child's type code).
+     * - Sub-committees the type names as sealed (`Extensions.example-board.SealedChildNames`) must not inherit membership.
      */
     public override ValidateChildSpaceChange(
         ctx: ChildSpaceChangeContext
     ): DriverValidationResult {
-        if (ctx.kind === 'CreateChild') {
-            const childName = (ctx.childSpace.Name ?? '').toLowerCase();
-            if (childName.includes('compensation') && ctx.childSpace.InheritsMembership) {
-                return {
-                    ok: false,
-                    message: 'Sealed sub-committees (e.g. Compensation) must not inherit membership.',
-                    field: 'InheritsMembership',
-                };
-            }
+        // Every kind that leaves a child open under the board: a created, moved-in, changed or reopened sub-committee
+        if (ctx.kind !== 'CreateChild' && ctx.kind !== 'MoveChildIn' && ctx.kind !== 'UpdateChild' && ctx.kind !== 'ReopenChild') return { ok: true };
+        const childTypeCode = CollaborationEngine.Instance.SpaceTypeById(ctx.childSpace.SpaceTypeID)?.Code;
+        if (childTypeCode === 'example-room') {
+            return { ok: false, message: 'Boards cannot contain Deal Rooms.', field: 'ParentID' };
+        }
+        const sealedNames = stringList(readExtension(ctx.spaceType.Configuration, KEY)['SealedChildNames'], 'SealedChildNames');
+        const childName = (ctx.childSpace.Name ?? '').toLowerCase();
+        if (ctx.childSpace.InheritsMembership && sealedNames.some((name) => childName.includes(name))) {
+            return {
+                ok: false,
+                message: 'Sealed sub-committees (for example Compensation) must not inherit membership.',
+                field: 'InheritsMembership',
+            };
         }
         return { ok: true };
     }
@@ -92,24 +105,54 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     }
 
     /**
-     * Validates board membership changes:
-     * - Outside directors must not be given Team band
+     * Validates board membership changes: a board may seat only so many outside directors. The most is the type's
+     * `Extensions.example-board.MaxOutsideDirectors`; with none set there is no cap. An outside seat is one on the Shared band, which
+     * the seat gate sets from the role before it asks this driver, so the rule sees the band the seat will have. Every kind that
+     * leaves someone holding a seat is judged (an invitation, a role change and a band change), not only invitations: a role
+     * change to an outside role would otherwise walk around the cap. The others are counted, so a seat already counted passes on
+     * a full board.
      */
-    public override ValidateMemberChange(
+    public override async ValidateMemberChange(
         ctx: MemberChangeContext
-    ): DriverValidationResult {
-        if (ctx.kind === 'Invite' || ctx.kind === 'BandChange' || ctx.kind === 'RoleChange') {
-            // Check if member is marked with outside director role via oldValues or SyncSource/PersonID
-            const roleName = String(ctx.oldValues?.['RoleTypeName'] ?? '');
-            if (ctx.member.Band === 'Team' && roleName.toLowerCase().includes('outside')) {
-                return {
-                    ok: false,
-                    message: 'Outside directors cannot be assigned to the Team band.',
-                    field: 'Band',
-                };
-            }
+    ): Promise<DriverValidationResult> {
+        if (ctx.kind === 'Remove' || ctx.member.Band !== 'Shared') return { ok: true };
+        const cap = readExtension(ctx.spaceType.Configuration, KEY)['MaxOutsideDirectors'];
+        if (cap === undefined) return { ok: true };
+        if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0) {
+            const message = `The extension setting MaxOutsideDirectors of "${KEY}" must be a whole number, not ${JSON.stringify(cap)}.`;
+            LogError(message);
+            throw new Error(message);
+        }
+        const others = await this.CountOtherOutsideDirectors(ctx);
+        if (others >= cap) {
+            return {
+                ok: false,
+                message: `This board already has ${others} other outside director${others === 1 ? '' : 's'}, the most its type allows (${cap}).`,
+                field: 'SpaceRoleTypeID',
+            };
         }
         return { ok: true };
+    }
+
+    /**
+     * The seats on the Shared band of this board that are not removed, other than the one being saved. Counted as the system user,
+     * as the gate counts a roster, so it is every seat and not the ones the acting person can read.
+     */
+    protected async CountOtherOutsideDirectors(ctx: MemberChangeContext): Promise<number> {
+        const spaceId = ctx.space.ID;
+        if (!UUID_PATTERN.test(spaceId)) throw new Error(`The board's id is not a valid id: ${spaceId}`);
+        const ownId = ctx.member.ID;
+        if (ownId && !UUID_PATTERN.test(ownId)) throw new Error(`The seat's id is not a valid id: ${ownId}`);
+        const own = ownId ? ` AND ID <> '${ownId}'` : '';
+        const system = await requireSystemUser(ctx.member);
+        const result = await RunView.FromMetadataProvider(ctx.provider as IMetadataProvider).RunView<{ ID: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Band = 'Shared' AND Status <> 'Removed'${own}`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, system);
+        if (!result.Success) throw new Error(`The outside directors could not be counted: ${result.ErrorMessage ?? 'unknown error'}`);
+        return result.Results?.length ?? 0;
     }
 
     public override OnMemberChanged(_ctx: MemberChangeContext): void {

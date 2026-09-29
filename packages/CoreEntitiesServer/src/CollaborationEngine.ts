@@ -14,6 +14,7 @@
 import {
     type AuthorizationInfo,
     type IMetadataProvider,
+    LogError,
     Metadata,
     RunView,
     type RunViewResult,
@@ -194,6 +195,26 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.UserCanConfigureSpaces(user, spaceId, provider);
     }
 
+    /** Whether a user holds the 'Administer Spaces' authorization (see the base engine). */
+    public UserMayAdministerSpaces(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.Base.UserMayAdministerSpaces(user, provider);
+    }
+
+    /** Whether a user may close an open space: the lifecycle authorization and an owner seat (with the post-close filter applied). */
+    public async UserCanCloseSpace(user: UserInfo, spaceId: string, provider?: IMetadataProvider): Promise<boolean> {
+        return this.Base.UserCanCloseSpace(user, spaceId, provider);
+    }
+
+    /** Whether a user may reopen a closed space: the lifecycle authorization and an owner seat, reached even past the space's end. */
+    public async UserCanReopenSpace(user: UserInfo, spaceId: string, provider?: IMetadataProvider): Promise<boolean> {
+        return this.Base.UserCanReopenSpace(user, spaceId, provider);
+    }
+
+    /** Whether a user holds the 'Close and Reopen Spaces' authorization. The owner seat is checked apart, by the space write rules. */
+    public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.Base.UserHoldsLifecycleAuthorization(user, provider);
+    }
+
     /**
      * Validates whether a storage account exists in FileStorageEngineBase and is active.
      */
@@ -213,87 +234,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return { valid: true };
     }
 
-    // ─── Server-Only: Storage Resolution ───────────────────────────────────────
-
-    /**
-     * Resolves the storage account for file uploads in a space (Punch list 2 item 6).
-     *
-     * Walks sub-space -> parent spaces -> space type -> app settings.
-     * With none configured, falls back to the host's single active storage account.
-     * With multiple active accounts and none configured, throws an actionable error.
-     */
-    public async ResolveStorageAccount(params: {
-        spaceId?: string;
-        spaceConfigs?: Array<CollaborationSettings | null | undefined>;
-        spaceTypeId?: string | null;
-        contextUser?: UserInfo;
-        provider?: IMetadataProvider;
-    }): Promise<string | null> {
-        let resolvedSettings: ResolvedCollaborationSettings;
-        if (params.spaceConfigs) {
-            resolvedSettings = this.ResolveSettingsForSpace(params.spaceConfigs, params.spaceTypeId);
-        } else if (params.spaceId) {
-            // Build space config chain
-            const md = params.provider ?? Metadata.Provider;
-            const spaceChain = await this.LoadSpaceSettingsChain(params.spaceId, md, params.contextUser);
-            resolvedSettings = this.ResolveSettingsForSpace(
-                spaceChain.configs,
-                spaceChain.typeId
-            );
-        } else {
-            resolvedSettings = this.ResolveSettingsForSpace([], params.spaceTypeId);
-        }
-
-        // If explicitly set in settings, validate that account exists and is active
-        if (resolvedSettings.StorageAccountID) {
-            const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders.filter(
-                a => a.provider.IsActive
-            );
-            const account = activeAccounts.find(a =>
-                UUIDsEqual(a.account.ID, resolvedSettings.StorageAccountID)
-            );
-            if (!account) {
-                throw new Error(
-                    `Configured storage account '${resolvedSettings.StorageAccountID}' does not exist or is not active.`
-                );
-            }
-            return account.account.ID;
-        }
-
-        // Fallback to active storage accounts from host
-        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders.filter(
-            a => a.provider.IsActive
-        );
-
-        if (activeAccounts.length === 0) {
-            return null;
-        }
-
-        if (activeAccounts.length === 1) {
-            return activeAccounts[0].account.ID;
-        }
-
-        const accountNames = activeAccounts
-            .map(a => `'${a.account.Name}' (${a.provider.Name})`)
-            .join(', ');
-
-        throw new Error(
-            `Multiple active file storage accounts detected (${accountNames}) but no StorageAccountID is configured in Collaboration settings.\n` +
-            `To fix: Set StorageAccountID on the space, its parent space, the space type, or the Collaboration app settings.`
-        );
-    }
-
-    /**
-     * Resolves PostCloseAccess settings for a space (Punch list 2 item 12).
-     */
-    public async ResolvePostCloseAccess(
-        spaceId: string,
-        provider?: IMetadataProvider,
-        contextUser?: UserInfo
-    ): Promise<{ access: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None'; days: number | null }> {
-        return this.ResolvePostCloseAccessForSpace({ spaceId, provider, contextUser });
-    }
-
     /**
      * Resolves PostCloseAccess settings for a space, accounting for in-memory / unsaved configuration
      * and walking ancestor spaces up the hierarchy.
@@ -311,7 +251,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
             ? await this.LoadSpaceSettingsChain(params.parentId, md, params.contextUser)
             : params.spaceId
                 ? await this.LoadSpaceSettingsChain(params.spaceId, md, params.contextUser)
-                : { configs: [], typeId: null };
+                : { configs: [], typeIds: [], typeId: null };
 
         const allConfigs = params.currentConfig
             ? [params.currentConfig, ...parentChain.configs]
@@ -333,19 +273,28 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         contextUser?: UserInfo
     ): Promise<{
         configs: CollaborationSettings[];
+        /** The type of each space in `configs`, in the same order, so a link is judged by the type it was saved under. */
+        typeIds: (string | null)[];
         typeId: string | null;
     }> {
         const md = provider ?? Metadata.Provider;
         const rv = RunView.FromMetadataProvider(md);
         const configs: CollaborationSettings[] = [];
+        const typeIds: (string | null)[] = [];
         let currentId: string | null = spaceId;
         let targetTypeId: string | null = null;
         const visited = new Set<string>();
 
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // Configuration fails closed: a chain that can't be read completely, or holds a configuration that doesn't
+        // parse, refuses the write or the turn instead of resolving with a link missing (extensibility plan § 4).
+        const refuse = (message: string): never => {
+            LogError(`LoadSpaceSettingsChain: ${message}`);
+            throw new Error(`Space settings refused: ${message}`);
+        };
         while (currentId && !visited.has(currentId.toLowerCase())) {
             if (!uuidRegex.test(currentId.trim())) {
-                break;
+                refuse(`'${currentId}' is not a valid space id.`);
             }
             visited.add(currentId.toLowerCase());
             const spaceRes: RunViewResult<{
@@ -366,21 +315,24 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
                 MaxRows: 1,
             }, contextUser);
 
-            if (!spaceRes.Success || !spaceRes.Results?.[0]) {
-                break;
+            if (!spaceRes.Success) {
+                refuse(`space ${currentId} could not be read: ${spaceRes.ErrorMessage ?? 'unknown error'}`);
+            }
+            if (!spaceRes.Results?.[0]) {
+                refuse(`space ${currentId} was not found.`);
             }
 
-            const row = spaceRes.Results[0];
+            const row = spaceRes.Results![0];
             if (!targetTypeId && row.SpaceTypeID) {
                 targetTypeId = row.SpaceTypeID;
             }
 
+            typeIds.push(row.SpaceTypeID ?? null);
             if (row.Configuration) {
                 try {
-                    const parsed = JSON.parse(row.Configuration) as CollaborationSettings;
-                    configs.push(parsed);
-                } catch {
-                    // Ignore unparseable configs in ancestor chain
+                    configs.push(JSON.parse(row.Configuration) as CollaborationSettings);
+                } catch (parseError) {
+                    refuse(`space ${currentId} has a configuration that does not parse: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
                 }
             } else {
                 configs.push({});
@@ -389,6 +341,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
             currentId = row.ParentID;
         }
 
-        return { configs, typeId: targetTypeId };
+        return { configs, typeIds, typeId: targetTypeId };
     }
 }

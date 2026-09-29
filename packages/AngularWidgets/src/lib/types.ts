@@ -95,6 +95,8 @@ export interface LibraryRowModel {
   band: SpaceBand;
   who: string;
   when: string;
+  /** When the item last changed (ISO): the "Recently updated" view sorts on it. */
+  updatedAt?: string;
   flagCount?: number;
   openers?: AvatarItem[];
   aiSeenCount?: number;
@@ -232,6 +234,15 @@ export interface SpaceMemberModel {
   band: SpaceBand;
   status: 'Active' | 'Invited' | 'Removed' | string;
   joinedDate?: string;
+  /** The space the seat sits on, when it isn't this one (the seat is inherited). */
+  source?: string;
+  inherited?: boolean;
+  /** Set when the person's own seat on this space is Invited or Removed while they still reach it through an ancestor. */
+  ownSeat?: { id: string; status: string; roleName: string; roleCode: string; canApprove: boolean; canRemove: boolean };
+  /** Whether the viewer may approve, remove or change the role of this seat. */
+  canApprove?: boolean;
+  canRemove?: boolean;
+  canChangeRole?: boolean;
 }
 
 export interface SpaceSettingsModel {
@@ -245,7 +256,10 @@ export interface SpaceSettingsModel {
   backgroundImageUrl: string;
   inheritsMembership: boolean;
   agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;
-  retention: 'Month' | 'Year' | 'Indefinite' | string;
+  /** The space's own retention. Empty means it has none and uses its type's default. */
+  retention: 'Month' | 'Year' | 'Indefinite' | '' | string;
+  /** The space type's default retention, shown as what an empty retention means. */
+  typeDefaultRetention?: 'Month' | 'Year' | 'Indefinite' | string;
   status: string;
 }
 

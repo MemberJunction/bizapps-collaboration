@@ -31,14 +31,6 @@ export function storedContentType(claimed: string | null | undefined): string {
     return 'application/octet-stream';
 }
 
-/** How the browser may show a stored type. Anything else is a download. */
-export function openMode(stored: string | null | undefined): 'inline' | 'text' | 'download' {
-    const mime = (stored ?? '').split(';')[0].trim().toLowerCase();
-    if (INLINE_TYPES.has(mime)) return 'inline';
-    if (mime === 'text/plain') return 'text';
-    return 'download';
-}
-
 /**
  * The band a new item asks for. The space type's default is used when this
  * role may place an item there. Otherwise the request is Team, and the item
@@ -47,6 +39,22 @@ export function openMode(stored: string | null | undefined): 'inline' | 'text' |
 export function requestedItemBand(defaultBand: Band | null, canSeeTeamBand: boolean, canPromoteBand: boolean): Band {
     if (defaultBand === 'Shared' && (!canSeeTeamBand || canPromoteBand)) return 'Shared';
     return 'Team';
+}
+
+/**
+ * The bands a seat may choose for an upload, and the one to start on. A seat that can't see Team can only share; one that
+ * can see Team but can't promote can only keep material on Team; one that does both may choose either. The start is what
+ * `requestedItemBand` picks from the type's default, or the first band the seat may choose when that isn't one of them.
+ * The server, the upload dialog and the Work tab all read this one rule.
+ */
+export function uploadBandChoice(
+    defaultBand: Band | null,
+    canSeeTeamBand: boolean,
+    canPromoteBand: boolean,
+): { allowed: readonly Band[]; start: Band } {
+    const allowed: readonly Band[] = !canSeeTeamBand ? ['Shared'] : canPromoteBand ? ['Shared', 'Team'] : ['Team'];
+    const wanted = requestedItemBand(defaultBand, canSeeTeamBand, canPromoteBand);
+    return { allowed, start: allowed.includes(wanted) ? wanted : allowed[0] };
 }
 
 export type LibraryDecision = { ok: true } | { ok: false; message: string };

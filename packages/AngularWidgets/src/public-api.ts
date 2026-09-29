@@ -5,6 +5,7 @@ export {
     BaseSpaceTypeUIDriver,
     UIDriverRegistry,
     assembleSpaceContributions,
+    overlayDescriptors,
 } from './lib/base-space-type-ui-driver';
 export type {
     SpaceUIContext,
@@ -47,6 +48,8 @@ export { CollabSpaceLibraryComponent, LibraryCollection, LibrarySmartView } from
 export { CollabShareCheckDialogComponent } from './lib/share-check-dialog.component';
 export { CollabUploadDialogComponent, CollabUploadSubmitPayload } from './lib/upload-dialog.component';
 export { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './lib/new-conversation-dialog.component';
+export { CollabNewSpaceDialogComponent, NewSpaceTypeOption, NewSpaceSubmitPayload } from './lib/new-space-dialog.component';
+export { CollabHomeListComponent, HomeListRow } from './lib/home-list.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
 export { CollabSpaceChatComponent } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';

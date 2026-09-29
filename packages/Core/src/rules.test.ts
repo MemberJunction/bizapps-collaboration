@@ -232,6 +232,19 @@ describe('rosterBySeat', () => {
         assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
     });
 
+    it('stops the list at a closed parent whose post-close access has ended, as membershipReaches does', () => {
+        const now = new Date('2026-06-01T00:00:00Z');
+        const closedNone = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-01-01T00:00:00Z', postCloseAccess: 'None' as const } : node);
+        const walk = rosterBySeat(closedNone, seated, 'grandchild', now);
+        assert.equal(walk.stop, 'closed');
+        assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild']);
+        assert.equal(membershipReaches(closedNone, seated, 'bea', 'grandchild', now), null);
+        // Within its window a closed parent still lets its people in, on both
+        const closedReadOnly = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-05-30T00:00:00Z', postCloseAccess: 'ReadOnly' as const, postCloseAccessDays: 30 } : node);
+        assert.deepEqual(rosterBySeat(closedReadOnly, seated, 'grandchild', now).groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.equal(membershipReaches(closedReadOnly, seated, 'ada', 'grandchild', now)?.spaceId, 'root');
+    });
+
     it('reports a parent the viewer was not given, the way a row filter hides it', () => {
         const visible = tree.filter((space) => space.id === 'child' || space.id === 'grandchild');
         const visibleMembers = seated.filter((member) => member.spaceId === 'child' || member.spaceId === 'grandchild');
@@ -461,7 +474,7 @@ describe('space writes', () => {
         assert.equal(authorizeSpaceWrite({
             kind: 'create-root',
             callerUserId: owner,
-            callerIsStaff: true,
+            callerMayAdminister: true,
             nextOwnerId: owner.toUpperCase(),
             here: null,
             onParent: null,
@@ -469,32 +482,39 @@ describe('space writes', () => {
     });
     it('lets staff create a root they will own', () => {
         assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: null }), 'create-root');
-        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here: null, onParent: null }).ok, true);
+        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', here: null, onParent: null }).ok, true);
     });
-    it('refuses a participant creating a root', () => {
-        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here: null, onParent: null }).ok, false);
+    it('refuses someone without the authorization creating a root, and says it is the authorization they lack', () => {
+        const decision = authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', here: null, onParent: null });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.code, 'not-authorized');
+            assert.match(decision.message, /Administer Spaces authorization/);
+        }
     });
     it('lets an owner of the parent create a child', () => {
         assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: 'root' }), 'create-child');
-        assert.equal(authorizeSpaceWrite({ kind: 'create-child', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here: null, onParent: onRoot }).ok, true);
+        assert.equal(authorizeSpaceWrite({ kind: 'create-child', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', here: null, onParent: onRoot }).ok, true);
     });
     it('lets an owner edit in place and move under a parent they own', () => {
         assert.equal(planSpaceWrite({ isNew: false, previousParentId: 'root', nextParentId: 'root' }), 'edit');
-        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', here, onParent: null }).ok, true);
+        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', here, onParent: null }).ok, true);
         assert.equal(planSpaceWrite({ isNew: false, previousParentId: 'root', nextParentId: 'legal' }), 'move');
-        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: onRoot }).ok, true);
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', here, onParent: onRoot }).ok, true);
     });
     it('lets staff move a space to the top level and refuses an owner who is not staff', () => {
         assert.deepEqual(chainsForSpaceWrite('move', true), { here: true, destination: false });
         assert.deepEqual(chainsForSpaceWrite('move', false), { here: true, destination: true });
-        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, true);
-        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: false, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, false);
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, true);
+        const refused = authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', toRoot: true, here, onParent: null });
+        assert.equal(refused.ok, false);
+        if (!refused.ok) assert.equal(refused.code, 'not-authorized');
     });
     it('refuses a move under a descendant and a guest edit', () => {
         assert.equal(parentCreatesCycle(tree, 'root', 'child'), true);
         const guest = member({ spaceId: 'child', userId: 'bea', role: guestRole, band: 'Shared' });
-        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'bea', callerIsStaff: false, nextOwnerId: 'ada', here: guest, onParent: null }).ok, false);
-        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerIsStaff: true, nextOwnerId: 'ada', here, onParent: null }).ok, false);
+        assert.equal(authorizeSpaceWrite({ kind: 'edit', callerUserId: 'bea', callerMayAdminister: false, nextOwnerId: 'ada', here: guest, onParent: null }).ok, false);
+        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', here, onParent: null }).ok, false);
     });
 });
 
@@ -770,7 +790,7 @@ describe('authorizeTaskAssignment', () => {
 
     it('allows a participant to assign an ancestor member when AllowParentAssignees is on', () => {
         const decision = authorizeTaskAssignment({
-            callerIsStaff: false,
+            callerMayAdminister: false,
             taskSpaceId: 'discovery',
             assigneeSeatSpaceId: 'northwind',
             allowParentAssignees: true,
@@ -782,7 +802,7 @@ describe('authorizeTaskAssignment', () => {
 
     it('refuses a participant assigning an ancestor member when AllowParentAssignees is off', () => {
         const decision = authorizeTaskAssignment({
-            callerIsStaff: false,
+            callerMayAdminister: false,
             taskSpaceId: 'discovery',
             assigneeSeatSpaceId: 'northwind',
             allowParentAssignees: false,
@@ -797,7 +817,7 @@ describe('authorizeTaskAssignment', () => {
 
     it('allows a participant to assign someone seated in the same space even when AllowParentAssignees is off', () => {
         const decision = authorizeTaskAssignment({
-            callerIsStaff: false,
+            callerMayAdminister: false,
             taskSpaceId: 'discovery',
             assigneeSeatSpaceId: 'discovery',
             allowParentAssignees: false,
@@ -809,7 +829,7 @@ describe('authorizeTaskAssignment', () => {
 
     it('allows staff to assign an ancestor member even when AllowParentAssignees is off', () => {
         const decision = authorizeTaskAssignment({
-            callerIsStaff: true,
+            callerMayAdminister: true,
             taskSpaceId: 'discovery',
             assigneeSeatSpaceId: 'northwind',
             allowParentAssignees: false,
@@ -821,7 +841,7 @@ describe('authorizeTaskAssignment', () => {
 
     it('refuses assignment of a Team task to someone who cannot see Team', () => {
         const decision = authorizeTaskAssignment({
-            callerIsStaff: true,
+            callerMayAdminister: true,
             taskSpaceId: 'discovery',
             assigneeSeatSpaceId: 'discovery',
             allowParentAssignees: true,

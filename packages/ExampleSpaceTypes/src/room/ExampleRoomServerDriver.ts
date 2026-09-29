@@ -18,9 +18,13 @@ import {
     type SyncSeatsResult,
     type SpaceChangeContext,
     type ChildSpaceChangeContext,
+    type MemberChangeContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { readExtension, stringList } from '../extension-config.js';
+
+const KEY = 'example-room';
 
 @RegisterClass(BaseSpaceTypeServerDriver, 'example-room')
 export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
@@ -39,11 +43,13 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
                 field: 'AnchorRecordID',
             };
         }
-        const entityName = (ctx.entityName ?? '').toLowerCase();
-        if (!entityName.includes('deal') && !entityName.includes('opportunity')) {
+        // The entities a room may be anchored to come from the type's configuration (`Extensions.example-room.AnchorEntities`)
+        const anchorEntities = stringList(readExtension(ctx.spaceType.Configuration, KEY)['AnchorEntities'], 'AnchorEntities');
+        const entityName = (ctx.entityName ?? '').toLowerCase().trim();
+        if (!anchorEntities.includes(entityName)) {
             return {
                 ok: false,
-                message: `Invalid anchor entity "${ctx.entityName}". Must be a Deal or Opportunity.`,
+                message: `Invalid anchor entity "${ctx.entityName}". A deal room anchors to one of: ${anchorEntities.join(', ') || 'no entity (none is configured)'}.`,
                 field: 'AnchorEntityID',
             };
         }
@@ -83,6 +89,21 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
     }
 
     /**
+     * Refuses to seat someone who opted out of outreach: the users named in `Extensions.example-room.OptedOutUserIds`
+     * on the room's own configuration.
+     */
+    public override ValidateMemberChange(
+        ctx: MemberChangeContext
+    ): DriverValidationResult {
+        if (ctx.kind !== 'Invite') return { ok: true };
+        const optedOut = stringList(readExtension(ctx.space.Configuration, KEY)['OptedOutUserIds'], 'OptedOutUserIds');
+        if (optedOut.includes((ctx.member.UserID ?? '').toLowerCase())) {
+            return { ok: false, message: 'This contact has opted out of communications.', field: 'UserID' };
+        }
+        return { ok: true };
+    }
+
+    /**
      * Validates who can start chats in a deal room:
      * - Only contributors or owners can start chats
      */
@@ -100,7 +121,8 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
         ctx: MessageValidationContext
     ): DriverValidationResult {
         const text = (ctx.messageText ?? '').toLowerCase();
-        if (text.includes('internal margin target') || text.includes('confidential deal floor')) {
+        const blocked = stringList(readExtension(ctx.spaceType.Configuration, KEY)['BlockedPhrases'], 'BlockedPhrases');
+        if (blocked.some((phrase) => text.includes(phrase))) {
             return {
                 ok: false,
                 message: 'Cannot post confidential margin or pricing floor terms in Deal Room chat.',
@@ -170,11 +192,9 @@ export class ExampleRoomServerDriver extends BaseSpaceTypeServerDriver {
         actingUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<SyncSeatsResult> {
-        // Filter out any contacts who opted out
-        const eligiblePeople = people.filter((p) => {
-            const email = (p.Email ?? '').toLowerCase();
-            return !email.includes('optout') && !email.includes('donotcontact');
-        });
+        // Filter out any contacts who opted out (`Extensions.example-room.OptedOutEmails` on the room's configuration)
+        const optedOut = stringList(readExtension(space.Configuration, KEY)['OptedOutEmails'], 'OptedOutEmails');
+        const eligiblePeople = people.filter((p) => !optedOut.includes((p.Email ?? '').toLowerCase().trim()));
         return super.SyncSeats(space, source, eligiblePeople, actingUser, provider);
     }
 }

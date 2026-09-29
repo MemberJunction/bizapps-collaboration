@@ -1,6 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ITEM_ENTITY, PERSON_ENTITY } from '../entity-names.js';
-import { FindRows, View } from '../wire.js';
+import { SPACE_AGENT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY } from '../entity-names.js';
+import { FindRows } from '../wire.js';
+import { registerChecks } from './cleanup-helpers.js';
 
 const checks: NamedCheck[] = [
     {
@@ -78,9 +79,27 @@ const checks: NamedCheck[] = [
             Assert(itemBands.has('Shared'), 'Shared band items exist');
         },
     },
+    {
+        Id: 'collab-world.CW4',
+        Name: 'CW4 — the world allows Sage in Northwind, and nowhere else, so a person can tag it in that space\'s chat',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const rows = await FindRows<{ SpaceID: string | null; SpaceTypeID: string | null; Agent: string; IsDefault: boolean }>(
+                ctx,
+                SPACE_AGENT_ENTITY,
+                'ID IS NOT NULL',
+                ['SpaceID', 'SpaceTypeID', 'Agent', 'IsDefault'],
+            );
+            Assert(rows.length === 1, `Exactly one agent row is in the world (Sage on Northwind), found ${rows.length}: ${JSON.stringify(rows)}`);
+            const [row] = rows;
+            Assert(row.Agent === 'Sage' && !row.SpaceTypeID && !row.IsDefault, `The row is Sage, on a space rather than a type, and not the default: ${JSON.stringify(row)}`);
+            const [northwind] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, "Name = 'Northwind relationship'", ['ID']);
+            Assert(row.SpaceID?.toLowerCase() === northwind.ID.toLowerCase(), 'and the space is Northwind relationship');
+        },
+    },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('collab-world', {
     Setup: async () => {},
     Teardown: async () => {},

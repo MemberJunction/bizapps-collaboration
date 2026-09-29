@@ -1,5 +1,5 @@
 import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { authorizeItemWrite, membershipReaches, requestedItemBand, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, membershipReaches, uploadBandChoice, type Band } from '@mj-biz-apps/collaboration-core';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceItemEntity,
@@ -11,11 +11,15 @@ const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
 
-/** The band a new upload asks for. The item gate still makes the final decision. */
+/**
+ * The band a new upload asks for: the one the person chose, or the type's default when they chose none.
+ * A band the seat can't hold is refused. The item gate still makes the final decision.
+ */
 export async function decideUploadBand(
     provider: IMetadataProvider,
     user: UserInfo,
     spaceId: string,
+    chosenBand?: Band | null,
 ): Promise<{ ok: true; band: Band } | { ok: false; message: string }> {
     const item = await provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(ITEMS, user);
     const space = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACES, user);
@@ -31,7 +35,11 @@ export async function decideUploadBand(
     if (!reach) {
         return { ok: false, message: 'Upload refused: the signer does not reach this space.' };
     }
-    const requested = requestedItemBand(type.DefaultBand, reach.role.canSeeTeamBand, reach.role.canPromoteBand);
+    const choice = uploadBandChoice(type.DefaultBand, reach.role.canSeeTeamBand, reach.role.canPromoteBand);
+    if (chosenBand && !choice.allowed.includes(chosenBand)) {
+        return { ok: false, message: `Upload refused: this seat cannot place material in the ${chosenBand} band.` };
+    }
+    const requested = chosenBand ?? choice.start;
     const decision = authorizeItemWrite({
         callerUserId: user.ID,
         previousSpaceId: null,

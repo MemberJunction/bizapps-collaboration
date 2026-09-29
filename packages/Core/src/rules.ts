@@ -53,6 +53,7 @@ export interface InviteRefusal {
         | 'not-signed-in'
         | 'unknown-space'
         | 'not-a-member'
+        | 'not-authorized'
         | 'cannot-invite'
         | 'above-ceiling'
         | 'sealed'
@@ -84,12 +85,15 @@ export function utcCalendarDaysBetween(d1: Date, d2: Date): number {
     return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
+/** The fields of a space that decide its post-close access: all the check reads. */
+export type PostCloseFields = Pick<SpaceNode, 'closedAt' | 'postCloseAccess' | 'postCloseAccessDays' | 'spaceTypePostCloseAccess' | 'spaceTypePostCloseAccessDays'>;
+
 /**
  * Checks whether post-close access is permitted for a space based on its
  * PostCloseAccess mode and PostCloseAccessDays window (aligning with fnCollaborationAccess).
  */
 export function isPostCloseAccessPermitted(
-    space: SpaceNode,
+    space: PostCloseFields,
     now: Date = new Date()
 ): boolean {
     if (!space.closedAt) {
@@ -113,7 +117,7 @@ export function isPostCloseAccessPermitted(
 }
 
 export function isAgentPostCloseAccessPermitted(
-    space: SpaceNode,
+    space: PostCloseFields,
     now: Date = new Date()
 ): boolean {
     if (!space.closedAt) {
@@ -206,7 +210,7 @@ export interface RosterGroup {
     members: MemberSnapshot[];
 }
 
-export type RosterStop = 'root' | 'sealed' | 'unloaded-parent';
+export type RosterStop = 'root' | 'sealed' | 'unloaded-parent' | 'closed';
 
 export interface RosterWalk {
     groups: RosterGroup[];
@@ -217,13 +221,16 @@ export interface RosterWalk {
 /**
  * Everyone who reaches `targetId`, grouped by the space they sit on.
  * Each person is listed once, under their nearest active seat. That is the
- * seat `membershipReaches` returns. The walk stops at a root, at a sealed
- * space, or at a parent the caller did not load.
+ * seat `membershipReaches` returns for a space that is open; for a closed target `membershipReaches` gives no one once its
+ * post-close access has ended, while this still lists the target's own seats. The walk stops at a root, at a sealed
+ * space, at a closed parent whose post-close access has ended (as `membershipReaches` stops there), or at a parent the caller
+ * did not load.
  */
 export function rosterBySeat(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     targetId: string,
+    now: Date = new Date(),
 ): RosterWalk {
     const index = byId(spaces);
     const groups: RosterGroup[] = [];
@@ -257,6 +264,11 @@ export function rosterBySeat(
         const parent = index.get(idKey(current.parentId));
         if (!parent) {
             stop = 'unloaded-parent';
+            break;
+        }
+        // A closed parent that no longer lets anyone in doesn't reach this space, and neither does anything above it
+        if (parent.closedAt && !isPostCloseAccessPermitted(parent, now)) {
+            stop = 'closed';
             break;
         }
         current = parent;
@@ -370,16 +382,16 @@ export function planSpaceWrite(input: {
 }
 
 /**
- * Create a child: owner of the parent. Create a root: staff, and the caller is
+ * Create a child: owner of the parent. Create a root: someone who may administer spaces, and the caller is
  * the owner they are about to be. Edit or move: owner of the space as it stands.
  * A move also requires owner of the destination parent. Participants do not create roots.
  */
 export function authorizeSpaceWrite(input: {
     kind: SpaceWriteKind;
     callerUserId: string | null;
-    callerIsStaff: boolean;
+    callerMayAdminister: boolean;
     nextOwnerId: string;
-    /** True when a move clears ParentID. Staff and the current owner may do that. */
+    /** True when a move clears ParentID. Only someone who may administer spaces may do that. */
     toRoot?: boolean;
     /** Reaching membership on the space being edited, before the move. Null on create. */
     here: MemberSnapshot | null;
@@ -390,8 +402,8 @@ export function authorizeSpaceWrite(input: {
         return { ok: false, code: 'not-signed-in', message: 'Space change refused: there is no signed-in user.' };
     }
     if (input.kind === 'create-root') {
-        if (!input.callerIsStaff || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may create a root, and they must own it.' };
+        if (!input.callerMayAdminister || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
+            return { ok: false, code: 'not-authorized', message: 'Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.' };
         }
         return { ok: true };
     }
@@ -405,8 +417,8 @@ export function authorizeSpaceWrite(input: {
         return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change it.' };
     }
     if (input.kind === 'move' && input.toRoot) {
-        if (!input.callerIsStaff) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may move a space to the top level.' };
+        if (!input.callerMayAdminister) {
+            return { ok: false, code: 'not-authorized', message: 'Space change refused: only someone with the Administer Spaces authorization may move a space to the top level.' };
         }
         return { ok: true };
     }
@@ -445,13 +457,13 @@ export function mayFileRootTask(input: {
  * Authorize task assignment to a member whose seat is known.
  *
  * When the filed task's space has `allowParentAssignees` off and the caller is
- * not staff, participants may only assign people seated in their space or below.
+ * unable to administer spaces, participants may only assign people seated in their space or below.
  * An ancestor seat reaches the space through inheritance, but the switch
  * restricts assignment to local seats.
  * A Team task can never be given to someone who cannot see Team.
  */
 export function authorizeTaskAssignment(input: {
-    callerIsStaff: boolean;
+    callerMayAdminister: boolean;
     taskSpaceId: string;
     assigneeSeatSpaceId: string;
     allowParentAssignees: boolean;
@@ -462,7 +474,7 @@ export function authorizeTaskAssignment(input: {
         return { ok: false, message: 'Assignment refused: a Team task cannot be given to someone who cannot see Team.' };
     }
     const isAncestorSeat = idKey(input.assigneeSeatSpaceId) !== idKey(input.taskSpaceId);
-    if (isAncestorSeat && !input.allowParentAssignees && !input.callerIsStaff) {
+    if (isAncestorSeat && !input.allowParentAssignees && !input.callerMayAdminister) {
         return { ok: false, message: 'Assignment refused: participants may not assign people seated above this space.' };
     }
     return { ok: true };

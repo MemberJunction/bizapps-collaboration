@@ -1,7 +1,7 @@
 [
   {
     "primaryKey": {
-      "ID": "08E35F1F-7DCA-40D3-AAA0-D0EF441A433A"
+      "ID": "@lookup:MJ: Application Roles.ApplicationID=94F5906B-38AB-4A9F-BFCA-3D395BBBC198&RoleID=@lookup:MJ: Roles.Name=UI"
     },
     "fields": {
       "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",
@@ -12,7 +12,7 @@
   },
   {
     "primaryKey": {
-      "ID": "45232CFB-3B4B-4028-AE4C-652E8A4B61CF"
+      "ID": "@lookup:MJ: Application Roles.ApplicationID=94F5906B-38AB-4A9F-BFCA-3D395BBBC198&RoleID=@lookup:MJ: Roles.Name=Developer"
     },
     "fields": {
       "ApplicationID": "94F5906B-38AB-4A9F-BFCA-3D395BBBC198",

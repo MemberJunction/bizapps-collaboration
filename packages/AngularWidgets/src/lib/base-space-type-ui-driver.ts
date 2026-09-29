@@ -1,8 +1,8 @@
 import type { Type } from '@angular/core';
 import type { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import type { EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { normalizeContributionKey, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
-import type { UserInfo } from '@memberjunction/core';
+import { LogError, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal, type ClassRegistration } from '@memberjunction/global';
 import { BaseSpaceTab } from './base-space-tab';
 import { BaseSpaceOverviewCard } from './base-space-overview-card';
@@ -35,6 +35,11 @@ export interface SpaceOverviewCardDescriptor {
     subtitle?: string;
     sortKey?: number;
     component?: Type<BaseSpaceOverviewCard>;
+    /**
+     * Who sees the card: 'Shared' shows it to everyone in the space, 'Team' only to those who can see the Team band. A card that
+     * doesn't say is a Team card: outside participants never see a card unless its author said they may.
+     */
+    side?: 'Shared' | 'Team';
 }
 
 export interface SpaceHeaderChipDescriptor {
@@ -71,9 +76,23 @@ export interface SpaceNewStepDescriptor {
     component?: Type<BaseAngularComponent>;
 }
 
+/**
+ * The details a type keeps of its own (its subtype's columns), as the New space dialog, Settings → Details and the Overview's About
+ * card draw them. By default a subtype with a registered form shows that form (MemberJunction's form host: no toolbar, no related
+ * entities), and one without shows a field for each column it adds. A driver returns `undefined` to show none, names fields to
+ * hide, or gives a component of its own; a field the space can't be saved without is shown regardless.
+ */
 export interface SpaceDetailsFormDescriptor {
+    /** The subtype entity the details are of. */
     entityName: string;
-    hiddenSectionKeys?: string[];
+    /** Subtype fields left out of the field list (an optional field only). It does not trim a form, which lays out its own fields. */
+    hiddenFieldNames?: string[];
+    /**
+     * An Angular component that draws the details in place of the form and the field list. It is mounted with `Record` (the
+     * subtype's record, whose fields it edits directly) and `EditMode` (false on the Overview's About card) as inputs, and its
+     * changes are seen through the DOM events it raises (`input`, `change`).
+     */
+    component?: Type<unknown>;
 }
 
 // ============================================================================
@@ -101,7 +120,7 @@ export interface BeforeCreateChildSpaceEvent extends CancellableSpaceUIEvent {
 export interface BeforeStartChatEvent extends CancellableSpaceUIEvent {
     spaceId: string;
     name?: string;
-    kind: 'Room' | 'Chat';
+    kind: 'General' | 'Topic' | 'Private';
     participantUserIds?: string[];
 }
 
@@ -180,19 +199,42 @@ export class BaseSpaceTypeUIDriver {
 
     public GetTabLabel(ctx: SpaceUIContext, tabKey: string, defaultLabel: string): string {
         const labels = ctx.rules?.Labels?.Tabs;
-        if (labels && labels[tabKey]) {
-            return labels[tabKey];
-        }
-        return defaultLabel;
+        const wanted = normalizeContributionKey(tabKey);
+        const match = labels ? Object.keys(labels).find((key) => normalizeContributionKey(key) === wanted) : undefined;
+        return match && labels?.[match] ? labels[match] : defaultLabel;
     }
+}
+
+/**
+ * The type's own driver has the final say over the parts it is handed: what it names replaces the part with the same key, and the
+ * rest (the built-in parts and what other apps contributed) stays. Sorted by `sortKey`.
+ */
+export function overlayDescriptors<TDescriptor extends { key: string; sortKey?: number }>(
+    defaults: readonly TDescriptor[],
+    own: readonly TDescriptor[],
+): TDescriptor[] {
+    const merged = new Map<string, TDescriptor>();
+    for (const item of defaults) merged.set(normalizeContributionKey(item.key), item);
+    for (const item of own) merged.set(normalizeContributionKey(item.key), item);
+    return [...merged.values()].sort((a, b) => (a.sortKey ?? 100) - (b.sortKey ?? 100));
 }
 
 // ============================================================================
 // Contribution Metadata & Assembler
 // ============================================================================
 
+/** What has been logged already: contributions are assembled for every space that is built, and a clash reads once. */
+const loggedContributionFaults = new Set<string>();
+function logContributionOnce(message: string): void {
+    if (loggedContributionFaults.has(message)) return;
+    loggedContributionFaults.add(message);
+    LogError(message);
+}
+
 export interface SpaceContributionMetadata {
     spaceTypes: string[];
+    /** For a card: who sees it (see `SpaceOverviewCardDescriptor.side`). */
+    side?: 'Shared' | 'Team';
     slot?: string;
     sortKey?: number;
     contributionKey: string;
@@ -219,7 +261,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         return spaceTypes.some((t) => t === '*' || t.toLowerCase().trim() === normalizedCode);
     });
 
-    // Deduplicate on contributionKey: highest Priority wins (if tied, latest)
+    // Deduplicate on contributionKey (compared without case): the highest Priority wins, and on a tie the first registered
     const map = new Map<string, { reg: ClassRegistration; meta: SpaceContributionMetadata }>();
     for (const reg of registrations) {
         const raw = reg.Metadata as Record<string, string | number | boolean | string[] | undefined>;
@@ -231,11 +273,15 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
             label: typeof raw['label'] === 'string' ? raw['label'] : undefined,
             icon: typeof raw['icon'] === 'string' ? raw['icon'] : undefined,
             title: typeof raw['title'] === 'string' ? raw['title'] : undefined,
+            side: raw['side'] === 'Shared' || raw['side'] === 'Team' ? raw['side'] : undefined,
         };
-        const key = meta.contributionKey;
+        const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
         if (!existing || reg.Priority > existing.reg.Priority) {
+            if (existing) logContributionOnce(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${reg.Priority}) is used and the other (${existing.reg.Priority}) is ignored.`);
             map.set(key, { reg, meta });
+        } else {
+            logContributionOnce(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; ${reg.Priority === existing.reg.Priority ? `at the same priority (${reg.Priority}) the first registered is used` : `the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored`}.`);
         }
     }
 
@@ -245,13 +291,19 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         contributedItems.push(desc);
     }
 
-    // Merge default items with contributed items (contributions override defaults on key collision)
+    // Contributions only add. One whose key clashes with a built-in part is refused and logged: any installed app could otherwise
+    // remove the chat from every space. Only the type's own UI driver may replace a built-in part (see overlayDescriptors).
     const mergedMap = new Map<string, TDescriptor>();
     for (const def of defaultItems) {
-        mergedMap.set(def.key, def);
+        mergedMap.set(normalizeContributionKey(def.key), def);
     }
     for (const contrib of contributedItems) {
-        mergedMap.set(contrib.key, contrib);
+        const key = normalizeContributionKey(contrib.key);
+        if (mergedMap.has(key)) {
+            logContributionOnce(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
+            continue;
+        }
+        mergedMap.set(key, contrib);
     }
 
     const result = Array.from(mergedMap.values());
@@ -294,7 +346,7 @@ export class UIDriverRegistry extends BaseSingleton<UIDriverRegistry> {
 
         if (!this._loggedMissing.has(normalized)) {
             this._loggedMissing.add(normalized);
-            console.warn(`[UIDriverRegistry] UI driver '${normalized}' not registered. Falling back to BaseSpaceTypeUIDriver.`);
+            LogError(`[UIDriverRegistry] UI driver '${normalized}' not registered. Falling back to BaseSpaceTypeUIDriver.`);
         }
 
         return this.GetDefaultDriver();

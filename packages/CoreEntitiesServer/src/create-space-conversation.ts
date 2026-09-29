@@ -10,6 +10,7 @@ import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
+import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
@@ -95,8 +96,15 @@ export async function createSpaceConversation(
         return { ok: false, message: 'Caller does not reach this space.' };
     }
 
-    // 1. Check Chats.WhoCanStart and allowed kinds
-    const chatSettings = await resolveSpaceChatSettings(provider, spaceId, user);
+    // 1. Check Chats.WhoCanStart and allowed kinds. The chain is read as the system user, as the host rules and the turn read it:
+    // what the caller can see of the tree must not change which narrowing overrides apply.
+    const system = await requireSystemUser(probe);
+    let chatSettings;
+    try {
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+    } catch (settingsError) {
+        return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
+    }
     const whoCanStart = chatSettings.resolvedSettings.Chats?.WhoCanStart ?? 'Anyone';
 
     const startPerms = evaluateCanStartSpaceConversation(
@@ -117,7 +125,17 @@ export async function createSpaceConversation(
         return { ok: false, message: `Caller cannot start a ${targetKind} conversation.` };
     }
 
-    const system = await requireSystemUser(probe);
+    // The space type's driver has the last word, and a type whose driver is missing refuses (fail closed)
+    const resolved = await resolveSpaceDriver(probe, provider, user, spaceId);
+    if (!resolved.ok) return { ok: false, message: resolved.message };
+    const chatRefusal = refusalOf(await resolved.call.driver.ValidateChatChange({
+        ...resolved.call.base,
+        chatName: cleanName,
+        chatKind: targetKind,
+        isNew: true,
+    }));
+    if (chatRefusal) return { ok: false, message: chatRefusal };
+
 
     // 2. Create Conversation and SpaceChat in one transaction owned by system user
     const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', system);

@@ -1,9 +1,11 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient, mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, mjBizAppsCollaborationItemUseEntity } from '@mj-biz-apps/collaboration-entities';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaClientContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext, SameID } from '../../wire.js';
+import { deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
 const createdItemIds: string[] = [];
 
 const checks: NamedCheck[] = [
@@ -225,40 +227,105 @@ const checks: NamedCheck[] = [
                 Assert(usesAfter.length >= 1, 'Item Uses MUST still exist after unauthorized delete attempt');
             } finally {
                 if (createdUseId) {
-                    const use = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationItemUseEntity>(ITEM_USE_ENTITY, ctx.User);
-                    const loaded = await use.Load(createdUseId);
-                    Assert(loaded === true, `client LB5 cleanup: loading Item Use ${createdUseId} must succeed`);
-                    const deleted = await use.Delete();
-                    Assert(deleted === true, `client LB5 cleanup: deleting Item Use ${createdUseId} must succeed: ${use.LatestResult?.CompleteMessage ?? ''}`);
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, ITEM_USE_ENTITY, createdUseId, 'an item use');
                 }
             }
         },
     },
+    {
+        Id: 'library.LB6',
+        Name: 'LB6 — an upload over the wire lands in the band its uploader chose, and a seat that cannot see Team cannot choose it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const leeCtx = await getPersonaClientContext(ctx, 'lee');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const leeClient = new CollaborationClient(leeCtx.GraphQLProvider);
+            const content = (name: string) => Buffer.from(`LB6 ${name}`).toString('base64');
+
+            // The cohort type's default band is Shared: with nothing chosen the file is Shared, with Team chosen it stays internal
+            const byDefault = await adaClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-default-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('default'), Folder: 'Welcome' });
+            Assert(byDefault.Success === true && !!byDefault.ItemID, `Ada uploads with no band chosen: ${byDefault.ErrorMessage ?? ''}`);
+            if (byDefault.ItemID) createdItemIds.push(byDefault.ItemID);
+            const internal = await adaClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-team-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('team'), Folder: 'Welcome', Band: 'Team' });
+            Assert(internal.Success === true && !!internal.ItemID, `Ada uploads with Team chosen: ${internal.ErrorMessage ?? ''}`);
+            if (internal.ItemID) createdItemIds.push(internal.ItemID);
+
+            const bands = await FindRows<{ ID: string; Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID IN ('${byDefault.ItemID}', '${internal.ItemID}')`, ['ID', 'Band']);
+            Assert(bands.find((r) => SameID(r.ID, byDefault.ItemID))?.Band === 'Shared', "No band chosen takes the type's default, Shared");
+            Assert(bands.find((r) => SameID(r.ID, internal.ItemID))?.Band === 'Team', 'Team chosen lands on Team');
+
+            const learnerRead = await FindRows<{ ID: string }>(leeCtx, SPACE_ITEM_ENTITY, `SpaceID = '${COHORT_SPACE_ID}'`, ['ID'], leeCtx.User, { BypassCache: true });
+            Assert(learnerRead.some((r) => SameID(r.ID, byDefault.ItemID)), 'Lee reads the Shared upload');
+            Assert(!learnerRead.some((r) => SameID(r.ID, internal.ItemID)), 'Lee cannot read the Team upload');
+
+            const refused = await leeClient.UploadSpaceFile({ SpaceID: COHORT_SPACE_ID, FileName: `lb6-refused-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('refused'), Folder: 'Welcome', Band: 'Team' });
+            Assert(!refused.Success, 'Lee choosing Team is refused over the wire');
+            Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
+            const storedRefused = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name LIKE 'lb6-refused-%'`, ['ID'], undefined, { BypassCache: true });
+            Assert(storedRefused.length === 0, 'A refused upload stores nothing');
+        },
+    },
+    {
+        Id: 'library.LB7',
+        Name: 'LB7 — in Discovery, an upload with no band chosen lands on Team over the wire, and a member who can only keep material on Team is refused Shared',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+            const content = (name: string) => Buffer.from(`LB7 ${name}`).toString('base64');
+
+            const byDefault = await adaClient.UploadSpaceFile({ SpaceID: DISCOVERY_SPACE_ID, FileName: `lb7-default-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('default'), Folder: 'Briefs' });
+            Assert(byDefault.Success === true && !!byDefault.ItemID, `Ada uploads with no band chosen: ${byDefault.ErrorMessage ?? ''}`);
+            if (byDefault.ItemID) createdItemIds.push(byDefault.ItemID);
+            const bands = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.ItemID}'`, ['Band']);
+            Assert(bands[0]?.Band === 'Team', `No band chosen takes Discovery's default, Team (saw ${bands[0]?.Band})`);
+
+            const refusedName = `lb7-refused-${Date.now()}.txt`;
+            const refused = await samClient.UploadSpaceFile({ SpaceID: DISCOVERY_SPACE_ID, FileName: refusedName, MimeType: 'text/plain', Base64Data: content('refused'), Folder: 'Briefs', Band: 'Shared' });
+            Assert(!refused.Success, 'Sam choosing Shared is refused over the wire');
+            Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Shared band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
+            const stored = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID'], undefined, { BypassCache: true });
+            Assert(stored.length === 0, 'A refused upload stores nothing');
+        },
+    },
+    {
+        Id: 'library.LB8',
+        Name: "LB8 — opening a file in MemberJunction's viewer follows the band: Bea's media token works for her Shared photo and is refused for Ada's Team brief",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const files = await FindRows<{ ID: string; Name: string }>(ctx, FILE_ENTITY, `Name IN ('site-photo.png', 'discovery-brief.pdf')`, ['ID', 'Name']);
+            const photo = files.find((f) => f.Name === 'site-photo.png');
+            const brief = files.find((f) => f.Name === 'discovery-brief.pdf');
+            Assert(!!photo && !!brief, 'The world seeds site-photo.png (Shared) and discovery-brief.pdf (Team)');
+
+            const mint = async (fileId: string) => {
+                const result = await beaCtx.GraphQLProvider.ExecuteGQL(
+                    `mutation CreateMediaAccessToken($fileId: String!) { CreateMediaAccessToken(fileId: $fileId) { Success Url ErrorMessage } }`,
+                    { fileId },
+                );
+                return result?.CreateMediaAccessToken as { Success: boolean; Url?: string | null; ErrorMessage?: string | null } | undefined;
+            };
+
+            // The Files form gets its media through this mutation, which loads the file as the caller
+            const shared = await mint(photo!.ID);
+            Assert(shared?.Success === true && !!shared.Url, `Bea's media token for her Shared photo: ${shared?.ErrorMessage ?? 'no answer'}`);
+            const team = await mint(brief!.ID);
+            Assert(!!team && team.Success === false, "Bea's media token for Ada's Team brief must be refused");
+            Assert(!team?.Url, 'No URL comes back for a refused token');
+        },
+    },
 ];
 
-for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
+registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        const errors: string[] = [];
-        while (createdItemIds.length > 0) {
-            const id = createdItemIds.pop();
-            if (id) {
-                try {
-                    const item = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, ctx.User);
-                    if (await item.Load(id)) {
-                        const deletedItem = await item.Delete();
-                        if (!deletedItem) {
-                            errors.push(`Failed to delete Space Item ${id}: ${item.LatestResult?.CompleteMessage ?? 'Delete returned false'}`);
-                        }
-                    }
-                } catch (e) {
-                    errors.push(`Error deleting Space Item ${id}: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        }
-        if (errors.length > 0) {
-            throw new Error(`library Teardown encountered ${errors.length} error(s):\n${errors.join('\n')}`);
-        }
-    },
+    // Every step runs and reads back, newest first; the first failure is thrown at the end
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps(
+            createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+        ),
 });
