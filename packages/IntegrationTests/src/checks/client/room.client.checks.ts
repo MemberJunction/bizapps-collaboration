@@ -4,6 +4,8 @@ import { MJConversationDetailEntity, MJConversationEntity, MJResourcePermissionE
 import { CollaborationClient, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceChatEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { CONVERSATION_ENTITY, CONVERSATION_DETAIL_ENTITY, SPACE_ITEM_ENTITY, FILE_ENTITY, SPACE_ENTITY, SPACE_CHAT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../../entity-names.js';
 import { FindRows, GetPersonaUser, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
+import { COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
+import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
@@ -16,6 +18,7 @@ const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 import { cleanupConversation, cleanupSpace } from '../cleanup-helpers.js';
 
 const createdDetailIds: string[] = [];
+let testAgentAttachmentId: string | null = null;
 
 const checks: NamedCheck[] = [
     {
@@ -354,7 +357,7 @@ const checks: NamedCheck[] = [
                 const adaPostRes = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: discConvId,
-                    Text: '@Collaboration Space Agent summarize materials in this space',
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize materials in this space`,
                 });
                 Assert(adaPostRes.Success === true, `Ada PostSpaceMessage failed: ${adaPostRes.ErrorMessage ?? ''}`);
                 if (adaPostRes.DetailID) createdDetailIds.push(adaPostRes.DetailID);
@@ -419,7 +422,7 @@ const checks: NamedCheck[] = [
                 const samPostRes = await samClient.PostSpaceMessage({
                     SpaceID: NORTHWIND_SPACE_ID,
                     ConversationID: nwConvId,
-                    Text: '@Collaboration Space Agent summarize all materials in this space',
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize all materials in this space`,
                 });
                 Assert(samPostRes.Success === true, `Sam PostSpaceMessage in Northwind room failed: ${samPostRes.ErrorMessage ?? ''}`);
                 if (samPostRes.DetailID) createdDetailIds.push(samPostRes.DetailID);
@@ -460,7 +463,7 @@ const checks: NamedCheck[] = [
                 const samSealedRes = await samClient.PostSpaceMessage({
                     SpaceID: SEALED_BRANCH_SPACE_ID,
                     ConversationID: sealedConvRes.ConversationID,
-                    Text: '@Collaboration Space Agent summarize materials in this space',
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize materials in this space`,
                 });
                 Assert(samSealedRes.Success === true, `Sam PostSpaceMessage in Sealed branch room failed: ${samSealedRes.ErrorMessage ?? ''}`);
                 if (samSealedRes.DetailID) createdDetailIds.push(samSealedRes.DetailID);
@@ -971,8 +974,16 @@ const checks: NamedCheck[] = [
 
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
-    Setup: async () => {},
+    // The turns run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
+    Setup: async (ctx: IntegrationCheckContext) => {
+        testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
+    },
     Teardown: async (ctx: IntegrationCheckContext) => {
+        if (testAgentAttachmentId) {
+            const attachmentId = testAgentAttachmentId;
+            testAgentAttachmentId = null;
+            await detachTestAgent(ctx, attachmentId);
+        }
         while (createdDetailIds.length > 0) {
             const id = createdDetailIds.pop();
             if (id) {

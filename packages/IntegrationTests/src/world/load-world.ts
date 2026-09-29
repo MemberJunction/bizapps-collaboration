@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
-import { MJAIAgentEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import '@mj-biz-apps/common-entities';
@@ -33,7 +33,6 @@ import {
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
-    COLLABORATION_DEFAULT_AGENT_ID,
     CollaborationEngine,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
@@ -454,55 +453,10 @@ export async function loadWorld(): Promise<void> {
     }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
-    await ensureRobotTesterSeated(provider, system, spaceIds);
-    await ensureTestAgentDriver(system);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
     console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
     console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
     await pool.close();
-}
-
-async function ensureTestAgentDriver(system: UserInfo): Promise<void> {
-    const md = new Metadata();
-    const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', system);
-    if (await agent.Load(COLLABORATION_DEFAULT_AGENT_ID)) {
-        if (agent.DriverClass !== 'CollaborationSpaceAgentDriver') {
-            agent.DriverClass = 'CollaborationSpaceAgentDriver';
-            const saved = await agent.Save();
-            if (!saved) {
-                throw new Error('Failed to set test agent DriverClass');
-            }
-        }
-    }
-}
-
-async function ensureRobotTesterSeated(
-    provider: SQLServerDataProvider,
-    system: UserInfo,
-    spaceIds: Map<string, string>,
-): Promise<void> {
-    const robotEmail = 'da-robot-tester@bluecypress.io';
-    const robotId = await findId(provider, USERS, `Email = '${robotEmail}'`, system);
-    if (!robotId) return;
-
-    const ownerRoleId = await findId(provider, ROLES, `Code = 'owner'`, system);
-    if (!ownerRoleId) return;
-
-    const md = new Metadata();
-    for (const spaceId of spaceIds.values()) {
-        const existingSeat = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${robotId}'`, system);
-        if (!existingSeat) {
-            const memberObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, system);
-            memberObj.NewRecord();
-            memberObj.SpaceID = spaceId;
-            memberObj.UserID = robotId;
-            memberObj.SpaceRoleTypeID = ownerRoleId;
-            memberObj.Band = 'Team';
-            memberObj.Status = 'Active';
-            await memberObj.Save();
-        }
-        await syncRoomEditGrantsForSpace(provider, spaceId);
-    }
 }
 
 function asBool(value: unknown): boolean {

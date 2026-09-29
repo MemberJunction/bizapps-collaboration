@@ -4,6 +4,7 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "agents",
     "tests",
     "test-suites"
   ],

@@ -96,4 +96,15 @@ Staff accounts hold `UI`, so a magic link is not issued for them. They use the h
 
 A Shared file writes a share notice for everyone who can see it except the uploader, and an item use of kind `upload`. A Team file writes the item use and no share notice. A second load finds the same file name in the space and reads the bytes back instead of storing them again.
 
+## The test agent
+
+The chat checks run their agent turns on the harness's own agent, **Space Chat Test Stub**, so they need no model key. It is a row in `metadata-tests/agents`, with its own ID, and its driver answers a turn from the items the turn allowed. Neither the loader nor a check changes a shipped row: the Collaboration Space Agent keeps its shipped `DriverClass` (none), and the world's own spaces answer with it. The stub's driver is in the integration package, not in a published one.
+
+- **Push its row** once per database, after the app's metadata: `pnpm run mj:push:tests`.
+- **A bundle attaches it.** The `room` and `agent` bundles add a Space Agent row for it on the Northwind root when they start (its children inherit it) and remove the row, then read back that it is gone, when they end. A message in those checks names it by mention, `@Space Chat Test Stub`.
+- **The server harness** registers the driver itself, because it loads the integration package.
+- **The client harness** talks to an MJAPI, and that process runs the turns. Start it with the driver's entry imported, as with the storage driver above: `--import <repo>/packages/IntegrationTests/dist/agents/index.js`. Without it a turn fails with an agent the server cannot build, and the check says which.
+
+The sample world seats no account of its own. An automation login that walks the app is seated by that walk's own setup, configured from its environment, or the walk runs as the personas.
+
 Conversations, the project plan, and committee governance rows join this catalog when those stores are seeded.

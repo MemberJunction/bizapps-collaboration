@@ -19,8 +19,11 @@ import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collabo
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { FindRows, getPersonaContext, getPersonaClientContext } from '../../wire.js';
+import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
+import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const createdDetailIds: string[] = [];
+let testAgentAttachmentId: string | null = null;
 
 import { cleanupConversation } from '../cleanup-helpers.js';
 
@@ -91,17 +94,18 @@ const checks: NamedCheck[] = [
             }
 
             // 3. Verify Collaboration Space Agent
-            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean }>(
+            const agents = await FindRows<{ ID: string; Name: string; AcceptsSkills: string; SkillActivationMode: string; ExposeAsAction: boolean; DriverClass: string | null }>(
                 ctx,
                 AI_AGENT_ENTITY,
                 `ID = '${AGENT_ID}'`,
-                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction'],
+                ['ID', 'Name', 'AcceptsSkills', 'SkillActivationMode', 'ExposeAsAction', 'DriverClass'],
             );
             Assert(agents.length === 1, 'Collaboration Space Agent exists');
             Assert(agents[0].Name === 'Collaboration Space Agent', 'Agent name matches');
             Assert(agents[0].AcceptsSkills === 'Limited', 'Agent AcceptsSkills is Limited');
             Assert(agents[0].SkillActivationMode === 'Auto', 'Agent SkillActivationMode is Auto');
             Assert(agents[0].ExposeAsAction === false, 'Agent ExposeAsAction is false (isolated from global chat area)');
+            Assert(agents[0].DriverClass === null, `The shipped agent has no DriverClass; no test changes a shipped row (saw ${agents[0].DriverClass})`);
 
             // 4. Verify 3 assigned skills
             const assignedSkills = await FindRows<{ ID: string; SkillID: string }>(
@@ -325,7 +329,7 @@ const checks: NamedCheck[] = [
                 const genMsg = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
-                    Text: `@Collaboration Space Agent summarize available documents`,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 Assert(genMsg.Success === true && !!genMsg.DetailID, `Ada posted tagged message in General: ${genMsg.ErrorMessage ?? ''}`);
                 if (genMsg.DetailID) createdDetailIds.push(genMsg.DetailID);
@@ -334,7 +338,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: genMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(genTurnRes.Success === true, `Agent turn in General succeeded: ${genTurnRes.ErrorMessage ?? ''}`);
                 if (genTurnRes.ReplyDetailIDs) createdDetailIds.push(...genTurnRes.ReplyDetailIDs);
@@ -358,7 +362,7 @@ const checks: NamedCheck[] = [
                 const privMsg = await adaClient.PostSpaceMessage({
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: privConvId,
-                    Text: `@Collaboration Space Agent summarize available documents`,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize available documents`,
                 });
                 Assert(privMsg.Success === true && !!privMsg.DetailID, `Ada posted tagged message in Private: ${privMsg.ErrorMessage ?? ''}`);
                 if (privMsg.DetailID) createdDetailIds.push(privMsg.DetailID);
@@ -367,7 +371,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: privConvId,
                     UserMessageID: privMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(privTurnRes.Success === true, `Agent turn in Private succeeded: ${privTurnRes.ErrorMessage ?? ''}`);
                 if (privTurnRes.ReplyDetailIDs) createdDetailIds.push(...privTurnRes.ReplyDetailIDs);
@@ -388,7 +392,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: untaggedMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!untaggedTurnRes.Success, 'Untagged message with AgentID under MentionOnly must be refused a turn over wire');
                 Assert(untaggedTurnRes.ErrorMessage === 'The message does not mention an agent.', `Untagged refusal matches: ${untaggedTurnRes.ErrorMessage}`);
@@ -398,7 +402,7 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: genMsg.DetailID!,
-                    AgentID: AGENT_ID,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
                 });
                 Assert(!secondTurnRes.Success, 'Second turn on already-processed UserMessageID must be refused over wire');
                 Assert(secondTurnRes.ErrorMessage === 'This message has already been processed by an agent turn.', `Second turn refusal matches: ${secondTurnRes.ErrorMessage}`);
@@ -412,8 +416,17 @@ const checks: NamedCheck[] = [
 
 for (const check of checks) IntegrationCheckRegistry.Instance.Register(check);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
-    Setup: async () => {},
+    // The turn checks run on the harness's own test agent, attached to the Northwind root for the bundle; its children inherit it.
+    // The MJAPI this harness talks to must load the test agent's driver (docs/reviewing-the-data.md).
+    Setup: async (ctx: IntegrationCheckContext) => {
+        testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
+    },
     Teardown: async (ctx: IntegrationCheckContext) => {
+        if (testAgentAttachmentId) {
+            const attachmentId = testAgentAttachmentId;
+            testAgentAttachmentId = null;
+            await detachTestAgent(ctx, attachmentId);
+        }
         while (createdDetailIds.length > 0) {
             const id = createdDetailIds.pop();
             if (id) {

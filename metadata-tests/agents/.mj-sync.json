@@ -1,0 +1,42 @@
+{
+  "entity": "MJ: AI Agents",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+    "Status": "Active",
+    "AcceptsSkills": "Limited",
+    "SkillActivationMode": "Auto"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".collaboration-test-agent.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'Space Chat Test Stub'",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      },
+      "CategoryID": {
+        "entity": "MJ: AI Agent Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Permissions": {
+        "entity": "MJ: AI Agent Permissions",
+        "foreignKey": "AgentID"
+      }
+    }
+  }
+}

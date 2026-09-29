@@ -22,6 +22,7 @@
     "build": "pnpm --filter \"./packages/*\" run build",
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
     "mj:push": "mj sync push --dir=metadata",
+    "mj:push:tests": "mj sync push --dir=metadata-tests --include=agents",
     "mj:standards": "mj standards check",
     "test:e2e": "pnpm --filter @mj-biz-apps/collaboration-e2e test"
   },

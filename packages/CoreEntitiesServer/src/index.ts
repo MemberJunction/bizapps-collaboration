@@ -59,6 +59,5 @@ export { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 export type { ResolvedSpaceChatSettings } from './resolve-space-chat-settings.js';
 export { createSpaceConversation, evaluateCanStartSpaceConversation } from './create-space-conversation.js';
 export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
-export { CollaborationSpaceAgentDriver } from './CollaborationSpaceAgentDriver.js';
 
 

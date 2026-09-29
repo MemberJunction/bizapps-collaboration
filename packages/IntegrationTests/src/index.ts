@@ -21,6 +21,7 @@ LoadShareNoticeEntityServer();
 LoadItemUseEntityServer();
 LoadCollaborationTaskEntityServer();
 
+import './agents/index.js';
 import './checks/collab-world.checks.js';
 import './checks/people-fls.checks.js';
 import './checks/parent-assignees.checks.js';
