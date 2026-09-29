@@ -33,7 +33,7 @@ On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subcl
 **`SpaceSubtypeResolver`** (`src/space-subtype-resolver.ts`) tells MemberJunction which subtype a space is: the entity its type names in `SpaceExtensionEntity`, or none.
 - It's registered with `@RegisterClass(EntitySubtypeResolver, 'MJ_BizApps_Collaboration: Spaces')`, so the browser and the server both use it.
 - It answers from `SpaceSubtypeDirectory`, which `collaboration-engine-base` fills whenever it loads the types. `Resolve()`, for a new space, reads the type itself when the types aren't loaded yet; `ResolveLoadHint()`, for a loaded space, answers only from the directory, and never queries.
-- `ResolveLoadHint` is on MemberJunction's `next`, so this package builds against `next`.
+- Only MemberJunction's `next` calls `ResolveLoadHint` ([MJ#4787](https://github.com/MemberJunction/MJ/pull/4787)); a release without it never does.
 
 **`CollaborationSpacePermissionProvider`** (`src/space-permission-provider.ts`) answers MJ's permission checks for the `Collaboration Spaces` permission domain and the `Space` resource type, both seeded in `metadata/`.
 - It's registered with `@RegisterClass(PermissionProviderBase, 'CollaborationSpacePermissionProvider')`, the class name the domain's metadata row names.

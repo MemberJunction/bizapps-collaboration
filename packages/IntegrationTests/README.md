@@ -23,7 +23,7 @@ Collaboration's integration checks, and the sample world they run against.
 | `library` | 6 | 8 | The seeded items, uploads and deletes |
 | `agent` | 10 | 7 | The agent's bounded retrieval, its search scope, and turns on the stub agent |
 | `features` | 5 | 5 | Space styling, tasks as items, message history and nesting |
-| `lifecycle` | none | 5 | A close with no access after it: who keeps the row and can reopen it, a closed parent's seats, `GetCloseConsequence`, Home's counts against the person's own reads, and a participant refused when running Home's query directly (LC1 to LC5) |
+| `lifecycle` | none | 6 | A close with no access after it: who keeps the row and can reopen it, a closed parent's seats, `GetCloseConsequence`, Home's counts against the person's own reads, Home's lists as the rows behind its counts, and a participant refused when running Home's queries directly (LC1 to LC6) |
 
 - **Server bundles** (`src/checks/`, entry `src/index.ts`) run in process with Collaboration's server classes loaded.
 - **Client bundles** (`src/checks/client/`, entry `src/client-index.ts`, exported as `./client`) run over GraphQL. They load no server package. `src/persona-provider.ts` signs in as each persona with a user API key it creates.

@@ -14,7 +14,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 - It's registered with `@RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')`, the `DriverClass` that `metadata/applications/` names.
 - Its tab shows the open space's name, or "Spaces", with the `fa-people-group` icon.
 - It's the whole Explorer surface:
-  - Home (the spaces you reach, with the counts `GetHomeCounts` reads), Inbox, My Tasks and Files;
+  - Home (the spaces you reach, with the counts `GetHomeCounts` reads; Open Tasks and Invitations Waiting open the rows behind them, from `GetHomeLists`), Inbox, My Tasks and Files;
   - a space's page, with Overview, Library, Work (list, board and timeline), Chat, People, Settings, and any tabs a type or another app contributes;
   - the share, upload, new-conversation and New space dialogs. New space is offered from the rail's + to someone who holds *Administer Spaces* and may create Space rows: it lists the active types, and draws a type's own fields when the type names a subtype.
 - A space whose type names a subtype shows that subtype's own fields in a Details card in Settings, editable by someone who may change settings, and read-only in an About card on the Overview (`src/lib/logic/space-details.ts`).
@@ -32,7 +32,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 22 `node:test` files in `src/lib/logic/`, and the root `pnpm test` runs them too.
+The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 23 `node:test` files in `src/lib/logic/`, and the root `pnpm test` runs them too.
 
 ## Not done yet
 

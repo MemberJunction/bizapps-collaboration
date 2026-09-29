@@ -64,7 +64,7 @@ Each gate has a `Load…EntityServer()` function, so a bundler can't drop it. `L
 pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build
 ```
 
-The build is `tsc`, into `dist/`. The tests use `node:test`, in twenty-two files, among them the gates (`space-entity-server`, `space-member-entity-server`, `space-item-entity-server`), the subtype rules (`subtype`), the drivers (`server-driver-registry`, `delete-driver`, `reactions`), the chat (`execute-space-chat-turn`, `resolve-space-chat-host-rules`, `room-edit-grants`) and `resolve-close-consequence`. The root `pnpm test` builds the package, typechecks the test files with `tsconfig.test.json`, and runs them.
+The build is `tsc`, into `dist/`. The tests use `node:test`, in twenty-three files, among them the gates (`space-entity-server`, `space-member-entity-server`, `space-item-entity-server`), the subtype rules (`subtype`), Home's queries (`resolve-home-counts`, `resolve-home-lists`), the drivers (`server-driver-registry`, `delete-driver`, `reactions`), the chat (`execute-space-chat-turn`, `resolve-space-chat-host-rules`, `room-edit-grants`) and `resolve-close-consequence`. The root `pnpm test` builds the package, typechecks the test files with `tsconfig.test.json`, and runs them.
 
 ## Not done yet
 

@@ -33,6 +33,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-share-check-dialog` | `CollabShareCheckDialogComponent` | Frame 04 Share check modal dialog composite |
 | `mjc-upload-dialog` | `CollabUploadDialogComponent` | Uploads a file to a space, in a band the seat may choose |
 | `mjc-new-conversation-dialog` | `CollabNewConversationDialogComponent` | Starts a conversation: its name and kind (General, Topic or Internal Only) |
+| `mjc-home-list` | `CollabHomeListComponent` | The rows behind one of Home's counts, how many there are in all when the list is cut short, and a failed read with a way to try again |
 | `mjc-new-space-dialog` | `CollabNewSpaceDialogComponent` | Starts a space: its kind, its name and description, and the kind's own details, which the host draws in the `[mjcDetails]` slot and holds Create for until the required ones are filled in |
 | `mjc-space-work` | `CollabSpaceWorkComponent` | The Work tab's task list |
 | `mjc-space-chat` | `CollabSpaceChatComponent` | MJ's chat area for a space's conversation, with the host rules from the server and no voice call |
@@ -52,5 +53,5 @@ pnpm --filter @mj-biz-apps/collaboration-ng-widgets run build
 pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
 ```
 
-The build is `ngc`, into `dist/`. The tests use Vitest, 144 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings with its Details card, the Overview's About card and a space's conversation (with a stand-in for MJ's chat area) in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
+The build is `ngc`, into `dist/`. The tests use Vitest, 151 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings with its Details card, the Overview's About card and contributed cards, Home's lists and a space's conversation (with a stand-in for MJ's chat area) in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
 
