@@ -67,9 +67,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <span>{{ ShareButtonLabel }}</span>
           </button>
           @if (FileId) {
-            <button mjButton variant="secondary" class="btn secondary open-file-btn" (click)="onOpenFile()" title="Open Document">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
-              <span>Open Document</span>
+            <button
+              mjButton
+              variant="secondary"
+              class="btn secondary open-file-btn"
+              [disabled]="IsOpeningFile"
+              (click)="onOpenFile()"
+              [title]="IsOpeningFile ? (OpeningLabel || 'Opening document...') : 'Open Document'"
+            >
+              @if (IsOpeningFile) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>{{ OpeningLabel || 'Opening...' }}</span>
+              } @else {
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <span>Open Document</span>
+              }
             </button>
           }
         </div>
@@ -268,6 +280,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       font-size: 13.5px;
       border-radius: var(--mj-radius-md);
       cursor: pointer;
+
+      &:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
     }
 
     .eyebrow {
@@ -328,6 +346,8 @@ export class CollabItemPreviewComponent {
   @Input() public ShareButtonLabel = '';
   @Input() public RecentUses: RecentUseModel[] = [];
   @Input() public FileId = '';
+  @Input() public IsOpeningFile = false;
+  @Input() public OpeningLabel = 'Opening...';
 
   @Output() public CloseRequested = new EventEmitter<void>();
   @Output() public ShareRequested = new EventEmitter<void>();
@@ -342,7 +362,7 @@ export class CollabItemPreviewComponent {
   }
 
   public onOpenFile(): void {
-    if (this.FileId) {
+    if (this.FileId && !this.IsOpeningFile) {
       this.OpenFileRequested.emit(this.FileId);
     }
   }

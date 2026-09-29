@@ -2,7 +2,7 @@ import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ViewChild } from
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { Metadata, CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
@@ -14,6 +14,7 @@ import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
@@ -741,6 +742,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 [PreviewFlagTitle]="previewFlagTitle"
                                                 [PreviewFlagDescription]="previewFlagDescription"
                                                 [PreviewRecentUses]="previewRecentUses"
+                                                [IsOpeningFile]="isOpeningFile"
+                                                [OpeningLabel]="openingFileLabel"
                                                 (RowSelectRequested)="onRowSelected($event)"
                                                 (ShareRequested)="onShareRequested($event)"
                                                 (CloseDrawerRequested)="onCloseDrawerRequested()"
@@ -833,6 +836,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PreviewFlagTitle]="previewFlagTitle"
                                                     [PreviewFlagDescription]="previewFlagDescription"
                                                     [PreviewRecentUses]="previewRecentUses"
+                                                    [IsOpeningFile]="isOpeningFile"
+                                                    [OpeningLabel]="openingFileLabel"
                                                     (RowSelectRequested)="onRowSelected($event)"
                                                     (ShareRequested)="onShareRequested($event)"
                                                     (CloseDrawerRequested)="onCloseDrawerRequested()"
@@ -1113,6 +1118,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public previewFlagTitle = '';
     public previewFlagDescription = '';
     public previewRecentUses: RecentUseModel[] = [];
+    public isOpeningFile = false;
+    public openingFileLabel = 'Opening...';
 
     // Share check dialog state
     public shareDialogTitle = '';
@@ -2254,13 +2261,38 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
         if (!fileId) return;
-        const targetItemId = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId))?.id;
-        if (!targetItemId) {
+        const targetItem = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
+        if (!targetItem) {
             SharedService.Instance.CreateSimpleNotification('File not found in this space library.', 'error', 5000);
             return;
         }
 
+        const actualFileId = targetItem.fileId || fileId;
+        const targetItemId = targetItem.id;
+
         try {
+            this.isOpeningFile = true;
+            this.openingFileLabel = 'Opening...';
+            this.RefreshView();
+
+            // 1. Primary path: Open natively in MJ Explorer
+            if (this.navigationService && actualFileId) {
+                try {
+                    const pkey = CompositeKey.FromID(actualFileId);
+                    this.navigationService.OpenEntityRecord('MJ: Files', pkey);
+                    void this.recordSpaceItemOpen(targetItemId);
+                    // Keep indicator briefly for smooth UI feedback during tab activation
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    return;
+                } catch (navErr) {
+                    LogError('Failed to open file via NavigationService: ' + (navErr instanceof Error ? navErr.message : String(navErr)));
+                    // Fall through to download fallback
+                }
+            }
+
+            // 2. Fallback path: Download / open in new tab via OpenSpaceFile mutation
+            this.openingFileLabel = 'Downloading...';
+            this.RefreshView();
             const client = new CollaborationClient(this.graphQLExecutor);
             const res = await client.OpenSpaceFile(targetItemId);
             if (!res.Success || !res.Base64) {
@@ -2305,6 +2337,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error opening space file: ' + msg);
             SharedService.Instance.CreateSimpleNotification('Error opening file: ' + msg, 'error', 5000);
+        } finally {
+            this.isOpeningFile = false;
+            this.RefreshView();
+        }
+    }
+
+    private async recordSpaceItemOpen(itemId: string): Promise<void> {
+        try {
+            const md = new Metadata();
+            const use = await md.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses');
+            if (use && this.activeSpaceRecord?.ID) {
+                use.NewRecord();
+                use.ItemID = itemId;
+                use.SpaceID = this.activeSpaceRecord.ID;
+                use.UserID = this.currentUser?.ID || '';
+                use.UsedAt = new Date();
+                use.Kind = 'open';
+                await use.Save();
+            }
+        } catch (err) {
+            console.debug('Failed to record space item use:', err);
         }
     }
 

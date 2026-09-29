@@ -493,6 +493,32 @@ describe('CollabItemPreviewComponent', () => {
       { text: ' for review', isBold: false },
     ]);
   });
+
+  it('emits OpenFileRequested with FileId when clicked and not opening', () => {
+    const comp = new CollabItemPreviewComponent();
+    comp.FileId = 'file-abc-123';
+    comp.IsOpeningFile = false;
+    let emitted: string | null = null;
+    comp.OpenFileRequested.subscribe(id => {
+      emitted = id;
+    });
+
+    comp.onOpenFile();
+    expect(emitted).toBe('file-abc-123');
+  });
+
+  it('does NOT emit OpenFileRequested when IsOpeningFile is true', () => {
+    const comp = new CollabItemPreviewComponent();
+    comp.FileId = 'file-abc-123';
+    comp.IsOpeningFile = true;
+    let emitted: string | null = null;
+    comp.OpenFileRequested.subscribe(id => {
+      emitted = id;
+    });
+
+    comp.onOpenFile();
+    expect(emitted).toBeNull();
+  });
 });
 
 describe('CollabShareCheckComponent', () => {
