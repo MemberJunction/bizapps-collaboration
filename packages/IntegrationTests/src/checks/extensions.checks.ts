@@ -400,6 +400,35 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'extensions.EX10',
+        Name: 'EX10 — a close and a move in one save are refused, so a sealed rule on incoming children cannot be walked around',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const first = await newSpace(ctx, ada, { name: 'EX10-A', typeId: board.ID });
+            const second = await newSpace(ctx, ada, { name: 'EX10-B', typeId: board.ID });
+            Assert(await first.Save() && await second.Save(), 'Ada creates two example boards');
+            const created: string[] = [first.ID, second.ID];
+            try {
+                await seatOwner(ctx, ada, first.ID);
+                await seatOwner(ctx, ada, second.ID);
+                const child = await newSpace(ctx, ada, { name: 'EX10-child', typeId: board.ID, parentId: first.ID });
+                Assert(await child.Save(), `The sub-committee is created: ${child.LatestResult?.CompleteMessage ?? ''}`);
+                created.unshift(child.ID);
+                await seatOwner(ctx, ada, child.ID);
+                const both = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await both.Load(child.ID), 'The sub-committee loads');
+                both.ParentID = second.ID;
+                both.ClosedAt = new Date(Date.now() - 60_000);
+                Assert(!(await both.Save()), 'Moving and closing in one save must be refused');
+                Assert(/separate saves/.test(both.LatestResult?.CompleteMessage ?? ''), `The refusal says why: ${both.LatestResult?.CompleteMessage ?? ''}`);
+            } finally {
+                for (const id of created) await closeAndRemove(ctx, id);
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

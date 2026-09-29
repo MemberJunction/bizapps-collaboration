@@ -17,7 +17,9 @@ const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
  * kind of their own: a seat that becomes Active again is an Invite, as it is when it is first made.
  */
 export function decideMemberKind(change: { isNew: boolean; status: string; statusChanged: boolean; roleChanged: boolean; bandChanged: boolean }): MemberChangeKind {
-    if (change.status === 'Removed' && (change.statusChanged || change.isNew)) return 'Remove';
+    // A new seat is an Invite (or a Remove, made Removed), whatever else is dirty: the gate derives its band and status itself
+    if (change.isNew) return change.status === 'Removed' ? 'Remove' : 'Invite';
+    if (change.status === 'Removed' && change.statusChanged) return 'Remove';
     if (change.roleChanged) return 'RoleChange';
     if (change.bandChanged) return 'BandChange';
     return 'Invite';
@@ -30,6 +32,9 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
+        // Read before the gate rewrites the status and the band, so it is the reading `Save` makes too
+        const reading = this.readChange();
+        this.validatedChange = reading;
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const caller = callerUuid(user);
@@ -64,12 +69,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                 nextIsOwner: !!context.role?.isOwnerRole,
                 activeOwners: context.ownerCount,
             }))) {
-                return fail(result, 'Status', 'You are the last owner of this space. Seat another owner before you leave.');
+                return fail(result, 'Status', "This is the space's last owner seat. Seat another owner first.");
             }
             const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
             if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
                 // Leaving skips the invite rules, but not the type's: a type may refuse a member leaving, or react to it
-                const refusedLeave = await this.judgeWithDriver(user, spaceId, 'Remove');
+                const refusedLeave = await this.judgeWithDriver(user, spaceId, 'Remove', reading.oldValues);
                 return refusedLeave ? fail(result, refusedLeave.field, refusedLeave.message) : result;
             }
         }
@@ -107,15 +112,14 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
 
         // Extensibility Driver Validation
-        const memberKind = this.currentKind();
-        const refused = await this.judgeWithDriver(user, spaceId, memberKind);
+        const refused = await this.judgeWithDriver(user, spaceId, reading.kind, reading.oldValues);
         if (refused) return fail(result, refused.field, refused.message);
 
         return result;
     }
 
     /** Asks the space type's driver to judge this seat change. Null when it accepts. */
-    private async judgeWithDriver(user: UserInfo, spaceId: string, kind: MemberChangeKind): Promise<{ field: string; message: string } | null> {
+    private async judgeWithDriver(user: UserInfo, spaceId: string, kind: MemberChangeKind, oldValues?: Record<string, unknown>): Promise<{ field: string; message: string } | null> {
         try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
             const verdict = await spaceInfo.driver.ValidateMemberChange({
@@ -126,6 +130,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                 effectiveRules: ResolveSpaceRules(null, null),
                 member: this,
                 kind,
+                oldValues,
             });
             return verdict.ok ? null : { field: verdict.field ?? 'SpaceRoleTypeID', message: verdict.message ?? 'Member change refused by driver.' };
         } catch (driverErr) {
@@ -136,6 +141,19 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     private isFieldDirty(name: string): boolean {
         return this.Fields.some((f) => f.Name === name && f.Dirty);
     }
+
+    /** What this save changes, read once. */
+    private readChange(): { kind: MemberChangeKind; oldValues: Record<string, unknown>; changed: boolean } {
+        const isNew = !this.IsSaved;
+        return {
+            kind: this.currentKind(),
+            oldValues: isNew ? {} : this.dirtyOldValues(),
+            changed: isNew || this.Fields.some((f) => f.Dirty),
+        };
+    }
+
+    /** What validation read, for the reaction that follows: set by validation, taken and cleared by `Save`. */
+    private validatedChange: { kind: MemberChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
 
     /** The kind of change this save is, from its dirty fields. */
     private currentKind(): MemberChangeKind {
@@ -160,26 +178,37 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
-        // Decided here, before the save, from what changed: the same reading validation makes, and the one the reaction is handed
-        const decidedKind = this.currentKind();
-        const oldValues = wasNew ? {} : this.dirtyOldValues();
-        const ok = await super.Save(options);
+        // Read here, before the save. If validation ran it read the same fields, before the gate's own rewrites, and its reading is
+        // the one used, so the two can't disagree. Dropped when the save is done, so a retry starts clean.
+        const own = this.readChange();
+        this.validatedChange = null;
+        let ok = false;
+        let decided = own;
+        try {
+            ok = await super.Save(options);
+            decided = this.validatedChange ?? own;
+        } finally {
+            this.validatedChange = null;
+        }
         if (ok && this.ContextCurrentUser && this.SpaceID) {
             const user = this.ContextCurrentUser;
-            try {
-                const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
-                await spaceInfo.driver.OnMemberChanged({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: spaceInfo.space,
-                    spaceType: spaceInfo.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    member: this,
-                    kind: decidedKind,
-                    oldValues,
-                });
-            } catch (driverErr) {
-                LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+            // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+            if (decided.changed) {
+                try {
+                    const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
+                    await spaceInfo.driver.OnMemberChanged({
+                        actingUser: user,
+                        provider: this.ProviderToUse,
+                        space: spaceInfo.space,
+                        spaceType: spaceInfo.spaceType,
+                        effectiveRules: ResolveSpaceRules(null, null),
+                        member: this,
+                        kind: decided.kind,
+                        oldValues: decided.oldValues,
+                    });
+                } catch (driverErr) {
+                    LogError(`OnMemberChanged of space ${this.SpaceID} failed for seat ${this.ID}: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+                }
             }
 
             const becameActive = this.Status === 'Active' && (wasNew || previousStatus !== 'Active');

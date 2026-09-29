@@ -89,11 +89,15 @@ export function resolveTabId(model: SpaceTabModel, key: string): string | null {
  * `buildSpaceTabs`, for a driver that may throw: on a failure the error goes to `onError` and the space still gets its built-in
  * tabs (the ones its type's panels allow), so one faulty driver or contribution can't take a space down.
  */
-export function buildSpaceTabsSafely(input: SpaceTabInputs, onError: (error: unknown) => void): SpaceTabModel {
+export function buildSpaceTabsSafely(
+    input: SpaceTabInputs,
+    onError: (error: unknown) => void,
+    fallbackLabelFor: (key: string, defaultLabel: string) => string = (_key, label) => label,
+): SpaceTabModel {
     try {
         return buildSpaceTabs(input);
     } catch (error) {
         onError(error);
-        return buildSpaceTabs({ panels: input.panels, finalize: (defaults) => defaults, labelFor: (_key, label) => label });
+        return buildSpaceTabs({ panels: input.panels, finalize: (defaults) => defaults, labelFor: fallbackLabelFor });
     }
 }

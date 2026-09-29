@@ -17,6 +17,7 @@ export {
     lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
+    isPostCloseAccessPermitted,
     membershipReaches,
     rosterActions,
     rosterBySeat,

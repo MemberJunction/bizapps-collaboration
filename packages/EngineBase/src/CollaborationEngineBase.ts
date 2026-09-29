@@ -450,7 +450,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return true;
         }
 
-        const reached = await this.ReachedSeat(user, spaceId, md);
+        // An owner keeps the right to configure, and to reopen, a space that has closed: the post-close filter is not applied here
+        const reached = await this.ReachedSeat(user, spaceId, md, undefined, true);
         return !!reached?.role.isOwnerRole;
     }
 
@@ -462,7 +463,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         user: UserInfo,
         spaceId: string,
         provider?: IMetadataProvider,
-        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id),
+        ignorePostCloseFilter: boolean = false
     ): Promise<ReturnType<typeof membershipReaches>> {
         const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -487,6 +489,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 const spaceRes: RunViewResult<{
                     ID: string;
                     ParentID: string | null;
+                    SpaceTypeID: string | null;
                     InheritsMembership: boolean;
                     OwnerID: string;
                     AgentRetrieval?: AgentRetrieval;
@@ -497,6 +500,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }> = await rv.RunView<{
                     ID: string;
                     ParentID: string | null;
+                    SpaceTypeID: string | null;
                     InheritsMembership: boolean;
                     OwnerID: string;
                     AgentRetrieval?: AgentRetrieval;
@@ -507,7 +511,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 }>({
                     EntityName: 'MJ_BizApps_Collaboration: Spaces',
                     ExtraFilter: `ID = '${currentSpaceId}'`,
-                    Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
+                    Fields: ['ID', 'ParentID', 'SpaceTypeID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays'],
                     ResultType: 'simple',
                     MaxRows: 1,
                 }, user);
@@ -530,6 +534,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                     closedAt: s.ClosedAt,
                     postCloseAccess: s.PostCloseAccess,
                     postCloseAccessDays: s.PostCloseAccessDays,
+                    spaceTypePostCloseAccess: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccess ?? null,
+                    spaceTypePostCloseAccessDays: this.SpaceTypeById(s.SpaceTypeID)?.PostCloseAccessDays ?? null,
                 });
                 if (!s.InheritsMembership || !s.ParentID) {
                     break;
@@ -580,7 +586,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 };
             });
 
-            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
+            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), ignorePostCloseFilter);
         } catch (e) {
             LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
             return null;

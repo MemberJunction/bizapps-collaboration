@@ -75,9 +75,17 @@ describe('what each reaction hears, through Save', () => {
         // MJ runs validation inside Save and clears the dirty flags when it is done: the stub does the same
         baseSave = BaseEntity.prototype.Save;
         BaseEntity.prototype.Save = async function (this: BaseEntity): Promise<boolean> {
+            const fields = this.Fields as unknown as FieldState[];
+            // A clean, saved record: MJ returns true without validating or writing
+            if (this.IsSaved && !fields.some((f) => f.Dirty)) return true;
             const result = await this.ValidateAsync();
             if (!result.Success) return false;
-            for (const field of this.Fields as unknown as FieldState[]) field.Dirty = false;
+            // After a save the record is saved, its old values are its new ones and nothing is dirty
+            (this as unknown as { IsSaved: boolean }).IsSaved = true;
+            for (const field of fields) {
+                field.OldValue = field.Value;
+                field.Dirty = false;
+            }
             return true;
         } as typeof BaseEntity.prototype.Save;
     });
@@ -150,14 +158,58 @@ describe('what each reaction hears, through Save', () => {
         assert.deepEqual(heard.own[0].oldValues, { Name: 'Old name' });
     });
 
-    it('starts clean on a second save of the same object', async () => {
-        const target = spaceEntity({ Name: 'New name' }, { Name: 'Old name' });
-        await saveAndHear(target);
+    it('hears nothing for a save that changes nothing, and its own kind on the next real change', async () => {
+        const target = spaceEntity({ ClosedAt: new Date() }, { ClosedAt: null });
+        const closed = await saveAndHear(target);
+        assert.equal(closed.own[0].kind, 'Close');
+        // Nothing is dirty now: a clean save tells nobody anything
         drivers.clear();
-        // Nothing is dirty now: the second save is an update with no old values, not the first save's
+        await SpaceEntityServer.prototype.Save.call(target);
+        assert.deepEqual(driverFor(SPACE).heard, []);
+        assert.deepEqual(driverFor(PARENT).heard, []);
+        // A rename after the close is an update, not the close again
+        const fields = target.Fields as unknown as FieldState[];
+        fields.push({ Name: 'Name', Value: 'New', OldValue: 'Old', Dirty: true });
         await SpaceEntityServer.prototype.Save.call(target);
         assert.deepEqual(driverFor(SPACE).heard.map((h) => h.kind), ['Update']);
-        assert.deepEqual(driverFor(SPACE).heard[0].oldValues, {});
+        assert.deepEqual(driverFor(SPACE).heard[0].oldValues, { Name: 'Old' });
+    });
+
+    it("lets the next driver hear when one throws, and names the hook and the space in the log", async () => {
+        drivers.clear();
+        const own = driverFor(SPACE);
+        own.OnSpaceChanged = () => { throw new Error('the space driver broke'); };
+        await SpaceEntityServer.prototype.Save.call(spaceEntity({ ParentID: PARENT }, { ParentID: OLD_PARENT }));
+        assert.deepEqual(driverFor(PARENT).heard.map((h) => h.kind), ['MoveChildIn']);
+        assert.deepEqual(driverFor(OLD_PARENT).heard.map((h) => h.kind), ['MoveChildOut']);
+    });
+
+    it('starts clean on the retry after a refused save', async () => {
+        const target = spaceEntity({ Name: 'New' }, { Name: 'Old' });
+        const stubbedValidate = target.ValidateAsync;
+        (target as unknown as { ValidateAsync: () => Promise<{ Success: boolean; Errors: unknown[] }> }).ValidateAsync = async () => ({ Success: false, Errors: [] });
+        drivers.clear();
+        assert.equal(await SpaceEntityServer.prototype.Save.call(target), false);
+        assert.deepEqual(driverFor(SPACE).heard, [], 'a refused save hears nothing');
+        (target as unknown as { ValidateAsync: typeof stubbedValidate }).ValidateAsync = stubbedValidate;
+        await SpaceEntityServer.prototype.Save.call(target);
+        assert.deepEqual(driverFor(SPACE).heard.map((h) => h.kind), ['Update']);
+    });
+
+    it("stamps the server's clock on a close by anyone but staff, and lets staff backdate one", async () => {
+        const backdated = new Date(Date.now() - 24 * 3600 * 1000);
+        const participant = { ID: ACTOR, Name: 'Actor', UserRoles: [{ Role: 'Space Participant' }] };
+        const staff = { ID: ACTOR, Name: 'Staff', UserRoles: [{ Role: 'Developer' }] };
+        for (const [who, minutes] of [[participant, -1], [participant, 24 * 60], [participant, -24 * 60]] as const) {
+            const sent = new Date(Date.now() + minutes * 60_000);
+            const target = spaceEntity({ ClosedAt: sent, ContextCurrentUser: who }, { ClosedAt: null });
+            await saveAndHear(target);
+            const stamped = (target as unknown as { ClosedAt: Date }).ClosedAt.getTime();
+            assert.ok(Math.abs(stamped - Date.now()) < 5000, `sent ${minutes} minutes from now, stored ${new Date(stamped).toISOString()}`);
+        }
+        const kept = spaceEntity({ ClosedAt: backdated, ContextCurrentUser: staff }, { ClosedAt: null });
+        await saveAndHear(kept);
+        assert.equal((kept as unknown as { ClosedAt: Date }).ClosedAt.getTime(), backdated.getTime());
     });
 
     const itemEntity = (values: Record<string, unknown>, dirty: Record<string, unknown>, isSaved = true): SpaceItemEntityServer =>
@@ -186,6 +238,11 @@ describe('what each reaction hears, through Save', () => {
         await SpaceMemberEntityServer.prototype.Save.call(target);
         return driverFor(SPACE).heard;
     }
+
+    it("tells a new seat Invite whatever else is dirty (its band is derived from its role)", async () => {
+        const heard = await seatHeard(seatEntity({ Band: 'Shared', SpaceRoleTypeID: 'role-1' }, { Band: null, SpaceRoleTypeID: null }, false));
+        assert.deepEqual(heard.map((h) => h.kind), ['Invite']);
+    });
 
     it("tells a seat's band change BandChange, an approval Invite, and a removal Remove", async () => {
         assert.deepEqual((await seatHeard(seatEntity({ Band: 'Shared' }, { Band: 'Team' }))).map((h) => h.kind), ['BandChange']);

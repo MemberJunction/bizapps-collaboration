@@ -607,6 +607,7 @@ describe('SpaceEntityServer close and reopen chat archiving and restoration', ()
             ID: { value: spaceId, writable: true },
             ContextCurrentUser: { value: { ID: 'caller-1', Name: 'Caller' } as UserInfo, writable: true },
             ClosedAt: { value: null, writable: true },
+            IsSaved: { value: true, writable: true },
             Fields: {
                 value: [
                     { Name: 'ClosedAt', Value: null, OldValue: prevClosedAt, Dirty: true },

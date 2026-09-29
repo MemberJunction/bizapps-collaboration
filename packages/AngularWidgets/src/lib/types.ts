@@ -238,7 +238,7 @@ export interface SpaceMemberModel {
   source?: string;
   inherited?: boolean;
   /** Set when the person's own seat on this space is Invited or Removed while they still reach it through an ancestor. */
-  ownSeatNote?: string;
+  ownSeat?: { id: string; status: string; roleName: string; roleCode: string; canApprove: boolean; canRemove: boolean };
   /** Whether the viewer may approve, remove or change the role of this seat. */
   canApprove?: boolean;
   canRemove?: boolean;

@@ -83,8 +83,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>{{ InviteOutcome!.message }}</span>
           @if (RedemptionUrl) {
             <input type="text" class="invite-link" readonly [value]="RedemptionUrl" aria-label="Sign-in link" />
-            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ linkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
-            @if (linkStatus() === 'failed') {
+            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ LinkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
+            @if (LinkStatus() === 'failed') {
               <span class="invite-outcome-error" role="alert">Couldn't copy the link. Select it and copy it.</span>
             }
           }
@@ -162,8 +162,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (m.inherited && m.source) {
                       <span class="person-source">from {{ m.source }}</span>
                     }
-                    @if (m.ownSeatNote) {
-                      <span class="person-source">{{ m.ownSeatNote }}</span>
+                    @if (m.ownSeat) {
+                      <span class="person-source">
+                        Their own seat here is {{ m.ownSeat.status }}
+                        @if (m.ownSeat.canApprove && pending?.id !== m.ownSeat.id) {
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(ownSeatOf(m), 'approve')">Approve</button>
+                        }
+                        @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && pending?.id !== m.ownSeat.id) {
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(ownSeatOf(m), 'remove')">Withdraw</button>
+                        }
+                        @if (pending?.id === m.ownSeat.id) {
+                          {{ pendingQuestion(ownSeatOf(m)) }}
+                          <button type="button" class="send-invite-btn" [disabled]="Busy" (click)="ConfirmPending()">Confirm</button>
+                          <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
+                        }
+                      </span>
                     }
                   </div>
                 </div>
@@ -194,7 +207,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
                       @if (pending?.id === m.id) {
                         <span class="fs12">{{ pendingQuestion(m) }}</span>
-                        <button type="button" class="send-invite-btn" [disabled]="busy" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" class="send-invite-btn" [disabled]="Busy" (click)="ConfirmPending()">Confirm</button>
                         <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
                       } @else {
                         @if (m.canApprove) {
@@ -553,7 +566,7 @@ export class CollabSpacePeopleComponent {
   /** The sign-in link the server returned when the host has no email channel: shown with a Copy button. */
   @Input() set RedemptionUrl(url: string | null) {
     this._redemptionUrl = url;
-    this.linkStatus.set('idle');
+    this.LinkStatus.set('idle');
   }
   get RedemptionUrl(): string | null {
     return this._redemptionUrl;
@@ -593,10 +606,10 @@ export class CollabSpacePeopleComponent {
 
   /** The action waiting for its confirmation. */
   public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
-  /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
   /** True while a confirmed change is with the server: Confirm can't be pressed twice. */
-  @Input() busy = false;
-  public linkStatus = signal<'idle' | 'copied' | 'failed'>('idle');
+  @Input() Busy = false;
+  /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
+  public LinkStatus = signal<'idle' | 'copied' | 'failed'>('idle');
   /** Where Copy writes. The browser's clipboard when there is one (there isn't on a plain-HTTP host). */
   @Input() Clipboard: Pick<Clipboard, 'writeText'> | null = typeof navigator !== 'undefined' ? navigator.clipboard ?? null : null;
 
@@ -607,6 +620,12 @@ export class CollabSpacePeopleComponent {
   public AskRole(member: SpaceMemberModel, roleCode: string): void {
     if (roleCode === member.roleCode) return;
     this.pending = { id: member.id, kind: 'role', roleCode };
+  }
+
+  /** The person's own seat on this space, as a member row, so it can be approved or withdrawn like any seat. */
+  public ownSeatOf(member: SpaceMemberModel): SpaceMemberModel {
+    const seat = member.ownSeat!;
+    return { ...member, id: seat.id, status: seat.status, roleName: seat.roleName, roleCode: seat.roleCode, inherited: false, ownSeat: undefined };
   }
 
   public pendingQuestion(member: SpaceMemberModel): string {
@@ -628,7 +647,8 @@ export class CollabSpacePeopleComponent {
   public ConfirmPending(): void {
     const pending = this.pending;
     this.pending = null;
-    const member = this.Members.find((m) => m.id === pending?.id);
+    const listed = this.Members.find((m) => m.id === pending?.id);
+    const member = listed ?? this.Members.filter((m) => m.ownSeat).map((m) => this.ownSeatOf(m)).find((m) => m.id === pending?.id);
     if (!pending || !member) return;
     if (pending.kind === 'approve') this.ApproveMemberRequested.emit(member);
     else if (pending.kind === 'remove') this.RemoveMemberRequested.emit(member);
@@ -639,15 +659,15 @@ export class CollabSpacePeopleComponent {
     if (!this.RedemptionUrl) return;
     if (!this.Clipboard) {
       console.error('Copy link: this page has no clipboard access (it needs a secure connection).');
-      this.linkStatus.set('failed');
+      this.LinkStatus.set('failed');
       return;
     }
     try {
       await this.Clipboard.writeText(this.RedemptionUrl);
-      this.linkStatus.set('copied');
+      this.LinkStatus.set('copied');
     } catch (error) {
       console.error(`Copy link failed: ${error instanceof Error ? error.message : String(error)}`);
-      this.linkStatus.set('failed');
+      this.LinkStatus.set('failed');
     }
   }
 
@@ -666,7 +686,8 @@ export class CollabSpacePeopleComponent {
 
   /** Seats that were asked for and wait for an owner or admin to approve them. */
   public get InvitedCount(): number {
-    return this.Members.filter((m) => m.status === 'Invited').length;
+    // A person listed under a seat they reach through can still hold an Invited seat of their own here, waiting for approval
+    return this.Members.filter((m) => m.status === 'Invited' || m.ownSeat?.status === 'Invited').length;
   }
 
   public get filteredMembers(): SpaceMemberModel[] {

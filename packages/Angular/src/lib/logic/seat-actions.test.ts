@@ -8,8 +8,8 @@ const owner = role({ level: 100, maxGrantableLevel: 100, canInvite: true, canPro
 const sam = role({ canInvite: true });
 const guest = role({ level: 5, maxGrantableLevel: 0, canSeeTeamBand: false, canContribute: false });
 
-const target = (status: string, over: { role?: RoleFlags; isSelf?: boolean; isOnlyActiveOwner?: boolean } = {}) => ({
-    status, role: over.role ?? guest, isSelf: over.isSelf ?? false, isOnlyActiveOwner: over.isOnlyActiveOwner ?? false,
+const target = (status: string, over: { role?: RoleFlags; isOnlyActiveOwner?: boolean } = {}) => ({
+    status, role: over.role ?? guest, isOnlyActiveOwner: over.isOnlyActiveOwner ?? false,
 });
 
 describe('the seat actions offered', () => {
@@ -36,9 +36,10 @@ describe('the seat actions offered', () => {
         assert.equal(seatActions({ caller: sam, typeApprovesInvites: false, target: target('Active', { role: powerful }) }).remove, false);
     });
 
-    it("hides Remove and Change role on the only active owner's own seat, and offers nothing for someone who cannot invite", () => {
-        const own = target('Active', { role: owner, isSelf: true, isOnlyActiveOwner: true });
-        assert.deepEqual(seatActions({ caller: owner, typeApprovesInvites: true, target: own }), { approve: false, remove: false, changeRole: false });
+    it("hides Remove and Change role on the only active owner seat, whoever is looking, and offers nothing for someone who cannot invite", () => {
+        const only = target('Active', { role: owner, isOnlyActiveOwner: true });
+        assert.deepEqual(seatActions({ caller: owner, typeApprovesInvites: true, target: only }), { approve: false, remove: false, changeRole: false });
+        assert.deepEqual(seatActions({ caller: role({ ...owner }), typeApprovesInvites: false, target: only }), { approve: false, remove: false, changeRole: false });
         assert.deepEqual(seatActions({ caller: role({}), typeApprovesInvites: false, target: target('Active') }), { approve: false, remove: false, changeRole: false });
     });
 });

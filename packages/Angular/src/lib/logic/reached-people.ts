@@ -1,4 +1,5 @@
 import { UUIDsEqual } from '@memberjunction/global';
+import { isPostCloseAccessPermitted } from '@mj-biz-apps/collaboration-core';
 
 /** The fields of a space the walk up its tree reads. */
 export interface TreeSpace {
@@ -6,6 +7,10 @@ export interface TreeSpace {
     Name: string;
     ParentID: string | null;
     InheritsMembership: boolean;
+    /** A closed space lets its parent's people in only while its post-close access allows it. */
+    ClosedAt?: string | Date | null;
+    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+    PostCloseAccessDays?: number | null;
 }
 
 export interface ChainSpace {
@@ -32,6 +37,11 @@ export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): Chai
             chain.push({ id: parentId, name: '' });
             break;
         }
+        // A closed parent whose post-close access has ended (or is None) no longer lets anyone in, and neither does what lies above it
+        if (parent.ClosedAt && !isPostCloseAccessPermitted({
+            id: parent.ID, parentId: parent.ParentID, inheritsMembership: parent.InheritsMembership, ownerId: '', agentRetrieval: 'Included',
+            closedAt: parent.ClosedAt, postCloseAccess: parent.PostCloseAccess, postCloseAccessDays: parent.PostCloseAccessDays,
+        })) break;
         current = parent;
     }
     return chain;
@@ -43,14 +53,14 @@ export interface ReachedSeat<T> {
     from: ChainSpace;
     /** True when the seat sits on an ancestor rather than on the space itself: it is shown, but changed only where it sits. */
     inherited: boolean;
-    /** The status of the person's own seat on this space when it isn't the one they reach through (Invited or Removed). */
-    ownSeatStatus?: string;
+    /** The person's own seat on this space when it isn't the one they reach through (an Invited or Removed one). */
+    ownSeat?: T;
 }
 
 /**
  * One seat per person, the way the server counts it: the nearest ACTIVE seat along the chain. An Invited or Removed seat on the
  * space itself doesn't stop an ancestor's Active seat from counting, so it is not what the person is listed under; it is shown
- * beside them (`ownSeatStatus`), or as its own row for a person nothing else reaches.
+ * beside them (`ownSeat`), or as its own row for a person nothing else reaches.
  */
 export function nearestSeats<T extends { SpaceID: string; UserID: string; Status: string }>(rows: readonly T[], chain: readonly ChainSpace[]): ReachedSeat<T>[] {
     const byUser = new Map<string, ReachedSeat<T>>();
@@ -66,7 +76,7 @@ export function nearestSeats<T extends { SpaceID: string; UserID: string; Status
         if (row.Status === 'Active' || !UUIDsEqual(row.SpaceID, own.id)) continue;
         const key = row.UserID.toLowerCase();
         const listed = byUser.get(key);
-        if (listed) listed.ownSeatStatus = row.Status;
+        if (listed) listed.ownSeat = row;
         else byUser.set(key, { row, from: own, inherited: false });
     }
     return [...byUser.values()];

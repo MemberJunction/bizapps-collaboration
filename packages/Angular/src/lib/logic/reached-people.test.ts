@@ -39,7 +39,7 @@ describe('who reaches a space', () => {
     it('lists Field notes with Ada on it and Bea, Casey and Sam reached through its parents', () => {
         const people = nearestSeats(seats, accessChain(id(11), spaces));
         const byUser = Object.fromEntries(people.map((p) => [p.row.UserID, p]));
-        assert.equal(byUser.ada.inherited, false, "Ada's own seat is nearer than the one she holds on Northwind");
+        assert.equal(byUser.ada.inherited, false, "Ada's seat on Field notes is nearer than Ada's seat on Northwind");
         assert.equal(byUser.casey.from.name, 'Northwind relationship');
         assert.equal(byUser.bea.from.name, 'Discovery');
     });
@@ -50,14 +50,14 @@ describe('who reaches a space', () => {
         assert.ok(people.every((p) => !p.inherited));
     });
 
-    it("keeps Sam reaching Field notes through Northwind when his guest seat there is Removed or Invited, and says so beside him", () => {
+    it("keeps Sam reaching Field notes through Northwind when the guest seat Sam holds there is Removed or Invited, and carries that seat beside Sam", () => {
         const withGuest = (status: string) => [...seats, { SpaceID: id(11), UserID: 'sam', Status: status }];
         for (const status of ['Removed', 'Invited']) {
             const people = nearestSeats(withGuest(status), accessChain(id(11), spaces));
             const sam = people.find((p) => p.row.UserID === 'sam');
             assert.equal(sam?.row.Status, 'Active', status);
             assert.equal(sam?.from.name, 'Northwind relationship');
-            assert.equal(sam?.ownSeatStatus, status);
+            assert.equal(sam?.ownSeat?.Status, status);
         }
     });
 
@@ -72,5 +72,13 @@ describe('who reaches a space', () => {
         assert.deepEqual(chain.map((c) => c.name), ['Discovery', '']);
         const people = nearestSeats(seats, chain);
         assert.deepEqual(people.map((p) => p.row.UserID).sort(), ['ada', 'bea', 'casey', 'remy', 'sam']);
+    });
+
+    it("stops at a closed parent whose post-close access has ended, and keeps one whose window is still open", () => {
+        const longAgo = '2020-01-01T00:00:00Z';
+        const closed = (over: Partial<TreeSpace>): TreeSpace[] => spaces.map((s) => (s.ID === id(2) ? { ...s, ClosedAt: longAgo, ...over } : s));
+        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'None' })).map((c) => c.name), ['Field notes']);
+        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: 30 })).map((c) => c.name), ['Field notes']);
+        assert.deepEqual(accessChain(id(11), closed({ PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null })).map((c) => c.name), ['Field notes', 'Discovery', 'Northwind relationship']);
     });
 });

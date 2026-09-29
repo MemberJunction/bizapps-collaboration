@@ -180,7 +180,7 @@ const checks: NamedCheck[] = [
             Assert(!savedStrand, 'Removing last active owner must fail save over the wire');
             const strandReason = member.LatestResult?.CompleteMessage ?? '';
             Assert(
-                strandReason.includes('last owner of this space'),
+                strandReason.includes('last owner seat'),
                 `Expected last owner message, got: ${strandReason}`,
             );
 

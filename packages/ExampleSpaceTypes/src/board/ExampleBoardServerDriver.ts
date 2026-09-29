@@ -81,7 +81,8 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     public override ValidateChildSpaceChange(
         ctx: ChildSpaceChangeContext
     ): DriverValidationResult {
-        if (ctx.kind !== 'CreateChild' && ctx.kind !== 'MoveChildIn' && ctx.kind !== 'UpdateChild') return { ok: true };
+        // Every kind that leaves a child open under the board: a created, moved-in, changed or reopened sub-committee
+        if (ctx.kind !== 'CreateChild' && ctx.kind !== 'MoveChildIn' && ctx.kind !== 'UpdateChild' && ctx.kind !== 'ReopenChild') return { ok: true };
         const childTypeCode = CollaborationEngine.Instance.SpaceTypeById(ctx.childSpace.SpaceTypeID)?.Code;
         if (childTypeCode === 'example-room') {
             return { ok: false, message: 'Boards cannot contain Deal Rooms.', field: 'ParentID' };

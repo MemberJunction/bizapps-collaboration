@@ -35,8 +35,20 @@ const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
  */
 export function decideSpaceKinds(change: { isNew: boolean; isClosing: boolean; isReopening: boolean; isMoving: boolean }): { spaceKind: SpaceChangeKind; childKind: ChildSpaceChangeKind } {
     const spaceKind: SpaceChangeKind = change.isNew ? 'Create' : change.isClosing ? 'Close' : change.isReopening ? 'Reopen' : change.isMoving ? 'Move' : 'Update';
-    const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isClosing ? 'CloseChild' : change.isReopening ? 'ReopenChild' : change.isMoving ? 'MoveChildIn' : 'UpdateChild';
+    // A move outranks a close for the parent that receives the space: a rule on incoming children must see it
+    const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isMoving ? 'MoveChildIn' : change.isClosing ? 'CloseChild' : change.isReopening ? 'ReopenChild' : 'UpdateChild';
     return { spaceKind, childKind };
+}
+
+/** What a space save changes: read once, and handed to validation and to the reactions. */
+interface SpaceChangeReading {
+    spaceKind: SpaceChangeKind;
+    childKind: ChildSpaceChangeKind;
+    justClosed: boolean;
+    justReopened: boolean;
+    oldParentId: string | null;
+    oldValues: Record<string, unknown>;
+    changed: boolean;
 }
 
 @RegisterClass(BaseEntity, ENTITY)
@@ -49,6 +61,31 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         return old;
     }
+
+    /** What this save changes, read once from the fields as they stand. Validation reads it before it rewrites anything, and `Save` before `super.Save()`. */
+    private readChange(): SpaceChangeReading {
+        const isNew = !this.IsSaved;
+        const field = (name: string) => this.Fields.find((f) => f.Name === name);
+        const wasClosed = !isNew && !!field('ClosedAt')?.OldValue;
+        const nowClosed = !!getFieldVal<Date | null>(this, 'ClosedAt');
+        const justClosed = !wasClosed && nowClosed;
+        const justReopened = wasClosed && !nowClosed;
+        const isMoving = !isNew && !!field('ParentID')?.Dirty;
+        const typeField = field('SpaceTypeID');
+        const typeChanged = !isNew && !!typeField?.Dirty;
+        const kinds = decideSpaceKinds({ isNew, isClosing: justClosed, isReopening: justReopened, isMoving });
+        return {
+            ...kinds,
+            justClosed,
+            justReopened,
+            oldParentId: isMoving ? parseUuid(String(field('ParentID')?.OldValue ?? '')) : null,
+            oldValues: isNew ? {} : { ...this.dirtyOldValues(), ...(typeChanged ? { SpaceTypeID: typeField?.OldValue } : {}) },
+            changed: isNew || this.Fields.some((f) => f.Dirty),
+        };
+    }
+
+    /** What validation read, for the reaction that follows it: set by validation, taken and cleared by `Save`. */
+    private validatedChange: SpaceChangeReading | null = null;
 
     private _callerSpecifiedAllowParentAssignees = false;
     private _callerSpecifiedAgentRetrieval = false;
@@ -71,6 +108,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
+        // Read before anything below rewrites the row, so the kind and the old values are the ones `Save` reads too
+        const change = this.readChange();
+        this.validatedChange = change;
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const caller = callerUuid(user);
@@ -178,14 +218,21 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
 
         if (isClosing) {
-            // The server's clock decides when a space closed: a browser a few seconds ahead must not be refused, so a client's
-            // stamp later than now is set to now. One far ahead is still refused.
+            // `Save` has already stamped the server's clock on a close by anyone but staff, so a stamp later than now is a staff one
             const closedDate = new Date(this.ClosedAt!).getTime();
-            const skewAllowedMs = 5 * 60 * 1000;
-            if (closedDate > Date.now() + skewAllowedMs) {
+            if (closedDate > Date.now()) {
                 return fail(result, 'ClosedAt', 'Space change refused: ClosedAt cannot be in the future.');
             }
-            if (closedDate > Date.now()) this.ClosedAt = new Date();
+            // One change at a time: a close that also moves the space would slip past the rules on incoming children
+            if (change.oldParentId !== null || this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty && this.IsSaved)) {
+                return fail(result, 'ParentID', 'Space change refused: close a space and move it in separate saves.');
+            }
+        }
+        // A closed space's date is the server's record of when it closed: only staff (the world loader, tests) may restamp it
+        const restamp = this.IsSaved && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue && !!this.ClosedAt
+            && this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty);
+        if (restamp && !isStaffUser(user)) {
+            return fail(result, 'ClosedAt', 'Space change refused: the date a space closed can not be changed.');
         }
 
         if (isReopening) {
@@ -388,8 +435,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             this.PostCloseAccessDays = postClose.days;
         }
 
-        const { spaceKind: changeKind, childKind } = decideSpaceKinds({ isNew, isClosing, isReopening, isMoving });
-        const oldValues = isNew ? {} : { ...this.dirtyOldValues(), ...(typeChanged ? { SpaceTypeID: previousTypeId } : {}) };
+        const { spaceKind: changeKind, childKind, oldValues } = change;
 
         if (driver && spaceType) {
             const driverValidation = await driver.ValidateSpaceChange({
@@ -459,6 +505,36 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     /** Judges this space against its parent's type: allowed child types, and the most open children. Null when it may sit there. */
+    /** Tells the drivers what happened. Each reaction has its own `try`, so a failing driver doesn't silence the next. */
+    private async react(user: UserInfo, decided: SpaceChangeReading): Promise<void> {
+        const base = { actingUser: user, provider: this.ProviderToUse, effectiveRules: ResolveSpaceRules(null, null) };
+        const attempt = async (hook: string, typeCode: string | undefined, run: () => Promise<void> | void): Promise<void> => {
+            try {
+                await run();
+            } catch (error) {
+                LogError(`${hook} of space type '${typeCode ?? 'unknown'}' failed for space ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        };
+        await attempt('OnSpaceChanged', undefined, async () => {
+            const spaceType = await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this);
+            const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
+            await driver.OnSpaceChanged({ ...base, space: this, spaceType, kind: decided.spaceKind, oldValues: decided.oldValues });
+        });
+        const parentId = getFieldVal<string | null>(this, 'ParentID');
+        if (parentId) {
+            await attempt('OnChildSpaceChanged', undefined, async () => {
+                const parent = await ServerDriverRegistry.Instance.ResolveSpaceAndType(parentId, this);
+                await parent.driver.OnChildSpaceChanged({ ...base, space: parent.space, spaceType: parent.spaceType, childSpace: this, kind: decided.childKind, oldValues: decided.oldValues });
+            });
+        }
+        if (decided.oldParentId) {
+            await attempt('OnChildSpaceChanged (MoveChildOut)', undefined, async () => {
+                const left = await ServerDriverRegistry.Instance.ResolveSpaceAndType(decided.oldParentId!, this);
+                await left.driver.OnChildSpaceChanged({ ...base, space: left.space, spaceType: left.spaceType, childSpace: this, kind: 'MoveChildOut', oldValues: decided.oldValues });
+            });
+        }
+    }
+
     private async refuseByParentType(parentTypeConfiguration: string | null, parentId: string, resolvedTypeCode: string | undefined): Promise<string | null> {
         let config: CollaborationSettings | null = null;
         try {
@@ -538,29 +614,29 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
-        const wasClosed = !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue;
-        const isNowClosed = !!this.ClosedAt;
-        const justClosed = !wasClosed && isNowClosed;
-        const justReopened = wasClosed && !isNowClosed;
-
+        // Read here, before the save, from the dirty fields. If validation ran it read the same fields, before its own rewrites,
+        // and its reading is the one used: the two can't disagree. Dropped when the save is done, so a retry starts clean.
+        const own = this.readChange();
+        this.validatedChange = null;
+        // The server's clock decides when a space closed. Only staff (the world loader, tests) may backdate one.
+        const signedIn = this.ContextCurrentUser;
+        if (own.justClosed && signedIn && !isStaffUser(signedIn) && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.Dirty) {
+            this.ClosedAt = new Date();
+        }
+        const justClosed = own.justClosed;
+        const justReopened = own.justReopened;
         const parentChanged = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
         const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
         const structureChanged = parentChanged || inheritsChanged;
 
-        // Decided here, before the save, from the dirty fields (the same reading validation makes): the saved row no longer shows
-        // what changed. Handed to every reaction, and dropped when the save is done, so a second save starts clean.
-        const isNew = !this.IsSaved;
-        const typeFieldDirty = !isNew && this.Fields.some((f) => f.Name === 'SpaceTypeID' && f.Dirty);
-        const kinds = decideSpaceKinds({ isNew, isClosing: justClosed, isReopening: justReopened, isMoving: !isNew && parentChanged });
-        const oldParentId = !isNew && parentChanged ? parseUuid(String(this.Fields.find((f) => f.Name === 'ParentID')?.OldValue ?? '')) : null;
-        const decided = {
-            spaceKind: kinds.spaceKind,
-            childKind: kinds.childKind,
-            oldParentId,
-            oldValues: isNew ? {} : { ...this.dirtyOldValues(), ...(typeFieldDirty ? { SpaceTypeID: this.Fields.find((f) => f.Name === 'SpaceTypeID')?.OldValue } : {}) },
-        };
-
-        const ok = await super.Save(options);
+        let ok = false;
+        let decided = own;
+        try {
+            ok = await super.Save(options);
+            decided = this.validatedChange ?? own;
+        } finally {
+            this.validatedChange = null;
+        }
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
             if (justClosed) {
@@ -642,49 +718,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 }
             }
 
-            try {
-                const spaceType = await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this);
-                const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
-                await driver.OnSpaceChanged({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: this,
-                    spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    kind: decided.spaceKind,
-                    oldValues: decided.oldValues,
-                });
-
-                if (this.ParentID) {
-                    const parentInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.ParentID, this);
-                    await parentInfo.driver.OnChildSpaceChanged({
-                        actingUser: user,
-                        provider: this.ProviderToUse,
-                        space: parentInfo.space,
-                        spaceType: parentInfo.spaceType,
-                        effectiveRules: ResolveSpaceRules(null, null),
-                        childSpace: this,
-                        kind: decided.childKind,
-                        oldValues: decided.oldValues,
-                    });
-                }
-                // The parent a space leaves hears of it too
-                if (decided.oldParentId) {
-                    const leftInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(decided.oldParentId, this);
-                    await leftInfo.driver.OnChildSpaceChanged({
-                        actingUser: user,
-                        provider: this.ProviderToUse,
-                        space: leftInfo.space,
-                        spaceType: leftInfo.spaceType,
-                        effectiveRules: ResolveSpaceRules(null, null),
-                        childSpace: this,
-                        kind: 'MoveChildOut',
-                        oldValues: decided.oldValues,
-                    });
-                }
-            } catch (driverErr) {
-                LogError(`Space driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
-            }
+            // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+            if (decided.changed) await this.react(user, decided);
 
             if (justClosed) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {

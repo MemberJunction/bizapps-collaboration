@@ -232,10 +232,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="cb-title">Status: {{ formData.status }}</div>
               @if (confirmingLifecycle) {
                 <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? It becomes read-only for everyone.' }}</div>
-                <button type="button" class="save-btn" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <button type="button" class="save-btn" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
                 <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = false">Cancel</button>
               } @else {
-                <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+                <button type="button" class="cancel-lifecycle-btn" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
           </div>
@@ -517,6 +517,13 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
 
   /** The banner shows a message until the person edits, and again for the next message. */
   public bannerVisible = true;
+  /** True while a close or reopen is with the server: both buttons are off. */
+  @Input() IsBusy = false;
+  private baselineJson = '';
+
+  private isFormDirty(): boolean {
+    return !!this.formData && JSON.stringify({ ...this.formData, status: this.Settings?.status }) !== this.baselineJson;
+  }
   public confirmingLifecycle = false;
 
   public onEdit(): void {
@@ -535,11 +542,19 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
 
   public ngOnInit(): void {
     this.initFormData();
+    this.baselineJson = JSON.stringify(this.Settings);
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['Settings'] && this.Settings) {
-      this.initFormData();
+      // The same space's settings arriving again (after a close or reopen) must not throw away what is being typed
+      const sameSpace = !!this.formData && this.formData.id === this.Settings.id;
+      if (sameSpace && this.isFormDirty()) {
+        this.formData = { ...this.formData, status: this.Settings.status };
+      } else {
+        this.initFormData();
+      }
+      this.baselineJson = JSON.stringify(this.Settings);
       this.confirmingLifecycle = false;
     }
     if (changes['saveSuccessMessage'] || changes['saveInfoMessage']) this.bannerVisible = true;

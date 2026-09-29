@@ -43,6 +43,24 @@ export function decideItemKind(change: { isNew: boolean; spaceChanged: boolean; 
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
+    /** What this save changes, read once. */
+    private readChange(): { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } {
+        const isNew = !this.IsSaved;
+        return {
+            kind: decideItemKind({
+                isNew,
+                spaceChanged: this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty),
+                bandChanged: this.Fields.some((f) => f.Name === 'Band' && f.Dirty),
+                band: this.Band,
+            }),
+            oldValues: isNew ? {} : this.dirtyOldValues(),
+            changed: isNew || this.Fields.some((f) => f.Dirty),
+        };
+    }
+
+    /** What validation read, for the reaction that follows: set by validation, taken and cleared by `Save`. */
+    private validatedChange: { kind: ItemChangeKind; oldValues: Record<string, unknown>; changed: boolean } | null = null;
+
     /** What each changed field held before this save, by field name. System columns are left out. */
     private dirtyOldValues(): Record<string, unknown> {
         const old: Record<string, unknown> = {};
@@ -57,6 +75,9 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
+        // Read before the gate rewrites the band and the stamps, so it is the reading `Save` makes too
+        const reading = this.readChange();
+        this.validatedChange = reading;
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         const caller = callerUuid(user);
@@ -136,12 +157,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         // Extensibility Driver Validation
         try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
-            const isNew = !this.IsSaved;
-            const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
-            const spaceChanged = this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty);
-
-            const itemKind = decideItemKind({ isNew, spaceChanged, bandChanged, band: this.Band });
-            const oldValues = isNew ? {} : this.dirtyOldValues();
+            const itemKind = reading.kind;
+            const oldValues = reading.oldValues;
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
                 actingUser: user,
@@ -166,17 +183,17 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
-        // Decided here, before the save, from the dirty fields: the saved row no longer shows what changed
-        const decided = {
-            kind: decideItemKind({
-                isNew: wasNew,
-                spaceChanged: this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty),
-                bandChanged: this.Fields.some((f) => f.Name === 'Band' && f.Dirty),
-                band: this.Band,
-            }),
-            oldValues: wasNew ? {} : this.dirtyOldValues(),
-        };
-        const ok = await super.Save(options);
+        // Read here, before the save; validation's own reading (taken before its rewrites) wins when it ran. Dropped when done.
+        const own = this.readChange();
+        this.validatedChange = null;
+        let ok = false;
+        let decided = own;
+        try {
+            ok = await super.Save(options);
+            decided = this.validatedChange ?? own;
+        } finally {
+            this.validatedChange = null;
+        }
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
         const becameShared = this.Band === 'Shared' && (wasNew || previousBand !== 'Shared');
@@ -187,7 +204,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             LogError(`Library event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        try {
+        // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+        if (decided.changed) try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
             await spaceInfo.driver.OnItemChanged({
                 actingUser: user,
@@ -200,7 +218,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 oldValues: decided.oldValues,
             });
         } catch (driverErr) {
-            LogError(`Item driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
+            LogError(`OnItemChanged of space ${this.SpaceID} failed for item ${this.ID}: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
         }
 
         if (becameShared) {

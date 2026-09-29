@@ -104,12 +104,12 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                     [attr.aria-current]="ActiveTab === tab.id ? 'page' : null"
                     (click)="onTabClick(tab.id)"
                     [title]="isCollapsed ? tab.label : ''"
-                    [attr.aria-label]="tab.label">
-                    <i class="link-icon" [class]="tab.iconClass || 'fa-solid fa-layer-group'" aria-hidden="true"></i>
+                    [attr.aria-label]="isCollapsed ? tab.label : null">
+                    <i class="fa-solid link-icon" [class]="tab.iconClass || 'fa-layer-group'" aria-hidden="true"></i>
                     @if (!isCollapsed) {
                       <span class="link-label">{{ tab.label }}</span>
-                      @if (badgeFor(tab) > 0) {
-                        <span class="link-badge">{{ badgeFor(tab) }}</span>
+                      @if (BadgeFor(tab) > 0) {
+                        <span class="link-badge">{{ BadgeFor(tab) }}</span>
                       }
                     }
                   </button>
@@ -118,7 +118,8 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
             </div>
           </div>
 
-          <!-- Space Conversations Section -->
+          <!-- Space Conversations Section: only for a space whose type has Chat -->
+          @if (HasChatTab) {
           <div class="nav-section-group">
             @if (!isCollapsed) {
               <div class="section-title-row">
@@ -171,13 +172,14 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                       class="band-dot"
                       [class.shared]="c.band === 'Shared'"
                       [class.team]="c.band === 'Team'"
-                      [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Team only'">
+                      [title]="c.band === 'Shared' ? 'Everyone in this space can see it' : 'Team only'">
                     </span>
                   }
                 </button>
               }
             </div>
           </div>
+          }
 
         </div>
 
@@ -194,7 +196,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
         <div class="jump" [mjClickable]="'Jump to a space'" (click)="onJumpClick()">
           <i class="fa-solid fa-magnifying-glass"></i>
           <span>Jump to a space</span>
-          <span class="kbd">⌘J</span>
+          <span class="kbd">{{ JumpHint }}</span>
         </div>
 
         <button
@@ -909,8 +911,19 @@ export class CollabSpaceRailComponent implements OnInit {
     this.loadLayoutPreference();
   }
 
+  /** Whether the space's type has a Chat tab: without one the rail lists no conversations. */
+  public get HasChatTab(): boolean {
+    return this.Tabs.some((tab) => tab.id === 'Chat');
+  }
+
+  /** The shortcut shown for the palette: ⌘J on a Mac, Ctrl+J elsewhere. */
+  public get JumpHint(): string {
+    const platform = typeof navigator !== 'undefined' ? navigator.platform ?? '' : '';
+    return /mac|iphone|ipad/i.test(platform) ? '⌘J' : 'Ctrl+J';
+  }
+
   /** The count a tab's link shows: the library's items, the tasks, the people, or the tab's own. */
-  public badgeFor(tab: TabItem): number {
+  public BadgeFor(tab: TabItem): number {
     switch (tab.id) {
       case 'Library': return this.LibraryCount;
       case 'Work': return this.TaskCount;

@@ -1139,9 +1139,9 @@ describe('Copy link says how it went', () => {
     people.Clipboard = { writeText };
     await people.CopyLink();
     expect(writeText).toHaveBeenCalledWith('https://host.example/redeem?t=abc');
-    expect(people.linkStatus()).toBe('copied');
+    expect(people.LinkStatus()).toBe('copied');
     people.RedemptionUrl = 'https://host.example/redeem?t=def';
-    expect(people.linkStatus()).toBe('idle');
+    expect(people.LinkStatus()).toBe('idle');
   });
 
   it('says it could not copy when the clipboard refuses, or there is none', async () => {
@@ -1149,11 +1149,11 @@ describe('Copy link says how it went', () => {
     const refused = invited();
     refused.Clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
     await refused.CopyLink();
-    expect(refused.linkStatus()).toBe('failed');
+    expect(refused.LinkStatus()).toBe('failed');
     const none = invited();
     none.Clipboard = null;
     await none.CopyLink();
-    expect(none.linkStatus()).toBe('failed');
+    expect(none.LinkStatus()).toBe('failed');
     vi.restoreAllMocks();
   });
 });
