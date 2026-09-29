@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
-import { isStaffUser, STAFF_ROLES } from '../dist/load-graph.js';
+import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChangeContext } from '../dist/base-space-type-server-driver.js';
@@ -9,20 +9,10 @@ import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { membershipReaches, type SpaceNode, type MemberSnapshot } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
-describe('isStaffUser', () => {
-    it('returns true for UI, Developer, and Integration roles', () => {
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'UI' }] }), true);
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Developer' }] }), true);
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Integration' }] }), true);
-    });
-
-    it('returns false for Space Participant, empty roles, or null', () => {
-        assert.equal(isStaffUser({ UserRoles: [{ Role: 'Space Participant' }] }), false);
-        assert.equal(isStaffUser({ UserRoles: [] }), false);
-        assert.equal(isStaffUser(null), false);
-        assert.equal(isStaffUser(undefined), false);
-    });
-});
+// Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
+let restoreAdminister: () => void;
+before(() => { restoreAdminister = grantAdministerToDefaultRoles(); });
+after(() => { restoreAdminister(); });
 
 describe('SpaceEntityServer staff-only edit gate', () => {
     const participantUser = {
@@ -60,7 +50,7 @@ describe('SpaceEntityServer staff-only edit gate', () => {
         assert.equal(res.Success, false);
         const err = res.Errors.find((e) => e.Source === 'AllowParentAssignees');
         assert.ok(err, 'Expected error on AllowParentAssignees');
-        assert.equal(err?.Message, 'Space change refused: only staff may change the allow-parent-assignees setting.');
+        assert.equal(err?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the allow-parent-assignees setting.');
     });
 
     it('refuses a participant owner editing AgentRetrieval', async () => {
@@ -69,7 +59,7 @@ describe('SpaceEntityServer staff-only edit gate', () => {
         assert.equal(res.Success, false);
         const err = res.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.ok(err, 'Expected error on AgentRetrieval');
-        assert.equal(err?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+        assert.equal(err?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
     });
 
     it('allows staff to edit AllowParentAssignees without setting refusal', async () => {
@@ -234,7 +224,7 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(res.Success, false);
         const err = res.Errors.find((e) => e.Source === 'AllowParentAssignees');
         assert.ok(err, 'Expected error on AllowParentAssignees');
-        assert.equal(err?.Message, 'Space change refused: only staff may change the allow-parent-assignees setting.');
+        assert.equal(err?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the allow-parent-assignees setting.');
     });
 
     it('allows participant to send type default for AgentRetrieval', async () => {
@@ -260,7 +250,7 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(res.Success, false);
         const err = res.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.ok(err, 'Expected error on AgentRetrieval');
-        assert.equal(err?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+        assert.equal(err?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
     });
 
     it("keeps the loader's explicit value", async () => {
@@ -328,7 +318,7 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(resAllow.Success, false);
         const allowErr = resAllow.Errors.find((e) => e.Source === 'AllowParentAssignees');
         assert.ok(allowErr, 'Expected error on AllowParentAssignees');
-        assert.equal(allowErr?.Message, 'Space change refused: only staff may change the allow-parent-assignees setting.');
+        assert.equal(allowErr?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the allow-parent-assignees setting.');
 
         const spaceAgent = mockCreateSpace({
             user: participantUser,
@@ -339,7 +329,7 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(resAgent.Success, false);
         const agentErr = resAgent.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.ok(agentErr, 'Expected error on AgentRetrieval');
-        assert.equal(agentErr?.Message, 'Space change refused: only staff may change the agent retrieval setting.');
+        assert.equal(agentErr?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
     });
 
     it("applies the type's defaults after NewRecord() with no sets", async () => {
@@ -956,3 +946,112 @@ describe('SpaceEntityServer type change', () => {
         assert.equal(oldDriver.judged.length, 0);
     });
 });
+
+// A staff close and a staff re-stamp, saved through the entity's own validation and its real write rules
+{
+    const STAFF = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9';
+    const STAFF_SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
+    const OWNER_ROLE = '69090145-C214-4C16-83C5-9D0F1F3B6DE4';
+    const STAFF_TYPE = 'C76A0ACA-CBF8-43AD-A996-9296CDA681BE';
+
+    // What the write rules read, through the space's own provider: the space, the staff user's owner seat, the role, the type
+    function graph(rows: Record<string, unknown[]>) {
+        const read = (entityName: string) => ({ Success: true, Results: rows[entityName.split(': ')[1]] ?? [] });
+        return {
+            async RunView(p: { EntityName: string }) { return read(p.EntityName); },
+            async RunViews(ps: { EntityName: string }[]) { return ps.map((p) => read(p.EntityName)); },
+            GetEntityObject() { return undefined; }, // with EntityByID, what asMetadata() needs to read the system user
+            EntityByID() { return { Name: 'x' }; },
+        };
+    }
+    const seatedRows = {
+        'Space Members': [{ SpaceID: STAFF_SPACE, UserID: STAFF, Status: 'Active', Band: 'Team', SpaceRoleTypeID: OWNER_ROLE }],
+        'Space Role Types': [{ ID: OWNER_ROLE, Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true }],
+        'Space Types': [{ ID: STAFF_TYPE, InviteApproval: 'Approve', MemberCap: null }],
+        Spaces: [{ ID: STAFF_SPACE, ParentID: null, InheritsMembership: true, OwnerID: STAFF, SpaceTypeID: STAFF_TYPE }],
+    };
+
+    class KindSpy extends BaseSpaceTypeServerDriver {
+        public judged: string[] = [];
+        public heard: string[] = [];
+        public judgedOld: Array<Record<string, unknown> | undefined> = [];
+        public heardOld: Array<Record<string, unknown> | undefined> = [];
+        public override ValidateSpaceChange(ctx: SpaceChangeContext) { this.judged.push(ctx.kind); this.judgedOld.push(ctx.oldValues); return { ok: true as const }; }
+        public override OnSpaceChanged(ctx: SpaceChangeContext) { this.heard.push(ctx.kind); this.heardOld.push(ctx.oldValues); }
+    }
+
+    describe('a staff close and a staff re-stamp, through the real validation', () => {
+        const spy = new KindSpy();
+        const engine = CollaborationEngine.Instance;
+        const registry = ServerDriverRegistry.Instance;
+        const held = {
+            system: WellKnownUserSource.Instance.GetSystemUser, type: engine.SpaceTypeById, lifecycle: engine.UserHoldsLifecycleAuthorization,
+            postClose: engine.ResolvePostCloseAccessForSpace, driver: registry.GetDriverForType, space: registry.ResolveSpaceAndType,
+            resolveType: registry.ResolveType, save: BaseEntity.prototype.Save,
+        };
+        before(() => {
+            WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' }) as UserInfo;
+            engine.SpaceTypeById = (() => ({ ID: STAFF_TYPE, Configuration: null, SpaceExtensionEntity: null })) as unknown as typeof engine.SpaceTypeById;
+            engine.UserHoldsLifecycleAuthorization = () => true;
+            engine.ResolvePostCloseAccessForSpace = async () => ({ access: 'ReadOnly', days: null });
+            registry.GetDriverForType = () => spy;
+            registry.ResolveSpaceAndType = (async () => ({ driver: spy, space: {}, spaceType: {} })) as unknown as typeof registry.ResolveSpaceAndType;
+            registry.ResolveType = (async () => ({ Code: 'test-type' })) as unknown as typeof registry.ResolveType;
+            // MJ's Save runs the entity's validation, the REAL one here, and a successful save leaves nothing dirty
+            BaseEntity.prototype.Save = async function (this: BaseEntity): Promise<boolean> {
+                if (!(await this.ValidateAsync()).Success) return false;
+                for (const f of this.Fields) { (f as unknown as { OldValue: unknown }).OldValue = f.Value; (f as unknown as { Dirty: boolean }).Dirty = false; }
+                return true;
+            };
+        });
+        after(() => {
+            WellKnownUserSource.Instance.GetSystemUser = held.system;
+            Object.assign(engine, { SpaceTypeById: held.type, UserHoldsLifecycleAuthorization: held.lifecycle, ResolvePostCloseAccessForSpace: held.postClose });
+            Object.assign(registry, { GetDriverForType: held.driver, ResolveSpaceAndType: held.space, ResolveType: held.resolveType });
+            BaseEntity.prototype.Save = held.save;
+        });
+
+        function staffSpace(rows: Record<string, unknown[]>, closedAt: string, oldClosedAt: string | null) {
+            const values: Record<string, unknown> = { ID: STAFF_SPACE, OwnerID: STAFF, SpaceTypeID: STAFF_TYPE, ParentID: null, ClosedAt: closedAt, PostCloseAccess: null, PostCloseAccessDays: null };
+            const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+            Object.defineProperties(space, {
+                ...Object.fromEntries(Object.entries(values).map(([k, v]) => [k, { value: v, writable: true }])),
+                Fields: { value: Object.entries(values).map(([Name, Value]) => ({ Name, Value, OldValue: Name === 'ClosedAt' ? oldClosedAt : Value, Dirty: Name === 'ClosedAt' })), writable: true },
+                ContextCurrentUser: { value: { ID: STAFF, Name: 'Staff', UserRoles: [{ Role: 'UI' }] }, writable: true },
+                IsSaved: { value: true, writable: true },
+                ProviderToUse: { value: graph(rows), writable: true },
+                RunViewProviderToUse: { value: graph(rows), writable: true },
+            });
+            return space;
+        }
+        const reset = () => { spy.judged.length = 0; spy.heard.length = 0; spy.judgedOld.length = 0; spy.heardOld.length = 0; };
+
+        it('passes, takes the server time, and is judged and heard as one Close', async () => {
+            reset();
+            const space = staffSpace(seatedRows, new Date(Date.now() + 60_000).toISOString(), null);
+            assert.equal(await space.Save(), true);
+            assert.ok(new Date(space.ClosedAt as unknown as string).getTime() <= Date.now(), 'the server time, not the sent one');
+            assert.deepEqual(spy.judged, ['Close']);
+            assert.deepEqual(spy.heard, ['Close']);
+        });
+
+        it('is refused when the staff user holds no owner seat: the test does go through the write rules', async () => {
+            reset();
+            const space = staffSpace({ ...seatedRows, 'Space Members': [] }, new Date(Date.now() + 60_000).toISOString(), null);
+            assert.equal(await space.Save(), false);
+            assert.deepEqual(spy.heard, []);
+        });
+
+        it('judges and hears a staff re-stamp of a closed space as the same kind, with the same old values', async () => {
+            reset();
+            const later = new Date(Date.now() - 60_000).toISOString();
+            const earlier = new Date(Date.now() - 86_400_000 * 30).toISOString();
+            const space = staffSpace(seatedRows, earlier, later);
+            assert.equal(await space.Save(), true);
+            assert.deepEqual(spy.judged, ['Update']);
+            assert.deepEqual(spy.heard, ['Update']);
+            assert.deepEqual(spy.heardOld, spy.judgedOld);
+            assert.deepEqual(Object.keys(spy.heardOld[0] ?? {}), ['ClosedAt']);
+        });
+    });
+}

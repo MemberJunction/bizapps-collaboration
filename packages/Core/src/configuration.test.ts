@@ -25,7 +25,7 @@ describe('Configuration & ResolveSpaceRules', () => {
     it('applies type configuration values', () => {
         const typeConfig: ISpaceTypeConfiguration = {
             Chats: {
-                WhoCanStart: 'Contributors',
+                WhoCanStart: 'Owners',
                 AgentReplyMode: 'Always',
                 HistoryOnAdd: 'Since',
             },
@@ -40,7 +40,7 @@ describe('Configuration & ResolveSpaceRules', () => {
         };
 
         const rules = ResolveSpaceRules(typeConfig, null);
-        assert.equal(rules.Chats.WhoCanStart, 'Contributors');
+        assert.equal(rules.Chats.WhoCanStart, 'Owners');
         assert.equal(rules.Chats.AgentReplyMode, 'Always');
         assert.equal(rules.Chats.HistoryOnAdd, 'Since');
         assert.equal(rules.Agents.ListMode, 'Replace');
@@ -50,7 +50,7 @@ describe('Configuration & ResolveSpaceRules', () => {
     it('applies space overrides only for keys in SpaceOverridable', () => {
         const typeConfig: ISpaceTypeConfiguration = {
             Chats: {
-                WhoCanStart: 'Contributors',
+                WhoCanStart: 'Owners',
                 AgentReplyMode: 'MentionOrOneToOne',
                 HistoryOnAdd: 'None',
             },
@@ -328,5 +328,13 @@ describe('a space may set the label keys its type lists', () => {
 describe('a key nothing reads is refused', () => {
     it("refuses Admin, which the app dropped: nothing read it", () => {
         assert.match(ValidateCollaborationSettings({ Admin: { RoleNames: ['Developer'] } }, 'type').errors.join(' '), /Unknown settings key: Admin/);
+    });
+});
+
+describe("WhoCanStart is 'Anyone' or 'Owners'", () => {
+    it("refuses 'Contributors', which meant the same as 'Anyone' and narrowed nothing", () => {
+        const result = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Contributors' } }, 'app');
+        assert.equal(result.valid, false);
+        assert.match(result.errors.join(' '), /WhoCanStart/);
     });
 });

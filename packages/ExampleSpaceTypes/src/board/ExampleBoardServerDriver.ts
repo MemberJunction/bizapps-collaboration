@@ -31,8 +31,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 @RegisterClass(BaseSpaceTypeServerDriver, 'example-board')
 export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     /**
-     * Narrows the rules for board spaces: only contributors start a conversation, where the rules would let anyone. A driver
-     * narrows; it never widens what the type or the app set.
+     * Narrows the rules for board spaces: only owners start a conversation, where the rules would let anyone whose seat can post. A
+     * driver narrows; it never widens what the type or the app set.
      */
     public override AdjustRules(
         _ctx: DriverBaseContext,
@@ -42,7 +42,7 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
             ...rules,
             Chats: {
                 ...rules.Chats,
-                WhoCanStart: rules.Chats?.WhoCanStart === 'Anyone' ? 'Contributors' : rules.Chats?.WhoCanStart,
+                WhoCanStart: 'Owners',
             },
         };
     }

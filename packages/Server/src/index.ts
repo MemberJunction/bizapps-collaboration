@@ -31,6 +31,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'execute-space-chat-turn.resolver.{js,ts}'),
     resolve(here, 'space-chat-host-rules.resolver.{js,ts}'),
     resolve(here, 'close-consequence.resolver.{js,ts}'),
+    resolve(here, 'home-counts.resolver.{js,ts}'),
     resolve(here, 'create-space-conversation.resolver.{js,ts}'),
 ];
 

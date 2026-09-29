@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
+import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
 import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import type { ValidationErrorInfo } from '@memberjunction/global';
 import type { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationTaskEntityServer } from '../dist/task-entity-server.js';
 import { assigneeSeatMessage, relevantFieldsChanged } from '../dist/task-space.js';
+
+// Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
+let restoreAdminister: () => void;
+before(() => { restoreAdminister = grantAdministerToDefaultRoles(); });
+after(() => { restoreAdminister(); });
 
 describe('relevantFieldsChanged', () => {
     it('checks a new record, and a saved record only when a named field is dirty', () => {

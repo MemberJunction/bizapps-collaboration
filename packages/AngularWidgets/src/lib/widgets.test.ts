@@ -626,6 +626,7 @@ describe('CollabShareCheckComponent', () => {
 describe('CollabSpaceOverviewComponent contributed cards', () => {
     it('draws one card per key, whatever spelling or order a driver appended them in', () => {
         const comp = new CollabSpaceOverviewComponent();
+        comp.CanSeeTeamSide = true;
         comp.ContributedCards = [
             { key: 'deal-summary', title: 'Deal', sortKey: 15 },
             { key: 'Deal-Summary', title: 'Deal again', sortKey: 16 },

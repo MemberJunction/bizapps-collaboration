@@ -87,8 +87,9 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
     }
 
     /**
-     * Returns board overview cards corresponding to Frame 08:
-     * Next meeting, Agenda, Active vote, and Members list.
+     * Returns board overview cards corresponding to Frame 08: Next meeting, Agenda, Active vote, and Members list. Frame 08 is an
+     * outside director's view (on the Shared band), so each card is a Shared card: a board that kept them Team-only would show that
+     * director none of them.
      */
     public override GetOverviewCards(
         _ctx: SpaceUIContext,
@@ -99,28 +100,28 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 key: 'next-meeting',
                 title: 'Next Meeting',
                 sortKey: 10,
-                side: 'Team',
+                side: 'Shared',
                 component: ExampleBoardNextMeetingCard,
             },
             {
                 key: 'agenda',
                 title: 'Agenda',
                 sortKey: 20,
-                side: 'Team',
+                side: 'Shared',
                 component: ExampleBoardAgendaCard,
             },
             {
                 key: 'vote',
                 title: 'Active Vote',
                 sortKey: 30,
-                side: 'Team',
+                side: 'Shared',
                 component: ExampleBoardVoteCard,
             },
             {
                 key: 'members',
                 title: 'Members',
                 sortKey: 40,
-                side: 'Team',
+                side: 'Shared',
                 component: ExampleBoardMembersCard,
             },
         ]);

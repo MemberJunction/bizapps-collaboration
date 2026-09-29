@@ -15,8 +15,8 @@ export interface CloseConsequence {
     /** The person who keeps the row once its access has ended: the space's `OwnerID`. */
     keeperUserId: string;
     keeperName: string;
-    /** Whether that person can reopen it: an owner seat (reached even past the space's end) and 'Close and Reopen Spaces'. */
-    keeperCanReopen: boolean;
+    /** Whether that person can reopen it: an owner seat (reached even past the space's end) and 'Close and Reopen Spaces'. Null when it could not be checked. */
+    keeperCanReopen: boolean | null;
 }
 
 /**
@@ -31,9 +31,11 @@ export async function resolveCloseConsequence(provider: IMetadataProvider, viewe
     if (!system) throw new Error('The system user is not available, so the space cannot be read.');
     const rv = RunView.FromMetadataProvider(provider);
 
-    // The viewer must be able to read the space: the read is theirs, and the rest is read as the system user
+    // Only someone who may close the space is told who keeps it and what they hold: the viewer's own reads decide, and the rest is
+    // read as the system user. A person who can read the space but not close it is refused, as the page never asks them.
     const own = await rv.RunView<{ ID: string }>({ EntityName: SPACES_ENTITY, ExtraFilter: `ID = '${id}'`, Fields: ['ID'], ResultType: 'simple' }, viewer);
     if (!own.Success || !own.Results?.length) throw new Error('That space is not one you can read.');
+    if (!(await CollaborationEngine.Instance.UserCanCloseSpace(viewer, id, provider))) throw new Error('Only someone who may close this space can ask what closing does.');
 
     const spaces = await rv.RunView<{ ParentID: string | null; SpaceTypeID: string | null; OwnerID: string; Configuration: string | null }>({
         EntityName: SPACES_ENTITY,
@@ -64,18 +66,21 @@ export async function resolveCloseConsequence(provider: IMetadataProvider, viewe
 
     const keeperId = parseUuid(space.OwnerID);
     if (!keeperId) throw new Error("The space's owner is not a valid user id.");
-    const users = await rv.RunView<{ Name: string }>({ EntityName: USERS_ENTITY, ExtraFilter: `ID = '${keeperId}'`, Fields: ['Name'], ResultType: 'simple' }, system);
-    const roles = await rv.RunView<{ Role: string; RoleID: string }>({ EntityName: USER_ROLES_ENTITY, ExtraFilter: `UserID = '${keeperId}'`, Fields: ['Role', 'RoleID'], ResultType: 'simple' }, system);
+    const [users, roles] = await rv.RunViews([
+        { EntityName: USERS_ENTITY, ExtraFilter: `ID = '${keeperId}'`, Fields: ['Name'], ResultType: 'simple' },
+        { EntityName: USER_ROLES_ENTITY, ExtraFilter: `UserID = '${keeperId}'`, Fields: ['Role', 'RoleID'], ResultType: 'simple' },
+    ], system);
     if (!users.Success || !roles.Success) throw new Error(`The keeper could not be read: ${users.ErrorMessage ?? roles.ErrorMessage ?? 'unknown error'}.`);
-    const keeperName = users.Results?.[0]?.Name ?? 'the space\'s owner';
+    const keeperName = ((users.Results ?? []) as { Name: string }[])[0]?.Name ?? 'the space\'s owner';
 
     // The keeper as the security layer sees them: their id, and their roles by name (authorizations) and id (row filters)
     const keeper = new UserInfo(provider, {
         ID: keeperId,
         Name: keeperName,
-        UserRoles: (roles.Results ?? []).map((row) => ({ UserID: keeperId, Role: row.Role, RoleID: row.RoleID })),
+        UserRoles: ((roles.Results ?? []) as { Role: string; RoleID: string }[]).map((row) => ({ UserID: keeperId, Role: row.Role, RoleID: row.RoleID })),
     });
-    let keeperCanReopen = false;
+    // A check that fails answers null, not false: "could not check" is not "cannot"
+    let keeperCanReopen: boolean | null = null;
     try {
         keeperCanReopen = await engine.UserCanReopenSpace(keeper, id, provider);
     } catch (error) {

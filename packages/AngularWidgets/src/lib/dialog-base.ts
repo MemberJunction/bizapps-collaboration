@@ -46,7 +46,17 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
 
   public ngOnDestroy(): void {
     if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
-    if (this.opener && typeof this.opener.focus === 'function') this.opener.focus();
+    if (typeof document === 'undefined') return;
+    // The opener may be gone (a row's Share button after the share): the focus falls back to the page's main area, not to the body
+    if (this.opener && typeof this.opener.focus === 'function' && document.contains(this.opener)) {
+      this.opener.focus();
+      return;
+    }
+    const main = document.querySelector<HTMLElement>('main, [role="main"]');
+    if (main) {
+      if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+      main.focus();
+    }
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -54,12 +64,19 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
     if (event.key !== 'Tab') return;
     const box = this.DialogBox()?.nativeElement;
     if (!box) return;
+    const container = box.querySelector<HTMLElement>('.mj-dialog-container');
     const focusable = box.querySelectorAll<HTMLElement>('input:not([disabled]):not([type="hidden"]), button:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
-    if (focusable.length === 0) return;
+    // While every control is off (a save is under way) Tab has nowhere to go: the focus stays on the dialog itself
+    if (focusable.length === 0) {
+      event.preventDefault();
+      container?.focus();
+      return;
+    }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     const active = document.activeElement;
-    if (!box.contains(active)) {
+    // The container is where the focus starts when no control takes it: from there Tab goes to the first control, Shift+Tab to the last
+    if (!box.contains(active) || active === container) {
       event.preventDefault();
       (event.shiftKey ? last : first).focus();
     } else if (event.shiftKey && active === first) {

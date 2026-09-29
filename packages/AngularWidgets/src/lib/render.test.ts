@@ -110,6 +110,23 @@ describe('the Team row, rendered', () => {
 });
 
 describe('the rail, rendered', () => {
+  it('lists conversations only for a space whose type has a Chat tab', async () => {
+    const chat = { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' };
+    const overview = { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' };
+    const without = TestBed.createComponent(CollabSpaceRailComponent);
+    without.componentRef.setInput('Mode', 'space');
+    without.componentRef.setInput('Tabs', [overview]);
+    without.detectChanges();
+    expect((without.nativeElement as HTMLElement).textContent).not.toContain('CONVERSATIONS');
+    without.destroy();
+    const withChat = TestBed.createComponent(CollabSpaceRailComponent);
+    withChat.componentRef.setInput('Mode', 'space');
+    withChat.componentRef.setInput('Tabs', [overview, chat]);
+    withChat.detectChanges();
+    expect((withChat.nativeElement as HTMLElement).textContent).toContain('CONVERSATIONS');
+  });
+
+
   it('lets the collapsed space tile be operated from the keyboard', async () => {
     const fixture = TestBed.createComponent(CollabSpaceRailComponent);
     fixture.componentRef.setInput('SpaceTitle', 'Northwind');
@@ -185,47 +202,115 @@ describe('the dialogs, rendered', () => {
     }
   });
 
-  it('focuses the first field when it opens, and the container, not a button, when it has no field', async () => {
+  it('focuses the first field when it opens, the marked control when there is one, and the container, not a button, when there is neither', () => {
     vi.useFakeTimers();
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);
     convo.detectChanges();
-    convo.componentInstance.ngOnInit();
     vi.runAllTimers();
     expect((document.activeElement as HTMLElement).id).toBe('convo-name');
     convo.destroy();
 
+    const upload = TestBed.createComponent(CollabUploadDialogComponent);
+    upload.detectChanges();
+    vi.runAllTimers();
+    expect((document.activeElement as HTMLElement).hasAttribute('data-autofocus')).toBe(true);
+    upload.destroy();
+
     const share = TestBed.createComponent(CollabShareCheckDialogComponent);
     share.detectChanges();
-    share.componentInstance.ngOnInit();
     vi.runAllTimers();
     expect(document.activeElement?.classList.contains('mj-dialog-container')).toBe(true);
     expect(document.activeElement?.tagName).not.toBe('BUTTON');
   });
 
-  it('gives focus back to what opened the dialog when it closes', () => {
+  it('gives focus back to what opened the dialog when it closes, and to the main area when that is gone', () => {
+    const main = document.createElement('main');
+    document.body.appendChild(main);
     const opener = document.createElement('button');
     document.body.appendChild(opener);
     opener.focus();
     const fixture = TestBed.createComponent(CollabNewConversationDialogComponent);
     fixture.detectChanges();
-    fixture.componentInstance.ngOnInit();
     document.body.querySelector<HTMLElement>('input')?.focus();
     expect(document.activeElement).not.toBe(opener);
     fixture.destroy();
     expect(document.activeElement).toBe(opener);
+
+    const second = document.createElement('button');
+    document.body.appendChild(second);
+    second.focus();
+    const again = TestBed.createComponent(CollabNewConversationDialogComponent);
+    again.detectChanges();
+    second.remove();
+    again.destroy();
+    expect(document.activeElement).toBe(main);
   });
 
-  it("keeps Tab inside, including the dialog's own close button", async () => {
+  it('asks for the share when Share is clicked, and not when Cancel is', async () => {
+    const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
+    const shared = vi.fn();
+    const cancelled = vi.fn();
+    fixture.componentInstance.ShareRequested.subscribe(shared);
+    fixture.componentInstance.CancelRequested.subscribe(cancelled);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('mj-dialog-actions button'));
+    buttons.find((b) => b.textContent?.includes('Share'))!.click();
+    expect(shared).toHaveBeenCalledTimes(1);
+    expect(cancelled).not.toHaveBeenCalled();
+    buttons.find((b) => b.textContent?.includes('Cancel'))!.click();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(shared).toHaveBeenCalledTimes(1);
+  });
+
+  const tabFrom = (element: HTMLElement, shiftKey = false): KeyboardEvent => {
+    element.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+    document.dispatchEvent(tab);
+    return tab;
+  };
+
+  it("keeps Tab inside, including the dialog's own close button: from the last control to the first, from the first back", async () => {
+    const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button'));
+    expect(buttons[0].getAttribute('aria-label')).toBe('Close dialog');
+    const last = buttons[buttons.length - 1];
+    expect(tabFrom(last).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(buttons[0]);
+    expect(tabFrom(buttons[0], true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('holds the trap from the container, where the focus starts: Tab goes to the first control, Shift+Tab to the last', async () => {
     const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
+    const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
+    container.setAttribute('tabindex', '-1');
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('button'));
-    expect(buttons[0].getAttribute('aria-label')).toBe('Close dialog');
-    buttons[buttons.length - 1].focus();
-    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    document.dispatchEvent(tab);
-    expect(tab.defaultPrevented).toBe(true);
+    expect(tabFrom(container, true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(buttons[buttons.length - 1]);
+    expect(tabFrom(container).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(buttons[0]);
+  });
+
+  it('keeps the focus on the dialog while a save has every control off', async () => {
+    const fixture = TestBed.createComponent(CollabUploadDialogComponent);
+    fixture.componentRef.setInput('IsSubmitting', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelectorAll<HTMLElement>('input, select, textarea, button, [tabindex]').forEach((el) => {
+      if (!el.classList.contains('mj-dialog-container')) el.setAttribute('disabled', '');
+      if (el.hasAttribute('tabindex') && !el.classList.contains('mj-dialog-container')) el.setAttribute('tabindex', '-1');
+    });
+    const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
+    container.setAttribute('tabindex', '-1');
+    const tab = tabFrom(container, true);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(container);
   });
 });

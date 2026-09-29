@@ -265,7 +265,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'parent-assignees.PA4',
-        Name: 'PA4 — only staff may change AllowParentAssignees; non-staff change is refused over the wire',
+        Name: 'PA4 — only someone with the Administer Spaces authorization may change AllowParentAssignees; a participant cannot over the wire',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const beaCtx = await getPersonaContext(ctx, 'bea');
@@ -278,7 +278,7 @@ const checks: NamedCheck[] = [
             Assert(!saved, 'Non-staff participant changing AllowParentAssignees MUST fail save over the wire');
             const reason = space.LatestResult?.CompleteMessage ?? '';
             Assert(
-                reason.includes('only staff may change the allow-parent-assignees setting'),
+                reason.includes('only someone with the Administer Spaces authorization may change the allow-parent-assignees setting'),
                 `Expected staff-only error message, got: ${reason}`,
             );
         },

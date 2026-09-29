@@ -381,16 +381,16 @@ export function planSpaceWrite(input: {
 }
 
 /**
- * Create a child: owner of the parent. Create a root: staff, and the caller is
+ * Create a child: owner of the parent. Create a root: someone who may administer spaces, and the caller is
  * the owner they are about to be. Edit or move: owner of the space as it stands.
  * A move also requires owner of the destination parent. Participants do not create roots.
  */
 export function authorizeSpaceWrite(input: {
     kind: SpaceWriteKind;
     callerUserId: string | null;
-    callerIsStaff: boolean;
+    callerMayAdminister: boolean;
     nextOwnerId: string;
-    /** True when a move clears ParentID. Staff and the current owner may do that. */
+    /** True when a move clears ParentID. Only someone who may administer spaces may do that. */
     toRoot?: boolean;
     /** Reaching membership on the space being edited, before the move. Null on create. */
     here: MemberSnapshot | null;
@@ -401,8 +401,8 @@ export function authorizeSpaceWrite(input: {
         return { ok: false, code: 'not-signed-in', message: 'Space change refused: there is no signed-in user.' };
     }
     if (input.kind === 'create-root') {
-        if (!input.callerIsStaff || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may create a root, and they must own it.' };
+        if (!input.callerMayAdminister || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
+            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.' };
         }
         return { ok: true };
     }
@@ -416,8 +416,8 @@ export function authorizeSpaceWrite(input: {
         return { ok: false, code: 'cannot-invite', message: 'Space change refused: only an owner of this space may change it.' };
     }
     if (input.kind === 'move' && input.toRoot) {
-        if (!input.callerIsStaff) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only a staff user may move a space to the top level.' };
+        if (!input.callerMayAdminister) {
+            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only someone with the Administer Spaces authorization may move a space to the top level.' };
         }
         return { ok: true };
     }
@@ -456,13 +456,13 @@ export function mayFileRootTask(input: {
  * Authorize task assignment to a member whose seat is known.
  *
  * When the filed task's space has `allowParentAssignees` off and the caller is
- * not staff, participants may only assign people seated in their space or below.
+ * unable to administer spaces, participants may only assign people seated in their space or below.
  * An ancestor seat reaches the space through inheritance, but the switch
  * restricts assignment to local seats.
  * A Team task can never be given to someone who cannot see Team.
  */
 export function authorizeTaskAssignment(input: {
-    callerIsStaff: boolean;
+    callerMayAdminister: boolean;
     taskSpaceId: string;
     assigneeSeatSpaceId: string;
     allowParentAssignees: boolean;
@@ -473,7 +473,7 @@ export function authorizeTaskAssignment(input: {
         return { ok: false, message: 'Assignment refused: a Team task cannot be given to someone who cannot see Team.' };
     }
     const isAncestorSeat = idKey(input.assigneeSeatSpaceId) !== idKey(input.taskSpaceId);
-    if (isAncestorSeat && !input.allowParentAssignees && !input.callerIsStaff) {
+    if (isAncestorSeat && !input.allowParentAssignees && !input.callerMayAdminister) {
         return { ok: false, message: 'Assignment refused: participants may not assign people seated above this space.' };
     }
     return { ok: true };

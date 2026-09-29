@@ -76,7 +76,7 @@ const checks: NamedCheck[] = [
             Assert(!savedRoot, 'Participant creating root space must be refused');
             const rootReason = rootAttempt.LatestResult?.CompleteMessage ?? '';
             Assert(
-                rootReason.includes('Space change refused: only a staff user may create a root, and they must own it.'),
+                rootReason.includes('Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.'),
                 `Expected root space refusal message, got: ${rootReason}`,
             );
 

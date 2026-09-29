@@ -46,7 +46,7 @@ async function ensureFontsLoaded(page: Page) {
 }
 
 test.describe('Frame 04 — Share Check Dialog', () => {
-    test('renders backdrop, dialog, audience grid, finding review, note, and effects in light theme', async ({ page }) => {
+    test('renders backdrop, dialog, audience grid, finding review, and effects in light theme', async ({ page }) => {
         await page.goto('/frame/04');
         await ensureFontsLoaded(page);
 
@@ -79,9 +79,7 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const fixes = review.locator('.fix');
         await expect(fixes).toHaveCount(2);
 
-        // 6. Note and Effects
-        const note = modal.locator('textarea.textarea');
-        await expect(note).toHaveValue(/Synthesis from all 18 interviews/);
+        // 6. Effects (the note is plain text carried to the share, not a field on this screen)
         const effects = modal.locator('.effects .eff');
         await expect(effects).toHaveCount(3);
 

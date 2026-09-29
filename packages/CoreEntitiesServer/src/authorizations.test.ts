@@ -14,6 +14,7 @@ const ROOT_AUTH_ID = '11111111-1111-4111-8111-111111111111';
 const TYPES_AUTH_ID = '22222222-2222-4222-8222-222222222222';
 const SPACES_AUTH_ID = '33333333-3333-4333-8333-333333333333';
 const LIFECYCLE_AUTH_ID = '99999999-9999-4999-8999-999999999999';
+const ADMINISTER_AUTH_ID = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
 const SPACE_ID = '44444444-4444-4444-8444-444444444444';
 const TYPE_ID = '55555555-5555-4555-8555-555555555555';
 const USER_ID = '66666666-6666-4666-8666-666666666666';
@@ -24,6 +25,7 @@ function createMockAuthorizations(grants: {
     typesAllowedRoles: string[];
     spacesAllowedRoles: string[];
     lifecycleAllowedRoles?: string[];
+    administerAllowedRoles?: string[];
 }) {
     const root = new AuthorizationInfo();
     root.ID = ROOT_AUTH_ID;
@@ -61,7 +63,16 @@ function createMockAuthorizations(grants: {
         value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.lifecycleAllowedRoles ?? []).includes(r.Role)) ?? false,
     });
 
-    return [root, typesAuth, spacesAuth, lifecycleAuth];
+    const administerAuth = new AuthorizationInfo();
+    administerAuth.ID = ADMINISTER_AUTH_ID;
+    administerAuth.Name = 'Administer Spaces';
+    administerAuth.ParentID = ROOT_AUTH_ID;
+    administerAuth.IsActive = true;
+    Object.defineProperty(administerAuth, 'UserCanExecute', {
+        value: (user: UserInfo) => user?.UserRoles?.some(r => r.Role && (grants.administerAllowedRoles ?? []).includes(r.Role)) ?? false,
+    });
+
+    return [root, typesAuth, spacesAuth, lifecycleAuth, administerAuth];
 }
 
 function createMockProvider(options: {
@@ -217,6 +228,24 @@ describe('CollaborationEngine authorization checks', () => {
         const engine = CollaborationEngine.Instance;
         const res = await engine.UserCanConfigureSpaces(adminUser, SPACE_ID, provider);
         assert.equal(res, true, 'User with Configure Spaces and owner role must be allowed');
+    });
+});
+
+describe("the 'Administer Spaces' authorization", () => {
+    const withRoles = (...roles: string[]) => ({ ID: USER_ID, UserRoles: roles.map((Role) => ({ Role }) as Partial<UserRoleInfo> as UserRoleInfo) }) as Partial<UserInfo> as UserInfo;
+    const grantedTo = (roles: string[]) => createMockProvider({ authorizations: createMockAuthorizations({ typesAllowedRoles: [], spacesAllowedRoles: [], administerAllowedRoles: roles }) });
+
+    it('is held through the authorization, whatever a role is called: a host that edits the grants moves who may administer', () => {
+        const engine = CollaborationEngine.Instance;
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('UI'), grantedTo(['UI', 'Developer', 'Integration'])), true);
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('Space Participant'), grantedTo(['UI', 'Developer', 'Integration'])), false);
+        // The grants are the host's to edit: a role no code knows by name may hold it, and the shipped roles may not
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('Community Manager'), grantedTo(['Community Manager'])), true);
+        assert.equal(engine.UserMayAdministerSpaces(withRoles('UI'), grantedTo(['Community Manager'])), false);
+    });
+
+    it('is refused when the authorization is missing, rather than assumed', () => {
+        assert.equal(CollaborationEngine.Instance.UserMayAdministerSpaces(withRoles('UI'), createMockProvider({ authorizations: [] })), false);
     });
 });
 

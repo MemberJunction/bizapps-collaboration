@@ -477,7 +477,7 @@ export class CollabSpaceOverviewComponent {
   @Input() public ShowPreviewAs = false;
   @Input() public CanAddSubSpace = false;
   /** False for a seat that can't see the Team band: the Team card is not drawn for them at all. */
-  @Input() public CanSeeTeamSide = true;
+  @Input() public CanSeeTeamSide = false;
 
   @Input() public NeedsYouItems: NeedsYouItemModel[] = [];
   @Input() public SharedItems: ItemCardModel[] = [];

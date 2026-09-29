@@ -20,7 +20,7 @@ import {
 } from '@mj-biz-apps/collaboration-entities';
 import { type BaseSpaceTypeServerDriver, type ChildSpaceChangeKind, type SpaceChangeKind } from './base-space-type-server-driver.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
-import { callerUuid, isStaffUser, loadAncestorChain, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { callerUuid, loadAncestorChain, mayAdminister, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { failDelete, refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
@@ -129,12 +129,12 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
         if (this.IsSaved) {
             const allowParentChanged = this.Fields.some((field) => field.Name === 'AllowParentAssignees' && field.Dirty);
-            if (allowParentChanged && !isStaffUser(user)) {
-                return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+            if (allowParentChanged && !mayAdminister(this, user)) {
+                return fail(result, 'AllowParentAssignees', 'Space change refused: only someone with the Administer Spaces authorization may change the allow-parent-assignees setting.');
             }
             const agentRetrievalChanged = this.Fields.some((field) => field.Name === 'AgentRetrieval' && field.Dirty);
-            if (agentRetrievalChanged && !isStaffUser(user)) {
-                return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+            if (agentRetrievalChanged && !mayAdminister(this, user)) {
+                return fail(result, 'AgentRetrieval', 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
             }
         }
 
@@ -233,10 +233,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 return fail(result, 'ParentID', 'Space change refused: close a space and move it in separate saves.');
             }
         }
-        // A closed space's date is the server's record of when it closed: only staff (the world loader, tests) may restamp it
+        // A closed space's date is the server's record of when it closed: only someone who may administer spaces (the world loader, tests) may restamp it
         const restamp = this.IsSaved && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue && !!this.ClosedAt
             && this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty);
-        if (restamp && !isStaffUser(user)) {
+        if (restamp && !mayAdminister(this, user)) {
             return fail(result, 'ClosedAt', 'Space change refused: the date a space closed cannot be changed.');
         }
 
@@ -332,11 +332,11 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 // Treat AllowParentAssignees and AgentRetrieval as unspecified while they still hold
                 // the value NewRecord() gave them without an explicit caller assignment in NewRecord().
                 // Apply the space type's defaults when unspecified. If an explicit value was set, keep it,
-                // and refuse non-staff callers if their explicit choice differs from the type's default.
+                // and refuse callers who may not administer spaces if their explicit choice differs from the type's default.
                 //
                 // Spaces are created on the server today, by the loader and EnsureSpaceForRecord.
                 // When a new-space UI form is built, it must prefill the space type's defaults so that
-                // staff intentionally choosing the column default when the type's default differs can
+                // someone who may administer spaces intentionally choosing the column default when the type's default differs can
                 // be distinguished.
                 const allowSpecified = this._callerSpecifiedAllowParentAssignees ||
                     (this._newRecordAllowParentAssignees !== undefined && this.AllowParentAssignees !== this._newRecordAllowParentAssignees);
@@ -345,14 +345,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
                 if (!allowSpecified) {
                     this.AllowParentAssignees = defaultAllow;
-                } else if (!isStaffUser(user) && this.AllowParentAssignees !== defaultAllow) {
-                    return fail(result, 'AllowParentAssignees', 'Space change refused: only staff may change the allow-parent-assignees setting.');
+                } else if (!mayAdminister(this, user) && this.AllowParentAssignees !== defaultAllow) {
+                    return fail(result, 'AllowParentAssignees', 'Space change refused: only someone with the Administer Spaces authorization may change the allow-parent-assignees setting.');
                 }
 
                 if (!agentSpecified) {
                     this.AgentRetrieval = defaultAgent;
-                } else if (!isStaffUser(user) && this.AgentRetrieval !== defaultAgent) {
-                    return fail(result, 'AgentRetrieval', 'Space change refused: only staff may change the agent retrieval setting.');
+                } else if (!mayAdminister(this, user) && this.AgentRetrieval !== defaultAgent) {
+                    return fail(result, 'AgentRetrieval', 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
                 }
             }
         }
@@ -394,7 +394,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const decision = authorizeSpaceWrite({
             kind,
             callerUserId: caller,
-            callerIsStaff: isStaffUser(user),
+            callerMayAdminister: mayAdminister(this, user),
             nextOwnerId: ownerId,
             toRoot,
             here,
@@ -642,10 +642,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         // The server's clock decides when a space closed. Staff (the world loader, tests) may backdate one; a date ahead of the
         // server, from anyone, is the server's own time (a browser's clock can run ahead of it).
         const signedIn = this.ContextCurrentUser;
-        // A staff re-stamp of a closed space follows the same rule: a date ahead of the server is the server's own time
+        // A re-stamp of a closed space by someone who may administer spaces follows the same rule: a date ahead of the server is the server's own time
         if (signedIn && this.ClosedAt && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.Dirty) {
             const sent = new Date(this.ClosedAt).getTime();
-            if ((own.justClosed && !isStaffUser(signedIn)) || !(sent <= Date.now())) this.ClosedAt = new Date();
+            if ((own.justClosed && !mayAdminister(this, signedIn)) || !(sent <= Date.now())) this.ClosedAt = new Date();
         }
         const justClosed = own.justClosed;
         const justReopened = own.justReopened;

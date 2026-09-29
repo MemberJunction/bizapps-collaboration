@@ -282,12 +282,9 @@ export interface CollabUploadSubmitPayload {
       border-radius: 6px 6px 0 0;
     }
     .d-body {
-      padding: 18px 20px;
       display: flex;
       flex-direction: column;
       gap: 14px;
-      max-height: calc(85vh - 160px);
-      overflow-y: auto;
     }
     .form-group {
       display: flex;
@@ -446,14 +443,6 @@ export interface CollabUploadSubmitPayload {
     .b-opt-sub {
       font-size: 11px;
       color: var(--mj-text-muted, #64748b);
-    }
-    .d-footer {
-      padding: 14px 20px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      border-top: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
     }
     .ellipsis {
       overflow: hidden;

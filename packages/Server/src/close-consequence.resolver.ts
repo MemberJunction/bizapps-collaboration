@@ -46,7 +46,7 @@ export class CloseConsequenceResolver extends ResolverBase {
                 Days: result.days ?? undefined,
                 KeeperUserID: result.keeperUserId,
                 KeeperName: result.keeperName,
-                KeeperCanReopen: result.keeperCanReopen,
+                KeeperCanReopen: result.keeperCanReopen ?? undefined,
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

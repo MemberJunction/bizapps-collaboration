@@ -1,6 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
 import { cleanupSpace, registerChecks } from '../cleanup-helpers.js';
@@ -163,11 +163,50 @@ const checks: NamedCheck[] = [
                 Assert(read.KeeperCanReopen === true, 'Ada holds an owner seat (through the parent) and the authorization, so she can reopen it');
 
                 // Someone who cannot read the space is told so, not given its keeper
-                const refused = await beaClient.GetCloseConsequence(child.ID);
-                Assert(!refused.Success, 'A person who cannot read the space is not told what closing does to it');
+                const unseen = await beaClient.GetCloseConsequence(child.ID);
+                Assert(!unseen.Success && /not one you can read/.test(unseen.ErrorMessage ?? ''), `A person who cannot read the space is refused for that reason: ${unseen.ErrorMessage ?? ''}`);
+                Assert(unseen.KeeperName === undefined || unseen.KeeperName === null, 'and is not given its keeper');
+
+                // Someone who can read it but may not close it (a plain member) is refused for that reason, and not given its keeper
+                const memberRole = await roleId(ctx, 'CanSeeTeamBand = 1 AND IsOwnerRole = 0');
+                await seat(ada, child.ID, (await getPersonaContext(ctx, 'bea')).User.ID, memberRole, 'Team');
+                const member = await beaClient.GetCloseConsequence(child.ID);
+                Assert(!member.Success && /Only someone who may close/.test(member.ErrorMessage ?? ''), `A member who may not close is refused for that reason: ${member.ErrorMessage ?? ''}`);
+                Assert(member.KeeperName === undefined || member.KeeperName === null, 'and is not given its keeper');
             } finally {
                 if (child) await cleanupSpace(ctx.Provider, ctx.User, child.ID);
                 await cleanupSpace(ctx.Provider, ctx.User, parent.ID);
+            }
+        },
+    },
+    {
+        Id: 'lifecycle.LC4',
+        Name: "LC4 — Home's counts come from one query run for the signed-in person, and match what the person's own reads find",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            for (const key of ['ada', 'bea']) {
+                const persona = await getPersonaContext(ctx, key);
+                const client = new CollaborationClient((await getPersonaClientContext(ctx, key)).GraphQLProvider);
+                const counts = await client.GetHomeCounts();
+                Assert(counts.Success, `${key}: the server reads Home's counts: ${counts.ErrorMessage ?? ''}`);
+                const asPersona = { ...ctx, Provider: persona.Provider, User: persona.User } as IntegrationCheckContext;
+                const read = (entity: string, filter: string, fields: string[]) => FindRows<{ ID: string; RecordID?: string }>(asPersona, entity, filter, fields, persona.User, { BypassCache: true });
+
+                // Shared files: Shared items whose entity is MJ: Files, in the spaces the person reaches (their own row filters decide)
+                const [filesEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', "Name = 'MJ: Files'", ['ID']);
+                const files = await read(SPACE_ITEM_ENTITY, `Band = 'Shared' AND EntityID = '${filesEntity.ID}'`, ['ID']);
+                Assert(counts.SharedFiles === files.length, `${key}: Shared files match their own reads (${counts.SharedFiles} vs ${files.length})`);
+
+                // Awaiting approval: Invited seats other people wait on, in spaces where the role may invite
+                const invited = await read(SPACE_MEMBER_ENTITY, `Status = 'Invited' AND UserID <> '${persona.User.ID}'`, ['ID']);
+                Assert(counts.AwaitingApproval === invited.length, `${key}: invitations waiting match their own reads (${counts.AwaitingApproval} vs ${invited.length})`);
+
+                // Open tasks: tasks filed in their spaces that are neither completed nor cancelled
+                const [tasksEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', "Name = 'MJ_BizApps_Tasks: Tasks'", ['ID']);
+                const items = await read(SPACE_ITEM_ENTITY, `EntityID = '${tasksEntity.ID}'`, ['ID', 'RecordID']);
+                const ids = items.map((item) => (item.RecordID ?? '').replace(/^ID\|/i, '')).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+                const open = ids.length === 0 ? [] : await read('MJ_BizApps_Tasks: Tasks', `ID IN (${ids.map((id) => `'${id}'`).join(',')}) AND Status NOT IN ('Completed', 'Cancelled')`, ['ID']);
+                Assert(counts.OpenTasks === open.length, `${key}: open tasks match their own reads, a cancelled task not counted (${counts.OpenTasks} vs ${open.length})`);
             }
         },
     },

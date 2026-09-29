@@ -25,8 +25,8 @@ export interface CollaborationSettings {
     PostCloseAccessDays?: number | null;
     /** Chat behavior rules. */
     Chats?: {
-        /** Who may start a chat. Default 'Anyone': every seat, read-only guests included. */
-        WhoCanStart?: 'Anyone' | 'Contributors' | 'Owners';
+        /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
+        WhoCanStart?: 'Anyone' | 'Owners';
         /** When an agent replies. Default 'MentionOrOneToOne'. */
         AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         /** The choice preselected when someone is added to an existing chat. Default 'None'. */
@@ -58,7 +58,7 @@ export interface ISpaceConfiguration extends CollaborationSettings {}
 
 export interface EffectiveSpaceRules {
     Chats: {
-        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        WhoCanStart: 'Anyone' | 'Owners';
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
@@ -154,7 +154,7 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
     const c = config as ISpaceTypeConfiguration;
 
     if (c.Chats) {
-        if (c.Chats.WhoCanStart && !['Anyone', 'Contributors', 'Owners'].includes(c.Chats.WhoCanStart)) {
+        if (c.Chats.WhoCanStart && !['Anyone', 'Owners'].includes(c.Chats.WhoCanStart)) {
             errors.push(`Invalid Chats.WhoCanStart: ${c.Chats.WhoCanStart}`);
         }
         if (c.Chats.AgentReplyMode && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(c.Chats.AgentReplyMode)) {
@@ -251,7 +251,7 @@ export interface ResolvedCollaborationSettings {
     PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
     PostCloseAccessDays: number | null;
     Chats: {
-        WhoCanStart: 'Anyone' | 'Contributors' | 'Owners';
+        WhoCanStart: 'Anyone' | 'Owners';
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
         HistoryOnAdd: 'None' | 'All' | 'Since';
     };
@@ -342,7 +342,7 @@ export function ValidateCollaborationSettings(
                     errors.push(`Unknown Chats key: ${k}`);
                 }
             }
-            if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Contributors', 'Owners'].includes(chats['WhoCanStart'] as string)) {
+            if (chats['WhoCanStart'] !== undefined && !['Anyone', 'Owners'].includes(chats['WhoCanStart'] as string)) {
                 errors.push(`Invalid Chats.WhoCanStart: ${String(chats['WhoCanStart'])}`);
             }
             if (chats['AgentReplyMode'] !== undefined && !['MentionOrOneToOne', 'MentionOnly', 'Always'].includes(chats['AgentReplyMode'] as string)) {

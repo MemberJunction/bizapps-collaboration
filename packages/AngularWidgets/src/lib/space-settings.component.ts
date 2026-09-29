@@ -50,7 +50,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       @if (!CanEdit) {
         <div class="alert-info" role="status">
           <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <span>{{ ReadOnlyNote }}</span>
+          <span>{{ ReadOnlyNote || "You can't change this space's settings." }}</span>
         </div>
         <div class="settings-sections">
           <div class="settings-card">

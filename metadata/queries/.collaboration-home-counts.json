@@ -1,0 +1,20 @@
+[
+  {
+    "primaryKey": {
+      "ID": "66CCE35F-EE16-4F59-ABB5-19A957A5AE0A"
+    },
+    "fields": {
+      "Name": "Collaboration Home Counts",
+      "Description": "One row for the signed-in person, across every space they reach: the Shared files, the open tasks (neither completed nor cancelled) and the invitations waiting on an owner. Built on fnCollaborationAccess; the person is the acting user, never a parameter.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Collaboration",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "SELECT\n    (SELECT COUNT(*)\n       FROM [__mj_BizAppsCollaboration].[SpaceItem] i\n       INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = i.SpaceID\n       INNER JOIN [__mj].[File] f ON f.ID = TRY_CAST(REPLACE(i.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER)\n      WHERE i.Band = N'Shared') AS SharedFiles,\n    (SELECT COUNT(*)\n       FROM [__mj_BizAppsCollaboration].[SpaceItem] i\n       INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = i.SpaceID\n       INNER JOIN [__mj_BizAppsTasks].[Task] t ON t.ID = TRY_CAST(REPLACE(i.RecordID, N'ID|', N'') AS UNIQUEIDENTIFIER)\n      WHERE (i.Band = N'Shared' OR a.CanSeeTeam = 1)\n        AND t.Status NOT IN (N'Completed', N'Cancelled')) AS OpenTasks,\n    (SELECT COUNT(*)\n       FROM [__mj_BizAppsCollaboration].[SpaceMember] m\n       INNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = m.SpaceID\n      WHERE m.Status = N'Invited'\n        AND a.CanInvite = 1\n        AND m.UserID <> TRY_CAST({{ UserID | sqlString }} AS UNIQUEIDENTIFIER)) AS AwaitingApproval"
+    }
+  }
+]

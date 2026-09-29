@@ -46,5 +46,17 @@
       "UseAuditLog": true,
       "Description": "Close and reopen a space, on spaces where the user holds an owner seat. Granted apart from 'Configure Spaces', which changes a space's settings."
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "F22C7B81-D6F8-4439-A4EB-F4C88FC1C9F1"
+    },
+    "fields": {
+      "Name": "Administer Spaces",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Collaboration",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Administer spaces beyond an owner's rights: create a top-level space, move a space to the top level, change a space's allow-parent-assignees and agent-retrieval settings, give a task to someone seated above its space when the space doesn't allow it, and backdate a close."
+    }
   }
 ]

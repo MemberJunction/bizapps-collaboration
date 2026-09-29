@@ -26,6 +26,12 @@ function provider(options: { viewerCanRead: boolean }) {
         return filter ? [] : [];
     };
     const md = {
+        async RunViews(params: { EntityName: string; ExtraFilter?: string }[], user?: UserInfo) {
+            return params.map((one) => {
+                const rows = answer(one.EntityName, one.ExtraFilter ?? '', user);
+                return { Success: true, Results: rows, RowCount: rows.length };
+            });
+        },
         async RunView(params: { EntityName: string; ExtraFilter?: string }, user?: UserInfo) {
             const rows = answer(params.EntityName, params.ExtraFilter ?? '', user);
             return { Success: true, Results: rows, RowCount: rows.length };
@@ -42,6 +48,9 @@ describe('what closing a space would do, read on the server', () => {
     let canReopen = true;
     let resolveParams: Parameters<typeof CollaborationEngine.Instance.ResolvePostCloseAccessForSpace>[0] | null = null;
     let reopenFor: { id: string; roles: string[] } | null = null;
+    let viewerCanClose = true;
+    let reopenThrows = false;
+    let close: typeof CollaborationEngine.Instance.UserCanCloseSpace;
 
     before(() => {
         const engine = CollaborationEngine.Instance;
@@ -50,12 +59,15 @@ describe('what closing a space would do, read on the server', () => {
         resolved = engine.ResolvePostCloseAccessForSpace.bind(engine);
         engine.ResolvePostCloseAccessForSpace = async (params) => { resolveParams = params; return stamped; };
         reopen = engine.UserCanReopenSpace.bind(engine);
-        engine.UserCanReopenSpace = async (user) => { reopenFor = { id: user.ID, roles: (user.UserRoles ?? []).map((role) => role.Role ?? '') }; return canReopen; };
+        close = engine.UserCanCloseSpace.bind(engine);
+        engine.UserCanCloseSpace = async () => viewerCanClose;
+        engine.UserCanReopenSpace = async (user) => { if (reopenThrows) throw new Error('the seat could not be read'); reopenFor = { id: user.ID, roles: (user.UserRoles ?? []).map((role) => role.Role ?? '') }; return canReopen; };
     });
     after(() => {
         WellKnownUserSource.Instance.GetSystemUser = systemUser;
         CollaborationEngine.Instance.ResolvePostCloseAccessForSpace = resolved;
         CollaborationEngine.Instance.UserCanReopenSpace = reopen;
+        CollaborationEngine.Instance.UserCanCloseSpace = close;
     });
 
     it("returns what the close would stamp (resolved as the close resolves it, from the parent and the space's own settings), the keeper's name, and whether they can reopen it", async () => {
@@ -83,6 +95,26 @@ describe('what closing a space would do, read on the server', () => {
         const { md } = provider({ viewerCanRead: true });
         assert.equal((await resolveCloseConsequence(md, viewer, SPACE)).keeperCanReopen, false);
         canReopen = true;
+    });
+
+    it('answers null, not false, when the check of the keeper\'s right fails: could not check is not cannot', async () => {
+        reopenThrows = true;
+        try {
+            const { md } = provider({ viewerCanRead: true });
+            assert.equal((await resolveCloseConsequence(md, viewer, SPACE)).keeperCanReopen, null);
+        } finally {
+            reopenThrows = false;
+        }
+    });
+
+    it('refuses someone who can read the space but may not close it: they are not told who keeps it', async () => {
+        viewerCanClose = false;
+        try {
+            const { md } = provider({ viewerCanRead: true });
+            await assert.rejects(resolveCloseConsequence(md, viewer, SPACE), /Only someone who may close this space can ask/);
+        } finally {
+            viewerCanClose = true;
+        }
     });
 
     it('refuses a viewer who cannot read the space, and never tells them its keeper', async () => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it, mock } from 'node:test';
+import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import {
     BaseSpaceTypeServerDriver,
@@ -12,6 +13,11 @@ import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { SpaceItemEntityServer } from '../dist/SpaceItemEntityServer.js';
 import { SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
+
+// Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
+let restoreAdminister: () => void;
+before(() => { restoreAdminister = grantAdministerToDefaultRoles(); });
+after(() => { restoreAdminister(); });
 
 const SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
 const PARENT = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';

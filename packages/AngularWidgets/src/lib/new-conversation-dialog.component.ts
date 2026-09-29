@@ -136,7 +136,6 @@ export interface NewConversationSubmitPayload {
       }
 
       .d-body {
-        padding: 20px 24px;
         display: flex;
         flex-direction: column;
         gap: 18px;
@@ -268,15 +267,6 @@ export interface NewConversationSubmitPayload {
         color: var(--mj-text-secondary, #64748b);
       }
 
-      .d-footer {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 10px;
-        padding: 16px 24px;
-        border-top: 1px solid var(--mj-border-default, #e2e8f0);
-        background: var(--mj-bg-surface-sunken, #f8fafc);
-      }
     `,
   ],
 })

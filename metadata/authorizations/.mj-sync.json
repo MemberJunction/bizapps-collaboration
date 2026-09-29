@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "Name IN ('Collaboration', 'Configure Space Types', 'Configure Spaces', 'Close and Reopen Spaces')",
+    "filter": "Name IN ('Collaboration', 'Configure Space Types', 'Configure Spaces', 'Close and Reopen Spaces', 'Administer Spaces')",
     "externalizeFields": [],
     "lookupFields": {
       "ParentID": {

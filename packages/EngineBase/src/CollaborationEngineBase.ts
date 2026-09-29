@@ -457,6 +457,22 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return !!reached?.role.isOwnerRole;
     }
 
+    /**
+     * Whether a user holds the 'Administer Spaces' authorization: the rights beyond an owner's (create or move to a top level,
+     * the allow-parent-assignees and agent-retrieval settings, a task for someone seated above its space, backdating a close).
+     * Granted by default to the UI, Developer and Integration roles, so nothing changes until a host edits the grants; no check
+     * looks at a role's name.
+     */
+    public UserMayAdministerSpaces(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Administer Spaces', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Administer Spaces'");
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. It is granted apart from 'Configure Spaces', which changes settings. */
     public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
         const md = provider ?? Metadata.Provider;

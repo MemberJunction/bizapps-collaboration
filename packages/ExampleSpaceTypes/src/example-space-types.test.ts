@@ -52,7 +52,7 @@ import {
     type mjBizAppsCollaborationSpaceMemberEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { type UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import { CollaborationEngine } from '@mj-biz-apps/collaboration-core-entities-server';
+import { CollaborationEngine, evaluateCanStartSpaceConversation } from '@mj-biz-apps/collaboration-core-entities-server';
 import type { mjBizAppsCollaborationSpaceRoleTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
 // Mock context factory helpers
@@ -110,7 +110,7 @@ describe('ExampleBoardServerDriver', () => {
         expect(instance).toBeInstanceOf(ExampleBoardServerDriver);
     });
 
-    it("AdjustRules narrows who may start a conversation: anyone becomes contributors, and owners-only stays owners-only", () => {
+    it('AdjustRules narrows who may start a conversation to owners, through the rule that decides it: a seat that can post but is not an owner is refused, and an owner may start', () => {
         const baseCtx = {
             actingUser: createMockUser(),
             provider: {} as unknown as IMetadataProvider,
@@ -119,10 +119,16 @@ describe('ExampleBoardServerDriver', () => {
             effectiveRules: createMockRules(),
         };
         const anyone = createMockRules();
-        expect(driver.AdjustRules(baseCtx, anyone).Chats.WhoCanStart).toBe('Contributors');
-        const owners = { ...createMockRules(), Chats: { ...createMockRules().Chats, WhoCanStart: 'Owners' as const } };
-        expect(driver.AdjustRules(baseCtx, owners).Chats.WhoCanStart).toBe('Owners');
+        expect(anyone.Chats.WhoCanStart).toBe('Anyone');
+        const adjusted = driver.AdjustRules(baseCtx, anyone);
+        expect(adjusted.Chats.WhoCanStart).toBe('Owners');
         expect(driver.AdjustRules(baseCtx, anyone).Chats.AgentReplyMode).toBe('MentionOrOneToOne');
+        const contributor = { isOwnerRole: false, canContribute: true, canSeeTeamBand: true };
+        const owner = { isOwnerRole: true, canContribute: true, canSeeTeamBand: true };
+        // Without the board's narrowing the contributor may start; with it, only the owner may
+        expect(evaluateCanStartSpaceConversation(false, anyone.Chats.WhoCanStart, contributor).canStartConversation).toBe(true);
+        expect(evaluateCanStartSpaceConversation(false, adjusted.Chats.WhoCanStart, contributor).canStartConversation).toBe(false);
+        expect(evaluateCanStartSpaceConversation(false, adjusted.Chats.WhoCanStart, owner).canStartConversation).toBe(true);
     });
 
     it('ValidateSpaceChange refuses closing a board whose configuration says motions are open, and allows it when none are', () => {
@@ -359,6 +365,12 @@ describe('ExampleBoardUIDriver and Contributions', () => {
         expect(normalizeContributionKey('Discussions')).toBe('chat');
         const ctx = { ...uiCtx, rules: { ...createMockRules(), Labels: { Tabs: { Discussions: 'Threads' } } } } as SpaceUIContext;
         expect(uiDriver.GetTabLabel(ctx, 'chat', 'Chat')).toBe('Threads');
+    });
+
+    it("declares every card a Shared card: Frame 08 is an outside director's view, on the Shared band", () => {
+        const cards = uiDriver.GetOverviewCards(uiCtx, []);
+        expect(cards.length).toBeGreaterThan(0);
+        expect(cards.map((c) => c.side)).toEqual(cards.map(() => 'Shared'));
     });
 
     it('GetOverviewCards returns Frame 08 overview cards', () => {

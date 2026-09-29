@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -19,7 +19,7 @@ import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
 import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
-import { closeConsequence, type CloseConsequenceRead } from './logic/close-consequence.js';
+import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
@@ -594,7 +594,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [ActiveTab]="activeTab"
                             [Tabs]="tabs"
                             [Conversations]="spaceConversations"
-                            [CanConfigure]="canConfigureCurrentSpace"
+                            [CanConfigure]="showsSettings"
                             [ActiveConversationId]="activeConversationId"
                             [CanStartConversation]="canStartConversation"
                             [LibraryCount]="libraryTotalCount"
@@ -625,25 +625,21 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 </div>
                                             </div>
                                             <div class="home-quick-stats">
-                                                <div class="stat-pill" (click)="onTabSelectRequested('Overview')">
+                                                <div class="stat-pill" [mjClickable]="'Active spaces'" (click)="onHomeSpacesRequested()">
                                                     <span class="stat-val">{{ activeSpacesCount }}</span>
                                                     <span class="stat-lbl">Active Spaces</span>
                                                 </div>
-                                                <div class="stat-pill" (click)="onNavSelectRequested('tasks')">
+                                                <div class="stat-pill" [mjClickable]="'Open tasks'" (click)="onNavSelectRequested('tasks')">
                                                     <span class="stat-val">{{ homeOpenTasks }}</span>
                                                     <span class="stat-lbl">Open Tasks</span>
                                                 </div>
-                                                <div class="stat-pill" (click)="onNavSelectRequested('inbox')">
+                                                <div class="stat-pill" [mjClickable]="'Awaiting approval'" (click)="onNavSelectRequested('inbox')">
                                                     <span class="stat-val">{{ inboxCount }}</span>
-                                                    <span class="stat-lbl">Inbox</span>
+                                                    <span class="stat-lbl">Awaiting Approval</span>
                                                 </div>
-                                                <div class="stat-pill" (click)="onNavSelectRequested('files')">
+                                                <div class="stat-pill" [mjClickable]="'Shared files'" (click)="onNavSelectRequested('files')">
                                                     <span class="stat-val">{{ homeSharedFiles }}</span>
                                                     <span class="stat-lbl">Shared Files</span>
-                                                </div>
-                                                <div class="stat-pill">
-                                                    <span class="stat-val">{{ homeAwaitingApproval }}</span>
-                                                    <span class="stat-lbl">Awaiting Approval</span>
                                                 </div>
                                             </div>
                                         </header>
@@ -1244,46 +1240,37 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    /** What the server says closing the space shown would do. Null until it has answered, or when it could not. */
-    private closeConsequenceRead: CloseConsequenceRead | null = null;
+    /** Where the server's read of what closing the space shown does stands. */
+    private closeConsequenceState: CloseConsequenceState = { status: 'loading' };
     private closeConsequenceForSpace: string | null = null;
 
     /** What closing the space shown does, in words: read from the server, which knows the ancestors and the keeper. */
     public get closeConsequenceText(): string {
-        return closeConsequence(
-            this.closeConsequenceForSpace && UUIDsEqual(this.closeConsequenceForSpace, this.activeSpaceId) ? this.closeConsequenceRead : null,
-            this.currentUser?.ID,
-        );
+        const forThisSpace = !!this.closeConsequenceForSpace && UUIDsEqual(this.closeConsequenceForSpace, this.activeSpaceId);
+        return closeConsequence(forThisSpace ? this.closeConsequenceState : { status: 'loading' }, this.currentUser?.ID);
     }
 
     /** Asks the server what closing the space would do, for the space shown. A later selection's answer is the one kept. */
     private async loadCloseConsequence(spaceId: string): Promise<void> {
         if (!isValidUuid(spaceId)) return;
+        this.closeConsequenceForSpace = spaceId;
+        this.closeConsequenceState = { status: 'loading' };
+        let next: CloseConsequenceState;
         try {
             const res = await new CollaborationClient(this.graphQLExecutor).GetCloseConsequence(spaceId);
-            if (!UUIDsEqual(this.activeSpaceId, spaceId)) return;
-            if (!res.Success || !res.KeeperUserID || !res.KeeperName || !res.Access) {
-                this.logOnce(`consequence:${spaceId}`, `Could not read what closing space ${spaceId} does: ${res.ErrorMessage ?? 'no answer'}`);
-                this.closeConsequenceRead = null;
-            } else {
-                this.closeConsequenceRead = {
-                    access: res.Access as CloseConsequenceRead['access'],
-                    days: res.Days ?? null,
-                    keeperUserId: res.KeeperUserID,
-                    keeperName: res.KeeperName,
-                    keeperCanReopen: !!res.KeeperCanReopen,
-                };
-            }
-            this.closeConsequenceForSpace = spaceId;
+            const read = res.Success ? readFromPayload(res) : null;
+            if (!read) this.logOnce(`consequence:${spaceId}`, `Could not read what closing space ${spaceId} does: ${res.ErrorMessage ?? 'the answer was incomplete'}`);
+            next = read ? { status: 'read', read } : { status: 'unavailable' };
         } catch (err) {
             this.logOnce(`consequence:${spaceId}`, `Could not read what closing space ${spaceId} does: ${err instanceof Error ? err.message : String(err)}`);
-            this.closeConsequenceRead = null;
-            this.closeConsequenceForSpace = spaceId;
+            next = { status: 'unavailable' };
         }
+        if (!UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        this.closeConsequenceState = next;
         this.RefreshView();
     }
 
-    /** Settings is offered to someone who may configure the space, and to an owner who may only reopen it (read-only, with Reopen). */
+    /** Settings is offered to someone who may configure the space, and to one who may only close or reopen it (read-only, with that button). */
     public get showsSettings(): boolean {
         return this.settingsAccessNow.showTab;
     }
@@ -1419,48 +1406,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
 
-    /** What Home counts across every space the person reaches (the rest of the app counts the space shown): read with their own filters. */
+    /** What Home counts across every space the person reaches, from one approved MJ query the server runs for them. */
     public homeSharedFiles = 0;
     public homeOpenTasks = 0;
-    public homeAwaitingApproval = 0;
 
-    /**
-     * Counts Shared files, open tasks and seats awaiting approval across the person's spaces. Each read is theirs, so the row
-     * filters decide what counts; a read that fails leaves its count at 0 and is logged.
-     */
+    /** Reads Home's three counts in one round trip. A read that fails leaves the counts as they were, and says so once. */
     private async loadHomeCounts(): Promise<void> {
-        const rv = new RunView(this.RunViewToUse);
-        const count = async (entityName: string, filter: string): Promise<number> => {
-            const res = await rv.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only' });
-            if (!res?.Success) {
-                this.logOnce(`home:${entityName}`, `Home could not count ${entityName}: ${res?.ErrorMessage ?? 'unknown error'}`);
-                return 0;
+        try {
+            const res = await new CollaborationClient(this.graphQLExecutor).GetHomeCounts();
+            if (!res.Success || res.SharedFiles === undefined || res.OpenTasks === undefined || res.AwaitingApproval === undefined) {
+                this.logOnce('home-counts', `Home could not read its counts: ${res.ErrorMessage ?? 'the answer was incomplete'}`);
+                return;
             }
-            return res.RowCount ?? res.TotalRowCount ?? 0;
-        };
-        const tasksEntity = this.ProviderToUse.EntityByName('MJ_BizApps_Tasks: Tasks');
-        const [files, approvals, taskItems] = await Promise.all([
-            count('MJ_BizApps_Collaboration: Space Items', "Band = 'Shared'"),
-            // Seats other people are waiting on: the filter shows an Invited seat to those who may approve it, and to its own person
-            count('MJ_BizApps_Collaboration: Space Members', `Status = 'Invited'${this.currentUser?.ID && isValidUuid(this.currentUser.ID) ? ` AND UserID <> '${this.currentUser.ID}'` : ''}`),
-            tasksEntity
-                ? rv.RunView<{ RecordID: string }>({
-                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
-                    ExtraFilter: `EntityID = '${tasksEntity.ID}'`,
-                    Fields: ['RecordID'],
-                    ResultType: 'simple',
-                    MaxRows: 500,
-                })
-                : Promise.resolve(null),
-        ]);
-        let openTasks = 0;
-        const taskIds = (taskItems?.Results ?? []).map((item) => (item.RecordID ?? '').replace(/^ID\|/i, '')).filter((id) => isValidUuid(id));
-        if (taskIds.length > 0) {
-            openTasks = await count('MJ_BizApps_Tasks: Tasks', `ID IN (${taskIds.map((id) => `'${id}'`).join(',')}) AND Status <> 'Completed'`);
+            this.homeSharedFiles = res.SharedFiles;
+            this.homeOpenTasks = res.OpenTasks;
+            // The invitations waiting on an owner are what the Inbox holds
+            this.inboxCount = res.AwaitingApproval;
+        } catch (err) {
+            this.logOnce('home-counts', `Home could not read its counts: ${err instanceof Error ? err.message : String(err)}`);
+            return;
         }
-        this.homeSharedFiles = files;
-        this.homeAwaitingApproval = approvals;
-        this.homeOpenTasks = openTasks;
         this.RefreshView();
     }
 
@@ -2780,6 +2745,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** The rail on the page shown: the home rail on Home and the global pages, the space rail on a space. */
     public get railMode(): 'home' | 'space' {
         return railModeFor(this.activeView);
+    }
+
+    private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+
+    /** The Active Spaces pill on Home: the directory of spaces is on Home itself, so it takes the person to its search box. */
+    public onHomeSpacesRequested(): void {
+        const search = (this.elementRef.nativeElement as HTMLElement).querySelector<HTMLInputElement>('.home-search-input');
+        search?.scrollIntoView({ block: 'center' });
+        search?.focus();
     }
 
     public onTabSelectRequested(tabId: string): void {

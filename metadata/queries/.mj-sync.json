@@ -20,7 +20,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "Name = 'Collaboration Space Subtree'",
+    "filter": "Name IN ('Collaboration Space Subtree', 'Collaboration Home Counts')",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true

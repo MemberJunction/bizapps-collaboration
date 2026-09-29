@@ -134,6 +134,27 @@ export interface CloseConsequenceGraphQLPayload {
     KeeperCanReopen?: boolean;
 }
 
+/** What Home counts across every space the signed-in person reaches. */
+export interface HomeCountsGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    SharedFiles?: number;
+    OpenTasks?: number;
+    AwaitingApproval?: number;
+}
+
+const GET_HOME_COUNTS_QUERY = `
+query GetHomeCounts {
+    GetHomeCounts {
+        Success
+        ErrorMessage
+        SharedFiles
+        OpenTasks
+        AwaitingApproval
+    }
+}
+`;
+
 const GET_CLOSE_CONSEQUENCE_QUERY = `
 query GetCloseConsequence($spaceId: String!) {
     GetCloseConsequence(spaceId: $spaceId) {
@@ -280,6 +301,11 @@ export class CollaborationClient {
         return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
+
+    async GetHomeCounts(): Promise<HomeCountsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_HOME_COUNTS_QUERY, {});
+        return (res?.GetHomeCounts as HomeCountsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
 
     async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_CLOSE_CONSEQUENCE_QUERY, { spaceId });

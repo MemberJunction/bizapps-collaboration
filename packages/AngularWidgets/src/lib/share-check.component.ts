@@ -17,7 +17,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     MJButtonDirective,
   ],
   template: `
-    <div class="m-h mj-dialog-titlebar">
+    <div class="m-h" [class.mj-dialog-titlebar]="Framed">
       <span class="m-ic">
         <i class="fa-solid fa-share-from-square"></i>
       </span>
@@ -366,31 +366,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       margin-bottom: 8px;
     }
 
-    .note-textarea {
-      min-height: 80px;
-      height: 80px;
-      width: 100%;
-      box-sizing: border-box;
-      resize: none;
-      display: block;
-    }
 
-    .textarea {
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-sm);
-      background: var(--mj-bg-surface);
-      padding: 8px 12px;
-      font-size: var(--mj-text-sm);
-      color: var(--mj-text-primary);
-      line-height: 1.5;
-      font-family: inherit;
-      outline: none;
-
-      &:focus {
-        border-color: var(--mj-brand-primary);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-      }
-    }
 
     .effects {
       display: flex;
