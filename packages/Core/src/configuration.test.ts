@@ -313,3 +313,14 @@ describe('tab labels merge without regard to key case', () => {
         assert.deepEqual(resolved.Labels?.Tabs, { library: 'Documents', work: 'Deliverables' });
     });
 });
+
+describe('a space may set the label keys its type lists', () => {
+    it("accepts Labels.Tabs when the type lists 'Labels.Tabs' or 'Labels', refuses it otherwise, and refuses a Labels key nothing reads", () => {
+        const tabs = { Labels: { Tabs: { library: 'Papers' } } };
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels.Tabs'] }).valid, true);
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
+        assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Chats.WhoCanStart'] }).valid, false);
+        const bands = ValidateCollaborationSettings({ Labels: { Bands: {} } }, 'space', { SpaceOverridable: ['Labels'] });
+        assert.match(bands.errors.join(' '), /Unknown Labels key: Bands/);
+    });
+});

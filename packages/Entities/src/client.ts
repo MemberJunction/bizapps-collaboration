@@ -99,6 +99,8 @@ export interface SpaceChatHostRulesGraphQLPayload {
     AgentHistoryFrom?: string;
     CanStartConversation: boolean;
     AllowedConversationKinds: string[];
+    /** The largest upload the host takes. */
+    UploadMaxBytes?: number;
     MentionPeople: {
         ID: string;
         Name: string;
@@ -132,6 +134,7 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         AgentHistoryFrom
         CanStartConversation
         AllowedConversationKinds
+        UploadMaxBytes
         MentionPeople {
             ID
             Name

@@ -95,6 +95,8 @@ export interface LibraryRowModel {
   band: SpaceBand;
   who: string;
   when: string;
+  /** When the item last changed (ISO): the "Recently updated" view sorts on it. */
+  updatedAt?: string;
   flagCount?: number;
   openers?: AvatarItem[];
   aiSeenCount?: number;

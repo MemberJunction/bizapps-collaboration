@@ -1,5 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
-import { SPACE_UPLOAD_MAX_BYTES, type Band } from '@mj-biz-apps/collaboration-core';
+import { type Band } from '@mj-biz-apps/collaboration-core';
+import { configuredUploadMaxBytes } from './upload-limit.js';
 import { collaborationFileStore, decideUploadBand, requireSystemUser, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 
@@ -60,7 +61,7 @@ export class UploadSpaceFileResolver extends ResolverBase {
             return { Success: false, ErrorMessage: 'Upload refused: the band must be Shared or Team.' };
         }
         const chosenBand: Band | null = input.Band === 'Shared' || input.Band === 'Team' ? input.Band : null;
-        const maxBytes = configuredMaxBytes();
+        const maxBytes = configuredUploadMaxBytes();
         if ((input.Base64Data?.length ?? 0) > Math.ceil(maxBytes * 4 / 3) + 8) {
             return { Success: false, ErrorMessage: `Upload refused: files are limited to ${maxBytes} bytes.` };
         }
@@ -86,7 +87,3 @@ export class UploadSpaceFileResolver extends ResolverBase {
     }
 }
 
-function configuredMaxBytes(): number {
-    const raw = Number(process.env.COLLABORATION_UPLOAD_MAX_BYTES);
-    return Number.isFinite(raw) && raw > 0 ? raw : SPACE_UPLOAD_MAX_BYTES;
-}

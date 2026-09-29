@@ -13,6 +13,7 @@
   "mjUILayer": "widgets",
   "scripts": {
     "build": "ngc",
+    "build:server": "tsc -p tsconfig.server.json",
     "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {

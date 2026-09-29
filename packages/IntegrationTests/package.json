@@ -12,7 +12,7 @@
     "./checks/*": "./dist/checks/*.js"
   },
   "scripts": {
-    "build": "tsc && node --input-type=module -e \"import {cpSync,mkdirSync} from 'node:fs'; mkdirSync('dist/world/data',{recursive:true}); cpSync('src/world/data','dist/world/data',{recursive:true})\"",
+    "build": "pnpm --filter @mj-biz-apps/collaboration-example-space-types run build:server && tsc && node --input-type=module -e \"import {cpSync,mkdirSync} from 'node:fs'; mkdirSync('dist/world/data',{recursive:true}); cpSync('src/world/data','dist/world/data',{recursive:true})\"",
     "load": "node dist/world/load-world.js",
     "purge": "node dist/world/purge-world.js",
     "test": "vitest run --exclude 'dist/**'"

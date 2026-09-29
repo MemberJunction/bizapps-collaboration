@@ -309,7 +309,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .pill-btn.active {
         background: var(--mj-bg-surface, #ffffff);
         color: var(--mj-text-primary, #0f172a);
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+        box-shadow: var(--mj-shadow-sm);
       }
       .spacer { flex: 1 1 auto; }
       .invite-btn {
@@ -338,7 +338,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         flex-direction: column;
         gap: 10px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        box-shadow: var(--mj-shadow-md);
       }
       .invite-form-title {
         font-size: 13px;

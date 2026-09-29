@@ -488,8 +488,17 @@ export function ValidateCollaborationSettings(
                 }
             }
         }
-        if (c['Labels'] !== undefined && !isAllowed('Labels')) {
-            errors.push("Labels cannot be overridden by space: not in type's SpaceOverridable.");
+        if (c['Labels'] !== undefined) {
+            // Checked the way the resolver reads it: each Labels key on its own ('Labels' allows them all, 'Labels.Tabs' the tabs)
+            const labels = c['Labels'];
+            if (!labels || typeof labels !== 'object' || Array.isArray(labels)) {
+                errors.push('Labels must be an object.');
+            } else {
+                for (const key of Object.keys(labels)) {
+                    if (key !== 'Tabs') errors.push(`Unknown Labels key: ${key}`);
+                    else if (!isAllowed('Labels.Tabs')) errors.push("Labels.Tabs cannot be overridden by space: not in type's SpaceOverridable.");
+                }
+            }
         }
     }
 

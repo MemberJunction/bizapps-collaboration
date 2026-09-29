@@ -226,6 +226,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
                 return fail(result, 'SpaceTypeID', "Space change refused: changing a space's type needs the 'Configure Spaces' authorization and an owner seat on the space.");
             }
+            const heldChildrenRefusal = await this.refuseByOwnNewType(spaceType.Configuration);
+            if (heldChildrenRefusal) return fail(result, 'SpaceTypeID', heldChildrenRefusal);
             const previousType = previousTypeId ? CollaborationEngine.Instance.SpaceTypeById(previousTypeId) : undefined;
             if (!previousType) {
                 return fail(result, 'SpaceTypeID', "Space change refused: the space's previous type could not be read.");
@@ -421,8 +423,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     return fail(result, childValidation.field ?? 'ParentID', childValidation.message ?? 'Child space change refused by parent driver.');
                 }
                 // The parent's type says which types may sit under it and how many may be open (created, moved in, or retyped)
-                if (isNew || isMoving || typeChanged) {
-                    const refusal = await this.refuseByParentType(parentInfo.spaceType.Configuration, parentId);
+                if (isNew || isMoving || typeChanged || isReopening) {
+                    const refusal = await this.refuseByParentType(parentInfo.spaceType.Configuration, parentId, spaceType?.Code);
                     if (refusal) return fail(result, typeChanged && !isMoving && !isNew ? 'SpaceTypeID' : 'ParentID', refusal);
                 }
             } catch (err) {
@@ -457,7 +459,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     /** Judges this space against its parent's type: allowed child types, and the most open children. Null when it may sit there. */
-    private async refuseByParentType(parentTypeConfiguration: string | null, parentId: string): Promise<string | null> {
+    private async refuseByParentType(parentTypeConfiguration: string | null, parentId: string, resolvedTypeCode: string | undefined): Promise<string | null> {
         let config: CollaborationSettings | null = null;
         try {
             config = parentTypeConfiguration ? JSON.parse(parentTypeConfiguration) as CollaborationSettings : null;
@@ -477,7 +479,38 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (!siblings.Success) return `The open sub-spaces could not be counted: ${siblings.ErrorMessage ?? 'unknown error'}`;
             open = siblings.Results?.length ?? 0;
         }
-        return refuseChildType(config, CollaborationEngine.Instance.SpaceTypeById(this.SpaceTypeID)?.Code, open);
+        // The type validation already resolved is the one to name: the engine's cache may not hold a type that was just created
+        return refuseChildType(config, resolvedTypeCode ?? CollaborationEngine.Instance.SpaceTypeById(this.SpaceTypeID)?.Code, open);
+    }
+
+    /** When this space's own type changes, the children it already holds must fit the new type's `Children` rules. Null when they do. */
+    private async refuseByOwnNewType(newTypeConfiguration: string | null): Promise<string | null> {
+        let config: CollaborationSettings | null = null;
+        try {
+            config = newTypeConfiguration ? JSON.parse(newTypeConfiguration) as CollaborationSettings : null;
+        } catch (error) {
+            return `The new type has a configuration that does not parse: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        if (!config?.Children) return null;
+        const system = await requireSystemUser(this);
+        const view = new RunView(this.RunViewProviderToUse);
+        const children = await view.RunView<{ SpaceTypeID: string; ClosedAt: Date | null }>({
+            EntityName: ENTITY,
+            ExtraFilter: `ParentID = '${this.ID}'`,
+            Fields: ['SpaceTypeID', 'ClosedAt'],
+            ResultType: 'simple',
+        }, system);
+        if (!children.Success) return `The sub-spaces could not be read: ${children.ErrorMessage ?? 'unknown error'}`;
+        const rows = children.Results ?? [];
+        const open = rows.filter((row) => !row.ClosedAt).length;
+        for (const row of rows) {
+            const refusal = refuseChildType({ Children: { AllowedTypeCodes: config.Children.AllowedTypeCodes } }, CollaborationEngine.Instance.SpaceTypeById(row.SpaceTypeID)?.Code, 0);
+            if (refusal) return `It already holds a sub-space this type does not allow: ${refusal}`;
+        }
+        if (config.Children.MaxOpen !== undefined && open > config.Children.MaxOpen) {
+            return `It already holds ${open} open sub-spaces, more than the new type allows (${config.Children.MaxOpen}).`;
+        }
+        return null;
     }
 
     /**

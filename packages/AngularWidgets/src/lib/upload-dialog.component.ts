@@ -268,7 +268,7 @@ export interface CollabUploadSubmitPayload {
       position: relative;
       background: var(--mj-bg-surface-card, #ffffff);
       border-radius: var(--mj-radius-lg, 12px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--mj-shadow-xl);
       width: 100%;
       max-width: 540px;
       border: 1px solid var(--mj-border-default, #e2e8f0);

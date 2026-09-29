@@ -154,7 +154,7 @@ export interface NewConversationSubmitPayload {
         background: var(--mj-bg-surface, #ffffff);
         border: 1px solid var(--mj-border-default, #e2e8f0);
         border-radius: 12px;
-        box-shadow: var(--mj-shadow-2xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25));
+        box-shadow: var(--mj-shadow-2xl);
         overflow: hidden;
         z-index: 1001;
         display: flex;

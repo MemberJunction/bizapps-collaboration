@@ -61,16 +61,16 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     }
 
     /* 10-color avatar categorical palette */
-    .av.c1 { background: #6366f1; }
-    .av.c2 { background: #0ea5e9; }
-    .av.c3 { background: #f97316; }
-    .av.c4 { background: #14b8a6; }
-    .av.c5 { background: #e11d48; }
-    .av.c6 { background: #8b5cf6; }
-    .av.c7 { background: #64748b; }
-    .av.c8 { background: #059669; }
-    .av.c9 { background: #d97706; }
-    .av.c10 { background: #0f766e; }
+    .av.c1 { background: #6366f1; } /* hex-ok: categorical palette */
+    .av.c2 { background: #0ea5e9; } /* hex-ok: categorical palette */
+    .av.c3 { background: #f97316; } /* hex-ok: categorical palette */
+    .av.c4 { background: #14b8a6; } /* hex-ok: categorical palette */
+    .av.c5 { background: #e11d48; } /* hex-ok: categorical palette */
+    .av.c6 { background: #8b5cf6; } /* hex-ok: categorical palette */
+    .av.c7 { background: #64748b; } /* hex-ok: categorical palette */
+    .av.c8 { background: #059669; } /* hex-ok: categorical palette */
+    .av.c9 { background: #d97706; } /* hex-ok: categorical palette */
+    .av.c10 { background: #0f766e; } /* hex-ok: categorical palette */
 
     .av-img {
       width: 100%;

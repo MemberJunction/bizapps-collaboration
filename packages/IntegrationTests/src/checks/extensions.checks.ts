@@ -362,6 +362,44 @@ const checks: NamedCheck[] = [
             await cleanupSpace(ctx.Provider, ctx.User, underWorkspace.ID);
         },
     },
+    {
+        Id: 'extensions.EX9',
+        Name: "EX9 — a type's Children.MaxOpen caps the open sub-spaces, and a reopen counts like a create",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const parent = await newSpace(ctx, ada, { name: 'EX9-Board', typeId: board.ID });
+            Assert(await parent.Save(), `Ada creates an example board: ${parent.LatestResult?.CompleteMessage ?? ''}`);
+            const created: string[] = [parent.ID];
+            try {
+                await seatOwner(ctx, ada, parent.ID);
+                const first = await newSpace(ctx, ada, { name: 'EX9-first', typeId: board.ID, parentId: parent.ID });
+                Assert(await first.Save(), `The first open sub-space fits: ${first.LatestResult?.CompleteMessage ?? ''}`);
+                created.unshift(first.ID);
+                await seatOwner(ctx, ada, first.ID);
+                const second = await newSpace(ctx, ada, { name: 'EX9-second', typeId: board.ID, parentId: parent.ID });
+                Assert(!(await second.Save()), 'A second open sub-space must be refused (MaxOpen is 1)');
+                Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
+
+                // Close the first, file a second in its place, then try to reopen the first: over the cap again
+                const closing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await closing.Load(first.ID), 'The first sub-space loads');
+                closing.ClosedAt = new Date(Date.now() - 60_000);
+                Assert(await closing.Save(), `The first sub-space closes: ${closing.LatestResult?.CompleteMessage ?? ''}`);
+                const replacement = await newSpace(ctx, ada, { name: 'EX9-replacement', typeId: board.ID, parentId: parent.ID });
+                Assert(await replacement.Save(), `A sub-space fits once the first is closed: ${replacement.LatestResult?.CompleteMessage ?? ''}`);
+                created.unshift(replacement.ID);
+                await seatOwner(ctx, ada, replacement.ID);
+                const reopening = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await reopening.Load(first.ID), 'The closed sub-space loads');
+                reopening.ClosedAt = null;
+                Assert(!(await reopening.Save()), 'Reopening it would take the board past MaxOpen, and must be refused');
+            } finally {
+                for (const id of created) await closeAndRemove(ctx, id);
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

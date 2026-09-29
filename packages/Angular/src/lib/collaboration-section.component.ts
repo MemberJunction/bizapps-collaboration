@@ -5,7 +5,7 @@ import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
@@ -141,6 +141,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
+        MJClickableDirective,
+        MJEmptyStateComponent,
         MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
@@ -302,9 +304,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             flex-direction: column;
             gap: 10px;
         }
+        .space-directory-card.closed { opacity: 0.7; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
         .space-directory-card:hover {
             border-color: var(--mj-brand-primary, #0284c7);
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+            box-shadow: var(--mj-shadow-md);
             transform: translateY(-2px);
         }
         .card-top {
@@ -433,7 +437,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             border-radius: 10px;
             padding: 16px;
             min-height: 480px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            box-shadow: var(--mj-shadow-sm);
             flex: 1;
         }
         .work-tab-container {
@@ -652,11 +656,14 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         placeholder="Search spaces by name, description, or type..."
                                                     />
                                                 </div>
+                                                @if (filteredSpaces.length === 0) {
+                                                    <mj-empty-state Icon="fa-solid fa-magnifying-glass" Title="No spaces match" Message="Try another search."></mj-empty-state>
+                                                }
                                                 <div class="spaces-directory-grid">
                                                     @for (space of filteredSpaces; track space.id) {
-                                                        <div class="space-directory-card" (click)="onSpaceOpenRequested(space.id)">
+                                                        <div class="space-directory-card" [class.closed]="space.isClosed" [mjClickable]="space.name" (click)="onSpaceOpenRequested(space.id)">
                                                             <div class="card-top">
-                                                                <div class="space-icon-box" [style.background-color]="space.color">
+                                                                <div class="space-icon-box" [style.background-color]="space.color || null">
                                                                     <i [class]="space.iconClass"></i>
                                                                 </div>
                                                                 <div class="space-type-badge">
@@ -666,7 +673,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                     {{ space.type }}
                                                                 </div>
                                                             </div>
-                                                            <h3 class="space-name">{{ space.name }}</h3>
+                                                            <h3 class="space-name">
+                                                                {{ space.name }}
+                                                                @if (space.isClosed) {
+                                                                    <i class="fa-solid fa-lock" title="Closed" aria-hidden="true"></i>
+                                                                    <span class="visually-hidden">(closed)</span>
+                                                                }
+                                                            </h3>
                                                             @if (space.description) {
                                                                 <p class="space-desc">{{ space.description }}</p>
                                                             }
@@ -1087,7 +1100,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * applies the space type's default.
      */
     public readonly bothBands: readonly SpaceBand[] = ['Shared', 'Team'];
-    public readonly uploadMaxBytes = SPACE_UPLOAD_MAX_BYTES;
+    /** The largest file the host takes: the default until the host rules say what this host set. */
+    public uploadMaxBytes = SPACE_UPLOAD_MAX_BYTES;
 
     /** The space's own collections, offered as folder suggestions in the upload dialog. */
     public get libraryFolderNames(): string[] {
@@ -1466,7 +1480,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return found ? found.name : '';
     }
 
-    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string }[] {
+    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string; isClosed: boolean }[] {
         const query = this.spaceSearchQuery.trim().toLowerCase();
         const spaceMap = new Map<string, RawSpaceRecord>();
         this.rawSpaces.forEach(s => spaceMap.set(s.ID, s));
@@ -1488,6 +1502,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
                 return {
                     id: s.ID,
+                    isClosed: !!s.ClosedAt,
                     name: s.Name,
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
@@ -1905,9 +1920,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 PromotedAt?: string | null;
                 PromotedByUser?: string | null;
                 __mj_CreatedAt: string;
+                __mj_UpdatedAt: string;
             }>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Items',
                 ExtraFilter: `SpaceID = '${spaceId}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
                 ResultType: 'simple',
                 MaxRows: 100,
             });
@@ -1992,6 +2009,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     band: item.Band,
                     who: author,
                     when: dateStr,
+                    updatedAt: item.__mj_UpdatedAt,
                     kind,
                 });
 
@@ -3059,6 +3077,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     Email: p.Email ?? null,
                 }));
                 this.canStartConversation = res.CanStartConversation ?? false;
+                if (res.UploadMaxBytes && res.UploadMaxBytes > 0) this.uploadMaxBytes = res.UploadMaxBytes;
                 this.canStartConversationKinds = (res.AllowedConversationKinds ?? []).filter(
                     (k): k is 'General' | 'Topic' | 'Private' => k === 'General' || k === 'Topic' || k === 'Private'
                 );

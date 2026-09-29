@@ -26,7 +26,8 @@
         "Children": {
           "AllowedTypeCodes": [
             "example-board"
-          ]
+          ],
+          "MaxOpen": 1
         },
         "Chats": {
           "AgentReplyMode": "MentionOnly"

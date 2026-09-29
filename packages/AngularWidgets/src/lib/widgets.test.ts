@@ -977,6 +977,14 @@ describe('the Library narrows by search, collection and view', () => {
     expect(filterLibraryRows(rows, { band: 'Shared', search: '', folderId: 'folder-1', collections }).map((r) => r.id)).toEqual(['r2']);
   });
 
+  it("lists the ten most recently updated first for the Recently updated view", () => {
+    const many: LibraryRowModel[] = Array.from({ length: 12 }, (_, i) => ({ id: `r${i}`, kind: 'doc', name: `n${i}`, folder: 'f', band: 'Shared', who: 'w', when: 'x', updatedAt: new Date(2026, 8, i + 1).toISOString() }));
+    const recent = filterLibraryRows(many, { band: 'All', search: '', folderId: 'recent', collections });
+    expect(recent).toHaveLength(10);
+    expect(recent[0].id).toBe('r11');
+    expect(recent[9].id).toBe('r2');
+  });
+
   it('marks the selected row and the selected tree row in any casing', () => {
     const library = new CollabSpaceLibraryComponent();
     library.Rows = [{ ...rows[0], id: 'ABCDEF00-0000-4000-8000-000000000001' }];
