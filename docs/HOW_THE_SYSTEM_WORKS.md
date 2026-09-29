@@ -2,7 +2,7 @@
 
 This page states the rules Collaboration enforces. Each rule is marked:
 - **built:** in the code as it stands, which carries everything #7 and #8 merged;
-- **planned:** with the item in [the plan](../plans/plan.md) that builds it. [PR 9's plan](../plans/pr9-plan.md) orders what's left.
+- **planned:** with the item in [the plan](../plans/plan.md) that builds it. [PR 10's plan](../plans/pr10-plan.md) orders what's left.
 
 D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for #7 and by D40 to D48 for PR 9 ([its § 3.7](../plans/plan.md#37-decided-on-2026-09-29-rights-subtypes-and-home)).
 
@@ -112,7 +112,7 @@ The engine reads space-role flags. It never compares space-role names.
 
 ## Data a space doesn't own, and what it grants
 
-**Planned: the stages after the chat** ([PR 9's plan](../plans/pr9-plan.md); the plan's D26 to D34, B14 to B20). The parts that need MJ's A14 to A17 wait for [MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (D36, D39). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
+**Planned: the stages after the chat** ([PR 10's plan](../plans/pr10-plan.md); the plan's D26 to D34, B14 to B20). The parts that need MJ's A14 to A17 wait for [MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (D36, D39). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
 - **Anchors (D26; B14).** A space can be anchored to one or more records it's about, each with a role, at most one primary. An anchor grants nothing by itself.
 - **Data reach (D28; B18).** A type declares which other apps' entities its participants may read, by a path to an anchor role, with a band and a field allow-list. A script turns the declarations into the Space Participant role's row-level security filters, one per entity, reviewed in `metadata/`. Reads stay in SQL, and a type that declares no reach on an entity gives its participants nothing from it.
 - **Grants (D27, D31; B15, B20).** A type, a space or a sub-space grants agents, actions, queries, views, dashboards, components and knowledge sources. A grant's bindings are filled in by the server from the space, its anchors and the caller: the model never sees a bound parameter, a client value for one is refused and logged, and a binding that doesn't resolve refuses the run. A grant on the Team band isn't offered in a chat where anyone can't see Team.
