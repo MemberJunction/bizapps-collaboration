@@ -682,3 +682,29 @@ describe("The Overview's contributed cards, rendered", () => {
     expect(await render(true)).toEqual(['shared', 'team', 'none']);
   });
 });
+
+describe('the conversation of a space, read-only', () => {
+  const render = async (inputs: Record<string, unknown>) => {
+    // A test may render twice: each render starts from a fresh test module
+    TestBed.resetTestingModule();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  };
+
+  it('says why it can be read and not posted in, in the words the page gives', async () => {
+    const host = await render({ IsReadOnly: true, ReadOnlyNote: "You can read this conversation, but you have no seat that lets you post." });
+    expect(host.querySelector('.space-closed-banner')?.textContent).toContain('you have no seat that lets you post');
+    expect(host.querySelector('.chat-container')?.classList.contains('read-only-chat')).toBe(true);
+  });
+
+  it('shows no note while it can be posted in, and says the space is closed unless told otherwise', async () => {
+    expect((await render({})).querySelector('.space-closed-banner')).toBeNull();
+    expect((await render({ IsReadOnly: true })).querySelector('.space-closed-banner')?.textContent).toContain('This space is closed.');
+  });
+});

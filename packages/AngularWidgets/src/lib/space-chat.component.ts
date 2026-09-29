@@ -24,11 +24,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
     <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
-      <!-- A closed space says so on its Chat tab, whether or not a conversation is open -->
+      <!-- A conversation that can't be posted in says why on the Chat tab, whether or not one is open -->
       @if (IsReadOnly) {
         <div class="space-closed-banner" role="status">
           <i class="fa-solid fa-lock" aria-hidden="true"></i>
-          <span>This space is closed. Conversations are read-only.</span>
+          <span>{{ ReadOnlyNote }}</span>
         </div>
       }
       @if (ConversationId && CurrentUser) {
@@ -298,7 +298,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   ],
 })
 export class CollabSpaceChatComponent {
+  /** The conversation can be read and not posted in: the composer is hidden and `ReadOnlyNote` says why. */
   @Input() public IsReadOnly = false;
+  @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';

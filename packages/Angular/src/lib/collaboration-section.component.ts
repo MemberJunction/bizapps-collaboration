@@ -1017,7 +1017,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
-                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsReadOnly]="isSpaceClosed || !canContribute"
+                                                    [ReadOnlyNote]="chatReadOnlyNote"
                                                     [OutsideParticipantCount]="outsideParticipantCount"
                                                     [ConversationId]="activeConversationId"
                                                     [ConversationName]="activeConversationName"
@@ -1828,6 +1829,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             ? CollaborationEngineBase.Instance.SpaceRoleTypeById(member.roleId)
             : CollaborationEngineBase.Instance.SpaceRoleTypeByCode(member.roleCode);
         return roleType ? roleType.CanContribute : false;
+    }
+
+    /** Why the conversation can't be posted in: a closed space, or a person with no seat that lets them post. */
+    public get chatReadOnlyNote(): string {
+        return this.isSpaceClosed
+            ? 'This space is closed. Conversations are read-only.'
+            : "You can read this conversation but can't post in it: you have no seat in this space that lets you post.";
     }
 
     public get discussionAudienceCount(): number {
