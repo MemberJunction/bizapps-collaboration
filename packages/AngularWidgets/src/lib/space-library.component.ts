@@ -123,14 +123,13 @@ export interface LibrarySmartView {
                 @if (ShowUsedBy) {
                   <th style="padding-top:12px;width:130px">Used by</th>
                 }
-                <th style="width:36px"></th>
               </tr>
             </thead>
             <tbody>
               @for (row of FilteredRows; track row.id) {
-                <tr [class.sel]="IsSelected(row.id)" [attr.aria-selected]="IsSelected(row.id)" (click)="onSelectRow(row)">
+                <tr [class.sel]="IsSelected(row.id)" (click)="onSelectRow(row)">
                   <td>
-                    <div class="row gap10" [mjClickable]="row.name">
+                    <div class="row gap10" [mjClickable]="row.name" [attr.aria-current]="IsSelected(row.id) ? 'true' : null">
                       <mjc-file-icon [Kind]="row.kind" Size="sm" />
                       <div class="grow">
                         <div class="fw6 fs13 ellipsis title">{{ row.name }}</div>
@@ -171,7 +170,6 @@ export interface LibrarySmartView {
                     </div>
                   </td>
                   }
-                  <td style="width:36px"></td>
                 </tr>
               }
             </tbody>

@@ -296,7 +296,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'extensions.EX7',
-        Name: 'EX7 — the board refuses the delete of an open board, and the delete goes through once it is closed',
+        Name: 'EX7 — the board refuses a close while motions are open and the delete of an open board, and both go through once they are clear',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -318,7 +318,7 @@ const checks: NamedCheck[] = [
                 devSeat.Status = 'Active';
                 Assert(await devSeat.Save(), `Ada seats Dev as owner: ${devSeat.LatestResult?.CompleteMessage ?? ''}`);
                 const withMotions = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                Assert(await withMotions.Load(space.ID), 'The board loads for Ada');
+                Assert(await withMotions.Load(space.ID), 'The board loads for Dev');
                 withMotions.Configuration = JSON.stringify({ Extensions: { 'example-board': { OpenMotions: 2 } } });
                 Assert(await withMotions.Save(), `The type lets a board hold OpenMotions: ${withMotions.LatestResult?.CompleteMessage ?? ''}`);
                 withMotions.ClosedAt = new Date(Date.now() - 60_000);
@@ -424,6 +424,56 @@ const checks: NamedCheck[] = [
                 both.ClosedAt = new Date(Date.now() - 60_000);
                 Assert(!(await both.Save()), 'Moving and closing in one save must be refused');
                 Assert(/separate saves/.test(both.LatestResult?.CompleteMessage ?? ''), `The refusal says why: ${both.LatestResult?.CompleteMessage ?? ''}`);
+            } finally {
+                for (const id of created) await closeAndRemove(ctx, id);
+            }
+        },
+    },
+    {
+        Id: 'extensions.EX11',
+        Name: "EX11 — MaxOpen holds for a move into a full board, a closed space may still move under one, and a retype the parent's list leaves out is refused",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const room = await loadTypeByCode(ctx, 'example-room');
+            const parent = await newSpace(ctx, ada, { name: 'EX11-Board', typeId: board.ID });
+            const outsider = await newSpace(ctx, ada, { name: 'EX11-Outsider', typeId: board.ID });
+            Assert(await parent.Save() && await outsider.Save(), 'Ada creates two example boards');
+            const created: string[] = [parent.ID, outsider.ID];
+            try {
+                await seatOwner(ctx, ada, parent.ID);
+                await seatOwner(ctx, ada, outsider.ID);
+                const held = await newSpace(ctx, ada, { name: 'EX11-held', typeId: board.ID, parentId: parent.ID });
+                Assert(await held.Save(), `The board's one open sub-space fits: ${held.LatestResult?.CompleteMessage ?? ''}`);
+                created.unshift(held.ID);
+                await seatOwner(ctx, ada, held.ID);
+
+                // A move into a board at its cap is refused
+                const moving = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await moving.Load(outsider.ID), 'The outside board loads');
+                moving.ParentID = parent.ID;
+                Assert(!(await moving.Save()), 'Moving an open board under a full board must be refused');
+                Assert(/most its type allows \(1\)/.test(moving.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${moving.LatestResult?.CompleteMessage ?? ''}`);
+
+                // A closed space adds no open sub-space, so it may move under the same board
+                const closing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await closing.Load(outsider.ID), 'The outside board loads again');
+                closing.ClosedAt = new Date(Date.now() - 60_000);
+                Assert(await closing.Save(), `The outside board closes: ${closing.LatestResult?.CompleteMessage ?? ''}`);
+                const filing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await filing.Load(outsider.ID), 'The closed board loads');
+                filing.ParentID = parent.ID;
+                Assert(await filing.Save(), `A closed board may move under a full one: ${filing.LatestResult?.CompleteMessage ?? ''}`);
+                // Now a sub-space of the parent, so it is removed before it
+                created.splice(created.indexOf(outsider.ID), 1);
+                created.unshift(outsider.ID);
+
+                // The board lists only boards, so a sub-space cannot become a room
+                const retype = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                Assert(await retype.Load(held.ID), 'The open sub-space loads');
+                retype.SpaceTypeID = room.ID;
+                Assert(!(await retype.Save()), 'Retyping a sub-space to a type its parent does not list must be refused');
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);
             }

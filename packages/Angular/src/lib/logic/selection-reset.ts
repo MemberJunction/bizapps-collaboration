@@ -12,6 +12,10 @@ export interface SelectionState {
     chatAudienceBand: SpaceBand;
     settingsSaveSuccess: string;
     settingsInfoMessage: string;
+    /** The share, upload and new-conversation dialogs are each for one space, so none stays open over the next one. */
+    isShareDialogOpen: boolean;
+    isUploadDialogOpen: boolean;
+    isNewConversationDialogOpen: boolean;
 }
 
 export function freshSelectionState(): SelectionState {
@@ -22,6 +26,9 @@ export function freshSelectionState(): SelectionState {
         chatAudienceBand: 'Team',
         settingsSaveSuccess: '',
         settingsInfoMessage: '',
+        isShareDialogOpen: false,
+        isUploadDialogOpen: false,
+        isNewConversationDialogOpen: false,
     };
 }
 

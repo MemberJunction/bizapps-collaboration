@@ -191,6 +191,9 @@ describe('ExampleBoardServerDriver', () => {
         expect(driver.ValidateChildSpaceChange(unconfigured).ok).toBe(true);
         // A move into the board is judged the same way as a create
         expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true), 'MoveChildIn')).ok).toBe(false);
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true), 'ReopenChild')).ok).toBe(false);
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true), 'CloseChild')).ok).toBe(true);
+        expect(driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true), 'MoveChildOut')).ok).toBe(true);
     });
 
     it('ValidateChildSpaceChange refuses a room under a board, by the child\'s type code', () => {
@@ -300,6 +303,34 @@ describe('ExampleBoardUIDriver and Contributions', () => {
         expect(new Set(tabs.map((t) => t.sortKey)).size).toBe(tabs.length);
     });
 
+    it("assembles the real contributions with the built-in tabs, then the board's own tabs: each key once, Members carries no fixed count", () => {
+        const builtIn: SpaceTabDescriptor[] = [
+            { key: 'Overview', label: 'Overview', sortKey: 10 },
+            { key: 'Library', label: 'Library', sortKey: 20 },
+            { key: 'Work', label: 'Work', sortKey: 30 },
+            { key: 'Chat', label: 'Chat', sortKey: 40 },
+            { key: 'People', label: 'People', sortKey: 50 },
+            { key: 'Settings', label: 'Settings', sortKey: 100 },
+        ];
+        const assembled = assembleSpaceContributions<SpaceTabDescriptor>(
+            BaseSpaceTab,
+            'example-board',
+            builtIn,
+            (reg, meta) => ({ key: meta.contributionKey, label: meta.label ?? meta.contributionKey, sortKey: meta.sortKey, component: reg.SubClass as Type<BaseSpaceTab> }),
+        );
+        const tabs = uiDriver.GetTabs(uiCtx, assembled);
+        const keys = tabs.map((t) => normalizeContributionKey(t.key));
+        expect(new Set(keys).size).toBe(keys.length);
+        expect(keys).toEqual(expect.arrayContaining(['overview', 'meetings', 'papers', 'motions', 'library', 'work', 'people', 'chat', 'settings']));
+        expect(tabs.find((t) => normalizeContributionKey(t.key) === 'people')?.badgeCount).toBeUndefined();
+    });
+
+    it('keys a tab spelled discussions as the Chat tab, so a label for either reaches it', () => {
+        expect(normalizeContributionKey('Discussions')).toBe('chat');
+        const ctx = { ...uiCtx, rules: { ...createMockRules(), Labels: { Tabs: { Discussions: 'Threads' } } } } as SpaceUIContext;
+        expect(uiDriver.GetTabLabel(ctx, 'chat', 'Chat')).toBe('Threads');
+    });
+
     it('GetOverviewCards returns Frame 08 overview cards', () => {
         const cards = uiDriver.GetOverviewCards(uiCtx, []);
         expect(cards.map((c) => c.key)).toEqual([
@@ -395,7 +426,7 @@ describe('cross-app contributions and their rules', () => {
 
     it('refuses a contribution whose key clashes with a built-in part, and logs it', () => {
         const builtIn: SpaceOverviewCardDescriptor[] = [{ key: 'Example-Notice', title: 'Built-in', sortKey: 1 }];
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         try {
             const cards = cardFor('workspace', builtIn);
             expect(cards.filter((c) => normalizeContributionKey(c.key) === 'example-notice')).toEqual(builtIn);
@@ -608,6 +639,18 @@ describe('ExampleRoomUIDriver', () => {
             type: createMockSpaceType('example-room'),
             viewer: createMockUser(),
         };
+    });
+
+    it('draws the deal card once when the real contributions are assembled, as the section does', () => {
+        const assembled = assembleSpaceContributions<SpaceOverviewCardDescriptor>(
+            BaseSpaceOverviewCard,
+            'example-room',
+            [],
+            (reg, meta) => ({ key: meta.contributionKey, title: meta.title ?? meta.contributionKey, sortKey: meta.sortKey, component: reg.SubClass as Type<BaseSpaceOverviewCard> }),
+        );
+        const cards = uiDriver.GetOverviewCards(uiCtx, assembled);
+        expect(cards.filter((c) => normalizeContributionKey(c.key) === 'deal-summary')).toHaveLength(1);
+        expect(cards.find((c) => c.key === 'deal-summary')?.component).toBe(ExampleRoomDealSummaryCard);
     });
 
     it('GetOverviewCards includes Deal Overview card', () => {

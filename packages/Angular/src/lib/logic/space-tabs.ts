@@ -43,6 +43,8 @@ export interface SpaceTabInputs {
     finalize: (defaults: SpaceTabDescriptor[]) => SpaceTabDescriptor[];
     /** The label a tab reads with, from the type's and the space's Labels.Tabs. */
     labelFor: (key: string, defaultLabel: string) => string;
+    /** Told the key of a tab that was dropped because it names no built-in tab and brings no component. */
+    onDropped?: (key: string) => void;
 }
 
 /**
@@ -68,7 +70,10 @@ export function buildSpaceTabs(input: SpaceTabInputs): SpaceTabModel {
         const id = builtIn?.id ?? descriptor.key;
         if (!builtIn && descriptor.component) contributed.set(id, descriptor.component);
         // A tab without a component that names no built-in tab has nothing to show
-        if (!builtIn && !descriptor.component) continue;
+        if (!builtIn && !descriptor.component) {
+            input.onDropped?.(descriptor.key);
+            continue;
+        }
         tabs.push({
             id,
             label: input.labelFor(descriptor.key, descriptor.label),

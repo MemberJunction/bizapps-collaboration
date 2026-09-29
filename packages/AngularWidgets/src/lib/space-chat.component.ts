@@ -283,7 +283,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         padding: 12px 16px;
         background-color: var(--mj-status-warning-bg, #fffbeb);
         color: var(--mj-status-warning-text, #92400e);
-        border-top: 1px solid var(--mj-status-warning-border, #fde68a);
+        border-bottom: 1px solid var(--mj-status-warning-border, #fde68a);
         font-size: var(--mj-text-sm, 13px);
         font-weight: 500;
         z-index: 10;

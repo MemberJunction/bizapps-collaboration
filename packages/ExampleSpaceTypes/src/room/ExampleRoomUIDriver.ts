@@ -51,7 +51,9 @@ export class ExampleRoomUIDriver extends BaseSpaceTypeUIDriver {
     }
 
     /**
-     * Client-side message validation:
+     * Client-side message validation. The phrases are literals here because a browser hook sees only the event, not the type's
+     * configuration; they mirror the type's `BlockedPhrases`, which the server driver reads and enforces. The server is the authority.
+     *
      * - Warns if confidential pricing floor text is being submitted
      */
     public override BeforePostMessage(

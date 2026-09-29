@@ -45,11 +45,33 @@ if (unknownMjc.length) {
 const FALLBACK = /var\(--[a-z0-9-]+\s*,\s*(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([^)]*\))\s*\)/g;
 const LITERAL = /(?<![&\w/])#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/;
 
+/** The code on a line once its comments are set aside: a whole-line comment leaves nothing, a trailing or inline block comment is cut. */
+function codeOf(line) {
+    if (/^\s*(\/\/|<!--)/.test(line)) return '';
+    // A line that starts a block comment, or continues one (`*` not followed by a selector), has code only after its `*/`
+    const starts = /^\s*\/\*/.test(line);
+    const continues = /^\s*\*(?![\s]*[{:.,\[>+~#\w-]*\s*[{,:])/.test(line) && !/^\s*\*\s*[{,:]/.test(line) && !/^\s*\*::?/.test(line);
+    let text = line;
+    if (starts || continues) {
+        const close = text.indexOf('*/');
+        if (close < 0) return '';
+        text = text.slice(close + 2);
+    }
+    return text.replace(/\/\*.*?\*\//g, '');
+}
+
 /** Colour literals on one line of source, after fallbacks and anchors are set aside. Empty when the line is clean. */
 export function colorLiteralsIn(line) {
     if (line.includes('hex-ok')) return [];
-    if (/^\s*(\/\/|\*(?!\s*\{)|\/\*|<!--)/.test(line)) return [];
-    const stripped = line.replace(FALLBACK, '').replace(/href\s*=\s*"#[^"]*"/g, '');
+    const code = codeOf(line);
+    if (!code.trim()) return [];
+    const stripped = code
+        .replace(FALLBACK, '')
+        .replace(/href\s*=\s*"#[^"]*"/g, '')
+        // Not colours: an SVG reference `url(#fade)`, and a template reference variable `<input #add>` (or on a line of its own)
+        .replace(/\burl\(\s*['"]?#[^)]*\)/g, '')
+        .replace(/(?<=<[a-zA-Z][^>]*)\s#[A-Za-z]\w*/g, '')
+        .replace(/^\s*#[A-Za-z]\w*\s*\/?>?\s*$/, '');
     const found = stripped.match(new RegExp(LITERAL.source, 'g'));
     return found ?? [];
 }
@@ -69,8 +91,8 @@ function walkHex(dir) {
 }
 
 function selfTest() {
-    const bad = ['color: #fff;', 'color: #0076b6;', 'background: rgba(0, 0, 0, 0.4);', 'box-shadow: 0 1px 2px rgb(1 2 3);', 'a { color: hsl(10, 20%, 30%); }', '* { color: #333; }', "public c = '#abc123';"];
-    const good = ['color: var(--mj-text-primary, #0f172a);', 'color: var(--mj-x, rgba(1,2,3,0.5));', '<a href="#add">', '// color: #fff', ' * old #fff', 'color: #fff; /* hex-ok: brand */', 'width: 10px;', 'background: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);', 'const id = a#b;'];
+    const bad = ['color: #fff;', 'color: #0076b6;', 'background: rgba(0, 0, 0, 0.4);', 'box-shadow: 0 1px 2px rgb(1 2 3);', 'a { color: hsl(10, 20%, 30%); }', '* { color: #333; }', "public c = '#abc123';", '*::before { color: #333; }', '/* note */ color: #fff;', 'color: #fff; /* c */'];
+    const good = ['color: var(--mj-text-primary, #0f172a);', 'color: var(--mj-x, rgba(1,2,3,0.5));', '<a href="#add">', '// color: #fff', ' * old #fff', 'color: #fff; /* hex-ok: brand */', 'width: 10px;', 'background: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);', 'const id = a#b;', 'fill: url(#fade);', '<input #add type="text">', '  #add', '/* old #fff */', ' * see #fff here', '/* start', ' * #fff inside', ' */'];
     const failures = [
         ...bad.filter((line) => colorLiteralsIn(line).length === 0).map((line) => `should be flagged: ${line}`),
         ...good.filter((line) => colorLiteralsIn(line).length !== 0).map((line) => `should pass: ${line}`),

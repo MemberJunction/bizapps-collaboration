@@ -525,7 +525,7 @@ export interface CollabUploadSubmitPayload {
 export class CollabUploadDialogComponent extends CollabDialogBase {
   @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
   protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
-  protected override Dismiss(): void { if (!this.IsSubmitting) this.onCancel(); }
+  protected override Dismiss(): void { this.onCancel(); }
 
   @Input() SpaceName = '';
   @Input() SpaceId = '';
@@ -577,7 +577,9 @@ export class CollabUploadDialogComponent extends CollabDialogBase {
     }
   }
 
+  /** Closing is refused while the upload is saving, from the close button and the backdrop as well as Escape. */
   public onCancel(): void {
+    if (this.IsSubmitting) return;
     this.CancelRequested.emit();
   }
 

@@ -3,11 +3,8 @@ import {
   Component,
   ElementRef,
   EventEmitter,
-  HostListener,
   Input,
   OnChanges,
-  OnDestroy,
-  OnInit,
   Output,
   SimpleChanges,
   ViewChild,
@@ -16,6 +13,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface NewConversationSubmitPayload {
@@ -34,7 +32,7 @@ export interface NewConversationSubmitPayload {
       <header class="d-header">
         <div class="d-title-group">
           <h2 id="dialog-title" class="d-title">New Conversation</h2>
-          <p class="d-sub">Start a new discussion channel in {{ SpaceName || 'this space' }}.</p>
+          <p class="d-sub">Start a new conversation in {{ SpaceName || 'this space' }}.</p>
         </div>
         <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -61,14 +59,14 @@ export interface NewConversationSubmitPayload {
         </div>
 
         <div class="form-group">
-          <label class="f-label" id="channel-type-label">Channel Type</label>
+          <label class="f-label" id="channel-type-label">Conversation type</label>
           <div class="kind-options" role="radiogroup" aria-labelledby="channel-type-label">
             <label class="kind-card" [class.selected]="kind === 'General'">
               <input type="radio" name="convoKind" value="General" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
               <div class="kind-card-icon general"><i class="fa-solid fa-comments" aria-hidden="true"></i></div>
               <div class="kind-card-text">
                 <div class="kind-title">General Discussion</div>
-                <div class="kind-desc">Open channel for all space participants and team members.</div>
+                <div class="kind-desc">Open conversation for all space participants and team members.</div>
               </div>
             </label>
 
@@ -349,7 +347,7 @@ export interface NewConversationSubmitPayload {
     `,
   ],
 })
-export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, OnChanges {
+export class CollabNewConversationDialogComponent extends CollabDialogBase implements OnChanges {
   @Input() public SpaceName = '';
   @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
@@ -363,40 +361,18 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, 
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
-  private previousActiveElement: HTMLElement | null = null;
-
-  public ngOnInit(): void {
-    if (typeof document !== 'undefined') {
-      this.previousActiveElement = document.activeElement as HTMLElement | null;
-      this.scheduleNameFocus();
-    }
-  }
-
-  private focusTimer: ReturnType<typeof setTimeout> | undefined;
-
-  /** Focuses the name field on the next turn, replacing any focus still pending so the timer can be cleared on destroy. */
-  private scheduleNameFocus(): void {
-    if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
-    this.focusTimer = setTimeout(() => {
-      this.focusTimer = undefined;
-      this.nameInputElement?.nativeElement?.focus();
-    }, 0);
-  }
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.modalRootElement; }
+  protected override Dismiss(): void { this.onCancel(); }
+  /** The name field, so a dialog that opens (or finishes a submit) is ready to type in. */
+  protected override FirstFocus(): HTMLElement | null { return this.nameInputElement?.nativeElement ?? null; }
 
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['IsSubmitting']) {
       const prev = changes['IsSubmitting'].previousValue;
       const curr = changes['IsSubmitting'].currentValue;
       if (prev === true && curr === false) {
-        this.scheduleNameFocus();
+        this.ScheduleFirstFocus();
       }
-    }
-  }
-
-  public ngOnDestroy(): void {
-    if (this.focusTimer !== undefined) clearTimeout(this.focusTimer);
-    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
-      this.previousActiveElement.focus();
     }
   }
 
@@ -406,43 +382,6 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, 
 
   public get trimmedName(): string {
     return this.name.trim();
-  }
-
-  // The document listener alone: a key pressed inside the dialog bubbles to it, so a host listener would run this twice
-  @HostListener('document:keydown', ['$event'])
-  public onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Tab' && this.modalRootElement?.nativeElement) {
-      const focusable = this.modalRootElement.nativeElement.querySelectorAll<HTMLElement>(
-        'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!this.modalRootElement.nativeElement.contains(document.activeElement)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-        return;
-      }
-      if (event.shiftKey) {
-        if (document.activeElement === first) {
-          last.focus();
-          event.preventDefault();
-        }
-      } else {
-        if (document.activeElement === last) {
-          first.focus();
-          event.preventDefault();
-        }
-      }
-    }
-  }
-
-  @HostListener('document:keydown.escape', ['$event'])
-  public onEscape(event?: Event): void {
-    if (event) {
-      event.preventDefault();
-    }
-    this.onCancel();
   }
 
   public onCancel(): void {

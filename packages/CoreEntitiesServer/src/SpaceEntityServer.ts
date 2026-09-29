@@ -543,7 +543,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             return `The parent's type has a configuration that does not parse: ${error instanceof Error ? error.message : String(error)}`;
         }
         let open = 0;
-        if (config?.Children?.MaxOpen !== undefined) {
+        // A space that stays closed adds no open sub-space, so only an open one is counted against the limit
+        const staysClosed = !!getFieldVal<Date | string | null>(this, 'ClosedAt') && !this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty);
+        if (config?.Children?.MaxOpen !== undefined && !staysClosed) {
             const system = await requireSystemUser(this);
             const view = new RunView(this.RunViewProviderToUse);
             const siblings = await view.RunView<{ ID: string }>({
@@ -579,12 +581,20 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         if (!children.Success) return `The sub-spaces could not be read: ${children.ErrorMessage ?? 'unknown error'}`;
         const rows = children.Results ?? [];
         const open = rows.filter((row) => !row.ClosedAt).length;
+        const name = this.Name || 'This space';
         for (const row of rows) {
-            const refusal = refuseChildType({ Children: { AllowedTypeCodes: config.Children.AllowedTypeCodes } }, CollaborationEngine.Instance.SpaceTypeById(row.SpaceTypeID)?.Code, 0);
-            if (refusal) return `It already holds a sub-space this type does not allow: ${refusal}`;
+            let code: string | undefined;
+            try {
+                // Resolved through the registry, which reads a type the engine's cache may not hold yet
+                code = (await ServerDriverRegistry.Instance.ResolveType(row.SpaceTypeID, this)).Code;
+            } catch (error) {
+                return `${name} holds a sub-space whose type could not be read: ${error instanceof Error ? error.message : String(error)}`;
+            }
+            const refusal = refuseChildType({ Children: { AllowedTypeCodes: config.Children.AllowedTypeCodes } }, code, 0);
+            if (refusal) return `${name} already holds a sub-space its new type does not allow: ${refusal}`;
         }
         if (config.Children.MaxOpen !== undefined && open > config.Children.MaxOpen) {
-            return `It already holds ${open} open sub-spaces, more than the new type allows (${config.Children.MaxOpen}).`;
+            return `${name} already holds ${open} open sub-spaces, more than its new type allows (${config.Children.MaxOpen}).`;
         }
         return null;
     }

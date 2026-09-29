@@ -2,7 +2,7 @@ import type { Type } from '@angular/core';
 import type { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
-import type { UserInfo } from '@memberjunction/core';
+import { LogError, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal, type ClassRegistration } from '@memberjunction/global';
 import { BaseSpaceTab } from './base-space-tab';
 import { BaseSpaceOverviewCard } from './base-space-overview-card';
@@ -188,7 +188,9 @@ export class BaseSpaceTypeUIDriver {
 
 /** Keys are compared without case or padding, everywhere: the section, the deep links, the drivers and Labels.Tabs. */
 export function normalizeContributionKey(key: string): string {
-    return key.trim().toLowerCase();
+    const normalized = key.trim().toLowerCase();
+    // 'discussions' is another spelling of the Chat tab, in deep links and in Labels.Tabs alike
+    return normalized === 'discussions' ? 'chat' : normalized;
 }
 
 /**
@@ -253,7 +255,10 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
         if (!existing || reg.Priority > existing.reg.Priority) {
+            if (existing) LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${reg.Priority}) is used and the other (${existing.reg.Priority}) is ignored.`);
             map.set(key, { reg, meta });
+        } else {
+            LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored.`);
         }
     }
 
@@ -272,7 +277,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
     for (const contrib of contributedItems) {
         const key = normalizeContributionKey(contrib.key);
         if (mergedMap.has(key)) {
-            console.warn(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
+            LogError(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
             continue;
         }
         mergedMap.set(key, contrib);
@@ -318,7 +323,7 @@ export class UIDriverRegistry extends BaseSingleton<UIDriverRegistry> {
 
         if (!this._loggedMissing.has(normalized)) {
             this._loggedMissing.add(normalized);
-            console.warn(`[UIDriverRegistry] UI driver '${normalized}' not registered. Falling back to BaseSpaceTypeUIDriver.`);
+            LogError(`[UIDriverRegistry] UI driver '${normalized}' not registered. Falling back to BaseSpaceTypeUIDriver.`);
         }
 
         return this.GetDefaultDriver();

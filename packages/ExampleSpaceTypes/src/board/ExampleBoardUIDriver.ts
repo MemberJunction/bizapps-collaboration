@@ -31,7 +31,8 @@ import { ExampleBoardMembersCard } from './components/ExampleBoardMembersCard.js
 export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
     /**
      * Relabels and orders tabs for board governance:
-     * Overview, Meetings (4), Papers (18), Motions (1), Members (7), Chat.
+     * Overview, Meetings (4), Papers (18), Motions (1), Members, Chat, then the tabs the app keeps (Library, Work, Settings).
+     * The Members tab carries no count of its own: the rail and the header show the real one.
      */
     public override GetTabs(
         _ctx: SpaceUIContext,
@@ -72,7 +73,6 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 key: 'people',
                 label: 'Members',
                 icon: 'fa-solid fa-user-group',
-                badgeCount: 7,
                 sortKey: 50,
             },
             {

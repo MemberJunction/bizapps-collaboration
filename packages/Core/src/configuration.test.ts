@@ -306,7 +306,7 @@ describe('which types a space may contain', () => {
 });
 
 describe('tab labels merge without regard to key case', () => {
-    it("lets a type's 'library' beat the app's 'Library', and a space's beat both when the type lets it", () => {
+    it("lets a type's 'library' beat the app's 'Library', and a space's 'WORK' beat the app's 'Work' when the type lets it", () => {
         const app: CollaborationSettings = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Labels: { Tabs: { Library: 'Files', Work: 'Tasks' } } };
         const type: CollaborationSettings = { Labels: { Tabs: { library: 'Documents' } }, SpaceOverridable: ['Labels'] };
         const resolved = ResolveCollaborationSettings({ spaces: [{ Labels: { Tabs: { WORK: 'Deliverables' } } }], type, app });

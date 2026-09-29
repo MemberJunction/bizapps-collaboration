@@ -16,6 +16,7 @@ import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
+import { runBeforeHookSafely } from './logic/before-hook.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
@@ -659,7 +660,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     />
                                                 </div>
                                                 @if (filteredSpaces.length === 0) {
-                                                    <mj-empty-state Icon="fa-solid fa-magnifying-glass" Title="No spaces match" Message="Try another search."></mj-empty-state>
+                                                    @if (spaceSearchQuery) {
+                                                        <mj-empty-state Icon="fa-solid fa-magnifying-glass" Title="No spaces match" Message="Try another search."></mj-empty-state>
+                                                    } @else {
+                                                        <mj-empty-state Icon="fa-solid fa-compass" Title="No spaces yet" Message="Spaces you belong to will appear here."></mj-empty-state>
+                                                    }
                                                 }
                                                 <div class="spaces-directory-grid">
                                                     @for (space of filteredSpaces; track space.id) {
@@ -1222,14 +1227,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** Runs a type's `Before…` hook. A hook that throws is logged with the space and its type, and reported as false: don't go on. */
     private runBeforeHook(hook: string, spaceId: string, run: () => void): boolean {
-        try {
-            run();
-            return true;
-        } catch (err) {
-            const type = CollaborationEngineBase.Instance.SpaceTypeById(this.activeSpaceRecord?.SpaceTypeID);
-            LogError(`${hook} of space type '${type?.Code ?? 'unknown'}' failed for space ${spaceId}: ${err instanceof Error ? err.message : String(err)}`);
-            return false;
-        }
+        const type = CollaborationEngineBase.Instance.SpaceTypeById(this.activeSpaceRecord?.SpaceTypeID);
+        return runBeforeHookSafely(hook, type?.Code, spaceId, run, (message) => LogError(message));
     }
 
     /** Opens a tab of the space shown. A tab the space doesn't have (its type turned the panel off) opens the Overview instead. */
@@ -1290,6 +1289,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             panels,
             finalize: (defaults) => this.uiDriver.GetTabs(ctx, assembleSpaceContributions(BaseSpaceTab, code, defaults, tabFactory)),
             labelFor: (key, label) => this.uiDriver.GetTabLabel(ctx, key, label),
+            onDropped: (key) => LogError(`A tab keyed '${key}' in space type '${code}' names no built-in tab and has no component, so it was dropped (space ${space.ID}).`),
         }, (err) => LogError(`The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
@@ -1740,6 +1740,31 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    /** The header of the space shown, from a row: its name, type, icon, colour, status and breadcrumbs. Used for the cached row, then the fresh one. */
+    private showHeaderFor(space: RawSpaceRecord): void {
+        const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
+        const resolvedType = space.SpaceType || typeDef?.name;
+        if (!resolvedType) {
+            LogError(`Missing space type for space ID: ${space.ID}`);
+        }
+        this.spaceTitle = space.Name;
+        this.spaceSubtitle = space.Description || '';
+        this.spaceStatus = space.ClosedAt ? 'Closed' : 'Active';
+        this.spaceTypeName = resolvedType || 'Unknown Type';
+        this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
+        this.headerTypeColor = space.Color || typeDef?.color || '';
+        this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
+
+        // Build breadcrumb lineage
+        const lineage: BreadcrumbItem[] = [];
+        let curr: RawSpaceRecord | undefined = space;
+        while (curr) {
+            lineage.unshift({ label: curr.Name, spaceId: curr.ID });
+            curr = curr.ParentID ? this.rawSpaces.find(s => UUIDsEqual(s.ID, curr!.ParentID)) : undefined;
+        }
+        this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
+    }
+
     private async selectSpaceBody(spaceId: string, requestId: number): Promise<void> {
         this.activeSpaceId = spaceId;
         this._loadedSpaceId = spaceId;
@@ -1790,10 +1815,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (cachedSpace) {
             // The tabs come from the cached row too, so the header and the rail don't show the default tabs until the read returns
             this.buildSpaceUi(cachedSpace);
-            this.spaceTitle = cachedSpace.Name;
-            this.spaceSubtitle = cachedSpace.Description || '';
-            this.spaceStatus = cachedSpace.ClosedAt ? 'Closed' : 'Active';
-            this.headerBackgroundImageUrl = cachedSpace.BackgroundImageURL || null;
+            this.showHeaderFor(cachedSpace);
         }
         this.previewRecentUses = [];
         this.previewMeta = '';
@@ -1836,25 +1858,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         const typeDef = this.spaceTypeMap.get(space.SpaceTypeID);
         const resolvedType = space.SpaceType || typeDef?.name;
-        if (!resolvedType) {
-            LogError(`Missing space type for space ID: ${space.ID}`);
-        }
-        this.spaceTitle = space.Name;
-        this.spaceSubtitle = space.Description || '';
-        this.spaceStatus = space.ClosedAt ? 'Closed' : 'Active';
-        this.spaceTypeName = resolvedType || 'Unknown Type';
-        this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
-        this.headerTypeColor = space.Color || typeDef?.color || '';
-        this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
-
-        // Build breadcrumb lineage
-        const lineage: BreadcrumbItem[] = [];
-        let curr: RawSpaceRecord | undefined = space;
-        while (curr) {
-            lineage.unshift({ label: curr.Name, spaceId: curr.ID });
-            curr = curr.ParentID ? this.rawSpaces.find(s => UUIDsEqual(s.ID, curr!.ParentID)) : undefined;
-        }
-        this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
+        this.showHeaderFor(space);
 
         // Overview sub-spaces
         const children = this.rawSpaces.filter(s => UUIDsEqual(s.ParentID, spaceId));

@@ -72,7 +72,7 @@ describe('UI Driver & Extensibility Contributions', () => {
         });
 
         it('warns and returns fallback default driver for unregistered class', () => {
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const driver = UIDriverRegistry.Instance.ResolveDriver('NonExistentUIDriver');
             expect(driver).toBeInstanceOf(BaseSpaceTypeUIDriver);
             expect(warnSpy).toHaveBeenCalledWith(

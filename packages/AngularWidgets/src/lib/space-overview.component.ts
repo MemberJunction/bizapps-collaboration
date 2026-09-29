@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
-import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
+import { normalizeContributionKey, type SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -206,7 +206,7 @@ export interface SubSpaceSummary {
           </div>
 
           <!-- Cards the type and other apps contribute: mounted with the space they belong to -->
-          @for (card of ContributedCards; track card.key) {
+          @for (card of UniqueContributedCards; track card.key) {
             @if (card.component) {
               <ng-container *ngComponentOutlet="card.component; inputs: { SpaceId: SpaceId, Sequence: card.sortKey ?? 0 }"></ng-container>
             }
@@ -446,6 +446,17 @@ export class CollabSpaceOverviewComponent {
   @Input() public ShowChatLink = true;
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
+
+  /** The contributed cards with one card per key: a driver may append what an earlier one already gave, and a key draws once. */
+  public get UniqueContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+    const seen = new Set<string>();
+    return this.ContributedCards.filter((card) => {
+      const key = normalizeContributionKey(card.key);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
   @Input() public FirmName = '';
   @Input() public ClientOrgName = '';
   @Input() public ClientPersonaName = '';

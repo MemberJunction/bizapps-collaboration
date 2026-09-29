@@ -32,7 +32,7 @@ export function summarizeSeats(seats: readonly SeatSummaryInput[]): SeatSummary 
         totalPeople: active.length,
         staffAvatars,
         outsideAvatars,
-        audienceSummary: `${staffAvatars.length} Team Staff · ${outsideAvatars.length} Outside`,
+        audienceSummary: `${staffAvatars.length} Team · ${outsideAvatars.length} Outside`,
         audienceBand: outsideAvatars.length > 0 ? 'Shared' : 'Team',
     };
 }

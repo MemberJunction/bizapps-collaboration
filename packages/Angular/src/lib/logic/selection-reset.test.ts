@@ -12,6 +12,11 @@ describe('a selection starts clean', () => {
         assert.equal(state.settingsSaveSuccess, '');
         assert.equal(state.settingsInfoMessage, '');
     });
+
+    it('closes the share, upload and new-conversation dialogs, so none stays open over the next space', () => {
+        const state = freshSelectionState();
+        assert.deepEqual([state.isShareDialogOpen, state.isUploadDialogOpen, state.isNewConversationDialogOpen], [false, false, false]);
+    });
 });
 
 describe('the loading flag of a selection', () => {

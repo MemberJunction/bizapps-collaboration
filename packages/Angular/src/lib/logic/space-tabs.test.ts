@@ -16,6 +16,15 @@ describe("a space's tabs", () => {
         assert.equal(model.contributed.size, 0);
     });
 
+    it('reports a tab that names no built-in tab and has no component, and keeps building', () => {
+        const dropped: string[] = [];
+        const stray = (defaults: SpaceTabDescriptor[]): SpaceTabDescriptor[] => [...defaults, { key: 'ghost', label: 'Ghost', sortKey: 15 }];
+        const model = buildSpaceTabs({ panels: allPanels, finalize: stray, labelFor: keepLabel, onDropped: (key) => dropped.push(key) });
+        assert.deepEqual(dropped, ['ghost']);
+        assert.equal(model.tabs.some((t) => t.id === 'ghost'), false);
+        assert.equal(model.tabs.length, 6);
+    });
+
     it('shows no Library for a type with LibraryPanel off, even when the driver names it', () => {
         const withLibrary = (defaults: SpaceTabDescriptor[]): SpaceTabDescriptor[] => [...defaults, { key: 'library', label: 'Papers', sortKey: 20 }];
         const model = buildSpaceTabs({ panels: { ...allPanels, LibraryPanel: false }, finalize: withLibrary, labelFor: keepLabel });

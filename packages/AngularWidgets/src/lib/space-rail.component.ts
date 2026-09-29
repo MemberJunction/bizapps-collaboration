@@ -1,5 +1,6 @@
 import { Component, ElementRef, EventEmitter, Input, Output, OnInit, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LogError } from '@memberjunction/core';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -70,6 +71,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
           } @else {
             <div
               class="space-avatar-tile collapsed-tile"
+              [mjClickable]="'Return to All Spaces from ' + SpaceTitle"
               (click)="onBackToSpaces()"
               [title]="SpaceTitle + ' - Click to return to All Spaces'">
               <i class="fa-solid" [class]="SpaceIcon || 'fa-shapes'"></i>
@@ -275,13 +277,14 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
               <mjc-type-tile
                 [IconClass]="s.iconClass"
                 [Color]="s.color || ''"
+                [IsClosed]="!!s.isLocked"
                 Size="sm">
               </mjc-type-tile>
               <span class="ellipsis">{{ s.name }}</span>
               @if (s.unread) {
                 <span class="unread"></span>
               } @else if (s.isLocked) {
-                <span class="meta"><i class="fa-solid fa-lock"></i></span>
+                <span class="meta"><i class="fa-solid fa-lock" aria-hidden="true"></i><span class="sr-only">(closed)</span></span>
               } @else if (s.meta !== undefined && s.meta !== null && s.meta !== '') {
                 <span class="meta">{{ s.meta }}</span>
               }
@@ -837,19 +840,21 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       background: var(--mj-brand-primary);
       flex: none;
     }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
     .tree-item .meta {
       margin-left: auto;
       font-size: 11.5px;
       color: var(--mj-text-muted);
-    }
-    .nav-footer {
-      margin-top: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding-top: 8px;
-      border-top: 1px solid var(--mj-border-default);
-      flex: none;
     }
     `
   ]
@@ -865,7 +870,7 @@ export class CollabSpaceRailComponent implements OnInit {
   /** The tabs of the space shown, as its type arranged them: the rail lists exactly these, with these labels. */
   @Input() Tabs: TabItem[] = DEFAULT_RAIL_TABS;
 
-  /** Whether the caller may configure this space. Settings & Assistant is offered only to those who can. */
+  /** Whether the caller may configure this space. Settings is offered only to those who can. */
   @Input() CanConfigure = false;
   @Input() Conversations: SpaceConversationItem[] = [];
   @Input() ActiveConversationId = '';
@@ -948,8 +953,9 @@ export class CollabSpaceRailComponent implements OnInit {
           this.isCollapsed = parsed.collapsed;
         }
       }
-    } catch {
-      // ignore parsing error
+    } catch (error) {
+      // A saved layout that doesn't parse leaves the default one, and is said so
+      LogError(`The saved rail layout could not be read: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

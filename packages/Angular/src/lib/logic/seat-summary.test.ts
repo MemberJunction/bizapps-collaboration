@@ -18,7 +18,7 @@ describe('the header seat summary', () => {
         assert.equal(summary.totalPeople, 3);
         assert.equal(summary.staffAvatars.length, 2);
         assert.equal(summary.outsideAvatars.length, 1);
-        assert.equal(summary.audienceSummary, '2 Team Staff · 1 Outside');
+        assert.equal(summary.audienceSummary, '2 Team · 1 Outside');
     });
 
     it('does not let an invited or removed outside seat make the space Shared', () => {

@@ -23,7 +23,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
         <div class="stat-card">
           <span class="stat-num in-progress">{{ InProgressCount }}</span>
-          <span class="stat-lbl">In Progress</span>
+          <span class="stat-lbl">In progress</span>
         </div>
         <div class="stat-card">
           <span class="stat-num completed">{{ CompletedCount }}</span>

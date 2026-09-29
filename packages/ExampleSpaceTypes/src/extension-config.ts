@@ -4,6 +4,11 @@ import { LogError } from '@memberjunction/core';
  * The example drivers read their behaviour switches from configuration, not from literals in code: a space type's or a space's
  * `Configuration.Extensions[<driver key>]` object (extensibility plan § 4). Settings are refused when they don't parse or have
  * the wrong shape, never quietly read as empty: a typo must not turn a rule off.
+ *
+ * Two things a reader should know. `Extensions.<driver key>` is overridable as a whole: Core checks nothing finer, so a space may
+ * set any key inside it. The drivers read `AnchorEntities`, `BlockedPhrases` and `SealedChildNames` from the space type only, and a
+ * space's own copy of those is ignored. And `OpenMotions` and the opt-out lists stand in for data a real type would read from its
+ * own tables (or a query): the example keeps them in settings so the extension model can be exercised end to end.
  */
 export type ExtensionSettings = Record<string, unknown>;
 

@@ -36,6 +36,11 @@ export interface SpaceChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
+/**
+ * What a change to a sub-space means to its parent's driver. A `MoveChildIn` and a `MoveChildOut` are one save seen from the two
+ * parents: the one it joins hears the first, the one it leaves the second. A `ReopenChild` is a closed sub-space becoming open
+ * again. A save that closes and moves a space at once is refused, so no save is both.
+ */
 export type ChildSpaceChangeKind = 'CreateChild' | 'UpdateChild' | 'ReopenChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
 
 export interface ChildSpaceChangeContext extends DriverBaseContext {
@@ -45,6 +50,10 @@ export interface ChildSpaceChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
+/**
+ * What a change to a seat means to the driver. Every new seat is an `Invite`, and so is approving a pending seat or reinstating a
+ * removed one: the driver hears the seat come into being, not the route it took.
+ */
 export type MemberChangeKind = 'Invite' | 'RoleChange' | 'BandChange' | 'Remove';
 
 export interface MemberChangeContext extends DriverBaseContext {

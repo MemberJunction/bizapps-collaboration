@@ -1,10 +1,10 @@
 import type { SpaceSettingsModel } from '@mj-biz-apps/collaboration-ng-widgets';
 import type { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 
-/** The columns of a space the Settings screen reads and writes. */
 /** The colour a space shows in the settings colour input when neither it nor its type has one. The input needs a hex value. */
 export const DEFAULT_TYPE_COLOR = '#0076b6'; // hex-ok: the colour input's default, the one place a hex is required
 
+/** The columns of a space the Settings screen reads and writes. */
 export interface SettingsSpaceRow {
     ID: string;
     Name: string;

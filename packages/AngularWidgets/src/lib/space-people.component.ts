@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, signal } from '@angular/core';
+import { LogError } from '@memberjunction/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceMemberModel } from './types';
@@ -22,7 +23,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         @if (CanSeeTeamSide) {
           <div class="metric-card">
             <span class="metric-num team">{{ TeamCount }}</span>
-            <span class="metric-lbl">Team Staff</span>
+            <span class="metric-lbl">Team</span>
           </div>
         }
         <div class="metric-card">
@@ -658,7 +659,7 @@ export class CollabSpacePeopleComponent {
   public async CopyLink(): Promise<void> {
     if (!this.RedemptionUrl) return;
     if (!this.Clipboard) {
-      console.error('Copy link: this page has no clipboard access (it needs a secure connection).');
+      LogError('Copy link: this page has no clipboard access (it needs a secure connection).');
       this.LinkStatus.set('failed');
       return;
     }
@@ -666,7 +667,7 @@ export class CollabSpacePeopleComponent {
       await this.Clipboard.writeText(this.RedemptionUrl);
       this.LinkStatus.set('copied');
     } catch (error) {
-      console.error(`Copy link failed: ${error instanceof Error ? error.message : String(error)}`);
+      LogError(`Copy link failed: ${error instanceof Error ? error.message : String(error)}`);
       this.LinkStatus.set('failed');
     }
   }

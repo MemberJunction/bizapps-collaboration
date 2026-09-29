@@ -14,8 +14,6 @@ interface Persona {
     space?: string;
     spaceId?: string;
     noSpaces?: boolean;
-    /** Whether the row opens a conversation before probing. False for a closed space, whose banner shows without one. */
-    openConversation?: boolean;
     expect?: Record<Expectation, boolean>;
 }
 
@@ -52,14 +50,16 @@ async function openSpace(page: Page, persona: Persona, tab: string): Promise<voi
 }
 
 /**
- * The chat area draws its composer (and a closed space's banner) only for an open conversation, so a row that probes them needs
- * one to open. The world seeds a General conversation in each such space; when the rail lists none, the row fails with that said.
+ * The chat area draws its composer only for an open conversation, so a row that probes it needs one to open (a closed space's
+ * banner shows without one). A closed space's conversation is archived and read-only, so its composer probe looks at a chat that is there.
+ * The world seeds a General conversation in each such space; when the rail lists none, the row fails with that said.
  */
 async function openFirstConversation(page: Page, persona: Persona): Promise<void> {
     const first = page.locator('mjc-space-rail .convo-link').first();
     await expect(first, `${persona.label}: the rail lists no conversation, so the composer and the closed banner can't be probed`).toBeVisible();
     await first.click();
-    await expect(page.locator('mjc-space-chat')).toBeVisible();
+    // The chat area itself, not its wrapper: the wrapper is always there, so waiting for it proves the click did nothing
+    await expect(page.locator('mjc-space-chat mj-conversation-chat-area')).toBeVisible();
 }
 
 async function shoot(page: Page, persona: Persona, step: string): Promise<void> {
@@ -85,7 +85,7 @@ for (const persona of personas) {
         test(`${persona.label} sees what its seat allows`, async ({ page }) => {
             // The rail is on every tab; the chat area is on the Chat tab
             await openSpace(page, persona, 'chat');
-            if (persona.openConversation !== false) await openFirstConversation(page, persona);
+            await openFirstConversation(page, persona);
             for (const key of EXPECTATIONS) {
                 if (persona.expect![key]) await expect(probe(page, key), key).toBeVisible();
                 else await expect(probe(page, key), key).toBeHidden();

@@ -318,10 +318,12 @@ export async function loadWorld(): Promise<void> {
             }
         }
     }
+    // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
-    // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer (and a closed
-    // space's banner) only for an open conversation. Closed this month's is made before the close below, which archives it.
+    // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer only for an open
+    // conversation (a closed space's banner shows without one, and its archived conversation is read-only). Closed this month's is made
+    // before the close below, which archives it.
     await seedSpaceConversations('studio', 'ada', 'sam', true);
     await seedSpaceConversations('sealed-child', 'sam', 'ada', true);
     await seedSpaceConversations('closed-recent', 'ada', 'bea', true);

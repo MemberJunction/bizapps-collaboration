@@ -1,5 +1,7 @@
 import '@angular/compiler';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import { CollabDialogBase } from './dialog-base.ts';
+import type { ElementRef } from '@angular/core';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -624,6 +626,18 @@ describe('CollabShareCheckComponent', () => {
   });
 });
 
+describe('CollabSpaceOverviewComponent contributed cards', () => {
+    it('draws one card per key, whatever spelling or order a driver appended them in', () => {
+        const comp = new CollabSpaceOverviewComponent();
+        comp.ContributedCards = [
+            { key: 'deal-summary', title: 'Deal', sortKey: 15 },
+            { key: 'Deal-Summary', title: 'Deal again', sortKey: 16 },
+            { key: 'notice', title: 'Notice', sortKey: 20 },
+        ];
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Deal', 'Notice']);
+    });
+});
+
 describe('CollabSpaceOverviewComponent', () => {
   it('emits PreviewAsRequested with lowercased persona', () => {
     const comp = new CollabSpaceOverviewComponent();
@@ -1117,6 +1131,19 @@ describe('the upload dialog keeps its promises', () => {
     expect(cancelled).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses the close button and the backdrop while it is saving, as Escape is', () => {
+    const dialog = new CollabUploadDialogComponent();
+    const cancelled = vi.fn();
+    dialog.CancelRequested.subscribe(cancelled);
+    dialog.IsSubmitting = true;
+    dialog.onCancel();
+    dialog.onBackdropClick({ target: { classList: { contains: () => true } } } as unknown as MouseEvent);
+    expect(cancelled).not.toHaveBeenCalled();
+    dialog.IsSubmitting = false;
+    dialog.onCancel();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
   it('closes the share dialog on Escape', () => {
     const dialog = new CollabShareCheckDialogComponent();
     const cancelled = vi.fn();
@@ -1145,16 +1172,19 @@ describe('Copy link says how it went', () => {
   });
 
   it('says it could not copy when the clipboard refuses, or there is none', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const refused = invited();
-    refused.Clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
-    await refused.CopyLink();
-    expect(refused.LinkStatus()).toBe('failed');
-    const none = invited();
-    none.Clipboard = null;
-    await none.CopyLink();
-    expect(none.LinkStatus()).toBe('failed');
-    vi.restoreAllMocks();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const refused = invited();
+      refused.Clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
+      await refused.CopyLink();
+      expect(refused.LinkStatus()).toBe('failed');
+      const none = invited();
+      none.Clipboard = null;
+      await none.CopyLink();
+      expect(none.LinkStatus()).toBe('failed');
+    } finally {
+      quiet.mockRestore();
+    }
   });
 });
 
@@ -1273,12 +1303,13 @@ describe('CollabNewConversationDialogComponent', () => {
     comp.onCancel();
     expect(cancelCount).toBe(1);
 
-    comp.onEscape();
+    const escape = { key: 'Escape', shiftKey: false, preventDefault: vi.fn() };
+    comp.OnDialogKeyDown(escape);
     expect(cancelCount).toBe(2);
 
     comp.IsSubmitting = true;
     comp.onCancel();
-    comp.onEscape();
+    comp.OnDialogKeyDown(escape);
     expect(cancelCount).toBe(2);
   });
 
@@ -1466,3 +1497,54 @@ describe('CollabSpaceSettingsComponent', () => {
 
 
 
+
+describe('CollabDialogBase focus', () => {
+  class Probe extends CollabDialogBase {
+    public asked: string[] = [];
+    public focused: string[] = [];
+    protected override DialogBox() {
+      const ask = (selector: string) => { this.asked.push(selector); return null; };
+      return { nativeElement: { querySelector: ask } } as unknown as ElementRef<HTMLElement>;
+    }
+    protected override Dismiss(): void { /* not used */ }
+    public first() { return this.FirstFocus(); }
+    public schedule() { this.ScheduleFirstFocus(); }
+    protected override FirstFocus(): HTMLElement | null {
+      this.focused.push('asked');
+      return super.FirstFocus();
+    }
+  }
+
+  it("never lands on the header's close button first, so Enter right after opening doesn't close the dialog", () => {
+    const probe = new Probe();
+    probe.first();
+    const buttonQuery = probe.asked.find((q) => q.startsWith('button'));
+    expect(buttonQuery).toContain(':not(.btn-close)');
+    expect(probe.asked[0]).toContain('data-autofocus');
+  });
+
+  it('cancels a pending focus when the dialog is destroyed', () => {
+    vi.useFakeTimers();
+    try {
+      const probe = new Probe();
+      probe.schedule();
+      probe.ngOnDestroy();
+      vi.runAllTimers();
+      expect(probe.focused).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('focuses on the next turn when it is not destroyed', () => {
+    vi.useFakeTimers();
+    try {
+      const probe = new Probe();
+      probe.schedule();
+      vi.runAllTimers();
+      expect(probe.focused).toEqual(['asked']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

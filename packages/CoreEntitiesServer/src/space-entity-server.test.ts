@@ -362,6 +362,40 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
+    function closingSpace(fields: Array<{ Name: string; Dirty: boolean; OldValue?: unknown; Value?: unknown }>, closedAt: string | null, user: UserInfo) {
+        const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
+        Object.defineProperties(space, {
+            ContextCurrentUser: { value: user, writable: true },
+            IsSaved: { value: true, writable: true },
+            ID: { value: '33333333-3333-4333-8333-333333333333', writable: true },
+            OwnerID: { value: staffUser.ID, writable: true },
+            ClosedAt: { value: closedAt, writable: true },
+            Fields: { value: [...fields, { Name: 'OwnerID', Dirty: false }], writable: true },
+        });
+        return space;
+    }
+
+    it('refuses a close and a move in one save, so a rule on incoming children cannot be walked around', async () => {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        const space = closingSpace([
+            { Name: 'ClosedAt', Dirty: true, OldValue: null, Value: past },
+            { Name: 'ParentID', Dirty: true, OldValue: '55555555-5555-4555-8555-555555555555', Value: '66666666-6666-4666-8666-666666666666' },
+        ], past, staffUser);
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, false);
+        assert.match(res.Errors.find((e) => e.Source === 'ParentID')?.Message ?? '', /close a space and move it in separate saves/);
+    });
+
+    it("refuses anyone but staff a new date on a space that is already closed", async () => {
+        const nobody = { ID: '77777777-7777-4777-8777-777777777777', UserRoles: [{ Role: 'Space Participant' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+        const earlier = new Date(Date.now() - 86_400_000 * 30).toISOString();
+        const later = new Date(Date.now() - 60_000).toISOString();
+        const space = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, nobody);
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
+        assert.equal(res.Success, false);
+        assert.match(res.Errors.map((e) => e.Message).join(' '), /the date a space closed can not be changed|staff/i);
+    });
+
     it('refuses future ClosedAt when closing a space', async () => {
         const futureDate = new Date(Date.now() + 86400000).toISOString();
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
@@ -727,6 +761,84 @@ describe('SpaceEntityServer type change', () => {
         mayConfigure = options.configure ?? true;
         return oldDriver;
     }
+
+    describe("a space's own Configuration keeps to what its type lets a space set", () => {
+        async function saveWithConfiguration(typeConfiguration: object, spaceConfiguration: object) {
+            reset({});
+            typeRows.set(NEW_TYPE_ID, { ...typeRow(NEW_TYPE_ID, null), Code: 'room', Configuration: JSON.stringify(typeConfiguration) } as mjBizAppsCollaborationSpaceTypeEntity);
+            const space = savedSpaceChangingType();
+            // Same type as before: only the space's own Configuration changes
+            (space.Fields as Array<{ Name: string; Dirty: boolean; OldValue?: unknown; Value?: unknown }>)[0] = { Name: 'SpaceTypeID', Dirty: false, OldValue: NEW_TYPE_ID, Value: NEW_TYPE_ID };
+            (space.Fields as Array<{ Name: string; Dirty: boolean; Value?: unknown }>).push({ Name: 'Configuration', Dirty: true, Value: JSON.stringify(spaceConfiguration) });
+            Object.defineProperty(space, 'Configuration', { value: JSON.stringify(spaceConfiguration), writable: true });
+            return SpaceEntityServer.prototype.ValidateAsync.call(space);
+        }
+        const configurationMessage = (res: Awaited<ReturnType<typeof saveWithConfiguration>>) => res.Errors.find((e) => e.Source === 'Configuration')?.Message ?? '';
+
+        it("refuses a Labels.Tabs a type that doesn't list Labels leaves out, and names the rule", async () => {
+            const res = await saveWithConfiguration({ SpaceOverridable: ['Chats.WhoCanStart'] }, { Labels: { Tabs: { library: 'Papers' } } });
+            assert.equal(res.Success, false);
+            assert.match(configurationMessage(res), /^Invalid space configuration: /);
+        });
+
+        it('refuses a Labels key nothing reads, even when the type lists Labels', async () => {
+            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels'] }, { Labels: { Bands: {} } });
+            assert.equal(res.Success, false);
+            assert.match(configurationMessage(res), /Unknown Labels key: Bands/);
+        });
+
+        it('accepts Labels.Tabs when the type lists it', async () => {
+            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels.Tabs'] }, { Labels: { Tabs: { library: 'Papers' } } });
+            assert.equal(configurationMessage(res), '');
+        });
+    });
+
+    describe('a retype checks the sub-spaces the space holds', () => {
+        const CHILD_TYPE_ID = '66666666-6666-4666-8666-666666666666';
+
+        async function retypeWith(configuration: string, children: Array<{ SpaceTypeID: string; ClosedAt: Date | null }>) {
+            reset({});
+            typeRows.set(NEW_TYPE_ID, { ...typeRow(NEW_TYPE_ID, null), Code: 'room', Configuration: configuration } as mjBizAppsCollaborationSpaceTypeEntity);
+            typeRows.set(CHILD_TYPE_ID, { ...typeRow(CHILD_TYPE_ID, null), Code: 'project' } as mjBizAppsCollaborationSpaceTypeEntity);
+            const space = savedSpaceChangingType();
+            Object.defineProperty(space, 'Name', { value: 'Cohort 5', writable: true });
+            Object.defineProperty(space, 'RunViewProviderToUse', { value: { RunView: async () => ({ Success: true, Results: children }) }, writable: true });
+            const registry = ServerDriverRegistry.Instance;
+            const held = registry.ResolveType.bind(registry);
+            registry.ResolveType = async (id: string | null | undefined) => {
+                const row = typeRows.get(String(id).toLowerCase());
+                if (!row) throw new Error(`Space type ${id} was not found.`);
+                return row;
+            };
+            try {
+                return await SpaceEntityServer.prototype.ValidateAsync.call(space);
+            } finally {
+                registry.ResolveType = held;
+            }
+        }
+        const messageOf = (res: Awaited<ReturnType<typeof retypeWith>>) => res.Errors.find((e) => e.Source === 'SpaceTypeID')?.Message ?? '';
+
+        it('refuses a type whose allowed list leaves out a held sub-space, naming the space', async () => {
+            const res = await retypeWith(JSON.stringify({ Children: { AllowedTypeCodes: ['task'] } }), [{ SpaceTypeID: CHILD_TYPE_ID, ClosedAt: null }]);
+            assert.equal(res.Success, false);
+            assert.match(messageOf(res), /^Cohort 5 already holds a sub-space its new type does not allow/);
+        });
+
+        it('refuses a type that allows fewer open sub-spaces than the space holds, and counts only the open ones', async () => {
+            const two = [{ SpaceTypeID: CHILD_TYPE_ID, ClosedAt: null }, { SpaceTypeID: CHILD_TYPE_ID, ClosedAt: null }, { SpaceTypeID: CHILD_TYPE_ID, ClosedAt: new Date() }];
+            const refused = await retypeWith(JSON.stringify({ Children: { MaxOpen: 1 } }), two);
+            assert.equal(refused.Success, false);
+            assert.match(messageOf(refused), /already holds 2 open sub-spaces, more than its new type allows \(1\)/);
+            const fits = await retypeWith(JSON.stringify({ Children: { MaxOpen: 1 } }), [two[0], two[2]]);
+            assert.equal(fits.Errors.find((e) => e.Source === 'SpaceTypeID'), undefined);
+        });
+
+        it('refuses, and names the space, when a held sub-space has a type that cannot be read', async () => {
+            const res = await retypeWith(JSON.stringify({ Children: { AllowedTypeCodes: ['project'] } }), [{ SpaceTypeID: '77777777-7777-4777-8777-777777777777', ClosedAt: null }]);
+            assert.equal(res.Success, false);
+            assert.match(messageOf(res), /^Cohort 5 holds a sub-space whose type could not be read/);
+        });
+    });
 
     it('refuses an owner who lacks the Configure Spaces authorization', async () => {
         const oldDriver = reset({ configure: false });
