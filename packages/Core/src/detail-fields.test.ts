@@ -69,7 +69,7 @@ describe("a subtype's generated form", () => {
         assert.equal(sectionKeyOfCategory('2026 Term'), '_2026Term');
         assert.equal(sectionKeyOf(col('X', { Category: 'Board Details', GeneratedFormSection: 'Category' })), 'boardDetails');
         assert.equal(sectionKeyOf(col('X')), 'details');
-        assert.equal(sectionKeyOf(col('X', { GeneratedFormSection: 'Top' })), null);
+        assert.equal(sectionKeyOf(col('X', { GeneratedFormSection: 'Top' })), 'top-area');
         assert.equal(sectionKeyOf(col('X', { IncludeInGeneratedForm: false })), null);
         assert.equal(sectionKeyOf(col('X', { Category: '  ', GeneratedFormSection: 'Category' })), null);
     });
@@ -95,6 +95,13 @@ describe("a subtype's generated form", () => {
         assert.equal(subtypeFormSections([col('TermName'), col('Cadence'), col('Name')], own), null);
         assert.equal(subtypeFormSections([col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' }), col('Cadence'), col('Name')], own), null);
         assert.equal(subtypeFormSections([col('TermName', { IncludeInGeneratedForm: false }), col('Name')], own), null);
+    });
+
+    it("cannot when a column of the space is in the form's top area, which shows whatever sections are asked for", () => {
+        const fields = [col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' }), col('Name', { GeneratedFormSection: 'Top' })];
+        assert.equal(subtypeFormSections(fields, own), null);
+        // A column of the subtype in the top area is the subtype's own: the space has none there
+        assert.deepEqual(subtypeFormSections([col('TermName', { GeneratedFormSection: 'Top' }), col('Name')], own), ['top-area']);
     });
 
     it('ignores the key: it is on no section of the form', () => {

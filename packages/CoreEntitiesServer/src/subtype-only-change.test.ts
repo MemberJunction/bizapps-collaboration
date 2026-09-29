@@ -36,7 +36,7 @@ class SpyDriver extends BaseSpaceTypeServerDriver {
 }
 
 /** A saved space with its subtype attached, whose own fields are as told. */
-function savedSpace(opts: { spaceDirty?: boolean; user?: object | null; leafOutOfReach?: boolean; leafFields?: Array<{ Name: string; Dirty: boolean; OldValue: unknown }> }) {
+function savedSpace(opts: { spaceDirty?: boolean; parentId?: string | null; user?: object | null; leafOutOfReach?: boolean; leafFields?: Array<{ Name: string; Dirty: boolean; OldValue: unknown }> }) {
     const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
     const history: Array<{ Message?: string; Type?: string }> = [];
     const leaf = { Fields: opts.leafFields ?? [{ Name: 'TermName', Dirty: true, OldValue: 'Original' }] };
@@ -45,7 +45,7 @@ function savedSpace(opts: { spaceDirty?: boolean; user?: object | null; leafOutO
         SpaceTypeID: { value: 'type-1', writable: true },
         IsSaved: { value: true, writable: true },
         ID: { value: SPACE, writable: true },
-        ParentID: { value: null, writable: true },
+        ParentID: { value: opts.parentId ?? null, writable: true },
         ClosedAt: { value: null, writable: true },
         ProviderToUse: { value: {}, writable: true },
         // A space made by its subtype's own save has no subtype in reach: `LeafEntity` is the space itself
@@ -156,6 +156,27 @@ describe("a change to only a subtype's own columns", () => {
         assert.equal(await SpaceEntityServer.prototype.Save.call(savedSpace({ leafOutOfReach: true }).space, asSubtype(BOARDS)), true);
         assert.equal(driver.asked.length, 1);
         assert.deepEqual(driver.told.map((t) => [t.kind, t.oldValues]), [['Update', {}]]);
+    });
+
+    it("is told to the space's own driver only: a parent's driver hears no child change, and is not asked", async () => {
+        configure = true;
+        const PARENT = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
+        const own = new SpyDriver();
+        const parent = new SpyDriver();
+        drivers.set(SPACE.toLowerCase(), own);
+        drivers.set(PARENT.toLowerCase(), parent);
+        const heldResolve = ServerDriverRegistry.Instance.ResolveSpaceAndType;
+        const childCalls: string[] = [];
+        parent.OnChildSpaceChanged = () => { childCalls.push('told'); };
+        parent.ValidateChildSpaceChange = () => { childCalls.push('asked'); return { ok: true }; };
+        try {
+            const { space } = savedSpace({ parentId: PARENT });
+            assert.equal(await SpaceEntityServer.prototype.Save.call(space, asSubtype(BOARDS)), true);
+            assert.equal(own.told.length, 1);
+            assert.deepEqual(childCalls, []);
+        } finally {
+            ServerDriverRegistry.Instance.ResolveSpaceAndType = heldResolve;
+        }
     });
 
     it('is refused without a signed-in user, before the space is saved', async () => {

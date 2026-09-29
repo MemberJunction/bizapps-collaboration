@@ -70,11 +70,16 @@ export function sectionKeyOfCategory(category: string): string {
     return /^\d/.test(words) ? `_${words}` : words;
 }
 
-/** The key of the section CodeGen's generated form puts a column in; null for a column that isn't on the form or is in the top area. */
+/** The key CodeGen gives the form's top area. */
+export const TOP_AREA = 'top-area';
+
+/** The key of the section CodeGen's generated form puts a column in; null for a column that isn't on the form. */
 export function sectionKeyOf(field: FieldSectionShape): string | null {
     if (!field.IncludeInGeneratedForm) return null;
     if (field.GeneratedFormSection === 'Category' && field.Category && field.Category.trim() !== '') return sectionKeyOfCategory(field.Category);
     if (field.GeneratedFormSection === 'Details') return 'details';
+    // The top area is on the form whatever sections are asked for
+    if (field.GeneratedFormSection === 'Top') return TOP_AREA;
     return null;
 }
 
@@ -94,6 +99,8 @@ export function subtypeFormSections(fields: readonly FieldSectionShape[], ownNam
         (ownNames.has(field.Name) ? own : others).add(key);
     }
     if (own.size === 0) return null;
+    // The top area is shown whichever sections are asked for: a column of the space in it would show beside the subtype's
+    if (others.has(TOP_AREA)) return null;
     for (const key of own) if (others.has(key)) return null;
     return [...own].sort();
 }

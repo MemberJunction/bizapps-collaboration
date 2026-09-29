@@ -154,14 +154,30 @@ export class BaseSpaceTypeServerDriver {
         return rules;
     }
 
-    /** Validate a change to the space itself. */
+    /**
+     * Validate a change to the space itself.
+     *
+     * A change to only the columns of the space's subtype (a board's term, a deal's stage) is judged here too, as kind `Update`.
+     * What the context holds then depends on how the subtype was saved. Saved through a space that was loaded (a server-side save),
+     * `oldValues` names the subtype's changed columns and `subtypeEntityName` names the subtype. Saved from a client over the wire,
+     * MJ builds the subtype from its own side, and its parent, this space, has no link back to it: `oldValues` is empty and the new
+     * values aren't in reach, so a rule about a subtype column can't be enforced from here (MemberJunction/MJ#4870). Put such a rule
+     * in the subtype entity's own server class until then.
+     */
     public ValidateSpaceChange(
         _ctx: SpaceChangeContext
     ): Promise<DriverValidationResult> | DriverValidationResult {
         return { ok: true };
     }
 
-    /** React to a change to the space (runs after the save commits; a failure is logged and the save stands). */
+    /**
+     * React to a change to the space. It runs after the space's own save returns, and a failure is logged and the save stands. It
+     * does not run after a commit when the save is part of a larger transaction: a space saved through its subtype (MJ's IsA save
+     * wraps both rows) and `CreateSpace` run it inside that transaction, and for a change to only the subtype's columns before the
+     * subtype's own row is written. Outside work (email, HTTP) belongs in `provider.RunAfterCommit`, which runs once the whole
+     * transaction has committed. A change to only the subtype's columns is told here alone, not to the parent's driver, with the
+     * same context as `ValidateSpaceChange` gave (over the wire, no old values).
+     */
     public OnSpaceChanged(_ctx: SpaceChangeContext): Promise<void> | void {}
 
     /** Validate a child space under this space (runs on parent's type driver). */
