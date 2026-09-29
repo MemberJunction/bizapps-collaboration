@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceBand, TaskItemModel } from './types';
+import { isTaskClosed, isTaskInProgress, taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -40,6 +41,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <input
             type="text"
             placeholder="Search tasks..."
+            aria-label="Search tasks"
             [(ngModel)]="searchQuery"
             class="search-input"
           />
@@ -74,11 +76,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             [class.active]="bandFilter === 'Shared'"
             (click)="bandFilter = 'Shared'"
           >Shared</button>
-          <button
-            class="pill-btn"
-            [class.active]="bandFilter === 'Team'"
-            (click)="bandFilter = 'Team'"
-          >Team</button>
+          @if (CanSeeTeamSide) {
+            <button
+              class="pill-btn"
+              [class.active]="bandFilter === 'Team'"
+              (click)="bandFilter = 'Team'"
+            >Team</button>
+          }
         </div>
 
         <div class="spacer"></div>
@@ -97,20 +101,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <input
             type="text"
             placeholder="Task title..."
+            aria-label="Task title"
             [(ngModel)]="newTaskName"
             (keydown.enter)="submitNewTask()"
             class="new-task-input"
             autofocus
           />
-          <select [(ngModel)]="newTaskBand" class="new-task-select">
-            <option value="Shared">Shared with Outside</option>
-            <option value="Team">Team only</option>
-          </select>
-          <select [(ngModel)]="newTaskPriority" class="new-task-select">
+          @if (AllowedBands.length > 1) {
+            <select [(ngModel)]="newTaskBand" class="new-task-select" aria-label="Who can see this task">
+              @for (band of AllowedBands; track band) {
+                <option [value]="band">{{ band === 'Shared' ? 'Shared with Outside' : 'Team only' }}</option>
+              }
+            </select>
+          }
+          <select [(ngModel)]="newTaskPriority" class="new-task-select" aria-label="Priority">
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
             <option value="High">High</option>
-            <option value="Urgent">Urgent</option>
+            <option value="Critical">Critical</option>
           </select>
           <button class="save-task-btn" [disabled]="!newTaskName.trim()" (click)="submitNewTask()">
             Add
@@ -157,6 +165,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <input
                     type="checkbox"
                     [checked]="task.status === 'Completed'"
+                    [disabled]="ReadOnly"
+                    [attr.aria-label]="'Mark ' + task.name + ' as ' + (task.status === 'Completed' ? 'not done' : 'done')"
                     (change)="onToggleTask(task)"
                     class="task-checkbox"
                   />
@@ -174,14 +184,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 </div>
 
                 <div class="td-priority">
-                  <span class="priority-badge" [class]="task.priority.toLowerCase()">
-                    {{ task.priority }}
+                  <span class="priority-badge" [class]="priorityClass(task.priority)">
+                    {{ priorityLabel(task.priority) }}
                   </span>
                 </div>
 
                 <div class="td-status">
-                  <span class="status-badge" [class]="formatStatusClass(task.status)">
-                    {{ task.status }}
+                  <span class="status-badge" [class]="statusClass(task.status)">
+                    {{ statusLabel(task.status) }}
                   </span>
                 </div>
 
@@ -242,8 +252,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         font-weight: 700;
         color: var(--mj-text-primary, #0f172a);
       }
-      .stat-num.in-progress { color: #0284c7; }
-      .stat-num.completed { color: #10b981; }
+      .stat-num.in-progress { color: var(--mj-status-info); }
+      .stat-num.completed { color: var(--mj-status-success); }
       .stat-num.shared { color: var(--mjc-shared, #0076b6); }
       .stat-lbl {
         font-size: 13px;
@@ -309,7 +319,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         align-items: center;
         gap: 6px;
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 7px 16px;
         border-radius: 6px;
@@ -349,7 +359,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .save-task-btn {
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 6px 14px;
         border-radius: 4px;
@@ -444,10 +454,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         border-radius: 4px;
         text-transform: capitalize;
       }
-      .priority-badge.low { background: #f1f5f9; color: #475569; }
-      .priority-badge.medium { background: #e0f2fe; color: #0284c7; }
-      .priority-badge.high { background: #fef3c7; color: #d97706; }
-      .priority-badge.urgent { background: #fee2e2; color: #dc2626; }
+      .priority-badge.priority-low { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+      .priority-badge.priority-medium { background: var(--mj-status-info-bg); color: var(--mj-status-info-text); }
+      .priority-badge.priority-high { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+      .priority-badge.priority-critical { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
 
       .status-badge {
         display: inline-block;
@@ -456,10 +466,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         padding: 2px 8px;
         border-radius: 4px;
       }
-      .status-badge.in-progress { background: #e0f2fe; color: #0284c7; }
-      .status-badge.completed { background: #dcfce7; color: #16a34a; }
-      .status-badge.not-started { background: #f1f5f9; color: #64748b; }
-      .status-badge.deferred { background: #fef3c7; color: #b45309; }
+      .status-badge.status-open { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+      .status-badge.status-inprogress { background: var(--mj-status-info-bg); color: var(--mj-status-info-text); }
+      .status-badge.status-completed { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+      .status-badge.status-blocked { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+      .status-badge.status-cancelled { background: var(--mj-bg-surface-sunken); color: var(--mj-text-disabled); }
 
       .assignee-wrap {
         display: flex;
@@ -508,6 +519,12 @@ export class CollabSpaceWorkComponent {
   @Input() Tasks: TaskItemModel[] = [];
   @Input() SpaceName = '';
   @Input() CanCreateTask = true;
+  /** A closed space, or a seat that may not contribute: the checkboxes are off, as they are on the board. */
+  @Input() ReadOnly = false;
+  /** The bands this seat may file a task on. With one, the choice isn't offered. */
+  @Input() AllowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
+  /** False for a seat that can't see the Team band: no Team filter. */
+  @Input() CanSeeTeamSide = true;
   @Input() public set DefaultBand(val: SpaceBand) {
     this._defaultBand = val || 'Shared';
     this.newTaskBand = this._defaultBand;
@@ -533,8 +550,13 @@ export class CollabSpaceWorkComponent {
   public openAddTask(): void {
     this.isAddingTask = !this.isAddingTask;
     if (this.isAddingTask) {
-      this.newTaskBand = this.DefaultBand;
+      this.newTaskBand = this.startBand();
     }
+  }
+
+  /** The band a new task starts on: the default when this seat may use it, else the one band it may. */
+  private startBand(): SpaceBand {
+    return this.AllowedBands.includes(this.DefaultBand) ? this.DefaultBand : (this.AllowedBands[0] ?? this.DefaultBand);
   }
 
   public get TotalTasks(): number {
@@ -542,7 +564,7 @@ export class CollabSpaceWorkComponent {
   }
 
   public get InProgressCount(): number {
-    return this.Tasks.filter((t) => t.status === 'In Progress').length;
+    return this.Tasks.filter((t) => isTaskInProgress(t.status)).length;
   }
 
   public get CompletedCount(): number {
@@ -564,7 +586,7 @@ export class CollabSpaceWorkComponent {
       }
 
       // Status filter
-      if (this.statusFilter === 'active' && task.status === 'Completed') return false;
+      if (this.statusFilter === 'active' && isTaskClosed(task.status)) return false;
       if (this.statusFilter === 'completed' && task.status !== 'Completed') return false;
 
       // Band filter
@@ -575,6 +597,7 @@ export class CollabSpaceWorkComponent {
   }
 
   public onToggleTask(task: TaskItemModel): void {
+    if (this.ReadOnly) return;
     this.TaskToggleRequested.emit(task);
   }
 
@@ -586,16 +609,27 @@ export class CollabSpaceWorkComponent {
     if (!this.newTaskName.trim()) return;
     this.CreateTaskRequested.emit({
       name: this.newTaskName.trim(),
-      band: this.newTaskBand,
+      band: this.AllowedBands.includes(this.newTaskBand) ? this.newTaskBand : this.startBand(),
       priority: this.newTaskPriority,
     });
     this.newTaskName = '';
-    this.newTaskBand = this.DefaultBand;
+    this.newTaskBand = this.startBand();
     this.isAddingTask = false;
   }
 
-  public formatStatusClass(status: string): string {
-    const s = status.toLowerCase().replace(/\s+/g, '-');
-    return s;
+  public statusLabel(status: string): string {
+    return taskStatusLabel(status);
+  }
+
+  public statusClass(status: string): string {
+    return taskStatusClass(status);
+  }
+
+  public priorityLabel(priority: string): string {
+    return taskPriorityLabel(priority);
+  }
+
+  public priorityClass(priority: string): string {
+    return taskPriorityClass(priority);
   }
 }

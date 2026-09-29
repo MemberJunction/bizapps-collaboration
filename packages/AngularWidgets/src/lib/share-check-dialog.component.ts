@@ -23,6 +23,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         [ReviewHeader]="ReviewHeader"
         [ReviewSub]="ReviewSub"
         [Findings]="Findings"
+        [ReviewCompleted]="ReviewCompleted"
         [Note]="Note"
         [NotifyRecipients]="NotifyRecipients"
         [AuthorName]="AuthorName"
@@ -83,6 +84,7 @@ export class CollabShareCheckDialogComponent {
   @Input() public ReviewHeader = '';
   @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
+  @Input() public ReviewCompleted = false;
   @Input() public Note = '';
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';

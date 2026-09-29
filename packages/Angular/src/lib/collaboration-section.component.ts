@@ -14,6 +14,9 @@ import { applySettingsChanges, buildSettingsModel, SettingsSession } from './log
 import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
+import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { shareAudience } from './logic/share-audience.js';
+import { toOverviewMessages } from './logic/overview-messages.js';
 import { guardedLoad, isSelectionCurrent } from './logic/selection-guard.js';
 import {
     CollaborationClient,
@@ -75,7 +78,7 @@ import {
     type SpaceSettingsModel,
     type SpaceConversationItem,
 } from '@mj-biz-apps/collaboration-ng-widgets';
-import type { MentionPerson } from '@memberjunction/conversations-runtime';
+import { MentionParser, type MentionPerson } from '@memberjunction/conversations-runtime';
 import { CollaborationNoAccessComponent } from './no-access.component';
 
 interface RawSpaceRecord {
@@ -698,7 +701,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @if (currentPersonId) {
                                                 <bizapps-my-tasks
                                                     [PersonID]="currentPersonId"
-                                                    [ShowCreateButton]="true"
+                                                    [ShowCreateButton]="false"
                                                     (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
                                                 />
                                             } @else {
@@ -772,13 +775,17 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 [Summary]="headerAudienceSummary"
                                             />
                                             @if (activeTab === 'Overview') {
-                                                <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
-                                                    <i class="fa-solid fa-user-plus"></i>Invite
-                                                </button>
-                                                <button mjButton variant="primary" size="md" (click)="onNewClicked()">
-                                                    <i class="fa-solid fa-plus"></i>New
-                                                </button>
-                                            } @else {
+                                                @if (canInviteHere) {
+                                                    <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
+                                                        <i class="fa-solid fa-user-plus"></i>Invite
+                                                    </button>
+                                                }
+                                                @if (canAddHere) {
+                                                    <button mjButton variant="primary" size="md" (click)="onNewClicked()">
+                                                        <i class="fa-solid fa-plus"></i>New
+                                                    </button>
+                                                }
+                                            } @else if (canAddHere) {
                                                 <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
                                                     <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
                                                 </button>
@@ -807,6 +814,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [RoomMessages]="overviewRoomMessages"
                                                     [SubSpaces]="overviewSubSpaces"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
                                                     [AgentAvailable]="chatDefaultAgentId !== null"
                                                     [IsSubmittingAsk]="isSubmittingAsk"
                                                     [DiscussionBand]="chatAudienceBand"
@@ -825,6 +833,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [TeamCount]="libraryTeamCount"
                                                     [Collections]="libraryCollections"
                                                     [SmartViews]="librarySmartViews"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                    [CanShareItems]="canShareItems"
                                                     [Rows]="libraryRows"
                                                     [SelectedRowId]="selectedItemId || ''"
                                                     [ShowDrawer]="isDrawerOpen"
@@ -861,6 +871,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                     [SpaceName]="spaceTitle"
                                                                     [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
                                                                     [CanCreateTask]="!isSpaceClosed && canContribute"
+                                                                    [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                    [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                                                    [CanSeeTeamSide]="canSeeTeamSide"
                                                                     (TaskSelectRequested)="onTaskSelected($event)"
                                                                     (TaskToggleRequested)="onTaskToggled($event)"
                                                                     (CreateTaskRequested)="onCreateTask($event)"
@@ -927,6 +940,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [IsSendingInvite]="isSendingInvite"
                                                     [InviteOutcome]="inviteOutcome"
                                                     (InviteMemberRequested)="onInviteMember($event)"
+                                                    (InviteOutcomeDismissed)="inviteOutcome = null"
                                                 />
                                             }
                                             @case ('Settings') {
@@ -1189,6 +1203,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public get isSpaceClosed(): boolean {
         const space = this.activeSpaceRecord;
         return !!space?.ClosedAt;
+    }
+
+    /** Whether the seat the caller reaches this space through may see the Team band. Unknown until the seat is resolved: not shown. */
+    public get canSeeTeamSide(): boolean {
+        return this.callerSeat?.role.canSeeTeamBand ?? false;
+    }
+
+    /** Invite is offered to seats whose role may invite, in a space that is open. */
+    public get canInviteHere(): boolean {
+        return !this.isSpaceClosed && (this.callerSeat?.role.canInvite ?? false);
+    }
+
+    /** Share is offered to seats whose role may promote an item to the Shared band, in a space that is open. */
+    public get canShareItems(): boolean {
+        return !this.isSpaceClosed && (this.callerSeat?.role.canPromoteBand ?? false);
+    }
+
+    /** Upload and New are offered to seats that may contribute, in a space that is open. */
+    public get canAddHere(): boolean {
+        return !this.isSpaceClosed && this.canContribute;
     }
 
     /**
@@ -1518,6 +1552,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceTasks = [];
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
+        // The next space has no drawer: what the last one showed is closed, and its item leaves the URL
+        this.isDrawerOpen = false;
+        this.selectedItemId = null;
+        this.previewRecentUses = [];
+        this.previewMeta = '';
+        this.previewBandLabel = '';
+        this.previewAudienceSub = '';
 
         // Refresh space record from server to ensure ClosedAt and status are completely fresh
         try {
@@ -1758,7 +1799,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         title: name,
                         author,
                         timestamp: dateStr,
-                        canShare: true,
+                        canShare: this.canShareItems,
                     });
                 }
 
@@ -1784,7 +1825,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.librarySmartViews = [
                 { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
                 { id: 'shared', name: 'Shared', iconClass: 'fa-solid fa-eye', count: shared.length },
-                { id: 'team', name: 'Staff internal', iconClass: 'fa-solid fa-lock', count: team.length },
+                ...(this.canSeeTeamSide ? [{ id: 'team', name: 'Team only', iconClass: 'fa-solid fa-lock', count: team.length }] : []),
             ];
         } catch (err) {
             LogError('Error loading space items: ' + (err instanceof Error ? err.message : String(err)));
@@ -1899,6 +1940,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         Role: string;
                         Message: string;
                         User?: string;
+                        UserID?: string | null;
                         __mj_CreatedAt: string;
                     }>({
                         EntityName: 'MJ: Conversation Details',
@@ -1916,17 +1958,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         this.overviewRoomMessages = [];
                         return;
                     }
-                    const chronological = [...detailRes.Results].reverse();
-                    this.overviewRoomMessages = chronological.map(d => ({
-                        id: d.ID,
-                        senderName: d.Role === 'AI' ? 'Assistant' : (d.User || 'Team Member'),
-                        senderInitials: d.Role === 'AI' ? 'AI' : (d.User ? d.User.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'TM'),
-                        senderColorClass: d.Role === 'AI' ? 'c1' : 'c2',
-                        isOutside: false,
-                        isAssistant: d.Role === 'AI',
-                        timestamp: this.formatDate(d.__mj_CreatedAt),
-                        text: d.Message,
-                    } satisfies RoomMiniMessage)).slice(-5);
+                    const parser = new MentionParser();
+                    this.overviewRoomMessages = toOverviewMessages(
+                        detailRes.Results,
+                        (message) => parser.ToPlainText(message),
+                        (userId) => this.isOutsideUser(userId),
+                        (iso) => formatDateTime(iso),
+                    );
                 },
             );
         } catch (err) {
@@ -2012,7 +2050,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         id: t.ID,
                         name: t.Name,
                         description: t.Description || undefined,
-                        status: t.Status || 'Not Started',
+                        status: t.Status || 'Open',
                         priority: t.Priority || 'Medium',
                         band: spaceItem?.Band || 'Shared',
                         assigneeName: assigned,
@@ -2146,12 +2184,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     private formatDate(isoStr: string): string {
-        try {
-            const d = new Date(isoStr);
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        } catch {
-            return 'Recently';
-        }
+        return formatDateLocale(isoStr);
+    }
+
+    /** Whether the user holds an Active outside (Shared band) seat on the space shown. */
+    private isOutsideUser(userId: string): boolean {
+        return this.spaceMembers.some((m) => m.status === 'Active' && m.band === 'Shared' && UUIDsEqual(m.userId, userId));
     }
 
     public onInviteClicked(): void {
@@ -2307,7 +2345,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeView = 'space';
         this.activeTab = 'Overview';
         void this.selectSpaceInternal(spaceId);
-        this.UpdateQueryParams({ view: 'space', space: spaceId, tab: 'overview', conv: null });
+        this.UpdateQueryParams({ view: 'space', space: spaceId, tab: 'overview', conv: null, item: null });
     }
 
     public onBreadcrumbSelected(crumb: BreadcrumbItem): void {
@@ -2369,6 +2407,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isDrawerOpen = true;
         this.activeTab = 'Library';
         this.UpdateQueryParams({ tab: 'library', item: item.id });
+        void this.showPreviewFor(item.id);
         this.RefreshView();
     }
 
@@ -2376,7 +2415,51 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.selectedItemId = row.id;
         this.isDrawerOpen = true;
         this.UpdateQueryParams({ item: row.id });
+        void this.showPreviewFor(row.id);
         this.RefreshView();
+    }
+
+    private readonly previewReads = new LatestOnly();
+
+    /** Fills the drawer for one item: what it is, who can see it, and who has used it. Whatever the last item showed is dropped first. */
+    private async showPreviewFor(itemId: string): Promise<void> {
+        const isLatest = this.previewReads.Begin();
+        this.previewRecentUses = [];
+        const row = this.libraryRows.find((r) => UUIDsEqual(r.id, itemId));
+        this.previewMeta = row ? `${row.folder} · ${row.who}, ${row.when}` : '';
+        this.previewBandLabel = row?.band === 'Team' ? 'Team only' : 'Shared';
+        this.previewAudienceSub = row?.band === 'Team'
+            ? 'Only the team can see this'
+            : `${this.discussionAudienceCount} ${this.discussionAudienceCount === 1 ? 'person' : 'people'} can see this`;
+        if (!row || !isValidUuid(itemId)) return;
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            await guardedLoad(
+                () => isLatest() && !!this.selectedItemId && UUIDsEqual(this.selectedItemId, itemId),
+                async () => {
+                    const res = await rv.RunView<{ ID: string; UserID: string; User?: string; UsedAt: string; Kind: string }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Item Uses',
+                        ExtraFilter: `ItemID = '${itemId}'`,
+                        OrderBy: 'UsedAt DESC',
+                        ResultType: 'simple',
+                        MaxRows: 5,
+                    });
+                    if (!res.Success) LogError(`Failed to load the recent use of item ${itemId}: ${res.ErrorMessage ?? 'unknown error'}`);
+                    return res;
+                },
+                (res) => {
+                    if (!res.Success) return;
+                    this.previewRecentUses = (res.Results ?? []).map((use) => ({
+                        id: use.ID,
+                        text: `${this.currentUser && UUIDsEqual(use.UserID, this.currentUser.ID) ? 'You' : (use.User || 'Someone')} opened this`,
+                        timestamp: formatDateTime(use.UsedAt),
+                    }));
+                    this.RefreshView();
+                },
+            );
+        } catch (err) {
+            LogError(`Error loading the recent use of item ${itemId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
@@ -2433,7 +2516,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return false;
             }
             if (this.selectedItemId && UUIDsEqual(this.selectedItemId, itemId)) {
-                this.previewRecentUses = [{ id: use.ID, text: 'You opened this', timestamp: 'Just now' }, ...this.previewRecentUses];
+                this.previewRecentUses = [{ id: use.ID, text: 'You opened this', timestamp: formatDateTime(new Date()) }, ...this.previewRecentUses];
             }
             return true;
         } catch (err) {
@@ -2450,6 +2533,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onShareRequested(item?: ItemCardModel | ItemRowModel | LibraryRowModel): void {
+        if (!this.canShareItems) {
+            SharedService.Instance.CreateSimpleNotification('Your role in this space can not share items.', 'warning', 3000);
+            return;
+        }
         if (item) {
             this.shareDialogItemId = item.id;
             this.shareDialogItemName = 'name' in item ? item.name : item.title;
@@ -2465,14 +2552,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             SharedService.Instance.CreateSimpleNotification('No item selected to share.', 'warning', 3000);
             return;
         }
-        this.shareDialogTitle = 'Share with Shared Band';
-        // Only people who can see it now: an invited or removed seat is not somebody the file would reach
-        const outsideMembers = this.spaceMembers.filter(m => m.status === 'Active' && m.band === 'Shared');
-        this.shareAudienceHeader = 'Participants who will gain access';
-        this.shareAudienceStaffSub = outsideMembers.length > 0
-            ? `${outsideMembers.length} outside participant${outsideMembers.length === 1 ? '' : 's'}`
-            : `${this.spaceMembers.length} space participant${this.spaceMembers.length === 1 ? '' : 's'}`;
-        this.shareRecipients = (outsideMembers.length > 0 ? outsideMembers : this.spaceMembers).map(m => ({
+        this.shareDialogTitle = 'Share with everyone in this space';
+        // Who gains access is worked out by one rule: Active outside seats only, and nobody when there are none
+        const audience = shareAudience(this.spaceMembers);
+        this.shareAudienceHeader = audience.header;
+        this.shareAudienceStaffSub = audience.subtitle;
+        this.shareRecipients = this.spaceMembers.filter(m => audience.people.some(p => p.id === m.id)).map(m => ({
             id: m.id,
             name: m.name,
             role: m.roleName || m.roleCode || '',
@@ -2487,8 +2572,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.shareRecipientCount = this.shareRecipients.length;
         this.shareAuthorName = this.currentUser?.FirstLast || this.currentUser?.Name || 'Current User';
         this.shareTimestamp = new Date().toISOString();
-        this.shareReviewHeader = 'Policy Review';
-        this.shareReviewSub = 'Automated policy check on shared items';
+        this.shareReviewHeader = 'Policy review';
+        this.shareReviewSub = 'A check on what is being shared';
         this.shareFindings = [];
         this.isShareDialogOpen = true;
         this.RefreshView();
@@ -2629,8 +2714,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
 
             SharedService.Instance.CreateSimpleNotification('Conversation created.', 'info', 3000);
-            if (!isCurrent()) return; // it belongs to a space no longer shown: nothing on screen changes
-            this.isNewConversationDialogOpen = false;
+            this.isNewConversationDialogOpen = false; // closed either way: it must not stay open over the next space
+            if (!isCurrent()) return; // it belongs to a space no longer shown: nothing else on screen changes
 
             await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID ?? undefined);
             if (!isCurrent()) return;
@@ -2737,10 +2822,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public async onTaskToggled(task: TaskItemModel): Promise<void> {
+        if (this.isSpaceClosed || !this.canContribute) {
+            SharedService.Instance.CreateSimpleNotification(
+                this.isSpaceClosed ? 'Cannot change task status in a closed space.' : 'You do not have permission to update tasks in this space.',
+                'warning', 3000);
+            return;
+        }
         const isCompleted = task.status === 'Completed';
         const newEntityStatus: TaskEntity['Status'] = isCompleted ? 'InProgress' : 'Completed';
         const previousStatus = task.status;
-        task.status = isCompleted ? 'In Progress' : 'Completed';
+        task.status = newEntityStatus;
         this.RefreshView();
         try {
             const md = this.ProviderToUse;
@@ -2827,6 +2918,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         const spaceId = this.activeSpaceId;
         const isCurrent = this.currentSelection();
+        // The assistant to ask is this space's, so it is read before the await; the person can have moved to another space by then
+        const askedMessage = this.askMessage(text);
         this.isSubmittingAsk = true;
         this.RefreshView();
         const name = text.length > 50 ? `${text.slice(0, 47)}...` : text;
@@ -2839,17 +2932,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
 
             if (res.Success && res.ConversationID && !isCurrent()) {
-                // Started in a space the person has left: the conversation exists there, and nothing on this screen changes
-                SharedService.Instance.CreateSimpleNotification('Conversation started in the space you left.', 'info', 3000);
+                // Started in a space the person has left: the conversation exists there, with the question waiting in it
+                this.pendingChatMessage = askedMessage;
+                this.pendingChatMessageConversationId = res.ConversationID;
+                SharedService.Instance.CreateSimpleNotification('Conversation started in the space you left. Your question is waiting there.', 'info', 4000);
             } else if (res.Success && res.ConversationID) {
                 this.spaceOverviewComponent?.clearAskBox();
-                const defaultAgentId = this.chatDefaultAgentId;
-                if (defaultAgentId) {
-                    const mention = `@${JSON.stringify({ type: 'agent', id: defaultAgentId, name: this.chatDefaultAgentName ?? 'Assistant' })}`;
-                    this.pendingChatMessage = `${mention} ${text}`;
-                } else {
-                    this.pendingChatMessage = text;
-                }
+                this.pendingChatMessage = askedMessage;
                 this.pendingChatMessageConversationId = res.ConversationID;
                 this.activeConversationId = res.ConversationID;
                 await this.loadSpaceConversations(spaceId, isCurrent, res.ConversationID);
@@ -2871,6 +2960,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.isSubmittingAsk = false;
             this.RefreshView();
         }
+    }
+
+    /** The ask box's question as the chat sends it: tagged with the space's default assistant, when it has one. */
+    private askMessage(text: string): string {
+        const defaultAgentId = this.chatDefaultAgentId;
+        if (!defaultAgentId) return text;
+        const mention = `@${JSON.stringify({ type: 'agent', id: defaultAgentId, name: this.chatDefaultAgentName ?? 'Assistant' })}`;
+        return `${mention} ${text}`;
     }
 
     /** True while an invite is with the server: the People form stays as it is. */

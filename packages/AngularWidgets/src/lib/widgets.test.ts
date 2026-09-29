@@ -24,6 +24,8 @@ import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
 import { SimpleChange } from '@angular/core';
+import { filterLibraryRows } from './library-filter.ts';
+import { taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status.ts';
 import {
   FindingModel,
   LibraryRowModel,
@@ -843,8 +845,8 @@ describe('CollabUploadDialogComponent', () => {
 
 describe('CollabSpaceWorkComponent', () => {
   const sampleTasks: TaskItemModel[] = [
-    { id: 't1', name: 'Draft specification', status: 'In Progress', priority: 'High', band: 'Shared' },
-    { id: 't2', name: 'Internal review', status: 'Not Started', priority: 'Medium', band: 'Team' },
+    { id: 't1', name: 'Draft specification', status: 'InProgress', priority: 'High', band: 'Shared' },
+    { id: 't2', name: 'Internal review', status: 'Open', priority: 'Medium', band: 'Team' },
     { id: 't3', name: 'Sign off document', status: 'Completed', priority: 'Low', band: 'Shared' },
   ];
 
@@ -885,16 +887,110 @@ describe('CollabSpaceWorkComponent', () => {
     });
     comp.newTaskName = 'New delivery milestone';
     comp.newTaskBand = 'Shared';
-    comp.newTaskPriority = 'Urgent';
+    comp.newTaskPriority = 'Critical';
     comp.submitNewTask();
 
     expect(created).toEqual({
       name: 'New delivery milestone',
       band: 'Shared',
-      priority: 'Urgent',
+      priority: 'Critical',
     });
     expect(comp.newTaskName).toBe('');
     expect(comp.isAddingTask).toBe(false);
+  });
+});
+
+describe('the Work list follows the seat and the entity', () => {
+  it('reads every stored status and priority as a label with its own badge class', () => {
+    expect(taskStatusLabel('InProgress')).toBe('In progress');
+    expect(taskStatusLabel('Open')).toBe('Open');
+    expect(taskPriorityLabel('Critical')).toBe('Critical');
+    for (const status of ['Open', 'InProgress', 'Blocked', 'Cancelled', 'Completed']) {
+      expect(taskStatusClass(status)).toBe(`status-${status.toLowerCase()}`);
+    }
+    expect(taskPriorityClass('Critical')).toBe('priority-critical');
+  });
+
+  it('counts In progress on the stored value, and treats Cancelled as closed', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.Tasks = [
+      { id: 'a', name: 'A', status: 'InProgress', priority: 'High', band: 'Shared' },
+      { id: 'b', name: 'B', status: 'Cancelled', priority: 'Low', band: 'Shared' },
+    ];
+    expect(comp.InProgressCount).toBe(1);
+    comp.statusFilter = 'active';
+    expect(comp.filteredTasks.map((t) => t.id)).toEqual(['a']);
+  });
+
+  it('does not emit a toggle from a read-only list', () => {
+    const comp = new CollabSpaceWorkComponent();
+    comp.ReadOnly = true;
+    const toggled = vi.fn();
+    comp.TaskToggleRequested.subscribe(toggled);
+    comp.onToggleTask({ id: 'a', name: 'A', status: 'Open', priority: 'Low', band: 'Shared' });
+    expect(toggled).not.toHaveBeenCalled();
+  });
+
+  it('files a Team-only seat on Team and a Shared-only seat on Shared, whatever the form held', () => {
+    const teamOnly = new CollabSpaceWorkComponent();
+    teamOnly.AllowedBands = ['Team'];
+    teamOnly.DefaultBand = 'Shared';
+    const created = vi.fn();
+    teamOnly.CreateTaskRequested.subscribe(created);
+    teamOnly.newTaskName = 'Internal';
+    teamOnly.newTaskBand = 'Shared';
+    teamOnly.submitNewTask();
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ band: 'Team' }));
+
+    const sharedOnly = new CollabSpaceWorkComponent();
+    sharedOnly.AllowedBands = ['Shared'];
+    sharedOnly.DefaultBand = 'Team';
+    const made = vi.fn();
+    sharedOnly.CreateTaskRequested.subscribe(made);
+    sharedOnly.newTaskName = 'Client note';
+    sharedOnly.newTaskBand = 'Team';
+    sharedOnly.submitNewTask();
+    expect(made).toHaveBeenCalledWith(expect.objectContaining({ band: 'Shared' }));
+  });
+});
+
+describe('the Library narrows by search, collection and view', () => {
+  const rows: LibraryRowModel[] = [
+    { id: 'r1', kind: 'doc', name: 'Brief', folder: 'Contracts', band: 'Shared', who: 'Ada', when: 'x' },
+    { id: 'r2', kind: 'image', name: 'Site photo', folder: 'Photos', band: 'Shared', who: 'Bea', when: 'x' },
+    { id: 'r3', kind: 'doc', name: 'Margin notes', folder: 'Photos', band: 'Team', who: 'Ada', when: 'x' },
+  ];
+  const collections = [{ id: 'folder-0', name: 'Contracts' }, { id: 'folder-1', name: 'Photos' }];
+
+  it('filters by search text over name, folder and author', () => {
+    expect(filterLibraryRows(rows, { band: 'All', search: 'photo', folderId: 'all', collections }).map((r) => r.id)).toEqual(['r2', 'r3']);
+    expect(filterLibraryRows(rows, { band: 'All', search: 'bea', folderId: 'all', collections }).map((r) => r.id)).toEqual(['r2']);
+  });
+
+  it('filters by collection and by smart view', () => {
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'folder-1', collections }).map((r) => r.id)).toEqual(['r2', 'r3']);
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'shared', collections }).map((r) => r.id)).toEqual(['r1', 'r2']);
+    expect(filterLibraryRows(rows, { band: 'All', search: '', folderId: 'team', collections }).map((r) => r.id)).toEqual(['r3']);
+  });
+
+  it("filters Ada's Discovery Library to Photos, and the band tab narrows it further", () => {
+    expect(filterLibraryRows(rows, { band: 'Shared', search: '', folderId: 'folder-1', collections }).map((r) => r.id)).toEqual(['r2']);
+  });
+
+  it('marks the selected row and the selected tree row in any casing', () => {
+    const library = new CollabSpaceLibraryComponent();
+    library.Rows = [{ ...rows[0], id: 'ABCDEF00-0000-4000-8000-000000000001' }];
+    library.SelectedRowId = 'abcdef00-0000-4000-8000-000000000001';
+    expect(library.IsSelected('ABCDEF00-0000-4000-8000-000000000001')).toBe(true);
+    expect(library.SelectedRow?.name).toBe('Brief');
+  });
+});
+
+describe('the share dialog says when nothing was reviewed', () => {
+  it('starts as not reviewed, and only a review that ran and found nothing reads clean', () => {
+    const dialog = new CollabShareCheckComponent();
+    expect(dialog.ReviewCompleted).toBe(false);
+    expect(dialog.Findings).toEqual([]);
   });
 });
 
@@ -1116,8 +1212,11 @@ describe('CollabSpacePeopleComponent', () => {
     it("forgets a refusal when the form is cancelled or reopened, so it doesn't greet the next invite", () => {
       const { comp } = withForm();
       comp.InviteOutcome = { ok: false, message: 'Invite refused: this role cannot invite.' };
+      const dismissed = vi.fn();
+      comp.InviteOutcomeDismissed.subscribe(dismissed);
       comp.CancelInvite();
       expect(comp.InviteOutcome).toBeNull();
+      expect(dismissed).toHaveBeenCalledTimes(1);
       comp.isInviting = true;
       comp.InviteOutcome = { ok: false, message: 'Invite refused again.' };
       comp.ToggleInviteForm(); // closes
@@ -1131,8 +1230,11 @@ describe('CollabSpacePeopleComponent', () => {
       comp.InviteOutcome = { ok: true, message: 'They are seated.' };
       expect(comp.isInviting).toBe(false);
       expect(comp.InviteOutcome?.message).toBe('They are seated.');
+      const dismissed = vi.fn();
+      comp.InviteOutcomeDismissed.subscribe(dismissed);
       comp.DismissInviteOutcome();
       expect(comp.InviteOutcome).toBeNull();
+      expect(dismissed).toHaveBeenCalledTimes(1);
     });
 
     it('sends nothing for a blank email', () => {

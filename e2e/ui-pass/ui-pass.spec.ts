@@ -10,71 +10,91 @@ const EXPECTATIONS: readonly Expectation[] = ['closedBanner', 'composer', 'newCo
 
 interface Persona {
     name: string;
-    label?: string;
-    space: string;
-    expect: Record<Expectation, boolean>;
+    label: string;
+    space?: string;
+    spaceId?: string;
+    noSpaces?: boolean;
+    expect?: Record<Expectation, boolean>;
 }
+
+/** Where Explorer serves the Collaboration section. Override when the host names it differently. */
+const SECTION_PATH = process.env.UI_PASS_SECTION_PATH ?? '/app/Collaboration/Spaces';
 
 const personas = (JSON.parse(readFileSync(resolve(here, 'personas.json'), 'utf8')) as { personas: Persona[] }).personas;
 
 // A matrix that can pass by asserting nothing is not a check
 if (personas.length === 0) throw new Error('personas.json lists no personas.');
 for (const persona of personas) {
+    if (persona.noSpaces) continue;
+    if (!persona.spaceId || !persona.space) throw new Error(`${persona.label}: a space and its id are required.`);
     for (const key of EXPECTATIONS) {
-        if (typeof persona.expect?.[key] !== 'boolean') throw new Error(`${persona.label ?? persona.name}: expectation "${key}" is missing.`);
+        if (typeof persona.expect?.[key] !== 'boolean') throw new Error(`${persona.label}: expectation "${key}" is missing.`);
     }
-}
-
-/** The space name, or the environment variable it names ($NAME). Null when that variable is unset. */
-function spaceNameOf(persona: Persona): string | null {
-    return persona.space.startsWith('$') ? process.env[persona.space.slice(1)] ?? null : persona.space;
 }
 
 function probe(page: Page, key: Expectation): Locator {
     switch (key) {
         case 'closedBanner': return page.locator('.space-closed-banner');
         case 'composer': return page.locator('mj-conversation-chat-area').locator('textarea, [contenteditable="true"]').first();
-        case 'newConversationButton': return page.locator('mjc-space-rail').locator('.btn-add-section[aria-label="New Conversation"]');
-        case 'settingsLink': return page.locator('mjc-space-rail').locator('.space-nav-link', { hasText: 'Settings & Assistant' });
+        // Both the expanded and the collapsed rail: found by their icon and label, never by visible text
+        case 'newConversationButton': return page.locator('mjc-space-rail').locator('button[aria-label="New Conversation"]').first();
+        case 'settingsLink': return page.locator('mjc-space-rail').locator('.space-nav-link:has(i.fa-sliders)').first();
     }
 }
 
-async function openSpace(page: Page, name: string): Promise<void> {
-    await page.goto('/');
-    // The rail lists the spaces; match the whole name, inside the rail
-    await page.locator('mjc-space-rail').getByText(name, { exact: true }).first().click();
-    // The page has rendered the space when its name is in the header
-    await expect(page.locator('h1, h2, .space-title, .space-header').getByText(name, { exact: true }).first()).toBeVisible();
+/** Opens a space on a tab by URL, and waits until the header shows its name. */
+async function openSpace(page: Page, persona: Persona, tab: string): Promise<void> {
+    await page.goto(`${SECTION_PATH}?view=space&space=${persona.spaceId}&tab=${tab}`);
+    await expect(page.locator('mjc-space-header').getByText(persona.space!, { exact: true }).first()).toBeVisible();
+}
+
+/** The chat area needs a conversation before it shows its composer; open the first one the rail lists, when there is one. */
+async function openFirstConversation(page: Page): Promise<void> {
+    const first = page.locator('mjc-space-rail .convo-link').first();
+    if (await first.count()) await first.click();
 }
 
 async function shoot(page: Page, persona: Persona, step: string): Promise<void> {
-    await page.screenshot({ path: resolve(here, `../ui-pass-out/${persona.label ?? persona.name}-${step}.png`) });
+    await page.screenshot({ path: resolve(here, `../ui-pass-out/${persona.label}-${step}.png`) });
 }
 
 for (const persona of personas) {
-    const title = persona.label ?? persona.name;
-    test.describe(title, () => {
+    test.describe(persona.label, () => {
         test.beforeEach(({ browserName }, testInfo) => {
-            test.skip(testInfo.project.name !== title, `each persona runs in its own project (${browserName})`);
+            test.skip(testInfo.project.name !== persona.label, `each persona runs in its own project (${browserName})`);
         });
 
-        test(`${title} sees what its seat allows`, async ({ page }) => {
-            const space = spaceNameOf(persona);
-            test.skip(space === null, `${persona.space} is not set`);
-            await openSpace(page, space!);
-            await shoot(page, persona, 'space');
+        if (persona.noSpaces) {
+            test(`${persona.label} sees no spaces`, async ({ page }) => {
+                await page.goto(SECTION_PATH);
+                await expect(page.getByText('Access Restricted')).toBeVisible();
+                await expect(page.locator('mjc-space-rail')).toBeHidden();
+                await shoot(page, persona, 'no-access');
+            });
+            return;
+        }
+
+        test(`${persona.label} sees what its seat allows`, async ({ page }) => {
+            // The rail is on every tab; the chat area is on the Chat tab
+            await openSpace(page, persona, 'chat');
+            await openFirstConversation(page);
             for (const key of EXPECTATIONS) {
-                if (persona.expect[key]) await expect(probe(page, key), key).toBeVisible();
+                if (persona.expect![key]) await expect(probe(page, key), key).toBeVisible();
                 else await expect(probe(page, key), key).toBeHidden();
+            }
+            await shoot(page, persona, 'chat');
+        });
+
+        test(`${persona.label}: the tabs open`, async ({ page }) => {
+            for (const tab of ['overview', 'library', 'work', 'people']) {
+                await openSpace(page, persona, tab);
+                await shoot(page, persona, tab);
             }
         });
 
-        // Named steps for the screenshots the review asks for; each opens one thing and captures it
-        test(`${title}: Settings & Assistant`, async ({ page }) => {
-            const space = spaceNameOf(persona);
-            test.skip(space === null || !persona.expect.settingsLink, 'this seat has no Settings & Assistant');
-            await openSpace(page, space!);
-            await probe(page, 'settingsLink').click();
+        test(`${persona.label}: Settings & Assistant`, async ({ page }) => {
+            test.skip(!persona.expect!.settingsLink, 'this seat has no Settings & Assistant');
+            await openSpace(page, persona, 'settings');
             await shoot(page, persona, 'settings');
         });
     });

@@ -481,6 +481,8 @@ export class CollabSpacePeopleComponent {
 
   /** The person's email and the role they are invited to. Which band the seat lands in follows from the role, on the server. */
   @Output() InviteMemberRequested = new EventEmitter<{ email: string; role: string }>();
+  /** The person dismissed (or cancelled away) the last invite's message. */
+  @Output() InviteOutcomeDismissed = new EventEmitter<void>();
 
   /** True while the invite is with the server: the form stays as it is. */
   @Input() IsSendingInvite = false;
@@ -543,17 +545,23 @@ export class CollabSpacePeopleComponent {
   /** Opens or closes the form; opening it starts clean, so a refusal from an earlier invite doesn't show. */
   public ToggleInviteForm(): void {
     this.isInviting = !this.isInviting;
-    if (this.isInviting) this.outcome = null;
+    if (this.isInviting && this.outcome) {
+      this.outcome = null;
+      this.InviteOutcomeDismissed.emit();
+    }
   }
 
   /** Closes the form and forgets what the last invite said, so a refusal doesn't greet the next one. */
   public CancelInvite(): void {
     this.isInviting = false;
     this.outcome = null;
+    this.InviteOutcomeDismissed.emit();
   }
 
+  /** Forgets the message here and tells the screen to forget it too: People is built again on each visit. */
   public DismissInviteOutcome(): void {
     this.outcome = null;
+    this.InviteOutcomeDismissed.emit();
   }
 
   public submitInvite(): void {

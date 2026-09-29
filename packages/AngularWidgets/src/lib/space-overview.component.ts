@@ -7,6 +7,7 @@ import { CollabNeedsYouCardComponent } from './needs-you-card.component';
 import { CollabItemCardComponent } from './item-card.component';
 import { CollabItemRowComponent } from './item-row.component';
 import { CollabAskBoxComponent } from './ask-box.component';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface RoomMiniMessage {
@@ -43,6 +44,7 @@ export interface SubSpaceSummary {
     CollabItemCardComponent,
     CollabItemRowComponent,
     CollabAskBoxComponent,
+    MJEmptyStateComponent,
   ],
   template: `
     <div class="page ov">
@@ -73,13 +75,18 @@ export interface SubSpaceSummary {
                 <i class="fa-solid fa-eye"></i>
               </span>
               <div class="grow">
-                <div class="fw7 fs14">{{ SharedBandTitle }}</div>
-                <div class="fs12 band-sub">{{ SharedBandSubtitle }}</div>
+                <div class="fw7 fs14">{{ SharedTitle }}</div>
+                <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
               </div>
-              <a class="link fs12 preview-link" (click)="onPreviewAsPersona($event)">
-                <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
-              </a>
+              @if (ShowPreviewAs && ClientPersonaName) {
+                <a class="link fs12 preview-link" (click)="onPreviewAsPersona($event)">
+                  <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
+                </a>
+              }
             </div>
+            @if (SharedItems.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-folder-open" Title="Nothing shared yet" Message="Files shared to everyone in this space appear here."></mj-empty-state>
+            }
             <div class="deliv-grid">
               @for (item of SharedItems; track item.id) {
                 <mjc-item-card
@@ -98,6 +105,7 @@ export interface SubSpaceSummary {
           </div>
 
           <!-- Team Working Set band -->
+          @if (CanSeeTeamSide) {
           <div class="card band-card team-band">
             <div class="band-h">
               <span class="band-ic team">
@@ -109,6 +117,9 @@ export interface SubSpaceSummary {
               </div>
               <a class="link fs12 open-lib-link" (click)="onOpenLibrary($event)">Open library</a>
             </div>
+            @if (TeamItems.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
+            }
             <div class="trows">
               @for (item of TeamItems; track item.id) {
                 <mjc-item-row
@@ -126,6 +137,7 @@ export interface SubSpaceSummary {
               }
             </div>
           </div>
+          }
         </div>
 
         <div class="col">
@@ -138,6 +150,8 @@ export interface SubSpaceSummary {
               [IsSubmitting]="IsSubmittingAsk"
               (AskRequested)="onAskRequested($event)"
             />
+          } @else if (CanStartConversation) {
+            <div class="card ask-unavailable" role="status">No assistant is available in this space right now.</div>
           }
 
           <!-- Discussion Card -->
@@ -147,6 +161,9 @@ export interface SubSpaceSummary {
               <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Internal Only' : 'Everyone') + ' · ' + AudienceCount" />
               <a class="link open-chat-link" (click)="onOpenChat($event)">Open chat</a>
             </div>
+            @if (RoomMessages.length === 0) {
+              <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" Message="Start a conversation from the ask box or the Chat tab."></mj-empty-state>
+            }
             <div class="mini-msgs">
               @for (msg of RoomMessages; track msg.id || $index) {
                 <div class="mm">
@@ -185,7 +202,9 @@ export interface SubSpaceSummary {
             <div class="card sub-card">
               <div class="card-h">
                 <span class="h3">Inside {{ SpaceName }}</span>
-                <a class="link add-sub-link" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                @if (CanAddSubSpace) {
+                  <a class="link add-sub-link" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                }
               </div>
               @for (sub of SubSpaces; track sub.id) {
                 <div class="sub-row" (click)="onSubSpaceSelected(sub)">
@@ -413,6 +432,11 @@ export class CollabSpaceOverviewComponent {
 
   @Input() public SharedBandTitle = '';
   @Input() public SharedBandSubtitle = '';
+  /** "Preview as" and "+ Sub-space" are offered only when the host builds them (the preview and the sub-space dialog come later). */
+  @Input() public ShowPreviewAs = false;
+  @Input() public CanAddSubSpace = false;
+  /** False for a seat that can't see the Team band: the Team card is not drawn for them at all. */
+  @Input() public CanSeeTeamSide = true;
 
   @Input() public NeedsYouItems: NeedsYouItemModel[] = [];
   @Input() public SharedItems: ItemCardModel[] = [];
@@ -438,6 +462,17 @@ export class CollabSpaceOverviewComponent {
   @Output() public NewSubSpaceRequested = new EventEmitter<void>();
   @Output() public SubSpaceSelectRequested = new EventEmitter<SubSpaceSummary>();
   @Output() public AskRequested = new EventEmitter<string>();
+
+  /** The Shared card's title: what the host set, else who the space is shared with. */
+  public get SharedTitle(): string {
+    if (this.SharedBandTitle) return this.SharedBandTitle;
+    return this.ClientOrgName ? `Shared with ${this.ClientOrgName}` : 'Shared with everyone in this space';
+  }
+
+  public get SharedSubtitle(): string {
+    if (this.SharedBandSubtitle) return this.SharedBandSubtitle;
+    return `${this.AudienceCount} ${this.AudienceCount === 1 ? 'person' : 'people'} can see these`;
+  }
 
   public clearAskBox(): void {
     this.askBoxComponent?.clear();

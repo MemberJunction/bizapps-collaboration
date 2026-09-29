@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import type { FindingModel, FileKind, RecipientPersonModel } from './types';
-import { MJButtonDirective, MJSwitchComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -12,12 +11,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FormsModule,
     CollabAvatarComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
     MJButtonDirective,
-    MJSwitchComponent,
   ],
   template: `
     <div class="m-h mj-dialog-titlebar">
@@ -111,30 +108,32 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           }
         </div>
       } @else {
-        <div class="no-findings-banner">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>No policy findings</span>
-        </div>
+        @if (ReviewCompleted) {
+          <div class="no-findings-banner">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>No policy findings</span>
+          </div>
+        } @else {
+          <div class="no-findings-banner not-reviewed">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Not reviewed. No policy check has run on this item.</span>
+          </div>
+        }
       }
 
       <div class="m-sec">
-        <div class="fw7 fs13 note-title">
-          <span>Note to {{ ClientOrgName }}</span>
-          <span class="muted fw5">&nbsp;(sent with the notification)</span>
-        </div>
-        <textarea class="mj-textarea textarea note-textarea" [(ngModel)]="Note"></textarea>
         <div class="effects">
           <div class="eff">
-            <mj-switch [(ngModel)]="NotifyRecipients" class="switch" />
-            <span>Notify the {{ RecipientCount }} people at {{ ClientOrgName }}</span>
+            <i class="fa-solid fa-bell"></i>
+            <span>Everyone who can see this space is told it was shared.</span>
           </div>
           <div class="eff">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>The Assistant can quote it in chats that include {{ ClientOrgName }}</span>
+            <span>The Assistant can quote it in this space's chats.</span>
           </div>
           <div class="eff">
             <i class="fa-solid fa-signature"></i>
-            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. You can move it back to Team; a sent notification can’t be recalled.</span>
+            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. A sent notification can’t be recalled.</span>
           </div>
         </div>
       </div>
@@ -575,6 +574,8 @@ export class CollabShareCheckComponent {
   @Input() public ReviewHeader = '';
   @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
+  /** True only when a policy review ran and found nothing; with no review, the dialog says it wasn't reviewed. */
+  @Input() public ReviewCompleted = false;
   @Input() public Note = '';
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';

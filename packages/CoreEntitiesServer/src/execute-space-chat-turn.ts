@@ -382,9 +382,11 @@ async function runClaimedTurn(
                     runResult?.agentRun?.ErrorMessage ||
                     runResult?.errorMessage ||
                     'Agent execution did not produce a result.';
+                LogError(`executeSpaceChatTurn: the agent run failed: ${agentErrorMessage}`);
             }
         } else {
             agentErrorMessage = `Failed to load agent ${targetAgentId}.`;
+            LogError(`executeSpaceChatTurn: ${agentErrorMessage}`);
         }
     } catch (agentErr) {
         agentErrorMessage = agentErr instanceof Error ? agentErr.message : String(agentErr);

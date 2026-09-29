@@ -24,6 +24,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </button>
       </div>
 
+      @if (Paragraphs.length > 0) {
       <div class="doc-prev">
         <div class="dp-page">
           <div class="dp-h"></div>
@@ -34,6 +35,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="dp-l s"></div>
         </div>
       </div>
+      }
 
       <div class="dr-sec">
         <div class="row gap8 band-row">
@@ -62,10 +64,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         }
 
         <div class="preview-actions">
-          <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
-            <i class="fa-solid fa-share-from-square"></i>
-            <span>{{ ShareButtonLabel }}</span>
-          </button>
+          @if (CanShare) {
+            <button mjButton variant="primary" class="btn primary share-btn-full" (click)="onShare()">
+              <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
+              <span>{{ ShareButtonLabel || 'Share' }}</span>
+            </button>
+          }
           @if (FileId) {
             <button
               mjButton
@@ -340,6 +344,8 @@ export class CollabItemPreviewComponent {
   @Input() public BandLabel = '';
   @Input() public AudienceSubtitle = '';
   @Input() public StaffAvatars: AvatarItem[] = [];
+  /** Whether the person may share this item: not offered for an item already Shared, or to a seat that can't promote. */
+  @Input() public CanShare = true;
   @Input() public FlagCount = 0;
   @Input() public FlagTitle = '';
   @Input() public FlagDescription = '';

@@ -840,12 +840,13 @@ const checks: NamedCheck[] = [
             seat.Band = 'Team';
             seat.Status = 'Active';
             Assert(await seat.Save(), `Ada seats Dev as an owner of Discovery: ${seat.LatestResult?.CompleteMessage ?? ''}`);
-            const discovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-            Assert(await discovery.Load(DISCOVERY_SPACE_ID), 'Dev loads Discovery');
-            const originalConfiguration = discovery.Configuration;
             let teamSpaceId: string | null = null;
             let changed = false;
+            let originalConfiguration: string | null = null;
             try {
+                const discovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await discovery.Load(DISCOVERY_SPACE_ID), 'Dev loads Discovery');
+                originalConfiguration = discovery.Configuration;
                 discovery.Configuration = JSON.stringify({ Agents: { ListMode: 'Replace' }, Chats: { WhoCanStart: 'Owners' } });
                 changed = true;
                 Assert(await discovery.Save(), `Dev sets Discovery's agent list mode and who may start chats: ${discovery.LatestResult?.CompleteMessage ?? ''}`);
@@ -862,6 +863,12 @@ const checks: NamedCheck[] = [
 
                 const rules = await resolveSpaceChatHostRules(ctx.Provider, ada, teamSpaceId);
                 Assert(rules.ok === true, `The Team's chat rules resolve under a Workspace that sets the list mode: ${rules.ok ? '' : rules.message}`);
+                // What came through: Discovery's "Owners only" reaches the Team, so its owner may start a conversation there
+                // and Sam, a member through Northwind, may not
+                Assert(rules.canStartConversation === true, 'Ada, the owner, may start a conversation in the Team space');
+                const sam = await GetPersonaUser(ctx, 'sam');
+                const samRules = await resolveSpaceChatHostRules(ctx.Provider, sam, teamSpaceId);
+                Assert(samRules.ok === true && samRules.canStartConversation === false, "Sam, a member, may not start one: Discovery's Owners-only rule reached the Team space");
             } finally {
                 if (teamSpaceId) await cleanupStep(() => cleanupSpace(ctx.Provider, ctx.User, teamSpaceId!));
                 if (changed) {
