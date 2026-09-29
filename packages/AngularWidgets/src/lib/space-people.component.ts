@@ -19,10 +19,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span class="metric-num">{{ TotalMembers }}</span>
           <span class="metric-lbl">Total People</span>
         </div>
-        <div class="metric-card">
-          <span class="metric-num team">{{ TeamCount }}</span>
-          <span class="metric-lbl">Team Staff</span>
-        </div>
+        @if (CanSeeTeamSide) {
+          <div class="metric-card">
+            <span class="metric-num team">{{ TeamCount }}</span>
+            <span class="metric-lbl">Team Staff</span>
+          </div>
+        }
         <div class="metric-card">
           <span class="metric-num outside">{{ OutsideCount }}</span>
           <span class="metric-lbl">Outside Participants</span>
@@ -40,6 +42,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <input
             type="text"
             placeholder="Search people by name or email..."
+            aria-label="Search people by name or email"
             [(ngModel)]="searchQuery"
             class="search-input"
           />
@@ -51,11 +54,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             [class.active]="audienceFilter === 'all'"
             (click)="audienceFilter = 'all'"
           >All</button>
-          <button
-            class="pill-btn"
-            [class.active]="audienceFilter === 'Team'"
-            (click)="audienceFilter = 'Team'"
-          >Team</button>
+          @if (CanSeeTeamSide) {
+            <button
+              class="pill-btn"
+              [class.active]="audienceFilter === 'Team'"
+              (click)="audienceFilter = 'Team'"
+            >Team</button>
+          }
           <button
             class="pill-btn"
             [class.active]="audienceFilter === 'Shared'"
@@ -65,15 +70,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="spacer"></div>
 
-        <button class="invite-btn" (click)="ToggleInviteForm()">
-          <i class="fa-solid fa-user-plus"></i>
-          <span>Invite person</span>
-        </button>
+        @if (CanInvite) {
+          <button class="invite-btn" (click)="ToggleInviteForm()">
+            <i class="fa-solid fa-user-plus"></i>
+            <span>Invite person</span>
+          </button>
+        }
       </div>
 
       @if (InviteOutcome?.ok && !isInviting) {
         <div class="invite-outcome invite-outcome-ok" role="status">
           <span>{{ InviteOutcome!.message }}</span>
+          @if (RedemptionUrl) {
+            <input type="text" class="invite-link" readonly [value]="RedemptionUrl" aria-label="Sign-in link" />
+            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ linkCopied ? 'Copied' : 'Copy link' }}</button>
+          }
           <button type="button" class="cancel-invite-btn" (click)="DismissInviteOutcome()">Dismiss</button>
         </div>
       }
@@ -86,15 +97,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <input
               type="email"
               placeholder="Email address..."
+              aria-label="Email address"
               [(ngModel)]="inviteEmail"
               class="invite-input"
             />
-            <select [(ngModel)]="inviteRole" class="invite-select">
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              <option value="client-member">Outside Member</option>
-              <option value="client-admin">Outside Admin</option>
-              <option value="guest">Guest</option>
+            <select [(ngModel)]="inviteRole" class="invite-select" aria-label="Role">
+              @for (option of RoleOptions; track option.code) {
+                <option [value]="option.code">{{ option.label }}</option>
+              }
             </select>
             <button
               class="send-invite-btn"
@@ -122,6 +132,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="th-band">Audience</div>
           <div class="th-status">Status</div>
           <div class="th-date">Joined</div>
+          @if (CanManageSeats) {
+            <div class="th-actions"></div>
+          }
         </div>
 
         <div class="table-body">
@@ -143,6 +156,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <div class="person-details">
                     <span class="person-name">{{ m.name }}</span>
                     <span class="person-email">{{ m.email }}</span>
+                    @if (m.inherited && m.source) {
+                      <span class="person-source">from {{ m.source }}</span>
+                    }
                   </div>
                 </div>
 
@@ -166,6 +182,32 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 <div class="td-date">
                   <span class="date-text">{{ m.joinedDate || 'Recently' }}</span>
                 </div>
+
+                @if (CanManageSeats) {
+                  <div class="td-actions">
+                    @if (m.canManage && !m.inherited) {
+                      @if (pending?.id === m.id) {
+                        <span class="fs12">{{ pendingQuestion(m) }}</span>
+                        <button type="button" class="send-invite-btn" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
+                      } @else {
+                        @if (m.status === 'Invited') {
+                          <button type="button" class="cancel-invite-btn" (click)="Ask(m, 'approve')">Approve</button>
+                        }
+                        @if (m.status === 'Active' && RoleOptions.length > 0) {
+                          <select class="invite-select role-select" [attr.aria-label]="'Change role for ' + m.name" [ngModel]="m.roleCode" (ngModelChange)="AskRole(m, $event)">
+                            @for (option of roleChoicesFor(m); track option.code) {
+                              <option [value]="option.code">{{ option.label }}</option>
+                            }
+                          </select>
+                        }
+                        @if (m.status !== 'Removed') {
+                          <button type="button" class="cancel-invite-btn" (click)="Ask(m, 'remove')">Remove</button>
+                        }
+                      }
+                    }
+                  </div>
+                }
               </div>
             }
           }
@@ -383,6 +425,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       .th-band, .td-band { width: 150px; }
       .th-status, .td-status { width: 120px; }
       .th-date, .td-date { width: 120px; text-align: right; }
+      .th-actions, .td-actions { width: 280px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+      .person-source { font-size: 11px; color: var(--mj-text-muted); }
+      .invite-link { flex: 1; min-width: 200px; }
 
       .table-body {
         display: flex;
@@ -478,11 +523,37 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 export class CollabSpacePeopleComponent {
   @Input() Members: SpaceMemberModel[] = [];
   @Input() SpaceName = '';
+  /** Whether the seat may invite. Without it the button isn't offered. */
+  @Input() CanInvite = true;
+  /** False for a seat that can't see the Team band: no Team card or filter. */
+  @Input() CanSeeTeamSide = true;
+  /** The roles the seat may hand out, highest first: what the invite form offers and what a role change picks from. */
+  @Input() set RoleOptions(options: ReadonlyArray<{ code: string; label: string }>) {
+    this._roleOptions = options;
+    if (!options.some((o) => o.code === this.inviteRole)) this.inviteRole = options[0]?.code ?? '';
+  }
+  get RoleOptions(): ReadonlyArray<{ code: string; label: string }> {
+    return this._roleOptions;
+  }
+  private _roleOptions: ReadonlyArray<{ code: string; label: string }> = [
+    { code: 'member', label: 'Member' },
+    { code: 'admin', label: 'Admin' },
+    { code: 'client-member', label: 'Outside member' },
+    { code: 'client-admin', label: 'Outside admin' },
+    { code: 'guest', label: 'Guest' },
+  ];
+  /** Shows the Approve / Remove / Change role column. Each row still shows its buttons only when the seat may change it. */
+  @Input() CanManageSeats = false;
+  /** The sign-in link the server returned when the host has no email channel: shown with a Copy button. */
+  @Input() RedemptionUrl: string | null = null;
 
   /** The person's email and the role they are invited to. Which band the seat lands in follows from the role, on the server. */
   @Output() InviteMemberRequested = new EventEmitter<{ email: string; role: string }>();
   /** The person dismissed (or cancelled away) the last invite's message. */
   @Output() InviteOutcomeDismissed = new EventEmitter<void>();
+  @Output() ApproveMemberRequested = new EventEmitter<SpaceMemberModel>();
+  @Output() RemoveMemberRequested = new EventEmitter<SpaceMemberModel>();
+  @Output() ChangeRoleRequested = new EventEmitter<{ member: SpaceMemberModel; roleCode: string }>();
 
   /** True while the invite is with the server: the form stays as it is. */
   @Input() IsSendingInvite = false;
@@ -506,6 +577,50 @@ export class CollabSpacePeopleComponent {
   public isInviting = false;
   public inviteEmail = '';
   public inviteRole = 'member';
+
+  /** The action waiting for its confirmation. */
+  public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
+  public linkCopied = false;
+
+  public Ask(member: SpaceMemberModel, kind: 'approve' | 'remove'): void {
+    this.pending = { id: member.id, kind };
+  }
+
+  public AskRole(member: SpaceMemberModel, roleCode: string): void {
+    if (roleCode === member.roleCode) return;
+    this.pending = { id: member.id, kind: 'role', roleCode };
+  }
+
+  public pendingQuestion(member: SpaceMemberModel): string {
+    switch (this.pending?.kind) {
+      case 'approve': return `Approve ${member.name}?`;
+      case 'remove': return `Remove ${member.name}?`;
+      case 'role': return `Change ${member.name}'s role?`;
+      default: return '';
+    }
+  }
+
+  /** The role picker's options for one seat: the roles the viewer may hand out, and the seat's own role so it reads as chosen. */
+  public roleChoicesFor(member: SpaceMemberModel): ReadonlyArray<{ code: string; label: string }> {
+    return this.RoleOptions.some((o) => o.code === member.roleCode)
+      ? this.RoleOptions
+      : [{ code: member.roleCode, label: member.roleName }, ...this.RoleOptions];
+  }
+
+  public ConfirmPending(): void {
+    const pending = this.pending;
+    this.pending = null;
+    const member = this.Members.find((m) => m.id === pending?.id);
+    if (!pending || !member) return;
+    if (pending.kind === 'approve') this.ApproveMemberRequested.emit(member);
+    else if (pending.kind === 'remove') this.RemoveMemberRequested.emit(member);
+    else if (pending.roleCode) this.ChangeRoleRequested.emit({ member, roleCode: pending.roleCode });
+  }
+
+  public CopyLink(): void {
+    if (!this.RedemptionUrl) return;
+    void navigator.clipboard?.writeText(this.RedemptionUrl).then(() => { this.linkCopied = true; });
+  }
 
   // The list shows every seat, invited and removed ones too; these counts, like the header's, count only Active ones.
   public get TotalMembers(): number {

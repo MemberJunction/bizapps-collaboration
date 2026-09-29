@@ -15,6 +15,8 @@ import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
+import { accessChain, nearestSeats } from './logic/reached-people.js';
 import { shareAudience } from './logic/share-audience.js';
 import { toOverviewMessages } from './logic/overview-messages.js';
 import { guardedLoad, isSelectionCurrent } from './logic/selection-guard.js';
@@ -23,6 +25,7 @@ import {
     type GraphQLExecutor,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceItemEntity,
+    mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
@@ -939,8 +942,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SpaceName]="spaceTitle"
                                                     [IsSendingInvite]="isSendingInvite"
                                                     [InviteOutcome]="inviteOutcome"
+                                                    [RedemptionUrl]="inviteRedemptionUrl"
+                                                    [CanInvite]="canInviteHere"
+                                                    [CanSeeTeamSide]="canSeeTeamSide"
+                                                    [RoleOptions]="grantableRoleOptions"
+                                                    [CanManageSeats]="canInviteHere"
                                                     (InviteMemberRequested)="onInviteMember($event)"
-                                                    (InviteOutcomeDismissed)="inviteOutcome = null"
+                                                    (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
+                                                    (ApproveMemberRequested)="onApproveMember($event)"
+                                                    (RemoveMemberRequested)="onRemoveMember($event)"
+                                                    (ChangeRoleRequested)="onChangeMemberRole($event)"
                                                 />
                                             }
                                             @case ('Settings') {
@@ -1036,6 +1047,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
     /** The current space type's default band for new material and tasks: the Work tab's default while the seat is unresolved. */
     public typeDefaultBand: SpaceBand | null = null;
+    /** The roles the caller's seat may hand out: the invite form and the role picker offer these, highest first. */
+    public grantableRoleOptions: RoleOption[] = [];
+    /** The sign-in link the last invite returned when the host has no email channel. */
+    public inviteRedemptionUrl: string | null = null;
 
     private async updateBandChoice(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
         let choice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
@@ -1054,6 +1069,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.bandChoice = choice;
         this.callerSeat = resolved;
         this.typeDefaultBand = type?.DefaultBand ?? null;
+        this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
     }
 
     public isUploading = false;
@@ -2070,10 +2086,24 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    /** Whether the caller's seat may approve, remove or change a seat holding `role`: it can invite and the role is within its ceiling. */
+    private mayManageSeat(role: { Level: number } | null | undefined): boolean {
+        const mine = this.callerSeat?.role;
+        return !!mine && mine.canInvite && (role?.Level ?? 0) <= mine.maxGrantableLevel;
+    }
+
     private async loadSpaceMembers(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!isValidUuid(spaceId)) return;
         try {
             const rv = new RunView(this.RunViewToUse);
+            // Everyone who reaches the space: its own seats, then each ancestor's while the chain inherits, the nearest seat per person
+            const chain = accessChain(spaceId, this.rawSpaces.map(sp => ({
+                ID: sp.ID,
+                Name: sp.Name,
+                ParentID: sp.ParentID ?? null,
+                InheritsMembership: !!sp.InheritsMembership,
+            })));
+            if (chain.length === 0) chain.push({ id: spaceId, name: '' });
             const membersRes = await rv.RunView<{
                 ID: string;
                 SpaceID: string;
@@ -2089,9 +2119,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 EntityName: 'MJ_BizApps_Collaboration: Space Members',
                 // Every seat, not only Active ones: the People tab shows invited and removed seats, and re-inviting
                 // someone needs to find their old one. The header's counts leave the others out (summarizeSeats).
-                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ExtraFilter: `SpaceID IN (${chain.map(c => `'${c.id}'`).join(',')})`,
                 ResultType: 'simple',
-                MaxRows: 100,
+                MaxRows: 500,
             });
 
             if (!isCurrent()) return;
@@ -2106,7 +2136,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             if (membersRes.Results) {
-                const userIds = [...new Set(membersRes.Results.map(m => m.UserID).filter(Boolean))];
+                const reached = nearestSeats(membersRes.Results, chain);
+                const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
                 const userEmailMap = new Map<string, string>();
                 if (userIds.length > 0) {
                     try {
@@ -2128,7 +2159,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 }
 
                 if (!isCurrent()) return;
-                this.spaceMembers = membersRes.Results.map(m => {
+                this.spaceMembers = reached.map(({ row: m, from, inherited }) => {
                     const name = m.User || 'Member';
                     const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                     const roleType = m.SpaceRoleTypeID
@@ -2149,6 +2180,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         band: m.Band || 'Team',
                         status: m.Status || 'Active',
                         joinedDate: this.formatDate(m.__mj_CreatedAt),
+                        inherited,
+                        source: inherited ? from.name : undefined,
+                        canManage: !inherited && this.mayManageSeat(roleType),
                     };
                 });
 
@@ -2991,6 +3025,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         };
         this.isSendingInvite = true;
         this.inviteOutcome = null;
+        this.inviteRedemptionUrl = null;
         this.RefreshView();
         try {
             const roleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(payload.role)?.ID;
@@ -3006,7 +3041,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             // On success the server's message says what happened: seated, Invited awaiting approval, already seated, and whether a link was sent
             const message = result.Message || 'They are seated.';
-            if (isCurrent()) this.inviteOutcome = { ok: true, message };
+            if (isCurrent()) {
+                this.inviteOutcome = { ok: true, message };
+                this.inviteRedemptionUrl = result.RedemptionUrl ?? null;
+            }
             SharedService.Instance.CreateSimpleNotification(message, 'info', 6000);
             await this.loadSpaceMembers(spaceId, isCurrent);
         } catch (error) {
@@ -3015,6 +3053,51 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this.isSendingInvite = false;
             this.RefreshView();
         }
+    }
+
+    /** Changes one of this space's own seats, then reads the people again. A refusal is shown as the server worded it. */
+    private async changeSeat(member: SpaceMemberModel, change: (seat: mjBizAppsCollaborationSpaceMemberEntity) => void, doing: string): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        try {
+            const seat = await this.ProviderToUse.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>('MJ_BizApps_Collaboration: Space Members', this.currentUser ?? undefined);
+            if (!(await seat.Load(member.id))) {
+                SharedService.Instance.CreateSimpleNotification(`Could not ${doing}: the seat was not found.`, 'error', 5000);
+                return;
+            }
+            change(seat);
+            if (!(await seat.Save())) {
+                const msg = seat.LatestResult?.CompleteMessage || `Could not ${doing}.`;
+                LogError(`Could not ${doing} for ${member.name}: ${msg}`);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 6000);
+                return;
+            }
+            SharedService.Instance.CreateSimpleNotification(`Done: ${doing} for ${member.name}.`, 'info', 3000);
+            await this.loadSpaceMembers(spaceId, isCurrent);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Could not ${doing}: ${msg}`);
+            SharedService.Instance.CreateSimpleNotification(`Could not ${doing}: ${msg}`, 'error', 6000);
+        } finally {
+            this.RefreshView();
+        }
+    }
+
+    public onApproveMember(member: SpaceMemberModel): Promise<void> {
+        return this.changeSeat(member, (seat) => { seat.Status = 'Active'; }, 'approve the seat');
+    }
+
+    public onRemoveMember(member: SpaceMemberModel): Promise<void> {
+        return this.changeSeat(member, (seat) => { seat.Status = 'Removed'; }, 'remove the seat');
+    }
+
+    public onChangeMemberRole(change: { member: SpaceMemberModel; roleCode: string }): Promise<void> {
+        const roleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(change.roleCode)?.ID;
+        if (!roleId) {
+            SharedService.Instance.CreateSimpleNotification(`There is no role called ${change.roleCode}.`, 'error', 5000);
+            return Promise.resolve();
+        }
+        return this.changeSeat(change.member, (seat) => { seat.SpaceRoleTypeID = roleId; }, 'change the role');
     }
 
     public async onSaveSettings(settings: SpaceSettingsModel): Promise<void> {

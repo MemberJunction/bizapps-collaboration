@@ -232,6 +232,11 @@ export interface SpaceMemberModel {
   band: SpaceBand;
   status: 'Active' | 'Invited' | 'Removed' | string;
   joinedDate?: string;
+  /** The space the seat sits on, when it isn't this one (the seat is inherited). */
+  source?: string;
+  inherited?: boolean;
+  /** Whether the viewer may approve, remove or change the role of this seat. */
+  canManage?: boolean;
 }
 
 export interface SpaceSettingsModel {

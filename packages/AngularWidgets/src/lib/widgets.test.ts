@@ -994,6 +994,53 @@ describe('the share dialog says when nothing was reviewed', () => {
   });
 });
 
+describe('the People tab acts on seats and shows the invite the way the seat may make it', () => {
+  const pat: SpaceMemberModel = { id: 'm9', userId: 'u9', name: 'Pat Invited', email: 'pat@example.com', initials: 'PI', roleName: 'Guest', roleCode: 'guest', band: 'Shared', status: 'Invited', canManage: true };
+
+  it('starts the invite form on the highest role the seat may grant', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.RoleOptions = [{ code: 'client-member', label: 'Outside member' }, { code: 'guest', label: 'Guest' }];
+    expect(comp.inviteRole).toBe('client-member');
+    expect(comp.RoleOptions.map((o) => o.code)).toEqual(['client-member', 'guest']);
+  });
+
+  it('asks before it approves, then emits once confirmed, and not at all when cancelled', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.Members = [pat];
+    const approved = vi.fn();
+    comp.ApproveMemberRequested.subscribe(approved);
+    comp.Ask(pat, 'approve');
+    expect(comp.pendingQuestion(pat)).toBe('Approve Pat Invited?');
+    expect(approved).not.toHaveBeenCalled();
+    comp.ConfirmPending();
+    expect(approved).toHaveBeenCalledWith(pat);
+    comp.Ask(pat, 'remove');
+    comp.pending = null;
+    comp.ConfirmPending();
+    expect(approved).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits a role change only for a different role, once confirmed', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.Members = [pat];
+    const changed = vi.fn();
+    comp.ChangeRoleRequested.subscribe(changed);
+    comp.AskRole(pat, 'guest');
+    expect(comp.pending).toBeNull();
+    comp.AskRole(pat, 'client-member');
+    comp.ConfirmPending();
+    expect(changed).toHaveBeenCalledWith({ member: pat, roleCode: 'client-member' });
+  });
+
+  it('keeps the sign-in link for the banner when the host has no email channel', () => {
+    const comp = new CollabSpacePeopleComponent();
+    comp.RedemptionUrl = 'https://host.example/redeem?t=abc';
+    comp.InviteOutcome = { ok: true, message: 'Sign-in link created.' };
+    expect(comp.RedemptionUrl).toBe('https://host.example/redeem?t=abc');
+    expect(comp.InviteOutcome?.ok).toBe(true);
+  });
+});
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
