@@ -63,6 +63,11 @@ export interface ExecuteSpaceChatTurnGraphQLInput {
     ConversationID: string;
     UserMessageID: string;
     AgentID?: string;
+    /**
+     * Answer as soon as the reply row is written In-Progress, and send the run's progress and text to this session as it goes
+     * (the messages MemberJunction's chat follows). Without it the call returns when the reply is final.
+     */
+    Background?: boolean;
 }
 
 export interface ExecuteSpaceChatTurnGraphQLPayload {

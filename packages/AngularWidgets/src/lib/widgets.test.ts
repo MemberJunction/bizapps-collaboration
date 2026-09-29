@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { afterEach, describe, it, expect, vi } from 'vitest';
+import type { ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -1188,15 +1189,18 @@ describe('Copy link says how it went', () => {
   });
 });
 
+/** The status-push subscription the space's chat starts; these tests don't look at it. */
+const streamingStub = { initialize: () => undefined } as unknown as ConversationStreamingService;
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
-    const comp = new CollabSpaceChatComponent();
+    const comp = new CollabSpaceChatComponent(streamingStub);
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(false);
   });
 
   it('emits the new-conversation request', () => {
-    const comp = new CollabSpaceChatComponent();
+    const comp = new CollabSpaceChatComponent(streamingStub);
 
     let newConvoEmitted = false;
     comp.NewConversationRequested.subscribe(() => {

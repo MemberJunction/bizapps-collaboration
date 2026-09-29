@@ -30,6 +30,7 @@ import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
+    mjBizAppsCollaborationSpaceAgentEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -52,6 +53,8 @@ import { seedWorldPlan } from './seed-plan.js';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
+const SPACE_AGENTS = 'MJ_BizApps_Collaboration: Space Agents';
+const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
 const USER_ROLES = 'MJ: User Roles';
@@ -134,6 +137,7 @@ export async function loadWorld(): Promise<void> {
     const typeRows = readCsv(join(dir, 'types.csv'));
     const spaceRows = readCsv(join(dir, 'spaces.csv'));
     const memberRows = readCsv(join(dir, 'members.csv'));
+    const agentRows = readCsv(join(dir, 'agents.csv'));
 
     const people = new Map<string, Persona>();
     for (const persona of personas) {
@@ -320,6 +324,21 @@ export async function loadWorld(): Promise<void> {
     }
     // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
+
+    // The agents a space allows (`agents.csv`): a person can tag them in its chat. A row on a space reaches its sub-spaces. The agent is
+    // MemberJunction's own, found by name, so a database without it stops here with the name rather than loading a world nobody can ask.
+    for (const row of agentRows) {
+        const spaceId = requireMap(spaceIds, row.Space, 'space');
+        const agentId = await findId(provider, AI_AGENTS, `Name = '${quote(row.Agent)}' AND Status = 'Active'`, system);
+        if (!agentId) throw new Error(`agents.csv names the agent ${row.Agent}, and this database has no active agent of that name.`);
+        if (await findId(provider, SPACE_AGENTS, `SpaceID = '${spaceId}' AND AgentID = '${agentId}'`, system)) continue;
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENTS, system);
+        record.NewRecord();
+        record.SpaceID = spaceId;
+        record.AgentID = agentId;
+        record.IsDefault = row.IsDefault === '1';
+        if (!(await record.Save())) throw new Error(`agent ${row.Agent} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    }
 
     // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer only for an open
     // conversation (a closed space's banner shows without one, and its archived conversation is read-only). Closed this month's is made

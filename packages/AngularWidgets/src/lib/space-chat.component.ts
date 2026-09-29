@@ -2,12 +2,15 @@ import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
+  Inject,
   Input,
+  OnInit,
   Output,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
 import {
   ConversationsModule,
+  ConversationStreamingService,
   type AgentReplyMode,
   type AgentTurnHandler,
 } from '@memberjunction/ng-conversations';
@@ -17,6 +20,13 @@ import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
+/**
+ * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules.
+ *
+ * MemberJunction's chat area follows an agent's live status and streamed reply through one app-wide subscription to the server's status
+ * pushes, and only its own workspace starts it. A space embeds the chat area without that workspace, so this starts the subscription
+ * (`initialize` does nothing once it is running); without it a reply stays at "Starting..." until the page is reloaded.
+ */
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
@@ -24,13 +34,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
     <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
-      <!-- A conversation that can't be posted in says why on the Chat tab, whether or not one is open -->
-      @if (IsReadOnly) {
-        <div class="space-closed-banner" role="status">
-          <i class="fa-solid fa-lock" aria-hidden="true"></i>
-          <span>{{ ReadOnlyNote }}</span>
-        </div>
-      }
       @if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
           [environmentId]="EnvironmentId"
@@ -41,7 +44,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           [linkedEntityId]="SpaceEntityId"
           [linkedRecordId]="SpaceId"
           [defaultAgentId]="DefaultAgentId"
-          [assistantDisplayName]="'Assistant'"
           [allowMentions]="AllowMentions && !IsReadOnly"
           [allowAgentMentions]="!IsReadOnly"
           [allowEntityMentions]="false"
@@ -77,6 +79,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               </div>
 
               <div class="header-right">
+                @if (IsReadOnly) {
+                  <span class="read-only-lock" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                  </span>
+                }
                 @if (ParticipantCount > 0) {
                   <div class="participant-count-pill" title="People who can see this conversation">
                     <i class="fa-solid fa-users"></i>
@@ -104,6 +111,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </mj-conversation-chat-area>
       } @else {
         <div class="no-conversation-state">
+          @if (IsReadOnly) {
+            <span class="read-only-lock read-only-lock-corner" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
+              <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            </span>
+          }
           <div class="empty-icon-wrap">
             <i class="fa-solid fa-comments"></i>
           </div>
@@ -277,27 +289,39 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: none !important;
       }
 
-      .space-closed-banner {
-        display: flex;
+      /* A conversation that can't be posted in says why on hover: a lock, not a banner that takes a row */
+      .read-only-lock {
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 12px 16px;
-        background-color: var(--mj-status-warning-bg, #fffbeb);
-        color: var(--mj-status-warning-text, #92400e);
-        border-bottom: 1px solid var(--mj-status-warning-border, #fde68a);
-        font-size: var(--mj-text-sm, 13px);
-        font-weight: 500;
-        z-index: 10;
-      }
-
-      .space-closed-banner i {
-        font-size: 14px;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        font-size: 13px;
         color: var(--mj-status-warning, #d97706);
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        cursor: help;
+      }
+      .read-only-lock:focus-visible {
+        outline: 2px solid var(--mj-brand-primary, #0076b6);
+        outline-offset: 2px;
+      }
+      .read-only-lock-corner {
+        position: absolute;
+        top: 10px;
+        right: 16px;
       }
     `,
   ],
 })
-export class CollabSpaceChatComponent {
+export class CollabSpaceChatComponent implements OnInit {
+  constructor(@Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService) {}
+
+  public ngOnInit(): void {
+    this.streaming.initialize();
+  }
+
   /** The conversation can be read and not posted in: the composer is hidden and `ReadOnlyNote` says why. */
   @Input() public IsReadOnly = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';

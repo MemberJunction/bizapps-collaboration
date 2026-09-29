@@ -3816,6 +3816,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ConversationID: request.ConversationId,
                 UserMessageID: request.UserMessageId,
                 AgentID: request.AgentId,
+                // The chat follows the run's live status from the reply row, as it does for any conversation's agent
+                Background: true,
             });
             return {
                 Success: res.Success,

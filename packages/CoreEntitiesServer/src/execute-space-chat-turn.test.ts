@@ -675,6 +675,82 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
+    describe('in the background', () => {
+        const MENTION = `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`;
+        /** A run that waits at the gate, so a test can look at the turn while the agent is still working. */
+        const gatedRun = (gate: Promise<void>, seen: { progress: string[]; streamed: string[] }) => async (params: Parameters<AgentRunner['RunAgent']>[0]) => {
+            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated('run-bg-1');
+            params.onProgress?.({ step: 'prompt_execution', message: 'Thinking it over' });
+            params.onStreaming?.({ content: 'Partial words', isComplete: false });
+            await gate;
+            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'run-bg-1', Message: 'The final answer' }), result: 'The final answer' };
+        };
+
+        it('answers with the In-Progress reply before the agent is done, hands progress and text to the observer, and tells it the end', async () => {
+            const held = AgentRunner.prototype.RunAgent;
+            let open: () => void = () => undefined;
+            const gate = new Promise<void>((resolve) => { open = resolve; });
+            const seen = { progress: [] as string[], streamed: [] as string[] };
+            const outcomes: { replyDetailId: string; success: boolean; runId: string | undefined }[] = [];
+            AgentRunner.prototype.RunAgent = gatedRun(gate, seen);
+            try {
+                const provider = createMockProvider({ messageText: MENTION });
+                const result = await executeSpaceChatTurn(provider, callerUser, {
+                    ...defaultInput,
+                    background: true,
+                    observer: {
+                        OnProgress: (progress) => seen.progress.push(progress.message),
+                        OnStreaming: (chunk) => seen.streamed.push(chunk.content),
+                        OnFinished: (outcome) => outcomes.push({ replyDetailId: outcome.replyDetailId, success: outcome.success, runId: outcome.agentRun?.ID }),
+                    },
+                });
+                assert.equal(result.ok, true);
+                assert.equal(result.ok && result.replyDetailIds.length, 1);
+                assert.equal(provider.savedDetails[provider.savedDetails.length - 1].Status, 'In-Progress', 'the reply is still In-Progress when the call returns');
+                assert.equal(outcomes.length, 0, 'the run has not ended');
+
+                // While it runs, the message's claim holds: a second turn on it is refused
+                const again = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+                assert.equal(again.ok, false);
+
+                open();
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                assert.deepEqual(seen.progress, ['Thinking it over']);
+                assert.deepEqual(seen.streamed, ['Partial words']);
+                const finalReply = provider.savedDetails[provider.savedDetails.length - 1];
+                assert.equal(finalReply.Status, 'Complete');
+                assert.equal(finalReply.Message, 'The final answer');
+                assert.deepEqual(outcomes, [{ replyDetailId: result.ok ? result.replyDetailIds[0] : '', success: true, runId: 'run-bg-1' }]);
+            } finally {
+                AgentRunner.prototype.RunAgent = held;
+            }
+        });
+
+        it('tells the observer a run that failed, and that a fault in the observer does not fail the turn', async () => {
+            const held = AgentRunner.prototype.RunAgent;
+            AgentRunner.prototype.RunAgent = async () => ({ success: false, errorMessage: 'Simulated LLM failure', agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'failed-bg-run' }) });
+            const outcomes: { success: boolean; errorMessage: string | undefined }[] = [];
+            try {
+                const provider = createMockProvider({ messageText: MENTION });
+                const result = await executeSpaceChatTurn(provider, callerUser, {
+                    ...defaultInput,
+                    background: true,
+                    observer: { OnFinished: (outcome) => { outcomes.push({ success: outcome.success, errorMessage: outcome.errorMessage }); throw new Error('the observer broke'); } },
+                });
+                assert.equal(result.ok, true);
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                assert.deepEqual(outcomes, [{ success: false, errorMessage: 'Simulated LLM failure' }]);
+                const reply = provider.savedDetails[provider.savedDetails.length - 1];
+                assert.equal(reply.Status, 'Error');
+                // The claim was released even though the observer threw: a later call is judged by the saved reply again
+                const later = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+                assert.notEqual(later.ok && later.replyDetailIds.length, 0);
+            } finally {
+                AgentRunner.prototype.RunAgent = held;
+            }
+        });
+    });
+
     it('refuses an untagged message under Always when no agent is Active', async () => {
         const provider = createMockProvider({
             messageText: 'Hello without any agent mention',

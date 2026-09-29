@@ -53,6 +53,10 @@ The system user writes the users, their MemberJunction roles, the People, and th
 
 A seat that already exists is not rewritten. If Pat were left Active by an earlier run, the read-back throws instead of repairing the row. A suite that reloads the world purges first, then loads. The purge keeps the user accounts, because a signed-in persona owns MemberJunction rows that reference them, and deletes the spaces, seats, People, and role grants.
 
+## Agents
+
+`agents.csv` names the agents a space allows, by space key and the agent's name: the world allows MemberJunction's own **Sage** on Northwind, and its sub-spaces inherit it, so a person can tag `@Sage` in Northwind's chat and Sage answers under its own name with live status. The loader finds the agent by name and stops naming it when the database has none. Check CW4 reads the row back.
+
 ## Files
 
 `files.csv` is the library. The loader stores each one through `uploadSpaceFile` and passes the sample account id. When configured with real Box cloud storage via four environment variables, the integration tests store files directly in a dedicated Box test folder:

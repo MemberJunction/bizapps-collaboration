@@ -33,7 +33,7 @@ Collaboration's integration checks, and the sample world they run against.
 - `src/agents/` is the stub agent's driver, **Space Chat Test Stub**, so agent turns need no model key.
 
 **The sample world,** `COLLAB-WORLD` (`src/world/`):
-- the catalog is CSV under `src/world/data/`: 13 personas, 15 spaces, 30 seats, 15 files and two space types of the world's own;
+- the catalog is CSV under `src/world/data/`: 13 personas, 15 spaces, 30 seats, 15 files, one agent row (`agents.csv`: MemberJunction's Sage on Northwind, so a person can tag it in that space's chat) and two space types of the world's own;
 - `load-world.ts` loads it through the entity gates, and `purge-world.ts` deletes only its own rows;
 - `seed-plan.ts` adds a small task plan, and `seed-files.ts` stores the world's files in a local directory storage account (`local-directory-storage.ts`, `local-storage-account.ts`).
 

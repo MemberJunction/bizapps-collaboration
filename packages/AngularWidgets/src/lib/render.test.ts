@@ -6,6 +6,7 @@ import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
+import { ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
 import { CollabSpaceChatComponent } from './space-chat.component.ts';
@@ -369,6 +370,8 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
   public AllowRealtime = true;
+  /** MJ's chat area names a reply after the agent that made it when this is null. */
+  public assistantDisplayName: string | null = null;
   public ComposerDraftConsumed = new EventEmitter<void>();
   public PendingMessageConsumed = new EventEmitter<void>();
 }
@@ -384,8 +387,13 @@ declareComponent(ChatAreaStub, {
   outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
 });
 
+/** MJ's status-push subscription, as the space's chat starts it. */
+const streamingStub = { initialize: vi.fn() };
+const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamingService, { useValue: streamingStub });
+
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
+    provideStreamingStub();
     TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
@@ -687,6 +695,7 @@ describe('the conversation of a space, read-only', () => {
   const render = async (inputs: Record<string, unknown>) => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
+    provideStreamingStub();
     TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
@@ -697,14 +706,38 @@ describe('the conversation of a space, read-only', () => {
     return fixture.nativeElement as HTMLElement;
   };
 
-  it('says why it can be read and not posted in, in the words the page gives', async () => {
-    const host = await render({ IsReadOnly: true, ReadOnlyNote: "You can read this conversation, but you have no seat that lets you post." });
-    expect(host.querySelector('.space-closed-banner')?.textContent).toContain('you have no seat that lets you post');
+  it('says why it can be read and not posted in, as a lock with the reason on hover, not a banner', async () => {
+    const note = 'You can read this conversation, but you have no seat that lets you post.';
+    const host = await render({ IsReadOnly: true, ConversationId: null, ReadOnlyNote: note });
+    const lock = host.querySelector('.read-only-lock');
+    expect(lock?.getAttribute('title')).toBe(note);
+    expect(lock?.getAttribute('aria-label')).toBe(note);
+    expect(host.querySelector('.space-closed-banner')).toBeNull();
+    expect(host.textContent).not.toContain(note);
     expect(host.querySelector('.chat-container')?.classList.contains('read-only-chat')).toBe(true);
   });
 
-  it('shows no note while it can be posted in, and says the space is closed unless told otherwise', async () => {
-    expect((await render({})).querySelector('.space-closed-banner')).toBeNull();
-    expect((await render({ IsReadOnly: true })).querySelector('.space-closed-banner')?.textContent).toContain('This space is closed.');
+  it('shows no lock while it can be posted in, and says the space is closed unless told otherwise', async () => {
+    expect((await render({ ConversationId: null })).querySelector('.read-only-lock')).toBeNull();
+    expect((await render({ IsReadOnly: true, ConversationId: null })).querySelector('.read-only-lock')?.getAttribute('title')).toContain('This space is closed.');
+  });
+
+  it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area');
+    expect(area.injector.get(ChatAreaStub).assistantDisplayName).toBeNull();
+  });
+
+  it("starts MJ's status-push subscription, which the chat area does not start itself: without it a reply stays at Starting", async () => {
+    streamingStub.initialize.mockClear();
+    await render({});
+    expect(streamingStub.initialize).toHaveBeenCalledTimes(1);
   });
 });

@@ -199,7 +199,7 @@ The Work tab (frame 10) is not an L2 composite. It hosts bizapps-tasks' own comp
 - `applicationScope="Application"` with `applicationId`;
 - `linkedEntityId` and `linkedRecordId` set to the space, so new chats belong to it;
 - `defaultAgentId` set to the firm's agent;
-- `assistantDisplayName="Assistant"`.
+- no `assistantDisplayName`: a reply is named for the agent that made it, which MemberJunction reads from the reply row (an override would name every agent "Assistant").
 
 Project four slots with `<ng-template mjChatSlot="…">`:
 

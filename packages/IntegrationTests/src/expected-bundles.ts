@@ -1,5 +1,5 @@
 export const EXPECTED_BUNDLES: Record<string, number> = {
-    'collab-world': 3,
+    'collab-world': 4,
     'people-fls': 3,
     'parent-assignees': 6,
     'room': 12,
@@ -13,7 +13,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
 };
 
 export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
-    'collab-world': 3,
+    'collab-world': 4,
     'people-fls': 3,
     'parent-assignees': 6,
     'room': 11,
