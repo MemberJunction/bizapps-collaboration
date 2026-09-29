@@ -11,3 +11,5 @@ playwright-report/
 scratch/
 .env
 .env.*
+e2e/ui-pass/auth/
+e2e/ui-pass-out/

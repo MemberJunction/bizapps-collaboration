@@ -1,0 +1,11 @@
+{
+    "_comment": "What each persona should see on the Collaboration screen. Sign-ins are NOT stored here: each persona's saved sign-in lives in e2e/ui-pass/auth/<name>.json (git-ignored). Names are the world's personas; `space` is the name shown in the rail, or $ENV_NAME to read it from the environment (the step is skipped when unset). Expectations are what the rules say each seat may do; the first live run confirms them.",
+    "personas": [
+        { "name": "ada",  "space": "Discovery", "expect": { "closedBanner": false, "composer": true,  "newConversationButton": true,  "settingsLink": false } },
+        { "name": "bea",  "space": "Discovery", "expect": { "closedBanner": false, "composer": true,  "newConversationButton": true,  "settingsLink": false } },
+        { "name": "casey", "space": "Discovery", "expect": { "closedBanner": false, "composer": true, "newConversationButton": true,  "settingsLink": false } },
+        { "name": "dev",  "space": "Discovery", "expect": { "closedBanner": false, "composer": true,  "newConversationButton": true,  "settingsLink": true } },
+        { "name": "nora", "space": "$UI_PASS_SEALED_CHILD_SPACE", "expect": { "closedBanner": false, "composer": true, "newConversationButton": true, "settingsLink": false } },
+        { "name": "ada",  "label": "ada-closed", "space": "$UI_PASS_CLOSED_SPACE", "expect": { "closedBanner": true, "composer": false, "newConversationButton": false, "settingsLink": false } }
+    ]
+}

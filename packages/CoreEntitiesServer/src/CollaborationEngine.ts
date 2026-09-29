@@ -231,7 +231,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
             ? await this.LoadSpaceSettingsChain(params.parentId, md, params.contextUser)
             : params.spaceId
                 ? await this.LoadSpaceSettingsChain(params.spaceId, md, params.contextUser)
-                : { configs: [], typeId: null };
+                : { configs: [], typeIds: [], typeId: null };
 
         const allConfigs = params.currentConfig
             ? [params.currentConfig, ...parentChain.configs]
@@ -253,11 +253,14 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         contextUser?: UserInfo
     ): Promise<{
         configs: CollaborationSettings[];
+        /** The type of each space in `configs`, in the same order, so a link is judged by the type it was saved under. */
+        typeIds: (string | null)[];
         typeId: string | null;
     }> {
         const md = provider ?? Metadata.Provider;
         const rv = RunView.FromMetadataProvider(md);
         const configs: CollaborationSettings[] = [];
+        const typeIds: (string | null)[] = [];
         let currentId: string | null = spaceId;
         let targetTypeId: string | null = null;
         const visited = new Set<string>();
@@ -304,6 +307,7 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
                 targetTypeId = row.SpaceTypeID;
             }
 
+            typeIds.push(row.SpaceTypeID ?? null);
             if (row.Configuration) {
                 try {
                     configs.push(JSON.parse(row.Configuration) as CollaborationSettings);
@@ -317,6 +321,6 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
             currentId = row.ParentID;
         }
 
-        return { configs, typeId: targetTypeId };
+        return { configs, typeIds, typeId: targetTypeId };
     }
 }

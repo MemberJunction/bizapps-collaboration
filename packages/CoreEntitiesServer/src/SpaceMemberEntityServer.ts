@@ -57,6 +57,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
             if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
                 // Leaving skips the invite rules, but not the type's: a type may refuse a member leaving, or react to it
+                this.pendingKind = 'Remove';
                 const refusedLeave = await this.judgeWithDriver(user, spaceId, 'Remove');
                 return refusedLeave ? fail(result, refusedLeave.field, refusedLeave.message) : result;
             }
@@ -139,6 +140,8 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
+        const decidedKind = this.pendingKind;
+        this.pendingKind = null;
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.SpaceID) {
             const user = this.ContextCurrentUser;
@@ -151,7 +154,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     spaceType: spaceInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
                     member: this,
-                    kind: this.pendingKind ?? (this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange'),
+                    kind: decidedKind ?? (this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange'),
                 });
             } catch (driverErr) {
                 LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);

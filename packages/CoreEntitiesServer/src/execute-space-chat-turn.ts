@@ -36,12 +36,15 @@ export type ExecuteSpaceChatTurnResult =
     | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[] }
     | { ok: false; message: string };
 
+/** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
+const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please try again.';
+
 /**
  * Executes a server turn for an agent in a space's chat.
  *
  * Verifies all security and context boundaries against the persisted user message:
  * 1. Caller reaches the space and can contribute (closed spaces refuse).
- * 2. conversationId belongs to the space's space.
+ * 2. conversationId belongs to this space.
  * 3. userMessageId exists, matches the conversation, and was authored by the caller.
  * 4. Checks that the user message does not already have an agent run (refuses if read fails).
  * 5. Mention rule: decide from saved message alone via MentionParser. Under Always without tag,
@@ -57,7 +60,7 @@ export async function executeSpaceChatTurn(
 ): Promise<ExecuteSpaceChatTurnResult> {
     // Two calls for one message can both pass the "already replied" reads before either writes its reply, so a message is
     // claimed here for the length of its turn. This holds within one server; a second server would need a database constraint.
-    const claim = parseUuid(input.userMessageId)?.toLowerCase();
+    const claim = parseUuid(input.userMessageId);
     if (claim) {
         if (turnsInFlight.has(claim)) {
             return { ok: false, message: 'This message has already been processed by an agent turn.' };
@@ -301,7 +304,7 @@ async function runClaimedTurn(
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to initialize assistant detail record.';
         LogError(`executeSpaceChatTurn: ${errMsg}`);
-        return { ok: false, message: errMsg };
+        return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
     }
 
     let agentSuccess = false;
@@ -390,12 +393,12 @@ async function runClaimedTurn(
 
     if (!agentSuccess || !agentReplyText) {
         assistantDetail.Status = 'Error';
-        assistantDetail.Message = agentErrorMessage ?? 'Agent execution failed.';
+        assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
         const errorSaved = await assistantDetail.Save();
         if (!errorSaved) {
             LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
         }
-        return { ok: false, message: agentErrorMessage ?? 'Agent execution failed.' };
+        return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
     }
 
     // Save final assistant reply as system user
@@ -406,7 +409,7 @@ async function runClaimedTurn(
         LogError(`executeSpaceChatTurn: failed to save assistant reply: ${errMsg}`);
         // Don't leave the reply at In-Progress: mark it Error, so the conversation shows the turn failed
         assistantDetail.Status = 'Error';
-        assistantDetail.Message = errMsg;
+        assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
         if (!(await assistantDetail.Save())) {
             LogError(`executeSpaceChatTurn: failed to mark the reply Error after its save failed: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
         }

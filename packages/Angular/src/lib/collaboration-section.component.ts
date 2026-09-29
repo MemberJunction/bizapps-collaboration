@@ -1893,22 +1893,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const rv = new RunView(this.RunViewToUse);
             await guardedLoad(
                 () => isLatest() && isCurrent(),
-                () => rv.RunView<{
-                    ID: string;
-                    Role: string;
-                    Message: string;
-                    User?: string;
-                    __mj_CreatedAt: string;
-                }>({
-                    EntityName: 'MJ: Conversation Details',
-                    ExtraFilter: `ConversationID = '${convId}'`,
-                    OrderBy: '__mj_CreatedAt DESC',
-                    ResultType: 'simple',
-                    MaxRows: 25,
-                }),
+                async () => {
+                    const res = await rv.RunView<{
+                        ID: string;
+                        Role: string;
+                        Message: string;
+                        User?: string;
+                        __mj_CreatedAt: string;
+                    }>({
+                        EntityName: 'MJ: Conversation Details',
+                        ExtraFilter: `ConversationID = '${convId}'`,
+                        OrderBy: '__mj_CreatedAt DESC',
+                        ResultType: 'simple',
+                        MaxRows: 25,
+                    });
+                    // Logged here, in the read, so a failed read is reported even when the person has moved on
+                    if (!res.Success) LogError(`Failed to load the Overview's messages for conversation ${convId}: ${res.ErrorMessage ?? 'unknown error'}`);
+                    return res;
+                },
                 (detailRes) => {
-                    if (!detailRes?.Success || !detailRes.Results) {
-                        LogError(`Failed to load the Overview's messages for conversation ${convId}: ${detailRes?.ErrorMessage ?? 'unknown error'}`);
+                    if (!detailRes.Success || !detailRes.Results) {
                         this.overviewRoomMessages = [];
                         return;
                     }
@@ -2237,6 +2241,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             this._pendingConvId = params['conv'];
             const match = this.spaceConversations.find(c => UUIDsEqual(c.id, params['conv']));
             if (match) {
+                // Applied: the next selection must not bring this conversation back
+                this._pendingConvId = null;
                 this.activeConversationId = params['conv'];
                 this.chatAudienceBand = match.band === 'Team' ? 'Team' : 'Shared';
                 if (this.activeSpaceId && !UUIDsEqual(prevConvId, params['conv'])) {
@@ -2877,9 +2883,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * The person needs no account yet, and a client admin (whose role may invite) can do it: the browser reads no other user.
      */
     public async onInviteMember(payload: { email: string; role: string }): Promise<void> {
+        // The space and selection are taken before the first await: an invite that finishes after a switch must not
+        // show its banner in the next space
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
         const failed = (message: string): void => {
             LogError(`Invite refused: ${message}`);
-            this.inviteOutcome = { ok: false, message };
+            if (isCurrent()) this.inviteOutcome = { ok: false, message };
             SharedService.Instance.CreateSimpleNotification(message, 'error', 5000);
         };
         this.isSendingInvite = true;
@@ -2892,16 +2902,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             const client = new CollaborationClient(this.graphQLExecutor);
-            const result = await client.MintSpaceLink({ SpaceID: this.activeSpaceId, Email: payload.email, RoleID: roleId });
+            const result = await client.MintSpaceLink({ SpaceID: spaceId, Email: payload.email, RoleID: roleId });
             if (!result.Success) {
                 failed(result.ErrorMessage || 'Invite refused.');
                 return;
             }
             // On success the server's message says what happened: seated, Invited awaiting approval, already seated, and whether a link was sent
             const message = result.Message || 'They are seated.';
-            this.inviteOutcome = { ok: true, message };
+            if (isCurrent()) this.inviteOutcome = { ok: true, message };
             SharedService.Instance.CreateSimpleNotification(message, 'info', 6000);
-            await this.loadSpaceMembers(this.activeSpaceId, this.currentSelection());
+            await this.loadSpaceMembers(spaceId, isCurrent);
         } catch (error) {
             failed(error instanceof Error ? error.message : String(error));
         } finally {

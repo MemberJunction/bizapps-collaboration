@@ -12,6 +12,11 @@ const checkOnly = process.argv.includes('--check');
 const skippedDirs = new Set(['node_modules', '.backups', 'sql_logging']);
 const problems = [];
 
+/** True for the block the sync tool writes: an object with a checksum or a lastModified stamp. */
+function isSyncBlock(val) {
+    return val !== null && typeof val === 'object' && !Array.isArray(val) && ('checksum' in val || 'lastModified' in val);
+}
+
 /** Returns the value without its records' `sync` blocks, and whether it held any. */
 function withoutSync(value) {
     let found = false;
@@ -19,10 +24,9 @@ function withoutSync(value) {
         if (Array.isArray(val)) return val.map(strip);
         if (val !== null && typeof val === 'object') {
             const out = {};
-            // A `sync` block sits on a record, beside its `fields`; a `sync` key anywhere else is somebody's data
-            const isRecord = 'fields' in val;
+            // A `sync` block is recognised by its own shape (a checksum or last-modified stamp); a `sync` key anywhere else is somebody's data
             for (const [key, child] of Object.entries(val)) {
-                if (key === 'sync' && isRecord) {
+                if (key === 'sync' && isSyncBlock(child)) {
                     found = true;
                     continue;
                 }

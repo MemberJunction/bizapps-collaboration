@@ -1,5 +1,5 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { createSpaceConversation, createSpaceTask, postSpaceMessage } from '@mj-biz-apps/collaboration-core-entities-server';
+import { createSpaceConversation, createSpaceTask, postSpaceMessage, resolveSpaceChatHostRules } from '@mj-biz-apps/collaboration-core-entities-server';
 import {
     mjBizAppsCollaborationItemUseEntity,
     mjBizAppsCollaborationShareNoticeEntity,
@@ -22,7 +22,7 @@ import {
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, SameID } from '../wire.js';
 import { CHECK_SPACE_PREFIX } from '../world/ids.js';
-import { cleanupConversation, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks } from './cleanup-helpers.js';
+import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks } from './cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -801,22 +801,80 @@ const checks: NamedCheck[] = [
                 return member;
             };
             try {
+                // An Admin is above what Casey may grant. Tried first, while Nora holds no seat: the database's one-seat-per-person
+                // rule would also refuse the save, so the check matches the ceiling's own message
+                const refused = await seatFor(admin!);
+                Assert(!(await refused.Save()), 'Casey seating an Admin, above her ceiling, must be refused');
+                const why = refused.LatestResult?.CompleteMessage ?? '';
+                Assert(/above the level this member may grant/.test(why), `The refusal names the ceiling, not a database rule: ${why}`);
+
                 // Discovery's type approves invites, so an outside admin's Active seat is stored as Invited, waiting for an owner
                 const allowed = await seatFor(outsideMember!);
                 Assert(await allowed.Save(), `Casey may seat an Outside member: ${allowed.LatestResult?.CompleteMessage ?? ''}`);
                 const stored = await FindRows<{ Status: string }>(ctx, SPACE_MEMBER_ENTITY, `ID = '${allowed.ID}'`, ['Status'], undefined, { BypassCache: true });
                 Assert(stored[0]?.Status === 'Invited', `The seat waits for an owner's approval: stored as ${stored[0]?.Status}`);
-
-                // An Admin is above what Casey may grant
-                const refused = await seatFor(admin!);
-                const saved = await refused.Save();
-                Assert(!saved, 'Casey seating an Admin, above her ceiling, must be refused');
-                Assert((refused.LatestResult?.CompleteMessage ?? '').length > 0, 'The refusal says why');
             } finally {
                 const gone = await FindRows<{ ID: string }>(ctx, SPACE_MEMBER_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID = '${nora.ID}'`, ['ID'], undefined, { BypassCache: true });
                 for (const row of gone) {
                     await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, row.ID, "Nora's seat on Discovery");
                 }
+            }
+        },
+    },
+    {
+        Id: 'write-gates.WG11',
+        Name: "WG11 — a Team space under a Workspace that sets what a Team may not still reads its chat rules, and takes only what a Team may inherit",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const owner = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']))[0]?.ID;
+            const team = (await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'team'", ['ID']))[0]?.ID;
+            Assert(!!owner && !!team, 'The owner role and the Team type are on this host');
+
+            const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+            seat.NewRecord();
+            seat.SpaceID = DISCOVERY_SPACE_ID;
+            seat.UserID = dev.ID;
+            seat.SpaceRoleTypeID = owner!;
+            seat.Band = 'Team';
+            seat.Status = 'Active';
+            Assert(await seat.Save(), `Ada seats Dev as an owner of Discovery: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+            const discovery = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+            Assert(await discovery.Load(DISCOVERY_SPACE_ID), 'Dev loads Discovery');
+            const originalConfiguration = discovery.Configuration;
+            let teamSpaceId: string | null = null;
+            let changed = false;
+            try {
+                discovery.Configuration = JSON.stringify({ Agents: { ListMode: 'Replace' }, Chats: { WhoCanStart: 'Owners' } });
+                changed = true;
+                Assert(await discovery.Save(), `Dev sets Discovery's agent list mode and who may start chats: ${discovery.LatestResult?.CompleteMessage ?? ''}`);
+
+                const child = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                child.NewRecord();
+                child.Name = `${CHECK_SPACE_PREFIX}WG11-Team-${Date.now()}`;
+                child.SpaceTypeID = team!;
+                child.ParentID = DISCOVERY_SPACE_ID;
+                child.OwnerID = ada.ID;
+                child.InheritsMembership = true;
+                Assert(await child.Save(), `Ada creates a Team space under Discovery: ${child.LatestResult?.CompleteMessage ?? ''}`);
+                teamSpaceId = child.ID;
+
+                const rules = await resolveSpaceChatHostRules(ctx.Provider, ada, teamSpaceId);
+                Assert(rules.ok === true, `The Team's chat rules resolve under a Workspace that sets the list mode: ${rules.ok ? '' : rules.message}`);
+            } finally {
+                if (teamSpaceId) await cleanupStep(() => cleanupSpace(ctx.Provider, ctx.User, teamSpaceId!));
+                if (changed) {
+                    await cleanupStep(async () => {
+                        const back = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                        Assert(await back.Load(DISCOVERY_SPACE_ID), 'Dev reloads Discovery to restore its settings');
+                        back.Configuration = originalConfiguration;
+                        Assert(await back.Save(), `Dev restores Discovery's settings: ${back.LatestResult?.CompleteMessage ?? ''}`);
+                        const verify = await FindRows<{ Configuration: string | null }>(ctx, SPACE_ENTITY, `ID = '${DISCOVERY_SPACE_ID}'`, ['Configuration'], undefined, { BypassCache: true });
+                        Assert((verify[0]?.Configuration ?? null) === (originalConfiguration ?? null), "Discovery's settings are back to what they were");
+                    });
+                }
+                await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_MEMBER_ENTITY, seat.ID, "Dev's seat on Discovery");
             }
         },
     },

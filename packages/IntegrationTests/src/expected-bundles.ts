@@ -3,7 +3,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'people-fls': 3,
     'parent-assignees': 6,
     'room': 12,
-    'write-gates': 9,
+    'write-gates': 10,
     'row-filters': 4,
     'library': 6,
     'agent': 10,

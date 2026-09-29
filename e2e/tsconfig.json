@@ -15,6 +15,6 @@
     "checkJs": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["specs/**/*.ts", "*.ts"],
+  "include": ["specs/**/*.ts", "ui-pass/**/*.ts", "*.ts"],
   "exclude": ["node_modules", "playwright-report", "test-results"]
 }

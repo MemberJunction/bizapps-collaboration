@@ -95,6 +95,8 @@ describe('executeSpaceChatTurn', () => {
         messageText?: string;
         spaceConfiguration?: string | null;
         allowedAgents?: string[];
+        /** No agent is Active: the agents read comes back empty. */
+        noActiveAgents?: boolean;
     }
 
     interface SavedDetail {
@@ -369,6 +371,7 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ: AI Agents') {
+                    if (options.noActiveAgents) return mockResult<T>([]);
                     return mockResult<T>([
                         {
                             ID: ALLOWED_AGENT_ID,
@@ -580,17 +583,19 @@ describe('executeSpaceChatTurn', () => {
             });
             const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
             assert.equal(result.ok, false);
-            assert.match(result.message, /Simulated LLM failure/);
+            assert.match(result.message, /could not answer/);
+            assert.doesNotMatch(result.message, /Simulated LLM failure/, 'the cause goes to the log, not to the conversation');
             assert.ok(provider.savedDetails.length >= 2);
             const errorReply = provider.savedDetails[provider.savedDetails.length - 1];
             assert.equal(errorReply.Status, 'Error');
-            assert.match(errorReply.Message ?? '', /Simulated LLM failure/);
+            assert.match(errorReply.Message ?? '', /could not answer/);
+            assert.doesNotMatch(errorReply.Message ?? '', /Simulated LLM failure/);
         } finally {
             AgentRunner.prototype.RunAgent = origRunner;
         }
     });
 
-    it('marks the reply Error when the history read fails, and shows the failure', async () => {
+    it('marks the reply Error when the history read fails, with a plain sentence', async () => {
         const held = ConversationEngine.LoadWindowRowsFresh;
         ConversationEngine.LoadWindowRowsFresh = async () => {
             throw new Error('the history read failed');
@@ -599,10 +604,11 @@ describe('executeSpaceChatTurn', () => {
             const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
             const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
             assert.equal(result.ok, false);
-            assert.match(result.message, /the history read failed/);
+            assert.match(result.message, /could not answer/);
             const reply = provider.savedDetails[provider.savedDetails.length - 1];
             assert.equal(reply.Status, 'Error');
-            assert.match(reply.Message ?? '', /the history read failed/);
+            assert.match(reply.Message ?? '', /could not answer/);
+            assert.doesNotMatch(reply.Message ?? '', /history read failed/);
         } finally {
             ConversationEngine.LoadWindowRowsFresh = held;
         }
@@ -645,6 +651,17 @@ describe('executeSpaceChatTurn', () => {
         } finally {
             AgentRunner.prototype.RunAgent = origRunner;
         }
+    });
+
+    it('refuses an untagged message under Always when no agent is Active', async () => {
+        const provider = createMockProvider({
+            messageText: 'Hello without any agent mention',
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'Always' } }),
+            noActiveAgents: true,
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        assert.equal(result.ok, false);
+        assert.match(result.message, /No assistant is available/);
     });
 
     it('succeeds with untagged message when space reply mode is Always', async () => {

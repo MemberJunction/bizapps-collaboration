@@ -1064,7 +1064,7 @@ describe('CollabSpacePeopleComponent', () => {
     expect(comp.TotalMembers).toBe(2);
     expect(comp.TeamCount).toBe(1);
     expect(comp.OutsideCount).toBe(1);
-    expect(comp.ActiveCount).toBe(2);
+    expect(comp.InvitedCount).toBe(1);
 
     comp.audienceFilter = 'Shared';
     expect(comp.filteredMembers.length).toBe(1);

@@ -35,28 +35,19 @@ export async function resolveSpaceChatSettings(
         ? CollaborationEngine.Instance.SpaceTypeById(spaceChain.typeId)
         : undefined;
 
-    let typeConfig: CollaborationSettings | null = null;
-    if (spaceType?.Configuration) {
-        try {
-            typeConfig = typeof spaceType.Configuration === 'string'
-                ? (JSON.parse(spaceType.Configuration) as CollaborationSettings)
-                : (spaceType.Configuration as CollaborationSettings);
-        } catch (err) {
-            const detail = err instanceof Error ? err.message : String(err);
-            LogError(`resolveSpaceChatSettings: Failed to parse type configuration for space type ${spaceChain.typeId}: ${detail}`);
-            throw new Error(`Space settings refused: the space type ${spaceChain.typeId} has a configuration that does not parse: ${detail}`);
-        }
-    }
+    const typeConfig = parseTypeConfig(spaceChain.typeId);
 
+    // Each link is judged by the type it was saved under: a Workspace may set what a Team may not.
     const validConfigs: CollaborationSettings[] = [];
-    for (const cfg of spaceChain.configs) {
-        const val = ValidateCollaborationSettings(cfg, 'space', typeConfig ?? undefined);
+    spaceChain.configs.forEach((cfg, i) => {
+        const linkTypeConfig = i === 0 ? typeConfig : parseTypeConfig(spaceChain.typeIds[i] ?? null);
+        const val = ValidateCollaborationSettings(cfg, 'space', linkTypeConfig ?? undefined);
         if (!val.valid) {
             LogError(`resolveSpaceChatSettings: Invalid space configuration in chain for space ${spaceId}: ${val.errors.join(', ')}`);
             throw new Error(`Space settings refused: a space in the chain of ${spaceId} has an invalid configuration: ${val.errors.join('; ')}`);
         }
         validConfigs.push(cfg);
-    }
+    });
 
     const resolvedSettings = CollaborationEngine.Instance.ResolveSettingsForSpace(
         validConfigs,
@@ -73,4 +64,19 @@ export async function resolveSpaceChatSettings(
         historyOnAdd,
         typeConfig,
     };
+}
+
+/** The parsed configuration of a space type; null when the type has none. A configuration that does not parse refuses. */
+function parseTypeConfig(typeId: string | null): CollaborationSettings | null {
+    const spaceType = typeId ? CollaborationEngine.Instance.SpaceTypeById(typeId) : undefined;
+    if (!spaceType?.Configuration) return null;
+    try {
+        return typeof spaceType.Configuration === 'string'
+            ? (JSON.parse(spaceType.Configuration) as CollaborationSettings)
+            : (spaceType.Configuration as CollaborationSettings);
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        LogError(`resolveSpaceChatSettings: Failed to parse type configuration for space type ${typeId}: ${detail}`);
+        throw new Error(`Space settings refused: the space type ${typeId} has a configuration that does not parse: ${detail}`);
+    }
 }

@@ -28,8 +28,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span class="metric-lbl">Outside Participants</span>
         </div>
         <div class="metric-card">
-          <span class="metric-num active">{{ ActiveCount }}</span>
-          <span class="metric-lbl">Active Seats</span>
+          <span class="metric-num active">{{ InvitedCount }}</span>
+          <span class="metric-lbl">Awaiting Approval</span>
         </div>
       </div>
 
@@ -518,8 +518,9 @@ export class CollabSpacePeopleComponent {
     return this.Members.filter((m) => m.status === 'Active' && m.band === 'Shared').length;
   }
 
-  public get ActiveCount(): number {
-    return this.Members.filter((m) => m.status === 'Active').length;
+  /** Seats that were asked for and wait for an owner or admin to approve them. */
+  public get InvitedCount(): number {
+    return this.Members.filter((m) => m.status === 'Invited').length;
   }
 
   public get filteredMembers(): SpaceMemberModel[] {
