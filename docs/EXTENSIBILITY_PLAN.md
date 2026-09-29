@@ -210,8 +210,8 @@ export interface CollaborationSettings extends ISpaceRules {
     PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
     /** How long that access lasts after ClosedAt, in days. Absent means no end. */
     PostCloseAccessDays?: number;
-    /** Words shown instead of Collaboration's, for example { Tabs: { Library: 'Papers' }, Bands: { Shared: 'Members' } }. */
-    Labels?: { Tabs?: Record<string, string>; Bands?: Record<string, { Name: string; Description?: string }> };
+    /** Words shown instead of Collaboration's, for example { Tabs: { Library: 'Papers' } }. Only tab labels are read; band names are not configurable. */
+    Labels?: { Tabs?: Record<string, string> };
 }
 
 export interface ISpaceTypeConfiguration extends CollaborationSettings {
@@ -280,7 +280,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 **The kinds of change.**
 - A space's own driver hears `Create`, `Update`, `Move`, `Close`, `Reopen` and `Delete`.
 - Its parent's driver hears the same change as a sub-space's: `CreateChild`, `UpdateChild`, `ReopenChild`, `MoveChildIn`, `MoveChildOut`, `CloseChild` and `DeleteChild`. A move is one save seen from both parents: the one it joins hears `MoveChildIn`, the one it leaves `MoveChildOut`. A close and a move in one save are refused, so no save is both.
-- A member's driver hears `Invite`, `RoleChange`, `BandChange` and `Remove`. A new seat is an `Invite` (a `Remove` when it is made Removed), and so is a seat whose status becomes Active or Invited: an approval or a reinstatement. A role or band edit is a `RoleChange` or `BandChange`, as asked: a band the gate puts back still reaches the driver as a `BandChange`. A save that touches none of status, role and band raises no seat reaction. A rule on who may hold a seat judges `Invite`, `RoleChange` and `BandChange` alike: judging only invitations lets a role change walk around it.
+- A member's driver hears `Invite`, `RoleChange`, `BandChange` and `Remove`. A new seat is an `Invite` (a `Remove` when it is made Removed), and so is a seat whose status becomes Active or Invited: an approval, a reinstatement or a re-invitation. A role or band edit is a `RoleChange` or `BandChange`, as asked: a band the gate puts back still reaches the driver as a `BandChange`. A save that touches none of status, role and band raises no seat reaction. A rule on who may hold a seat judges `Invite`, `RoleChange` and `BandChange` alike: judging only invitations lets a role change walk around it.
 - Validation and reaction share one reading of the change, taken by `Save` before anything changes a field and handed to validation (validation called on its own takes its own), so they can't disagree about what kind it was. A save that changes nothing raises no reaction. Each reaction runs on its own: a driver that throws is logged with its hook and space, and doesn't silence the next.
 - **Today** the reactions run after the save has committed, not inside its transaction, and a failure is logged and does not undo the save. Moving them inside the transaction is planned for stage 2, with the one resolver for the rules.
 
@@ -341,7 +341,8 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 
 **Composition.** Each hook receives Collaboration's default list for the space and returns the final one:
 - `GetTabs`, `GetOverviewCards`, `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`, `GetNewSpaceSteps`, `GetDetailsForm`;
-- items are descriptors (key, label, icon, count, and the component class), so the host has labels and counts without mounting anything.
+- items are descriptors (key, label, icon, count, and the component class), so the host has labels and counts without mounting anything;
+- an Overview card also says its **side**: `Shared` shows it to everyone in the space, `Team` only to those who can see the Team band. A card that doesn't say is a Team card, so an outside participant never sees a card unless its author said they may.
 
 **Events.** Collaboration's composites raise cancellable `Before…` and `After…` events, for example `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `Cancel` and `CancelReason`, like `ng-conversations`' chat events. The driver can cancel, and the server hook still enforces.
 

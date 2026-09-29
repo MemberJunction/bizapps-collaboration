@@ -46,7 +46,7 @@ async function ensureFontsLoaded(page: Page) {
 }
 
 test.describe('Frame 04 — Share Check Dialog', () => {
-    test('renders backdrop, scrim, audience grid, finding review, note, and effects in light theme', async ({ page }) => {
+    test('renders backdrop, dialog, audience grid, finding review, note, and effects in light theme', async ({ page }) => {
         await page.goto('/frame/04');
         await ensureFontsLoaded(page);
 
@@ -54,15 +54,16 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const topbar = page.locator('header.topbar');
         await expect(topbar).toBeVisible();
 
-        // 2. Scrim and modal container
+        // 2. mj-dialog's backdrop and container; the dialog is named, and draws one close button
         const dialog = page.locator('mjc-share-check-dialog');
-        await expect(dialog).toBeVisible();
-        await expect(dialog.locator('.scrim')).toBeVisible();
-        const modal = dialog.locator('.modal.share-modal');
+        await expect(dialog.locator('.mj-dialog-backdrop')).toBeVisible();
+        const modal = dialog.locator('.mj-dialog-container');
         await expect(modal).toBeVisible();
+        await expect(modal).toHaveAttribute('aria-labelledby', /^mj-dialog-title-/);
+        await expect(modal.locator('[aria-label="Close dialog"]')).toHaveCount(1);
 
-        // 3. Modal Header
-        await expect(modal.locator('.m-h')).toContainText('Share with Northwind');
+        // 3. Title (mj-dialog's) and the item line (share-check's header)
+        await expect(modal.locator('.mj-dialog-title')).toContainText('Share with Northwind');
         await expect(modal.locator('.m-h')).toContainText('Interview synthesis v3');
 
         // 4. Audience Grid
@@ -84,11 +85,12 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const effects = modal.locator('.effects .eff');
         await expect(effects).toHaveCount(3);
 
-        // 7. Action buttons
-        const footer = modal.locator('.m-f');
-        await expect(footer.locator('button.btn.primary')).toContainText('Apply 2 fixes and share');
-        await expect(footer.locator('button.btn').filter({ hasText: 'Share as is' })).toBeVisible();
-        await expect(footer.locator('button.btn.ghost')).toContainText('Cancel');
+        // 7. Action buttons, in mj-dialog's actions (outside the scrolling body)
+        const footer = modal.locator('mj-dialog-actions');
+        await expect(footer.locator('button').first()).toContainText('Apply 2 fixes and share');
+        await expect(footer.locator('button').filter({ hasText: 'Share as is' })).toBeVisible();
+        await expect(footer.locator('button').filter({ hasText: 'Cancel' })).toBeVisible();
+        await expect(modal.locator('.mj-dialog-body')).not.toContainText('Share as is');
 
         const screenshot = await page.screenshot({ fullPage: false, animations: 'disabled' });
         saveTestResultScreenshot('04-light.png', screenshot);
@@ -100,7 +102,7 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const html = page.locator('html');
         await expect(html).toHaveAttribute('data-theme', 'dark');
 
-        const modal = page.locator('mjc-share-check-dialog .modal.share-modal');
+        const modal = page.locator('mjc-share-check-dialog .mj-dialog-container');
         await expect(modal).toBeVisible();
 
         const screenshot = await page.screenshot({ fullPage: false, animations: 'disabled' });
@@ -111,7 +113,7 @@ test.describe('Frame 04 — Share Check Dialog', () => {
     test.skip('visual regression: matches 04-share-check.png within budget (§ 10 topbar mask) [Retired per D24]', async ({ page }) => {
         await page.goto('/frame/04');
         await ensureFontsLoaded(page);
-        await page.waitForSelector('mjc-share-check-dialog .modal.share-modal');
+        await page.waitForSelector('mjc-share-check-dialog .mj-dialog-container');
 
         const screenshotBuffer = await page.screenshot({ fullPage: false, animations: 'disabled' });
         const targetPath = resolve(__dirname, '../../docs/ux/screens/04-share-check.png');

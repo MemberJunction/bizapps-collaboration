@@ -10,7 +10,7 @@
   "files": ["/dist"],
   "scripts": {
     "build": "ngc",
-    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test src/lib/logic/settings-model.test.ts src/lib/logic/conversation-list.test.ts src/lib/logic/seat-summary.test.ts src/lib/logic/selection-guard.test.ts src/lib/logic/open-file.test.ts src/lib/logic/latest-only.test.ts src/lib/logic/format-date.test.ts src/lib/logic/overview-messages.test.ts src/lib/logic/share-audience.test.ts src/lib/logic/reached-people.test.ts src/lib/logic/grantable-roles.test.ts src/lib/logic/rail-flags.test.ts src/lib/logic/selection-reset.test.ts src/lib/logic/space-tabs.test.ts src/lib/logic/seat-actions.test.ts src/lib/logic/before-hook.test.ts src/lib/logic/close-consequence.test.ts src/lib/logic/ui-driver-safe.test.ts"
+    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test src/lib/logic/settings-model.test.ts src/lib/logic/conversation-list.test.ts src/lib/logic/seat-summary.test.ts src/lib/logic/selection-guard.test.ts src/lib/logic/open-file.test.ts src/lib/logic/latest-only.test.ts src/lib/logic/format-date.test.ts src/lib/logic/overview-messages.test.ts src/lib/logic/share-audience.test.ts src/lib/logic/reached-people.test.ts src/lib/logic/grantable-roles.test.ts src/lib/logic/rail-flags.test.ts src/lib/logic/selection-reset.test.ts src/lib/logic/space-tabs.test.ts src/lib/logic/seat-actions.test.ts src/lib/logic/before-hook.test.ts src/lib/logic/close-consequence.test.ts src/lib/logic/ui-driver-safe.test.ts src/lib/logic/settings-access.test.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

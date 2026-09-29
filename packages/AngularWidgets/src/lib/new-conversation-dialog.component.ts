@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -25,10 +25,10 @@ export interface NewConversationSubmitPayload {
   selector: 'mjc-new-conversation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, SharedGenericModule],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule],
   template: `
     <mj-dialog [Visible]="true" Title="New Conversation" [Width]="520" [Closeable]="!IsSubmitting" (Close)="onCancel()">
-    <div #modalRoot class="conversation-modal">
+    <div class="conversation-modal">
       <p class="d-sub">Start a new conversation in {{ SpaceName || 'this space' }}.</p>
 
       <div class="d-body">
@@ -85,7 +85,9 @@ export interface NewConversationSubmitPayload {
         </div>
       </div>
 
-      <footer class="d-footer">
+
+    </div>
+      <mj-dialog-actions>
         <button
           type="button"
           mjButton
@@ -110,8 +112,7 @@ export interface NewConversationSubmitPayload {
         >
           Cancel
         </button>
-      </footer>
-    </div>
+      </mj-dialog-actions>
     </mj-dialog>
   `,
   styles: [
@@ -288,12 +289,12 @@ export class CollabNewConversationDialogComponent extends CollabDialogBase imple
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
   @ViewChild('nameInput') private nameInputElement?: ElementRef<HTMLInputElement>;
-  @ViewChild('modalRoot') private modalRootElement?: ElementRef<HTMLElement>;
+  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
 
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.modalRootElement; }
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
   /** The name field, so a dialog that opens (or finishes a submit) is ready to type in. */
   protected override FirstFocus(): HTMLElement | null { return this.nameInputElement?.nativeElement ?? null; }
 

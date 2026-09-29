@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Ou
 import { CollabDialogBase } from './dialog-base';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -31,12 +31,13 @@ export interface CollabUploadSubmitPayload {
     FormsModule,
     MJButtonDirective,
     MJDialogComponent,
+    MJDialogActionsComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
   ],
   template: `
     <mj-dialog [Visible]="true" [Title]="'Add document to ' + (SpaceName || 'Space')" [Width]="540" [Closeable]="!IsSubmitting" (Close)="onCancel()">
-      <div #dialogBox class="dialog">
+      <div class="dialog">
         <p class="d-sub">{{ AllowLinks ? 'Upload a local file or link a cloud document.' : 'Upload a file from your computer.' }}</p>
 
         <!-- Segmented Tab switcher -->
@@ -216,7 +217,9 @@ export interface CollabUploadSubmitPayload {
           </div>
         </div>
 
-        <footer class="d-footer">
+
+      </div>
+        <mj-dialog-actions>
           <button
             mjButton
             variant="primary"
@@ -234,8 +237,7 @@ export interface CollabUploadSubmitPayload {
           <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
             Cancel
           </button>
-        </footer>
-      </div>
+        </mj-dialog-actions>
     </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
@@ -461,8 +463,8 @@ export interface CollabUploadSubmitPayload {
   `],
 })
 export class CollabUploadDialogComponent extends CollabDialogBase {
-  @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
+  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
 
   @Input() SpaceName = '';
   @Input() SpaceId = '';

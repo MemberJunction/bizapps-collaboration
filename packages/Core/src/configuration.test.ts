@@ -242,7 +242,7 @@ describe('Configuration & ResolveSpaceRules', () => {
 
         it('refuses on a space the keys only a type or the app can hold, and Labels unless the type allows them', () => {
             const type: CollaborationSettings = { SpaceOverridable: ['Chats.WhoCanStart'] };
-            for (const key of ['Children', 'Admin', 'SpaceOverridable']) {
+            for (const key of ['Children', 'SpaceOverridable']) {
                 const res = ValidateCollaborationSettings({ [key]: key === 'SpaceOverridable' ? ['Chats'] : {} }, 'space', type);
                 assert.equal(res.valid, false, key);
                 assert.match(res.errors.join(' '), new RegExp(`${key} cannot be set on a space`));
@@ -322,5 +322,11 @@ describe('a space may set the label keys its type lists', () => {
         assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Chats.WhoCanStart'] }).valid, false);
         const bands = ValidateCollaborationSettings({ Labels: { Bands: {} } }, 'space', { SpaceOverridable: ['Labels'] });
         assert.match(bands.errors.join(' '), /Unknown Labels key: Bands/);
+    });
+});
+
+describe('a key nothing reads is refused', () => {
+    it("refuses Admin, which the app dropped: nothing read it", () => {
+        assert.match(ValidateCollaborationSettings({ Admin: { RoleNames: ['Developer'] } }, 'type').errors.join(' '), /Unknown settings key: Admin/);
     });
 });

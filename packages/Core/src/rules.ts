@@ -220,7 +220,8 @@ export interface RosterWalk {
 /**
  * Everyone who reaches `targetId`, grouped by the space they sit on.
  * Each person is listed once, under their nearest active seat. That is the
- * seat `membershipReaches` returns. The walk stops at a root, at a sealed
+ * seat `membershipReaches` returns for a space that is open; for a closed target `membershipReaches` gives no one once its
+ * post-close access has ended, while this still lists the target's own seats. The walk stops at a root, at a sealed
  * space, at a closed parent whose post-close access has ended (as `membershipReaches` stops there), or at a parent the caller
  * did not load.
  */

@@ -22,7 +22,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <i class="fa-solid fa-share-from-square"></i>
       </span>
       <div class="grow">
-        <div class="fw7 title">{{ Title }}</div>
+        @if (Framed) {
+          <div class="fw7 title">{{ Title }}</div>
+        }
         <div class="row gap6 fs13 secondary subtitle">
           <mjc-file-icon [Kind]="Kind" Size="sm" />
           <b class="item-name">{{ ItemName }}</b>
@@ -32,9 +34,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <mjc-band-chip Band="Shared" Label="Shared" />
         </div>
       </div>
-      <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
-        <i class="fa-solid fa-xmark muted"></i>
-      </button>
+      @if (Framed) {
+        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
+          <i class="fa-solid fa-xmark muted"></i>
+        </button>
+      }
     </div>
 
     <div class="m-b">
@@ -139,6 +143,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
     </div>
 
+    @if (Framed) {
     <div class="m-f mj-dialog-actions">
       @if (Findings && Findings.length > 0) {
         <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
@@ -154,6 +159,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
+    }
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
@@ -563,6 +569,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckComponent {
+  /**
+   * True (the default) when the component draws its own title, close button and actions. Inside an `mj-dialog`, which draws the
+   * title and the close button and holds the actions in its footer, it is false: the host calls `onApplyAndShare`, `onShareAsIs`
+   * and `onCancel` from its own actions.
+   */
+  @Input() public Framed = true;
   @Input() public Title = '';
   @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';

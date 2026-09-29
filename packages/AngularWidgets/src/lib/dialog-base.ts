@@ -1,7 +1,7 @@
 import { Directive, HostListener, type ElementRef, type OnDestroy, type OnInit } from '@angular/core';
 
 /**
- * What every dialog here does the same way, on top of `mj-dialog` (which draws it, closes it on Escape, the backdrop and its close
+ * What every dialog here does the same way, on top of `mj-dialog` (the box is `mj-dialog`'s own element, so its close button is inside the trap) (which draws it, closes it on Escape, the backdrop and its close
  * button, and locks the page's scroll): remember what had focus when it opened and give it back on close, focus the first
  * control, and keep Tab inside. `mj-dialog` does none of these three today. A dialog extends this and says which element is its box.
  */
@@ -14,15 +14,19 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
   protected abstract DialogBox(): ElementRef<HTMLElement> | undefined;
 
   /**
-   * The control to focus when the dialog opens: one marked `data-autofocus`, else the first field, else the first button that
-   * isn't the header's close button. Landing on the close button would make Enter, right after a dialog opens, close it.
+   * The control to focus when the dialog opens: one marked `data-autofocus`, else the first field, else the dialog's own container
+   * (made focusable, not tabbable), so that Enter right after it opens activates nothing: not the close button, not the primary action.
    */
   protected FirstFocus(): HTMLElement | null {
     const box = this.DialogBox()?.nativeElement;
     if (!box) return null;
-    return box.querySelector<HTMLElement>('[data-autofocus]:not([disabled])')
-      ?? box.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
-      ?? box.querySelector<HTMLElement>('button:not([disabled]):not(.btn-close)');
+    const marked = box.querySelector<HTMLElement>('[data-autofocus]:not([disabled])');
+    if (marked) return marked;
+    const field = box.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
+    if (field) return field;
+    const container = box.querySelector<HTMLElement>('.mj-dialog-container');
+    if (container && !container.hasAttribute('tabindex')) container.setAttribute('tabindex', '-1');
+    return container;
   }
 
   /** Focuses the first control on the next turn, replacing any focus still pending so the timer can be cleared on destroy. */

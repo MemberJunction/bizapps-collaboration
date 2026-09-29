@@ -313,6 +313,14 @@ describe('a seat saved through its own validation', () => {
         assert.equal(driver.judged[0].member.Band, 'Team', 'the driver is asked with the band the gate derived');
     });
 
+    it('tells the driver an Invite for a removed seat made Invited again, since a re-invitation is a seat coming back', async () => {
+        driver = new SpyDriver({ ok: true });
+        const seat = editedSeat({ Status: 'Invited', Band: 'Team', SpaceRoleTypeID: MEMBER_ROLE }, [{ Name: 'Status', OldValue: 'Removed' }]);
+        const saved = await seat.Save();
+        assert.deepEqual(driver.judged.map((c) => c.kind), ['Invite'], lastRefusal);
+        if (saved) assert.deepEqual(driver.heard.map((c) => c.kind), ['Invite']);
+    });
+
     it('says nothing to the driver, asked or told, when the save touches no status, role or band', async () => {
         driver = new SpyDriver({ ok: true });
         const seat = editedSeat({ Status: 'Active', Band: 'Team', SpaceRoleTypeID: MEMBER_ROLE }, []);

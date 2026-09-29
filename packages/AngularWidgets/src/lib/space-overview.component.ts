@@ -452,10 +452,12 @@ export class CollabSpaceOverviewComponent {
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
 
-  /** The contributed cards with one card per key: a driver may append what an earlier one already gave, and a key draws once. */
+  /** The contributed cards this viewer may see, one per key: a driver may append what an earlier one already gave, and a key draws once. */
   public get UniqueContributedCards(): readonly SpaceOverviewCardDescriptor[] {
     const seen = new Set<string>();
     return this.ContributedCards.filter((card) => {
+      // A card that doesn't say its side is a Team card: it doesn't reach someone who can't see the Team band
+      if ((card.side ?? 'Team') === 'Team' && !this.CanSeeTeamSide) return false;
       const key = normalizeContributionKey(card.key);
       if (seen.has(key)) return false;
       seen.add(key);

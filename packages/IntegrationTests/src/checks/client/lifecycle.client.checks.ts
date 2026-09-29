@@ -1,9 +1,9 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
-import { FindRows, getPersonaContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
-import { cleanupSpace, cleanupStep, registerChecks } from '../cleanup-helpers.js';
+import { cleanupSpace, registerChecks } from '../cleanup-helpers.js';
 
 type PersonaContext = Awaited<ReturnType<typeof getPersonaContext>>;
 
@@ -53,15 +53,8 @@ async function close(persona: PersonaContext, spaceId: string): Promise<void> {
     Assert(space.PostCloseAccess === 'None', `The close wrote the resolved post-close access (None), got ${space.PostCloseAccess}`);
 }
 
-/** Removes what a check made: reopen (so the harness can delete it), then delete the space and its seats. */
+/** Removes what a check made: the space, its seats and what hangs on it (the harness deletes a closed space too). */
 async function remove(ctx: IntegrationCheckContext, spaceId: string): Promise<void> {
-    await cleanupStep(async () => {
-        const staff = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
-        if (await staff.Load(spaceId) && staff.ClosedAt) {
-            staff.ClosedAt = null;
-            await staff.Save();
-        }
-    });
     await cleanupSpace(ctx.Provider, ctx.User, spaceId);
 }
 
@@ -131,9 +124,50 @@ const checks: NamedCheck[] = [
 
                 await close(ada, parent.ID);
                 Assert((await seatsOfParent()) === 0, 'A parent closed with no post-close access reaches no one: its seats are not offered under the sub-space');
+                // The close did not cut off Bea from the sub-space she is seated on: her own seat still reads
+                const ownSeats = await FindRows<{ ID: string }>(
+                    { ...ctx, Provider: bea.Provider, User: bea.User } as IntegrationCheckContext,
+                    SPACE_MEMBER_ENTITY,
+                    `SpaceID = '${child.ID}' AND UserID = '${bea.User.ID}' AND Status = 'Active'`,
+                    ['ID'],
+                    bea.User,
+                    { BypassCache: true },
+                );
+                Assert(ownSeats.length === 1, 'Bea still reads her own seat on the sub-space after the parent closed');
             } finally {
                 if (child) await cleanupSpace(ctx.Provider, ctx.User, child.ID);
                 await remove(ctx, parent.ID);
+            }
+        },
+    },
+    {
+        Id: 'lifecycle.LC3',
+        Name: 'LC3 — the server says what closing would do: the stamped access (a sub-space takes its type\'s None), whose row it keeps, and whether they can reopen it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await getPersonaContext(ctx, 'ada');
+            const adaClient = new CollaborationClient((await getPersonaClientContext(ctx, 'ada')).GraphQLProvider);
+            const beaClient = new CollaborationClient((await getPersonaClientContext(ctx, 'bea')).GraphQLProvider);
+            const typeId = await vaultTypeId(ctx);
+            const ownerRole = await roleId(ctx, "Code = 'owner'");
+            const parent = await createSpace(ada, 'LC3 parent', typeId, null);
+            let child: mjBizAppsCollaborationSpaceEntity | null = null;
+            try {
+                await seat(ada, parent.ID, ada.User.ID, ownerRole, 'Team');
+                child = await createSpace(ada, 'LC3 child', typeId, parent.ID);
+                const read = await adaClient.GetCloseConsequence(child.ID);
+                Assert(read.Success, `The server reads what closing does: ${read.ErrorMessage ?? ''}`);
+                Assert(read.Access === 'None', `A sub-space of a vault stamps None, got ${read.Access}`);
+                Assert(read.KeeperUserID?.toLowerCase() === ada.User.ID.toLowerCase(), "The keeper is the space's OwnerID");
+                Assert(read.KeeperName === ada.User.Name, `The keeper is named: ${read.KeeperName}`);
+                Assert(read.KeeperCanReopen === true, 'Ada holds an owner seat (through the parent) and the authorization, so she can reopen it');
+
+                // Someone who cannot read the space is told so, not given its keeper
+                const refused = await beaClient.GetCloseConsequence(child.ID);
+                Assert(!refused.Success, 'A person who cannot read the space is not told what closing does to it');
+            } finally {
+                if (child) await cleanupSpace(ctx.Provider, ctx.User, child.ID);
+                await cleanupSpace(ctx.Provider, ctx.User, parent.ID);
             }
         },
     },

@@ -12,6 +12,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
     metadata: {
         spaceTypes: ['*'],
         slot: 'card',
+        side: 'Shared',
         sortKey: 90,
         contributionKey: 'example-notice',
         title: 'Notice from another app',

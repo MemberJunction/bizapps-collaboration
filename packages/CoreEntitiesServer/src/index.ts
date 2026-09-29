@@ -55,6 +55,7 @@ export { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './ro
 export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult } from './execute-space-chat-turn.js';
 export { resolveSpaceChatHostRules } from './resolve-space-chat-host-rules.js';
+export { resolveCloseConsequence, type CloseConsequence } from './resolve-close-consequence.js';
 export type { SpaceChatHostRulesMentionPerson, SpaceChatHostRulesResult } from './resolve-space-chat-host-rules.js';
 export { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 export type { ResolvedSpaceChatSettings } from './resolve-space-chat-settings.js';

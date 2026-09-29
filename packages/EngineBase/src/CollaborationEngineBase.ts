@@ -488,6 +488,10 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
      * Whether a user may reopen a closed space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space or on an
      * ancestor it inherits from, reached even when the space's post-close access has ended. `UserCanConfigureSpaces` keeps the
      * post-close filter, so on such a space an owner may reopen but not configure.
+     *
+     * The row filter decides who can read the space once its access has ended: only its `OwnerID`. So in practice this answers true,
+     * for the person who asks, only for the `OwnerID` (an owner by seat who isn't it reads no row, and their seat read finds nothing).
+     * `OwnerID` gives no write right by itself: it must still hold an owner seat and the authorization.
      */
     public async UserCanReopenSpace(
         user: UserInfo,

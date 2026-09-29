@@ -99,24 +99,28 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 key: 'next-meeting',
                 title: 'Next Meeting',
                 sortKey: 10,
+                side: 'Team',
                 component: ExampleBoardNextMeetingCard,
             },
             {
                 key: 'agenda',
                 title: 'Agenda',
                 sortKey: 20,
+                side: 'Team',
                 component: ExampleBoardAgendaCard,
             },
             {
                 key: 'vote',
                 title: 'Active Vote',
                 sortKey: 30,
+                side: 'Team',
                 component: ExampleBoardVoteCard,
             },
             {
                 key: 'members',
                 title: 'Members',
                 sortKey: 40,
+                side: 'Team',
                 component: ExampleBoardMembersCard,
             },
         ]);

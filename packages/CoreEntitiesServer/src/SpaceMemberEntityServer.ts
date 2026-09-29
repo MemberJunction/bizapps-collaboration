@@ -14,7 +14,7 @@ const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
 /**
  * The kind of change a seat save is, from what the save asked for. A new seat is an Invite (a Remove when made Removed), and so is
- * a seat whose status becomes Active or Invited: an approval, or a reinstatement. Otherwise a status made Removed is a Remove, and a role or a band
+ * a seat whose status becomes Active or Invited: an approval, a reinstatement or a re-invitation. Otherwise a status made Removed is a Remove, and a role or a band
  * edit is a RoleChange or a BandChange. A save that touches none of these is no seat change and has no kind.
  */
 export function decideMemberKind(change: { isNew: boolean; status: string; statusChanged: boolean; roleChanged: boolean; bandChanged: boolean }): MemberChangeKind | null {

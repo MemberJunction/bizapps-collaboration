@@ -58,6 +58,11 @@ export async function bundleGalleryApp() {
     const buttonContent = readFileSync(buttonScssPath, 'utf8');
     const { code: buttonCss } = await transform(buttonContent, { loader: 'css' });
 
+    // mj-dialog draws the dialogs (the share dialog in frame 04): the host app ships its stylesheet, so the gallery must too
+    const dialogScssPath = join(dirname(require.resolve('@memberjunction/ng-ui-components/package.json')), 'dist/lib/dialog/dialog.scss');
+    const dialogContent = readFileSync(dialogScssPath, 'utf8');
+    const { code: dialogCss } = await transform(dialogContent, { loader: 'css' });
+
     const collabTokens = `
 :root {
   --mjc-shared: var(--mj-brand-tertiary-active);
@@ -96,7 +101,7 @@ body {
 }
 `;
 
-    const combinedCss = [fontCss, tokensContent, collabTokens, buttonCss, baseReset].join('\n\n');
+    const combinedCss = [fontCss, tokensContent, collabTokens, buttonCss, dialogCss, baseReset].join('\n\n');
     writeFileSync(join(here, 'dist/gallery.css'), combinedCss, 'utf8');
     console.log('UXGallery stylesheet built to dist/gallery.css');
 }

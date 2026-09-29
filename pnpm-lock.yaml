@@ -175,6 +175,9 @@ importers:
       '@angular/forms':
         specifier: 21.2.23
         version: 21.2.23(@angular/common@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))(@angular/platform-browser@21.2.23(@angular/animations@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2)))(@angular/common@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2)))(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: 21.2.23
+        version: 21.2.23(@angular/animations@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2)))(@angular/common@21.2.23(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.23(@angular/compiler@21.2.23)(rxjs@7.8.2))
       '@memberjunction/conversations-runtime':
         specifier: 6.1.3
         version: 6.1.3(ws@8.21.3)
@@ -205,6 +208,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.1.3
         version: 6.1.3(2c195e2e4c2a3f5ddd2c627f5e209823)
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3

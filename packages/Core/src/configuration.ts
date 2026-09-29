@@ -46,10 +46,6 @@ export interface CollaborationSettings {
         AllowedTypeCodes?: string[];
         MaxOpen?: number;
     };
-    /** Roles that administer spaces of this type, beside Collaboration's staff roles. */
-    Admin?: {
-        RoleNames?: string[];
-    };
     /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
     SpaceOverridable?: string[];
     /** Behavior switches that the type's own drivers read, keyed by app. */
@@ -269,9 +265,6 @@ export interface ResolvedCollaborationSettings {
         AllowedTypeCodes?: string[];
         MaxOpen?: number;
     };
-    Admin?: {
-        RoleNames?: string[];
-    };
     Extensions: Record<string, Record<string, ConfigurationValue>>;
 }
 
@@ -299,7 +292,6 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'Agents',
     'Labels',
     'Children',
-    'Admin',
     'SpaceOverridable',
     'Extensions',
 ]);
@@ -405,17 +397,6 @@ export function ValidateCollaborationSettings(
         }
     }
 
-    if (c['Admin'] !== undefined) {
-        if (!c['Admin'] || typeof c['Admin'] !== 'object' || Array.isArray(c['Admin'])) {
-            errors.push('Admin must be an object.');
-        } else {
-            const adm = c['Admin'] as Record<string, unknown>;
-            if (adm['RoleNames'] !== undefined && !Array.isArray(adm['RoleNames'])) {
-                errors.push('Admin.RoleNames must be an array of strings.');
-            }
-        }
-    }
-
     if (c['SpaceOverridable'] !== undefined && !Array.isArray(c['SpaceOverridable'])) {
         errors.push('SpaceOverridable must be an array of strings.');
     }
@@ -445,7 +426,7 @@ export function ValidateCollaborationSettings(
     if (level === 'space') {
         const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
         // Keys that only a type or the app can hold: on a space they would do nothing, so they are refused instead
-        for (const typeOnly of ['Children', 'Admin', 'SpaceOverridable']) {
+        for (const typeOnly of ['Children', 'SpaceOverridable']) {
             if (c[typeOnly] !== undefined) errors.push(`${typeOnly} cannot be set on a space: it belongs to the space type.`);
         }
         const isAllowed = (dottedKey: string): boolean => {
@@ -646,7 +627,6 @@ export function ResolveCollaborationSettings(
         },
         Labels: tabs ? { Tabs: tabs } : undefined,
         Children: typeConfig?.Children,
-        Admin: typeConfig?.Admin,
         Extensions: extensions,
     };
 }

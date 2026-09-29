@@ -122,6 +122,32 @@ mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
 }
 `;
 
+/** What closing a space would do, read from the server. */
+export interface CloseConsequenceGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    /** ReadOnly, ReadOnlyWithAgent or None. */
+    Access?: string;
+    Days?: number;
+    KeeperUserID?: string;
+    KeeperName?: string;
+    KeeperCanReopen?: boolean;
+}
+
+const GET_CLOSE_CONSEQUENCE_QUERY = `
+query GetCloseConsequence($spaceId: String!) {
+    GetCloseConsequence(spaceId: $spaceId) {
+        Success
+        ErrorMessage
+        Access
+        Days
+        KeeperUserID
+        KeeperName
+        KeeperCanReopen
+    }
+}
+`;
+
 const GET_SPACE_CHAT_HOST_RULES_QUERY = `
 query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
     GetSpaceChatHostRules(spaceId: $spaceId, conversationId: $conversationId) {
@@ -254,6 +280,11 @@ export class CollaborationClient {
         return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
+
+    async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_CLOSE_CONSEQUENCE_QUERY, { spaceId });
+        return (res?.GetCloseConsequence as CloseConsequenceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
 
     async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_CHAT_HOST_RULES_QUERY, { spaceId, conversationId });

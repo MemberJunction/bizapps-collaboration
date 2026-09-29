@@ -8,6 +8,7 @@ import { BaseSpaceOverviewCard } from '@mj-biz-apps/collaboration-ng-widgets';
     metadata: {
         spaceTypes: ['example-room'],
         slot: 'card',
+        side: 'Shared',
         sortKey: 15,
         contributionKey: 'deal-summary',
     },

@@ -61,7 +61,7 @@ export interface ChildSpaceChangeContext extends DriverBaseContext {
 
 /**
  * What a change to a seat means to the driver, from what the save asked for. A new seat is an `Invite`, or a `Remove` when it is
- * made Removed. A saved seat whose status becomes Active or Invited is an `Invite` too: an approval or a reinstatement is the seat coming
+ * made Removed. A saved seat whose status becomes Active or Invited is an `Invite` too: an approval, a reinstatement or a re-invitation is the seat coming
  * into being, not a route the driver hears. Otherwise a status made Removed is a `Remove`, and a role or a band edit is a `RoleChange`
  * or a `BandChange`. The kind is what was asked for: a band the gate puts back still reaches the driver as a `BandChange`. A save
  * that touches none of status, role and band raises no seat reaction.

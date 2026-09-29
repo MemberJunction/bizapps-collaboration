@@ -31,6 +31,7 @@ export class ExampleRoomUIDriver extends BaseSpaceTypeUIDriver {
                 key: 'deal-summary',
                 title: 'Deal Overview',
                 sortKey: 15,
+                side: 'Shared',
                 component: ExampleRoomDealSummaryCard,
             },
         ]);

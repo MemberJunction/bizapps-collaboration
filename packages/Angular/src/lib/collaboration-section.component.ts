@@ -18,7 +18,8 @@ import { formatDate as formatDateLocale, formatDateTime } from './logic/format-d
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
-import { closeConsequence } from './logic/close-consequence.js';
+import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
+import { closeConsequence, type CloseConsequenceRead } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
@@ -629,16 +630,20 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     <span class="stat-lbl">Active Spaces</span>
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('tasks')">
-                                                    <span class="stat-val">{{ taskCount }}</span>
-                                                    <span class="stat-lbl">My Tasks</span>
+                                                    <span class="stat-val">{{ homeOpenTasks }}</span>
+                                                    <span class="stat-lbl">Open Tasks</span>
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('inbox')">
                                                     <span class="stat-val">{{ inboxCount }}</span>
                                                     <span class="stat-lbl">Inbox</span>
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('files')">
-                                                    <span class="stat-val">{{ librarySharedCount }}</span>
+                                                    <span class="stat-val">{{ homeSharedFiles }}</span>
                                                     <span class="stat-lbl">Shared Files</span>
+                                                </div>
+                                                <div class="stat-pill">
+                                                    <span class="stat-val">{{ homeAwaitingApproval }}</span>
+                                                    <span class="stat-lbl">Awaiting Approval</span>
                                                 </div>
                                             </div>
                                         </header>
@@ -1017,8 +1022,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [saveInfoMessage]="settingsInfoMessage"
                                                     [IsRootSpace]="!activeSpaceRecord?.ParentID"
                                                     [IsBusy]="isChangingLifecycle"
-                                                    [CanEdit]="canConfigureCurrentSpace"
-                                                    [CanChangeLifecycle]="canCloseCurrentSpace || canReopenCurrentSpace"
+                                                    [CanEdit]="settingsAccessNow.canEdit"
+                                                    [CanChangeLifecycle]="settingsAccessNow.canChangeLifecycle"
+                                                    [ReadOnlyNote]="settingsAccessNow.readOnlyNote"
                                                     [CloseConsequence]="closeConsequenceText"
                                                     (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
                                                     (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
@@ -1150,12 +1156,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
     }
 
-    public isUploading = false;
-    /** The space an upload in flight is for. */
-    private uploadingSpaceId: string | null = null;
+    /** The spaces an upload is in flight for, one entry per upload: two uploads to one space count twice. */
+    private readonly uploadingSpaceIds: string[] = [];
     /** True while an upload for the space shown is with the server: the dialog of another space is not held by it. */
     public get isUploadingHere(): boolean {
-        return this.isUploading && !!this.uploadingSpaceId && UUIDsEqual(this.uploadingSpaceId, this.activeSpaceId);
+        return this.uploadingSpaceIds.some((id) => UUIDsEqual(id, this.activeSpaceId));
     }
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
@@ -1190,7 +1195,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public canConfigureCurrentSpace = false;
     /** An owner may reopen a closed space even when its post-close access has ended and they can no longer configure it. */
     public canReopenCurrentSpace = false;
-    /** Closing needs the settings right and the 'Close and Reopen Spaces' authorization, on a space that is open. */
+    /** Closing needs the 'Close and Reopen Spaces' authorization and an owner seat, on a space that is open: not the settings right. */
     public canCloseCurrentSpace = false;
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
@@ -1215,7 +1220,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             // Only a closed space is reopened, and only there does the right differ from configuring
             if (this.activeSpaceRecord?.ClosedAt) {
                 canReopen = await CollaborationEngineBase.Instance.UserCanReopenSpace(this.currentUser, spaceIdAtStart, this.ProviderToUse);
-            } else if (canConfig) {
+            } else {
                 canClose = await CollaborationEngineBase.Instance.UserCanCloseSpace(this.currentUser, spaceIdAtStart, this.ProviderToUse);
             }
         } catch (e) {
@@ -1230,6 +1235,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.canConfigureCurrentSpace = canConfig;
         this.canReopenCurrentSpace = canReopen;
         this.canCloseCurrentSpace = canClose;
+        // What closing does is read once the person may close: the confirmation says it before the close
+        if (canClose) void this.loadCloseConsequence(spaceIdAtStart);
         if (!this.showsSettings && this.activeTab === 'Settings') {
             this.activeTab = 'Overview';
             this.UpdateQueryParams({ tab: 'overview' });
@@ -1237,22 +1244,58 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    /** What closing the space shown does, from the post-close access its own settings and its type's give it. */
+    /** What the server says closing the space shown would do. Null until it has answered, or when it could not. */
+    private closeConsequenceRead: CloseConsequenceRead | null = null;
+    private closeConsequenceForSpace: string | null = null;
+
+    /** What closing the space shown does, in words: read from the server, which knows the ancestors and the keeper. */
     public get closeConsequenceText(): string {
-        const space = this.activeSpaceRecord;
+        return closeConsequence(
+            this.closeConsequenceForSpace && UUIDsEqual(this.closeConsequenceForSpace, this.activeSpaceId) ? this.closeConsequenceRead : null,
+            this.currentUser?.ID,
+        );
+    }
+
+    /** Asks the server what closing the space would do, for the space shown. A later selection's answer is the one kept. */
+    private async loadCloseConsequence(spaceId: string): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
         try {
-            const config = space?.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
-            const resolved = CollaborationEngineBase.Instance.ResolveSettingsForSpace([config], space?.SpaceTypeID);
-            return closeConsequence(resolved.PostCloseAccess, resolved.PostCloseAccessDays);
+            const res = await new CollaborationClient(this.graphQLExecutor).GetCloseConsequence(spaceId);
+            if (!UUIDsEqual(this.activeSpaceId, spaceId)) return;
+            if (!res.Success || !res.KeeperUserID || !res.KeeperName || !res.Access) {
+                this.logOnce(`consequence:${spaceId}`, `Could not read what closing space ${spaceId} does: ${res.ErrorMessage ?? 'no answer'}`);
+                this.closeConsequenceRead = null;
+            } else {
+                this.closeConsequenceRead = {
+                    access: res.Access as CloseConsequenceRead['access'],
+                    days: res.Days ?? null,
+                    keeperUserId: res.KeeperUserID,
+                    keeperName: res.KeeperName,
+                    keeperCanReopen: !!res.KeeperCanReopen,
+                };
+            }
+            this.closeConsequenceForSpace = spaceId;
         } catch (err) {
-            this.logOnce(`consequence:${space?.ID}`, `Could not resolve the post-close access of space ${space?.ID}: ${err instanceof Error ? err.message : String(err)}`);
-            return closeConsequence('ReadOnly', null);
+            this.logOnce(`consequence:${spaceId}`, `Could not read what closing space ${spaceId} does: ${err instanceof Error ? err.message : String(err)}`);
+            this.closeConsequenceRead = null;
+            this.closeConsequenceForSpace = spaceId;
         }
+        this.RefreshView();
     }
 
     /** Settings is offered to someone who may configure the space, and to an owner who may only reopen it (read-only, with Reopen). */
     public get showsSettings(): boolean {
-        return this.canConfigureCurrentSpace || this.canReopenCurrentSpace;
+        return this.settingsAccessNow.showTab;
+    }
+
+    /** What Settings offers the person on the space shown: the form, the close or reopen button, and the note over a read-only view. */
+    public get settingsAccessNow(): SettingsAccess {
+        return settingsAccess({
+            isClosed: !!this.activeSpaceRecord?.ClosedAt,
+            canConfigure: this.canConfigureCurrentSpace,
+            canClose: this.canCloseCurrentSpace,
+            canReopen: this.canReopenCurrentSpace,
+        });
     }
 
     /** The tabs of the space shown: the built-in ones its type's panels allow, plus what the type and other apps contribute. */
@@ -1347,10 +1390,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }, (err) => this.logOnce(`tabs:${space.ID}`, `The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
-        const cardFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; title?: string; sortKey?: number }): SpaceOverviewCardDescriptor => ({
+        const cardFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; title?: string; sortKey?: number; side?: 'Shared' | 'Team' }): SpaceOverviewCardDescriptor => ({
             key: meta.contributionKey,
             title: meta.title ?? meta.contributionKey,
             sortKey: meta.sortKey,
+            side: meta.side,
             component: reg.SubClass as SpaceOverviewCardDescriptor['component'],
         });
         try {
@@ -1374,6 +1418,51 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
+
+    /** What Home counts across every space the person reaches (the rest of the app counts the space shown): read with their own filters. */
+    public homeSharedFiles = 0;
+    public homeOpenTasks = 0;
+    public homeAwaitingApproval = 0;
+
+    /**
+     * Counts Shared files, open tasks and seats awaiting approval across the person's spaces. Each read is theirs, so the row
+     * filters decide what counts; a read that fails leaves its count at 0 and is logged.
+     */
+    private async loadHomeCounts(): Promise<void> {
+        const rv = new RunView(this.RunViewToUse);
+        const count = async (entityName: string, filter: string): Promise<number> => {
+            const res = await rv.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only' });
+            if (!res?.Success) {
+                this.logOnce(`home:${entityName}`, `Home could not count ${entityName}: ${res?.ErrorMessage ?? 'unknown error'}`);
+                return 0;
+            }
+            return res.RowCount ?? res.TotalRowCount ?? 0;
+        };
+        const tasksEntity = this.ProviderToUse.EntityByName('MJ_BizApps_Tasks: Tasks');
+        const [files, approvals, taskItems] = await Promise.all([
+            count('MJ_BizApps_Collaboration: Space Items', "Band = 'Shared'"),
+            // Seats other people are waiting on: the filter shows an Invited seat to those who may approve it, and to its own person
+            count('MJ_BizApps_Collaboration: Space Members', `Status = 'Invited'${this.currentUser?.ID && isValidUuid(this.currentUser.ID) ? ` AND UserID <> '${this.currentUser.ID}'` : ''}`),
+            tasksEntity
+                ? rv.RunView<{ RecordID: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                    ExtraFilter: `EntityID = '${tasksEntity.ID}'`,
+                    Fields: ['RecordID'],
+                    ResultType: 'simple',
+                    MaxRows: 500,
+                })
+                : Promise.resolve(null),
+        ]);
+        let openTasks = 0;
+        const taskIds = (taskItems?.Results ?? []).map((item) => (item.RecordID ?? '').replace(/^ID\|/i, '')).filter((id) => isValidUuid(id));
+        if (taskIds.length > 0) {
+            openTasks = await count('MJ_BizApps_Tasks: Tasks', `ID IN (${taskIds.map((id) => `'${id}'`).join(',')}) AND Status <> 'Completed'`);
+        }
+        this.homeSharedFiles = files;
+        this.homeAwaitingApproval = approvals;
+        this.homeOpenTasks = openTasks;
+        this.RefreshView();
+    }
 
     // Overview state data
     public overviewNeedsYou: NeedsYouItemModel[] = [];
@@ -1718,6 +1807,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.loadErrorMessage = '';
                     this.rawSpaces = spacesRes.Results;
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+                    void this.loadHomeCounts();
 
                     const params = this._pendingQueryParams ?? this.GetQueryParams();
                     this._pendingQueryParams = null;
@@ -3026,8 +3116,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // the file is read, and the file, in the band they chose, belongs to the space they chose it for
         const spaceId = this.activeSpaceId;
         const spaceName = this.rawSpaces.find((sp) => UUIDsEqual(sp.ID, spaceId))?.Name ?? 'the space it was for';
-        this.isUploading = true;
-        this.uploadingSpaceId = spaceId;
+        this.uploadingSpaceIds.push(spaceId);
         this.RefreshView();
         try {
             if (payload.mode === 'upload' && payload.file) {
@@ -3070,7 +3159,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             LogError('Error submitting upload: ' + msg);
             SharedService.Instance.CreateSimpleNotification(`Failed to upload file to ${spaceName}: ${msg}`, 'error', 5000);
         } finally {
-            this.isUploading = false;
+            // Only this upload's entry goes: another upload still in flight keeps its dialog showing as sending
+            const own = this.uploadingSpaceIds.findIndex((id) => UUIDsEqual(id, spaceId));
+            if (own >= 0) this.uploadingSpaceIds.splice(own, 1);
             this.RefreshView();
         }
     }

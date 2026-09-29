@@ -195,6 +195,11 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.UserCanConfigureSpaces(user, spaceId, provider);
     }
 
+    /** Whether a user may reopen a closed space: the lifecycle authorization and an owner seat, reached even past the space's end. */
+    public async UserCanReopenSpace(user: UserInfo, spaceId: string, provider?: IMetadataProvider): Promise<boolean> {
+        return this.Base.UserCanReopenSpace(user, spaceId, provider);
+    }
+
     /** Whether a user holds the 'Close and Reopen Spaces' authorization. The owner seat is checked apart, by the space write rules. */
     public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
         return this.Base.UserHoldsLifecycleAuthorization(user, provider);

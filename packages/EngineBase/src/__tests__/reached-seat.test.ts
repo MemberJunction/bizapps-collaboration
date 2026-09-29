@@ -126,9 +126,14 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
     });
 
     it("gives an owner no reopen right without the 'Close and Reopen Spaces' authorization, though the seat is right", async () => {
-        const without = providerOver([seat(CLOSED_NONE, OWNER_ROLE)], false, false, lifecycleAuthorizations(['Developer']));
+        const without = providerOver([seat(CLOSED_NONE, OWNER_ROLE), seat(DISCOVERY, OWNER_ROLE)], false, false, lifecycleAuthorizations(['Developer']));
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, without, roleTypeOf)).toBe(false);
         expect(await engine.UserCanCloseSpace(user, DISCOVERY, without, roleTypeOf)).toBe(false);
+        // The same owner, with the authorization, may close the open space they hold a seat on: the seat is right, so the authorization decides
+        const withIt = providerOver([seat(DISCOVERY, OWNER_ROLE)], false, false, lifecycleAuthorizations(['Space Participant']));
+        expect(await engine.UserCanCloseSpace(user, DISCOVERY, withIt, roleTypeOf)).toBe(true);
+        const notWithIt = providerOver([seat(DISCOVERY, OWNER_ROLE)], false, false, lifecycleAuthorizations(['Developer']));
+        expect(await engine.UserCanCloseSpace(user, DISCOVERY, notWithIt, roleTypeOf)).toBe(false);
     });
 
     it('gives no reopen right to a member who does not own the closed space, or to someone with no seat', async () => {

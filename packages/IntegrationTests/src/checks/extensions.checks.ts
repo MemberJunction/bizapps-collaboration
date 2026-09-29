@@ -515,8 +515,7 @@ const checks: NamedCheck[] = [
                 Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
 
                 // A member seated on the Team band who is given the outside role would be a second outside director: also refused
-                const memberRole = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'contributor'", ['ID']))[0]
-                    ?? (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, 'CanSeeTeamBand = 1 AND IsOwnerRole = 0', ['ID']))[0];
+                const memberRole = (await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'member'", ['ID']))[0];
                 Assert(!!memberRole, 'A non-owner role that sees the Team band exists');
                 const teamSeat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
                 teamSeat.NewRecord();
@@ -529,6 +528,14 @@ const checks: NamedCheck[] = [
                 teamSeat.SpaceRoleTypeID = outsideRole.ID;
                 Assert(!(await teamSeat.Save()), 'Giving Bea the outside role would make a second outside director, and must be refused');
                 Assert(/most its type allows \(1\)/.test(teamSeat.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${teamSeat.LatestResult?.CompleteMessage ?? ''}`);
+
+                // The one outside director changing between outside roles is not a second: the count leaves out the seat itself
+                const outsideRoles = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, 'CanSeeTeamBand = 0', ['ID']);
+                const other = outsideRoles.find((role) => role.ID.toLowerCase() !== outsideRole.ID.toLowerCase());
+                if (other) {
+                    first.SpaceRoleTypeID = other.ID;
+                    Assert(await first.Save(), `The only outside director may change between outside roles on a full board: ${first.LatestResult?.CompleteMessage ?? ''}`);
+                }
             } finally {
                 await closeAndRemove(ctx, space.ID);
             }

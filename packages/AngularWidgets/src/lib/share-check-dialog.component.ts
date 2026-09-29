@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { CollabDialogBase } from './dialog-base';
 import type { FileKind, FindingModel, RecipientPersonModel } from './types';
 import { CollabShareCheckComponent } from './share-check.component';
@@ -9,11 +9,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-share-check-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MJDialogComponent, CollabShareCheckComponent],
+  imports: [MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, CollabShareCheckComponent],
   template: `
-    <mj-dialog [Visible]="true" [Width]="680" (Close)="onCancel()">
-    <div #dialogBox class="share-modal">
+    <mj-dialog [Visible]="true" [Title]="Title || 'Share an item'" [Width]="680" (Close)="onCancel()">
+    <div class="share-modal">
       <mjc-share-check
+        #check
+        [Framed]="false"
         [Title]="Title"
         [ItemName]="ItemName"
         [Kind]="Kind"
@@ -35,6 +37,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         (CancelRequested)="onCancel()"
       />
     </div>
+    <mj-dialog-actions>
+      @if (Findings && Findings.length > 0) {
+        <button mjButton variant="primary" (click)="check.onApplyAndShare()">
+          <i class="fa-solid fa-check"></i>
+          <span>{{ check.primaryButtonText }}</span>
+        </button>
+        <button mjButton variant="secondary" (click)="check.onShareAsIs()">Share as is</button>
+      } @else {
+        <button mjButton variant="primary" (click)="check.onShareAsIs()">
+          <i class="fa-solid fa-share"></i>
+          <span>Share</span>
+        </button>
+      }
+      <button mjButton variant="flat" (click)="onCancel()">Cancel</button>
+    </mj-dialog-actions>
     </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
@@ -51,8 +68,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   `],
 })
 export class CollabShareCheckDialogComponent extends CollabDialogBase {
-  @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
+  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
 
   @Input() public Title = '';
   @Input() public ItemName = '';

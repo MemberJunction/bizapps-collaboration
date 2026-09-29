@@ -50,7 +50,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       @if (!CanEdit) {
         <div class="alert-info" role="status">
           <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <span>You can reopen this space, but you can't change its settings.</span>
+          <span>{{ ReadOnlyNote }}</span>
         </div>
         <div class="settings-sections">
           <div class="settings-card">
@@ -545,6 +545,8 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() CanEdit = true;
   /** Whether the person may close (or, on a closed space, reopen) it: the button is offered only then. */
   @Input() CanChangeLifecycle = true;
+  /** Said above the read-only view: what the person may do instead. */
+  @Input() ReadOnlyNote = '';
   /** What closing does under this space's post-close access, shown where the close is confirmed. */
   @Input() CloseConsequence = 'It becomes read-only for everyone.';
   private baselineJson = '';

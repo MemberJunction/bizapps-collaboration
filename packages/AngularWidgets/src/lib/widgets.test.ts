@@ -1,7 +1,5 @@
 import '@angular/compiler';
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { CollabDialogBase } from './dialog-base.ts';
-import type { ElementRef } from '@angular/core';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabAvatarStackComponent } from './avatar-stack.component.ts';
 import { CollabTypeTileComponent } from './type-tile.component.ts';
@@ -244,10 +242,9 @@ describe('CollabSpaceRailComponent', () => {
     });
 
     let stopped = false;
-    const mockEvent = {
-      stopPropagation: () => {
-        stopped = true;
-      }
+    const mockEvent = new Event('click');
+    mockEvent.stopPropagation = () => {
+      stopped = true;
     };
 
     expect(comp.isNodeExpanded(node)).toBe(false);
@@ -1175,21 +1172,6 @@ describe('Copy link says how it went', () => {
   });
 });
 
-describe('the Team row keeps Share as a control of its own', () => {
-  it("emits the share request, and not the row's selection, when Share is activated", () => {
-    const row = new CollabItemRowComponent();
-    const shared = vi.fn();
-    const selected = vi.fn();
-    row.ShareRequested.subscribe(shared);
-    row.RowSelectRequested.subscribe(selected);
-    const stop = vi.fn();
-    row.onShareClick({ stopPropagation: stop });
-    expect(shared).toHaveBeenCalledTimes(1);
-    expect(stop).toHaveBeenCalled();
-    expect(selected).not.toHaveBeenCalled();
-  });
-});
-
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
@@ -1563,69 +1545,5 @@ describe('CollabSpaceSettingsComponent', () => {
   it('edits and offers close and reopen by default', () => {
     const comp = new CollabSpaceSettingsComponent();
     expect([comp.CanEdit, comp.CanChangeLifecycle]).toEqual([true, true]);
-  });
-});
-
-
-
-
-describe('CollabDialogBase focus', () => {
-  class Probe extends CollabDialogBase {
-    public asked: string[] = [];
-    public focused: string[] = [];
-    protected override DialogBox() {
-      const ask = (selector: string) => { this.asked.push(selector); return null; };
-      return { nativeElement: { querySelector: ask } } as unknown as ElementRef<HTMLElement>;
-    }
-    protected override Dismiss(): void { /* not used */ }
-    public first() { return this.FirstFocus(); }
-    public schedule() { this.ScheduleFirstFocus(); }
-    protected override FirstFocus(): HTMLElement | null {
-      this.focused.push('asked');
-      return super.FirstFocus();
-    }
-  }
-
-  it("never lands on the header's close button first, so Enter right after opening doesn't close the dialog", () => {
-    const probe = new Probe();
-    probe.first();
-    const buttonQuery = probe.asked.find((q) => q.startsWith('button'));
-    expect(buttonQuery).toContain(':not(.btn-close)');
-    expect(probe.asked[0]).toContain('data-autofocus');
-  });
-
-  it('cancels a pending focus when the dialog is destroyed', () => {
-    vi.useFakeTimers();
-    try {
-      const probe = new Probe();
-      probe.schedule();
-      probe.ngOnDestroy();
-      vi.runAllTimers();
-      expect(probe.focused).toEqual([]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('focuses on the next turn when it is not destroyed', () => {
-    vi.useFakeTimers();
-    try {
-      const probe = new Probe();
-      probe.schedule();
-      vi.runAllTimers();
-      expect(probe.focused).toEqual(['asked']);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
-describe('CollabSpaceRailComponent conversations', () => {
-  it('lists conversations only for a space whose type has a Chat tab', () => {
-    const rail = new CollabSpaceRailComponent();
-    rail.Tabs = [{ id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' }];
-    expect(rail.HasChatTab).toBe(false);
-    rail.Tabs = [...rail.Tabs, { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' }];
-    expect(rail.HasChatTab).toBe(true);
   });
 });

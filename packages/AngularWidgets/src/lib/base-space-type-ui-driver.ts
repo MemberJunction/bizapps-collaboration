@@ -35,6 +35,11 @@ export interface SpaceOverviewCardDescriptor {
     subtitle?: string;
     sortKey?: number;
     component?: Type<BaseSpaceOverviewCard>;
+    /**
+     * Who sees the card: 'Shared' shows it to everyone in the space, 'Team' only to those who can see the Team band. A card that
+     * doesn't say is a Team card: outside participants never see a card unless its author said they may.
+     */
+    side?: 'Shared' | 'Team';
 }
 
 export interface SpaceHeaderChipDescriptor {
@@ -214,6 +219,8 @@ function logContributionOnce(message: string): void {
 
 export interface SpaceContributionMetadata {
     spaceTypes: string[];
+    /** For a card: who sees it (see `SpaceOverviewCardDescriptor.side`). */
+    side?: 'Shared' | 'Team';
     slot?: string;
     sortKey?: number;
     contributionKey: string;
@@ -252,6 +259,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
             label: typeof raw['label'] === 'string' ? raw['label'] : undefined,
             icon: typeof raw['icon'] === 'string' ? raw['icon'] : undefined,
             title: typeof raw['title'] === 'string' ? raw['title'] : undefined,
+            side: raw['side'] === 'Shared' || raw['side'] === 'Team' ? raw['side'] : undefined,
         };
         const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
