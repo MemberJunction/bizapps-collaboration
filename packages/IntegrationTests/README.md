@@ -18,6 +18,7 @@ Collaboration's integration checks, and the sample world they run against.
 | `room` | 12 | 11 | A space's conversations: who reads and starts them, posting, agent replies, and close and reopen |
 | `write-gates` | 10 | 8 | The gates on spaces, seats, items, share notices and item uses, invitations and a change of type |
 | `extensions` | 12 | none | The example types' drivers, and `Children` rules (EX1 to EX12) |
+| `subtypes` | 3 | none | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3) |
 | `row-filters` | 4 | 4 | What each persona reads |
 | `library` | 6 | 8 | The seeded items, uploads and deletes |
 | `agent` | 10 | 7 | The agent's bounded retrieval, its search scope, and turns on the stub agent |
@@ -28,7 +29,7 @@ Collaboration's integration checks, and the sample world they run against.
 - **Client bundles** (`src/checks/client/`, entry `src/client-index.ts`, exported as `./client`) run over GraphQL. They load no server package. `src/persona-provider.ts` signs in as each persona with a user API key it creates.
 - `src/expected-bundles.ts` holds the expected counts. `scripts/assert-check-count.mjs` reads it to fail a run that ran fewer checks.
 - `src/wire.ts` and `src/entity-names.ts` hold the helpers and entity names the checks share.
-- The repo's `mj.config.cjs` points `testing.checkModules` at this package. `metadata-tests/` holds the stub agent and the example space types the checks need (`pnpm run mj:push:tests`), and `mj test` suite records for eight of the server bundles (COL-00 to COL-07; not `extensions`, `features` or `lifecycle`).
+- The repo's `mj.config.cjs` points `testing.checkModules` at this package. `metadata-tests/` holds the stub agent, the example space types and their entities' permissions, which the checks need (`pnpm run mj:push:tests`), and `mj test` suite records for eight of the server bundles (COL-00 to COL-07; not `extensions`, `subtypes`, `features` or `lifecycle`).
 - `src/agents/` is the stub agent's driver, **Space Chat Test Stub**, so agent turns need no model key.
 
 **The sample world,** `COLLAB-WORLD` (`src/world/`):
@@ -45,11 +46,11 @@ pnpm --filter @mj-biz-apps/collaboration-integration-tests run build
 pnpm --filter @mj-biz-apps/collaboration-integration-tests test
 ```
 
-The build compiles the example types' server entry, runs `tsc`, then copies the world's CSV into `dist/`. The unit tests use Vitest, 52 in all:
+The build compiles the example types' server entry, runs `tsc`, then copies the world's CSV into `dist/`. The unit tests use Vitest, 54 in all:
 - `registry-parity.test.ts` and `client-parity.test.ts`: each entry registers exactly the expected bundles, checks and lifecycles, and the client entry loads no server class;
 - `cleanup-reporting.test.ts`: a check reports its own error before its clean-up's, and a failed clean-up fails the check.
 
-**Running the checks** needs a database with Collaboration's migrations, its metadata, the test metadata and the world loaded ([building the database](../../docs/building-the-database.md)). The client checks also need a running MJAPI with Collaboration's server package loaded, started with the stub agent's and the storage driver's entries imported, plus `MJ_API_KEY`, and `MJAPI_URL` or `GRAPHQL_PORT` ([running the harnesses](../../docs/building-the-database.md#running-the-harnesses)). Run each harness from a purge and a fresh load, then again on that load. From the repo root:
+**Running the checks** needs a database with Collaboration's migrations, its metadata, the example types' schema, the test metadata and the world loaded ([building the database](../../docs/building-the-database.md)). The client checks also need a running MJAPI with Collaboration's server package loaded, started with the stub agent's and the storage driver's entries imported, plus `MJ_API_KEY`, and `MJAPI_URL` or `GRAPHQL_PORT` ([running the harnesses](../../docs/building-the-database.md#running-the-harnesses)). Run each harness from a purge and a fresh load, then again on that load. From the repo root:
 
 ```bash
 pnpm run test:integration:server
@@ -63,4 +64,3 @@ pnpm run test:integration          # both
 
 - A check for every gate's accepting side, for tasks, invitations, share notices, item uses and band promotion. Some exist (WG6, WG8); the plan lists the rest.
 - The agent turns run on the stub agent, not a model.
-- The subtype path (an example type's own table as an IsA child of Space) isn't exercised end to end yet; PR 9 adds it (the plan's D42).

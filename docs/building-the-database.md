@@ -55,16 +55,24 @@ when `mj` is not on the path of the member you are in.
 
    A second full `mj sync push --dir=metadata` then reports nothing to do. `strip-sync-blocks.mjs` removes the `sync` blocks the push
    writes back and restores each file's final newline; `--check` fails if either is wrong (CI runs it).
-7. **The test metadata:** `pnpm run mj:push:tests` pushes the harness's stub agent and three example space types
+7. **The example types' own tables,** for a test database only. The board and the room keep their details in tables of their
+   own, in a schema of their own, as IsA children of Space; the migration holds their CodeGen output too:
+
+   ```bash
+   mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations
+   ```
+
+8. **The test metadata:** `pnpm run mj:push:tests` pushes the two example entities' permissions first
+   (`metadata-tests/entity-permissions`), then the harness's stub agent and three example space types
    (`metadata-tests/agents` and `metadata-tests/space-types`; see [reviewing the data](reviewing-the-data.md#the-test-agent)). The
-   `extensions` and `lifecycle` checks need the types. Then run `node scripts/strip-sync-blocks.mjs` again: it cleans
+   `extensions`, `subtypes` and `lifecycle` checks need the types. Then run `node scripts/strip-sync-blocks.mjs` again: it cleans
    `metadata-tests/` too.
-8. **The sample world:** build the integration package, then purge and load, as
+9. **The sample world:** build the integration package, then purge and load, as
    [reviewing the data](reviewing-the-data.md#loading-it) says.
 
 ## Running the harnesses
 
-- **Server:** `pnpm run test:integration:server`. It needs only the database, built through step 8.
+- **Server:** `pnpm run test:integration:server`. It needs only the database, built through step 9.
 - **Client:** `pnpm run test:integration:client`. It needs an MJAPI on the same database with this app's packages loaded, started with the
   test agent's and the storage driver's entries imported (the start command is in [reviewing the data](reviewing-the-data.md#files) and [the test agent](reviewing-the-data.md#the-test-agent)), `MJ_API_KEY`, and `MJAPI_URL` or
   `GRAPHQL_PORT`. Pick a port outside the fetch specification's blocked list: Node's `fetch` refuses 4190, for one.

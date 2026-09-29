@@ -104,18 +104,18 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 
 ### 3.6 Where stage 0 stands
 
-At `4c03dd9`, on 2026-09-29:
+At `90f677d`, on 2026-09-29:
 - **#8's final review:** every item is closed but the screenshots, which wait on sign-ins for the named users.
 - **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the dialogs' last points (57), Home's counts (60), the screenshot row (70) and the hand-built controls (73).
 - **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
   - **server drivers work in part:** every save runs its type's Validate hook, and reactions in the transaction and one resolver are stage 2's (79, 81);
-  - **UI drivers' tabs and Overview cards are wired in the section,** contributions only add, and each Overview card declares its side. The page asks a driver before an invite and before a conversation starts; its other hooks (header chips and actions, settings sections, new-space steps, the details form, and the checks before a message or a new sub-space) aren't called yet;
+  - **UI drivers' tabs and Overview cards are wired in the section,** contributions only add, and each Overview card declares its side. The page asks a driver before an invite and before a conversation starts, and for the details form; its other hooks (header chips and actions, settings sections, new-space steps, and the checks before a message or a new sub-space) aren't called yet;
   - **configuration works,** with `Admin.RoleNames` removed and `Labels.Bands` left for a type that needs it;
-  - **subtypes** are D42's work, still to do (75, 76, 77).
+  - **subtypes are built** (D42): the Spaces resolver, a type paired with its subtype, the check on the entity a type names, the example tables in a schema of their own with their CodeGen output, and the three screens (New space, Settings' Details card and the Overview's About card). Left: a change to only a subtype's own columns doesn't go through the space's write rules on the server yet (119); the screens draw a subtype's fields one by one, and a downstream app's own form can't take their place (77); and the delete of a space through its subtype works around [MJ#4850](https://github.com/MemberJunction/MJ/issues/4850).
 - **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
 - **Decided on 2026-09-29, and built:** the checks that went by a role's name ask the *Administer Spaces* authorization, and Settings offers agent retrieval only to someone who holds it (D41). Home's counts come from one approved query that only Integration may run, which the server runs as the system user (D45). `WhoCanStart` is `Anyone` or `Owners` (D43). A space's conversations offer no voice call.
-- **Tests:** Core's 133, EngineBase's 18, CoreEntitiesServer's 219, Server's 10, IntegrationTests' 52, the page's 113 and the example types' 45 pass in a clean install. The widgets' 131 pass in the builder's workspace; in a clean install `render.test.ts` doesn't load yet, so 112 run there. The harnesses hold 71 checks on the server and 60 on the client; at `4c03dd9`, the builder ran both twice from one load of the world, and both passed.
-- **To finish:** the latest review's items; D41's tests, D42, and Home's pills (D45); the MemberJunction pull request of D48; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
+- **Tests:** Core's 133, EngineBase's 18, CoreEntitiesServer's 232, Server's 10, IntegrationTests' 54, the page's 133 and the example types' 45 pass in a clean install. The widgets' 144 pass in the builder's workspace; in a clean install `render.test.ts` doesn't load yet, so 112 run there. The harnesses hold 74 checks on the server, in eleven bundles, and 60 on the client; at `90f677d`, the builder ran both twice from a purge and a fresh load, and both passed.
+- **To finish:** the latest review's items; D41's tests, what's left of D42, and Home's pills (D45); the MemberJunction pull request of D48, with MJ#4850 in it; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
 
 ## 4. Stages 1 to 4
 

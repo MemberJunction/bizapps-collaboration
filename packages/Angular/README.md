@@ -16,7 +16,8 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 - It's the whole Explorer surface:
   - Home (the spaces you reach, with the counts `GetHomeCounts` reads), Inbox, My Tasks and Files;
   - a space's page, with Overview, Library, Work (list, board and timeline), Chat, People, Settings, and any tabs a type or another app contributes;
-  - the share, upload and new-conversation dialogs.
+  - the share, upload, new-conversation and New space dialogs. New space is offered from the rail's + to someone who holds *Administer Spaces* and may create Space rows: it lists the active types, and draws a type's own fields when the type names a subtype.
+- A space whose type names a subtype shows that subtype's own fields in a Details card in Settings, editable by someone who may change settings, and read-only in an About card on the Overview (`src/lib/logic/space-details.ts`).
 - Settings closes and reopens a space, and the confirmation shows what `GetCloseConsequence` says a close will do.
 - The query parameters are `view`, `space`, `tab`, `item`, `conv` and `workView`, and back and forward restore them. It calls `SetAgentContext` and `NotifyLoadComplete()`.
 - The page's decisions that don't need Angular live in `src/lib/logic/`, as plain functions with their own tests.
@@ -31,9 +32,9 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 19 `node:test` files in `src/lib/logic/`, and the root `pnpm test` runs them too.
+The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 22 `node:test` files in `src/lib/logic/`, and the root `pnpm test` runs them too.
 
 ## Not done yet
 
-- The New Space screen with a type's own fields, Settings → Details and an About card, for a type with its own table (the plan's D42).
+- A sub-space made through the New space dialog, and a downstream app's own form for its subtype in place of the page's field-by-field one.
 - Header chips, needs-you items and agenda items from contributions.

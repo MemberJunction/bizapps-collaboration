@@ -28,17 +28,18 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-needs-you-card` | `CollabNeedsYouCardComponent` | Overview attention strip card for requests, reviews, and overdue tasks |
 | `mjc-item-preview` | `CollabItemPreviewComponent` | Right drawer preview with doc page snippet, marked text, audience stack, and recent uses |
 | `mjc-share-check` | `CollabShareCheckComponent` | Pre-share finding review panel with recipient cards and finding resolution controls |
-| `mjc-space-overview` | `CollabSpaceOverviewComponent` | Frame 02 Overview page composite (needs-you strip, cards grid, mini room, sub-spaces) |
+| `mjc-space-overview` | `CollabSpaceOverviewComponent` | Frame 02 Overview page composite (needs-you strip, cards grid, mini room, sub-spaces), with a read-only About card for the details a space's type keeps of its own, which the host draws in the `[mjcAbout]` slot |
 | `mjc-space-library` | `CollabSpaceLibraryComponent` | Frame 03 Library page composite (collections, files table, item preview drawer) |
 | `mjc-share-check-dialog` | `CollabShareCheckDialogComponent` | Frame 04 Share check modal dialog composite |
 | `mjc-upload-dialog` | `CollabUploadDialogComponent` | Uploads a file to a space, in a band the seat may choose |
 | `mjc-new-conversation-dialog` | `CollabNewConversationDialogComponent` | Starts a conversation: its name and kind (General, Topic or Internal Only) |
+| `mjc-new-space-dialog` | `CollabNewSpaceDialogComponent` | Starts a space: its kind, its name and description, and the kind's own details, which the host draws in the `[mjcDetails]` slot and holds Create for until the required ones are filled in |
 | `mjc-space-work` | `CollabSpaceWorkComponent` | The Work tab's task list |
 | `mjc-space-chat` | `CollabSpaceChatComponent` | MJ's chat area for a space's conversation, with the host rules from the server and no voice call |
 | `mjc-space-people` | `CollabSpacePeopleComponent` | The People tab: who reaches the space, and invitations |
-| `mjc-space-settings` | `CollabSpaceSettingsComponent` | The Settings tab, including close and reopen |
+| `mjc-space-settings` | `CollabSpaceSettingsComponent` | The Settings tab, including close and reopen, and a Details card for the type's own details, which the host draws in the `[mjcSettingsDetails]` slot, with a Save and Discard of its own |
 
-The three dialogs draw through MJ's `mj-dialog`. `CollabDialogBase` (`dialog-base.ts`) adds their first focus, a Tab trap and the return of focus.
+The four dialogs draw through MJ's `mj-dialog`. `CollabDialogBase` (`dialog-base.ts`) adds their first focus, a Tab trap and the return of focus.
 
 **The extension model's browser half:** `BaseSpaceTypeUIDriver` (a type's UI driver) and `UIDriverRegistry`, the contribution bases `BaseSpaceTab`, `BaseSpaceOverviewCard` and `BaseSpaceSettingsSection`, and `assembleSpaceContributions` and `overlayDescriptors`, which merge what a type and other apps contribute.
 
@@ -51,5 +52,5 @@ pnpm --filter @mj-biz-apps/collaboration-ng-widgets run build
 pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
 ```
 
-The build is `ngc`, into `dist/`. The tests use Vitest, 131 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings and a space's conversation (with a stand-in for MJ's chat area) in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
+The build is `ngc`, into `dist/`. The tests use Vitest, 144 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings with its Details card, the Overview's About card and a space's conversation (with a stand-in for MJ's chat area) in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
 

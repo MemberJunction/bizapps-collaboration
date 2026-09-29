@@ -393,17 +393,17 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 
 **Creating.**
 - Collaboration registers an `EntitySubtypeResolver` for Spaces in `collaboration-entities`, so the server and the browser both load it. It reads the type's `SpaceExtensionEntity` from Collaboration's cached types, and answers MJ's two questions with its two methods ([§ 9.2](#92-mj-core-knowing-a-subtype-on-load)):
-  - `Resolve()`, for a new space, may await the space type engine's `Config()`, since its answer has to be right.
+  - `Resolve()`, for a new space, reads the type itself when the types aren't loaded yet, since its answer has to be right.
   - `ResolveLoadHint()`, for a loaded space, reads the cached type only once that engine is loaded, and returns `null` (no hint) until then. It never queries.
 - **The resolver** is `SpaceSubtypeResolver` in `collaboration-entities`. It answers from `SpaceSubtypeDirectory`, which the engine fills with the types' `SpaceExtensionEntity` whenever it loads, and falls back to reading the type when the directory is empty. The rule lives in code because it depends on a row of another table.
 - **Not built:** declaring `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}` on the Spaces entity as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does. Where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load and doesn't need it.
-- **The New space dialog** makes a `SpaceEntity` through `NewSpaceDraft`: it sets the type, the owner and the type's default for inheriting membership, calls `EnsureISAChild()`, and draws the subtype's own fields. Create sets the name and description, saves once through the subtype, which writes both rows in one transaction, and seats the person as the space's owner. It is offered from the rail's + to a person who holds `Administer Spaces` and may create Space rows; a sub-space is not made through it yet.
+- **The New space dialog** makes a `SpaceEntity` through `NewSpaceDraft`: it sets the type, the owner and the type's default for inheriting membership, calls `EnsureISAChild()`, and draws the subtype's own fields. Create sets the name and description and saves once through the subtype, which writes both rows in one transaction; a second save then seats the person as the space's owner. It is offered from the rail's + to a person who holds `Administer Spaces` and may create Space rows; a sub-space is not made through it yet.
 - The resolver answers "none" for plain types. Without it, `EnsureISAChild()` falls back to "the only subtype", so once Committee were Space's only subtype, every new space would become a committee.
 
 **Showing.** Where a space has a subtype, the page draws the subtype's own columns with MJ's `<mj-form-field>`, one per field, bound to the subtype record (`space.LeafEntity`), so any subtype works without a form of its own.
 - **Which fields:** every column the subtype adds, in the entity's order: not the key, a column of the space (`ParentEntityFieldNames`), a view-only column or a `__mj_` column. A field is required when its column allows no null and has no default, and Create or Save waits for it.
 - **Where:** a details block in New space, a Details card in Settings, and an About card on the Overview, read-only. Settings has its own Save details and Discard, kept apart from the settings' Save, and it is read-only to a person who may not change settings. Leaving Settings drops details that were changed and not saved, so the About card never shows a value that isn't saved.
-- **The UI driver** replaces or trims the block through `GetDetailsForm(ctx, { entityName })`: it returns `undefined` to show none, or `hiddenFieldNames` to leave out optional fields (a required one always shows). A driver that throws leaves the default.
+- **The UI driver** trims the block through `GetDetailsForm(ctx, { entityName })`: it returns `undefined` to show none, or `hiddenFieldNames` to leave out optional fields (a required one always shows). A driver that throws leaves the default.
 - **Not built:** a downstream app's own generated, custom or interactive form in place of the default, through `<mj-entity-form-host [Record]="space.LeafEntity">`. It needs a form registered for the subtype entity, which the example package doesn't have.
 - **The gallery** draws them from fixtures, since the host shows "No form is registered" without the downstream package.
 
@@ -413,12 +413,12 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
   - An engine that caches spaces caches them as plain rows. `BaseEngine` defaults to entity objects, which would pay the probe on every load and refresh.
   - The space type engine caches the types, and the resolver reads them for both of its answers.
   - [§ 9.2](#92-mj-core-knowing-a-subtype-on-load) removes the probe when the cached type already says what the subtype is, through the resolver's `ResolveLoadHint()`.
-- **Security isn't inherited.** Space's read filter doesn't filter the subtype's views. Each downstream app writes its own filters with `fnCollaborationAccess`, which becomes a published contract ([§ 11](#11-security-rules-for-plug-ins)).
+- **Security isn't inherited.** Space's read filter doesn't filter the subtype's views. Each downstream app gives every role's read on its subtype Space's own filter, and Collaboration refuses a type naming a subtype that some role reads otherwise, or that a role reads without being able to read Spaces. It checks when the type is saved, so a permission changed later isn't checked again. Other space-scoped tables filter with `fnCollaborationAccess`, which becomes a published contract ([§ 11](#11-security-rules-for-plug-ins)).
 - **Space's column names are shared** with every subtype. If a subtype has a column with the same name as a Space column, CodeGen logs a field collision and skips the subtype's inherited fields altogether. So:
   - a subtype never reuses a Space column's name: `Name`, `Description`, `ParentID`, `StartedAt`, `ClosedAt` and the rest, as the Space table defines them;
   - a new `Space` column needs a changeset note, since it can collide with a column a downstream subtype already has;
   - Committees drops `Committee.Name`, `Description` and `ParentCommitteeID`, and `Term.Name`, as part of its move.
-- **Deletes cascade up.** Deleting a Committee deletes its Space, and there is no way to remove a subtype but keep the space.
+- **Deletes cascade up.** Deleting a Committee deletes its Space, and there is no way to remove a subtype but keep the space. A space that has its subtype attached is deleted through the subtype, which deletes its own row, then the space's; Collaboration's server hands the delete to the subtype itself, since MJ's own delegation never returns ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850)).
 - **Converting** an existing plain space into a subtype from the browser (IsA promotion) needs MJ `next`. In 6.1.3 only the server can do it.
 
 ## 8. Chats, history and agents
@@ -591,6 +591,7 @@ These are in the plan's workstream A:
 - Who a conversation message is from (A19, in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), open). Until it ships, a type's message hooks aren't enforced (the plan's D44).
 - Bound view and dashboard properties, hidden action parameters and locked query parameters (A14 to A17, in MJ#4789), which grants and a granted query need ([§ 11](#11-security-rules-for-plug-ins)).
 - A read-only chat area for a closed space ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Until that's in MJ `next`, Collaboration hides the composer itself.
+- An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), for the same pull request). Until that's in MJ `next`, Collaboration's server hands a space's delete to its subtype itself.
 
 ## 10. Examples
 
@@ -660,7 +661,7 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 - **Subtypes get the space's filter.** MJ doesn't carry Space's read filter onto a subtype's view, and CodeGen gives a new entity unfiltered read for MJ's UI role by default. So:
   - Collaboration ships its space-access filter as a reusable row-level security filter;
   - each app attaches it to every role's read permission on its subtype, as metadata;
-  - when a type names an extension entity, Collaboration's server refuses the type row unless the subtype's permissions match Space's: the same roles, with the space filter wherever Space has one (PR 9, the plan's D42; today the server checks only that the entity exists).
+  - when a type names an extension entity, Collaboration's server refuses the type row unless the entity is an IsA child of Spaces and every role that reads it reads Spaces too, under the same filter (PR 9, the plan's D42). The check runs when the type is saved.
 - **Data a space shows but doesn't own** is copied into its subtype's own columns by its driver, and read under that filter (decision 17).
 - **Configuration changes are privileged.** Only users with Collaboration's settings authorizations change settings on a type or a space (the plan's D23), and a space only the keys its type allows; the app's row is guarded by MJ's own permissions. External participants get none.
 - **A failing driver fails closed.** A driver that throws, or is named and missing, refuses the write. Nothing is saved without the type's rules.

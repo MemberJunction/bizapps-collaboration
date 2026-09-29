@@ -30,6 +30,11 @@ On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subcl
 - Pass it an executor: any object with `ExecuteGQL`, such as a component's `ProviderToUse` or MJ's GraphQL data provider. It throws without one.
 - `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
 
+**`SpaceSubtypeResolver`** (`src/space-subtype-resolver.ts`) tells MemberJunction which subtype a space is: the entity its type names in `SpaceExtensionEntity`, or none.
+- It's registered with `@RegisterClass(EntitySubtypeResolver, 'MJ_BizApps_Collaboration: Spaces')`, so the browser and the server both use it.
+- It answers from `SpaceSubtypeDirectory`, which `collaboration-engine-base` fills whenever it loads the types. `Resolve()`, for a new space, reads the type itself when the types aren't loaded yet; `ResolveLoadHint()`, for a loaded space, answers only from the directory, and never queries.
+- `ResolveLoadHint` is on MemberJunction's `next`, so this package builds against `next`.
+
 **`CollaborationSpacePermissionProvider`** (`src/space-permission-provider.ts`) answers MJ's permission checks for the `Collaboration Spaces` permission domain and the `Space` resource type, both seeded in `metadata/`.
 - It's registered with `@RegisterClass(PermissionProviderBase, 'CollaborationSpacePermissionProvider')`, the class name the domain's metadata row names.
 - It answers from the roster: Read follows reach, and Update and Share follow the owner role (`rosterActions` in `collaboration-core`).
