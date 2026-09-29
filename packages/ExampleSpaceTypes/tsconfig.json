@@ -10,5 +10,5 @@
     "strictTemplates": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "src/generated/server", "src/resolvers.ts", "**/*.test.ts", "**/*.spec.ts"]
 }

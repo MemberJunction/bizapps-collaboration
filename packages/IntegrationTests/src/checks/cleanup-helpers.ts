@@ -1,3 +1,4 @@
+import { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
@@ -52,7 +53,10 @@ async function deleteRowAndConfirmUnguarded(
     what: string,
 ): Promise<void> {
     const entity = await provider.GetEntityObject<BaseEntity>(entityName, user);
-    if (await entity.InnerLoad(CompositeKey.FromID(id))) {
+    // A space may be a subtype (an IsA child): a full `Load` finds its child, so the delete goes through the leaf and takes both rows.
+    // `InnerLoad` skips that discovery, and deleting the parent under a live child row is not a delete this app makes.
+    const loaded = entity instanceof mjBizAppsCollaborationSpaceEntity ? await entity.Load(id) : await entity.InnerLoad(CompositeKey.FromID(id));
+    if (loaded) {
         const deleted = await entity.Delete();
         Assert(deleted === true, `Delete of ${what} ${id} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }

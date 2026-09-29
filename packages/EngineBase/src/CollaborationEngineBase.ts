@@ -46,6 +46,7 @@ import type {
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
+import { SpaceSubtypeDirectory } from '@mj-biz-apps/collaboration-entities';
 import type {
     MJApplicationSettingEntity,
     MJAuthorizationEntity,
@@ -164,6 +165,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._authorizationsByName = null;
         this._cachedParsedSettings = undefined;
         this._settingsError = null;
+        // The subtype each space type names, for the Spaces subtype resolver: it answers a load's hint from memory, never by a read
+        SpaceSubtypeDirectory.Replace(this.SpaceTypes.map((type) => ({ ID: type.ID, SpaceExtensionEntity: type.SpaceExtensionEntity })));
     }
 
     // ─── Collections ───────────────────────────────────────────────────────────

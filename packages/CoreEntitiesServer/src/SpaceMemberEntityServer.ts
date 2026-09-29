@@ -4,7 +4,7 @@ import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, stra
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
 import type { MemberChangeKind } from './base-space-type-server-driver.js';
-import { failDelete, refusalOf, resolveSpaceDriver } from './space-driver-call.js';
+import { failDelete, refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
@@ -139,6 +139,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                 space: spaceInfo.space,
                 spaceType: spaceInfo.spaceType,
                 effectiveRules: ResolveSpaceRules(null, null),
+                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
                 member: this,
                 kind,
                 oldValues,
@@ -211,6 +212,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                         space: spaceInfo.space,
                         spaceType: spaceInfo.spaceType,
                         effectiveRules: ResolveSpaceRules(null, null),
+                        subtypeEntityName: subtypeOf(spaceInfo.spaceType),
                         member: this,
                         kind: decided.kind,
                         oldValues: decided.oldValues,

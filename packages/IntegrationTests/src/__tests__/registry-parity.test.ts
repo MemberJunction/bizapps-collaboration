@@ -14,6 +14,7 @@ import '../checks/library.checks.js';
 import '../checks/agent.checks.js';
 import '../checks/features.checks.js';
 import '../checks/extensions.checks.js';
+import '../checks/subtypes.checks.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');

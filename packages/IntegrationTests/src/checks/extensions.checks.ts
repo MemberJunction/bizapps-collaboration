@@ -9,7 +9,12 @@ import {
     type DriverValidationResult,
     type TaskFiledContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import { ExampleBoardServerDriver, ExampleRoomServerDriver } from '@mj-biz-apps/collaboration-example-space-types/server';
+import {
+    ExampleBoardServerDriver,
+    ExampleRoomServerDriver,
+    mjBizAppsCollabExamplesExampleBoardEntity,
+    mjBizAppsCollabExamplesExampleRoomEntity,
+} from '@mj-biz-apps/collaboration-example-space-types/server';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
@@ -32,7 +37,7 @@ interface NewSpace {
     inherits?: boolean;
 }
 
-/** Saves a marked space as the given user. Returns the entity, whose Save result the caller reads. */
+/** Saves a marked space as the given user. Returns the entity, whose Save result the caller reads. A type that names a subtype gets it, with the columns it requires. */
 async function newSpace(ctx: IntegrationCheckContext, owner: Awaited<ReturnType<typeof GetPersonaUser>>, spec: NewSpace): Promise<mjBizAppsCollaborationSpaceEntity> {
     const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, owner);
     space.NewRecord();
@@ -41,6 +46,15 @@ async function newSpace(ctx: IntegrationCheckContext, owner: Awaited<ReturnType<
     space.ParentID = spec.parentId ?? null;
     space.OwnerID = owner.ID;
     space.InheritsMembership = spec.inherits ?? false;
+    // The type says which subtype the space is, and its own save then writes both rows
+    const leaf = await space.EnsureISAChild();
+    if (leaf instanceof mjBizAppsCollabExamplesExampleBoardEntity) {
+        leaf.TermName = '2026 to 2027';
+    } else if (leaf instanceof mjBizAppsCollabExamplesExampleRoomEntity) {
+        leaf.DealID = 'D-1';
+        leaf.AccountName = 'Acme';
+        leaf.DealStage = 'Prospecting';
+    }
     return space;
 }
 

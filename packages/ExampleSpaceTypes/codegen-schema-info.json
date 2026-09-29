@@ -1,0 +1,15 @@
+{
+  "description": "Declares the example space types' tables as IsA children of Collaboration's Space. CodeGen sets Entity.ParentID from this, then generates each child's view (joined to Space's) and its typed accessors.",
+  "ISARelationships": [
+    {
+      "ChildEntity": "ExampleBoard",
+      "ParentEntity": "MJ_BizApps_Collaboration: Spaces",
+      "SchemaName": "__mj_BizAppsCollabExamples"
+    },
+    {
+      "ChildEntity": "ExampleRoom",
+      "ParentEntity": "MJ_BizApps_Collaboration: Spaces",
+      "SchemaName": "__mj_BizAppsCollabExamples"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ import { type BaseSpaceTypeServerDriver, type ChildSpaceChangeKind, type SpaceCh
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, loadAncestorChain, mayAdminister, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
-import { failDelete, refusalOf, resolveSpaceDriver } from './space-driver-call.js';
+import { failDelete, refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -39,6 +39,31 @@ export function decideSpaceKinds(change: { isNew: boolean; isClosing: boolean; i
     // validation, so this order is a second guard: if that refusal ever went, a rule on incoming children would still see the move.
     const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isMoving ? 'MoveChildIn' : change.isClosing ? 'CloseChild' : change.isReopening ? 'ReopenChild' : 'UpdateChild';
     return { spaceKind, childKind };
+}
+
+/**
+ * A space type and its subtype go together. A type that names an IsA child of Spaces (`SpaceExtensionEntity`) creates its spaces as
+ * that child: one save writes both tables, and a plain space can't be saved under it. A type that names none takes no subtype.
+ * `actual` is the entity the save came through (MJ tells the parent's save which child started it), or null for a plain save.
+ *
+ * A saved space that already exists is judged only in the direction that can't strand it: a subtype under a type that doesn't
+ * name it is always refused, but an existing plain space under a type that now names a subtype may still be edited (it has no
+ * subtype row to write), where a new one may not be created. A change of type is not judged here: the two types must share a
+ * subtype table, and that check names the reason.
+ */
+export function refuseSubtypePairing(input: { typeName: string; expected: string | null; actual: string | null; isNew: boolean; typeChanged: boolean }): string | null {
+    if (input.typeChanged) return null;
+    const same = (a: string | null, b: string | null) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+    if (!input.expected && input.actual) {
+        return `Space type "${input.typeName}" names no subtype, so a ${input.actual} cannot be saved under it.`;
+    }
+    if (input.expected && input.actual && !same(input.expected, input.actual)) {
+        return `Space type "${input.typeName}" names ${input.expected}, not ${input.actual}.`;
+    }
+    if (input.expected && !input.actual && input.isNew) {
+        return `Space type "${input.typeName}" keeps its details in ${input.expected}: create the space as that (NewRecord, then Save) so one save writes both tables.`;
+    }
+    return null;
 }
 
 /** What a space save changes: read once, and handed to validation and to the reactions. */
@@ -85,6 +110,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             changed: isNew || this.Fields.some((f) => f.Dirty),
         };
     }
+
+    /** The subtype entity this save comes through, from MJ's IsA orchestration; null for a plain save. */
+    private savingAsSubtype: string | null = null;
 
     /** What `Save` read, handed to validation so a save has one reading. Validation called on its own reads for itself. */
     private readingForSave: SpaceChangeReading | null = null;
@@ -189,6 +217,19 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 LogError(`Space change refused: space type ${spaceType.ID} has a configuration that does not parse: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
                 return fail(result, 'SpaceTypeID', "Space change refused: the space type's configuration does not parse.");
             }
+        }
+
+        // The type and its subtype go together (see refuseSubtypePairing)
+        if (spaceType) {
+            const typeFieldForPairing = this.Fields.find((f) => f.Name === 'SpaceTypeID');
+            const pairing = refuseSubtypePairing({
+                typeName: spaceType.Name || spaceType.Code || String(spaceType.ID),
+                expected: subtypeOf(spaceType),
+                actual: this.savingAsSubtype,
+                isNew: !this.IsSaved,
+                typeChanged: this.IsSaved && !!typeFieldForPairing?.Dirty,
+            });
+            if (pairing) return fail(result, 'SpaceTypeID', pairing);
         }
 
         let parsedSpaceConfig: CollaborationSettings | null = null;
@@ -308,6 +349,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 space: this,
                 spaceType: previousType,
                 effectiveRules: ResolveSpaceRules(previousConfig, parsedSpaceConfig as ISpaceConfiguration),
+                subtypeEntityName: subtypeOf(previousType),
                 kind: 'Update',
                 oldValues: { SpaceTypeID: previousTypeId },
             });
@@ -449,6 +491,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 space: this,
                 spaceType: spaceType as mjBizAppsCollaborationSpaceTypeEntity,
                 effectiveRules: adjustedRules,
+                subtypeEntityName: subtypeOf(spaceType),
                 kind: changeKind,
                 oldValues,
             });
@@ -466,6 +509,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     space: parentInfo.space,
                     spaceType: parentInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
+                    subtypeEntityName: subtypeOf(parentInfo.spaceType),
                     childSpace: this,
                     kind: childKind,
                     oldValues,
@@ -494,6 +538,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     space: oldParent.space,
                     spaceType: oldParent.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
+                    subtypeEntityName: subtypeOf(oldParent.spaceType),
                     childSpace: this,
                     kind: 'MoveChildOut',
                     oldValues,
@@ -526,21 +571,21 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             const spaceType = await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this);
             typeCode = spaceType.Code;
             const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
-            await driver.OnSpaceChanged({ ...base, space: this, spaceType, kind: decided.spaceKind, oldValues: decided.oldValues });
+            await driver.OnSpaceChanged({ ...base, space: this, spaceType, subtypeEntityName: subtypeOf(spaceType), kind: decided.spaceKind, oldValues: decided.oldValues });
         });
         const parentId = getFieldVal<string | null>(this, 'ParentID');
         if (parentId) {
             await attempt('OnChildSpaceChanged', async () => {
                 const parent = await ServerDriverRegistry.Instance.ResolveSpaceAndType(parentId, this);
                 typeCode = parent.spaceType.Code;
-                await parent.driver.OnChildSpaceChanged({ ...base, space: parent.space, spaceType: parent.spaceType, childSpace: this, kind: decided.childKind, oldValues: decided.oldValues });
+                await parent.driver.OnChildSpaceChanged({ ...base, space: parent.space, spaceType: parent.spaceType, subtypeEntityName: subtypeOf(parent.spaceType), childSpace: this, kind: decided.childKind, oldValues: decided.oldValues });
             });
         }
         if (decided.oldParentId) {
             await attempt('OnChildSpaceChanged (MoveChildOut)', async () => {
                 const left = await ServerDriverRegistry.Instance.ResolveSpaceAndType(decided.oldParentId!, this);
                 typeCode = left.spaceType.Code;
-                await left.driver.OnChildSpaceChanged({ ...base, space: left.space, spaceType: left.spaceType, childSpace: this, kind: 'MoveChildOut', oldValues: decided.oldValues });
+                await left.driver.OnChildSpaceChanged({ ...base, space: left.space, spaceType: left.spaceType, subtypeEntityName: subtypeOf(left.spaceType), childSpace: this, kind: 'MoveChildOut', oldValues: decided.oldValues });
             });
         }
     }
@@ -629,6 +674,12 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
+        // A space that has its subtype attached is deleted through that subtype, which deletes its own row and then this one. Core
+        // delegates from here too, but its one-delete-at-a-time guard then waits on this very call when the subtype comes back for
+        // the parent row, so the delete never returns. Delegating first keeps that call from being pending; the driver is asked
+        // once, when the subtype's delete reaches this row.
+        const leaf = this.LeafEntity;
+        if (leaf !== this && !options?.IsParentEntityDelete) return leaf.Delete(options);
         const refusal = await this.driverRefusalForDelete();
         if (refusal) return failDelete(this, refusal);
         return super.Delete(options);
@@ -639,6 +690,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         // Dropped when the save is done, so a retry starts clean.
         const own = this.readChange();
         this.readingForSave = own;
+        // MJ tells a parent's save which child started it: that is the subtype this save writes (null for a plain save)
+        this.savingAsSubtype = options?.ISAActiveChildEntityName ?? null;
         // The server's clock decides when a space closed. Staff (the world loader, tests) may backdate one; a date ahead of the
         // server, from anyone, is the server's own time (a browser's clock can run ahead of it).
         const signedIn = this.ContextCurrentUser;
@@ -658,6 +711,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             ok = await super.Save(options);
         } finally {
             this.readingForSave = null;
+            this.savingAsSubtype = null;
         }
         const decided = own;
         if (ok && this.ContextCurrentUser && this.ID) {

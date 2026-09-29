@@ -44,7 +44,8 @@
             "MaxOutsideDirectors": 1
           }
         }
-      }
+      },
+      "SpaceExtensionEntity": "MJ_BizApps_Collaboration_Examples: Example Boards"
     }
   },
   {
@@ -89,7 +90,8 @@
             ]
           }
         }
-      }
+      },
+      "SpaceExtensionEntity": "MJ_BizApps_Collaboration_Examples: Example Rooms"
     }
   },
   {

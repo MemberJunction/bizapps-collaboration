@@ -100,7 +100,7 @@ Collaboration owns the engine, the base classes, its schema, and the default beh
 |---|---|---|
 | `ServerDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeServerDriver`. Empty means Collaboration's base driver. |
 | `UIDriverClass` | `NVARCHAR(255) NULL` | The ClassFactory key under `BaseSpaceTypeUIDriver`. Empty means the base driver. |
-| `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Committees: Committees`. Empty means a plain space. The server checks on save that it names an existing entity; checking that it's an IsA child of Spaces comes in PR 9 (the plan's D42). |
+| `SpaceExtensionEntity` | `NVARCHAR(255) NULL` | The MJ entity name of the IsA child that every space of this type has, for example `Committees: Committees`. Empty means a plain space. The server checks on save that it names an existing entity that is an IsA child of Spaces, and that every role that reads it does so under the same row filter as Spaces ([§ 7](#7-isa-subtypes-and-their-forms)). |
 | `Configuration` | `NVARCHAR(MAX) NULL` | The type's rules and defaults, as `ISpaceTypeConfiguration` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)). |
 
 - **Removed:** the `committee` seed row, in PR #3 (the plan's B0.11); Committees ships its own type. **Still to remove:** the `GovernancePanel` column.
@@ -157,7 +157,7 @@ Collaboration adds four things orders doesn't have:
 - **Behavior per type.** Orders' type row names no code: event products' rules are written against their entity, so a new product type can't add rules of its own. A space type names its drivers.
 - **Checked values.** Orders doesn't check the extension's name, and reads its configuration as an untyped string. Collaboration validates both on save.
 - **A missing driver is caught.** For an unregistered key, MJ's `ClassFactory.CreateInstance` returns the base class rather than null, so a null check never fires. Collaboration uses `TryCreateInstance` ([§ 5](#5-server-drivers)).
-- **The selector reaches hosts.** Orders' `SubtypeSelector` rows aren't in its migrations yet, so a host installed from migrations falls back to "the only child". Collaboration's selector will go in its release seed, and a resolver in code will cover it anyway (PR 9, the plan's D42; [§ 7](#7-isa-subtypes-and-their-forms)).
+- **The selector reaches hosts.** Orders' `SubtypeSelector` rows aren't in its migrations yet, so a host installed from migrations falls back to "the only child". Collaboration declares no selector yet: a resolver in code covers it ([§ 7](#7-isa-subtypes-and-their-forms)).
 
 **Where a setting goes:**
 
@@ -281,7 +281,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 - the acting user and the provider (`this.ProviderToUse` of the entity being saved);
 - the space, its type and the effective rules. Today only `ValidateSpaceChange` gets the space's own rules, its type's and its own narrowed by `AdjustRules`; the other hooks get Collaboration's defaults until stage 2's one resolver;
 - the change (`Create`, `Update`, `Move`, `Close`, `Reopen` or `Delete`), with the old values;
-- the subtype entity's name when an IsA child started the save (the field exists, and nothing sets it yet; the plan's D42).
+- `subtypeEntityName`, the subtype entity's name when an IsA child started the save, in every context (for a space, its seats and its items, the name comes from the type, since a seat or an item isn't saved through the subtype), and `subtypeOf(spaceType)` for the type's own answer.
 
 **The kinds of change.**
 - A space's own driver hears `Create`, `Update`, `Move`, `Close`, `Reopen` and `Delete`.
@@ -336,10 +336,12 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 - **Use the driver, not a second `SpaceEntityServer`.** Only one class can hold an entity's ClassFactory key: the last one loaded wins, and the other gets only a console warning.
 - **Use the context's provider.** It owns the open transaction; `new Metadata()` doesn't.
 
-**The type/subtype pairing,** from MJ's save options. It comes in PR 9 (the plan's D42); only the third rule is built:
+**The type/subtype pairing,** from MJ's save options. All three rules are built:
 - a space whose type names a subtype must be saved as that subtype;
 - a subtype record must use a type that names its entity;
 - `SpaceTypeID` may change only between types with the same subtype. Turning a plain space into a subtype is IsA promotion, which MJ's browser path supports only from MJ `next` ([§ 7](#7-isa-subtypes-and-their-forms)).
+
+The first two apply to a new space, and to an existing one only in the direction that can't strand it: an existing plain space under a type that now names a subtype may still be edited. A change of type is judged by the third rule alone, which names the reason.
 
 ## 6. UI drivers and contributions
 
@@ -350,7 +352,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 - items are descriptors (key, label, icon, count, and the component class), so the host has labels and counts without mounting anything;
 - an Overview card also says its **side**: `Shared` shows it to everyone in the space, `Team` only to those who can see the Team band. A card that doesn't say is a Team card, so an outside participant never sees a card unless its author said they may.
 
-Today the page calls `GetTabs`, `GetTabLabel` and `GetOverviewCards`. `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`, `GetNewSpaceSteps`, `GetDetailsForm` and `GetVocabulary` are declared and not called yet; the New Space, Settings → Details and About screens come with the plan's D42. `GetOverviewCards` gets only the contributed cards, since the Overview's own sections aren't descriptors.
+Today the page calls `GetTabs`, `GetTabLabel`, `GetOverviewCards` and `GetDetailsForm`. `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`, `GetNewSpaceSteps` and `GetVocabulary` are declared and not called yet. `GetOverviewCards` gets only the contributed cards, since the Overview's own sections aren't descriptors.
 
 **Events.** The UI driver has cancellable `Before…` hooks and one `After…` hook: `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `cancel` and `cancelReason`. Today the page raises only `BeforeInvite` and `BeforeStartChat`; the others are declared and not raised yet. The driver can cancel, and the server hook still enforces.
 
@@ -385,7 +387,7 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 
 ## 7. IsA subtypes and their forms
 
-**Status:** not built yet. PR 9 builds it end to end, screens included (the plan's D42). Today a type's `SpaceExtensionEntity` is checked only to name an existing entity, and a space can't move between types with different extension entities. There's no Spaces subtype resolver, `SubtypeSelector`, `EnsureISAChild()` call or `mj-entity-form-host` yet. The example types name no `SpaceExtensionEntity`, and the example tables' migration isn't applied.
+**Status:** built in PR 9 (the plan's D42): the resolver, the pairing rules, the checks on a type's subtype, the example tables and the three screens (New space, Settings → Details, About). Not built: the `SubtypeSelector` metadata, creating a sub-space through the same dialog, and a downstream app's own form in place of the default (below).
 
 **Declaring.** A downstream app declares its table as an IsA child of `Space` in its own `codegen-schema-info.json`, disjoint (MJ's default). Collaboration changes nothing to allow it; bizapps-sales already subtypes bizapps-common's entities across schemas the same way.
 
@@ -393,15 +395,16 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 - Collaboration registers an `EntitySubtypeResolver` for Spaces in `collaboration-entities`, so the server and the browser both load it. It reads the type's `SpaceExtensionEntity` from Collaboration's cached types, and answers MJ's two questions with its two methods ([§ 9.2](#92-mj-core-knowing-a-subtype-on-load)):
   - `Resolve()`, for a new space, may await the space type engine's `Config()`, since its answer has to be right.
   - `ResolveLoadHint()`, for a loaded space, reads the cached type only once that engine is loaded, and returns `null` (no hint) until then. It never queries.
-- The Spaces entity also declares `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}`, as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does. It doesn't set `UseForLoadedRecords`: where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load, and doesn't consult the selector.
-- The selector reaches a host only through Collaboration's release seed. The resolver doesn't depend on it.
-- The New Space flow creates a `SpaceEntity`, sets its fields, and calls `EnsureISAChild()`. MJ builds the subtype record, and one `Save()` writes both rows in one transaction.
+- **The resolver** is `SpaceSubtypeResolver` in `collaboration-entities`. It answers from `SpaceSubtypeDirectory`, which the engine fills with the types' `SpaceExtensionEntity` whenever it loads, and falls back to reading the type when the directory is empty. The rule lives in code because it depends on a row of another table.
+- **Not built:** declaring `SubtypeSelector` = `{"Path": "SpaceTypeID.SpaceExtensionEntity"}` on the Spaces entity as metadata, so offline tools such as MetadataSync and Loom see the same rule. The path's last step has to be a column holding the entity's name, which is why the type stores a name rather than an ID, as orders does. Where Collaboration's packages are loaded, MJ follows the registered resolver on create and on load and doesn't need it.
+- **The New space dialog** makes a `SpaceEntity` through `NewSpaceDraft`: it sets the type, the owner and the type's default for inheriting membership, calls `EnsureISAChild()`, and draws the subtype's own fields. Create sets the name and description, saves once through the subtype, which writes both rows in one transaction, and seats the person as the space's owner. It is offered from the rail's + to a person who holds `Administer Spaces` and may create Space rows; a sub-space is not made through it yet.
 - The resolver answers "none" for plain types. Without it, `EnsureISAChild()` falls back to "the only subtype", so once Committee were Space's only subtype, every new space would become a committee.
 
-**Showing.** Where a space has a subtype, Collaboration's L2 composites host `<mj-entity-form-host [Record]="space.LeafEntity">`, and MJ picks the downstream app's generated, custom or interactive form by entity name.
-- **Config:** `Toolbar: null`, `ShowRelatedEntities: false`, and `HiddenSectionKeys` set to Space's own sections, which Collaboration already shows.
-- **Buttons:** Collaboration's own Save and Cancel call `host.Save()` and `host.Cancel()`. The save writes the space and the subtype together.
-- **Where:** a details step in New space, Settings → Details, and an About card on the Overview, read-only. The UI driver can replace any of the three through `GetDetailsForm` and the step and section hooks.
+**Showing.** Where a space has a subtype, the page draws the subtype's own columns with MJ's `<mj-form-field>`, one per field, bound to the subtype record (`space.LeafEntity`), so any subtype works without a form of its own.
+- **Which fields:** every column the subtype adds, in the entity's order: not the key, a column of the space (`ParentEntityFieldNames`), a view-only column or a `__mj_` column. A field is required when its column allows no null and has no default, and Create or Save waits for it.
+- **Where:** a details block in New space, a Details card in Settings, and an About card on the Overview, read-only. Settings has its own Save details and Discard, kept apart from the settings' Save, and it is read-only to a person who may not change settings. Leaving Settings drops details that were changed and not saved, so the About card never shows a value that isn't saved.
+- **The UI driver** replaces or trims the block through `GetDetailsForm(ctx, { entityName })`: it returns `undefined` to show none, or `hiddenFieldNames` to leave out optional fields (a required one always shows). A driver that throws leaves the default.
+- **Not built:** a downstream app's own generated, custom or interactive form in place of the default, through `<mj-entity-form-host [Record]="space.LeafEntity">`. It needs a form registered for the subtype entity, which the example package doesn't have.
 - **The gallery** draws them from fixtures, since the host shows "No form is registered" without the downstream package.
 
 **Costs, accepted.**
@@ -573,7 +576,7 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
 - **Effect:** opening a space goes from three round trips to two, and 100 spaces from 201 to 101. A later pull request could batch the rest.
 - **Tests:** a new `baseEntity.isa.loadHint.test.ts`, covering a right hint, a wrong hint, a null hint, a failing resolver, a hop missing from the cache, overlapping parents, and a user who can't read the child. Plus an IsA case in the entity-object `RunView` tests, and `entityInfo.subtypeSelector.test.ts` for the selector's flag.
 - **Changeset:** minor, since the flag is a field on a JSON type under MJ's `metadata/`.
-- **Where it is:** [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), merged into MJ's `next` on 2026-09-27. Collaboration gets the saving once its Spaces resolver overrides `ResolveLoadHint` (PR 9, the plan's D42).
+- **Where it is:** [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787), merged into MJ's `next` on 2026-09-27. Collaboration's Spaces resolver overrides `ResolveLoadHint` (PR 9, the plan's D42), so a space of a known type loads its subtype row without the probe.
 
 ### 9.3 On the MJ list, outside these pull requests
 
@@ -646,8 +649,8 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
   - `example-board`, shaped like Committees: its own subtype table, rules for sub-spaces, a synced roster, tabs, cards and chips. It draws frame 08 in the gallery.
   - `example-room`, shaped like the deal room: a space opened for a record through `EnsureSpaceForRecord`, two synced rosters and a copied card.
   - `example-chapter` (the plan's B24, in stage 2 of [PR 9's plan](../plans/pr9-plan.md)): a Chapter entity with Members, a primary anchor, a data reach on Members, a granted view and dashboard with bound properties, a granted aggregate query, a granted action with a bound parameter, and sub-spaces of the same type and of another.
-- **Where they stand:** today they override every server hook and most UI hooks. `example-board`'s table exists, and its type doesn't name it yet (D42). The room's `SyncSeats` passes through to the base, which isn't built, and nothing calls `EnsureSpaceForRecord` for it, so its roster sync and its record opening aren't exercised; its deal card is static. A third test type, `example-vault`, has no plug-ins. The type rows are in `metadata-tests/`, pushed with `pnpm run mj:push:tests`.
-- **Their tables** are in a test-only migration folder in that package, and no host ever gets it. Its CodeGen output, and the setup that applies it, come with the plan's D42; today the migration holds only the tables, and nothing applies it.
+- **Where they stand:** today they override every server hook and most UI hooks. `example-board` and `example-room` name their tables as subtypes (D42), so both are created through them. The room's `SyncSeats` passes through to the base, which isn't built, and nothing calls `EnsureSpaceForRecord` for it, so its roster sync and its record opening aren't exercised; its deal card is static. A third test type, `example-vault`, has no plug-ins. The type rows are in `metadata-tests/`, pushed with `pnpm run mj:push:tests`.
+- **Their tables** are in a test-only migration folder in that package (`migrations/`, schema `__mj_BizAppsCollabExamples`, each with its primary key as a foreign key to `Space`), and no host ever gets it. The package has its own CodeGen config with the IsA relationships in `codegen-schema-info.json`; the migration carries CodeGen's output, and `src/generated/` holds the entity classes and GraphQL resolvers (`./resolvers`, which a host that shows the example types must load). Their entity permissions are in `metadata-tests/entity-permissions/`, pushed first by `pnpm run mj:push:tests`.
 - **They're private** because a shipped example type would show up in every host's New space list. Developers read them as the reference implementation, and the integration suite and the gallery load them.
 
 ## 11. Security rules for plug-ins
@@ -669,13 +672,13 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
 
 ## 12. Tests
 
-Not yet tested, because not yet built: `SyncSeats`, the type/subtype pairing, audience-bounded turns and sealing. `EnsureSpaceForRecord` and lifecycle subscribers have no tests yet. "A reaction rolled back with its save" waits for stage 2, which moves reactions into the transaction.
+Not yet tested, because not yet built: `SyncSeats`, audience-bounded turns and sealing. `EnsureSpaceForRecord` and lifecycle subscribers have no tests yet. "A reaction rolled back with its save" waits for stage 2, which moves reactions into the transaction.
 
 - **Unit tests,** in `collaboration-core` and the server package:
   - `ResolveCollaborationSettings`: the chain in order (the space, its parents, the type, the app), allowed and refused space overrides, a missing app row refused, `AdjustRules`;
   - settings rights: a write refused without the authorization, allowed with it, and refused for a space owner who lacks it;
   - driver resolution: empty key, registered key, missing key refusing writes;
-  - hook order in an IsA save (space hooks before the subtype's own validation), and the type/subtype pairing both ways;
+  - the type/subtype pairing both ways and its exceptions, and the checks on the entity a type names (`subtype.test.ts`), the delete of a space that has its subtype attached (`delete-driver.test.ts`), the subtype's detail fields, the draft of a new space and a saved space's details (`space-details.test.ts`, `new-space-draft.test.ts`); hook order in an IsA save (space hooks before the subtype's own validation) is covered over the wire only, by ST1 to ST3 and the example checks;
   - the allowed-agent chain: `Extend`, `Replace` and a level without rows, down a three-level tree;
   - the reply rule: tagged, one person and one agent, group chat, and each `AgentReplyMode`;
   - `EnsureSpaceForRecord`: a second call returns the same space; it's refused without update rights on the record, and when `ValidateAnchor` refuses;

@@ -100,6 +100,27 @@ describe('deleting a space or an item asks the type first', () => {
         assert.match(JSON.stringify(history), /closed, not deleted/);
     });
 
+    it('deletes a space that has its subtype attached through the subtype, without asking the driver first', async () => {
+        const own = new SpyDriver({ space: { ok: false, message: 'Not asked here.' } });
+        drivers.set(SPACE.toLowerCase(), own);
+        const calls: unknown[] = [];
+        const leaf = { Delete: async (options?: unknown) => { calls.push(options); return true; } };
+        const { entity: space } = entity(SpaceEntityServer.prototype, { ID: SPACE, ParentID: null, LeafEntity: leaf });
+        const options = { SkipEntityActions: true };
+        assert.equal(await SpaceEntityServer.prototype.Delete.call(space, options), true);
+        assert.deepEqual(calls, [options]);
+        assert.deepEqual(own.spaceKinds, []);
+    });
+
+    it('asks the driver once the subtype delete reaches the space row', async () => {
+        const own = new SpyDriver({ space: { ok: false, message: 'Close it first.' } });
+        drivers.set(SPACE.toLowerCase(), own);
+        const leaf = { Delete: async () => { throw new Error('The chain must not go back to the subtype.'); } };
+        const { entity: space } = entity(SpaceEntityServer.prototype, { ID: SPACE, ParentID: null, LeafEntity: leaf });
+        assert.equal(await SpaceEntityServer.prototype.Delete.call(space, { IsParentEntityDelete: true }), false);
+        assert.deepEqual(own.spaceKinds, ['Delete']);
+    });
+
     it('refuses the delete of a space whose type has no driver, closed', async () => {
         drivers.delete(SPACE.toLowerCase());
         const { entity: space } = entity(SpaceEntityServer.prototype, { ID: SPACE, ParentID: null });

@@ -3,6 +3,11 @@ import { ResolveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import type { BaseSpaceTypeServerDriver, DriverBaseContext, DriverValidationResult } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 
+/** The IsA child of Spaces a type names (`SpaceType.SpaceExtensionEntity`), or null: what every hook is told as `subtypeEntityName`. */
+export function subtypeOf(spaceType: { SpaceExtensionEntity?: string | null } | null | undefined): string | null {
+    return spaceType?.SpaceExtensionEntity?.trim() || null;
+}
+
 /** What a driver call needs: the space, its type, the driver, and the context every hook takes. */
 export interface SpaceDriverCall {
     driver: BaseSpaceTypeServerDriver;
@@ -27,7 +32,7 @@ export async function resolveSpaceDriver(
             ok: true,
             call: {
                 driver,
-                base: { actingUser: user, provider, space, spaceType, effectiveRules: ResolveSpaceRules(null, null) },
+                base: { actingUser: user, provider, space, spaceType, effectiveRules: ResolveSpaceRules(null, null), subtypeEntityName: subtypeOf(spaceType) },
             },
         };
     } catch (error) {

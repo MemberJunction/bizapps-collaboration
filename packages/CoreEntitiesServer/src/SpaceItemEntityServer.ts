@@ -11,7 +11,7 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
-import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
@@ -165,6 +165,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 space: spaceInfo.space,
                 spaceType: spaceInfo.spaceType,
                 effectiveRules: ResolveSpaceRules(null, null),
+                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
                 item: this,
                 kind: itemKind,
                 oldValues,
@@ -214,6 +215,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                     space: spaceInfo.space,
                     spaceType: spaceInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
+                    subtypeEntityName: subtypeOf(spaceInfo.spaceType),
                     item: this,
                     kind: decided.kind,
                     oldValues: decided.oldValues,

@@ -23,6 +23,7 @@ const ALL_BUNDLES = [
     'room',
     'write-gates',
     'extensions',
+    'subtypes',
     'row-filters',
     'library',
     'agent',

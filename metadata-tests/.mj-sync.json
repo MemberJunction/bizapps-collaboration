@@ -4,6 +4,7 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "entity-permissions",
     "agents",
     "space-types",
     "tests",

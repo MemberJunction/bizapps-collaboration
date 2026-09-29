@@ -8,13 +8,15 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./server": "./dist/server.js"
+    "./server": "./dist/server.js",
+    "./resolvers": "./dist/resolvers.js"
   },
   "mjUILayer": "widgets",
   "scripts": {
     "build": "ngc",
     "build:server": "tsc -p tsconfig.server.json",
-    "test": "tsc -p tsconfig.test.json && vitest run"
+    "test": "tsc -p tsconfig.test.json && vitest run",
+    "build:resolvers": "tsc -p tsconfig.resolvers.json"
   },
   "dependencies": {
     "@angular/common": "^21.2.22",
@@ -27,13 +29,19 @@
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-core-entities-server": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0",
-    "@mj-biz-apps/collaboration-ng-widgets": "0.1.0"
+    "@mj-biz-apps/collaboration-ng-widgets": "0.1.0",
+    "class-validator": "^0.14.3",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/server": "6.1.3",
     "@types/node": "24.10.11",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@memberjunction/server": "^6.1.2"
   }
 }
