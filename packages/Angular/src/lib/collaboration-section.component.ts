@@ -2,7 +2,7 @@ import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ViewChild } from
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
@@ -18,7 +18,6 @@ import {
     CollaborationClient,
     type GraphQLExecutor,
     mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
@@ -93,14 +92,6 @@ interface RawSpaceRecord {
     Retention?: mjBizAppsCollaborationSpaceEntity['Retention'];
     ClosedAt?: mjBizAppsCollaborationSpaceEntity['ClosedAt'];
     OwnerID?: mjBizAppsCollaborationSpaceEntity['OwnerID'];
-}
-
-interface RawSpaceTypeRecord {
-    ID: string;
-    Name: string;
-    Code?: string;
-    IconClass?: string | null;
-    Color?: string | null;
 }
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
