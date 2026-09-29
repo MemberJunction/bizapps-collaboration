@@ -15,10 +15,6 @@
       "CacheEnabled": false,
       "IsMaterialized": false,
       "SQL": "SELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n\nUNION ALL\n\nSELECT 'Team' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nINNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = sc.SpaceID\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND sc.Kind = 'Private'\n  AND a.CanSeeTeam = 1\n\nUNION ALL\n\nSELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[Space] s\nWHERE s.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND NOT EXISTS (\n      SELECT 1 FROM [__mj_BizAppsCollaboration].[SpaceChat] sc\n      WHERE sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  )"
-    },
-    "sync": {
-      "lastModified": "2026-09-28T23:51:18.155Z",
-      "checksum": "1dd413583cf0b39f9cd9b52f02cedd1d92ae9a2643c0c2197cab28a28fa99980"
     }
   }
 ]
