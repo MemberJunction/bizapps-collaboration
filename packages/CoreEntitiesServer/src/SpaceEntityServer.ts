@@ -222,6 +222,11 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
         const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
 
+        // Closing and reopening are governed by an authorization of their own, beside the owner seat the write rules already asked for
+        if ((change.justClosed || change.justReopened)
+            && !CollaborationEngine.Instance.UserHoldsLifecycleAuthorization(user, asMetadata(this.ProviderToUse) ?? Metadata.Provider)) {
+            return fail(result, 'ClosedAt', `Space change refused: ${change.justClosed ? 'closing' : 'reopening'} a space needs the 'Close and Reopen Spaces' authorization and an owner seat on the space.`);
+        }
         if (isClosing) {
             // One change at a time: a close that also moves the space would slip past the rules on incoming children
             if (change.oldParentId !== null || this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty && this.IsSaved)) {
@@ -637,9 +642,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         // The server's clock decides when a space closed. Staff (the world loader, tests) may backdate one; a date ahead of the
         // server, from anyone, is the server's own time (a browser's clock can run ahead of it).
         const signedIn = this.ContextCurrentUser;
-        if (own.justClosed && signedIn && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.Dirty) {
-            const sent = new Date(this.ClosedAt!).getTime();
-            if (!isStaffUser(signedIn) || !(sent <= Date.now())) this.ClosedAt = new Date();
+        // A staff re-stamp of a closed space follows the same rule: a date ahead of the server is the server's own time
+        if (signedIn && this.ClosedAt && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.Dirty) {
+            const sent = new Date(this.ClosedAt).getTime();
+            if ((own.justClosed && !isStaffUser(signedIn)) || !(sent <= Date.now())) this.ClosedAt = new Date();
         }
         const justClosed = own.justClosed;
         const justReopened = own.justReopened;

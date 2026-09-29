@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
-import { normalizeContributionKey, type SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
+import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
+import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, SpaceBand } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';

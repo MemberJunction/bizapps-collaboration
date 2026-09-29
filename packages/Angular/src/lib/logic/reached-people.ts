@@ -11,6 +11,9 @@ export interface TreeSpace {
     ClosedAt?: string | Date | null;
     PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
     PostCloseAccessDays?: number | null;
+    /** What the space's type says, used when the space itself says nothing. */
+    TypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
+    TypePostCloseAccessDays?: number | null;
 }
 
 export interface ChainSpace {
@@ -43,6 +46,7 @@ export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): Chai
         // A closed parent whose post-close access has ended (or is None) no longer lets anyone in, and neither does what lies above it
         if (parent.ClosedAt && !isPostCloseAccessPermitted({
             closedAt: parent.ClosedAt, postCloseAccess: parent.PostCloseAccess, postCloseAccessDays: parent.PostCloseAccessDays,
+            spaceTypePostCloseAccess: parent.TypePostCloseAccess, spaceTypePostCloseAccessDays: parent.TypePostCloseAccessDays,
         })) break;
         current = parent;
     }

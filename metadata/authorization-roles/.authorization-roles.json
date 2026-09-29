@@ -18,5 +18,45 @@
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "28587A9F-0FF7-4CBA-BD88-A090DAAA06A6"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Close and Reopen Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "64717BE1-0128-42A6-9D85-D389A918A2B8"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Close and Reopen Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "13A26A7F-8A6B-4A69-ACD6-8C091E51816E"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Close and Reopen Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1007441C-A5D8-481C-8C10-3C9231892060"
+    },
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Close and Reopen Spaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    }
   }
 ]

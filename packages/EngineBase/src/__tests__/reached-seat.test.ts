@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, type IMetadataProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import { CollaborationEngineBase, type RoleTypeFlags } from '../CollaborationEngineBase.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -36,7 +36,22 @@ const spaces: SpaceRow[] = [
 ];
 
 /** A provider whose reads answer from `seats` and `spaces`, or fail on request. */
-function providerOver(seats: SeatRow[], failSpaces = false, failSeats = false): IMetadataProvider {
+/** The 'Collaboration' root and its 'Close and Reopen Spaces' child, the child executable by the given roles only. */
+function lifecycleAuthorizations(allowedRoles: string[]): AuthorizationInfo[] {
+    const root = new AuthorizationInfo();
+    root.ID = 'D0000000-0000-4000-8000-000000000001';
+    root.Name = 'Collaboration';
+    root.IsActive = true;
+    const child = new AuthorizationInfo();
+    child.ID = 'D0000000-0000-4000-8000-000000000002';
+    child.Name = 'Close and Reopen Spaces';
+    child.ParentID = root.ID;
+    child.IsActive = true;
+    Object.defineProperty(child, 'UserCanExecute', { value: (who: UserInfo) => who?.UserRoles?.some((role) => !!role.Role && allowedRoles.includes(role.Role)) ?? false });
+    return [root, child];
+}
+
+function providerOver(seats: SeatRow[], failSpaces = false, failSeats = false, authorizations: AuthorizationInfo[] = lifecycleAuthorizations(['Space Participant'])): IMetadataProvider {
     const runView = async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
         const ok = (rows: object[]): RunViewResult<T> => ({ Success: true, Results: rows as unknown as T[], RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' });
         const fail = (): RunViewResult<T> => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: 'the read failed' });
@@ -49,11 +64,11 @@ function providerOver(seats: SeatRow[], failSpaces = false, failSeats = false): 
         const ids = [...String(params.ExtraFilter).matchAll(/'([0-9a-f-]{36})'/gi)].map((m) => m[1].toLowerCase());
         return ok(seats.filter((seat) => ids.includes(seat.SpaceID.toLowerCase())));
     };
-    return { EntityByName: () => ({}), RunView: runView } as unknown as IMetadataProvider;
+    return { EntityByName: () => ({}), RunView: runView, Authorizations: authorizations } as unknown as IMetadataProvider;
 }
 
 describe('CollaborationEngineBase.ReachedSeat', () => {
-    const user = { ID: USER_ID } as UserInfo;
+    const user = { ID: USER_ID, UserRoles: [{ Role: 'Space Participant' }] } as unknown as UserInfo;
     let engine: CollaborationEngineBase;
 
     /** The two role types the seats hold, given to the walk directly instead of loaded into the engine. */
@@ -108,6 +123,12 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
         const provider = providerOver([seat(CLOSED_NONE, OWNER_ROLE)]);
         expect(await reachedSeat(CLOSED_NONE, provider)).toBeNull();
         expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, provider, roleTypeOf)).toBe(true);
+    });
+
+    it("gives an owner no reopen right without the 'Close and Reopen Spaces' authorization, though the seat is right", async () => {
+        const without = providerOver([seat(CLOSED_NONE, OWNER_ROLE)], false, false, lifecycleAuthorizations(['Developer']));
+        expect(await engine.UserCanReopenSpace(user, CLOSED_NONE, without, roleTypeOf)).toBe(false);
+        expect(await engine.UserCanCloseSpace(user, DISCOVERY, without, roleTypeOf)).toBe(false);
     });
 
     it('gives no reopen right to a member who does not own the closed space, or to someone with no seat', async () => {

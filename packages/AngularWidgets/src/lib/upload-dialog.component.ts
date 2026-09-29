@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Ou
 import { CollabDialogBase } from './dialog-base';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -30,21 +30,14 @@ export interface CollabUploadSubmitPayload {
     CommonModule,
     FormsModule,
     MJButtonDirective,
+    MJDialogComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
   ],
   template: `
-    <div class="overlay" (click)="onBackdropClick($event)">
-      <div #dialogBox class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-        <header class="d-header">
-          <div class="d-title-group">
-            <h2 id="dialog-title" class="d-title">Add document to {{ SpaceName || 'Space' }}</h2>
-            <p class="d-sub">{{ AllowLinks ? 'Upload a local file or link a cloud document.' : 'Upload a file from your computer.' }}</p>
-          </div>
-          <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </header>
+    <mj-dialog [Visible]="true" [Title]="'Add document to ' + (SpaceName || 'Space')" [Width]="540" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+      <div #dialogBox class="dialog">
+        <p class="d-sub">{{ AllowLinks ? 'Upload a local file or link a cloud document.' : 'Upload a file from your computer.' }}</p>
 
         <!-- Segmented Tab switcher -->
         @if (AllowLinks) {
@@ -243,57 +236,14 @@ export interface CollabUploadSubmitPayload {
           </button>
         </footer>
       </div>
-    </div>
+    </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .overlay {
-      position: absolute;
-      inset: 0;
-      background: var(--mj-bg-overlay);
-      backdrop-filter: blur(2px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      box-sizing: border-box;
+      display: contents;
     }
     .dialog {
-      position: relative;
-      background: var(--mj-bg-surface-card, #ffffff);
-      border-radius: var(--mj-radius-lg, 12px);
-      box-shadow: var(--mj-shadow-xl);
-      width: 100%;
-      max-width: 540px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
       font-family: var(--mj-font-family, Inter, sans-serif);
-      color: var(--mj-text-primary, #0f172a);
-    }
-    .d-header {
-      padding: 18px 20px 14px;
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-    }
-    .d-title-group {
-      flex: 1;
-    }
-    .d-title {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 700;
-      line-height: 1.3;
       color: var(--mj-text-primary, #0f172a);
     }
     .d-sub {
@@ -301,19 +251,6 @@ export interface CollabUploadSubmitPayload {
       font-size: 12.5px;
       color: var(--mj-text-muted, #64748b);
       line-height: 1.4;
-    }
-    .btn-close {
-      background: transparent;
-      border: none;
-      font-size: 16px;
-      color: var(--mj-text-muted, #64748b);
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 6px;
-    }
-    .btn-close:hover {
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
     }
     .tab-strip {
       display: flex;
@@ -526,7 +463,6 @@ export interface CollabUploadSubmitPayload {
 export class CollabUploadDialogComponent extends CollabDialogBase {
   @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
   protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
-  protected override Dismiss(): void { this.onCancel(); }
 
   @Input() SpaceName = '';
   @Input() SpaceId = '';
@@ -570,12 +506,6 @@ export class CollabUploadDialogComponent extends CollabDialogBase {
   public setMode(mode: 'upload' | 'link'): void {
     this.activeMode = mode;
     this.updateDetection();
-  }
-
-  public onBackdropClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement).classList.contains('overlay')) {
-      this.onCancel();
-    }
   }
 
   /** Closing is refused while the upload is saving, from the close button and the backdrop as well as Escape. */

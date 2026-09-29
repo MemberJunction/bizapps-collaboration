@@ -362,6 +362,16 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
+    let holdsLifecycle = true;
+    let heldLifecycle: typeof CollaborationEngine.Instance.UserHoldsLifecycleAuthorization;
+    before(() => {
+        heldLifecycle = CollaborationEngine.Instance.UserHoldsLifecycleAuthorization.bind(CollaborationEngine.Instance);
+        CollaborationEngine.Instance.UserHoldsLifecycleAuthorization = () => holdsLifecycle;
+    });
+    after(() => {
+        CollaborationEngine.Instance.UserHoldsLifecycleAuthorization = heldLifecycle;
+    });
+
     function closingSpace(fields: Array<{ Name: string; Dirty: boolean; OldValue?: unknown; Value?: unknown }>, closedAt: string | null, user: UserInfo) {
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
         Object.defineProperties(space, {
@@ -403,6 +413,23 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         const space = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, staffUser);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Errors.find((e) => e.Source === 'ClosedAt'), undefined);
+    });
+
+    it("refuses a close, and a reopen, by an owner without the 'Close and Reopen Spaces' authorization", async () => {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        holdsLifecycle = false;
+        try {
+            const closing = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: null, Value: past }], past, staffUser);
+            const closeRes = await SpaceEntityServer.prototype.ValidateAsync.call(closing);
+            assert.equal(closeRes.Success, false);
+            assert.match(closeRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: closing a space needs the 'Close and Reopen Spaces' authorization/);
+            const reopening = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: past, Value: null }], null, staffUser);
+            const reopenRes = await SpaceEntityServer.prototype.ValidateAsync.call(reopening);
+            assert.equal(reopenRes.Success, false);
+            assert.match(reopenRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: reopening a space needs the 'Close and Reopen Spaces' authorization/);
+        } finally {
+            holdsLifecycle = true;
+        }
     });
 
     it('refuses a space created with a ClosedAt: a space is created open, and closed later', async () => {

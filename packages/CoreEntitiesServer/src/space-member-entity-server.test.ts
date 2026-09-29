@@ -258,7 +258,7 @@ describe('a seat saved through its own validation', () => {
     });
 
     /** The leaver's seat, edited by the space's owner. `values` are what the save leaves in the fields; `dirty` says which changed, and from what. */
-    function editedSeat(values: { Status: string; Band: string; SpaceRoleTypeID: string }, dirty: Array<{ Name: string; OldValue: string }>) {
+    function editedSeat(values: { Status: string; Band: string; SpaceRoleTypeID: string }, dirty: Array<{ Name: string; OldValue: string }>, isSaved = true) {
         const seat = Object.create(SpaceMemberEntityServer.prototype) as SpaceMemberEntityServer;
         const fields = ['Status', 'Band', 'SpaceRoleTypeID'].map((Name) => {
             const change = dirty.find((d) => d.Name === Name);
@@ -266,7 +266,7 @@ describe('a seat saved through its own validation', () => {
         });
         Object.defineProperties(seat, {
             ContextCurrentUser: { value: { ID: OWNER, Name: 'Owner', UserRoles: [] }, writable: true },
-            IsSaved: { value: true, writable: true },
+            IsSaved: { value: isSaved, writable: true },
             ID: { value: members[0].ID, writable: true },
             UserID: { value: LEAVER, writable: true },
             SpaceID: { value: SPACE, writable: true },
@@ -299,6 +299,18 @@ describe('a seat saved through its own validation', () => {
         assert.deepEqual(driver.judged.map((c) => c.kind), ['Invite']);
         assert.deepEqual(driver.heard.map((c) => c.kind), ['Invite']);
         assert.deepEqual(driver.heard[0].oldValues, driver.judged[0].oldValues);
+    });
+
+    it('tells the driver an Invite, both times, for a new seat whose band differs from its role: the gate derives the band, the kind is what was asked', async () => {
+        driver = new SpyDriver({ ok: true });
+        // A new seat asked to sit on Shared under a role that sees the Team band; the gate sets Team
+        const seat = editedSeat({ Status: 'Active', Band: 'Shared', SpaceRoleTypeID: MEMBER_ROLE }, [], false);
+        assert.equal(await seat.Save(), true, lastRefusal);
+        assert.deepEqual(driver.judged.map((c) => c.kind), ['Invite']);
+        assert.deepEqual(driver.heard.map((c) => c.kind), ['Invite']);
+        assert.deepEqual(driver.judged[0].oldValues, {});
+        assert.deepEqual(driver.heard[0].oldValues, {});
+        assert.equal(driver.judged[0].member.Band, 'Team', 'the driver is asked with the band the gate derived');
     });
 
     it('says nothing to the driver, asked or told, when the save touches no status, role or band', async () => {

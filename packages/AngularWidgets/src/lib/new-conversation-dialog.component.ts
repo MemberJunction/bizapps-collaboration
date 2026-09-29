@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -25,19 +25,11 @@ export interface NewConversationSubmitPayload {
   selector: 'mjc-new-conversation-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, MJButtonDirective, SharedGenericModule],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, SharedGenericModule],
   template: `
-    <div class="scrim" (click)="onCancel()"></div>
-    <div #modalRoot class="modal conversation-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-      <header class="d-header">
-        <div class="d-title-group">
-          <h2 id="dialog-title" class="d-title">New Conversation</h2>
-          <p class="d-sub">Start a new conversation in {{ SpaceName || 'this space' }}.</p>
-        </div>
-        <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </header>
+    <mj-dialog [Visible]="true" Title="New Conversation" [Width]="520" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+    <div #modalRoot class="conversation-modal">
+      <p class="d-sub">Start a new conversation in {{ SpaceName || 'this space' }}.</p>
 
       <div class="d-body">
         <div class="form-group">
@@ -120,86 +112,26 @@ export interface NewConversationSubmitPayload {
         </button>
       </footer>
     </div>
+    </mj-dialog>
   `,
   styles: [
     COLLAB_TOKENS_CSS,
     `
       :host {
-        display: block;
-        position: absolute;
-        inset: 0;
-        z-index: 1000;
+        display: contents;
+      }
+
+      .conversation-modal {
         color: var(--mj-text-primary, #0f172a);
         font-family: var(--mj-font-family, Inter, sans-serif);
         font-size: 14px;
         line-height: var(--mjc-line-height, 1.5);
       }
 
-      .scrim {
-        position: absolute;
-        inset: 0;
-        background: var(--mj-bg-overlay, rgba(15, 23, 42, 0.4));
-        backdrop-filter: blur(2px);
-      }
-
-      .modal.conversation-modal {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        width: 520px;
-        max-width: calc(100vw - 32px);
-        background: var(--mj-bg-surface, #ffffff);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        border-radius: 12px;
-        box-shadow: var(--mj-shadow-2xl);
-        overflow: hidden;
-        z-index: 1001;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .d-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        padding: 20px 24px 16px;
-        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-        background: var(--mj-bg-surface, #ffffff);
-      }
-
-      .d-title-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .d-title {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
-      }
-
       .d-sub {
         margin: 0;
         font-size: 13px;
         color: var(--mj-text-secondary, #64748b);
-      }
-
-      .btn-close {
-        background: transparent;
-        border: none;
-        color: var(--mj-text-muted, #94a3b8);
-        cursor: pointer;
-        padding: 4px 6px;
-        border-radius: 6px;
-        font-size: 16px;
-        transition: all 0.15s ease;
-      }
-      .btn-close:hover {
-        background: var(--mj-bg-surface-hover, #f1f5f9);
-        color: var(--mj-text-primary, #0f172a);
       }
 
       .d-body {
@@ -362,7 +294,6 @@ export class CollabNewConversationDialogComponent extends CollabDialogBase imple
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
   protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.modalRootElement; }
-  protected override Dismiss(): void { this.onCancel(); }
   /** The name field, so a dialog that opens (or finishes a submit) is ready to type in. */
   protected override FirstFocus(): HTMLElement | null { return this.nameInputElement?.nativeElement ?? null; }
 

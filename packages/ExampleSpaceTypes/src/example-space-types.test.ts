@@ -23,10 +23,10 @@ import {
     ExampleDealRoomSignalProvider,
 } from './server.js';
 import type { Type } from '@angular/core';
+import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
 import {
     assembleSpaceContributions,
     overlayDescriptors,
-    normalizeContributionKey,
     BaseSpaceTab,
     BaseSpaceOverviewCard,
     type SpaceUIContext,
@@ -219,7 +219,7 @@ describe('ExampleBoardServerDriver', () => {
     describe('the cap on outside directors', () => {
         class CountingBoard extends ExampleBoardServerDriver {
             public seated = 0;
-            protected override async CountOutsideDirectors(): Promise<number> { return this.seated; }
+            protected override async CountOtherOutsideDirectors(): Promise<number> { return this.seated; }
         }
         const ctxFor = (config: object | null, band: 'Team' | 'Shared', kind: MemberChangeContext['kind'] = 'Invite'): MemberChangeContext => ({
             kind,
@@ -236,17 +236,33 @@ describe('ExampleBoardServerDriver', () => {
             board.seated = 1;
             const refused = await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared'));
             expect(refused.ok).toBe(false);
-            expect(refused.message).toBe('This board already has 1 outside director, the most its type allows (1).');
+            expect(refused.message).toBe('This board already has 1 other outside director, the most its type allows (1).');
             board.seated = 0;
             expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared'))).ok).toBe(true);
         });
 
-        it('has no cap when the type sets none, and looks only at a new outside seat', async () => {
+        it('has no cap when the type sets none, and leaves a Team seat and a removal alone', async () => {
             const board = new CountingBoard();
             board.seated = 5;
             expect((await board.ValidateMemberChange(ctxFor(null, 'Shared'))).ok).toBe(true);
             expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Team'))).ok).toBe(true);
-            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared', 'BandChange'))).ok).toBe(true);
+            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared', 'Remove'))).ok).toBe(true);
+        });
+
+        it('judges a role change and a band change onto the Shared band as it judges an invitation', async () => {
+            const board = new CountingBoard();
+            board.seated = 1;
+            for (const kind of ['Invite', 'RoleChange', 'BandChange'] as const) {
+                const refused = await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared', kind));
+                expect([kind, refused.ok]).toEqual([kind, false]);
+            }
+        });
+
+        it('passes a seat that is already an outside director on a full board: it is not one of the others', async () => {
+            const board = new CountingBoard();
+            board.seated = 0;
+            // The only outside director changes between two outside roles: the count of the others is 0
+            expect((await board.ValidateMemberChange(ctxFor({ MaxOutsideDirectors: 1 }, 'Shared', 'RoleChange'))).ok).toBe(true);
         });
 
         it('throws on a cap that is not a whole number, rather than reading it as none', async () => {
@@ -460,7 +476,7 @@ describe('cross-app contributions and their rules', () => {
     });
 
     it('relabels a tab by its key without regard to case', () => {
-        const uiCtx = { spaceTypeCode: 'workspace', rules: { ...createMockRules(), Labels: { Tabs: { library: 'Documents' } } }, space: createMockSpace(), type: createMockSpaceType('workspace'), viewer: createMockUser() } as unknown as SpaceUIContext;
+        const uiCtx: SpaceUIContext = { spaceTypeCode: 'workspace', rules: { ...createMockRules(), Labels: { Tabs: { library: 'Documents' } } }, space: createMockSpace(), type: createMockSpaceType('workspace'), viewer: createMockUser() };
         expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'Library', 'Library')).toBe('Documents');
         expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'People', 'People')).toBe('People');
     });

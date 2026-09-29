@@ -1032,12 +1032,12 @@ describe('the People tab acts on seats and shows the invite the way the seat may
     const approved = vi.fn();
     comp.ApproveMemberRequested.subscribe(approved);
     comp.Ask(pat, 'approve');
-    expect(comp.pendingQuestion(pat)).toBe('Approve Pat Invited?');
+    expect(comp.PendingQuestion(pat)).toBe('Approve Pat Invited?');
     expect(approved).not.toHaveBeenCalled();
     comp.ConfirmPending();
     expect(approved).toHaveBeenCalledWith(pat);
     comp.Ask(pat, 'remove');
-    comp.pending = null;
+    comp.Pending = null;
     comp.ConfirmPending();
     expect(approved).toHaveBeenCalledTimes(1);
   });
@@ -1048,7 +1048,7 @@ describe('the People tab acts on seats and shows the invite the way the seat may
     const changed = vi.fn();
     comp.ChangeRoleRequested.subscribe(changed);
     comp.AskRole(pat, 'guest');
-    expect(comp.pending).toBeNull();
+    expect(comp.Pending).toBeNull();
     comp.AskRole(pat, 'client-member');
     comp.ConfirmPending();
     expect(changed).toHaveBeenCalledWith({ member: pat, roleCode: 'client-member' });
@@ -1119,36 +1119,23 @@ describe('the upload dialog keeps its promises', () => {
     expect(submitted).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'Signed engagement letter.pdf', title: 'Signed engagement letter' }));
   });
 
-  it('closes on Escape, and not while it is saving', () => {
-    const dialog = new CollabUploadDialogComponent();
-    const cancelled = vi.fn();
-    dialog.CancelRequested.subscribe(cancelled);
-    const escape = { key: 'Escape', shiftKey: false, preventDefault: vi.fn() };
-    dialog.OnDialogKeyDown(escape);
-    expect(cancelled).toHaveBeenCalledTimes(1);
-    dialog.IsSubmitting = true;
-    dialog.OnDialogKeyDown(escape);
-    expect(cancelled).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuses the close button and the backdrop while it is saving, as Escape is', () => {
+  it('refuses to close while it is saving, whichever way mj-dialog asks (its close button, backdrop and Escape all end in Close)', () => {
     const dialog = new CollabUploadDialogComponent();
     const cancelled = vi.fn();
     dialog.CancelRequested.subscribe(cancelled);
     dialog.IsSubmitting = true;
     dialog.onCancel();
-    dialog.onBackdropClick({ target: { classList: { contains: () => true } } } as unknown as MouseEvent);
     expect(cancelled).not.toHaveBeenCalled();
     dialog.IsSubmitting = false;
     dialog.onCancel();
     expect(cancelled).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the share dialog on Escape', () => {
+  it('closes the share dialog when it is cancelled', () => {
     const dialog = new CollabShareCheckDialogComponent();
     const cancelled = vi.fn();
     dialog.CancelRequested.subscribe(cancelled);
-    dialog.OnDialogKeyDown({ key: 'Escape', shiftKey: false, preventDefault: vi.fn() });
+    dialog.onCancel();
     expect(cancelled).toHaveBeenCalledTimes(1);
   });
 });
@@ -1293,7 +1280,7 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(emitted).toBe(false);
   });
 
-  it('emits CancelRequested on cancel and escape only when not submitting', () => {
+  it('emits CancelRequested on cancel only when not submitting', () => {
     const comp = new CollabNewConversationDialogComponent();
     let cancelCount = 0;
     comp.CancelRequested.subscribe(() => {
@@ -1303,14 +1290,9 @@ describe('CollabNewConversationDialogComponent', () => {
     comp.onCancel();
     expect(cancelCount).toBe(1);
 
-    const escape = { key: 'Escape', shiftKey: false, preventDefault: vi.fn() };
-    comp.OnDialogKeyDown(escape);
-    expect(cancelCount).toBe(2);
-
     comp.IsSubmitting = true;
     comp.onCancel();
-    comp.OnDialogKeyDown(escape);
-    expect(cancelCount).toBe(2);
+    expect(cancelCount).toBe(1);
   });
 
   describe('focus after a submit ends', () => {
@@ -1380,7 +1362,7 @@ describe('CollabSpacePeopleComponent', () => {
       const removed = vi.fn();
       comp.RemoveMemberRequested.subscribe(removed);
       comp.Ask(comp.OwnSeatOf(withOwnSeat), 'remove');
-      expect(comp.pendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe("Withdraw Sam Reach's seat?");
+      expect(comp.PendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe("Withdraw Sam Reach's seat?");
       comp.ConfirmPending();
       expect(removed).toHaveBeenCalledTimes(1);
       expect(removed.mock.calls[0][0]).toMatchObject({ id: 'own-1', status: 'Invited', roleCode: 'member' });
@@ -1392,7 +1374,7 @@ describe('CollabSpacePeopleComponent', () => {
       const approved = vi.fn();
       comp.ApproveMemberRequested.subscribe(approved);
       comp.Ask(comp.OwnSeatOf(withOwnSeat), 'approve');
-      expect(comp.pendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe('Approve Sam Reach?');
+      expect(comp.PendingQuestion(comp.OwnSeatOf(withOwnSeat))).toBe('Approve Sam Reach?');
       comp.ConfirmPending();
       expect(approved.mock.calls[0][0]).toMatchObject({ id: 'own-1' });
     });
@@ -1400,7 +1382,7 @@ describe('CollabSpacePeopleComponent', () => {
     it('still asks to remove a seated person', () => {
       const comp = new CollabSpacePeopleComponent();
       comp.Ask(sampleMembers[1], 'remove');
-      expect(comp.pendingQuestion(sampleMembers[1])).toBe('Remove Bea Client?');
+      expect(comp.PendingQuestion(sampleMembers[1])).toBe('Remove Bea Client?');
     });
   });
 
@@ -1409,20 +1391,20 @@ describe('CollabSpacePeopleComponent', () => {
     comp.Members = sampleMembers;
 
     // Pat is Invited: still a row in the list, but not counted
-    expect(comp.filteredMembers.map(m => m.name)).toContain('Pat Invited');
+    expect(comp.FilteredMembers.map(m => m.name)).toContain('Pat Invited');
     expect(comp.TotalMembers).toBe(2);
     expect(comp.TeamCount).toBe(1);
     expect(comp.OutsideCount).toBe(1);
     expect(comp.InvitedCount).toBe(1);
 
     comp.audienceFilter = 'Shared';
-    expect(comp.filteredMembers.length).toBe(1);
-    expect(comp.filteredMembers[0].name).toBe('Bea Client');
+    expect(comp.FilteredMembers.length).toBe(1);
+    expect(comp.FilteredMembers[0].name).toBe('Bea Client');
 
     comp.audienceFilter = 'all';
-    comp.searchQuery = 'lovelace';
-    expect(comp.filteredMembers.length).toBe(1);
-    expect(comp.filteredMembers[0].name).toBe('Ada Lovelace');
+    comp.SearchQuery = 'lovelace';
+    expect(comp.FilteredMembers.length).toBe(1);
+    expect(comp.FilteredMembers[0].name).toBe('Ada Lovelace');
   });
 
   describe('inviting a person', () => {
@@ -1563,7 +1545,7 @@ describe('CollabSpaceSettingsComponent', () => {
     expect(comp.formData.name).toBe('Renamed by someone else');
   });
 
-  it('asks to close an open space and to reopen a closed one, and is off while busy', () => {
+  it('asks to close an open space and to reopen a closed one', () => {
     const comp = new CollabSpaceSettingsComponent();
     comp.Settings = initialSettings;
     comp.ngOnInit();
@@ -1578,8 +1560,9 @@ describe('CollabSpaceSettingsComponent', () => {
     expect([closed.mock.calls.length, reopened.mock.calls.length]).toEqual([1, 1]);
   });
 
-  it('edits by default, and is read-only only when told the person may just reopen', () => {
-    expect(new CollabSpaceSettingsComponent().CanEdit).toBe(true);
+  it('edits and offers close and reopen by default', () => {
+    const comp = new CollabSpaceSettingsComponent();
+    expect([comp.CanEdit, comp.CanChangeLifecycle]).toEqual([true, true]);
   });
 });
 
@@ -1634,5 +1617,15 @@ describe('CollabDialogBase focus', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('CollabSpaceRailComponent conversations', () => {
+  it('lists conversations only for a space whose type has a Chat tab', () => {
+    const rail = new CollabSpaceRailComponent();
+    rail.Tabs = [{ id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high' }];
+    expect(rail.HasChatTab).toBe(false);
+    rail.Tabs = [...rail.Tabs, { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' }];
+    expect(rail.HasChatTab).toBe(true);
   });
 });

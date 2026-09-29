@@ -17,6 +17,8 @@ import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
+import { resolveDriverSafely } from './logic/ui-driver-safe.js';
+import { closeConsequence } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { seatActions } from './logic/seat-actions.js';
@@ -1016,6 +1018,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [IsRootSpace]="!activeSpaceRecord?.ParentID"
                                                     [IsBusy]="isChangingLifecycle"
                                                     [CanEdit]="canConfigureCurrentSpace"
+                                                    [CanChangeLifecycle]="canCloseCurrentSpace || canReopenCurrentSpace"
+                                                    [CloseConsequence]="closeConsequenceText"
                                                     (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
                                                     (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
                                                     (SaveSettingsRequested)="onSaveSettings($event)"
@@ -1060,7 +1064,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [SpaceName]="spaceTitle"
                                 [SpaceId]="activeSpaceId"
                                 [ClientOrgName]="clientOrgName"
-                                [IsSubmitting]="isUploading"
+                                [IsSubmitting]="isUploadingHere"
                                 [AllowedBands]="bandChoice?.allowed ?? bothBands"
                                 [MaxBytes]="uploadMaxBytes"
                                 [FolderSuggestions]="libraryFolderNames"
@@ -1147,6 +1151,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public isUploading = false;
+    /** The space an upload in flight is for. */
+    private uploadingSpaceId: string | null = null;
+    /** True while an upload for the space shown is with the server: the dialog of another space is not held by it. */
+    public get isUploadingHere(): boolean {
+        return this.isUploading && !!this.uploadingSpaceId && UUIDsEqual(this.uploadingSpaceId, this.activeSpaceId);
+    }
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
     public composerDraft: string | null = null;
@@ -1180,6 +1190,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public canConfigureCurrentSpace = false;
     /** An owner may reopen a closed space even when its post-close access has ended and they can no longer configure it. */
     public canReopenCurrentSpace = false;
+    /** Closing needs the settings right and the 'Close and Reopen Spaces' authorization, on a space that is open. */
+    public canCloseCurrentSpace = false;
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
 
@@ -1187,11 +1199,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!this.currentUser || !this.activeSpaceId) {
             this.canConfigureCurrentSpace = false;
             this.canReopenCurrentSpace = false;
+            this.canCloseCurrentSpace = false;
             return;
         }
         const spaceIdAtStart = this.activeSpaceId;
         let canConfig = false;
         let canReopen = false;
+        let canClose = false;
         try {
             canConfig = await CollaborationEngineBase.Instance.UserCanConfigureSpaces(
                 this.currentUser,
@@ -1201,22 +1215,39 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             // Only a closed space is reopened, and only there does the right differ from configuring
             if (this.activeSpaceRecord?.ClosedAt) {
                 canReopen = await CollaborationEngineBase.Instance.UserCanReopenSpace(this.currentUser, spaceIdAtStart, this.ProviderToUse);
+            } else if (canConfig) {
+                canClose = await CollaborationEngineBase.Instance.UserCanCloseSpace(this.currentUser, spaceIdAtStart, this.ProviderToUse);
             }
         } catch (e) {
             LogError('Error checking space configuration authorization: ' + (e instanceof Error ? e.message : String(e)));
             canConfig = false;
             canReopen = false;
+            canClose = false;
         }
         if (!UUIDsEqual(this.activeSpaceId, spaceIdAtStart)) {
             return;
         }
         this.canConfigureCurrentSpace = canConfig;
         this.canReopenCurrentSpace = canReopen;
+        this.canCloseCurrentSpace = canClose;
         if (!this.showsSettings && this.activeTab === 'Settings') {
             this.activeTab = 'Overview';
             this.UpdateQueryParams({ tab: 'overview' });
         }
         this.RefreshView();
+    }
+
+    /** What closing the space shown does, from the post-close access its own settings and its type's give it. */
+    public get closeConsequenceText(): string {
+        const space = this.activeSpaceRecord;
+        try {
+            const config = space?.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
+            const resolved = CollaborationEngineBase.Instance.ResolveSettingsForSpace([config], space?.SpaceTypeID);
+            return closeConsequence(resolved.PostCloseAccess, resolved.PostCloseAccessDays);
+        } catch (err) {
+            this.logOnce(`consequence:${space?.ID}`, `Could not resolve the post-close access of space ${space?.ID}: ${err instanceof Error ? err.message : String(err)}`);
+            return closeConsequence('ReadOnly', null);
+        }
     }
 
     /** Settings is offered to someone who may configure the space, and to an owner who may only reopen it (read-only, with Reopen). */
@@ -1269,10 +1300,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return this.spaceTabModel?.contributed.get(this.activeTab) ?? null;
     }
 
-    /**
-     * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
-     * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
-     */
     /** What has been logged already, by key: the tabs and the header are built more than once per selection, and a fault reads once. */
     private readonly loggedOnceKeys = new Set<string>();
     private logOnce(key: string, message: string): void {
@@ -1281,24 +1308,27 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         LogError(message);
     }
 
+    /**
+     * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
+     * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
+     */
     private buildSpaceUi(space: RawSpaceRecord): void {
         const engine = CollaborationEngineBase.Instance;
         const type = engine.SpaceTypeById(space.SpaceTypeID);
         const code = type?.Code ?? '';
         // A driver whose constructor throws must not take the space down: fall back to the default driver
-        try {
-            this.uiDriver = UIDriverRegistry.Instance.ResolveDriver(type?.UIDriverClass);
-        } catch (err) {
-            this.logOnce(`driver:${space.ID}`, `The UI driver of space type '${code}' could not be created for space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
-            this.uiDriver = UIDriverRegistry.Instance.GetDefaultDriver();
-        }
+        this.uiDriver = resolveDriverSafely(
+            () => UIDriverRegistry.Instance.ResolveDriver(type?.UIDriverClass),
+            () => UIDriverRegistry.Instance.GetDefaultDriver(),
+            (err) => this.logOnce(`driver:${space.ID}`, `The UI driver of space type '${code}' could not be created for space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
+        );
         let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: structuredClone(DEFAULT_SPACE_RULES) };
         try {
             const spaceConfig = space.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
             const resolved = engine.ResolveSettingsForSpace([spaceConfig], space.SpaceTypeID);
             ctx = { ...ctx, rules: { Chats: resolved.Chats, Agents: resolved.Agents, Labels: resolved.Labels, Extensions: resolved.Extensions ?? {} } };
         } catch (err) {
-            LogError(`Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
+            this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
         }
         const tabFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
             key: meta.contributionKey,
@@ -1314,7 +1344,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             finalize: (defaults) => this.uiDriver.GetTabs(ctx, assembleSpaceContributions(BaseSpaceTab, code, defaults, tabFactory)),
             labelFor: (key, label) => this.uiDriver.GetTabLabel(ctx, key, label),
             onDropped: (key) => this.logOnce(`dropped:${code}:${key}`, `A tab keyed '${key}' in space type '${code}' names no built-in tab and has no component, so it is dropped (first seen in space ${space.ID}).`),
-        }, (err) => LogError(`The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
+        }, (err) => this.logOnce(`tabs:${space.ID}`, `The UI driver of space type '${code}' failed building the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`),
         // The labels the type's own settings give, which need no driver: a driver that failed doesn't take them away
         (key, label) => new BaseSpaceTypeUIDriver().GetTabLabel(ctx, key, label));
         const cardFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; title?: string; sortKey?: number }): SpaceOverviewCardDescriptor => ({
@@ -1326,7 +1356,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             this.overviewContributedCards = this.uiDriver.GetOverviewCards(ctx, assembleSpaceContributions(BaseSpaceOverviewCard, code, [], cardFactory));
         } catch (err) {
-            LogError(`The UI driver of space type '${code}' failed building the Overview cards of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
+            this.logOnce(`cards:${space.ID}`, `The UI driver of space type '${code}' failed building the Overview cards of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
             this.overviewContributedCards = [];
         }
     }
@@ -1829,6 +1859,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
         this.canReopenCurrentSpace = false;
+        this.canCloseCurrentSpace = false;
         // The last space's save message must not greet the next space's Settings, its drawer is closed, and both bands start narrow
         Object.assign(this, freshSelectionState());
         this.spaceTabModel = null;
@@ -1851,6 +1882,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async selectSpaceBody(spaceId: string, requestId: number, quiet: boolean): Promise<void> {
         this.activeSpaceId = spaceId;
         this._loadedSpaceId = spaceId;
+        // A quiet re-read names the conversation that is open as the one to keep, so it doesn't open the newest instead
+        if (quiet && this.activeConversationId) this._pendingConvId ??= this.activeConversationId;
         // A quiet re-read of the space already shown (after a close or a reopen) keeps everything on screen until the new reads
         // arrive: Settings stays in the tabs, and the counts don't fall to 0. A new selection starts from nothing.
         if (!quiet) this.resetForSelection(spaceId);
@@ -2406,6 +2439,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ClosedAt: sp.ClosedAt,
                 PostCloseAccess: sp.PostCloseAccess,
                 PostCloseAccessDays: sp.PostCloseAccessDays,
+                TypePostCloseAccess: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccess ?? null,
+                TypePostCloseAccessDays: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccessDays ?? null,
             })));
             if (chain.length === 0) chain.push({ id: spaceId, name: '' });
             const membersRes = await rv.RunView<{
@@ -2628,6 +2663,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
             if (named) this.activeTab = named;
             else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
+            // A link to a tab the space doesn't have: the URL says the tab that opened
+            if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
         }
 
         if (params['item'] && isValidUuid(params['item'])) {
@@ -2730,7 +2767,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeView = 'space';
         this.activeConversationId = convId;
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
-        this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
+        // A conversation the list doesn't hold says nothing of its band: the band stays what it was
+        if (item) this.chatAudienceBand = item.band === 'Team' ? 'Team' : 'Shared';
         this.setTab('Chat');
         this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase(), conv: convId });
         void this.loadOverviewMessages(convId, this.currentSelection());
@@ -2987,9 +3025,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // The space and the selection this upload is for, taken before the first await: the person can move to another space while
         // the file is read, and the file, in the band they chose, belongs to the space they chose it for
         const spaceId = this.activeSpaceId;
-        const isCurrent = this.currentSelection();
         const spaceName = this.rawSpaces.find((sp) => UUIDsEqual(sp.ID, spaceId))?.Name ?? 'the space it was for';
         this.isUploading = true;
+        this.uploadingSpaceId = spaceId;
         this.RefreshView();
         try {
             if (payload.mode === 'upload' && payload.file) {
@@ -3016,19 +3054,21 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!uploadRes.Success) {
                     throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');
                 }
-                this.isUploadDialogOpen = false;
-                if (isCurrent()) {
-                    await this.loadSpaceItems(spaceId, isCurrent);
+                // Judged by the space shown, not the selection: coming back to the same space still shows its library
+                const stillHere = UUIDsEqual(this.activeSpaceId, spaceId);
+                if (stillHere) {
+                    this.isUploadDialogOpen = false;
+                    await this.loadSpaceItems(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
                     SharedService.Instance.CreateSimpleNotification('File uploaded successfully.', 'info', 3000);
                 } else {
-                    // The person has moved on: the file went where they chose it, and the notice says where
+                    // The person has moved on: the file went where they chose it, and the notice says where. Their dialog is theirs.
                     SharedService.Instance.CreateSimpleNotification(`File uploaded to ${spaceName}.`, 'info', 4000);
                 }
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error submitting upload: ' + msg);
-            SharedService.Instance.CreateSimpleNotification('Failed to upload file: ' + msg, 'error', 5000);
+            SharedService.Instance.CreateSimpleNotification(`Failed to upload file to ${spaceName}: ${msg}`, 'error', 5000);
         } finally {
             this.isUploading = false;
             this.RefreshView();
@@ -3475,7 +3515,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (this.isChangingLifecycle) return;
         const verb = closing ? 'close' : 'reopen';
         // The right is checked before the lock is taken, so a refusal can't leave Close and Reopen disabled
-        if (!(closing ? this.canConfigureCurrentSpace : this.canReopenCurrentSpace)) {
+        if (!(closing ? this.canCloseCurrentSpace : this.canReopenCurrentSpace)) {
             SharedService.Instance.CreateSimpleNotification(`You do not have permission to ${verb} this space.`, 'warning', 4000);
             return;
         }

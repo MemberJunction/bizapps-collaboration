@@ -1,8 +1,9 @@
 import { Directive, HostListener, type ElementRef, type OnDestroy, type OnInit } from '@angular/core';
 
 /**
- * What every dialog here does the same way: remember what had focus when it opened and give it back on close, close on Escape,
- * and keep Tab inside. A dialog extends this, says which element is its box, and says what closing means.
+ * What every dialog here does the same way, on top of `mj-dialog` (which draws it, closes it on Escape, the backdrop and its close
+ * button, and locks the page's scroll): remember what had focus when it opened and give it back on close, focus the first
+ * control, and keep Tab inside. `mj-dialog` does none of these three today. A dialog extends this and says which element is its box.
  */
 @Directive()
 export abstract class CollabDialogBase implements OnInit, OnDestroy {
@@ -11,9 +12,6 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
 
   /** The dialog's box: Tab cycles inside it. */
   protected abstract DialogBox(): ElementRef<HTMLElement> | undefined;
-
-  /** What Escape does: the dialog's own cancel. */
-  protected abstract Dismiss(): void;
 
   /**
    * The control to focus when the dialog opens: one marked `data-autofocus`, else the first field, else the first button that
@@ -49,11 +47,6 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   public OnDialogKeyDown(event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'preventDefault'>): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.Dismiss();
-      return;
-    }
     if (event.key !== 'Tab') return;
     const box = this.DialogBox()?.nativeElement;
     if (!box) return;

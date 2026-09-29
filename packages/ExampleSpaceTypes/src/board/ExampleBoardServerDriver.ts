@@ -22,10 +22,11 @@ import {
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { CollaborationEngine } from '@mj-biz-apps/collaboration-core-entities-server';
+import { CollaborationEngine, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readExtension, stringList } from '../extension-config.js';
 
 const KEY = 'example-board';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @RegisterClass(BaseSpaceTypeServerDriver, 'example-board')
 export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
@@ -106,12 +107,15 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     /**
      * Validates board membership changes: a board may seat only so many outside directors. The most is the type's
      * `Extensions.example-board.MaxOutsideDirectors`; with none set there is no cap. An outside seat is one on the Shared band, which
-     * the seat gate sets from the role before it asks this driver, so the rule sees the band the seat will have.
+     * the seat gate sets from the role before it asks this driver, so the rule sees the band the seat will have. Every kind that
+     * leaves someone holding a seat is judged (an invitation, a role change and a band change), not only invitations: a role
+     * change to an outside role would otherwise walk around the cap. The others are counted, so a seat already counted passes on
+     * a full board.
      */
     public override async ValidateMemberChange(
         ctx: MemberChangeContext
     ): Promise<DriverValidationResult> {
-        if (ctx.kind !== 'Invite' || ctx.member.Band !== 'Shared') return { ok: true };
+        if (ctx.kind === 'Remove' || ctx.member.Band !== 'Shared') return { ok: true };
         const cap = readExtension(ctx.spaceType.Configuration, KEY)['MaxOutsideDirectors'];
         if (cap === undefined) return { ok: true };
         if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0) {
@@ -119,26 +123,34 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
             LogError(message);
             throw new Error(message);
         }
-        const seated = await this.CountOutsideDirectors(ctx);
-        if (seated >= cap) {
+        const others = await this.CountOtherOutsideDirectors(ctx);
+        if (others >= cap) {
             return {
                 ok: false,
-                message: `This board already has ${seated} outside director${seated === 1 ? '' : 's'}, the most its type allows (${cap}).`,
+                message: `This board already has ${others} other outside director${others === 1 ? '' : 's'}, the most its type allows (${cap}).`,
                 field: 'SpaceRoleTypeID',
             };
         }
         return { ok: true };
     }
 
-    /** The seats on the Shared band of this board that are not removed, other than the one being saved. */
-    protected async CountOutsideDirectors(ctx: MemberChangeContext): Promise<number> {
-        const own = ctx.member.ID ? ` AND ID <> '${ctx.member.ID}'` : '';
+    /**
+     * The seats on the Shared band of this board that are not removed, other than the one being saved. Counted as the system user,
+     * as the gate counts a roster, so it is every seat and not the ones the acting person can read.
+     */
+    protected async CountOtherOutsideDirectors(ctx: MemberChangeContext): Promise<number> {
+        const spaceId = ctx.space.ID;
+        if (!UUID_PATTERN.test(spaceId)) throw new Error(`The board's id is not a valid id: ${spaceId}`);
+        const ownId = ctx.member.ID;
+        if (ownId && !UUID_PATTERN.test(ownId)) throw new Error(`The seat's id is not a valid id: ${ownId}`);
+        const own = ownId ? ` AND ID <> '${ownId}'` : '';
+        const system = await requireSystemUser(ctx.member);
         const result = await RunView.FromMetadataProvider(ctx.provider as IMetadataProvider).RunView<{ ID: string }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Members',
-            ExtraFilter: `SpaceID = '${ctx.space.ID}' AND Band = 'Shared' AND Status <> 'Removed'${own}`,
+            ExtraFilter: `SpaceID = '${spaceId}' AND Band = 'Shared' AND Status <> 'Removed'${own}`,
             Fields: ['ID'],
             ResultType: 'simple',
-        }, ctx.actingUser);
+        }, system);
         if (!result.Success) throw new Error(`The outside directors could not be counted: ${result.ErrorMessage ?? 'unknown error'}`);
         return result.Results?.length ?? 0;
     }

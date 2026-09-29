@@ -99,6 +99,7 @@ describe("the section's list of who reaches a space, held against Core's", () =>
         const nodes: SpaceNode[] = tree.map((space) => ({
             id: space.ID, parentId: space.ParentID, inheritsMembership: space.InheritsMembership, ownerId: 'owner', agentRetrieval: 'Included',
             closedAt: space.ClosedAt ?? null, postCloseAccess: space.PostCloseAccess ?? null, postCloseAccessDays: space.PostCloseAccessDays ?? null,
+            spaceTypePostCloseAccess: space.TypePostCloseAccess ?? null, spaceTypePostCloseAccessDays: space.TypePostCloseAccessDays ?? null,
         }));
         return { tree, nodes };
     }
@@ -110,6 +111,9 @@ describe("the section's list of who reaches a space, held against Core's", () =>
         ['a closed middle space with no post-close access', { ClosedAt: daysAgo(10), PostCloseAccess: 'None' as const }],
         ['a closed middle space still inside its window', { ClosedAt: daysAgo(10), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
         ['a closed middle space past its window', { ClosedAt: daysAgo(40), PostCloseAccess: 'ReadOnly' as const, PostCloseAccessDays: 30 }],
+        ['a closed middle space that leaves post-close access to a type that says ReadOnly', { ClosedAt: daysAgo(10), TypePostCloseAccess: 'ReadOnly' as const }],
+        ['a closed middle space that leaves it to a type whose window has run out', { ClosedAt: daysAgo(40), TypePostCloseAccess: 'ReadOnly' as const, TypePostCloseAccessDays: 30 }],
+        ['a closed middle space that leaves it to a type that says nothing', { ClosedAt: daysAgo(10) }],
     ] as const) {
         it(`lists the same people under the same seats with ${label}`, () => {
             const { tree, nodes } = trees(closed);

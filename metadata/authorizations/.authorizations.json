@@ -34,5 +34,17 @@
       "UseAuditLog": true,
       "Description": "Configure a space's settings, on spaces where the user's role allows configuring."
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "FF64DD87-D2B7-4752-91F8-2FEF205E61D2"
+    },
+    "fields": {
+      "Name": "Close and Reopen Spaces",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Collaboration",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Close and reopen a space, on spaces where the user holds an owner seat. Granted apart from 'Configure Spaces', which changes a space's settings."
+    }
   }
 ]

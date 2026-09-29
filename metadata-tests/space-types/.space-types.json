@@ -91,5 +91,31 @@
         }
       }
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "1B093662-822E-4074-A88B-1997F531D4E6"
+    },
+    "fields": {
+      "Code": "example-vault",
+      "Name": "Example vault",
+      "Vocabulary": "vault",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultRetention": "Indefinite",
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "AutoApprove",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-vault",
+      "Color": "#455a64",
+      "Configuration": {
+        "PostCloseAccess": "None"
+      }
+    }
   }
 ]

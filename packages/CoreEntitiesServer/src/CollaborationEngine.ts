@@ -195,6 +195,11 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return this.Base.UserCanConfigureSpaces(user, spaceId, provider);
     }
 
+    /** Whether a user holds the 'Close and Reopen Spaces' authorization. The owner seat is checked apart, by the space write rules. */
+    public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.Base.UserHoldsLifecycleAuthorization(user, provider);
+    }
+
     /**
      * Validates whether a storage account exists in FileStorageEngineBase and is active.
      */

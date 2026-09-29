@@ -50,7 +50,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       @if (!CanEdit) {
         <div class="alert-info" role="status">
           <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <span>This space is closed and its access has ended, so its settings can no longer be changed. As an owner you can reopen it.</span>
+          <span>You can reopen this space, but you can't change its settings.</span>
         </div>
         <div class="settings-sections">
           <div class="settings-card">
@@ -250,16 +250,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
 
       <ng-template #lifecycle>
+        @if (CanChangeLifecycle) {
             <div class="form-field full-width">
               <div class="cb-title">Status: {{ formData.status }}</div>
               @if (confirmingLifecycle) {
-                <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? It becomes read-only for everyone.' }}</div>
+                <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
                 <button type="button" class="save-btn" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
                 <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = false">Cancel</button>
               } @else {
                 <button type="button" class="cancel-lifecycle-btn" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
+        }
       </ng-template>
     </div>
   `,
@@ -539,8 +541,12 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   public bannerVisible = true;
   /** True while a close or reopen is with the server: both buttons are off. */
   @Input() IsBusy = false;
-  /** False when the person may only reopen the space (its access has ended): the form is not shown, and there is nothing to save. */
+  /** False when the person may reopen the space but not change its settings: the form is not shown, and there is nothing to save. */
   @Input() CanEdit = true;
+  /** Whether the person may close (or, on a closed space, reopen) it: the button is offered only then. */
+  @Input() CanChangeLifecycle = true;
+  /** What closing does under this space's post-close access, shown where the close is confirmed. */
+  @Input() CloseConsequence = 'It becomes read-only for everyone.';
   private baselineJson = '';
 
   /** The fields the person changed from what the form was built from. Status is the space's own, not a field they edit. */

@@ -44,7 +44,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             type="text"
             placeholder="Search people by name or email..."
             aria-label="Search people by name or email"
-            [(ngModel)]="searchQuery"
+            [(ngModel)]="SearchQuery"
             class="search-input"
           />
         </div>
@@ -142,14 +142,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
 
         <div class="table-body">
-          @if (filteredMembers.length === 0) {
+          @if (FilteredMembers.length === 0) {
             <div class="empty-state">
               <i class="fa-solid fa-user-group empty-ic"></i>
               <div class="empty-title">No members match your filter</div>
               <div class="empty-sub">Try changing your search term or audience filter.</div>
             </div>
           } @else {
-            @for (m of filteredMembers; track m.id) {
+            @for (m of FilteredMembers; track m.id) {
               <div class="member-row">
                 <div class="td-person">
                   <mjc-avatar
@@ -166,16 +166,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (m.ownSeat) {
                       <span class="person-source">
                         Their own seat here is {{ m.ownSeat.status }}
-                        @if (m.ownSeat.canApprove && pending?.id !== m.ownSeat.id) {
+                        @if (m.ownSeat.canApprove && Pending?.id !== m.ownSeat.id) {
                           <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
                         }
-                        @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && pending?.id !== m.ownSeat.id) {
+                        @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && Pending?.id !== m.ownSeat.id) {
                           <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
                         }
-                        @if (pending?.id === m.ownSeat.id) {
-                          {{ pendingQuestion(OwnSeatOf(m)) }}
+                        @if (Pending?.id === m.ownSeat.id) {
+                          {{ PendingQuestion(OwnSeatOf(m)) }}
                           <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                          <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
+                          <button type="button" class="cancel-invite-btn" (click)="Pending = null">Cancel</button>
                         }
                       </span>
                     }
@@ -206,23 +206,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 @if (CanManageSeats) {
                   <div class="td-actions">
                     @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
-                      @if (pending?.id === m.id) {
-                        <span class="fs12">{{ pendingQuestion(m) }}</span>
+                      @if (Pending?.id === m.id) {
+                        <span class="fs12">{{ PendingQuestion(m) }}</span>
                         <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                        <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
+                        <button type="button" class="cancel-invite-btn" (click)="Pending = null">Cancel</button>
                       } @else {
                         @if (m.canApprove) {
                           <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
                         }
                         @if (m.canChangeRole && RoleOptions.length > 0) {
                           <select class="invite-select role-select" [attr.aria-label]="'Change role for ' + m.name" [ngModel]="m.roleCode" (ngModelChange)="AskRole(m, $event)">
-                            @for (option of roleChoicesFor(m); track option.code) {
+                            @for (option of RoleChoicesFor(m); track option.code) {
                               <option [value]="option.code">{{ option.label }}</option>
                             }
                           </select>
                         }
                         @if (m.canRemove) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Remove ' + m.name" (click)="Ask(m, 'remove')">Remove</button>
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="(m.status === 'Invited' ? 'Withdraw the seat of ' : 'Remove ') + m.name" (click)="Ask(m, 'remove')">{{ m.status === 'Invited' ? 'Withdraw' : 'Remove' }}</button>
                         }
                       }
                     }
@@ -598,7 +598,7 @@ export class CollabSpacePeopleComponent {
   }
   private outcome: { ok: boolean; message: string } | null = null;
 
-  public searchQuery = '';
+  public SearchQuery = '';
   public audienceFilter: 'all' | 'Team' | 'Shared' = 'all';
 
   public isInviting = false;
@@ -606,7 +606,7 @@ export class CollabSpacePeopleComponent {
   public inviteRole = 'member';
 
   /** The action waiting for its confirmation. */
-  public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
+  public Pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
   /** True while a confirmed change is with the server: Confirm can't be pressed twice. */
   @Input() IsBusy = false;
   /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
@@ -615,12 +615,12 @@ export class CollabSpacePeopleComponent {
   @Input() Clipboard: Pick<Clipboard, 'writeText'> | null = typeof navigator !== 'undefined' ? navigator.clipboard ?? null : null;
 
   public Ask(member: SpaceMemberModel, kind: 'approve' | 'remove'): void {
-    this.pending = { id: member.id, kind };
+    this.Pending = { id: member.id, kind };
   }
 
   public AskRole(member: SpaceMemberModel, roleCode: string): void {
     if (roleCode === member.roleCode) return;
-    this.pending = { id: member.id, kind: 'role', roleCode };
+    this.Pending = { id: member.id, kind: 'role', roleCode };
   }
 
   /** The person's own seat on this space, as a member row, so it can be approved or withdrawn like any seat. */
@@ -629,8 +629,8 @@ export class CollabSpacePeopleComponent {
     return { ...member, id: seat.id, status: seat.status, roleName: seat.roleName, roleCode: seat.roleCode, inherited: false, ownSeat: undefined };
   }
 
-  public pendingQuestion(member: SpaceMemberModel): string {
-    switch (this.pending?.kind) {
+  public PendingQuestion(member: SpaceMemberModel): string {
+    switch (this.Pending?.kind) {
       case 'approve': return `Approve ${member.name}?`;
       case 'remove': return member.status === 'Invited' ? `Withdraw ${member.name}'s seat?` : `Remove ${member.name}?`;
       case 'role': return `Change ${member.name}'s role?`;
@@ -639,15 +639,15 @@ export class CollabSpacePeopleComponent {
   }
 
   /** The role picker's options for one seat: the roles the viewer may hand out, and the seat's own role so it reads as chosen. */
-  public roleChoicesFor(member: SpaceMemberModel): ReadonlyArray<{ code: string; label: string }> {
+  public RoleChoicesFor(member: SpaceMemberModel): ReadonlyArray<{ code: string; label: string }> {
     return this.RoleOptions.some((o) => o.code === member.roleCode)
       ? this.RoleOptions
       : [{ code: member.roleCode, label: member.roleName }, ...this.RoleOptions];
   }
 
   public ConfirmPending(): void {
-    const pending = this.pending;
-    this.pending = null;
+    const pending = this.Pending;
+    this.Pending = null;
     const listed = this.Members.find((m) => m.id === pending?.id);
     const member = listed ?? this.Members.filter((m) => m.ownSeat).map((m) => this.OwnSeatOf(m)).find((m) => m.id === pending?.id);
     if (!pending || !member) return;
@@ -691,10 +691,10 @@ export class CollabSpacePeopleComponent {
     return this.Members.filter((m) => m.status === 'Invited' || m.ownSeat?.status === 'Invited').length;
   }
 
-  public get filteredMembers(): SpaceMemberModel[] {
+  public get FilteredMembers(): SpaceMemberModel[] {
     return this.Members.filter((m) => {
-      if (this.searchQuery.trim()) {
-        const q = this.searchQuery.toLowerCase();
+      if (this.SearchQuery.trim()) {
+        const q = this.SearchQuery.toLowerCase();
         const matchesName = m.name.toLowerCase().includes(q);
         const matchesEmail = m.email.toLowerCase().includes(q);
         if (!matchesName && !matchesEmail) return false;

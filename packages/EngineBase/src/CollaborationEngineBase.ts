@@ -435,7 +435,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     public async UserCanConfigureSpaces(
         user: UserInfo,
         spaceId?: string | null,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
         const md = provider ?? Metadata.Provider;
         const auth = this.FindCollaborationAuthorization('Configure Spaces', md);
@@ -452,15 +453,41 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         }
 
         // The post-close filter applies: on a space closed with its access ended, the server refuses every change but a reopen
-        const reached = await this.ReachedSeat(user, spaceId, md);
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /** Whether a user holds the 'Close and Reopen Spaces' authorization. It is granted apart from 'Configure Spaces', which changes settings. */
+    public UserHoldsLifecycleAuthorization(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        const auth = this.FindCollaborationAuthorization('Close and Reopen Spaces', md);
+        if (!auth) {
+            LogError("Missing authorization: 'Close and Reopen Spaces'");
+            return false;
+        }
+        return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, user, md.Authorizations ?? []);
+    }
+
+    /**
+     * Whether a user may close an open space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space (or on
+     * an ancestor it inherits from), with the post-close filter applied.
+     */
+    public async UserCanCloseSpace(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
+    ): Promise<boolean> {
+        const md = provider ?? Metadata.Provider;
+        if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf);
         return !!reached?.role.isOwnerRole;
     }
 
     /**
-     * Whether a user may reopen a closed space: an owner seat on it or on an ancestor it inherits from, reached even when the
-     * space's post-close access has ended. That is the right the server gives a reopen, and only a reopen (it asks for no
-     * 'Configure Spaces' authorization). `UserCanConfigureSpaces` keeps the post-close filter, so on such a space an owner may
-     * reopen but not configure.
+     * Whether a user may reopen a closed space: the 'Close and Reopen Spaces' authorization AND an owner seat on the space or on an
+     * ancestor it inherits from, reached even when the space's post-close access has ended. `UserCanConfigureSpaces` keeps the
+     * post-close filter, so on such a space an owner may reopen but not configure.
      */
     public async UserCanReopenSpace(
         user: UserInfo,
@@ -468,7 +495,9 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         provider?: IMetadataProvider,
         roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<boolean> {
-        const reached = await this.ReachedSeat(user, spaceId, provider ?? Metadata.Provider, roleTypeOf, true);
+        const md = provider ?? Metadata.Provider;
+        if (!this.UserHoldsLifecycleAuthorization(user, md)) return false;
+        const reached = await this.ReachedSeat(user, spaceId, md, roleTypeOf, true);
         return !!reached?.role.isOwnerRole;
     }
 

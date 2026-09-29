@@ -1,6 +1,6 @@
 import type { Type } from '@angular/core';
 import type { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { normalizeContributionKey as normalizeKey, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { normalizeContributionKey, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal, type ClassRegistration } from '@memberjunction/global';
@@ -186,11 +186,6 @@ export class BaseSpaceTypeUIDriver {
     }
 }
 
-/** Keys are compared without case or padding, and `discussions` is Chat, everywhere: Core holds the one rule. */
-export function normalizeContributionKey(key: string): string {
-    return normalizeKey(key);
-}
-
 /**
  * The type's own driver has the final say over the parts it is handed: what it names replaces the part with the same key, and the
  * rest (the built-in parts and what other apps contributed) stays. Sorted by `sortKey`.
@@ -208,6 +203,14 @@ export function overlayDescriptors<TDescriptor extends { key: string; sortKey?: 
 // ============================================================================
 // Contribution Metadata & Assembler
 // ============================================================================
+
+/** What has been logged already: contributions are assembled for every space that is built, and a clash reads once. */
+const loggedContributionFaults = new Set<string>();
+function logContributionOnce(message: string): void {
+    if (loggedContributionFaults.has(message)) return;
+    loggedContributionFaults.add(message);
+    LogError(message);
+}
 
 export interface SpaceContributionMetadata {
     spaceTypes: string[];
@@ -237,7 +240,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         return spaceTypes.some((t) => t === '*' || t.toLowerCase().trim() === normalizedCode);
     });
 
-    // Deduplicate on contributionKey (compared without case): highest Priority wins (if tied, latest)
+    // Deduplicate on contributionKey (compared without case): the highest Priority wins, and on a tie the first registered
     const map = new Map<string, { reg: ClassRegistration; meta: SpaceContributionMetadata }>();
     for (const reg of registrations) {
         const raw = reg.Metadata as Record<string, string | number | boolean | string[] | undefined>;
@@ -253,10 +256,10 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         const key = normalizeContributionKey(meta.contributionKey);
         const existing = map.get(key);
         if (!existing || reg.Priority > existing.reg.Priority) {
-            if (existing) LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${reg.Priority}) is used and the other (${existing.reg.Priority}) is ignored.`);
+            if (existing) logContributionOnce(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; the one with the higher priority (${reg.Priority}) is used and the other (${existing.reg.Priority}) is ignored.`);
             map.set(key, { reg, meta });
         } else {
-            LogError(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; ${reg.Priority === existing.reg.Priority ? `at the same priority (${reg.Priority}) the first registered is used` : `the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored`}.`);
+            logContributionOnce(`[assembleSpaceContributions] Two contributions to '${spaceTypeCode}' spaces share the key '${meta.contributionKey}'; ${reg.Priority === existing.reg.Priority ? `at the same priority (${reg.Priority}) the first registered is used` : `the one with the higher priority (${existing.reg.Priority}) is used and the other (${reg.Priority}) is ignored`}.`);
         }
     }
 
@@ -275,7 +278,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
     for (const contrib of contributedItems) {
         const key = normalizeContributionKey(contrib.key);
         if (mergedMap.has(key)) {
-            LogError(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
+            logContributionOnce(`[assembleSpaceContributions] A contribution keyed '${contrib.key}' clashes with an existing part in '${spaceTypeCode}' spaces and was refused. Contributions add parts; they do not replace them.`);
             continue;
         }
         mergedMap.set(key, contrib);

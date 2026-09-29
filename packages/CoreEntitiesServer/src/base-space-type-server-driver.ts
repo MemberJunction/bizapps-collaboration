@@ -61,10 +61,13 @@ export interface ChildSpaceChangeContext extends DriverBaseContext {
 
 /**
  * What a change to a seat means to the driver, from what the save asked for. A new seat is an `Invite`, or a `Remove` when it is
- * made Removed. A saved seat whose status becomes Active is an `Invite` too: an approval or a reinstatement is the seat coming into
- * being, not a route the driver hears. Otherwise a status made Removed is a `Remove`, and a role or a band edit is a `RoleChange`
+ * made Removed. A saved seat whose status becomes Active or Invited is an `Invite` too: an approval or a reinstatement is the seat coming
+ * into being, not a route the driver hears. Otherwise a status made Removed is a `Remove`, and a role or a band edit is a `RoleChange`
  * or a `BandChange`. The kind is what was asked for: a band the gate puts back still reaches the driver as a `BandChange`. A save
- * that touches none of these four fields raises no seat reaction.
+ * that touches none of status, role and band raises no seat reaction.
+ *
+ * A rule on who may hold a seat has to judge every kind that leaves someone holding it: `Invite`, `RoleChange` and `BandChange`
+ * (and not only `Invite`). Judging only an invitation lets a role change walk around the rule.
  */
 export type MemberChangeKind = 'Invite' | 'RoleChange' | 'BandChange' | 'Remove';
 

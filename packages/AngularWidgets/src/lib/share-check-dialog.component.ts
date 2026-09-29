@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { CollabDialogBase } from './dialog-base';
 import type { FileKind, FindingModel, RecipientPersonModel } from './types';
 import { CollabShareCheckComponent } from './share-check.component';
@@ -8,10 +9,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-share-check-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabShareCheckComponent],
+  imports: [MJDialogComponent, CollabShareCheckComponent],
   template: `
-    <div class="scrim" (click)="onCancel()"></div>
-    <div #dialogBox class="modal share-modal" role="dialog" aria-modal="true" [attr.aria-label]="Title || 'Share an item'">
+    <mj-dialog [Visible]="true" [Width]="680" (Close)="onCancel()">
+    <div #dialogBox class="share-modal">
       <mjc-share-check
         [Title]="Title"
         [ItemName]="ItemName"
@@ -34,49 +35,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         (CancelRequested)="onCancel()"
       />
     </div>
+    </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
-      display: block;
-      position: absolute;
-      inset: 0;
-      z-index: 1000;
+      display: contents;
+    }
+
+    .share-modal {
       color: var(--mj-text-primary);
       font-family: var(--mj-font-family, Inter, sans-serif);
       font-size: 14px;
       line-height: var(--mjc-line-height);
-    }
-
-    .scrim {
-      position: absolute;
-      inset: 0;
-      background: var(--mj-bg-overlay);
-      backdrop-filter: blur(1.5px);
-    }
-
-    .modal.share-modal {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 680px;
-      max-height: calc(100% - 24px);
-      display: flex;
-      flex-direction: column;
-      transform: translate(-50%, -50%);
-      background: var(--mj-bg-surface);
-      border-radius: 16px;
-      box-shadow: var(--mj-shadow-2xl);
-      border: 1px solid var(--mj-border-default);
-      overflow: hidden;
-      box-sizing: border-box;
-      z-index: 1001;
     }
   `],
 })
 export class CollabShareCheckDialogComponent extends CollabDialogBase {
   @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
   protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
-  protected override Dismiss(): void { this.onCancel(); }
 
   @Input() public Title = '';
   @Input() public ItemName = '';

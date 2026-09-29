@@ -227,6 +227,17 @@ describe('what each reaction hears, through Save', () => {
         assert.equal((kept as unknown as { ClosedAt: Date }).ClosedAt.getTime(), backdated.getTime());
     });
 
+    it("gives a staff re-stamp of an already closed space the same rule: ahead of the server is the server's time, in the past is kept", async () => {
+        const staff = { ID: ACTOR, Name: 'Staff', UserRoles: [{ Role: 'Developer' }] };
+        const ahead = spaceEntity({ ClosedAt: new Date(Date.now() + 24 * 3600 * 1000), ContextCurrentUser: staff }, { ClosedAt: new Date(Date.now() - 3600 * 1000) });
+        await saveAndHear(ahead);
+        assert.ok(Math.abs((ahead as unknown as { ClosedAt: Date }).ClosedAt.getTime() - Date.now()) < 5000, 'a re-stamp a day ahead is stored as now');
+        const backdated = new Date(Date.now() - 10 * 24 * 3600 * 1000);
+        const kept = spaceEntity({ ClosedAt: backdated, ContextCurrentUser: staff }, { ClosedAt: new Date(Date.now() - 3600 * 1000) });
+        await saveAndHear(kept);
+        assert.equal((kept as unknown as { ClosedAt: Date }).ClosedAt.getTime(), backdated.getTime());
+    });
+
     const itemEntity = (values: Record<string, unknown>, dirty: Record<string, unknown>, isSaved = true): SpaceItemEntityServer =>
         entity(SpaceItemEntityServer.prototype, { ID: 'item-1', SpaceID: SPACE, Band: 'Team', EntityID: 'entity-1', RecordID: 'record-1', ...values }, dirty, isSaved);
 
