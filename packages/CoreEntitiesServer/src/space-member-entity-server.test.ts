@@ -4,7 +4,7 @@ import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type MemberChangeContext } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
-import { reportedMemberChangeKind, SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
+import { decideMemberKind, SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
 
 const LEAVER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE1';
 const OWNER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9';
@@ -202,15 +202,17 @@ describe('a seat being deleted', () => {
     });
 });
 
-describe('the kind of change the driver hears about after a save', () => {
-    it('is the kind validation decided, which the saved row no longer shows', () => {
-        assert.equal(reportedMemberChangeKind('BandChange', 'Active', false), 'BandChange');
-        assert.equal(reportedMemberChangeKind('Remove', 'Active', false), 'Remove');
+describe('the kind of change a seat save is', () => {
+    const base = { isNew: false, status: 'Active', statusChanged: false, roleChanged: false, bandChanged: false };
+
+    it('names a removal, a role change and a band change from what changed', () => {
+        assert.equal(decideMemberKind({ ...base, status: 'Removed', statusChanged: true }), 'Remove');
+        assert.equal(decideMemberKind({ ...base, roleChanged: true }), 'RoleChange');
+        assert.equal(decideMemberKind({ ...base, bandChanged: true }), 'BandChange');
     });
 
-    it('is worked out from the saved row when validation did not run', () => {
-        assert.equal(reportedMemberChangeKind(null, 'Removed', false), 'Remove');
-        assert.equal(reportedMemberChangeKind(null, 'Active', true), 'Invite');
-        assert.equal(reportedMemberChangeKind(null, 'Active', false), 'RoleChange');
+    it('calls a new seat, an approval and a reinstatement an Invite: they have no kind of their own', () => {
+        assert.equal(decideMemberKind({ ...base, isNew: true }), 'Invite');
+        assert.equal(decideMemberKind({ ...base, statusChanged: true }), 'Invite');
     });
 });

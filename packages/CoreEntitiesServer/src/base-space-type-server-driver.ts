@@ -36,7 +36,7 @@ export interface SpaceChangeContext extends DriverBaseContext {
     oldValues?: Record<string, unknown>;
 }
 
-export type ChildSpaceChangeKind = 'CreateChild' | 'UpdateChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
+export type ChildSpaceChangeKind = 'CreateChild' | 'UpdateChild' | 'ReopenChild' | 'MoveChildIn' | 'MoveChildOut' | 'CloseChild' | 'DeleteChild';
 
 export interface ChildSpaceChangeContext extends DriverBaseContext {
     childSpace: mjBizAppsCollaborationSpaceEntity;

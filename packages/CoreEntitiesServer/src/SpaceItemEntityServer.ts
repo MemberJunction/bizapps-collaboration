@@ -43,9 +43,6 @@ export function decideItemKind(change: { isNew: boolean; spaceChanged: boolean; 
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity {
-    /** What validation decided about this save, for the reaction that follows it. */
-    private decidedChange: { kind: ItemChangeKind; oldValues: Record<string, unknown> } | null = null;
-
     /** What each changed field held before this save, by field name. System columns are left out. */
     private dirtyOldValues(): Record<string, unknown> {
         const old: Record<string, unknown> = {};
@@ -145,8 +142,6 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
 
             const itemKind = decideItemKind({ isNew, spaceChanged, bandChanged, band: this.Band });
             const oldValues = isNew ? {} : this.dirtyOldValues();
-            // Decided once, here, and handed to the reaction after the save
-            this.decidedChange = { kind: itemKind, oldValues };
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
                 actingUser: user,
@@ -171,9 +166,16 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousBand = this.Fields.find((field) => field.Name === 'Band')?.OldValue as Band | null | undefined;
-        // Taken and cleared before the save, so a second save of this object starts clean
-        const decided = this.decidedChange;
-        this.decidedChange = null;
+        // Decided here, before the save, from the dirty fields: the saved row no longer shows what changed
+        const decided = {
+            kind: decideItemKind({
+                isNew: wasNew,
+                spaceChanged: this.Fields.some((f) => f.Name === 'SpaceID' && f.Dirty),
+                bandChanged: this.Fields.some((f) => f.Name === 'Band' && f.Dirty),
+                band: this.Band,
+            }),
+            oldValues: wasNew ? {} : this.dirtyOldValues(),
+        };
         const ok = await super.Save(options);
         const user = this.ContextCurrentUser;
         if (!ok || !user || !this.ID) return ok;
@@ -194,8 +196,8 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
                 spaceType: spaceInfo.spaceType,
                 effectiveRules: ResolveSpaceRules(null, null),
                 item: this,
-                kind: decided?.kind ?? (becameShared ? 'Promote' : wasNew ? 'Add' : 'Update'),
-                oldValues: decided?.oldValues,
+                kind: decided.kind,
+                oldValues: decided.oldValues,
             });
         } catch (driverErr) {
             LogError(`Item driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);

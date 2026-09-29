@@ -35,15 +35,12 @@ const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
  */
 export function decideSpaceKinds(change: { isNew: boolean; isClosing: boolean; isReopening: boolean; isMoving: boolean }): { spaceKind: SpaceChangeKind; childKind: ChildSpaceChangeKind } {
     const spaceKind: SpaceChangeKind = change.isNew ? 'Create' : change.isClosing ? 'Close' : change.isReopening ? 'Reopen' : change.isMoving ? 'Move' : 'Update';
-    const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isClosing ? 'CloseChild' : change.isMoving ? 'MoveChildIn' : 'UpdateChild';
+    const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isClosing ? 'CloseChild' : change.isReopening ? 'ReopenChild' : change.isMoving ? 'MoveChildIn' : 'UpdateChild';
     return { spaceKind, childKind };
 }
 
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
-    /** What validation decided about this save, for the reaction that follows it. */
-    private decidedChange: { spaceKind: SpaceChangeKind; childKind: ChildSpaceChangeKind; oldValues: Record<string, unknown> } | null = null;
-
     /** What each changed field held before this save, by field name. System columns are left out. */
     private dirtyOldValues(): Record<string, unknown> {
         const old: Record<string, unknown> = {};
@@ -387,8 +384,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
         const { spaceKind: changeKind, childKind } = decideSpaceKinds({ isNew, isClosing, isReopening, isMoving });
         const oldValues = isNew ? {} : { ...this.dirtyOldValues(), ...(typeChanged ? { SpaceTypeID: previousTypeId } : {}) };
-        // Decided once, here, and handed to the reaction after the save: the saved row no longer shows what changed
-        this.decidedChange = { spaceKind: changeKind, childKind, oldValues };
 
         if (driver && spaceType) {
             const driverValidation = await driver.ValidateSpaceChange({
@@ -515,9 +510,18 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
         const structureChanged = parentChanged || inheritsChanged;
 
-        // What validation decided is taken and cleared before the save, so a second save of this object starts clean
-        const decided = this.decidedChange;
-        this.decidedChange = null;
+        // Decided here, before the save, from the dirty fields (the same reading validation makes): the saved row no longer shows
+        // what changed. Handed to every reaction, and dropped when the save is done, so a second save starts clean.
+        const isNew = !this.IsSaved;
+        const typeFieldDirty = !isNew && this.Fields.some((f) => f.Name === 'SpaceTypeID' && f.Dirty);
+        const kinds = decideSpaceKinds({ isNew, isClosing: justClosed, isReopening: justReopened, isMoving: !isNew && parentChanged });
+        const oldParentId = !isNew && parentChanged ? parseUuid(String(this.Fields.find((f) => f.Name === 'ParentID')?.OldValue ?? '')) : null;
+        const decided = {
+            spaceKind: kinds.spaceKind,
+            childKind: kinds.childKind,
+            oldParentId,
+            oldValues: isNew ? {} : { ...this.dirtyOldValues(), ...(typeFieldDirty ? { SpaceTypeID: this.Fields.find((f) => f.Name === 'SpaceTypeID')?.OldValue } : {}) },
+        };
 
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.ID) {
@@ -610,8 +614,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     space: this,
                     spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
-                    kind: decided?.spaceKind ?? (justClosed ? 'Close' : justReopened ? 'Reopen' : 'Update'),
-                    oldValues: decided?.oldValues,
+                    kind: decided.spaceKind,
+                    oldValues: decided.oldValues,
                 });
 
                 if (this.ParentID) {
@@ -623,8 +627,22 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                         spaceType: parentInfo.spaceType,
                         effectiveRules: ResolveSpaceRules(null, null),
                         childSpace: this,
-                        kind: decided?.childKind ?? 'UpdateChild',
-                        oldValues: decided?.oldValues,
+                        kind: decided.childKind,
+                        oldValues: decided.oldValues,
+                    });
+                }
+                // The parent a space leaves hears of it too
+                if (decided.oldParentId) {
+                    const leftInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(decided.oldParentId, this);
+                    await leftInfo.driver.OnChildSpaceChanged({
+                        actingUser: user,
+                        provider: this.ProviderToUse,
+                        space: leftInfo.space,
+                        spaceType: leftInfo.spaceType,
+                        effectiveRules: ResolveSpaceRules(null, null),
+                        childSpace: this,
+                        kind: 'MoveChildOut',
+                        oldValues: decided.oldValues,
                     });
                 }
             } catch (driverErr) {

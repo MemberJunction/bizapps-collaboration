@@ -13,13 +13,14 @@ import { parseUuid } from './uuid.js';
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
 /**
- * The kind of change the driver hears about after a save: what validation decided, when it ran (it knows a band change from a role
- * change, which the saved row no longer shows), else the best reading of the saved row.
+ * The kind of change a seat save is, decided from what changed. Approving an invited seat and reinstating a removed one have no
+ * kind of their own: a seat that becomes Active again is an Invite, as it is when it is first made.
  */
-export function reportedMemberChangeKind(decided: MemberChangeKind | null, status: string, wasNew: boolean): MemberChangeKind {
-    if (decided) return decided;
-    if (status === 'Removed') return 'Remove';
-    return wasNew ? 'Invite' : 'RoleChange';
+export function decideMemberKind(change: { isNew: boolean; status: string; statusChanged: boolean; roleChanged: boolean; bandChanged: boolean }): MemberChangeKind {
+    if (change.status === 'Removed' && (change.statusChanged || change.isNew)) return 'Remove';
+    if (change.roleChanged) return 'RoleChange';
+    if (change.bandChanged) return 'BandChange';
+    return 'Invite';
 }
 
 @RegisterClass(BaseEntity, ENTITY)
@@ -68,7 +69,6 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
             if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
                 // Leaving skips the invite rules, but not the type's: a type may refuse a member leaving, or react to it
-                this.pendingKind = 'Remove';
                 const refusedLeave = await this.judgeWithDriver(user, spaceId, 'Remove');
                 return refusedLeave ? fail(result, refusedLeave.field, refusedLeave.message) : result;
             }
@@ -107,19 +107,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
 
         // Extensibility Driver Validation
-        const isNew = !this.IsSaved;
-        const statusChanged = this.Fields.some((f) => f.Name === 'Status' && f.Dirty);
-        const roleChanged = this.Fields.some((f) => f.Name === 'SpaceRoleTypeID' && f.Dirty);
-        const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
-        let memberKind: MemberChangeKind = 'Invite';
-        if (this.Status === 'Removed' && (statusChanged || isNew)) {
-            memberKind = 'Remove';
-        } else if (roleChanged) {
-            memberKind = 'RoleChange';
-        } else if (bandChanged) {
-            memberKind = 'BandChange';
-        }
-        this.pendingKind = memberKind;
+        const memberKind = this.currentKind();
         const refused = await this.judgeWithDriver(user, spaceId, memberKind);
         if (refused) return fail(result, refused.field, refused.message);
 
@@ -145,14 +133,36 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
     }
 
-    /** The kind of change Validate decided on, so Save tells the driver the same thing (Dirty flags are gone after the save). */
-    private pendingKind: MemberChangeKind | null = null;
+    private isFieldDirty(name: string): boolean {
+        return this.Fields.some((f) => f.Name === name && f.Dirty);
+    }
+
+    /** The kind of change this save is, from its dirty fields. */
+    private currentKind(): MemberChangeKind {
+        return decideMemberKind({
+            isNew: !this.IsSaved,
+            status: this.Status,
+            statusChanged: this.isFieldDirty('Status'),
+            roleChanged: this.isFieldDirty('SpaceRoleTypeID'),
+            bandChanged: this.isFieldDirty('Band'),
+        });
+    }
+
+    /** What each changed field held before this save, by field name. System columns are left out. */
+    private dirtyOldValues(): Record<string, unknown> {
+        const old: Record<string, unknown> = {};
+        for (const field of this.Fields) {
+            if (field.Dirty && !field.Name.startsWith('__mj_')) old[field.Name] = field.OldValue;
+        }
+        return old;
+    }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         const wasNew = !this.IsSaved;
         const previousStatus = this.Fields.find((f) => f.Name === 'Status')?.OldValue as string | undefined;
-        const decidedKind = this.pendingKind;
-        this.pendingKind = null;
+        // Decided here, before the save, from what changed: the same reading validation makes, and the one the reaction is handed
+        const decidedKind = this.currentKind();
+        const oldValues = wasNew ? {} : this.dirtyOldValues();
         const ok = await super.Save(options);
         if (ok && this.ContextCurrentUser && this.SpaceID) {
             const user = this.ContextCurrentUser;
@@ -165,7 +175,8 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     spaceType: spaceInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
                     member: this,
-                    kind: reportedMemberChangeKind(decidedKind, this.Status, wasNew),
+                    kind: decidedKind,
+                    oldValues,
                 });
             } catch (driverErr) {
                 LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);
