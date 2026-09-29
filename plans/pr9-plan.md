@@ -100,12 +100,13 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 - the five screenshots from #8's item 23 are taken again in Explorer, as named users, with the real agent answering. They're committed under `docs/screenshots/pr9/` with the Playwright script that takes them, and embedded in the comment;
 - `metadata/` has no `sync` block, every file in it ends in a newline, and `git diff next -- metadata` shows only intended changes;
 - the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed;
-- D41's authorization has replaced every check on a role's name, an `example-board` space is created, edited, reloaded and deleted through the screens (D42), and D45's query answers Home's counts, each with its tests.
+- D41's authorization has replaced every check on a role's name, an `example-board` space is created, edited, reloaded and deleted through the screens (D42), and D45's query answers Home's counts, each with its tests;
+- the MemberJunction pull request of D48 has been built and tested locally, and Amith has reviewed it.
 
 ### 3.6 Where stage 0 stands
 
 At `c4903a3`, on 2026-09-29:
-- **#8's final review:** every item is closed but the screenshots, which wait on sign-ins for the named users.
+- **#8's final review:** every item is closed but the screenshots, which the browser pass takes.
 - **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the screenshot row (70) and the hand-built controls (73).
 - **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
   - **server drivers work in part:** every save runs its type's Validate hook, and reactions in the transaction and one resolver are stage 2's (79, 81);
@@ -115,7 +116,13 @@ At `c4903a3`, on 2026-09-29:
 - **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
 - **Decided on 2026-09-29, and built:** the checks that went by a role's name ask the *Administer Spaces* authorization, and Settings offers agent retrieval only to someone who holds it (D41). Home's counts come from one approved query that only Integration may run, which the server runs as the system user, and Open Tasks and Invitations Waiting open the rows behind them, from two more (D45). `WhoCanStart` is `Anyone` or `Owners` (D43). A space's conversations offer no voice call.
 - **Tests:** Core's 146, EngineBase's 18, CoreEntitiesServer's 267, Server's 10, IntegrationTests' 56, the page's 140 and its five rendered tests, the widgets' 151 and the example types' 45 pass in a clean install. The harnesses hold 75 checks on the server and 64 on the client, in eleven bundles each; at `61168bd` the builder ran both twice from a purge and a fresh load, and both passed (`c4903a3` changes only a doc comment and tests on the server side).
-- **To finish:** the latest review's items; what's left of D42; the MemberJunction pull request of D48, with MJ#4850, MJ#4859, MJ#4864 and MJ#4870 in it, whose opening waits on Amith; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
+- **To finish:**
+  - the MemberJunction pull request of D48, with MJ#4836 to MJ#4839, MJ#4850, MJ#4859, MJ#4864 and MJ#4870 in it. Amith gave the go-ahead on 2026-09-29: the builder builds it next and tests it locally, and Amith reviews it too;
+  - the browser pass, now that the builder can sign in to Explorer: the details form (D42), the hand-built controls (73) and the screenshots;
+  - bizapps-common's pull request 186, which Amith reviews and merges (D46);
+  - § 3.5's findings.
+
+  PR 9 merges once these are done and the MemberJunction pull request has been built, tested locally and reviewed by Amith.
 
 ## 4. Stages 1 to 4
 
