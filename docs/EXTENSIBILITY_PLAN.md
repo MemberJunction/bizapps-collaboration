@@ -2,7 +2,7 @@
 
 This plan makes Collaboration a base that other apps build on without Collaboration knowing about them. A downstream app adds a **space type**. The type names server and browser plug-in classes, and optionally a table of its own that extends `Space` through MJ's IsA. The first app built this way is a refactored Committees (bizapps-committees).
 
-It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-for-apps-on-top), and it settles the chat and agent rules of round 94's task 6, which moved to the next pull request.
+It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-for-apps-on-top), and it settles the rules for chats and agents ([§ 8](#8-chats-history-and-agents)).
 
 **Status:** agreed with Amith on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, D16 to D25 on 2026-09-27, and D26 to D35 later that day (the plan's v0.5: anchors, grants, data reach, notes and meetings). PR #7 builds this document as it stood before D26; PR #8 builds D26 to D35's changes to it, from [its own plan](../plans/pr8-plan.md) ([§ 13](#13-order-of-work)). Where this document and the plan disagree, the plan wins.
 
@@ -402,7 +402,7 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 
 ## 8. Chats, history and agents
 
-This section is round 94's task 6, rewritten; it moved to the next pull request. Its rules come from Amith's answers of 2026-09-25 and 2026-09-26, and the plan's D2, D4 and D10.
+This section's rules come from Amith's answers of 2026-09-25 and 2026-09-26, and the plan's D2, D4 and D10.
 
 ### Data
 
