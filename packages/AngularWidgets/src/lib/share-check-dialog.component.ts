@@ -28,7 +28,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         [ReviewSub]="ReviewSub"
         [Findings]="Findings"
         [ReviewCompleted]="ReviewCompleted"
-        [Note]="Note"
         [NotifyRecipients]="NotifyRecipients"
         [AuthorName]="AuthorName"
         [Timestamp]="Timestamp"
@@ -83,20 +82,19 @@ export class CollabShareCheckDialogComponent extends CollabDialogBase {
   @Input() public ReviewSub = '';
   @Input() public Findings: FindingModel[] = [];
   @Input() public ReviewCompleted = false;
-  @Input() public Note = '';
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';
   @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
-  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
+  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; notify: boolean }>();
   @Output() public CancelRequested = new EventEmitter<void>();
 
   public onApplyFix(fix: FindingModel): void {
     this.ApplyFixRequested.emit(fix);
   }
 
-  public onShareRequested(result: { applyFixes: boolean; note: string; notify: boolean }): void {
+  public onShareRequested(result: { applyFixes: boolean; notify: boolean }): void {
     this.ShareRequested.emit(result);
   }
 

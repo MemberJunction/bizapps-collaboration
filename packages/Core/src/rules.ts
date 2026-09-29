@@ -53,6 +53,7 @@ export interface InviteRefusal {
         | 'not-signed-in'
         | 'unknown-space'
         | 'not-a-member'
+        | 'not-authorized'
         | 'cannot-invite'
         | 'above-ceiling'
         | 'sealed'
@@ -402,7 +403,7 @@ export function authorizeSpaceWrite(input: {
     }
     if (input.kind === 'create-root') {
         if (!input.callerMayAdminister || idKey(input.nextOwnerId) !== idKey(input.callerUserId)) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.' };
+            return { ok: false, code: 'not-authorized', message: 'Space change refused: only someone with the Administer Spaces authorization may create a root, and they must own it.' };
         }
         return { ok: true };
     }
@@ -417,7 +418,7 @@ export function authorizeSpaceWrite(input: {
     }
     if (input.kind === 'move' && input.toRoot) {
         if (!input.callerMayAdminister) {
-            return { ok: false, code: 'cannot-invite', message: 'Space change refused: only someone with the Administer Spaces authorization may move a space to the top level.' };
+            return { ok: false, code: 'not-authorized', message: 'Space change refused: only someone with the Administer Spaces authorization may move a space to the top level.' };
         }
         return { ok: true };
     }

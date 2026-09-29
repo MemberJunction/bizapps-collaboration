@@ -484,8 +484,13 @@ describe('space writes', () => {
         assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: null }), 'create-root');
         assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', here: null, onParent: null }).ok, true);
     });
-    it('refuses a participant creating a root', () => {
-        assert.equal(authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', here: null, onParent: null }).ok, false);
+    it('refuses someone without the authorization creating a root, and says it is the authorization they lack', () => {
+        const decision = authorizeSpaceWrite({ kind: 'create-root', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', here: null, onParent: null });
+        assert.equal(decision.ok, false);
+        if (!decision.ok) {
+            assert.equal(decision.code, 'not-authorized');
+            assert.match(decision.message, /Administer Spaces authorization/);
+        }
     });
     it('lets an owner of the parent create a child', () => {
         assert.equal(planSpaceWrite({ isNew: true, previousParentId: null, nextParentId: 'root' }), 'create-child');
@@ -501,7 +506,9 @@ describe('space writes', () => {
         assert.deepEqual(chainsForSpaceWrite('move', true), { here: true, destination: false });
         assert.deepEqual(chainsForSpaceWrite('move', false), { here: true, destination: true });
         assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: true, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, true);
-        assert.equal(authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', toRoot: true, here, onParent: null }).ok, false);
+        const refused = authorizeSpaceWrite({ kind: 'move', callerUserId: 'ada', callerMayAdminister: false, nextOwnerId: 'ada', toRoot: true, here, onParent: null });
+        assert.equal(refused.ok, false);
+        if (!refused.ok) assert.equal(refused.code, 'not-authorized');
     });
     it('refuses a move under a descendant and a guest edit', () => {
         assert.equal(parentCreatesCycle(tree, 'root', 'child'), true);

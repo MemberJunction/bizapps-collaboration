@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it, mock } from 'node:test';
-import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
+import { grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import {
     BaseSpaceTypeServerDriver,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, type Type } from '@angular/core';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
@@ -10,6 +10,7 @@ import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
 import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabNewConversationDialogComponent } from './new-conversation-dialog.component.ts';
+import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
@@ -97,6 +98,10 @@ describe('agent retrieval in Settings, rendered', () => {
     expect(radios(host).length).toBeGreaterThan(0);
     expect(radios(host).every((radio) => radio.disabled)).toBe(true);
     expect(host.textContent).toContain('Only someone with the Administer Spaces authorization can change this.');
+    // The radios are off, so they can't be focused: the group is what a screen reader lands on, and it points at the reason
+    const group = host.querySelector('[role="radiogroup"]')!;
+    expect(group.getAttribute('aria-describedby')).toBe('settings-retrieval-note');
+    expect(host.querySelector('#settings-retrieval-note')?.textContent).toContain('Administer Spaces');
     without.destroy();
 
     const withIt = TestBed.createComponent(CollabSpaceSettingsComponent);
@@ -107,6 +112,7 @@ describe('agent retrieval in Settings, rendered', () => {
     const allowed = withIt.nativeElement as HTMLElement;
     expect(radios(allowed).every((radio) => !radio.disabled)).toBe(true);
     expect(allowed.textContent).not.toContain('Only someone with the Administer Spaces authorization');
+    expect(allowed.querySelector('[role="radiogroup"]')!.hasAttribute('aria-describedby')).toBe(false);
   });
 });
 
@@ -329,28 +335,45 @@ describe('the dialogs, rendered', () => {
     expect(document.activeElement).toBe(buttons[0]);
   });
 
-  it('keeps the focus on the dialog while a save has every control off', async () => {
-    const fixture = TestBed.createComponent(CollabUploadDialogComponent);
-    fixture.componentRef.setInput('IsSubmitting', true);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    const host = fixture.nativeElement as HTMLElement;
-    host.querySelectorAll<HTMLElement>('input, select, textarea, button, [tabindex]').forEach((el) => {
-      if (!el.classList.contains('mj-dialog-container')) el.setAttribute('disabled', '');
-      if (el.hasAttribute('tabindex') && !el.classList.contains('mj-dialog-container')) el.setAttribute('tabindex', '-1');
-    });
-    const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
-    container.setAttribute('tabindex', '-1');
-    const tab = tabFrom(container, true);
-    expect(tab.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(container);
+  it('keeps the focus on the dialog while a save has every control off, in the dialogs that open on a field', async () => {
+    for (const Dialog of [CollabUploadDialogComponent, CollabNewConversationDialogComponent, CollabNewSpaceDialogComponent]) {
+      const fixture = TestBed.createComponent(Dialog as Type<CollabUploadDialogComponent | CollabNewConversationDialogComponent | CollabNewSpaceDialogComponent>);
+      fixture.componentRef.setInput('IsSubmitting', true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const host = fixture.nativeElement as HTMLElement;
+      // Every control is off, as it is while the save runs: the container is what is left, and it was never made focusable by an open on a field
+      host.querySelectorAll<HTMLElement>('input, select, textarea, button').forEach((el) => el.setAttribute('disabled', ''));
+      host.querySelectorAll<HTMLElement>('[tabindex]').forEach((el) => {
+        if (!el.classList.contains('mj-dialog-container')) el.setAttribute('tabindex', '-1');
+      });
+      const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
+      container.removeAttribute('tabindex');
+      const tab = tabFrom(container, true);
+      expect(tab.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(container);
+      fixture.destroy();
+    }
   });
 });
 
+/**
+ * Test components are declared without decorator syntax: the widgets' `tsconfig.json` leaves `*.test.ts` out, and the toolchain
+ * reads `experimentalDecorators` from the tsconfig that covers a file, so a decorator here would reach Node uncompiled. Calling the
+ * decorator is what `@Component` does.
+ */
+function declareComponent(target: Type<unknown>, metadata: Component): void {
+  Component({ standalone: true, ...metadata })(target);
+}
+
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
-@Component({
+class ChatAreaStub {
+  public AllowRealtime = true;
+  public ComposerDraftConsumed = new EventEmitter<void>();
+  public PendingMessageConsumed = new EventEmitter<void>();
+}
+declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
-  standalone: true,
   template: '<ng-content></ng-content>',
   inputs: [
     'environmentId', 'currentUser', 'conversationId', 'applicationScope', 'applicationId', 'linkedEntityId', 'linkedRecordId', 'defaultAgentId',
@@ -358,13 +381,8 @@ describe('the dialogs, rendered', () => {
     'AllowPinning', 'AllowMessageEdit', 'AllowMessageDelete', 'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
-})
-class ChatAreaStub {
-  public AllowRealtime = true;
-  @Input() public unusedForTypeCheck = '';
-  @Output() public ComposerDraftConsumed = new EventEmitter<void>();
-  @Output() public PendingMessageConsumed = new EventEmitter<void>();
-}
+  outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
+});
 
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
@@ -481,16 +499,6 @@ describe('New space, rendered', () => {
 });
 
 describe('A space\'s own details, rendered', () => {
-  @Component({
-    standalone: true,
-    imports: [CollabSpaceSettingsComponent],
-    template: `
-      <mjc-space-settings [Settings]="settings" [HasDetails]="hasDetails" DetailsTitle="Board details" [DetailsEditable]="editable"
-        [DetailsDirty]="dirty" [DetailsIncomplete]="incomplete" [IsSavingDetails]="saving" [DetailsMessage]="message" [DetailsError]="error"
-        (SaveDetailsRequested)="saved()" (DiscardDetailsRequested)="discarded()">
-        <div mjcSettingsDetails id="projected-field">Term</div>
-      </mjc-space-settings>`,
-  })
   class SettingsHost {
     public settings = settings;
     public hasDetails = true;
@@ -503,6 +511,15 @@ describe('A space\'s own details, rendered', () => {
     public saved = vi.fn();
     public discarded = vi.fn();
   }
+  declareComponent(SettingsHost, {
+    imports: [CollabSpaceSettingsComponent],
+    template: `
+      <mjc-space-settings [Settings]="settings" [HasDetails]="hasDetails" DetailsTitle="Board details" [DetailsEditable]="editable"
+        [DetailsDirty]="dirty" [DetailsIncomplete]="incomplete" [IsSavingDetails]="saving" [DetailsMessage]="message" [DetailsError]="error"
+        (SaveDetailsRequested)="saved()" (DiscardDetailsRequested)="discarded()">
+        <div mjcSettingsDetails id="projected-field">Term</div>
+      </mjc-space-settings>`,
+  });
 
   const renderSettings = async (over: Partial<SettingsHost> = {}) => {
     const fixture = TestBed.createComponent(SettingsHost);
@@ -555,14 +572,13 @@ describe('A space\'s own details, rendered', () => {
   });
 
   it('shows an About card on the Overview only when the space has details, titled by the host', async () => {
-    @Component({
-      standalone: true,
-      imports: [CollabSpaceOverviewComponent],
-      template: `<mjc-space-overview [HasAbout]="has" AboutTitle="About this board"><span mjcAbout id="about-field">Term</span></mjc-space-overview>`,
-    })
     class OverviewHost {
       public has = true;
     }
+    declareComponent(OverviewHost, {
+      imports: [CollabSpaceOverviewComponent],
+      template: `<mjc-space-overview [HasAbout]="has" AboutTitle="About this board"><span mjcAbout id="about-field">Term</span></mjc-space-overview>`,
+    });
     const shown = TestBed.createComponent(OverviewHost);
     shown.detectChanges();
     await shown.whenStable();
@@ -573,5 +589,90 @@ describe('A space\'s own details, rendered', () => {
     shown.changeDetectorRef.markForCheck();
     shown.detectChanges();
     expect(host.querySelector('.about-card')).toBeNull();
+  });
+});
+
+describe("Home's lists, rendered", () => {
+  const rows: HomeListRow[] = [
+    { key: 's1', title: 'Bea is invited as Contributor', detail: 'Invited Sep 28, 2026', spaceName: 'Northwind', iconClass: 'fa-solid fa-user-plus', actionLabel: 'Review on People' },
+    { key: 's2', title: 'Cy is invited', detail: 'Waiting for an owner', spaceName: 'Board', iconClass: 'fa-solid fa-user-plus', actionLabel: 'Review on People' },
+  ];
+  const render = async (inputs: Record<string, unknown>) => {
+    const fixture = TestBed.createComponent(CollabHomeListComponent);
+    for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  };
+
+  it('draws a button for each row, named by what it is, where it is and what it does, and selects the row by its key', async () => {
+    const fixture = await render({ Id: 'approvals', Title: 'Invitations waiting on an owner', Rows: rows, TotalCount: 2 });
+    const host = fixture.nativeElement as HTMLElement;
+    const selected = vi.fn();
+    fixture.componentInstance.RowSelected.subscribe(selected);
+    expect(host.querySelector('section')?.getAttribute('aria-labelledby')).toBe('hl-title-approvals');
+    const buttons = host.querySelectorAll<HTMLButtonElement>('.hl-row');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0].getAttribute('aria-label')).toBe('Bea is invited as Contributor, Northwind. Review on People');
+    buttons[1].click();
+    expect(selected).toHaveBeenCalledWith('s2');
+  });
+
+  it('says how many there are in all when the rows are cut short, and not when they are all shown', async () => {
+    const cut = await render({ Rows: rows, TotalCount: 73 });
+    expect((cut.nativeElement as HTMLElement).textContent).toContain('Showing 2 of 73.');
+    const all = await render({ Rows: rows, TotalCount: 2 });
+    expect((all.nativeElement as HTMLElement).textContent).not.toContain('Showing');
+  });
+
+  it('says what an empty list means, what went wrong with a read and offers to try again, and says it is reading', async () => {
+    const empty = await render({ Rows: [], EmptyMessage: 'No open tasks in your spaces.' });
+    expect((empty.nativeElement as HTMLElement).querySelector('[role="status"]')?.textContent).toContain('No open tasks in your spaces.');
+    const failed = await render({ Rows: [], ErrorMessage: 'The list could not be read: the query is not approved.' });
+    const retried = vi.fn();
+    failed.componentInstance.RetryRequested.subscribe(retried);
+    const failedHost = failed.nativeElement as HTMLElement;
+    expect(failedHost.querySelector('[role="alert"]')?.textContent).toContain('the query is not approved');
+    failedHost.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+    expect(retried).toHaveBeenCalledTimes(1);
+    const loading = await render({ Rows: rows, IsLoading: true });
+    const loadingHost = loading.nativeElement as HTMLElement;
+    expect(loadingHost.textContent).toContain('Reading');
+    expect(loadingHost.querySelector('.hl-row')).toBeNull();
+  });
+
+  it('closes from its own button', async () => {
+    const fixture = await render({ Rows: rows });
+    const closed = vi.fn();
+    fixture.componentInstance.CloseRequested.subscribe(closed);
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[aria-label="Close this list"]')!.click();
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("The Overview's contributed cards, rendered", () => {
+  class SharedCardStub {}
+  declareComponent(SharedCardStub, { selector: 'stub-shared-card', template: '<div class="stub-card" data-side="shared">Shared card</div>' });
+  class TeamCardStub {}
+  declareComponent(TeamCardStub, { selector: 'stub-team-card', template: '<div class="stub-card" data-side="team">Team card</div>' });
+  class NoSideCardStub {}
+  declareComponent(NoSideCardStub, { selector: 'stub-no-side-card', template: '<div class="stub-card" data-side="none">No side</div>' });
+
+  const render = async (canSeeTeamSide: boolean) => {
+    const fixture = TestBed.createComponent(CollabSpaceOverviewComponent);
+    fixture.componentRef.setInput('CanSeeTeamSide', canSeeTeamSide);
+    fixture.componentRef.setInput('ContributedCards', [
+      { key: 'shared', title: 'Shared', side: 'Shared', component: SharedCardStub },
+      { key: 'team', title: 'Team', side: 'Team', component: TeamCardStub },
+      { key: 'no-side', title: 'No side', component: NoSideCardStub },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.stub-card')).map((el) => el.getAttribute('data-side'));
+  };
+
+  it('draws the Shared card and no Team card for a viewer who cannot see the Team band, and every card for one who can', async () => {
+    expect(await render(false)).toEqual(['shared']);
+    expect(await render(true)).toEqual(['shared', 'team', 'none']);
   });
 });

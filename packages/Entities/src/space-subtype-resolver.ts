@@ -47,8 +47,11 @@ export class SpaceSubtypeResolver extends EntitySubtypeResolver {
         return result.Results?.[0]?.SpaceExtensionEntity?.trim() || null;
     }
 
-    /** The subtype a loaded space most likely has: its type's, from memory. No hint (null) while the directory isn't filled. */
-    public override ResolveLoadHint(record: BaseEntity): string | null {
+    /**
+     * The subtype a loaded space most likely has: its type's, from memory. No hint (null) while the directory isn't filled.
+     * MJ's `next` asks for it (MJ#4787); a release without it never calls this, which is why it carries no `override`.
+     */
+    public ResolveLoadHint(record: BaseEntity): string | null {
         const typeId = record.Get('SpaceTypeID') as string | null;
         const known = SpaceSubtypeDirectory.Get(typeId);
         return known ?? null;

@@ -212,19 +212,46 @@ const checks: NamedCheck[] = [
         },
     },
     {
+        Id: 'lifecycle.LC6',
+        Name: "LC6 — Home's lists are the rows behind its counts: the same number up to the cut, each open task once, each invitation one the person's own reads find",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const listLimit = 50;
+            for (const key of ['ada', 'bea']) {
+                const persona = await getPersonaContext(ctx, key);
+                const client = new CollaborationClient((await getPersonaClientContext(ctx, key)).GraphQLProvider);
+                const counts = await client.GetHomeCounts();
+                const lists = await client.GetHomeLists();
+                Assert(counts.Success && lists.Success, `${key}: the server reads Home's counts and lists: ${counts.ErrorMessage ?? ''} ${lists.ErrorMessage ?? ''}`);
+                const invitations = lists.Invitations ?? [];
+                const tasks = lists.OpenTasks ?? [];
+                Assert(invitations.length === Math.min(counts.AwaitingApproval ?? -1, listLimit), `${key}: the invitations listed are the count, up to ${listLimit} (${invitations.length} vs ${counts.AwaitingApproval})`);
+                Assert(tasks.length === Math.min(counts.OpenTasks ?? -1, listLimit), `${key}: the open tasks listed are the count, up to ${listLimit} (${tasks.length} vs ${counts.OpenTasks})`);
+                Assert(new Set(tasks.map((task) => task.TaskID.toLowerCase())).size === tasks.length, `${key}: a task filed in two spaces is listed once`);
+                Assert(tasks.every((task) => !!task.SpaceID && !!task.SpaceName), `${key}: each task names the space it opens in`);
+                const asPersona = { ...ctx, Provider: persona.Provider, User: persona.User } as IntegrationCheckContext;
+                const seenSeats = await FindRows<{ ID: string }>(asPersona, SPACE_MEMBER_ENTITY, "Status = 'Invited'", ['ID'], persona.User, { BypassCache: true });
+                const seen = new Set(seenSeats.map((seat) => seat.ID.toLowerCase()));
+                Assert(invitations.every((invitation) => seen.has(invitation.SeatID.toLowerCase()) && invitation.Person.length > 0), `${key}: every invitation listed is one their own reads find, with a name`);
+            }
+        },
+    },
+    {
         Id: 'lifecycle.LC5',
-        Name: "LC5 — Home's query can't be run directly by a participant, who could otherwise count someone else's spaces with a UserID of their choosing",
+        Name: "LC5 — Home's queries can't be run directly by a participant, who could otherwise read someone else's spaces with a UserID of their choosing",
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const bea = await getPersonaClientContext(ctx, 'bea');
             const ada = await getPersonaContext(ctx, 'ada');
-            const run = await new RunQuery(bea.GraphQLProvider).RunQuery(
-                { QueryName: 'Collaboration Home Counts', CategoryPath: 'Collaboration', Parameters: { UserID: ada.User.ID } },
-                bea.User,
-            ).catch((error: unknown) => ({ Success: false, ErrorMessage: error instanceof Error ? error.message : String(error), Results: [] as unknown[] }));
-            Assert(!run.Success, "A participant running Home's query directly, for Ada, is refused");
-            Assert(/permission|not allowed|denied/i.test(run.ErrorMessage ?? ''), `The refusal says why: ${run.ErrorMessage ?? ''}`);
-            Assert((run.Results ?? []).length === 0, "and is given no counts");
+            for (const queryName of ['Collaboration Home Counts', 'Collaboration Home Invitations', 'Collaboration Home Open Tasks']) {
+                const run = await new RunQuery(bea.GraphQLProvider).RunQuery(
+                    { QueryName: queryName, CategoryPath: 'Collaboration', Parameters: { UserID: ada.User.ID } },
+                    bea.User,
+                ).catch((error: unknown) => ({ Success: false, ErrorMessage: error instanceof Error ? error.message : String(error), Results: [] as unknown[] }));
+                Assert(!run.Success, `A participant running ${queryName} directly, for Ada, is refused`);
+                Assert(/permission|not allowed|denied/i.test(run.ErrorMessage ?? ''), `The refusal says why: ${run.ErrorMessage ?? ''}`);
+                Assert((run.Results ?? []).length === 0, 'and is given no rows');
+            }
         },
     },
 ];

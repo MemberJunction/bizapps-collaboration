@@ -22,5 +22,5 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'library': 8,
     'agent': 7,
     'features': 5,
-    'lifecycle': 5,
+    'lifecycle': 6,
 };

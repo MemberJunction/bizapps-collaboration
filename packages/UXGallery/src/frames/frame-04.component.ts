@@ -103,7 +103,6 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
         [ReviewHeader]="f.dialog.reviewHeader"
         [ReviewSub]="f.dialog.reviewSub"
         [Findings]="f.dialog.findings"
-        [Note]="f.dialog.note"
         [NotifyRecipients]="f.dialog.notifyRecipients"
         [AuthorName]="f.dialog.authorName"
         [Timestamp]="f.dialog.timestamp"

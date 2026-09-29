@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, before, after } from 'node:test';
-import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
+import { grantAdministerTo, grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import type { ValidationErrorInfo } from '@memberjunction/global';
 import type { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
@@ -143,6 +143,42 @@ describe('assigneeSeatMessage', () => {
         } finally {
             source.GetSystemUser = orig;
         }
+    });
+
+    describe("holds by the authorization, not by a role's name", () => {
+        let restore: () => void;
+        before(() => { restore = grantAdministerTo(['Community Manager']); });
+        after(() => { restore(); });
+
+        async function assignAs(role: string): Promise<string | null> {
+            const source = WellKnownUserSource.Instance;
+            const orig = source.GetSystemUser.bind(source);
+            source.GetSystemUser = async () => ({ ID: SYSTEM_USER_ID }) as UserInfo;
+            try {
+                const provider = createMockProvider(false);
+                const assignment = {
+                    IsSaved: false,
+                    Fields: [],
+                    ProviderToUse: provider,
+                    RunViewProviderToUse: provider,
+                    ContextCurrentUser: { ID: CALLER_USER_ID, UserRoles: [{ Role: role }] } as unknown as UserInfo,
+                    TaskID: TASK_ID,
+                    AssigneeEntityID: USERS_ENTITY_ID,
+                    AssigneeRecordID: ASSIGNEE_USER_ID,
+                } as unknown as mjBizAppsTasksTaskAssignmentEntity;
+                return await assigneeSeatMessage(assignment);
+            } finally {
+                source.GetSystemUser = orig;
+            }
+        }
+
+        it('lets a user whose only role is one no code knows, and that holds the grant, assign someone seated above', async () => {
+            assert.equal(await assignAs('Community Manager'), null);
+        });
+
+        it('refuses a UI user whose role lost the grant', async () => {
+            assert.equal(await assignAs('UI'), 'Assignment refused: participants may not assign people seated above this space.');
+        });
     });
 
     it('refuses assignment in a closed space', async () => {
