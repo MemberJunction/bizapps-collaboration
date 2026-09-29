@@ -269,7 +269,8 @@ export async function loadWorld(): Promise<void> {
         const space = spaceRows.find((item) => item.Key === row.Space);
         if (!space) throw new Error(`Member row names unknown space ${row.Space}.`);
         const inviter = row.Status === 'Invited' ? nonOwnerInviter(row.Space) : space.Owner;
-        const who = actor(row.Role === 'owner' ? row.Person : inviter);
+        // The space's own owner seats themselves first; any other owner is seated by the space's owner
+        const who = actor(row.Role === 'owner' && row.Person === space.Owner ? row.Person : inviter);
         let record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, who);
         const existing = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${userId}'`, system);
         if (!existing) {

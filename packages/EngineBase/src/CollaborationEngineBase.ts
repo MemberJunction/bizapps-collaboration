@@ -57,6 +57,17 @@ const normalizeKey = (key: string | null | undefined): string => (key ?? '').tri
 export const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 export const COLLABORATION_SETTINGS_NAME = 'CollaborationSettings';
 
+/** The parts of a role type the seat rules read. The engine's own role types satisfy it; a test can pass plain values. */
+export interface RoleTypeFlags {
+    Level: number;
+    MaxGrantableLevel: number;
+    CanInvite: boolean;
+    CanPromoteBand: boolean;
+    CanSeeTeamBand: boolean;
+    IsOwnerRole: boolean;
+    CanContribute: boolean;
+}
+
 @RegisterForStartup()
 export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase> {
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
@@ -433,7 +444,8 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     public async ReachedSeat(
         user: UserInfo,
         spaceId: string,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        roleTypeOf: (id: string) => RoleTypeFlags | undefined = (id) => this.SpaceRoleTypeById(id)
     ): Promise<ReturnType<typeof membershipReaches>> {
         const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -533,7 +545,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }
 
             const memberships: MemberSnapshot[] = memberRes.Results.map(m => {
-                const roleType = this.SpaceRoleTypeById(m.SpaceRoleTypeID);
+                const roleType = roleTypeOf(m.SpaceRoleTypeID);
                 return {
                     spaceId: m.SpaceID,
                     userId: m.UserID,

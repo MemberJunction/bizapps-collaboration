@@ -43,7 +43,7 @@ interface SpaceNavPref {
                 type="button"
                 class="btn-back-spaces"
                 (click)="onBackToSpaces()"
-                title="Return to Spaces Directory">
+                title="Back to all spaces">
                 <i class="fa-solid fa-arrow-left"></i>
                 <span>All Spaces</span>
               </button>
@@ -103,10 +103,10 @@ interface SpaceNavPref {
                 class="space-nav-link"
                 [class.active]="ActiveTab === 'Library'"
                 (click)="onTabClick('Library')"
-                [title]="isCollapsed ? 'Documents' : ''">
+                [title]="isCollapsed ? 'Library' : ''">
                 <i class="fa-solid fa-folder-open link-icon"></i>
                 @if (!isCollapsed) {
-                  <span class="link-label">Documents</span>
+                  <span class="link-label">Library</span>
                   @if (LibraryCount > 0) {
                     <span class="link-badge">{{ LibraryCount }}</span>
                   }
@@ -118,10 +118,10 @@ interface SpaceNavPref {
                 class="space-nav-link"
                 [class.active]="ActiveTab === 'Work'"
                 (click)="onTabClick('Work')"
-                [title]="isCollapsed ? 'Work & Tasks' : ''">
+                [title]="isCollapsed ? 'Work' : ''">
                 <i class="fa-solid fa-list-check link-icon"></i>
                 @if (!isCollapsed) {
-                  <span class="link-label">Work &amp; Tasks</span>
+                  <span class="link-label">Work</span>
                   @if (TaskCount > 0) {
                     <span class="link-badge">{{ TaskCount }}</span>
                   }
@@ -133,10 +133,10 @@ interface SpaceNavPref {
                 class="space-nav-link"
                 [class.active]="ActiveTab === 'Chat'"
                 (click)="onTabClick('Chat')"
-                [title]="isCollapsed ? 'Discussion & AI' : ''">
+                [title]="isCollapsed ? 'Chat' : ''">
                 <i class="fa-solid fa-comments link-icon"></i>
                 @if (!isCollapsed) {
-                  <span class="link-label">Discussion &amp; AI</span>
+                  <span class="link-label">Chat</span>
                 }
               </button>
 
@@ -145,10 +145,10 @@ interface SpaceNavPref {
                 class="space-nav-link"
                 [class.active]="ActiveTab === 'People'"
                 (click)="onTabClick('People')"
-                [title]="isCollapsed ? 'People & Access' : ''">
+                [title]="isCollapsed ? 'People' : ''">
                 <i class="fa-solid fa-user-group link-icon"></i>
                 @if (!isCollapsed) {
-                  <span class="link-label">People &amp; Access</span>
+                  <span class="link-label">People</span>
                   @if (MemberCount > 0) {
                     <span class="link-badge">{{ MemberCount }}</span>
                   }
@@ -161,10 +161,10 @@ interface SpaceNavPref {
                   class="space-nav-link"
                   [class.active]="ActiveTab === 'Settings'"
                   (click)="onTabClick('Settings')"
-                  [title]="isCollapsed ? 'Settings & Assistant' : ''">
+                  [title]="isCollapsed ? 'Settings' : ''">
                   <i class="fa-solid fa-sliders link-icon"></i>
                   @if (!isCollapsed) {
-                    <span class="link-label">Settings &amp; Assistant</span>
+                    <span class="link-label">Settings</span>
                   }
                 </button>
               }
@@ -242,7 +242,7 @@ interface SpaceNavPref {
                       class="band-dot"
                       [class.shared]="c.band === 'Shared'"
                       [class.team]="c.band === 'Team'"
-                      [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Internal team only'">
+                      [title]="c.band === 'Shared' ? 'Shared with outside participants' : 'Team only'">
                     </span>
                   }
                 </button>

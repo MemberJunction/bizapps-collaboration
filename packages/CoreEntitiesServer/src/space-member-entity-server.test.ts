@@ -4,7 +4,7 @@ import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type MemberChangeContext } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
-import { SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
+import { reportedMemberChangeKind, SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
 
 const LEAVER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE1';
 const OWNER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9';
@@ -142,5 +142,18 @@ describe('a member leaving a space', () => {
         } finally {
             registry.ResolveSpaceAndType = held;
         }
+    });
+});
+
+describe('the kind of change the driver hears about after a save', () => {
+    it('is the kind validation decided, which the saved row no longer shows', () => {
+        assert.equal(reportedMemberChangeKind('BandChange', 'Active', false), 'BandChange');
+        assert.equal(reportedMemberChangeKind('Remove', 'Active', false), 'Remove');
+    });
+
+    it('is worked out from the saved row when validation did not run', () => {
+        assert.equal(reportedMemberChangeKind(null, 'Removed', false), 'Remove');
+        assert.equal(reportedMemberChangeKind(null, 'Active', true), 'Invite');
+        assert.equal(reportedMemberChangeKind(null, 'Active', false), 'RoleChange');
     });
 });

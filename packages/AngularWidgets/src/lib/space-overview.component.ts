@@ -7,7 +7,7 @@ import { CollabNeedsYouCardComponent } from './needs-you-card.component';
 import { CollabItemCardComponent } from './item-card.component';
 import { CollabItemRowComponent } from './item-row.component';
 import { CollabAskBoxComponent } from './ask-box.component';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface RoomMiniMessage {
@@ -45,6 +45,7 @@ export interface SubSpaceSummary {
     CollabItemRowComponent,
     CollabAskBoxComponent,
     MJEmptyStateComponent,
+    MJClickableDirective,
   ],
   template: `
     <div class="page ov">
@@ -79,7 +80,7 @@ export interface SubSpaceSummary {
                 <div class="fs12 band-sub">{{ SharedSubtitle }}</div>
               </div>
               @if (ShowPreviewAs && ClientPersonaName) {
-                <a class="link fs12 preview-link" (click)="onPreviewAsPersona($event)">
+                <a class="link fs12 preview-link" [mjClickable]="'Preview as ' + ClientPersonaName" (click)="onPreviewAsPersona($event)">
                   <i class="fa-solid fa-eye"></i>&nbsp;Preview as {{ ClientPersonaName }}
                 </a>
               }
@@ -112,10 +113,10 @@ export interface SubSpaceSummary {
                 <i class="fa-solid fa-lock"></i>
               </span>
               <div class="grow">
-                <div class="fw7 fs14">Team working set</div>
-                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Internal team only' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
+                <div class="fw7 fs14">Team only</div>
+                <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
               </div>
-              <a class="link fs12 open-lib-link" (click)="onOpenLibrary($event)">Open library</a>
+              <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
             </div>
             @if (TeamItems.length === 0) {
               <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
@@ -158,8 +159,8 @@ export interface SubSpaceSummary {
           <div class="card room-card">
             <div class="card-h">
               <span class="h3">Discussion</span>
-              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Internal Only' : 'Everyone') + ' · ' + AudienceCount" />
-              <a class="link open-chat-link" (click)="onOpenChat($event)">Open chat</a>
+              <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
+              <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
             </div>
             @if (RoomMessages.length === 0) {
               <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" Message="Start a conversation from the ask box or the Chat tab."></mj-empty-state>
@@ -203,11 +204,11 @@ export interface SubSpaceSummary {
               <div class="card-h">
                 <span class="h3">Inside {{ SpaceName }}</span>
                 @if (CanAddSubSpace) {
-                  <a class="link add-sub-link" (click)="onNewSubSpace($event)">+ Sub-space</a>
+                  <a class="link add-sub-link" [mjClickable]="'Add a sub-space'" (click)="onNewSubSpace($event)">+ Sub-space</a>
                 }
               </div>
               @for (sub of SubSpaces; track sub.id) {
-                <div class="sub-row" (click)="onSubSpaceSelected(sub)">
+                <div class="sub-row" [mjClickable]="sub.name" (click)="onSubSpaceSelected(sub)">
                   <mjc-type-tile [IconClass]="sub.iconClass" [Color]="sub.color" Size="lg" />
                   <div class="grow">
                     <div class="fw6 fs13">{{ sub.name }}</div>

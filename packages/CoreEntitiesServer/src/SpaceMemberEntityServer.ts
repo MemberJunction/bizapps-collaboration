@@ -11,6 +11,16 @@ import { parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
+/**
+ * The kind of change the driver hears about after a save: what validation decided, when it ran (it knows a band change from a role
+ * change, which the saved row no longer shows), else the best reading of the saved row.
+ */
+export function reportedMemberChangeKind(decided: MemberChangeKind | null, status: string, wasNew: boolean): MemberChangeKind {
+    if (decided) return decided;
+    if (status === 'Removed') return 'Remove';
+    return wasNew ? 'Invite' : 'RoleChange';
+}
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -154,7 +164,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                     spaceType: spaceInfo.spaceType,
                     effectiveRules: ResolveSpaceRules(null, null),
                     member: this,
-                    kind: decidedKind ?? (this.Status === 'Removed' ? 'Remove' : wasNew ? 'Invite' : 'RoleChange'),
+                    kind: reportedMemberChangeKind(decidedKind, this.Status, wasNew),
                 });
             } catch (driverErr) {
                 LogError(`Member driver reaction failed: ${driverErr instanceof Error ? driverErr.message : String(driverErr)}`);

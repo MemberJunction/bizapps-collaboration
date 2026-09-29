@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import type { FileKind, ItemRowModel } from './types';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -7,9 +8,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-row',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabFileIconComponent],
+  imports: [CollabFileIconComponent, MJClickableDirective],
   template: `
-    <div class="trow" (click)="onSelect()">
+    <div class="trow" [mjClickable]="Title" (click)="onSelect()">
       <mjc-file-icon [Kind]="Kind" Size="sm" />
       <div class="grow">
         <div class="fw6 fs13 ellipsis title">{{ Title }}</div>

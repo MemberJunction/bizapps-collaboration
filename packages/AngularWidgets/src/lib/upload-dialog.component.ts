@@ -210,7 +210,7 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-title">
                       <mjc-band-chip Band="Team" Label="Team" />
                     </div>
-                    <div class="b-opt-sub">Internal team only</div>
+                    <div class="b-opt-sub">Only the team can see it</div>
                   </div>
                 </label>
                 }

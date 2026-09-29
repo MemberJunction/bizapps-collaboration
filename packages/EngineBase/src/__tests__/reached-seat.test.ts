@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
-import { CollaborationEngineBase } from '../CollaborationEngineBase.js';
+import { CollaborationEngineBase, type RoleTypeFlags } from '../CollaborationEngineBase.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
@@ -51,48 +51,51 @@ describe('CollaborationEngineBase.ReachedSeat', () => {
     const user = { ID: USER_ID } as UserInfo;
     let engine: CollaborationEngineBase;
 
+    /** The two role types the seats hold, given to the walk directly instead of loaded into the engine. */
+    const roleTypes: Record<string, RoleTypeFlags> = {
+        [OWNER_ROLE.toLowerCase()]: { Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
+        [MEMBER_ROLE.toLowerCase()]: { Level: 20, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
+    };
+    const roleTypeOf = (id: string): RoleTypeFlags | undefined => roleTypes[id.toLowerCase()];
+
+    const reachedSeat = (spaceId: string, provider: IMetadataProvider) => engine.ReachedSeat(user, spaceId, provider, roleTypeOf);
+
     beforeEach(() => {
         engine = CollaborationEngineBase.Instance;
-        const internals = engine as unknown as { _spaceRoleTypes: unknown[] };
-        internals._spaceRoleTypes = [
-            { ID: OWNER_ROLE, Code: 'owner', Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
-            { ID: MEMBER_ROLE, Code: 'member', Level: 20, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
-        ];
-        void (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
     });
 
     const seat = (spaceId: string, roleId: string): SeatRow => ({ SpaceID: spaceId, UserID: USER_ID, Status: 'Active', Band: 'Team', SpaceRoleTypeID: roleId });
 
     it('finds an owner seat held on an ancestor the space inherits from', async () => {
-        const reached = await engine.ReachedSeat(user, DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)]));
+        const reached = await reachedSeat(DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)]));
         expect(reached?.role.isOwnerRole).toBe(true);
         expect(reached?.spaceId.toLowerCase()).toBe(NORTHWIND.toLowerCase());
     });
 
     it('prefers a seat held on the space itself over one inherited from above', async () => {
-        const reached = await engine.ReachedSeat(user, DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE), seat(DISCOVERY, MEMBER_ROLE)]));
+        const reached = await reachedSeat(DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE), seat(DISCOVERY, MEMBER_ROLE)]));
         expect(reached?.role.isOwnerRole).toBe(false);
         expect(reached?.spaceId.toLowerCase()).toBe(DISCOVERY.toLowerCase());
     });
 
     it("ends the walk at a sealed space: a seat above it doesn't reach it", async () => {
-        const reached = await engine.ReachedSeat(user, SEALED, providerOver([seat(NORTHWIND, OWNER_ROLE)]));
+        const reached = await reachedSeat(SEALED, providerOver([seat(NORTHWIND, OWNER_ROLE)]));
         expect(reached).toBeNull();
     });
 
     it('is null for a person with no seat anywhere on the walk', async () => {
-        expect(await engine.ReachedSeat(user, DISCOVERY, providerOver([]))).toBeNull();
+        expect(await reachedSeat(DISCOVERY, providerOver([]))).toBeNull();
     });
 
     it('is null, not a guess, when the space read fails', async () => {
-        expect(await engine.ReachedSeat(user, DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)], true))).toBeNull();
+        expect(await reachedSeat(DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)], true))).toBeNull();
     });
 
     it('is null, not a guess, when the seats read fails', async () => {
-        expect(await engine.ReachedSeat(user, DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)], false, true))).toBeNull();
+        expect(await reachedSeat(DISCOVERY, providerOver([seat(NORTHWIND, OWNER_ROLE)], false, true))).toBeNull();
     });
 
     it('is null for an id that is not a UUID', async () => {
-        expect(await engine.ReachedSeat(user, "x'; DROP TABLE Space; --", providerOver([]))).toBeNull();
+        expect(await reachedSeat("x'; DROP TABLE Space; --", providerOver([]))).toBeNull();
     });
 });

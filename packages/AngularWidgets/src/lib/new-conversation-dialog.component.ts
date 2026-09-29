@@ -86,7 +86,7 @@ export interface NewConversationSubmitPayload {
                 <input type="radio" name="convoKind" value="Private" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
                 <div class="kind-card-icon private"><i class="fa-solid fa-lock" aria-hidden="true"></i></div>
                 <div class="kind-card-text">
-                  <div class="kind-title">Internal Only</div>
+                  <div class="kind-title">Team only</div>
                   <div class="kind-desc">Restricted to internal staff and team members.</div>
                 </div>
               </label>

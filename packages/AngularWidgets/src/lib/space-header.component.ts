@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { CommonModule } from '@angular/common';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { BreadcrumbItem } from './types';
@@ -6,14 +7,14 @@ import { BreadcrumbItem } from './types';
 @Component({
   selector: 'mjc-space-header',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent],
+  imports: [CommonModule, CollabTypeTileComponent, MJClickableDirective],
   template: `
     <section class="space-head" [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
       @if (Breadcrumbs && Breadcrumbs.length > 0) {
         <div class="crumbs">
           @for (c of Breadcrumbs; track c.label; let last = $last) {
             @if (!last) {
-              <span class="crumb-link" (click)="onCrumbClick(c)">{{ c.label }}</span>
+              <span class="crumb-link" [mjClickable]="c.label" (click)="onCrumbClick(c)">{{ c.label }}</span>
               <i class="fa-solid fa-chevron-right"></i>
             } @else {
               <b>{{ c.label }}</b>

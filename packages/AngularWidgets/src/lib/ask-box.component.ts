@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { FormsModule } from '@angular/forms';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
@@ -6,7 +7,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-ask-box',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, MJClickableDirective],
   template: `
     <div class="card ask">
       <div class="row gap10">
@@ -48,7 +49,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       @if (Suggestions && Suggestions.length > 0) {
         <div class="sugs">
           @for (sug of Suggestions; track sug) {
-            <span class="sug" (click)="onSelectSuggestion(sug)">{{ sug }}</span>
+            <span class="sug" [mjClickable]="sug" (click)="onSelectSuggestion(sug)">{{ sug }}</span>
           }
         </div>
       }

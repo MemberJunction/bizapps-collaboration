@@ -13,7 +13,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     <div class="settings-container">
       <div class="settings-header">
         <div>
-          <div class="settings-title">Space Settings</div>
+          <div class="settings-title">Settings</div>
           <div class="settings-sub">Manage identity, branding, access inheritance, and AI retrieval behavior for {{ Settings.name }}.</div>
         </div>
 
@@ -75,7 +75,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field">
-              <label class="field-label">Icon Class (FontAwesome)</label>
+              <label class="field-label">Icon</label>
               <div class="input-with-icon">
                 <i [class]="formData.iconClass || 'fa-solid fa-compass'" class="icon-preview"></i>
                 <input

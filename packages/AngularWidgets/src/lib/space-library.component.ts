@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { AvatarItem, LibraryRowModel, SpaceBand } from './types';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJEmptyStateComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
+import { MJClickableDirective, MJEmptyStateComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
 import { filterLibraryRows } from './library-filter';
 import { CollabAvatarStackComponent } from './avatar-stack.component';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -34,6 +34,7 @@ export interface LibrarySmartView {
     CollabItemPreviewComponent,
     MJEmptyStateComponent,
     MJTabNavComponent,
+    MJClickableDirective,
   ],
   template: `
     <div class="lib">
@@ -41,6 +42,7 @@ export interface LibrarySmartView {
       <aside class="folders">
         <div
           class="fold"
+          [mjClickable]="'All material'"
           [class.on]="ActiveFolderId === 'all'"
           (click)="onSelectFolder('all')"
         >
@@ -53,6 +55,7 @@ export interface LibrarySmartView {
         @for (col of Collections; track col.id) {
           <div
             class="fold"
+            [mjClickable]="col.name"
             [class.on]="ActiveFolderId === col.id"
             (click)="onSelectFolder(col.id)"
           >
@@ -67,6 +70,7 @@ export interface LibrarySmartView {
         @for (view of SmartViews; track view.id) {
           <div
             class="fold"
+            [mjClickable]="view.name"
             [class.on]="ActiveFolderId === view.id"
             (click)="onSelectFolder(view.id)"
           >
@@ -121,7 +125,7 @@ export interface LibrarySmartView {
             </thead>
             <tbody>
               @for (row of FilteredRows; track row.id) {
-                <tr [class.sel]="IsSelected(row.id)" (click)="onSelectRow(row)">
+                <tr [class.sel]="IsSelected(row.id)" [mjClickable]="row.name" (click)="onSelectRow(row)">
                   <td>
                     <div class="row gap10">
                       <mjc-file-icon [Kind]="row.kind" Size="sm" />

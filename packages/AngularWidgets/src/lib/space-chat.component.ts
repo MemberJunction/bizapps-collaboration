@@ -59,22 +59,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <div class="space-chat-header-slot">
               <div class="header-left">
                 <div class="title-row">
-                  <i class="fa-solid fa-hashtag hash-icon"></i>
+                  <i [class]="AudienceBand === 'Team' ? 'fa-solid fa-lock hash-icon' : 'fa-solid fa-hashtag hash-icon'" aria-hidden="true"></i>
                   <span class="chat-title">{{ ConversationName || (SpaceName ? SpaceName + ' General' : 'General') }}</span>
                   <mjc-band-chip [Band]="AudienceBand" />
                 </div>
                 <div class="subtitle-row">
-                  @if (AudienceBand === 'Shared') {
-                    Shared channel with team members and outside participants.
-                  } @else {
-                    Private internal team discussion channel.
-                  }
+                  {{ AudienceSubtitle }}
                 </div>
               </div>
 
               <div class="header-right">
                 @if (ParticipantCount > 0) {
-                  <div class="participant-count-pill" title="Participants in this channel">
+                  <div class="participant-count-pill" title="People who can see this conversation">
                     <i class="fa-solid fa-users"></i>
                     <span>{{ ParticipantCount }}</span>
                   </div>
@@ -113,9 +109,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <h3 class="empty-title">Select a Conversation</h3>
             <p class="empty-desc">
               @if (CanStartConversation) {
-                Choose a channel from the space sidebar or start a new conversation.
+                Choose a conversation from the space sidebar or start a new one.
               } @else {
-                Choose a channel from the space sidebar to view the conversation.
+                Choose a conversation from the space sidebar to read it.
               }
             </p>
           } @else {
@@ -312,6 +308,16 @@ export class CollabSpaceChatComponent {
   @Input() public ApplicationId: string | null = null;
   @Input() public DefaultAgentId: string | null = null;
   @Input() public ParticipantCount = 0;
+  /** How many Active outside seats reach the space: the subtitle claims outside participants only when there are some. */
+  @Input() public OutsideParticipantCount = 0;
+  /** Who can read this conversation, in words, from the space's real audience. */
+  public get AudienceSubtitle(): string {
+    if (this.AudienceBand === 'Team') return 'Only the team can see this conversation.';
+    return this.OutsideParticipantCount > 0
+      ? 'Team members and outside participants can see this conversation.'
+      : 'Everyone who can see this space can see this conversation.';
+  }
+
   @Input() public AllowMentions = true;
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';

@@ -609,7 +609,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('inbox')">
                                                     <span class="stat-val">{{ inboxCount }}</span>
-                                                    <span class="stat-lbl">Pending Approvals</span>
+                                                    <span class="stat-lbl">Inbox</span>
                                                 </div>
                                                 <div class="stat-pill" (click)="onNavSelectRequested('files')">
                                                     <span class="stat-val">{{ librarySharedCount }}</span>
@@ -623,7 +623,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 <div class="section-title-row">
                                                     <div class="section-title">
                                                         <i class="fa-solid fa-layer-group"></i>
-                                                        <span>Spaces Directory &amp; Explorer</span>
+                                                        <span>All spaces</span>
                                                     </div>
                                                     <span class="section-badge">{{ filteredSpaces.length }} spaces</span>
                                                 </div>
@@ -675,7 +675,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 <i class="fa-solid fa-inbox"></i>
                                             </div>
                                             <div>
-                                                <h1 class="view-title">Approval Inbox</h1>
+                                                <h1 class="view-title">Inbox</h1>
                                                 <p class="view-subtitle">Review and sign off on tasks and deliverables awaiting your approval.</p>
                                             </div>
                                         </header>
@@ -920,6 +920,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @case ('Chat') {
                                                 <mjc-space-chat
                                                     [IsReadOnly]="isSpaceClosed"
+                                                    [OutsideParticipantCount]="outsideParticipantCount"
                                                     [ConversationId]="activeConversationId"
                                                     [ConversationName]="activeConversationName"
                                                     [CurrentUser]="currentUser"
@@ -1244,6 +1245,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Whether the seat the caller reaches this space through may see the Team band. Unknown until the seat is resolved: not shown. */
+    public get outsideParticipantCount(): number {
+        return this.spaceMembers.filter(m => m.status === 'Active' && m.band === 'Shared').length;
+    }
+
     public get canSeeTeamSide(): boolean {
         return this.callerSeat?.role.canSeeTeamBand ?? false;
     }
