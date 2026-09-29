@@ -8,7 +8,6 @@
       "Description": "Dedicated agent for collaboration spaces, answering questions, promoting materials, summarizing activity, and acting on tasks.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "DriverClass": "CollaborationSpaceAgentDriver",
       "Status": "Active",
       "AcceptsSkills": "Limited",
       "SkillActivationMode": "Auto",
@@ -151,10 +150,6 @@
           }
         }
       ]
-    },
-    "sync": {
-      "lastModified": "2026-09-28T21:48:43.285Z",
-      "checksum": "8c611f1de8f3876d79ddf45133ebb6943e6ad79d33b89bd9540515df49e62fd9"
     }
   }
 ]

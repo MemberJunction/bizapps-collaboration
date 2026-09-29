@@ -4,10 +4,12 @@ import {
     WellKnownUserSource,
     type IMetadataProvider,
     type IRunViewProvider,
+    type RunViewParams,
     type RunViewResult,
     type UserInfo,
 } from '@memberjunction/core';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
+import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 
 function mockResult<T>(results: T[]): RunViewResult<T> {
     return {
@@ -76,7 +78,8 @@ describe('resolveSpaceChatHostRules', () => {
                     ProviderToUse: provider,
                 } as never;
             },
-            async RunView<T>({ EntityName }: { EntityName: string }): Promise<RunViewResult<T>> {
+            async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+                const { EntityName, ExtraFilter } = params;
                 if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
                     return mockResult<T>([
                         {
@@ -176,6 +179,15 @@ describe('resolveSpaceChatHostRules', () => {
                 }
 
                 if (EntityName === 'MJ: AI Agents') {
+                    const filterStr = typeof ExtraFilter === 'string' ? ExtraFilter : '';
+                    if (!ExtraFilter || filterStr.includes(COLLABORATION_DEFAULT_AGENT_ID)) {
+                        return mockResult<T>([
+                            {
+                                ID: COLLABORATION_DEFAULT_AGENT_ID,
+                                Name: 'Collaboration Space Agent',
+                            } as unknown as T,
+                        ]);
+                    }
                     return mockResult<T>([]);
                 }
 
@@ -192,7 +204,7 @@ describe('resolveSpaceChatHostRules', () => {
 
                 return mockResult<T>([]);
             },
-            async RunViews(queries: Array<{ EntityName: string }>) {
+            async RunViews(queries: Array<{ EntityName: string; ExtraFilter?: string }>) {
                 return Promise.all(queries.map((q) => provider.RunView!(q)));
             },
         };
@@ -215,6 +227,9 @@ describe('resolveSpaceChatHostRules', () => {
         assert.ok(result.allowedConversationKinds.includes('General'));
         assert.ok(result.allowedConversationKinds.includes('Topic'));
         assert.ok(result.allowedConversationKinds.includes('Private'));
+        assert.equal(result.agentReplyMode, 'MentionOnly');
+        assert.equal(result.defaultAgentId, COLLABORATION_DEFAULT_AGENT_ID);
+        assert.equal(result.defaultAgentName, 'Collaboration Space Agent');
     });
 
     it('excludes Private kind for outside member who cannot see Team band', async () => {
@@ -242,10 +257,12 @@ describe('resolveSpaceChatHostRules', () => {
         assert.equal(result.message, 'The conversation does not belong to this space.');
     });
 
-    it('refuses when target conversation is archived', async () => {
+    it('answers read-only when target conversation is archived', async () => {
         const provider = createMockProvider({ chatStatus: 'Archived' });
         const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID, CONVERSATION_ID);
-        assert.equal(result.ok, false);
-        assert.equal(result.message, 'The conversation is archived.');
+        assert.equal(result.ok, true);
+        assert.equal(result.canStartConversation, false);
+        assert.deepEqual(result.allowedConversationKinds, []);
+        assert.deepEqual(result.allowedAgentIds, []);
     });
 });

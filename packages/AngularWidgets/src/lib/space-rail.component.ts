@@ -591,8 +591,8 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 6px;
       background: transparent;
-      border: 1px dashed var(--mj-border-strong, #64748b);
-      color: var(--mj-text-muted, #94a3b8);
+      border: 1px dashed #64748b;
+      color: var(--mj-text-secondary, #475569);
       cursor: pointer;
       display: inline-grid;
       place-items: center;
@@ -673,6 +673,12 @@ interface SpaceNavPref {
     .link-badge.unread {
       background: var(--mj-brand-primary, #0076b6);
       color: var(--mj-brand-on-primary, #ffffff);
+    }
+    :host-context([data-theme="dark"]) .link-badge.unread,
+    :host-context(.dark) .link-badge.unread,
+    [data-theme="dark"] .link-badge.unread {
+      background: var(--mj-brand-primary, #2699cc);
+      color: #0b1528;
     }
     .collapsed-unread-dot {
       position: absolute;

@@ -1011,6 +1011,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public chatAgentHistoryFrom: Date | null = null;
     public chatMentionPeople: readonly MentionPerson[] = [];
     private hostRulesRequestId = 0;
+    private selectSpaceRequestId = 0;
 
     // Header metadata
     public spaceTitle = '';
@@ -1426,6 +1427,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private _loadedSpaceId: string | null = null;
 
     private async selectSpaceInternal(spaceId: string): Promise<void> {
+        const requestId = ++this.selectSpaceRequestId;
         this.activeSpaceId = spaceId;
         this._loadedSpaceId = spaceId;
         this.activeConversationId = '';
@@ -1433,6 +1435,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceConversations = [];
 
         // Reset host rules immediately so previous space's buttons / ask box do not linger
+        this.hostRulesRequestId++;
         this.chatAgentReplyMode = 'MentionOnly';
         this.chatAllowedAgentIds = [];
         this.chatDefaultAgentId = null;
@@ -1451,15 +1454,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ResultType: 'simple',
                 MaxRows: 1,
             });
-            if (freshSpaceRes?.Success && freshSpaceRes.Results?.[0]) {
+            if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) {
+                return;
+            }
+            if (!freshSpaceRes?.Success) {
+                LogError(`Failed to refresh space record for ${spaceId}: ${freshSpaceRes?.ErrorMessage || 'Unknown error'}`);
+            } else if (freshSpaceRes.Results?.[0]) {
                 const fresh = freshSpaceRes.Results[0];
                 const idx = this.rawSpaces.findIndex(s => UUIDsEqual(s.ID, spaceId));
                 if (idx >= 0) {
                     this.rawSpaces[idx] = { ...this.rawSpaces[idx], ...fresh };
                 }
+            } else {
+                LogError(`Failed to refresh space record for ${spaceId}: space not found`);
             }
         } catch (e) {
             LogError(`Failed to refresh space record for ${spaceId}: ${e}`);
+        }
+
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) {
+            return;
         }
 
         const space = this.rawSpaces.find(s => UUIDsEqual(s.ID, spaceId));
@@ -1522,14 +1536,20 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         };
 
         await this.updateCanConfigureCurrentSpace();
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
 
         // Load items, conversation, tasks, members
         await this.loadSpaceItems(spaceId);
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         await this.loadSpaceConversations(spaceId, this._pendingConvId ?? undefined);
         this._pendingConvId = null;
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         await this.loadSpaceTasks(spaceId);
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         await this.loadSpaceMembers(spaceId);
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
         await this.loadSpaceChatHostRules(spaceId, this.activeConversationId || undefined);
+        if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
 
         this.syncStateWithAgent();
         this.RefreshView();
@@ -1756,6 +1776,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                             const orderB = orderMap.get(b.id.toLowerCase()) ?? 9999;
                             return orderA - orderB;
                         });
+                    } else if (!convRes?.Success) {
+                        LogError(`Failed to read conversations for sorting: ${convRes?.ErrorMessage ?? 'unknown error'}`);
                     }
                 } catch (sortErr) {
                     LogError('Failed to sort conversations by __mj_UpdatedAt: ' + String(sortErr));
@@ -1922,7 +1944,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 __mj_CreatedAt: string;
             }>({
                 EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `SpaceID = '${spaceId}'`,
+                ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'`,
                 ResultType: 'simple',
                 MaxRows: 100,
             });
@@ -2095,8 +2117,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (params['conv'] && isValidUuid(params['conv'])) {
             const prevConvId = this.activeConversationId;
             this._pendingConvId = params['conv'];
-            if (this.spaceConversations.some(c => UUIDsEqual(c.id, params['conv']))) {
+            const match = this.spaceConversations.find(c => UUIDsEqual(c.id, params['conv']));
+            if (match) {
                 this.activeConversationId = params['conv'];
+                this.chatAudienceBand = match.band === 'Team' ? 'Team' : 'Shared';
                 if (this.activeSpaceId && !UUIDsEqual(prevConvId, params['conv'])) {
                     void this.loadSpaceChatHostRules(this.activeSpaceId, params['conv']);
                 }

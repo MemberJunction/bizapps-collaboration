@@ -203,6 +203,8 @@ async function rollbackFailedConversation(
                     }
                 }
             }
+        } else if (!grantsRes.Success) {
+            LogError(`createSpaceConversation rollback: failed to read resource permissions for conversation ${conversation.ID}: ${grantsRes.ErrorMessage ?? 'Unknown error'}`);
         }
     } catch (permErr) {
         LogError(`createSpaceConversation rollback: failed to clean up permissions for conversation ${conversation.ID}: ${permErr instanceof Error ? permErr.message : String(permErr)}`);
@@ -230,7 +232,10 @@ async function rollbackFailedConversation(
 
     // 4. Re-sync remaining space room grants so the space is left in a consistent state
     try {
-        await syncRoomEditGrantsForSpace(provider, spaceId);
+        const syncResult = await syncRoomEditGrantsForSpace(provider, spaceId);
+        if (!syncResult.ok) {
+            LogError(`createSpaceConversation rollback: failed to re-sync space grants: ${syncResult.message ?? ''}`);
+        }
     } catch (resyncErr) {
         LogError(`createSpaceConversation rollback: error re-syncing space grants: ${resyncErr instanceof Error ? resyncErr.message : String(resyncErr)}`);
     }

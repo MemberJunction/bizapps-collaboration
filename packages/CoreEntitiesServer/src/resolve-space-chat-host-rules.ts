@@ -357,7 +357,7 @@ export async function resolveSpaceChatHostRules(
         }
         if (chatCheck.Results[0].Status === 'Archived') {
             return {
-                ok: false,
+                ok: true,
                 message: 'The conversation is archived.',
                 agentReplyMode: 'MentionOnly',
                 allowedAgentIds: [],

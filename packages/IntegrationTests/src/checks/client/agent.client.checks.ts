@@ -22,80 +22,7 @@ import { FindRows, getPersonaContext, getPersonaClientContext } from '../../wire
 
 const createdDetailIds: string[] = [];
 
-async function cleanupConversation(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    conversationId?: string | null,
-    spaceChatId?: string | null,
-): Promise<void> {
-    const rv = RunView.FromMetadataProvider(provider);
-    if (conversationId) {
-        try {
-            const chats = await rv.RunView<{ ID: string }>({
-                EntityName: SPACE_CHAT_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 100,
-            }, user);
-            if (chats?.Success && chats.Results) {
-                for (const c of chats.Results) {
-                    const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-                    if (await chat.Load(c.ID)) {
-                        await chat.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const details = await rv.RunView<{ ID: string }>({
-                EntityName: CONVERSATION_DETAIL_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (details?.Success && details.Results) {
-                for (const d of details.Results) {
-                    const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
-                    if (await det.Load(d.ID)) {
-                        await det.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const grants = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Resource Permissions',
-                ExtraFilter: `ResourceRecordID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (grants?.Success && grants.Results) {
-                for (const g of grants.Results) {
-                    const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
-                    if (await p.Load(g.ID)) {
-                        await p.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
-            if (await conv.Load(conversationId)) {
-                await conv.Delete();
-            }
-        } catch { /* ignore */ }
-    } else if (spaceChatId) {
-        try {
-            const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-            if (await chat.Load(spaceChatId)) {
-                await chat.Delete();
-            }
-        } catch { /* ignore */ }
-    }
-}
+import { cleanupConversation } from '../cleanup-helpers.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
@@ -374,7 +301,6 @@ const checks: NamedCheck[] = [
             const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const beaCtx = await getPersonaClientContext(ctx, 'bea');
             const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
-            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
 
             const genStart = await adaClient.CreateSpaceConversation({
                 SpaceID: DISCOVERY_SPACE_ID,

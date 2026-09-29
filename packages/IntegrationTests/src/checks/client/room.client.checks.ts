@@ -13,138 +13,9 @@ const SEALED_BRANCH_SPACE_ID = 'C1000001-0000-4000-8000-000000000014';
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
+import { cleanupConversation, cleanupSpace } from '../cleanup-helpers.js';
+
 const createdDetailIds: string[] = [];
-
-async function cleanupConversation(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    conversationId?: string | null,
-    spaceChatId?: string | null,
-): Promise<void> {
-    const rv = RunView.FromMetadataProvider(provider);
-    if (conversationId) {
-        try {
-            const chats = await rv.RunView<{ ID: string }>({
-                EntityName: SPACE_CHAT_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 100,
-            }, user);
-            if (chats?.Success && chats.Results) {
-                for (const c of chats.Results) {
-                    const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-                    if (await chat.Load(c.ID)) {
-                        await chat.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const details = await rv.RunView<{ ID: string }>({
-                EntityName: CONVERSATION_DETAIL_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (details?.Success && details.Results) {
-                for (const d of details.Results) {
-                    const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
-                    if (await det.Load(d.ID)) {
-                        await det.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const grants = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Resource Permissions',
-                ExtraFilter: `ResourceRecordID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (grants?.Success && grants.Results) {
-                for (const g of grants.Results) {
-                    const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
-                    if (await p.Load(g.ID)) {
-                        await p.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
-            if (await conv.Load(conversationId)) {
-                await conv.Delete();
-            }
-        } catch { /* ignore */ }
-    } else if (spaceChatId) {
-        try {
-            const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-            if (await chat.Load(spaceChatId)) {
-                await chat.Delete();
-            }
-        } catch { /* ignore */ }
-    }
-}
-
-async function cleanupSpace(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    spaceId: string,
-): Promise<void> {
-    const rv = RunView.FromMetadataProvider(provider);
-    try {
-        const chats = await rv.RunView<{ ID: string; ConversationID: string }>({
-            EntityName: SPACE_CHAT_ENTITY,
-            ExtraFilter: `SpaceID = '${spaceId}'`,
-            Fields: ['ID', 'ConversationID'],
-            MaxRows: 100,
-        }, user);
-        if (chats?.Success && chats.Results) {
-            for (const c of chats.Results) {
-                await cleanupConversation(provider, user, c.ConversationID, c.ID);
-            }
-        }
-    } catch { /* ignore */ }
-
-    try {
-        const items = await rv.RunView<{ ID: string }>({
-            EntityName: SPACE_ITEM_ENTITY,
-            ExtraFilter: `SpaceID = '${spaceId}'`,
-            Fields: ['ID'],
-            MaxRows: 100,
-        }, user);
-        if (items?.Success && items.Results) {
-            for (const item of items.Results) {
-                const itemObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(SPACE_ITEM_ENTITY, user);
-                if (await itemObj.Load(item.ID)) await itemObj.Delete();
-            }
-        }
-    } catch { /* ignore */ }
-
-    try {
-        const members = await rv.RunView<{ ID: string }>({
-            EntityName: SPACE_MEMBER_ENTITY,
-            ExtraFilter: `SpaceID = '${spaceId}'`,
-            Fields: ['ID'],
-            MaxRows: 100,
-        }, user);
-        if (members?.Success && members.Results) {
-            for (const m of members.Results) {
-                const memObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, user);
-                if (await memObj.Load(m.ID)) await memObj.Delete();
-            }
-        }
-    } catch { /* ignore */ }
-
-    try {
-        const spaceObj = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
-        if (await spaceObj.Load(spaceId)) await spaceObj.Delete();
-    } catch { /* ignore */ }
-}
 
 const checks: NamedCheck[] = [
     {
@@ -290,7 +161,14 @@ const checks: NamedCheck[] = [
                 Assert(beaSaved && !!beaDetail.ID, `Direct conversation detail save over wire by Bea should succeed: ${beaDetail.LatestResult?.CompleteMessage ?? ''}`);
 
                 const beaDeleted = await beaDetail.Delete();
-                Assert(beaDeleted === true, `Bea deleting her own detail over wire should succeed: ${beaDetail.LatestResult?.CompleteMessage ?? ''}`);
+                Assert(beaDeleted === false, 'Bea (Space Participant) cannot delete conversation details over wire; delete must be refused');
+
+                // Clean up Bea's message as harness user
+                const cleanupBea = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
+                if (await cleanupBea.Load(beaDetail.ID)) {
+                    const delOk = await cleanupBea.Delete();
+                    Assert(delOk === true, 'Harness user delete of Bea detail over wire must succeed');
+                }
 
                 // Direct save over wire by Pat (non-contributor / invited) is refused
                 const patClientCtx = await getPersonaClientContext(ctx, 'pat');
@@ -502,6 +380,7 @@ const checks: NamedCheck[] = [
                 );
                 Assert(beaReplyRes.Success && (beaReplyRes.Results?.length ?? 0) === 1, 'Bea can read room assistant reply over the wire');
                 const replyMsg = beaReplyRes.Results![0].Message;
+                Assert(replyMsg.includes('site-photo.png'), 'Room assistant reply must quote Shared file site-photo.png');
                 Assert(!replyMsg.includes('discovery-brief.pdf'), 'Room assistant reply must not name Team file discovery-brief.pdf');
                 Assert(!replyMsg.includes('field-notes.txt'), 'Room assistant reply must not name Team file field-notes.txt');
 
@@ -764,6 +643,7 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const adaCtx = await getPersonaClientContext(ctx, 'ada');
             const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const devCtx = await getPersonaClientContext(ctx, 'dev');
             const dev = await GetPersonaUser(ctx, 'dev');
             const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
             const samClient = new CollaborationClient(samCtx.GraphQLProvider);
@@ -773,7 +653,7 @@ const checks: NamedCheck[] = [
             const ownerRoleId = ownerRoles[0].ID;
 
             // Ada seats Dev as owner on Discovery so Dev (with Configure Spaces authorization) can configure space settings
-            const devMember = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
+            const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
             devMember.NewRecord();
             devMember.SpaceID = DISCOVERY_SPACE_ID;
             devMember.UserID = dev.ID;
@@ -786,7 +666,7 @@ const checks: NamedCheck[] = [
             let adaConvId: string | undefined;
             let adaChatId: string | undefined;
             try {
-                const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                const space = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
                 Assert(await space.Load(DISCOVERY_SPACE_ID), 'Load Discovery space as dev');
                 origConfig = space.Configuration;
 
@@ -814,19 +694,28 @@ const checks: NamedCheck[] = [
                 adaConvId = adaRes.ConversationID;
                 adaChatId = adaRes.SpaceChatID;
             } finally {
-                if (adaConvId || adaChatId) {
-                    await cleanupConversation(ctx.Provider, ctx.User, adaConvId, adaChatId);
-                }
-                const restoreSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
-                if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
-                    restoreSpace.Configuration = origConfig;
-                    const restoreSaved = await restoreSpace.Save();
-                    Assert(restoreSaved, 'Restoring original Discovery space configuration over wire must succeed');
-                }
-                if (devMember.ID) {
-                    const cleanupDev = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
-                    if (await cleanupDev.Load(devMember.ID)) {
-                        await cleanupDev.Delete();
+                try {
+                    if (adaConvId || adaChatId) {
+                        await cleanupConversation(ctx.Provider, ctx.User, adaConvId, adaChatId);
+                    }
+                    if (origConfig !== null) {
+                        const restoreSpace = await devCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, devCtx.User);
+                        if (await restoreSpace.Load(DISCOVERY_SPACE_ID)) {
+                            restoreSpace.Configuration = origConfig;
+                            const restoreSaved = await restoreSpace.Save();
+                            Assert(restoreSaved, 'Restoring original Discovery space configuration over wire must succeed');
+                        }
+                    }
+                } finally {
+                    if (devMember.ID) {
+                        const cleanupDev = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        if (await cleanupDev.Load(devMember.ID)) {
+                            const delOk = await cleanupDev.Delete();
+                            Assert(delOk === true, 'Harness user delete of Dev seat on Discovery must succeed');
+                        }
+                        const verifyGone = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
+                        const reloaded = await verifyGone.Load(devMember.ID);
+                        Assert(!reloaded, 'Dev seat on Discovery must be deleted');
                     }
                 }
             }

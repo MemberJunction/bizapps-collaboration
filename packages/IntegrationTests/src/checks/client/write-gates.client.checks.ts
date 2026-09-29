@@ -7,9 +7,7 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
     mjBizAppsCollaborationShareNoticeEntity,
     mjBizAppsCollaborationItemUseEntity,
-    mjBizAppsCollaborationSpaceChatEntity,
 } from '@mj-biz-apps/collaboration-entities';
-import { MJConversationDetailEntity, MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
 import {
     SPACE_ENTITY,
     SPACE_MEMBER_ENTITY,
@@ -21,87 +19,10 @@ import {
     TASK_ENTITY,
     TASK_LINK_ENTITY,
     TASK_ACTIVITY_ENTITY,
-    CONVERSATION_DETAIL_ENTITY,
-    CONVERSATION_ENTITY,
-    SPACE_CHAT_ENTITY,
 } from '../../entity-names.js';
 import { mjBizAppsTasksTaskActivityEntity, mjBizAppsTasksTaskEntity, mjBizAppsTasksTaskLinkEntity } from '@mj-biz-apps/tasks-entities';
 import { FindRows, getPersonaContext, getPersonaClientContext, View } from '../../wire.js';
-
-async function cleanupConversation(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    conversationId?: string | null,
-    spaceChatId?: string | null,
-): Promise<void> {
-    const rv = RunView.FromMetadataProvider(provider);
-    if (conversationId) {
-        try {
-            const chats = await rv.RunView<{ ID: string }>({
-                EntityName: SPACE_CHAT_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 100,
-            }, user);
-            if (chats?.Success && chats.Results) {
-                for (const c of chats.Results) {
-                    const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-                    if (await chat.Load(c.ID)) {
-                        await chat.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const details = await rv.RunView<{ ID: string }>({
-                EntityName: CONVERSATION_DETAIL_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (details?.Success && details.Results) {
-                for (const d of details.Results) {
-                    const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
-                    if (await det.Load(d.ID)) {
-                        await det.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const grants = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Resource Permissions',
-                ExtraFilter: `ResourceRecordID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (grants?.Success && grants.Results) {
-                for (const g of grants.Results) {
-                    const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
-                    if (await p.Load(g.ID)) {
-                        await p.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
-            if (await conv.Load(conversationId)) {
-                await conv.Delete();
-            }
-        } catch { /* ignore */ }
-    } else if (spaceChatId) {
-        try {
-            const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-            if (await chat.Load(spaceChatId)) {
-                await chat.Delete();
-            }
-        } catch { /* ignore */ }
-    }
-}
+import { cleanupConversation } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';

@@ -267,43 +267,41 @@ export async function executeSpaceChatTurn(
         return { ok: false, message: errMsg };
     }
 
-    // Load fresh window rows through ConversationEngine (Item 5)
-    const windowRows = await ConversationEngine.LoadWindowRowsFresh(
-        conversationId,
-        user,
-        provider,
-        conversationHistoryFrom
-    );
-    const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
-        excludeDetailIds: [assistantDetail.ID],
-        historyFrom: conversationHistoryFrom ?? null,
-    });
-    const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
-        role: m.role,
-        content: m.content,
-    }));
-
     let agentSuccess = false;
     let agentErrorMessage: string | null = null;
     let agentRunId: string | undefined;
     let agentReplyText: string | null = null;
 
     try {
+        // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
+        const windowRows = await ConversationEngine.LoadWindowRowsFresh(
+            conversationId,
+            user,
+            provider,
+            conversationHistoryFrom
+        );
+        const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
+            excludeDetailIds: [assistantDetail.ID],
+            historyFrom: conversationHistoryFrom ?? null,
+            maxTailMessages: 20,
+        });
+        const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
+            role: m.role,
+            content: m.content,
+        }));
+
         const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
         if (agentEntity && (await agentEntity.Load(targetAgentId))) {
             const runner = new AgentRunner(provider);
             const runnerParams: ExecuteAgentParams = {
                 agent: agentEntity,
                 contextUser: user,
+                userId: user.ID,
                 conversationId,
                 conversationDetailId: assistantDetail.ID,
                 ConversationHistoryFrom: conversationHistoryFrom,
                 PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
                 PrimaryScopeRecordID: foundChat.ID,
-                SecondaryScopes: {
-                    SpaceID: [spaceId],
-                    Audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
-                },
                 data: {
                     spaceId,
                     conversationId,
@@ -317,7 +315,10 @@ export async function executeSpaceChatTurn(
                         const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
                         if (runObj && (await runObj.Load(createdRunId))) {
                             runObj.ExternalReferenceID = userMessageId;
-                            await runObj.Save();
+                            const stampSaved = await runObj.Save();
+                            if (!stampSaved) {
+                                LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${runObj.LatestResult?.CompleteMessage ?? ''}`);
+                            }
                         }
                     } catch (stampErr) {
                         LogError(`executeSpaceChatTurn: failed to stamp ExternalReferenceID: ${stampErr}`);
@@ -353,7 +354,10 @@ export async function executeSpaceChatTurn(
     if (!agentSuccess || !agentReplyText) {
         assistantDetail.Status = 'Error';
         assistantDetail.Message = agentErrorMessage ?? 'Agent execution failed.';
-        await assistantDetail.Save();
+        const errorSaved = await assistantDetail.Save();
+        if (!errorSaved) {
+            LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+        }
         return { ok: false, message: agentErrorMessage ?? 'Agent execution failed.' };
     }
 

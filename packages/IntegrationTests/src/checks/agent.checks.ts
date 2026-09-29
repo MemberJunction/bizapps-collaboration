@@ -47,80 +47,7 @@ const EXPECTED_ADA_NORTHWIND_SPACES = new Set([
 const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];
 const createdDetailIds: string[] = [];
 
-async function cleanupConversation(
-    provider: IMetadataProvider,
-    user: UserInfo,
-    conversationId?: string | null,
-    spaceChatId?: string | null,
-): Promise<void> {
-    const rv = RunView.FromMetadataProvider(provider);
-    if (conversationId) {
-        try {
-            const chats = await rv.RunView<{ ID: string }>({
-                EntityName: SPACE_CHAT_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 100,
-            }, user);
-            if (chats?.Success && chats.Results) {
-                for (const c of chats.Results) {
-                    const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-                    if (await chat.Load(c.ID)) {
-                        await chat.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const details = await rv.RunView<{ ID: string }>({
-                EntityName: CONVERSATION_DETAIL_ENTITY,
-                ExtraFilter: `ConversationID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (details?.Success && details.Results) {
-                for (const d of details.Results) {
-                    const det = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
-                    if (await det.Load(d.ID)) {
-                        await det.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const grants = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Resource Permissions',
-                ExtraFilter: `ResourceRecordID = '${conversationId}'`,
-                Fields: ['ID'],
-                MaxRows: 1000,
-            }, user);
-            if (grants?.Success && grants.Results) {
-                for (const g of grants.Results) {
-                    const p = await provider.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', user);
-                    if (await p.Load(g.ID)) {
-                        await p.Delete();
-                    }
-                }
-            }
-        } catch { /* ignore */ }
-
-        try {
-            const conv = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, user);
-            if (await conv.Load(conversationId)) {
-                await conv.Delete();
-            }
-        } catch { /* ignore */ }
-    } else if (spaceChatId) {
-        try {
-            const chat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceChatEntity>(SPACE_CHAT_ENTITY, user);
-            if (await chat.Load(spaceChatId)) {
-                await chat.Delete();
-            }
-        } catch { /* ignore */ }
-    }
-}
+import { cleanupConversation } from './cleanup-helpers.js';
 
 const checks: NamedCheck[] = [
     {
@@ -580,6 +507,28 @@ const checks: NamedCheck[] = [
                 Assert(genTurnRes.allowedItemNames!.includes('site-photo.png'), 'General turn MUST allow Shared file site-photo.png');
                 Assert(!genTurnRes.allowedItemNames!.includes('discovery-brief.pdf'), 'General turn must NOT allow Team file discovery-brief.pdf');
 
+                // ExplainScope dry-run: assert that the search lane filter for General conversation is strictly bounded to Band IN ('Shared')
+                if (!isClientTransport(ctx)) {
+                    await SearchEngine.Instance.Config({}, ada);
+                    const genScopeExp = await SearchEngine.Instance.ExplainScope(
+                        {
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: {
+                                PrimaryScopeRecordID: genChatId,
+                            },
+                            AIAgentID: AGENT_ID,
+                        },
+                        ada,
+                    );
+                    Assert(genScopeExp.length === 1, 'General scope explanation returned');
+                    const itemsLane = genScopeExp[0].Lanes.find((l) => l.Target.includes('Space Items'));
+                    Assert(!!itemsLane && itemsLane.Status === 'Active', 'Space Items lane is Active in General chat');
+                    Assert(
+                        !!itemsLane?.RenderedFilter && itemsLane.RenderedFilter.includes("Band IN ('Shared')"),
+                        `General chat search lane filter MUST restrict to Band IN ('Shared') (got: ${itemsLane?.RenderedFilter})`
+                    );
+                }
+
                 // Bea (client with Shared-only visibility) can view the General conversation assistant reply
                 const beaView = RunView.FromMetadataProvider(ctx.Provider);
                 const beaReplies = await beaView.RunView<{ ID: string; Role: string; Message: string }>({
@@ -619,6 +568,29 @@ const checks: NamedCheck[] = [
                 Assert(privTurnRes.allowedItemNames !== undefined, 'Private turn returned allowedItemNames');
                 Assert(privTurnRes.allowedItemNames!.includes('site-photo.png'), 'Private turn MUST allow Shared file site-photo.png');
                 Assert(privTurnRes.allowedItemNames!.includes('discovery-brief.pdf'), 'Private turn MUST allow Team file discovery-brief.pdf');
+
+                // ExplainScope dry-run: assert that Private conversation includes both Shared and Team
+                if (!isClientTransport(ctx)) {
+                    const privScopeExp = await SearchEngine.Instance.ExplainScope(
+                        {
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: {
+                                PrimaryScopeRecordID: privChatId,
+                            },
+                            AIAgentID: AGENT_ID,
+                        },
+                        ada,
+                    );
+                    Assert(privScopeExp.length === 1, 'Private scope explanation returned');
+                    const privItemsLane = privScopeExp[0].Lanes.find((l) => l.Target.includes('Space Items'));
+                    Assert(!!privItemsLane && privItemsLane.Status === 'Active', 'Space Items lane is Active in Private chat');
+                    Assert(
+                        !!privItemsLane?.RenderedFilter &&
+                            privItemsLane.RenderedFilter.includes('Shared') &&
+                            privItemsLane.RenderedFilter.includes('Team'),
+                        `Private chat search lane filter allows both Shared and Team (got: ${privItemsLane?.RenderedFilter})`
+                    );
+                }
 
                 // 3. Test Item 6: Untagged message with AgentID under MentionOnly is refused turn
                 const untaggedMsg = await postSpaceMessage(ctx.Provider, ada, {

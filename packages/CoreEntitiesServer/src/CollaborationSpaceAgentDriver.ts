@@ -1,7 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 
 /**
@@ -27,9 +26,13 @@ export class CollaborationSpaceAgentDriver extends BaseAgent {
             replyText = 'I found no shared materials in this space.';
         }
 
-        const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
+        const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', system);
         run.NewRecord();
         run.AgentID = params.agent.ID;
+        const userId = params.userId ?? params.contextUser?.ID;
+        if (userId) {
+            run.UserID = userId;
+        }
         run.ConversationID = params.conversationId ?? null;
         run.ExternalReferenceID = params.conversationDetailId ?? null;
         run.Status = 'Completed';
@@ -37,7 +40,10 @@ export class CollaborationSpaceAgentDriver extends BaseAgent {
         run.StartedAt = new Date();
         run.CompletedAt = new Date();
         run.Success = true;
-        await run.Save();
+        const saved = await run.Save();
+        if (!saved) {
+            throw new Error(`Failed to save AI Agent Run for agent ${params.agent.ID}`);
+        }
 
         if (typeof params.onAgentRunCreated === 'function') {
             await params.onAgentRunCreated(run.ID);
@@ -45,8 +51,8 @@ export class CollaborationSpaceAgentDriver extends BaseAgent {
 
         return {
             success: true,
-            agentRun: run as unknown as MJAIAgentRunEntityExtended,
-            payload: replyText as unknown as R,
+            agentRun: run,
+            payload: replyText as R,
             errorMessage: undefined,
         };
     }

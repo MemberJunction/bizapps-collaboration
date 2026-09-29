@@ -83,7 +83,28 @@ describe('executeSpaceChatTurn', () => {
         allowedAgents?: string[];
     }
 
-    function createMockProvider(options: MockWorldOptions = {}): IMetadataProvider {
+    interface SavedDetail {
+        ID?: string;
+        ConversationID?: string;
+        ParentID?: string | null;
+        Role?: string;
+        AgentID?: string | null;
+        Status?: string;
+        Message?: string;
+    }
+
+    interface SavedRun {
+        ID?: string;
+        ExternalReferenceID?: string | null;
+        Status?: string;
+    }
+
+    type MockMetadataProvider = IMetadataProvider & {
+        readonly savedDetails: SavedDetail[];
+        readonly savedRuns: SavedRun[];
+    };
+
+    function createMockProvider(options: MockWorldOptions = {}): MockMetadataProvider {
         const canContribute = options.canContribute !== false;
         const closedAt = options.closedAt ?? null;
         const hasRoomChat = options.hasRoomChat !== false;
@@ -94,8 +115,8 @@ describe('executeSpaceChatTurn', () => {
         const messageConversationId = options.messageConversationId ?? CONVERSATION_ID;
         const messageText = options.messageText ?? `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} help`;
 
-        const savedDetails: Array<Record<string, unknown>> = [];
-        const savedRuns: Array<Record<string, unknown>> = [];
+        const savedDetails: SavedDetail[] = [];
+        const savedRuns: SavedRun[] = [];
 
         const provider: Partial<IMetadataProvider & IRunViewProvider> = {
             EntityByName() {
@@ -374,7 +395,12 @@ describe('executeSpaceChatTurn', () => {
             },
         };
 
-        return provider as IMetadataProvider;
+        const fullProvider = Object.assign(provider, {
+            savedDetails,
+            savedRuns,
+        });
+
+        return fullProvider as MockMetadataProvider;
     }
 
     const defaultInput: ExecuteSpaceChatTurnInput = {
@@ -506,6 +532,47 @@ describe('executeSpaceChatTurn', () => {
         if (result.ok) {
             assert.ok(result.replyDetailIds.length > 0);
             assert.ok(result.agentRunId);
+        }
+
+        // Assert saved reply
+        assert.ok(provider.savedDetails.length >= 2, 'Should save In-Progress and Complete reply details');
+        const initialReply = provider.savedDetails[0];
+        assert.equal(initialReply.ParentID, USER_MESSAGE_ID);
+        assert.equal(initialReply.Role, 'AI');
+        assert.equal(initialReply.Status, 'In-Progress');
+        const finalReply = provider.savedDetails[provider.savedDetails.length - 1];
+        assert.equal(finalReply.ParentID, USER_MESSAGE_ID);
+        assert.equal(finalReply.Role, 'AI');
+        assert.equal(finalReply.Status, 'Complete');
+        assert.equal(finalReply.Message, 'Mocked agent response');
+        assert.equal(finalReply.AgentID?.toLowerCase(), ALLOWED_AGENT_ID.toLowerCase());
+
+        // Assert ExternalReferenceID stamp
+        assert.ok(provider.savedRuns.length >= 1, 'Should save stamped agent run');
+        const stampedRun = provider.savedRuns.find((r) => r.ExternalReferenceID === USER_MESSAGE_ID);
+        assert.ok(stampedRun, 'Agent run should have ExternalReferenceID stamped with user message ID');
+    });
+
+    it('marks reply detail as Error when agent execution fails', async () => {
+        const origRunner = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async () => ({
+            success: false,
+            errorMessage: 'Simulated LLM failure',
+            agentRun: { ID: 'failed-run' } as never,
+        });
+        try {
+            const provider = createMockProvider({
+                messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
+            });
+            const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+            assert.equal(result.ok, false);
+            assert.match(result.message, /Simulated LLM failure/);
+            assert.ok(provider.savedDetails.length >= 2);
+            const errorReply = provider.savedDetails[provider.savedDetails.length - 1];
+            assert.equal(errorReply.Status, 'Error');
+            assert.match(errorReply.Message ?? '', /Simulated LLM failure/);
+        } finally {
+            AgentRunner.prototype.RunAgent = origRunner;
         }
     });
 

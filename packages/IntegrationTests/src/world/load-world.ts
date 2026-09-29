@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
-import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import '@mj-biz-apps/common-entities';
@@ -33,6 +33,7 @@ import {
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
+    COLLABORATION_DEFAULT_AGENT_ID,
     CollaborationEngine,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
@@ -379,7 +380,10 @@ export async function loadWorld(): Promise<void> {
                 ResultType: 'simple',
                 MaxRows: 1,
             }, system);
-            let convId: string | undefined = existingRes.Success && existingRes.Results?.[0]?.ConversationID ? existingRes.Results[0].ConversationID : undefined;
+            if (!existingRes.Success) {
+                throw new Error(`Failed to lookup existing space chat for ${name} in space ${spaceKey}: ${existingRes.ErrorMessage ?? 'unknown error'}`);
+            }
+            let convId: string | undefined = existingRes.Results?.[0]?.ConversationID;
             if (!convId) {
                 const res = await createSpaceConversation(provider, actor(creatorKey), {
                     SpaceID: spaceId,
@@ -443,14 +447,62 @@ export async function loadWorld(): Promise<void> {
     await seedSpaceConversations('committee', 'ada', 'sam');
 
     for (const spaceId of spaceIds.values()) {
-        await syncRoomEditGrantsForSpace(provider, spaceId);
+        const syncRes = await syncRoomEditGrantsForSpace(provider, spaceId);
+        if (!syncRes.ok) {
+            throw new Error(`Failed to sync room edit grants for space ${spaceId}: ${syncRes.message}`);
+        }
     }
 
     await assertCatalog(provider, system, spaceRows, memberRows, personas, people, spaceIds, types, roles);
+    await ensureRobotTesterSeated(provider, system, spaceIds);
+    await ensureTestAgentDriver(system);
     console.log(`COLLAB-WORLD loaded into ${DB_DATABASE}. ${spaceRows.length} spaces, ${memberRows.length} seats, and the catalog files match.`);
     console.log('The system user wrote the users, their MemberJunction roles, the People rows, and the world-owned space type.');
     console.log('Each space was saved by its owner. Invited seats were saved by a non-owner who can invite. Removed seats were created, then removed by the owner.');
     await pool.close();
+}
+
+async function ensureTestAgentDriver(system: UserInfo): Promise<void> {
+    const md = new Metadata();
+    const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', system);
+    if (await agent.Load(COLLABORATION_DEFAULT_AGENT_ID)) {
+        if (agent.DriverClass !== 'CollaborationSpaceAgentDriver') {
+            agent.DriverClass = 'CollaborationSpaceAgentDriver';
+            const saved = await agent.Save();
+            if (!saved) {
+                throw new Error('Failed to set test agent DriverClass');
+            }
+        }
+    }
+}
+
+async function ensureRobotTesterSeated(
+    provider: SQLServerDataProvider,
+    system: UserInfo,
+    spaceIds: Map<string, string>,
+): Promise<void> {
+    const robotEmail = 'da-robot-tester@bluecypress.io';
+    const robotId = await findId(provider, USERS, `Email = '${robotEmail}'`, system);
+    if (!robotId) return;
+
+    const ownerRoleId = await findId(provider, ROLES, `Code = 'owner'`, system);
+    if (!ownerRoleId) return;
+
+    const md = new Metadata();
+    for (const spaceId of spaceIds.values()) {
+        const existingSeat = await findId(provider, MEMBERS, `SpaceID = '${spaceId}' AND UserID = '${robotId}'`, system);
+        if (!existingSeat) {
+            const memberObj = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(MEMBERS, system);
+            memberObj.NewRecord();
+            memberObj.SpaceID = spaceId;
+            memberObj.UserID = robotId;
+            memberObj.SpaceRoleTypeID = ownerRoleId;
+            memberObj.Band = 'Team';
+            memberObj.Status = 'Active';
+            await memberObj.Save();
+        }
+        await syncRoomEditGrantsForSpace(provider, spaceId);
+    }
 }
 
 function asBool(value: unknown): boolean {
@@ -567,9 +619,21 @@ async function assertCatalog(
     if ((members.Results?.length ?? 0) !== memberRows.length) {
         throw new Error(`Expected ${memberRows.length} seats, read ${members.Results?.length ?? 0}.`);
     }
+    const seenSeats = new Set<string>();
+    for (const member of members.Results ?? []) {
+        const key = `${member.SpaceID.toLowerCase()}:${member.UserID.toLowerCase()}`;
+        if (seenSeats.has(key)) {
+            throw new Error(`Duplicate seat found for SpaceID ${member.SpaceID} and UserID ${member.UserID}.`);
+        }
+        seenSeats.add(key);
+    }
     for (const row of memberRows) {
-        const found = members.Results?.find((member) => member.SpaceID.toLowerCase() === spaceIds.get(row.Space)!.toLowerCase() && member.UserID.toLowerCase() === people.get(row.Person)!.id.toLowerCase());
-        if (!found) throw new Error(`Missing seat ${row.Person} on ${row.Space}.`);
+        const expectedSpaceId = spaceIds.get(row.Space)!.toLowerCase();
+        const expectedUserId = people.get(row.Person)!.id.toLowerCase();
+        const matches = members.Results?.filter((member) => member.SpaceID.toLowerCase() === expectedSpaceId && member.UserID.toLowerCase() === expectedUserId) ?? [];
+        if (matches.length === 0) throw new Error(`Missing seat ${row.Person} on ${row.Space}.`);
+        if (matches.length > 1) throw new Error(`Duplicate seat ${row.Person} on ${row.Space}.`);
+        const found = matches[0];
         if (found.Status.trim() !== row.Status || found.Band.trim() !== row.Band) {
             throw new Error(`${row.Person} on ${row.Space} is ${found.Status.trim()} ${found.Band.trim()}, catalog says ${row.Status} ${row.Band}.`);
         }
@@ -598,11 +662,17 @@ async function assertCatalog(
         { space: 'committee', name: 'committee-deliverables', kind: 'Topic' },
         { space: 'committee', name: 'committee-internal', kind: 'Private' },
     ];
+    if (chatsCheck.Results.length !== expectedChats.length) {
+        throw new Error(`Expected ${expectedChats.length} active space chats, found ${chatsCheck.Results.length}.`);
+    }
     for (const ec of expectedChats) {
         const sid = spaceIds.get(ec.space);
-        const match = chatsCheck.Results.find(c => c.SpaceID.toLowerCase() === sid?.toLowerCase() && c.Name === ec.name && c.Kind === ec.kind);
-        if (!match) {
+        const matches = chatsCheck.Results.filter(c => c.SpaceID.toLowerCase() === sid?.toLowerCase() && c.Name === ec.name && c.Kind === ec.kind);
+        if (matches.length === 0) {
             throw new Error(`Missing expected space chat ${ec.name} (${ec.kind}) in space ${ec.space}.`);
+        }
+        if (matches.length > 1) {
+            throw new Error(`Duplicate space chat ${ec.name} (${ec.kind}) in space ${ec.space}.`);
         }
     }
 }

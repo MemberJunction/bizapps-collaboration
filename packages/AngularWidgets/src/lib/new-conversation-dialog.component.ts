@@ -5,9 +5,11 @@ import {
   EventEmitter,
   HostListener,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
   Output,
+  SimpleChanges,
   ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -347,7 +349,7 @@ export interface NewConversationSubmitPayload {
     `,
   ],
 })
-export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
+export class CollabNewConversationDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() public SpaceName = '';
   @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
@@ -355,8 +357,8 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
   @Output() public CancelRequested = new EventEmitter<void>();
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
-  @ViewChild('nameInput') public nameInputElement?: ElementRef<HTMLInputElement>;
-  @ViewChild('modalRoot') public modalRootElement?: ElementRef<HTMLElement>;
+  @ViewChild('nameInput') private nameInputElement?: ElementRef<HTMLInputElement>;
+  @ViewChild('modalRoot') private modalRootElement?: ElementRef<HTMLElement>;
 
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
@@ -369,6 +371,18 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
       setTimeout(() => {
         this.nameInputElement?.nativeElement?.focus();
       }, 0);
+    }
+  }
+
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (changes['IsSubmitting']) {
+      const prev = changes['IsSubmitting'].previousValue;
+      const curr = changes['IsSubmitting'].currentValue;
+      if (prev === true && curr === false) {
+        setTimeout(() => {
+          this.nameInputElement?.nativeElement?.focus();
+        }, 0);
+      }
     }
   }
 
@@ -387,6 +401,7 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('keydown', ['$event'])
+  @HostListener('document:keydown', ['$event'])
   public onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && this.modalRootElement?.nativeElement) {
       const focusable = this.modalRootElement.nativeElement.querySelectorAll<HTMLElement>(
@@ -395,6 +410,11 @@ export class CollabNewConversationDialogComponent implements OnInit, OnDestroy {
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+      if (!this.modalRootElement.nativeElement.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
       if (event.shiftKey) {
         if (document.activeElement === first) {
           last.focus();
