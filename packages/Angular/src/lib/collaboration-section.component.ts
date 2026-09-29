@@ -20,6 +20,7 @@ import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
 import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
+import { countLabel, countText, invitationRows, taskRows, type HomeListKind, type HomeRowModel } from './logic/home-lists.js';
 import { NewSpaceDraft, SpaceDetails, visibleDetailFields, type DetailField } from './logic/space-details.js';
 import { newSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
@@ -33,6 +34,8 @@ import { toOverviewMessages } from './logic/overview-messages.js';
 import { guardedLoad, isSelectionCurrent } from './logic/selection-guard.js';
 import {
     CollaborationClient,
+    type HomeInvitationGraphQL,
+    type HomeOpenTaskGraphQL,
     type GraphQLExecutor,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceItemEntity,
@@ -70,6 +73,8 @@ import {
     CollabSpaceSettingsComponent,
     CollabNewConversationDialogComponent,
     CollabNewSpaceDialogComponent,
+    CollabHomeListComponent,
+    type HomeListRow,
     type NewConversationSubmitPayload,
     type NewSpaceSubmitPayload,
     type TabItem,
@@ -171,6 +176,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabSpaceSettingsComponent,
         CollabNewConversationDialogComponent,
         CollabNewSpaceDialogComponent,
+        CollabHomeListComponent,
         CollaborationNoAccessComponent,
         TaskKanbanComponent,
         TaskGanttComponent,
@@ -291,6 +297,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             background: var(--mj-bg-surface-hover, #f1f5f9);
             border-color: var(--mj-brand-primary, #0284c7);
             transform: translateY(-1px);
+        }
+        .stat-pill.active {
+            border-color: var(--mj-brand-primary, #0284c7);
+            background: var(--mj-bg-surface-hover, #f1f5f9);
+        }
+        .home-list-wrap {
+            padding: 0 32px 8px;
         }
         .stat-val {
             font-size: 20px;
@@ -608,7 +621,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [LibraryCount]="libraryTotalCount"
                             [TaskCount]="taskCount"
                             [MemberCount]="headerTotalPeople"
-                            [InboxCount]="inboxCount"
+                            [InboxCount]="0"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
@@ -635,24 +648,41 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 </div>
                                             </div>
                                             <div class="home-quick-stats">
-                                                <div class="stat-pill" [mjClickable]="'Active spaces'" (click)="onHomeSpacesRequested()">
+                                                <div class="stat-pill" [mjClickable]="homeCountLabel('spaces')" (click)="onHomeSpacesRequested()">
                                                     <span class="stat-val">{{ activeSpacesCount }}</span>
                                                     <span class="stat-lbl">Active Spaces</span>
                                                 </div>
-                                                <div class="stat-pill" [mjClickable]="'Open tasks'" (click)="onNavSelectRequested('tasks')">
-                                                    <span class="stat-val">{{ homeOpenTasks }}</span>
+                                                <div class="stat-pill" [class.active]="homeList === 'tasks'" [mjClickable]="homeCountLabel('tasks')" (click)="onHomeListRequested('tasks')">
+                                                    <span class="stat-val">{{ homeCountValue('tasks') }}</span>
                                                     <span class="stat-lbl">Open Tasks</span>
                                                 </div>
-                                                <div class="stat-pill" [mjClickable]="'Awaiting approval'" (click)="onNavSelectRequested('inbox')">
-                                                    <span class="stat-val">{{ inboxCount }}</span>
-                                                    <span class="stat-lbl">Awaiting Approval</span>
+                                                <div class="stat-pill" [class.active]="homeList === 'approvals'" [mjClickable]="homeCountLabel('approvals')" (click)="onHomeListRequested('approvals')">
+                                                    <span class="stat-val">{{ homeCountValue('approvals') }}</span>
+                                                    <span class="stat-lbl">Invitations Waiting</span>
                                                 </div>
-                                                <div class="stat-pill" [mjClickable]="'Shared files'" (click)="onNavSelectRequested('files')">
-                                                    <span class="stat-val">{{ homeSharedFiles }}</span>
+                                                <div class="stat-pill" [mjClickable]="homeCountLabel('files')" (click)="onNavSelectRequested('files')">
+                                                    <span class="stat-val">{{ homeCountValue('files') }}</span>
                                                     <span class="stat-lbl">Shared Files</span>
                                                 </div>
                                             </div>
                                         </header>
+
+                                        @if (homeList) {
+                                            <div class="home-list-wrap">
+                                                <mjc-home-list
+                                                    [Id]="homeList"
+                                                    [Title]="homeListTitle"
+                                                    [Rows]="homeListRows"
+                                                    [TotalCount]="homeListTotal"
+                                                    [IsLoading]="isLoadingHomeList"
+                                                    [ErrorMessage]="homeListError"
+                                                    [EmptyMessage]="homeListEmpty"
+                                                    (RowSelected)="onHomeRowSelected($event)"
+                                                    (RetryRequested)="loadHomeLists()"
+                                                    (CloseRequested)="closeHomeList()"
+                                                />
+                                            </div>
+                                        }
 
                                         <div class="home-body">
                                             <section class="home-section">
@@ -1096,7 +1126,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [ReviewHeader]="shareReviewHeader"
                                 [ReviewSub]="shareReviewSub"
                                 [Findings]="shareFindings"
-                                [Note]="shareNote"
                                 [NotifyRecipients]="true"
                                 [AuthorName]="shareAuthorName"
                                 [Timestamp]="shareTimestamp"
@@ -1277,6 +1306,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isSubmittingAsk = false;
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
+        // The grants can change while the page is open (a host edits them): what the page offers follows them on the next selection
+        this.refreshMayAdminister();
+        this.refreshCanCreateSpace();
         if (!this.currentUser || !this.activeSpaceId) {
             this.canConfigureCurrentSpace = false;
             this.canReopenCurrentSpace = false;
@@ -1515,7 +1547,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     // Navigation Rail data
-    public inboxCount = 0;
     public taskCount = 0;
     public spaces: RailSpaceNode[] = [];
     public rawSpaces: RawSpaceRecord[] = [];
@@ -1528,36 +1559,157 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
 
-    /** Whether the person holds 'Administer Spaces': the page offers what only that authorization may do, and the server refuses the rest. */
-    public get mayAdministerSpaces(): boolean {
-        if (!this.currentUser) return false;
+    /**
+     * Whether the person holds 'Administer Spaces': the page offers what only that authorization may do, and the server refuses the rest.
+     * Worked out once when the page loads and again when a space is selected, not on every change-detection pass: a missing
+     * authorization logs an error each time it is asked.
+     */
+    public mayAdministerSpaces = false;
+
+    private refreshMayAdminister(): void {
+        if (!this.currentUser) {
+            this.mayAdministerSpaces = false;
+            return;
+        }
         try {
-            return CollaborationEngineBase.Instance.UserMayAdministerSpaces(this.currentUser, this.ProviderToUse);
+            this.mayAdministerSpaces = CollaborationEngineBase.Instance.UserMayAdministerSpaces(this.currentUser, this.ProviderToUse);
         } catch (err) {
             this.logOnce('administer', `Could not check the Administer Spaces authorization: ${err instanceof Error ? err.message : String(err)}`);
-            return false;
+            this.mayAdministerSpaces = false;
         }
     }
 
     /** What Home counts across every space the person reaches, from one approved MJ query the server runs for them. */
     public homeSharedFiles = 0;
     public homeOpenTasks = 0;
+    /** Invitations waiting on an owner: approved on a space's People tab, not in the approval inbox. */
+    public homeAwaitingApproval = 0;
+    /** True when the counts could not be read: the pills say so instead of showing a zero. */
+    public homeCountsFailed = false;
 
-    /** Reads Home's three counts in one round trip. A read that fails leaves the counts as they were, and says so once. */
+    /** The list Home has open under its counts, and the rows the server gave for it. */
+    public homeList: HomeListKind | null = null;
+    public homeInvitations: HomeInvitationGraphQL[] = [];
+    public homeOpenTaskList: HomeOpenTaskGraphQL[] = [];
+    public isLoadingHomeList = false;
+    public homeListError = '';
+
+    private homeCountOf(which: 'tasks' | 'approvals' | 'files' | 'spaces'): { count: number; singular: string; plural: string } {
+        switch (which) {
+            case 'tasks': return { count: this.homeOpenTasks, singular: 'open task', plural: 'open tasks' };
+            case 'approvals': return { count: this.homeAwaitingApproval, singular: 'invitation waiting', plural: 'invitations waiting' };
+            case 'files': return { count: this.homeSharedFiles, singular: 'shared file', plural: 'shared files' };
+            default: return { count: this.activeSpacesCount, singular: 'active space', plural: 'active spaces' };
+        }
+    }
+
+    /** What a pill shows: its number, or a dash while its count could not be read. Active spaces come from the page's own list, so they are always known. */
+    public homeCountValue(which: 'tasks' | 'approvals' | 'files'): string {
+        return countText(this.homeCountOf(which).count, this.homeCountsFailed);
+    }
+
+    /** What a pill says to a screen reader: the number with what it counts, so the label doesn't replace the number. */
+    public homeCountLabel(which: 'tasks' | 'approvals' | 'files' | 'spaces'): string {
+        const { count, singular, plural } = this.homeCountOf(which);
+        return countLabel(count, which !== 'spaces' && this.homeCountsFailed, singular, plural);
+    }
+
+    public get homeListTitle(): string {
+        return this.homeList === 'approvals' ? 'Invitations waiting on an owner' : 'Open tasks in your spaces';
+    }
+
+    public get homeListEmpty(): string {
+        return this.homeList === 'approvals' ? 'No invitations are waiting for you to approve.' : 'No open tasks in your spaces.';
+    }
+
+    public get homeListTotal(): number {
+        return this.homeList === 'approvals' ? this.homeAwaitingApproval : this.homeOpenTasks;
+    }
+
+    public get homeListRows(): HomeListRow[] {
+        const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
+        const rows: HomeRowModel[] = this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : taskRows(this.homeOpenTaskList, date);
+        return rows;
+    }
+
+    /** Opens (or closes, when it is already open) the list behind a count. */
+    public onHomeListRequested(kind: HomeListKind): void {
+        if (this.homeList === kind) {
+            this.closeHomeList();
+            return;
+        }
+        this.homeList = kind;
+        void this.loadHomeLists();
+    }
+
+    public closeHomeList(): void {
+        this.homeList = null;
+        this.RefreshView();
+    }
+
+    /** Reads the rows behind the counts. A failed read says so in the list, with a way to try again. */
+    public async loadHomeLists(): Promise<void> {
+        this.isLoadingHomeList = true;
+        this.homeListError = '';
+        this.RefreshView();
+        try {
+            const res = await new CollaborationClient(this.graphQLExecutor).GetHomeLists();
+            if (!res.Success || !res.Invitations || !res.OpenTasks) {
+                this.homeListError = `The list could not be read: ${res.ErrorMessage ?? 'the answer was incomplete'}`;
+                this.logOnce('home-lists', this.homeListError);
+            } else {
+                this.homeInvitations = res.Invitations;
+                this.homeOpenTaskList = res.OpenTasks;
+            }
+        } catch (err) {
+            this.homeListError = `The list could not be read: ${err instanceof Error ? err.message : String(err)}`;
+            this.logOnce('home-lists', this.homeListError);
+        } finally {
+            this.isLoadingHomeList = false;
+            this.RefreshView();
+        }
+    }
+
+    /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task. */
+    public onHomeRowSelected(key: string): void {
+        if (this.homeList === 'approvals') {
+            const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, key));
+            if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
+        } else {
+            const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, key));
+            if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
+        }
+    }
+
+    /** Opens a space on one of its tabs. A space that is not in the person's list says so, rather than doing nothing. */
+    private openSpaceOnTab(spaceId: string, tab: 'People' | 'Work'): void {
+        if (!this.rawSpaces.some((s) => UUIDsEqual(s.ID, spaceId))) {
+            SharedService.Instance.CreateSimpleNotification("That space isn't in your list, so it can't be opened here.", 'warning', 5000);
+            return;
+        }
+        this.activeView = 'space';
+        this.activeTab = tab;
+        void this.selectSpaceInternal(spaceId);
+        this.UpdateQueryParams({ view: 'space', space: spaceId, tab: tab.toLowerCase(), conv: null, item: null });
+    }
+
+    /** Reads Home's three counts in one round trip. A read that fails shows a dash in each pill, and says so once. */
     private async loadHomeCounts(): Promise<void> {
         try {
             const res = await new CollaborationClient(this.graphQLExecutor).GetHomeCounts();
             if (!res.Success || res.SharedFiles === undefined || res.OpenTasks === undefined || res.AwaitingApproval === undefined) {
                 this.logOnce('home-counts', `Home could not read its counts: ${res.ErrorMessage ?? 'the answer was incomplete'}`);
+                this.homeCountsFailed = true;
+                this.RefreshView();
                 return;
             }
             this.homeSharedFiles = res.SharedFiles;
             this.homeOpenTasks = res.OpenTasks;
-            // The invitations waiting on an owner are what the Inbox holds
-            this.inboxCount = res.AwaitingApproval;
+            this.homeAwaitingApproval = res.AwaitingApproval;
+            this.homeCountsFailed = false;
         } catch (err) {
             this.logOnce('home-counts', `Home could not read its counts: ${err instanceof Error ? err.message : String(err)}`);
-            return;
+            this.homeCountsFailed = true;
         }
         this.RefreshView();
     }
@@ -1598,7 +1750,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public shareReviewSub = '';
     public shareAuthorName = '';
     public shareTimestamp = '';
-    public shareNote = '';
     public shareRecipients: RecipientPersonModel[] = [];
     public shareFindings: FindingModel[] = [];
 
@@ -1881,6 +2032,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             this.spaceEntityId = spEntity.ID;
             this.currentUser = md.CurrentUser || null;
+            this.refreshMayAdminister();
+            this.refreshCanCreateSpace();
 
             // Load SpaceTypes from CollaborationEngineBase (punch list item 54)
             await CollaborationEngineBase.Instance.Config(false, md.CurrentUser, this.ProviderToUse);
@@ -3250,7 +3403,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
-    public async onShareCompleted(_result: { applyFixes: boolean; note: string; notify: boolean }): Promise<void> {
+    public async onShareCompleted(_result: { applyFixes: boolean; notify: boolean }): Promise<void> {
         this.isShareDialogOpen = false;
         const targetItemId = this.shareDialogItemId;
         if (!targetItemId) {
@@ -3358,14 +3511,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    /** Whether the rail offers New space: who may create a top-level space (Administer Spaces) and may create Space rows at all. */
-    public get canCreateSpace(): boolean {
-        if (!this.currentUser || !this.mayAdministerSpaces) return false;
+    /** Whether the rail offers New space: who may create a top-level space (Administer Spaces) and may create Space rows at all. Worked out with `mayAdministerSpaces`. */
+    public canCreateSpace = false;
+
+    private refreshCanCreateSpace(): void {
         try {
-            return !!this.ProviderToUse.EntityByName('MJ_BizApps_Collaboration: Spaces')?.GetUserPermisions(this.currentUser).CanCreate;
+            this.canCreateSpace = !!this.currentUser && this.mayAdministerSpaces
+                && !!this.ProviderToUse.EntityByName('MJ_BizApps_Collaboration: Spaces')?.GetUserPermisions(this.currentUser).CanCreate;
         } catch (err) {
             this.logOnce('create-space', `Could not check the right to create a space: ${err instanceof Error ? err.message : String(err)}`);
-            return false;
+            this.canCreateSpace = false;
         }
     }
 

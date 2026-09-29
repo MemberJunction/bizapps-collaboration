@@ -1,9 +1,10 @@
 import { Directive, HostListener, type ElementRef, type OnDestroy, type OnInit } from '@angular/core';
 
 /**
- * What every dialog here does the same way, on top of `mj-dialog` (the box is `mj-dialog`'s own element, so its close button is inside the trap) (which draws it, closes it on Escape, the backdrop and its close
- * button, and locks the page's scroll): remember what had focus when it opened and give it back on close, focus the first
- * control, and keep Tab inside. `mj-dialog` does none of these three today. A dialog extends this and says which element is its box.
+ * What every dialog here does the same way, on top of `mj-dialog`, which draws it, closes it on Escape, the backdrop and its close
+ * button, and locks the page's scroll. It does three things `mj-dialog` doesn't: it remembers what had focus when the dialog opened
+ * and gives it back on close, focuses the first control, and keeps Tab inside. A dialog extends this and says which element is its
+ * box: `mj-dialog`'s own element, so that its close button is inside the trap.
  */
 @Directive()
 export abstract class CollabDialogBase implements OnInit, OnDestroy {
@@ -69,6 +70,8 @@ export abstract class CollabDialogBase implements OnInit, OnDestroy {
     // While every control is off (a save is under way) Tab has nowhere to go: the focus stays on the dialog itself
     if (focusable.length === 0) {
       event.preventDefault();
+      // The container takes focus without joining the tab order; a dialog that opened on a field never made it focusable
+      if (container && !container.hasAttribute('tabindex')) container.setAttribute('tabindex', '-1');
       container?.focus();
       return;
     }

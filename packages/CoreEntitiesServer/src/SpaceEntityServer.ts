@@ -692,7 +692,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         this.readingForSave = own;
         // MJ tells a parent's save which child started it: that is the subtype this save writes (null for a plain save)
         this.savingAsSubtype = options?.ISAActiveChildEntityName ?? null;
-        // The server's clock decides when a space closed. Staff (the world loader, tests) may backdate one; a date ahead of the
+        // The server's clock decides when a space closed. Someone who holds the Administer Spaces authorization (the world loader, tests) may backdate one; a date ahead of the
         // server, from anyone, is the server's own time (a browser's clock can run ahead of it).
         const signedIn = this.ContextCurrentUser;
         // A re-stamp of a closed space by someone who may administer spaces follows the same rule: a date ahead of the server is the server's own time

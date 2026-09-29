@@ -585,30 +585,28 @@ describe('CollabShareCheckComponent', () => {
 
   it('emits ShareRequested with applyFixes true on onApplyAndShare', () => {
     const comp = new CollabShareCheckComponent();
-    comp.Note = 'Test note';
     comp.NotifyRecipients = true;
 
-    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let result: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
     comp.onApplyAndShare();
-    expect(result).toEqual({ applyFixes: true, note: 'Test note', notify: true });
+    expect(result).toEqual({ applyFixes: true, notify: true });
   });
 
   it('emits ShareRequested with applyFixes false on onShareAsIs', () => {
     const comp = new CollabShareCheckComponent();
-    comp.Note = 'Raw note';
     comp.NotifyRecipients = false;
 
-    let result: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let result: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(r => {
       result = r;
     });
 
     comp.onShareAsIs();
-    expect(result).toEqual({ applyFixes: false, note: 'Raw note', notify: false });
+    expect(result).toEqual({ applyFixes: false, notify: false });
   });
 
   it('emits CancelRequested on cancel', () => {
@@ -633,6 +631,23 @@ describe('CollabSpaceOverviewComponent contributed cards', () => {
             { key: 'notice', title: 'Notice', sortKey: 20 },
         ];
         expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Deal', 'Notice']);
+    });
+
+    it('gives a viewer who cannot see the Team band the Shared cards only, and treats a card that names no side as Team', () => {
+        const comp = new CollabSpaceOverviewComponent();
+        comp.ContributedCards = [
+            { key: 'notice', title: 'Notice', sortKey: 10, side: 'Shared' },
+            { key: 'agenda', title: 'Agenda', sortKey: 20, side: 'Team' },
+            { key: 'no-side', title: 'No side', sortKey: 30 },
+        ];
+        comp.CanSeeTeamSide = false;
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Notice']);
+        comp.CanSeeTeamSide = true;
+        expect(comp.UniqueContributedCards.map((c) => c.title)).toEqual(['Notice', 'Agenda', 'No side']);
+    });
+
+    it('is closed to the Team band until the host says otherwise', () => {
+        expect(new CollabSpaceOverviewComponent().CanSeeTeamSide).toBe(false);
     });
 });
 
@@ -728,13 +743,13 @@ describe('CollabShareCheckDialogComponent', () => {
 
   it('emits ShareRequested on onShareRequested', () => {
     const comp = new CollabShareCheckDialogComponent();
-    let payload: { applyFixes: boolean; note: string; notify: boolean } | null = null;
+    let payload: { applyFixes: boolean; notify: boolean } | null = null;
     comp.ShareRequested.subscribe(p => {
       payload = p;
     });
 
-    comp.onShareRequested({ applyFixes: true, note: 'Done', notify: true });
-    expect(payload).toEqual({ applyFixes: true, note: 'Done', notify: true });
+    comp.onShareRequested({ applyFixes: true, notify: true });
+    expect(payload).toEqual({ applyFixes: true, notify: true });
   });
 });
 

@@ -22,7 +22,6 @@ export interface Frame04FixtureData {
         reviewHeader: string;
         reviewSub: string;
         findings: FindingModel[];
-        note: string;
         notifyRecipients: boolean;
         authorName: string;
         timestamp: string;
@@ -95,7 +94,6 @@ export const FRAME_04_FIXTURE: Frame04FixtureData = {
                 status: 'Flagged',
             },
         ],
-        note: 'Synthesis from all 18 interviews — we’ll walk through it together on Thursday.',
         notifyRecipients: true,
         authorName: 'Ada Lovell',
         timestamp: 'today at 10:14 AM',

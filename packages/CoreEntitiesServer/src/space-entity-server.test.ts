@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
-import { grantAdministerToDefaultRoles } from '../dist/test-support.js';
+import { grantAdministerTo, grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChangeContext } from '../dist/base-space-type-server-driver.js';
@@ -74,6 +74,25 @@ describe('SpaceEntityServer staff-only edit gate', () => {
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         const err = res.Errors.find((e) => e.Source === 'AgentRetrieval');
         assert.equal(err, undefined, 'Staff should not be refused for AgentRetrieval');
+    });
+
+    describe("holds by the authorization, not by a role's name", () => {
+        const manager = { ID: '88888888-8888-4888-8888-888888888888', UserRoles: [{ Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+        let restore: () => void;
+        before(() => { restore = grantAdministerTo(['Community Manager']); });
+        after(() => { restore(); });
+
+        for (const field of ['AllowParentAssignees', 'AgentRetrieval']) {
+            it(`lets a user whose only role is one no code knows, and that holds the grant, edit ${field}`, async () => {
+                const res = await SpaceEntityServer.prototype.ValidateAsync.call(mockSpace(manager, true, field));
+                assert.equal(res.Errors.find((e) => e.Source === field), undefined);
+            });
+
+            it(`refuses a UI user, whose role lost the grant, editing ${field}`, async () => {
+                const res = await SpaceEntityServer.prototype.ValidateAsync.call(mockSpace(staffUser, true, field));
+                assert.match(res.Errors.find((e) => e.Source === field)?.Message ?? '', /only someone with the Administer Spaces authorization may change/);
+            });
+        }
     });
 });
 
@@ -332,6 +351,28 @@ describe('SpaceEntityServer create path validation', () => {
         assert.equal(agentErr?.Message, 'Space change refused: only someone with the Administer Spaces authorization may change the agent retrieval setting.');
     });
 
+    describe("holds by the authorization, not by a role's name", () => {
+        const manager = { ID: '88888888-8888-4888-8888-888888888888', UserRoles: [{ Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+        let restore: () => void;
+        before(() => { restore = grantAdministerTo(['Community Manager']); });
+        after(() => { restore(); });
+
+        it('lets a user whose only role is one no code knows, and that holds the grant, create a top-level space, and refuses a UI user without it', async () => {
+            const allowed = await SpaceEntityServer.prototype.ValidateAsync.call(mockCreateSpace({ user: manager }));
+            assert.equal(allowed.Errors.find((e) => e.Source === 'ParentID'), undefined, `Errors: ${allowed.Errors.map((e) => e.Message).join(', ')}`);
+            const refused = await SpaceEntityServer.prototype.ValidateAsync.call(mockCreateSpace({ user: staffUser }));
+            assert.match(refused.Errors.find((e) => e.Source === 'ParentID')?.Message ?? '', /Administer Spaces/);
+        });
+
+        it('lets that user create a space with a non-default setting, and refuses the UI user without the grant', async () => {
+            const options = { allowParentAssignees: false, defaultAllow: true, agentRetrieval: 'ExcludedEntirely' as const, defaultAgent: 'Included' as const };
+            const allowed = await SpaceEntityServer.prototype.ValidateAsync.call(mockCreateSpace({ user: manager, ...options }));
+            assert.equal(allowed.Errors.find((e) => e.Source === 'AllowParentAssignees' || e.Source === 'AgentRetrieval'), undefined);
+            const refused = await SpaceEntityServer.prototype.ValidateAsync.call(mockCreateSpace({ user: staffUser, ...options }));
+            assert.ok(refused.Errors.some((e) => e.Source === 'AllowParentAssignees'), 'the setting is refused');
+        });
+    });
+
     it("applies the type's defaults after NewRecord() with no sets", async () => {
         const space = mockCreateSpace({
             user: staffUser,
@@ -403,6 +444,25 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         const space = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, staffUser);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Errors.find((e) => e.Source === 'ClosedAt'), undefined);
+    });
+
+    describe("a backdated close holds by the authorization, not by a role's name", () => {
+        const manager = { ID: '88888888-8888-4888-8888-888888888888', UserRoles: [{ Role: 'Community Manager' } as Partial<UserRoleInfo> as UserRoleInfo] } as Partial<UserInfo> as UserInfo;
+        let restore: () => void;
+        before(() => { restore = grantAdministerTo(['Community Manager']); });
+        after(() => { restore(); });
+        const earlier = new Date(Date.now() - 86_400_000 * 30).toISOString();
+        const later = new Date(Date.now() - 60_000).toISOString();
+
+        it('lets a user whose only role is one no code knows, and that holds the grant, put a new date on a closed space', async () => {
+            const res = await SpaceEntityServer.prototype.ValidateAsync.call(closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, manager));
+            assert.equal(res.Errors.find((e) => e.Source === 'ClosedAt'), undefined);
+        });
+
+        it('refuses a UI user whose role lost the grant', async () => {
+            const res = await SpaceEntityServer.prototype.ValidateAsync.call(closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: later, Value: earlier }], earlier, staffUser));
+            assert.match(res.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /the date a space closed cannot be changed/);
+        });
     });
 
     it("refuses a close, and a reopen, by an owner without the 'Close and Reopen Spaces' authorization", async () => {

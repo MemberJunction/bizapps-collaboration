@@ -1,0 +1,33 @@
+[
+  {
+    "primaryKey": {
+      "ID": "29E0E89F-1941-41C8-AF60-4C94A2756576"
+    },
+    "fields": {
+      "Name": "Collaboration Home Invitations",
+      "Description": "The invitations waiting on an owner across every space a person reaches, newest first, up to 50: the rows behind the Awaiting Approval count of Collaboration Home Counts, with the same rules. Only the Integration role may run it: the server runs it as the system user, with the signed-in person's own id, through GetHomeLists.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Collaboration",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "SELECT TOP 50\n    m.ID AS SeatID,\n    m.SpaceID,\n    s.Name AS SpaceName,\n    COALESCE(u.Name, u.Email) AS Person,\n    r.Name AS RoleName,\n    m.__mj_CreatedAt AS InvitedAt\nFROM [__mj_BizAppsCollaboration].[SpaceMember] m\nINNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = m.SpaceID\nINNER JOIN [__mj_BizAppsCollaboration].[Space] s ON s.ID = m.SpaceID\nLEFT JOIN [__mj].[User] u ON u.ID = m.UserID\nLEFT JOIN [__mj_BizAppsCollaboration].[SpaceRoleType] r ON r.ID = m.SpaceRoleTypeID\nWHERE m.Status = N'Invited'\n  AND a.CanInvite = 1\n  AND m.UserID <> TRY_CAST({{ UserID | sqlString }} AS UNIQUEIDENTIFIER)\nORDER BY m.__mj_CreatedAt DESC"
+    },
+    "relatedEntities": {
+      "MJ: Query Permissions": [
+        {
+          "primaryKey": {
+            "ID": "208814E0-323D-49AC-8AFF-423A6AC4DAB1"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          }
+        }
+      ]
+    }
+  }
+]

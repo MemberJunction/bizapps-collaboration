@@ -155,7 +155,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               @if (!CanAdminister) {
                 <div class="radio-sub" id="settings-retrieval-note">Only someone with the Administer Spaces authorization can change this.</div>
               }
-              <div class="radio-group" role="radiogroup" aria-labelledby="settings-retrieval-label">
+              <div class="radio-group" role="radiogroup" aria-labelledby="settings-retrieval-label" [attr.aria-describedby]="CanAdminister ? null : 'settings-retrieval-note'">
                 <label class="radio-label">
                   <input
                     type="radio"

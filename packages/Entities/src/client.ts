@@ -143,6 +143,46 @@ export interface HomeCountsGraphQLPayload {
     AwaitingApproval?: number;
 }
 
+/** An invitation waiting on an owner. */
+export interface HomeInvitationGraphQL {
+    SeatID: string;
+    SpaceID: string;
+    SpaceName: string;
+    Person: string;
+    RoleName: string;
+    InvitedAt?: string | null;
+}
+
+/** An open task filed in one of the person's spaces. */
+export interface HomeOpenTaskGraphQL {
+    TaskID: string;
+    Name: string;
+    Status: string;
+    Priority?: string | null;
+    DueAt?: string | null;
+    SpaceID: string;
+    SpaceName: string;
+}
+
+/** The rows behind Home's counts. */
+export interface HomeListsGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    Invitations?: HomeInvitationGraphQL[];
+    OpenTasks?: HomeOpenTaskGraphQL[];
+}
+
+const GET_HOME_LISTS_QUERY = `
+query GetHomeLists {
+    GetHomeLists {
+        Success
+        ErrorMessage
+        Invitations { SeatID SpaceID SpaceName Person RoleName InvitedAt }
+        OpenTasks { TaskID Name Status Priority DueAt SpaceID SpaceName }
+    }
+}
+`;
+
 const GET_HOME_COUNTS_QUERY = `
 query GetHomeCounts {
     GetHomeCounts {
@@ -305,6 +345,11 @@ export class CollaborationClient {
     async GetHomeCounts(): Promise<HomeCountsGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_HOME_COUNTS_QUERY, {});
         return (res?.GetHomeCounts as HomeCountsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetHomeLists(): Promise<HomeListsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_HOME_LISTS_QUERY, {});
+        return (res?.GetHomeLists as HomeListsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {

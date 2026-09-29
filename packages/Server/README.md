@@ -28,7 +28,8 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 | `ExecuteSpaceChatTurn` | `SpaceID`, `ConversationID`, `UserMessageID`, `AgentID?` | Runs the space's agent on a saved message, as the asking user, and writes the reply. The conversation's kind bounds what the reply may use. |
 | `GetSpaceChatHostRules` (query) | `spaceId`, `conversationId?` | The chat area's rules for this person here: the allowed agents and the default, the reply mode, whom `@` offers, the history floor, and whether they may start a conversation and of which kinds. |
 | `GetCloseConsequence` (query) | `spaceId` | For someone who may close the space, what closing it would do: the access it would stamp, whose row it keeps, and whether they could reopen it. |
-| `GetHomeCounts` (query) | none | Home's counts for the signed-in person, across the spaces they reach: the Shared files, the open tasks and the invitations awaiting approval, from one approved query. Only the Integration role may run that query, so the server runs it as the system user, with the person's own id. |
+| `GetHomeCounts` (query) | none | Home's counts for the signed-in person, across the spaces they reach: the Shared files, the open tasks and the invitations waiting on an owner (each file and task counted once), from one approved query. Only the Integration role may run that query, so the server runs it as the system user, with the person's own id. |
+| `GetHomeLists` (query) | none | The rows behind those counts, up to 50 of each: the invitations waiting (with their space, for a link to that space's People tab) and the open tasks (each once, under the first of the person's spaces by name). Two approved queries with the same rules as the counts, run the same way. |
 
 **`src/mint-space-link.ts`** holds the invitation logic behind `MintSpaceLink`. Its header says why the link is an app session rather than a resource share: access ends when the seat is removed.
 

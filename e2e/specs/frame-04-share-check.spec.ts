@@ -79,7 +79,7 @@ test.describe('Frame 04 — Share Check Dialog', () => {
         const fixes = review.locator('.fix');
         await expect(fixes).toHaveCount(2);
 
-        // 6. Effects (the note is plain text carried to the share, not a field on this screen)
+        // 6. Effects
         const effects = modal.locator('.effects .eff');
         await expect(effects).toHaveCount(3);
 

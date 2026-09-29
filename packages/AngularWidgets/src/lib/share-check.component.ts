@@ -362,12 +362,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       color: var(--mj-status-success-text);
     }
 
-    .note-title {
-      margin-bottom: 8px;
-    }
-
-
-
     .effects {
       display: flex;
       flex-direction: column;
@@ -564,13 +558,12 @@ export class CollabShareCheckComponent {
   @Input() public Findings: FindingModel[] = [];
   /** True only when a policy review ran and found nothing; with no review, the dialog says it wasn't reviewed. */
   @Input() public ReviewCompleted = false;
-  @Input() public Note = '';
   @Input() public NotifyRecipients = true;
   @Input() public AuthorName = '';
   @Input() public Timestamp = '';
 
   @Output() public ApplyFixRequested = new EventEmitter<FindingModel>();
-  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; note: string; notify: boolean }>();
+  @Output() public ShareRequested = new EventEmitter<{ applyFixes: boolean; notify: boolean }>();
   @Output() public CancelRequested = new EventEmitter<void>();
 
   public get pendingCount(): number {
@@ -608,7 +601,6 @@ export class CollabShareCheckComponent {
   public onApplyAndShare(): void {
     this.ShareRequested.emit({
       applyFixes: true,
-      note: this.Note,
       notify: this.NotifyRecipients,
     });
   }
@@ -616,7 +608,6 @@ export class CollabShareCheckComponent {
   public onShareAsIs(): void {
     this.ShareRequested.emit({
       applyFixes: false,
-      note: this.Note,
       notify: this.NotifyRecipients,
     });
   }
