@@ -73,7 +73,8 @@ when `mj` is not on the path of the member you are in.
 ## Running the harnesses
 
 - **Server:** `pnpm run test:integration:server`. It needs only the database, built through step 9.
-- **Client:** `pnpm run test:integration:client`. It needs an MJAPI on the same database with this app's packages loaded, started with the
+- **Client:** `pnpm run test:integration:client`. It needs an MJAPI on the same database with this app's packages and the example types' `/server`
+  entry loaded (their drivers, and the resolvers of the two subtype entities: [reviewing the data](reviewing-the-data.md#files) has the setting), started with the
   test agent's and the storage driver's entries imported (the start command is in [reviewing the data](reviewing-the-data.md#files) and [the test agent](reviewing-the-data.md#the-test-agent)), `MJ_API_KEY`, and `MJAPI_URL` or
   `GRAPHQL_PORT`. Pick a port outside the fetch specification's blocked list: Node's `fetch` refuses 4190, for one.
 - Run each **from a purge and a fresh load, and then a second time** on that load.

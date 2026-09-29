@@ -288,9 +288,9 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 - Its parent's driver hears the same change as a sub-space's: `CreateChild`, `UpdateChild`, `ReopenChild`, `MoveChildIn`, `MoveChildOut`, `CloseChild` and `DeleteChild`. A move is one save seen from both parents: the one it joins hears `MoveChildIn`, the one it leaves `MoveChildOut`. A close and a move in one save are refused, so no save is both. A delete is judged in `ValidateSpaceChange` and raises no reaction.
 - A member's driver hears `Invite`, `RoleChange`, `BandChange` and `Remove`. A new seat is an `Invite` (a `Remove` when it is made Removed), and so is a seat whose status becomes Active or Invited: an approval, a reinstatement or a re-invitation. A role or band edit is a `RoleChange` or `BandChange`, as asked: a band the gate puts back still reaches the driver as a `BandChange`. A save that touches none of status, role and band raises no seat reaction. A rule on who may hold a seat judges `Invite`, `RoleChange` and `BandChange` alike: judging only invitations lets a role change walk around it.
 - Validation and reaction share one reading of the change, taken by `Save` before anything changes a field and handed to validation (validation called on its own takes its own), so they can't disagree about what kind it was. A save that changes nothing raises no reaction. Each reaction runs on its own: a driver that throws is logged with its hook and space, and doesn't silence the next.
-- **Today** the reactions run after the save has committed, not inside its transaction, and a failure is logged and does not undo the save. Moving them inside the transaction is planned for stage 2, with the one resolver for the rules.
+- **Today** the reactions run after the space's own save returns, and a failure is logged and does not undo the save. When that save is part of a larger transaction, they run inside it, before it commits: a space saved through its subtype (MJ's IsA save wraps both rows) and `CreateSpace` (which writes the owner's seat too). A later refusal then rolls back what they wrote through the context's provider; outside work belongs in `provider.RunAfterCommit`, which runs only once the whole transaction commits. Moving every reaction inside the save's own transaction is planned for stage 2, with the one resolver for the rules.
 
-| Area | Validate (can refuse) | React (after the save commits today; inside the transaction is planned) |
+| Area | Validate (can refuse) | React (after the save today, inside the caller's transaction when there is one; inside the save's own is planned) |
 |---|---|---|
 | Rules | `AdjustRules(ctx, rules)` narrows the effective rules | |
 | The space | `ValidateSpaceChange` | `OnSpaceChanged` |
@@ -305,7 +305,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 **Where Collaboration calls them.**
 - `SpaceEntityServer`, `SpaceMemberEntityServer` and `SpaceItemEntityServer`; `CreateSpaceConversation` (`ValidateChatChange`); `CreateSpaceTask` (`OnTaskFiled`); and `EnsureSpaceForRecord` (`ValidateAnchor`, `ResolveAnchorParent`). The message hooks wait for A19 (D44), adding people waits for A5, and the agent turn doesn't call `BuildAgentContext` yet.
 - Validate hooks run in `ValidateAsync` and add `ValidationErrorInfo`, so `Save()` returns false with the driver's message.
-- React hooks run after the save commits, as above. Running them inside its transaction, through MJ's `RunInEntityTransaction`, is planned for stage 2; then a thrown error will roll the whole save back.
+- React hooks run after the space's own save, as above, inside the caller's transaction when there is one. Running them inside the save's own transaction, through MJ's `RunInEntityTransaction`, is planned for stage 2; then a thrown error will roll the whole save back.
 - Email, HTTP and other outside work goes through `provider.RunAfterCommit`.
 
 **Resolving a driver.**
@@ -332,7 +332,7 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 
 **Rules for driver authors.**
 - **Drivers never grant reads.** Reach stays in `fnCollaborationAccess` and row-level security ([§ 11](#11-security-rules-for-plug-ins)).
-- **IsA saves the parent first.** Saving a Committee saves its Space first: MJ passes `IsParentEntitySave` and `ISAActiveChildEntityName`. So the space hooks run before the Committee row exists. Rules about the subtype's own columns belong in the subtype entity's server class.
+- **IsA saves the parent first.** Saving a Committee saves its Space first: MJ passes `IsParentEntitySave` and `ISAActiveChildEntityName`. So the space hooks run before the Committee row exists. A save that changes only the Committee's own columns reaches `ValidateSpaceChange` as an `Update`, told the subtype and the columns' old values, and raises no reaction, since the space's own row doesn't change. Rules on one column's own values belong in the subtype entity's server class.
 - **Use the driver, not a second `SpaceEntityServer`.** Only one class can hold an entity's ClassFactory key: the last one loaded wins, and the other gets only a console warning.
 - **Use the context's provider.** It owns the open transaction; `new Metadata()` doesn't.
 
@@ -387,7 +387,7 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 
 ## 7. IsA subtypes and their forms
 
-**Status:** built in PR 9 (the plan's D42): the resolver, the pairing rules, the checks on a type's subtype, the rules for a change to only a subtype's columns, the example tables and forms, `CreateSpace`, and the three screens (New space, Settings → Details, About). Not built: the `SubtypeSelector` metadata, and creating a sub-space through the same dialog.
+**Status:** built in PR 9 (the plan's D42): the resolver, the pairing rules, the checks on a type's subtype, the rules for a change to only a subtype's columns, the example tables and forms, `CreateSpace`, and the three screens (New space, Settings → Details, About). Not built: the `SubtypeSelector` metadata, creating a sub-space through the same dialog, and a form that shows only the subtype's own columns (below).
 
 **Declaring.** A downstream app declares its table as an IsA child of `Space` in its own `codegen-schema-info.json`, disjoint (MJ's default). Collaboration changes nothing to allow it; bizapps-sales already subtypes bizapps-common's entities across schemas the same way.
 
@@ -409,6 +409,7 @@ This replaces the UX plan's `GetAllRegistrations` filtered by code and ordered b
 - **Who may save them:** saving a subtype's own columns applies the space's rules for a change, though MJ saves and validates the space first only when the space itself changed: the right Settings asks for (*Configure Spaces* and an owner seat) and the type's driver (`ValidateSpaceChange`, kind `Update`, told the subtype and what its columns held). `ST4` and `SC3` check it in-process and over the wire.
 - **The UI driver** trims the field list through `hiddenFieldNames` (an optional field only), returns `undefined` to show none, or gives a component. A driver that throws leaves the default. A form lays out its own fields, so `hiddenFieldNames` does not trim it.
 - **The example package** has CodeGen's Angular forms for its two subtypes (`src/generated/forms`, registered by its client entry), so a host that loads it shows the forms and the gallery's path is the form host's. A host without the package shows the field list.
+- **Not yet:** CodeGen's form for a subtype puts the space's own columns (its name, owner, type, parent, close date and the rest) in the same section as the subtype's, so the form host shows the whole space record. MJ's form config can show only some sections (`VisibleSectionKeys`), once the subtype's own columns have a section of their own, through a category on each of them.
 - **The gallery** draws them from fixtures, since the host shows "No form is registered" without the downstream package.
 
 **Costs, accepted.**
@@ -597,6 +598,7 @@ These are in the plan's workstream A:
 - A read-only chat area for a closed space ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Until that's in MJ `next`, Collaboration hides the composer itself.
 - An IsA parent's `Delete()` that never returns when its subtype is attached ([MJ#4850](https://github.com/MemberJunction/MJ/issues/4850), for the same pull request). Until that's in MJ `next`, Collaboration's server hands a space's delete to its subtype itself.
 - `EnsureISAChild()` on a new record reads a child row that can't exist yet and logs a load error ([MJ#4859](https://github.com/MemberJunction/MJ/issues/4859), for the same pull request). Nothing is wrong, and each new space of a type with its own table logs one until the fix is in.
+- Over GraphQL, a subtype's `Delete()` returns false although both rows are deleted: the server deletes the space along with the subtype, and the client then sends the space's delete too ([MJ#4864](https://github.com/MemberJunction/MJ/issues/4864), for the same pull request). The page deletes no space itself; the integration checks read the rows back rather than trust the result.
 
 ## 10. Examples
 

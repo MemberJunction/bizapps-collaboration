@@ -42,7 +42,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 
 The four dialogs draw through MJ's `mj-dialog`. `CollabDialogBase` (`dialog-base.ts`) adds their first focus, a Tab trap and the return of focus.
 
-**The extension model's browser half:** `BaseSpaceTypeUIDriver` (a type's UI driver) and `UIDriverRegistry`, the contribution bases `BaseSpaceTab`, `BaseSpaceOverviewCard` and `BaseSpaceSettingsSection`, and `assembleSpaceContributions` and `overlayDescriptors`, which merge what a type and other apps contribute.
+**The extension model's browser half:** `BaseSpaceTypeUIDriver` (a type's UI driver) and `UIDriverRegistry`, the contribution bases `BaseSpaceTab`, `BaseSpaceOverviewCard` and `BaseSpaceSettingsSection`, and `assembleSpaceContributions` and `overlayDescriptors`, which merge what a type and other apps contribute. A driver's `GetDetailsForm` says how a type's details are drawn: `undefined` for none, `hiddenFieldNames` to leave optional fields out of the field list, or `component` for a component of its own, mounted with `Record` and `EditMode`.
 
 **Tokens** (`src/lib/tokens.ts` and `src/lib/_tokens.scss`): the app's `--mjc-*` tokens (the Shared and Team colors, the Assistant's gradient, warning colors, line height and font features), each an expression of an MJ semantic token. `COLLAB_TOKENS_CSS` is exported and bound to `:host` in the widgets' styles, so the tokens resolve in any host; a widget drawn inside another inherits them.
 

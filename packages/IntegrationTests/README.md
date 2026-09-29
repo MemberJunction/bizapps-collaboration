@@ -18,7 +18,7 @@ Collaboration's integration checks, and the sample world they run against.
 | `room` | 12 | 11 | A space's conversations: who reads and starts them, posting, agent replies, and close and reopen |
 | `write-gates` | 10 | 8 | The gates on spaces, seats, items, share notices and item uses, invitations and a change of type |
 | `extensions` | 12 | none | The example types' drivers, and `Children` rules (EX1 to EX12) |
-| `subtypes` | 3 | none | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3) |
+| `subtypes` | 4 | 3 | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3); a change to only the board's own columns refused without *Configure Spaces* and an owner seat (ST4). Over GraphQL: `CreateSpace` writing the board and its owner seat together (SC1), refusing what a space can't be made from and leaving nothing behind (SC2), and the board's own columns saved only with the right (SC3) |
 | `row-filters` | 4 | 4 | What each persona reads |
 | `library` | 6 | 8 | The seeded items, uploads and deletes |
 | `agent` | 10 | 7 | The agent's bounded retrieval, its search scope, and turns on the stub agent |
@@ -46,11 +46,11 @@ pnpm --filter @mj-biz-apps/collaboration-integration-tests run build
 pnpm --filter @mj-biz-apps/collaboration-integration-tests test
 ```
 
-The build compiles the example types' server entry, runs `tsc`, then copies the world's CSV into `dist/`. The unit tests use Vitest, 54 in all:
+The build compiles the example types' server entry, runs `tsc`, then copies the world's CSV into `dist/`. The unit tests use Vitest, 56 in all:
 - `registry-parity.test.ts` and `client-parity.test.ts`: each entry registers exactly the expected bundles, checks and lifecycles, and the client entry loads no server class;
 - `cleanup-reporting.test.ts`: a check reports its own error before its clean-up's, and a failed clean-up fails the check.
 
-**Running the checks** needs a database with Collaboration's migrations, its metadata, the example types' schema, the test metadata and the world loaded ([building the database](../../docs/building-the-database.md)). The client checks also need a running MJAPI with Collaboration's server package loaded, started with the stub agent's and the storage driver's entries imported, plus `MJ_API_KEY`, and `MJAPI_URL` or `GRAPHQL_PORT` ([running the harnesses](../../docs/building-the-database.md#running-the-harnesses)). Run each harness from a purge and a fresh load, then again on that load. From the repo root:
+**Running the checks** needs a database with Collaboration's migrations, its metadata, the example types' schema, the test metadata and the world loaded ([building the database](../../docs/building-the-database.md)). The client checks also need a running MJAPI with Collaboration's server package and the example types' `/server` entry loaded, started with the stub agent's and the storage driver's entries imported, plus `MJ_API_KEY`, and `MJAPI_URL` or `GRAPHQL_PORT` ([running the harnesses](../../docs/building-the-database.md#running-the-harnesses)). Run each harness from a purge and a fresh load, then again on that load. From the repo root:
 
 ```bash
 pnpm run test:integration:server

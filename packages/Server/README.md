@@ -10,16 +10,17 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 
 **`src/index.ts`**
 - Imports the entity and action packages, then the server gates, so the gates' subclasses replace the generated classes.
-- `LoadBizAppsCollaborationServer()` calls the gates' `Load…` functions, so they aren't tree-shaken. It doesn't call `LoadSpaceTypeEntityServer` yet; importing the package registers that gate anyway.
+- `LoadBizAppsCollaborationServer()` calls the gates' `Load…` functions and `LoadSpaceSubtypeResolver`, so they aren't tree-shaken. It doesn't call `LoadSpaceTypeEntityServer` yet; importing the package registers that gate anyway.
 - `RESOLVER_PATHS` lists the resolver files for the host's schema builder. Importing a resolver isn't enough for MJAPI to serve it.
 - Also exports `mintSpaceLink`.
 
 **The generated resolvers** (`src/generated/`, from CodeGen): read and write resolvers for the eleven entities. Never edit them by hand.
 
-**Six mutations and three queries,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
+**Seven mutations and four queries,** each a thin resolver over an operation in `collaboration-core-entities-server` or `mint-space-link.ts`:
 
 | Operation | Input | What it does |
 |---|---|---|
+| `CreateSpace` | `TypeID`, `Name`, `Description?`, `Details?` | Makes a top-level space of a type, through its subtype when the type names one, and seats the caller as its active owner on the Team band, in one transaction: a refusal of either leaves nothing behind. The space's own rules apply, so it needs `Administer Spaces`. `Details` is a JSON object of the subtype's own columns; any other name is refused. |
 | `MintSpaceLink` | `SpaceID`, `Email`, `RoleID` | Seats a person by email. The seat is saved through the member gate, so the invitation ceiling, approval and cap apply. It creates the MJ user and Person when needed, grants `Space Participant`, and issues a one-use magic link of kind `app-session` for an Active seat. The link is emailed, returned to a host issuer, or withheld (see the host's `magicLink` settings in the root README). |
 | `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder`, `Band?` | Stores the file and files it as a space item, in the band the person chose (Shared or Team; a band the seat cannot hold is refused), or the space type's default when none is chosen. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. |
 | `CreateSpaceTask` | `SpaceID`, `Name`, `Band` | Creates a root task and files it in the space. |
