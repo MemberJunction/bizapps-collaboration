@@ -36,7 +36,7 @@
   <a href="#documentation">Docs</a>
 </p>
 
-<!-- Screenshots: add real Explorer captures from docs/screenshots/pr8/ once PR #8's walkthrough lands. -->
+<!-- Screenshots: add real Explorer captures once the walkthrough lands (PR 9's plan, stage 4). -->
 
 ---
 
@@ -116,7 +116,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 
 | | Feature |
 |---|---|
-| 🚧 | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
+| ✅ | **Conversations in every space,** started when someone asks for one: open to everyone in the space, on a topic, or internal to the team, on MemberJunction's own chat area. |
 | 🚧 | **Chats inside a space,** with the people you choose. Whoever adds someone decides how much history they see. |
 | 🚧 | **An assistant bounded by its audience.** In a private chat it uses your reach, narrowed by a scope control; in a shared conversation, only what every participant can read, band by band. |
 | 🚧 | **Per-space agents,** skills and knowledge sources, set down the tree by admins. |
@@ -231,8 +231,9 @@ The UX gallery, the example plug-ins and the integration checks are private pack
 | When | What |
 |---|---|
 | **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
-| **Now: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area, with agent turns; then anchors, grants, data reach, notes and pins ([its plan](plans/pr8-plan.md)), and the screens, walked end to end |
-| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open #8's closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
+| **Done: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area: conversations started when someone asks for one, and agent turns run on the server, bounded by the conversation's audience |
+| **Now: PR 9** | Finishing the chat, with MemberJunction's edge release pinned, and testing the extension model end to end; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host ([its plan](plans/pr9-plan.md)) |
+| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open the closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
 
 The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
 
@@ -241,6 +242,7 @@ The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/p
 | Document | What it covers |
 |---|---|
 | [The plan](plans/plan.md) | What's being built and why: the model, the security doctrine, every decision, the roadmap and the open questions |
+| [PR 9's plan](plans/pr9-plan.md) | Finishing the chat, then #8's stages and the rest of the plan, in order |
 | [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
 | [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
 | [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |

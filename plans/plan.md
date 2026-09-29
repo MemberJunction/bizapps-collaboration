@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19.
+**Version:** v0.5 · 2026-09-27. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19. On 2026-09-29, #8 merged after the chat, and PR 9 takes the rest ([§ 3.6](#36-decided-on-2026-09-29-8-merges-after-the-chat)).
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -11,7 +11,8 @@
 - [the UX storyboard](../docs/ux/README.md) and [its implementation plan](../docs/ux/IMPLEMENTATION_PLAN.md);
 - [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md);
 - [How Collaboration works](../docs/HOW_THE_SYSTEM_WORKS.md): the rules, each marked built or planned;
-- [PR 8's plan](pr8-plan.md): the build plan for D26 to D35's Collaboration work, from where PR #7 leaves the app.
+- [PR 8's plan](pr8-plan.md): the build plan for D26 to D35's Collaboration work, from where PR #7 leaves the app;
+- [PR 9's plan](pr9-plan.md): finishing the chat, then #8's stages and the rest of this plan, from where #8 leaves the app.
 
 ## Contents
 
@@ -80,10 +81,12 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
   - **It merged into `next` on 2026-09-28,** at `0f0dd3d` (merge commit `4d9c779`), as complete enough (Amith). What was left of its finish line moved to PR #8 with the numbers kept, and the chat is #8's first work.
   - Each review of it carried one numbered punch list, and each push got a new list with the same numbers. The first is [punch list 1](https://github.com/MemberJunction/bizapps-collaboration/pull/7#issuecomment-5852309348). [§ 2.3](#23-pr-3s-finish-line) names the item that carries each of PR #3's open points.
   - [§ 9](#9-sequencing) is its order.
-- **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, carries D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
+- **PR #8,** on `claude/hopeful-bell-6ldk4v-pr8`, built the chat, its first job, and was to carry D26 to D35's Collaboration work, from [its own plan](pr8-plan.md).
   - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. When #7 merged, it was retargeted to `next` and handed to the builder, as #7 was when PR #3 merged.
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
-- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, A18's and A19's. Amith and MJ's reviewers review it now, and the builder builds it after #7 and PR #8 (D36). PR #8 builds on MemberJunction as released, and a follow-up pins the release that carries it.
+  - **It merged into `next` on 2026-09-29,** at `ad5ffef`, after the chat (Amith, D38), with CI red only for D37. The chat's remaining defects and its stages 1 to 4 moved to PR 9.
+- **PR 9,** on `claude/hopeful-bell-6ldk4v`, finishes the chat and pins MJ's edge release, then carries #8's stages and the rest of this plan, from [its own plan](pr9-plan.md). Ian runs it with the builder. It merges when its stage 0 is done, and each later stage is its own pull request.
+- **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, A18's and A19's. Colin builds it (Amith, 2026-09-28), after #7 and #8 (D36). Until a release carries it, Collaboration builds on MemberJunction as released, and a follow-up pins that release.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
 ### 2.2 What PR #3 delivered
@@ -377,7 +380,7 @@ These are v0.3's decisions. They change v0.2's doctrine.
   - `AgentTurnHandler`: a call to Collaboration's turn operation. From the saved message it checks everything again on the server: that the caller can contribute, that the conversation is an active conversation of the space that the caller can post in, that the agent is allowed and, where the mode needs it, tagged in the stored message, and the history floor. It then runs the agent under the audience rule and writes the reply as the system user.
 - **People post as themselves.** A contributing seat has Edit on its space's conversations, and on an Internal Only one only if it sees Team: an `MJ: Resource Permissions` grant the server writes and revokes with the seat and with the space's closure. Space Participant has Create on Conversation Details, limited by a create filter to the conversations its user can contribute to; the permission and its filter are metadata, under `metadata/`.
 - **No conversation until someone asks for one** (Amith, 09-28). A space starts with none, and nothing is created with it. People start General, Topic and Internal Only conversations from the rail's +, the chat's New Conversation button or the Overview's ask box, through `CreateSpaceConversation`, which applies `Chats.WhoCanStart`. There's no room: `Room` is retired. Chats with their own people stay B3's. `PostSpaceMessage`'s `ExecuteAgent` switch and its mention regex go.
-- **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 merged without it, so #8 pins the first edge release that carries it, and #8's CI can pass only once that release is out.
+- **Until MJ publishes #4788**, the team builds against MJ `next` in the dev workspace. MJ's next edge releases go out the week of 09-28 (`6.2.0-edge.0`, of 09-23, predates #4788). #7 and #8 merged without it, so PR 9 pins the first edge release that carries it, and CI can pass only once it's pinned (D38).
 
 ### 3.5 Decided on 2026-09-27: anchors, grants, data, notes and meetings
 
@@ -475,8 +478,16 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 
 **D37. #7's chat builds on MJ `next`.** Amith, answering punch list 6's chat call on 09-27: the team develops against MJ `next`, which carries A13.1 ([MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788)), and MJ's next edge releases go out the week of 09-28. It's the call's option A, without cutting a 6.1.5 from `lts/6.1`.
 - **#8 finishes A, not #7:** the server binds A13.1's inputs on MJ's chat area, runs agent turns, and grants each contributing seat Edit on its space's conversations. An outside participant also needs Create on Conversation Details, limited to the conversations they reach. #7 merged on 2026-09-28 without it (Amith: complete enough), so it's #8's first work (#7's items 57, 8 and 61). Amith, the same day: the bindings go in right away, against MJ `next` in the pnpm workspace, without waiting for the release.
-- **#8 pins the first edge release that carries A13.1.** Its CI installs published packages, so it can't pass before that release is out. Until then the builder works against MJ's source in the shared workspace.
+- **PR 9 pins the first edge release that carries A13.1,** since #8 merged without it (D38). CI installs published packages, so it can't pass before that release is pinned. Until then the builder works against MJ's source in the shared workspace.
 - **D25 is settled** (Amith, 09-27): the chat is MJ's chat area as merged to MJ `next`, with MJ#4788's host rules set from the server. #7 rewrote D25 (`455b88c`), and this plan took it when #7 merged.
+
+### 3.6 Decided on 2026-09-29: #8 merges after the chat
+
+**D38. #8 merges after the chat, and PR 9 takes the rest.** Amith, 09-29: #8 merges at its latest work, CI aside, and PR 9 carries all of its remaining defects with a clear plan, and then the rest of this plan. Ian runs it, supervising the builder.
+- **#8 merged into `next`** on 2026-09-29 at `ad5ffef`, with the chat built but not finished, and its stages 1 to 4 not started. CI was red only for D37's types. [Its final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958) covers `b80bab6`; its last commit, `ad5ffef`, which Amith asked for, wasn't reviewed.
+- **PR 9's stage 0 finishes the chat and tests the extension model.** It pins the first edge release carrying A13.1, fixes the items of [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958) with their numbers, walks the UI for what isn't built, and tests subtypes, drivers and contributions end to end. It ends with a review of what it found.
+- **Then #8's stages 1 to 4,** from [#8's plan](pr8-plan.md), a stage that makes the app ready for a first host, and the rest of [§ 9](#9-sequencing). [PR 9's plan](pr9-plan.md) orders them, one pull request per stage after PR 9.
+- **D36's rules hold for those stages:** the grants that need A14 to A17 stay closed until a release carries MJ#4789, which Colin builds (Amith, 09-28). Where this plan names PR #8 for D26 to D35's work, read PR 9's stages.
 
 ## 4. The model
 
@@ -507,7 +518,7 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 
 **What this plan adds** is designed in the extensibility plan and in B8: type drivers and subtypes, configuration bags and the settings chain (D20), the metadata engine (D19), chats and allowed agents, sub-spaces that inherit only when asked (D22), access after close (D21), settings rights (D23), knowledge bindings, `SpaceMember.PersonID`, and the lifecycle and signal contributions.
 
-**What D26 to D35 add** (PR #8, from [its plan](pr8-plan.md)):
+**What D26 to D35 add** (PR 9's stages 1 to 4, from [#8's plan](pr8-plan.md)):
 - **`SpaceAnchor`:** the records a space is about, each with a role, at most one of them primary (D26). It replaces `Space.AnchorEntityID` and `AnchorRecordID`.
 - **`SpaceGrant`:** what a type, a space or a sub-space offers (agents, actions, queries, views, dashboards, components and knowledge sources), with bindings and, for agents, settings (D27, D31). It replaces `SpaceAgent`, `SpaceAgentSkill` and `SpaceKnowledgeSource`.
 - **`SpaceNote`** (D33) and **`SpaceMemberPin`** (D32).
@@ -751,9 +762,9 @@ Opened during the next pull request's work, in parallel (D11). The designs are i
   - a parent's read filter doesn't reach its subtypes' views;
   - a loaded record never looks for its subtype again when it's reloaded.
 
-**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 merged on 2026-09-28 without pinning them, and #8 pins the first edge release that carries them (D37).
+**Where A13 stands** (2026-09-27): A13.1 merged into MJ `next` as [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788), and A13.2 as [MemberJunction/MJ#4787](https://github.com/MemberJunction/MJ/pull/4787). #7 and #8 merged without pinning them, and PR 9 pins the first edge release that carries them (D37, D38).
 
-**A14 to A18** are D26 to D35's MJ work, and **A19** is a fix found while building the chat. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). The builder builds it after #7 and PR #8 (D36). PR #8's grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
+**A14 to A18** are D26 to D35's MJ work, and **A19** is a fix found while building the chat. Their detailed plan, checked against MJ's source, is in the MJ pull request ([MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)). Colin builds it, after #7 and #8 (D36). The grants that need A14 to A17 stay closed until a release carries them; A18 serves workstream T.
 
 ### A14. Properties on user views
 
@@ -922,7 +933,7 @@ Slices B to I of the [UI plan's § 11](../docs/ux/IMPLEMENTATION_PLAN.md#11-orde
 - **Slice H (new space):** the UI plan's gap 2, tab labels per type.
 - **Slice I (extension points):** frame 08 through the example plug-in (B8). The UI plan's gap 10, the committee removal, is B0.11: begun in PR #3 and finished here (item 18).
 
-**B14 to B24** are D26 to D35's Collaboration work, built in PR #8 from [its plan](pr8-plan.md), except B23, which waits for workstream T. They change the extensibility plan's schema, which #7 built, before any version ships (D35). Each data change is proposed in a pull request comment before its migration, as the extensibility plan's § 3 asks.
+**B14 to B24** are D26 to D35's Collaboration work, built in PR 9's stages 1 to 4 (D38) from [#8's plan](pr8-plan.md), except B23, which waits for workstream T. They change the extensibility plan's schema, which #7 built, before any version ships (D35). Each data change is proposed in a pull request comment before its migration, as the extensibility plan's § 3 asks.
 
 ### B14. `SpaceAnchor` (D26)
 
@@ -1155,21 +1166,22 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 - **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared conversation is provably bounded by its audience. Don't put a real client in a shared conversation before A6 and B2 pass [§ 10](#10-verification).
 - **Within a stage,** core and app items can run in parallel. App items that depend on a core item ship behind a feature check until the core version is pinned.
 
-**After #7: PR #8, the MJ pull request, Tasks and Committees.** D26 to D35's work runs in this order. [PR #8's plan](pr8-plan.md) details its stages.
+**After #8: PR 9, the MJ pull request, Tasks and Committees.** D26 to D35's work runs in this order (D38). [PR 9's plan](pr9-plan.md) orders it, and [#8's plan](pr8-plan.md) details its stages.
 
 | When | MJ core (A) | Collaboration (B) | bizapps-tasks (T) | Committees (C) |
 |---|---|---|---|---|
-| **Now, beside #7** | The MJ pull request's plan, in review (D36) | PR #8's plan, as a draft | T1's schema, proposed for review | C0 |
-| **PR #8, stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
-| **PR #8, stage 2: the server** | | B16, B17, B18, and B24's example type, with PR #8's § 4 grants closed | T1 | |
-| **PR #8, stage 3: agents** | | B20 | T3 | |
-| **PR #8, stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
-| **After PR #8** | The MJ pull request: A16, A14, A15, A17, then A18, and a release | A follow-up that pins the release and opens § 4's grants | T2, on A18 | |
+| **PR 9, stage 0: finish the chat** | The first edge release carrying A13.1, pinned; the MJ pull request, built by Colin (D36) | #8's final review, a pass through the UI, and the extension model tested end to end | T1's schema, proposed for review | C0 |
+| **Stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
+| **Stage 2: the server** | | B16, B17, B18, and B24's example type, with #8's plan's § 4 grants closed | T1 | |
+| **Stage 3: agents** | | B20 | T3 | |
+| **Stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
+| **Stage 5: a first host** | | The adversarial test and a clean install | | |
+| **After the MJ release** | A16, A14, A15, A17, then A18, released | A follow-up that pins the release and opens § 4's grants | T2, on A18 | |
 | **After T ships** | | B23, in a later pull request | | C4, in a major version |
 
-- **PR #8 started when #7 merged,** on 2026-09-28. Its plan starts from the app as #7 left it, and takes the items #7 moved to it ([its § 1](pr8-plan.md#what-7-moved-here)).
-- **The MJ pull request comes after PR #8** (D36). PR #8 merges with the grants that need A14 to A17 closed, and the follow-up opens them once an MJ release carries them.
-- **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass. Under D36, rows 13, 15, 16 and 19 pass closed in PR #8.
+- **PR #8 started when #7 merged,** on 2026-09-28, and merged on 2026-09-29 after the chat (D38). PR 9 started then, from the app as #8 left it. Each stage after its stage 0 is its own pull request.
+- **The MJ pull request is Colin's** (Amith, 09-28), after #7 and #8 (D36). The stages merge with the grants that need A14 to A17 closed, and the follow-up opens them once an MJ release carries them.
+- **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass. Under D36, rows 13, 15, 16 and 19 pass closed in PR 9's stages.
 
 ## 10. Verification
 
@@ -1218,7 +1230,7 @@ The sample world (`docs/reviewing-the-data.md`) covers some of these today: Ada 
 | 23 | A query that isn't Canon-approved is granted to a type that seats participants | The grant is refused on save |
 | 24 | A binding's anchor role is missing | The run is refused; it never runs unbound |
 
-Under D36, PR #8 checks rows 13, 15, 16 and 19 closed, since what they need waits for the MJ release. They pass open in the follow-up, with row 23's approved side and row 24 on a view.
+Under D36, PR 9's stages check rows 13, 15, 16 and 19 closed, since what they need waits for the MJ release. They pass open in the follow-up, with row 23's approved side and row 24 on a view.
 
 **KPIs that must be measurable** once A2 and A4 land: zero cross-band retrievals in audit; zero sealed-source quotes; every AI message has an `AgentRunID` and source rows.
 

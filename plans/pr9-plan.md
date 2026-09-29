@@ -1,0 +1,162 @@
+# PR 9: finish the chat, then anchors, grants, data reach, notes and pins
+
+**What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.5, with its D38. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
+
+**Who does what.**
+- **Ian runs it,** with an AI coding agent as the builder: the builder writes the code, and Ian supervises it and decides.
+- **The plan's author reviews each push** with one numbered punch list, and pushes only document updates, as for #7 and #8. Both sides merge the remote branch before pushing; nobody rebases or force-pushes.
+- **It merges by stage.** PR 9 merges when stage 0 is done. Each later stage is its own pull request, opened from `next` when the one before it merges, with the plan's item numbers kept. #7 and #8 each ran long and merged as complete enough; a stage at a time is easier to review and keeps `next` working.
+
+## Contents
+
+1. [Where #8 leaves the app](#1-where-8-leaves-the-app)
+2. [The order](#2-the-order)
+3. [Stage 0: finish the chat, and learn the app](#3-stage-0-finish-the-chat-and-learn-the-app)
+4. [Stages 1 to 4](#4-stages-1-to-4)
+5. [Stage 5: ready for a first host](#5-stage-5-ready-for-a-first-host)
+6. [After MJ#4789 ships: views and dashboards with properties](#6-after-mj4789-ships-views-and-dashboards-with-properties)
+7. [The rest of the plan](#7-the-rest-of-the-plan)
+8. [What holds throughout](#8-what-holds-throughout)
+9. [Rules for the work](#9-rules-for-the-work)
+10. [Day one](#10-day-one)
+
+## 1. Where #8 leaves the app
+
+#8 built the chat, its first job, on MemberJunction's chat area (D25) and MJ `next` (D37):
+- **Conversations on request.** A space has none until someone starts one: General, Topic or Internal Only, from the rail's +, the new-conversation dialog or the Overview's ask box, through `CreateSpaceConversation`. Each is a `SpaceChat` row with its kind, and who reads it follows its kind and band.
+- **Agent turns on the server.** `ExecuteSpaceChatTurn` checks the saved message again, runs the space agent through MJ's `AgentRunner`, and writes the reply as the system user. The agent's search is bounded by the conversation's audience.
+- **Grants, as metadata:** Edit on a space's conversations for each contributing seat, and Space Participant's Create on Conversation Details with its create filter. Clients read only their own agent runs.
+- **Host rules** on MJ's chat area: who can start a conversation, the reply mode, the default agent and mentions.
+- **Closing a space** archives its conversations, and reopening restores them. A closed space's chat is read-only.
+
+It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of the items #7 handed over ([#8's plan § 1](pr8-plan.md#what-7-moved-here)) only the chat's row is done. **At the merge:**
+- **CI is red only for D37.** The widgets and the turn use types that are only on MJ `next` until the first edge release carrying [MemberJunction/MJ#4788](https://github.com/MemberJunction/MJ/pull/4788) is pinned. That release is expected on 2026-09-29, in the evening.
+- **Tests,** in a clean copy of `b80bab6` on 6.1.3: Core's 116, EngineBase's 4, CoreEntitiesServer's 127 and IntegrationTests' 41 pass. The widgets' and ExampleSpaceTypes' tests need MJ `next`.
+- **The chat's defects** are in [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958), of `b80bab6`, and they're stage 0.
+- **#8's last commit, `ad5ffef`,** opens documents in Explorer. Amith asked for it after the final review, and it wasn't reviewed; PR 9's first punch list reviews it.
+
+## 2. The order
+
+| Stage | What | Pull request | Starts after |
+|---|---|---|---|
+| **0** | Finish the chat: pin the edge release, fix #8's final review, walk the UI for what isn't built, and test the extension model end to end. It ends with a review of the findings | PR 9 | #8's merge |
+| **1** | The schema: B14, B15, B21's and B22's tables, `DataReach`, one baseline, CI against a database | Its own | Stage 0 |
+| **2** | The server: B16, B17, B18 and B24, with [#8's plan § 4](pr8-plan.md#4-what-it-depends-on)'s grants closed | Its own | Stage 1 |
+| **3** | Agents: B20 | Its own | Stage 2 |
+| **4** | The screens (D16): B19, notes, pins, the walkthrough and the documents | Its own | Stage 3 |
+| **5** | Ready for a first host | Its own | Stage 4 |
+| **Then** | [Views and dashboards with properties](#6-after-mj4789-ships-views-and-dashboards-with-properties), and [the rest of the plan](#7-the-rest-of-the-plan) | Their own | A release carrying MJ#4789, and stage 5 |
+
+## 3. Stage 0: finish the chat, and learn the app
+
+### 3.1 The pin
+
+When MemberJunction's first edge release carrying MJ#4788 is out:
+1. Move every exact `@memberjunction/*` pin from `6.1.3` to that release: the root `package.json` and each package's `devDependencies`. Widen each package's `peerDependencies` and `mj-app.json`'s `mjVersionRange` to admit it: a caret range on `6.1.x` doesn't match a `6.2.0` prerelease.
+2. Update `pnpm-lock.yaml` with the same change, and check that `node_modules/.pnpm` holds one `@memberjunction/core`.
+3. Build and test from a clean clone with `pnpm install --frozen-lockfile`, as CI does. The build, the widgets' tests and ExampleSpaceTypes' tests pass there.
+
+Until the release is out, work against MJ `next` in the shared workspace (D37), and start on the rest.
+
+### 3.2 #8's final review
+
+Its items, with their numbers. Each is done when its last column holds.
+
+| # | What's left | Done when |
+|---|---|---|
+| 5 | Low: two calls at once for one message both run; a failed final save leaves the reply at `In-Progress`; no test makes the history read fail | One reply per message even when two calls race, a failed final save marks the reply `Error`, and a test covers a failed history read |
+| 11 | Three `sync` blocks, and 26 files with no final newline, in `metadata/` | No `sync` block, every file ends in a newline, and `git diff next -- metadata` shows only intended changes |
+| 12 | The cleanup helper passes when a read fails or a row doesn't load; RM5, RM9 and WG6 4c clean up outside it; an assert in `finally` hides the check's own error; the harness's user isn't pinned | Every check cleans up through the helper, which fails on a failed read and confirms the rows are gone; a check's first error is the one reported; the harness's user is set and can delete what it must |
+| 16 | The loaders write their lists before the selection is checked; a stale load clears the deep link; failed reads are silent | Each loader checks the selection before it writes, a deep link survives a stale load, and every failed read is logged |
+| 23 | RM8's restore skips a space with no configuration, so RM9 fails; WG6 4c's reuse branch leaks a seat; screenshot 3 shows the stub; the rail repeats conversations and shows the checks' leftovers, and doesn't highlight the open one; the host-rules tests can't catch a broken default agent; an archived conversation's rules skip the Internal Only check | Both harnesses pass twice in a row from one load of the world; the five screenshots are taken again with the real agent; the rail lists each conversation once and highlights the open one (`UUIDsEqual`); the tests fail when the default agent resolves wrong |
+| 24 | The banner uses two names that aren't MemberJunction tokens; a suggested response still sends in a closed space; the composer is hidden through MJ's internal class | The token check passes; MJ has an issue or pull request for a read-only chat area; a screenshot shows a closed space |
+| 25 | The People tab lost invited and removed seats; the + border and the badge use hex; the unread states never show; the Overview doesn't follow back and forward; *Settings & Assistant* shows for everyone; the rail and chat tests render no template | People shows every seat and the counts show Active ones; tokens only; unread counts work or their UI goes; the Overview follows the conversation in the URL; the rail's link follows the configure right; tests render the read-only, closed and unread states |
+| 27 | The world loader sets the shipped agent's driver to the stub; the stub ships in CoreEntitiesServer; no agent turn runs a search | No test changes a shipped row; the stub lives in IntegrationTests with its own agent row; a turn, or a check on a real search, proves the band on the search itself |
+| 28 | The world loader seats a real account as Owner of every space, unchecked | No real account in the loader: the walkthrough's account comes from its environment and is seated by the walkthrough's own setup, or the walkthrough runs as the personas |
+| `ad5ffef` | #8's last commit wasn't reviewed | Reviewed in PR 9's first punch list |
+
+### 3.3 A pass through the UI
+
+Much of what's left is found by using the app. Click through every screen, as staff and as a client (Ada and Bea in [the sample world](../docs/reviewing-the-data.md)), in light and dark: a screen that isn't built, a button that does nothing, a missing loading, empty or error state, a label that's wrong for the space's type. Post the list on PR 9, numbered on from the review's, and have the builder fill each gap. A gap that belongs to a later stage's work is marked for that stage instead.
+
+### 3.4 The extension model, end to end
+
+Collaboration's promise is that a new kind of space is configuration and a plug-in, not a fork of the app. Test that it works as intended, starting from the private example types, `example-board` and `example-room` ([the extensibility plan § 10.3](../docs/EXTENSIBILITY_PLAN.md#103-examples-in-collaboration-itself)):
+- **Subtypes (IsA):** a type whose spaces are a subtype of `Space`, with its own table and columns, created, edited and loaded through the space's screens ([§ 7](../docs/EXTENSIBILITY_PLAN.md#7-isa-subtypes-and-their-forms)).
+- **Server drivers:** a type's server driver running its rules and lifecycle hooks, such as creating a sub-space, changing a seat, closing and reopening, on the server, where the browser can't skip them ([§ 5](../docs/EXTENSIBILITY_PLAN.md#5-server-drivers)).
+- **UI drivers and contributions:** a type adding its own tabs to a space and its own cards to the Overview tab, and another app contributing a tab or a card to a type it doesn't own ([§ 6](../docs/EXTENSIBILITY_PLAN.md#6-ui-drivers-and-contributions)).
+- **Configuration:** a type that sets only what differs from the app's defaults, and a space that overrides what its type allows ([§ 4](../docs/EXTENSIBILITY_PLAN.md#4-configuration-one-bag-per-type-and-per-space)).
+
+For each, say whether it works as intended. Fix what's small. What isn't, or what shows the model should go further, becomes an item for the stage it belongs to. `example-chapter` (B24, stage 2) then adds anchors, grants and data reach to the same test.
+
+### 3.5 Findings, before stage 1
+
+When the app runs and the code is familiar, write down what the UI pass, the extension-model test and a read of the code and architecture found, as a comment on PR 9. Go over it with Amith, and with Colin for anything about retrieval ([§ 8](#8-what-holds-throughout)), before stage 1 starts. It can change the stages that follow.
+
+**Stage 0 is done when:**
+- CI is green on the pinned release, with the token check;
+- the push's comment gives each package's `pnpm test` count from a clean copy, and both harnesses' tallies after a purge and a fresh load of the world;
+- the five screenshots from #8's item 23 are taken again in Explorer, as named users, with the real agent answering. They're committed under `docs/screenshots/pr9/` with the Playwright script that takes them, and embedded in the comment;
+- `metadata/` has no `sync` block, every file in it ends in a newline, and `git diff next -- metadata` shows only intended changes;
+- the UI pass's gaps are filled or assigned to a stage, and the findings are reviewed.
+
+## 4. Stages 1 to 4
+
+[#8's plan](pr8-plan.md) holds them, unchanged, in its [§ 6](pr8-plan.md#6-stage-1-the-schema) to [§ 9](pr8-plan.md#9-stage-4-the-screens), each with its acceptance checks, and [its § 1's table](pr8-plan.md#what-7-moved-here) names the stage for each of #7's items. Read "PR #8" there as the stage's own pull request. What changed since it was written:
+- **The chat's row is done,** apart from stage 0.
+- **Stage 1 starts with the design comment** ([#8's plan § 6](pr8-plan.md#6-stage-1-the-schema), step 1), which settles [its § 13's points](pr8-plan.md#13-design-points-to-settle-in-stage-1s-comment) before any migration.
+- **Stage 3 builds on the chat's turn,** `execute-space-chat-turn.ts`, instead of a new one. The grants for the conversation's audience, the tools and *Run space data* go into it.
+- **Stage 4's walkthrough** puts its shots under `docs/screenshots/`, in the stage's own folder.
+
+Each stage's pull request merges when that stage's checks pass.
+
+## 5. Stage 5: ready for a first host
+
+- **The adversarial test** over #7, #8 and stages 0 to 4 (#7's item 24).
+- **A clean install:** a new database gets the app through `mj app install`, which runs migrations only, and both harnesses pass on it.
+- **The release's metadata migration and the PostgreSQL migrations,** made by the build engineer at release from a clean database. Neither is hand-written in a feature pull request.
+- **The wrap-up** (#7's item 52): the README, `docs/HOW_THE_SYSTEM_WORKS.md`, the extensibility plan and each package's README, current.
+- **Amith's calls:** who owns the app, and its license and publish path (the plan's open decisions 1 and 2).
+
+## 6. After MJ#4789 ships: views and dashboards with properties
+
+Colin builds [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789): A14 to A17, A18 and A19. Its core is **properties on MemberJunction's user views and user dashboards.**
+- **A space binds them.** A view's or dashboard's properties take their values from the space: its anchor, its own fields, or who is asking. Neither the person nor an agent can see or change a bound value, and the server sets it on every run.
+- **So one native view or dashboard serves every space of a type,** each showing only its own data. A chapter type's *Chapter Members* dashboard, for instance, shows each chapter's space its own members, already filtered, and nothing else.
+- **Dashboards embed in a space,** on its data tab or its Overview. These are the user dashboards people build in MemberJunction's Data Explorer. Properties make each one reusable in any context that binds them.
+- **Skip's generated components stay an option** beside them, where a view or dashboard isn't enough.
+
+When a release carries MJ#4789, a pull request pins it and opens the grants [#8's plan § 4](pr8-plan.md#4-what-it-depends-on) holds closed. The plan's § 10 rows 13, 15, 16 and 19 then pass open, with row 23's approved side and row 24 on a view. A19 also closes a gap the chat has today: until it ships, someone with a contributing seat can save a message in a space's conversation as someone else, or as the agent.
+
+## 7. The rest of the plan
+
+After stage 5, in [the plan's § 9](plan.md#9-sequencing) order. Most of it needs MemberJunction core work first, as A items in their own pull requests:
+- **Provenance:** A1 to A4, and B4, receipts in the UI.
+- **Audience:** A5 to A7 and A11; the rest of B2 (B2.3 to B2.6), B3's posting and sealing, B9 (outside participants and identity) and B10 (exposure and hygiene).
+- **Reach:** A8 to A10; B5 (the space agent outside the portal, over MCP, Slack and Teams), B6 (digests and subscriptions), B7 (proposed posts), and building `SyncSeats` (#7's item 39).
+- **Breadth:** the rest of A12; B11 (PostgreSQL), B12 (embedding and cohorts), B13 (the remaining UX slices) and slice A's data (#7's item 50).
+- **Meetings:** workstream T in bizapps-tasks, then B23 (meetings in spaces), then C4 (Committees on Collaboration, in a major version).
+
+## 8. What holds throughout
+
+- **The agent always runs in the scope of the person who asked.** Every turn, from a conversation, the ask box or a tool, has its search, knowledge, tools and every other input bound on the server to what that person may reach, and in a shared conversation to what everyone in it may reach. Nothing the browser or the model supplies widens it. The plan's [§ 5.3](plan.md#53-what-an-agent-may-use) says how. #8's chat does it with a required `Audience` the server derives, and each stage keeps it true for what it adds: grants, bindings and *Run space data*.
+- **Retrieval is MemberJunction's to improve.** Search, audience bounding, knowledge sources and the rest of retrieval (RAG) change in MemberJunction core, in MJ's own pull requests, so every MemberJunction app gets the improvement. Colin leads that work. Collaboration uses it, and says what it needs.
+- **The UI comes last in each stage** (D16), and MJ's own components are used as they are (D15).
+
+## 9. Rules for the work
+
+[#8's plan § 12](pr8-plan.md#12-rules-for-the-work) holds. #8's reviews found the same mistakes coming back, so these are added, and each push's comment reports on them:
+- **No `sync` blocks, and no churn in `metadata/`.** `mj sync push` writes `sync` blocks back and drops each file's final newline. After a push, run `node scripts/strip-sync-blocks.mjs`, restore the newlines, and check that `git diff` shows only the change you meant.
+- **Test code stays in the harness.** Nothing in `metadata/`, a shipped package or the world loader changes a shipped row for a test. A test-only agent is its own row, in the harness's metadata, with a `uuidgen` ID.
+- **A test calls the code it tests,** and fails when that code is deleted.
+- **Every `Save()` and `Delete()` is checked,** in tests and cleanup too, and cleanup asserts that what it removed is gone. A check that leaves rows behind breaks the next run.
+- **Only MemberJunction's semantic tokens.** `node scripts/check-mj-tokens.mjs` checks the names, and no hex goes outside a `var()` fallback.
+- **Nothing environment-specific** in code, documents or seeds: no real accounts, hosts or database names. The walkthrough's login comes from its environment.
+- **Each push's comment reports evidence, not intent:** CI's result on the head, each package's `pnpm test` count from a clean copy, both harnesses' tallies after a purge and a fresh load, and the screenshots committed in the branch. The review checks each claim against the code.
+
+## 10. Day one
+
+1. **Read,** in this order: this plan; [#8's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/8#issuecomment-5881431958); the plan's [§ 3.5](plan.md#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings) (D26 to D35), [§ 3.6](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat) (D38), [§ 5](plan.md#5-the-security-doctrine) and [§ 9](plan.md#9-sequencing); [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md); [#8's plan](pr8-plan.md) § 4, § 6 and § 12; [how the system works](../docs/HOW_THE_SYSTEM_WORKS.md); and the repo's `CLAUDE.md`.
+2. **Check out** PR 9's branch, `claude/hopeful-bell-6ldk4v`, and set it up as the README's [*Develop it*](../README.md#develop-it) says, against MJ `next` until the pin.
+3. **Load the world** ([the data guide](../docs/reviewing-the-data.md)) from a purge, run both harnesses, and post the tallies and each package's `pnpm test` count as PR 9's first comment. They're the baseline every punch list compares against.
+4. **Start stage 0:** the pin if the release is out, and the review's items, the UI pass and the extension model either way.
