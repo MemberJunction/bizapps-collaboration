@@ -256,7 +256,7 @@ export interface CollabUploadSubmitPayload {
     .overlay {
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.45);
+      background: var(--mj-bg-overlay);
       backdrop-filter: blur(2px);
       display: flex;
       align-items: center;
@@ -472,8 +472,8 @@ export interface CollabUploadSubmitPayload {
       border-radius: 4px;
     }
     .btn-clear:hover {
-      color: #ef4444;
-      background: rgba(239, 68, 68, 0.1);
+      color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
     }
     .band-options {
       display: flex;

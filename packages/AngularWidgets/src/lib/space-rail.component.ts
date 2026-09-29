@@ -327,7 +327,7 @@ interface SpaceNavPref {
         <div class="tree-list">
           @for (s of visibleSpaces; track s.id) {
             <div
-              class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ s.id === ActiveSpaceId ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
+              class="tree-item {{ s.level === 1 ? 'l1' : s.level === 2 ? 'l2' : '' }} {{ IsActiveSpace(s.id) ? 'active' : '' }} {{ s.isDim ? 'dim' : '' }}"
               [mjClickable]="s.name"
               [attr.aria-expanded]="s.hasChildren ? isNodeExpanded(s) : null"
               (keydown.arrowright)="onArrowRight(s, $event)"
@@ -484,7 +484,7 @@ interface SpaceNavPref {
       height: 32px;
       border-radius: 8px;
       background: linear-gradient(135deg, var(--mj-brand-secondary, #0891b2), var(--mj-brand-primary, #0076b6));
-      color: #ffffff;
+      color: var(--mj-text-inverse);
       display: grid;
       place-items: center;
       font-size: 14px;
@@ -939,6 +939,11 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() ActiveConversationId = '';
 
   /** The URL keeps the casing it was given and the rows keep the database's, so compare IDs, never strings. */
+  /** Whether the tree row is the open space. Ids are compared as UUIDs: the URL keeps the casing it was given. */
+  public IsActiveSpace(spaceId: string): boolean {
+    return !!this.ActiveSpaceId && UUIDsEqual(spaceId, this.ActiveSpaceId);
+  }
+
   public IsActiveConversation(conversationId: string): boolean {
     return !!this.ActiveConversationId && UUIDsEqual(this.ActiveConversationId, conversationId);
   }

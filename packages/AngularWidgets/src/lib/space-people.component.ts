@@ -248,9 +248,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         font-weight: 700;
         color: var(--mj-text-primary, #0f172a);
       }
-      .metric-num.team { color: #475569; }
+      .metric-num.team { color: var(--mjc-team); }
       .metric-num.outside { color: var(--mjc-shared, #0076b6); }
-      .metric-num.active { color: #10b981; }
+      .metric-num.active { color: var(--mj-status-success); }
       .metric-lbl {
         font-size: 13px;
         color: var(--mj-text-secondary, #64748b);
@@ -311,7 +311,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         align-items: center;
         gap: 6px;
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 7px 16px;
         border-radius: 6px;
@@ -362,7 +362,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .send-invite-btn {
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 6px 16px;
         border-radius: 4px;
@@ -465,11 +465,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         padding: 2px 8px;
         border-radius: 4px;
       }
-      .role-chip.owner { background: #ede9fe; color: #6d28d9; }
-      .role-chip.admin { background: #e0f2fe; color: #0284c7; }
-      .role-chip.member { background: #f1f5f9; color: #475569; }
-      .role-chip.client-member, .role-chip.client-admin { background: #fef3c7; color: #b45309; }
-      .role-chip.guest { background: #f3f4f6; color: #6b7280; }
+      .role-chip.owner { background: color-mix(in srgb, var(--mj-brand-accent) 15%, var(--mj-bg-surface)); color: var(--mj-brand-accent); }
+      .role-chip.admin { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+      .role-chip.member { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+      .role-chip.client-member, .role-chip.client-admin { background: var(--mjc-shared-bg); color: var(--mjc-shared); }
+      .role-chip.guest { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
 
       .status-pill {
         display: inline-flex;
@@ -483,12 +483,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         height: 6px;
         border-radius: 50%;
       }
-      .status-pill.active { color: #16a34a; }
-      .status-pill.active .dot { background: #16a34a; }
-      .status-pill.invited { color: #d97706; }
-      .status-pill.invited .dot { background: #d97706; }
-      .status-pill.removed { color: #94a3b8; }
-      .status-pill.removed .dot { background: #94a3b8; }
+      .status-pill.active { color: var(--mj-status-success); }
+      .status-pill.active .dot { background: var(--mj-status-success); }
+      .status-pill.invited { color: var(--mj-status-warning); }
+      .status-pill.invited .dot { background: var(--mj-status-warning); }
+      .status-pill.removed { color: var(--mj-text-disabled); }
+      .status-pill.removed .dot { background: var(--mj-text-disabled); }
 
       .date-text {
         font-size: 12px;

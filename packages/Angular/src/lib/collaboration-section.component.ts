@@ -10,11 +10,12 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
-import { applySettingsChanges, buildSettingsModel, SettingsSession } from './logic/settings-model.js';
+import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
 import { SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
 import { accessChain, nearestSeats } from './logic/reached-people.js';
@@ -101,6 +102,9 @@ interface RawSpaceRecord {
     ClosedAt?: mjBizAppsCollaborationSpaceEntity['ClosedAt'];
     OwnerID?: mjBizAppsCollaborationSpaceEntity['OwnerID'];
 }
+
+/** What the load-error page says: the cause goes to the log, not to the person. */
+const LOAD_FAILED_MESSAGE = "Collaboration couldn't load your spaces. Please try again.";
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 function isValidUuid(id?: string | null): boolean {
@@ -217,8 +221,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             width: 52px;
             height: 52px;
             border-radius: 12px;
-            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-            color: #ffffff;
+            background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
+            color: var(--mj-text-inverse);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -298,7 +302,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             width: 38px;
             height: 38px;
             border-radius: 8px;
-            color: #ffffff;
+            color: var(--mj-text-inverse);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -385,17 +389,17 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            color: #ffffff;
+            color: var(--mj-text-inverse);
             flex-shrink: 0;
         }
         .header-icon-box.inbox {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            background: var(--mj-status-warning);
         }
         .header-icon-box.tasks {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--mj-status-success);
         }
         .header-icon-box.files {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            background: var(--mj-brand-accent);
         }
         .view-title {
             margin: 0;
@@ -548,6 +552,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                         <i class="fa-solid fa-triangle-exclamation"></i>
                         <h3>Error Loading Workspace</h3>
                         <p>{{ loadErrorMessage }}</p>
+                        <button mjButton variant="primary" size="md" (click)="onRetryLoad()">Try again</button>
                     </div>
                 } @else if (!hasAccess) {
                     <mjc-no-access [Seats]="seats" />
@@ -803,6 +808,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                     </mjc-space-header>
 
                                     <div class="content-area">
+                                        @if (isLoadingSpace) {
+                                            <mj-loading text="Loading space..."></mj-loading>
+                                        } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
                                                 <mjc-space-overview
@@ -968,6 +976,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 />
                                             }
                                         }
+                                        }
                                     </div>
                                 }
                             }
@@ -1103,7 +1112,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public spaceTypeName = '';
     public spaceStatus = '';
     public spaceSubtitle = '';
-    public headerTypeColor = '#0076b6';
+    public headerTypeColor = '';
     public headerTypeIcon = 'fa-solid fa-compass';
     public headerBackgroundImageUrl: string | null = null;
     public headerStaffAvatars: AvatarItem[] = [];
@@ -1320,7 +1329,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
-                    color: s.Color || t?.color || '#0076b6',
+                    color: s.Color || t?.color || '',
                 };
             });
     }
@@ -1368,7 +1377,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
-                    color: s.Color || t?.color || '#0076b6',
+                    color: s.Color || t?.color || '',
                     parentName: parent?.Name,
                 };
             });
@@ -1403,7 +1412,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         spaceType: '',
         spaceTypeId: '',
         iconClass: 'fa-solid fa-compass',
-        color: '#0076b6',
+        color: DEFAULT_TYPE_COLOR,
         backgroundImageUrl: '',
         inheritsMembership: true,
         agentRetrieval: 'Included',
@@ -1423,6 +1432,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return p;
         }
         throw new Error('Current provider does not implement GraphQLExecutor (missing ExecuteGQL)');
+    }
+
+    /** With no visible space, the caller's own seats say why: an invite waiting, or a seat that was removed. */
+    private async loadOwnSeats(rv: RunView): Promise<void> {
+        const userId = this.ProviderToUse.CurrentUser?.ID;
+        if (!userId) return;
+        try {
+            const res = await rv.RunView<{ Space?: string | null; Status: string }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `UserID = '${userId}'`,
+                ResultType: 'simple',
+                MaxRows: 50,
+            });
+            if (!res.Success) {
+                LogError(`Failed to load the caller's own seats: ${res.ErrorMessage ?? 'unknown error'}`);
+                return;
+            }
+            this.seats = (res.Results ?? []).map(seat => ({ spaceName: seat.Space ?? '', status: seat.Status }));
+        } catch (err) {
+            LogError(`Error loading the caller's own seats: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** The load-error page's Retry: read everything again. */
+    public onRetryLoad(): void {
+        this.isLoading = true;
+        this.loadErrorMessage = '';
+        this.RefreshView();
+        void this.loadRealData();
     }
 
     protected async loadRealData(): Promise<void> {
@@ -1453,9 +1491,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
             const spEntity = md.EntityByName('MJ_BizApps_Collaboration: Spaces');
             if (!spEntity) {
-                const msg = 'Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces';
-                LogError(msg);
-                this.loadErrorMessage = msg;
+                LogError('Metadata lookup failed for entity MJ_BizApps_Collaboration: Spaces');
+                this.loadErrorMessage = LOAD_FAILED_MESSAGE;
                 this.hasAccess = false;
                 return;
             }
@@ -1467,7 +1504,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             for (const t of CollaborationEngineBase.Instance.SpaceTypes) {
                 this.spaceTypeMap.set(t.ID, {
                     icon: t.IconClass || 'fa-solid fa-compass',
-                    color: t.Color || '#0076b6',
+                    color: t.Color || '',
                     name: t.Name,
                 });
             }
@@ -1491,17 +1528,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     await this.applyQueryParams(params);
                 } else {
                     this.hasAccess = false;
+                    await this.loadOwnSeats(rv);
                 }
             } else {
-                const msg = spacesRes?.ErrorMessage || 'Failed to query collaboration spaces';
-                LogError(msg);
-                this.loadErrorMessage = msg;
+                LogError(spacesRes?.ErrorMessage || 'Failed to query collaboration spaces');
+                this.loadErrorMessage = LOAD_FAILED_MESSAGE;
                 this.hasAccess = false;
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error loading collaboration data: ' + msg);
-            this.loadErrorMessage = 'Error loading collaboration data: ' + msg;
+            this.loadErrorMessage = LOAD_FAILED_MESSAGE;
             this.hasAccess = false;
         } finally {
             this.isLoading = false;
@@ -1523,7 +1560,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             nodes.push({
                 id: space.ID,
                 name: space.Name,
-                color: space.Color || typeDef?.color || '#0076b6',
+                color: space.Color || typeDef?.color || '',
                 iconClass: space.IconClass || typeDef?.icon || 'fa-solid fa-compass',
                 level,
                 hasChildren: children.length > 0,
@@ -1543,8 +1580,25 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     private _loadedSpaceId: string | null = null;
 
+    /** True while a selection reads its space: the content area shows a loader instead of the last space's lists. */
+    private readonly selectionLoading = new LoadingFlag();
+    public get isLoadingSpace(): boolean {
+        return this.selectionLoading.Active;
+    }
+
     private async selectSpaceInternal(spaceId: string): Promise<void> {
         const requestId = ++this.selectSpaceRequestId;
+        const endLoading = this.selectionLoading.Begin();
+        this.RefreshView();
+        try {
+            await this.selectSpaceBody(spaceId, requestId);
+        } finally {
+            endLoading();
+            this.RefreshView();
+        }
+    }
+
+    private async selectSpaceBody(spaceId: string, requestId: number): Promise<void> {
         this.activeSpaceId = spaceId;
         this._loadedSpaceId = spaceId;
         this.activeConversationId = '';
@@ -1583,12 +1637,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceTasks = [];
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
-        // The last space's save message must not greet the next space's Settings
-        this.settingsSaveSuccess = '';
-        this.settingsInfoMessage = '';
-        // The next space has no drawer: what the last one showed is closed, and its item leaves the URL
-        this.isDrawerOpen = false;
-        this.selectedItemId = null;
+        // The last space's save message must not greet the next space's Settings, its drawer is closed, and both bands start narrow
+        Object.assign(this, freshSelectionState());
+        this.overviewSubSpaces = [];
+        // The header shows the space's own name at once, from what is already loaded
+        const cachedSpace = this.rawSpaces.find(sp => UUIDsEqual(sp.ID, spaceId));
+        if (cachedSpace) {
+            this.spaceTitle = cachedSpace.Name;
+            this.spaceSubtitle = cachedSpace.Description || '';
+            this.spaceStatus = cachedSpace.ClosedAt ? 'Closed' : 'Active';
+            this.headerBackgroundImageUrl = cachedSpace.BackgroundImageURL || null;
+        }
         this.previewRecentUses = [];
         this.previewMeta = '';
         this.previewBandLabel = '';
@@ -1638,7 +1697,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceStatus = space.ClosedAt ? 'Closed' : 'Active';
         this.spaceTypeName = resolvedType || 'Unknown Type';
         this.headerTypeIcon = space.IconClass || typeDef?.icon || 'fa-solid fa-compass';
-        this.headerTypeColor = space.Color || typeDef?.color || '#0076b6';
+        this.headerTypeColor = space.Color || typeDef?.color || '';
         this.headerBackgroundImageUrl = space.BackgroundImageURL || null;
 
         // Build breadcrumb lineage
@@ -1663,7 +1722,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 name: c.Name,
                 type: subType || 'Unknown Type',
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
-                color: c.Color || cType?.color || '#0076b6',
+                color: c.Color || cType?.color || '',
                 description: c.Description || '',
             };
         });
@@ -2151,6 +2210,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.headerStaffAvatars = [];
                 this.headerOutsideAvatars = [];
                 this.headerAudienceSummary = '';
+                this.spaceAudienceBand = 'Team'; // no band is claimed when the seats could not be read
                 return;
             }
             if (membersRes.Results) {

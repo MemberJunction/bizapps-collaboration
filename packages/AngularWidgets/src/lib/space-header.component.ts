@@ -8,7 +8,7 @@ import { BreadcrumbItem } from './types';
   standalone: true,
   imports: [CommonModule, CollabTypeTileComponent],
   template: `
-    <section class="space-head" [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, rgba(255,255,255,0.88), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
+    <section class="space-head" [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
       @if (Breadcrumbs && Breadcrumbs.length > 0) {
         <div class="crumbs">
           @for (c of Breadcrumbs; track c.label; let last = $last) {

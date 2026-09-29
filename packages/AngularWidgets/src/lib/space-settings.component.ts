@@ -99,7 +99,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   type="text"
                   class="form-input color-text"
                   [(ngModel)]="formData.color"
-                  placeholder="#0076b6"
+                  placeholder="#RRGGBB"
                 />
               </div>
             </div>
@@ -272,7 +272,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         align-items: center;
         gap: 6px;
         background: var(--mj-brand-primary, #0076b6);
-        color: #ffffff;
+        color: var(--mj-text-inverse);
         border: none;
         padding: 8px 20px;
         border-radius: 6px;
@@ -352,7 +352,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-brand-primary, #0076b6);
       }
       .section-ic.ai-ic {
-        color: #6366f1;
+        color: var(--mjc-ai-to);
       }
       .card-title {
         font-size: 15px;

@@ -2,6 +2,9 @@ import type { SpaceSettingsModel } from '@mj-biz-apps/collaboration-ng-widgets';
 import type { mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 
 /** The columns of a space the Settings screen reads and writes. */
+/** The colour a space shows in the settings colour input when neither it nor its type has one. The input needs a hex value. */
+export const DEFAULT_TYPE_COLOR = '#0076b6'; // hex-ok: the colour input's default, the one place a hex is required
+
 export interface SettingsSpaceRow {
     ID: string;
     Name: string;
@@ -34,7 +37,7 @@ export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeIn
         spaceType: type.name || 'Unknown Type',
         spaceTypeId: space.SpaceTypeID,
         iconClass: space.IconClass || type.icon || 'fa-solid fa-compass',
-        color: space.Color || type.color || '#0076b6',
+        color: space.Color || type.color || DEFAULT_TYPE_COLOR,
         backgroundImageUrl: space.BackgroundImageURL || '',
         inheritsMembership: space.InheritsMembership === true,
         agentRetrieval: space.AgentRetrieval || 'Included',
