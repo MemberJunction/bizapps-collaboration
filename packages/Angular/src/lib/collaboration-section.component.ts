@@ -23,6 +23,7 @@ import { settingsAccess, type SettingsAccess } from './logic/settings-access.js'
 import { countLabel, countText, invitationRows, taskRows, type HomeListKind, type HomeRowModel } from './logic/home-lists.js';
 import { NewSpaceDraft, SpaceDetails } from './logic/space-details.js';
 import { planDetailsView, type DetailsViewModel } from './logic/details-view.js';
+import { NewSpacePicks } from './logic/new-space-picks.js';
 import { SpaceDetailsViewComponent } from './space-details-view.component';
 import { newSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
@@ -929,7 +930,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     <div mjcAbout style="display: contents">
                                                         @if (spaceDetails; as details) {
                                                             @if (detailsView; as view) {
-                                                                <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [EditMode]="false" />
+                                                                <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [FormSections]="view.formSections" [EditMode]="false" />
                                                             }
                                                         }
                                                     </div>
@@ -1097,6 +1098,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                     [Presentation]="view.presentation"
                                                                     [Fields]="view.fields"
                                                                     [Component]="view.component"
+                                                                    [FormSections]="view.formSections"
                                                                     [EditMode]="settingsAccessNow.canEdit && !isSavingDetails"
                                                                     (Changed)="onDetailChanged()"
                                                                 />
@@ -1174,6 +1176,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 [Presentation]="view.presentation"
                                                 [Fields]="view.fields"
                                                 [Component]="view.component"
+                                                [FormSections]="view.formSections"
                                                 [EditMode]="!isCreatingSpace"
                                                 (Changed)="onNewSpaceDetailChanged()"
                                             />
@@ -1276,8 +1279,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** How the details of the kind chosen are drawn, or null when it has none. */
     public newSpaceView: DetailsViewModel | null = null;
     public newSpaceDetailsTitle = 'Details';
-    /** Counts the kinds picked, so a draft that finishes after a later pick is dropped. */
-    private newSpacePick = 0;
+    /** The kinds picked: only the latest pick's draft may reach the screen. */
+    private readonly newSpacePicks = new NewSpacePicks(new LatestOnly());
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
     public composerDraft: string | null = null;
@@ -2365,6 +2368,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const view = details && this.uiContext
                 ? await planDetailsView({
                     fields: details.Fields,
+                    formSections: details.FormSections,
                     descriptor: this.detailsDescriptor(this.uiDriver, this.uiContext, details.Leaf.EntityInfo.Name),
                     hasForm: () => this.hasFormFor(details.Leaf),
                 })
@@ -3564,7 +3568,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** Starts the dialog from nothing. A draft still being made from an earlier opening is dropped when it finishes. */
     private resetNewSpace(): void {
-        this.newSpacePick += 1;
+        this.newSpacePicks.Reset();
         this.newSpaceTypeId = '';
         this.newSpaceDraft = null;
         this.newSpaceView = null;
@@ -3586,28 +3590,30 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const type = CollaborationEngineBase.Instance.SpaceTypeById(typeId);
         const user = this.currentUser;
         if (!type || !user) return;
-        const pick = ++this.newSpacePick;
         this.newSpaceError = '';
-        try {
+        const outcome = await this.newSpacePicks.Pick(async () => {
             const draft = await NewSpaceDraft.Start(this.ProviderToUse, user, type);
             const driver = this.uiDriverFor(type.UIDriverClass, type.Code, `a new ${type.Name} space`, `driver:new:${type.ID}`);
             const ctx: SpaceUIContext = { space: null, type, spaceTypeCode: type.Code, viewer: user, rules: structuredClone(DEFAULT_SPACE_RULES) };
             const view = await planDetailsView({
                 fields: draft.DetailFields,
+                formSections: draft.FormSections,
                 descriptor: draft.HasDetails ? this.detailsDescriptor(driver, ctx, draft.Leaf.EntityInfo.Name) : undefined,
                 hasForm: () => this.hasFormFor(draft.Leaf),
             });
-            if (pick !== this.newSpacePick) return;
-            this.newSpaceDraft = draft;
-            this.newSpaceView = view;
-            this.newSpaceTypeId = type.ID;
-            this.newSpaceDetailsTitle = `${type.Name} details`;
-            this.newSpaceDetailsIncomplete = draft.MissingDetails().length > 0;
-        } catch (err) {
-            if (pick !== this.newSpacePick) return;
-            const msg = err instanceof Error ? err.message : String(err);
+            return { draft, view };
+        });
+        if (outcome.status === 'stale') return;
+        if (outcome.status === 'failed') {
+            const msg = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
             LogError(`Could not start a ${type.Name} space: ${msg}`);
             this.newSpaceError = `Could not start a ${type.Name} space: ${msg}`;
+        } else {
+            this.newSpaceDraft = outcome.value.draft;
+            this.newSpaceView = outcome.value.view;
+            this.newSpaceTypeId = type.ID;
+            this.newSpaceDetailsTitle = `${type.Name} details`;
+            this.newSpaceDetailsIncomplete = outcome.value.draft.MissingDetails().length > 0;
         }
         this.RefreshView();
     }

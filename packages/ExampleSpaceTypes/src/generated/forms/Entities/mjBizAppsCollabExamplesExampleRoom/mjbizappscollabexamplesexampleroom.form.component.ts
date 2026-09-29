@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types';
+import { mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types/entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
@@ -15,7 +15,8 @@ export class mjBizAppsCollabExamplesExampleRoomFormComponent extends BaseFormCom
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'dealDetails', sectionName: 'Deal Details', isExpanded: true }
         ]);
     }
 }

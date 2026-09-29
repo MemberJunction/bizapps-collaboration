@@ -1,0 +1,22 @@
+{
+  "entity": "MJ: Entity Fields",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".entity-fields.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "EntityID IN (SELECT ID FROM __mj.Entity WHERE SchemaName = '__mj_BizAppsCollabExamples') AND Category IS NOT NULL",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {},
+    "relatedEntities": {}
+  }
+}

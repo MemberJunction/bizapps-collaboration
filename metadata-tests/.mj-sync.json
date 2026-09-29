@@ -5,6 +5,7 @@
   },
   "directoryOrder": [
     "entity-permissions",
+    "entity-fields",
     "agents",
     "space-types",
     "tests",

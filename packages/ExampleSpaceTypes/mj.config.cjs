@@ -17,7 +17,7 @@ module.exports = {
     process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
   coreSchema: process.env.MJ_CORE_SCHEMA || '__mj',
 
-  entityPackageName: '@mj-biz-apps/collaboration-example-space-types',
+  entityPackageName: '@mj-biz-apps/collaboration-example-space-types/entities',
 
   // Declares ExampleBoard and ExampleRoom as IsA children of Spaces
   additionalSchemaInfo: './codegen-schema-info.json',

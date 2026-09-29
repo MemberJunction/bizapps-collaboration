@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { detailFields, missingDetails, visibleDetailFields, type DetailFieldShape } from './detail-fields.ts';
+import { detailFields, missingDetails, sectionKeyOf, sectionKeyOfCategory, subtypeFormSections, visibleDetailFields, type DetailFieldShape, type FieldSectionShape } from './detail-fields.ts';
 
 const field = (over: Partial<DetailFieldShape> & { Name: string }): DetailFieldShape => ({
     DisplayName: over.Name, IsPrimaryKey: false, IsVirtual: false, AllowUpdateAPI: true, AllowsNull: true, DefaultValue: null, Sequence: 10, ...over,
@@ -56,5 +56,48 @@ describe("a space subtype's own details", () => {
         const all = detailFields(fields, parentNames);
         assert.deepEqual(visibleDetailFields(all, ['meetingcadence', 'TermName']).map((f) => f.name), ['TermName', 'QuorumPercentage']);
         assert.deepEqual(visibleDetailFields(all, undefined).map((f) => f.name), ['TermName', 'QuorumPercentage', 'MeetingCadence']);
+    });
+});
+
+describe("a subtype's generated form", () => {
+    const col = (Name: string, over: Partial<FieldSectionShape> = {}): FieldSectionShape => ({ Name, IsPrimaryKey: false, Category: null, GeneratedFormSection: 'Details', IncludeInGeneratedForm: true, ...over });
+    const own = new Set(['TermName', 'Cadence']);
+
+    it('is keyed the way CodeGen keys a section: the category in camel case, or details', () => {
+        assert.equal(sectionKeyOfCategory('Board Details'), 'boardDetails');
+        assert.equal(sectionKeyOfCategory('Deal & Stage 2'), 'dealStage2');
+        assert.equal(sectionKeyOfCategory('2026 Term'), '_2026Term');
+        assert.equal(sectionKeyOf(col('X', { Category: 'Board Details', GeneratedFormSection: 'Category' })), 'boardDetails');
+        assert.equal(sectionKeyOf(col('X')), 'details');
+        assert.equal(sectionKeyOf(col('X', { GeneratedFormSection: 'Top' })), null);
+        assert.equal(sectionKeyOf(col('X', { IncludeInGeneratedForm: false })), null);
+        assert.equal(sectionKeyOf(col('X', { Category: '  ', GeneratedFormSection: 'Category' })), null);
+    });
+
+    it("can be shown on its own when the subtype's columns are in sections that hold none of the space's", () => {
+        const fields = [
+            col('ID', { IsPrimaryKey: true }),
+            col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' }),
+            col('Cadence', { Category: 'Board Details', GeneratedFormSection: 'Category' }),
+            col('Name'),
+            col('OwnerID'),
+            col('__mj_CreatedAt'),
+        ];
+        assert.deepEqual(subtypeFormSections(fields, own), ['boardDetails']);
+    });
+
+    it("can be shown on several sections, each the subtype's alone", () => {
+        const fields = [col('TermName', { Category: 'Term', GeneratedFormSection: 'Category' }), col('Cadence', { Category: 'Meetings', GeneratedFormSection: 'Category' }), col('Name')];
+        assert.deepEqual(subtypeFormSections(fields, own), ['meetings', 'term']);
+    });
+
+    it("cannot when a subtype column shares a section with the space's own (nobody gave it a category), or none is on the form", () => {
+        assert.equal(subtypeFormSections([col('TermName'), col('Cadence'), col('Name')], own), null);
+        assert.equal(subtypeFormSections([col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' }), col('Cadence'), col('Name')], own), null);
+        assert.equal(subtypeFormSections([col('TermName', { IncludeInGeneratedForm: false }), col('Name')], own), null);
+    });
+
+    it('ignores the key: it is on no section of the form', () => {
+        assert.deepEqual(subtypeFormSections([col('ID', { IsPrimaryKey: true }), col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' })], new Set(['TermName'])), ['boardDetails']);
     });
 });

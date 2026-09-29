@@ -555,7 +555,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     /** Tells the drivers what happened. Each reaction has its own `try`, so a failing driver doesn't silence the next. */
-    private async react(user: UserInfo, decided: SpaceChangeReading): Promise<void> {
+    private async react(user: UserInfo, decided: SpaceChangeReading, tell: 'all' | 'own' = 'all'): Promise<void> {
         const base = { actingUser: user, provider: this.ProviderToUse, effectiveRules: ResolveSpaceRules(null, null) };
         // The type code is set once a reaction has resolved its type, so a failure after that names it; before that it says so
         let typeCode: string | undefined;
@@ -573,6 +573,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
             await driver.OnSpaceChanged({ ...base, space: this, spaceType, subtypeEntityName: subtypeOf(spaceType), kind: decided.spaceKind, oldValues: decided.oldValues });
         });
+        if (tell === 'own') return;
         const parentId = getFieldVal<string | null>(this, 'ParentID');
         if (parentId) {
             await attempt('OnChildSpaceChanged', async () => {
@@ -685,22 +686,28 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         return super.Delete(options);
     }
 
+    /** What the subtype's own columns held before this save, by name: only the columns that changed. Empty when nothing did. */
+    private subtypeOldValues(): Record<string, unknown> {
+        const oldValues: Record<string, unknown> = {};
+        // The subtype is not reachable from a parent its own save made: no old values are known
+        if (this.LeafEntity === this) return oldValues;
+        for (const field of this.LeafEntity.Fields) {
+            if (field.Dirty && !field.Name.startsWith('__mj_')) oldValues[field.Name] = field.OldValue;
+        }
+        return oldValues;
+    }
+
     /**
      * The space's rules for a change, for a save whose only change is in its subtype's own columns (MJ validates a parent only when
      * the parent itself changed): the right that Settings asks for, and the type's driver, told the subtype's old values.
      */
-    private async refuseSubtypeOnlyChange(user: UserInfo): Promise<string | null> {
+    private async refuseSubtypeOnlyChange(user: UserInfo, oldValues: Record<string, unknown>): Promise<string | null> {
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
         if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
             return "Space change refused: changing a space's details needs the 'Configure Spaces' authorization and an owner seat on the space.";
         }
         const resolved = await resolveSpaceDriver(this, this.ProviderToUse, user, this.ID);
         if (!resolved.ok) return resolved.message;
-        const leaf = this.LeafEntity;
-        const oldValues: Record<string, unknown> = {};
-        for (const field of leaf.Fields) {
-            if (field.Dirty && !field.Name.startsWith('__mj_')) oldValues[field.Name] = field.OldValue;
-        }
         return refusalOf(await resolved.call.driver.ValidateSpaceChange({ ...resolved.call.base, kind: 'Update', oldValues }));
     }
 
@@ -726,9 +733,15 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const structureChanged = parentChanged || inheritsChanged;
 
         // A subtype's own columns can change with the space itself untouched: MJ then saves the space first and skips its validation,
-        // so the space's rules for a change are applied here
-        if (this.savingAsSubtype && this.IsSaved && !own.changed && signedIn) {
-            const refusal = await this.refuseSubtypeOnlyChange(signedIn);
+        // so the space's rules for a change are applied here. MJ saves the parent chain whether or not the subtype is dirty. When the
+        // subtype is in reach (it was loaded through the space) a save that changes nothing has nothing to judge, and nobody is asked
+        // or told. When it is not (the subtype's own save made this space, as an API call does), its changes can't be seen from here,
+        // so the save is judged as a change with no old values, as MJ gives a parent no word of its child's state (see D48).
+        const subtypeSeen = this.LeafEntity !== this;
+        const subtypeOldValues = this.savingAsSubtype && this.IsSaved && !own.changed ? this.subtypeOldValues() : null;
+        const subtypeOnlyChange = subtypeOldValues !== null && (!subtypeSeen || Object.keys(subtypeOldValues).length > 0);
+        if (subtypeOnlyChange) {
+            const refusal = signedIn ? await this.refuseSubtypeOnlyChange(signedIn, subtypeOldValues) : 'Space change refused: there is no signed-in user.';
             if (refusal) {
                 this.readingForSave = null;
                 this.savingAsSubtype = null;
@@ -825,8 +838,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 }
             }
 
-            // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+            // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it. A change to only the
+            // subtype's columns is told to the space's own driver as an Update, as it was asked: it is no child's change to the parent's.
             if (decided.changed) await this.react(user, decided);
+            else if (subtypeOnlyChange) await this.react(user, { ...decided, changed: true, spaceKind: 'Update', childKind: 'UpdateChild', oldValues: subtypeOldValues }, 'own');
 
             if (justClosed) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {

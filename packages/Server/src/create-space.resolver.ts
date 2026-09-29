@@ -52,9 +52,9 @@ export class CreateSpaceResolver extends ResolverBase {
             const result = await createSpace(provider, user, { TypeID: input.TypeID, Name: input.Name, Description: input.Description, Details: details });
             return result.status === 'created' ? { Success: true, SpaceID: result.spaceId } : { Success: false, ErrorMessage: result.message };
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            LogError(`CreateSpace failed: ${message}`);
-            return { Success: false, ErrorMessage: message };
+            // What went wrong is for the log: an unexpected error's own text is not for the browser
+            LogError(`CreateSpace failed: ${error instanceof Error ? error.message : String(error)}`);
+            return { Success: false, ErrorMessage: 'The space could not be created.' };
         }
     }
 }

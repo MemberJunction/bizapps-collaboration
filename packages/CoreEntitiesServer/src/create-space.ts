@@ -1,4 +1,4 @@
-import { EntityFieldTSType, LogError, WellKnownUserSource, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { type BaseEntity, type DatabaseProviderBase, EntityFieldTSType, LogError, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import { ownDetailFields, type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { parseUuid } from './uuid.js';
@@ -16,12 +16,6 @@ export interface CreateSpaceInput {
 
 export type CreateSpaceResult = { status: 'created'; spaceId: string } | { status: 'refused'; message: string };
 
-type TransactionalProvider = IMetadataProvider & {
-    BeginTransaction?: () => Promise<void>;
-    CommitTransaction?: () => Promise<void>;
-    RollbackTransaction?: () => Promise<void>;
-};
-
 /** Puts a value from JSON where the entity field wants it: a date field takes a Date, not its text. */
 function asFieldValue(leaf: BaseEntity, name: string, value: unknown): unknown {
     const field = leaf.EntityInfo.Fields.find((f) => f.Name === name);
@@ -34,7 +28,7 @@ function asFieldValue(leaf: BaseEntity, name: string, value: unknown): unknown {
  * subtype, when the type names one) and the seat are written together or not at all, so a failed seat leaves no space nobody is
  * seated on. The space's own rules apply as for any save: it is the person's own save, judged as they are.
  */
-export async function createSpace(provider: TransactionalProvider, user: UserInfo, input: CreateSpaceInput): Promise<CreateSpaceResult> {
+export async function createSpace(provider: DatabaseProviderBase, user: UserInfo, input: CreateSpaceInput): Promise<CreateSpaceResult> {
     const typeId = parseUuid(input.TypeID);
     if (!typeId) return { status: 'refused', message: 'Invalid space type.' };
     const name = input.Name?.trim() ?? '';
@@ -70,7 +64,7 @@ export async function createSpace(provider: TransactionalProvider, user: UserInf
         leaf.Set(field, asFieldValue(leaf, field, value));
     }
 
-    if (provider.BeginTransaction) await provider.BeginTransaction();
+    await provider.BeginTransaction();
     try {
         if (!(await leaf.Save())) {
             throw new RefusedError(leaf.LatestResult?.CompleteMessage || 'The space could not be created.');
@@ -85,10 +79,10 @@ export async function createSpace(provider: TransactionalProvider, user: UserInf
         if (!(await seat.Save())) {
             throw new RefusedError(`You could not be seated as the space's owner: ${seat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
-        if (provider.CommitTransaction) await provider.CommitTransaction();
+        await provider.CommitTransaction();
         return { status: 'created', spaceId: space.ID };
     } catch (error) {
-        if (provider.RollbackTransaction) await provider.RollbackTransaction();
+        await provider.RollbackTransaction();
         if (error instanceof RefusedError) return { status: 'refused', message: error.message };
         LogError(`createSpace failed: ${error instanceof Error ? error.message : String(error)}`);
         return { status: 'refused', message: 'The space could not be created.' };

@@ -23,7 +23,7 @@
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
     "mj:migrate:examples": "mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations",
     "mj:push": "mj sync push --dir=metadata",
-    "mj:push:tests": "mj sync push --dir=metadata-tests --include=entity-permissions && mj sync push --dir=metadata-tests --include=agents,space-types",
+    "mj:push:tests": "mj sync push --dir=metadata-tests --include=entity-permissions,entity-fields && mj sync push --dir=metadata-tests --include=agents,space-types",
     "mj:standards": "mj standards check",
     "test:e2e": "pnpm --filter @mj-biz-apps/collaboration-e2e test"
   },

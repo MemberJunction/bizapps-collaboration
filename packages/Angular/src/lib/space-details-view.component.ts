@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, type Type } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, type OnChanges, Output, type Type } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { BaseEntity } from '@memberjunction/core';
 import { BaseFormsModule, type EntityFormConfig } from '@memberjunction/ng-base-forms';
@@ -34,7 +34,7 @@ export const DETAILS_FORM_CONFIG: EntityFormConfig = {
                     }
                 }
                 @case ('form') {
-                    <mj-entity-form-host [Record]="Record" [Config]="FormConfig" [EditMode]="EditMode"></mj-entity-form-host>
+                    <mj-entity-form-host [Record]="Record" [Config]="formConfig" [EditMode]="EditMode"></mj-entity-form-host>
                 }
                 @default {
                     <div class="fields">
@@ -51,7 +51,7 @@ export const DETAILS_FORM_CONFIG: EntityFormConfig = {
         .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
     `],
 })
-export class SpaceDetailsViewComponent {
+export class SpaceDetailsViewComponent implements OnChanges {
     /** The subtype's record: the space's own record with its subtype attached, or the subtype loaded through the space. */
     @Input() public Record!: BaseEntity;
     @Input() public Presentation: DetailsPresentation = 'fields';
@@ -59,6 +59,14 @@ export class SpaceDetailsViewComponent {
     @Input() public Fields: readonly DetailField[] = [];
     @Input() public Component: Type<unknown> | null = null;
     @Input() public EditMode = false;
-    @Input() public FormConfig: EntityFormConfig = DETAILS_FORM_CONFIG;
+    /** For a form: the sections that hold only the subtype's columns. The form lays out the space's columns too, so it shows these alone. */
+    @Input() public FormSections: readonly string[] = [];
     @Output() public Changed = new EventEmitter<void>();
+
+    /** The form's config: the same object until the sections change, so the form host isn't handed a new one on every pass. */
+    public formConfig: EntityFormConfig = DETAILS_FORM_CONFIG;
+
+    public ngOnChanges(): void {
+        this.formConfig = { ...DETAILS_FORM_CONFIG, VisibleSectionKeys: [...this.FormSections] };
+    }
 }

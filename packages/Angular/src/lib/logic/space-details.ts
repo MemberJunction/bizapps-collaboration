@@ -1,6 +1,6 @@
 import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { missingDetails, visibleDetailFields, type DetailField } from '@mj-biz-apps/collaboration-core';
-import { ownDetailFields, type CreateSpaceGraphQLInput, type CreateSpaceGraphQLPayload, type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
+import { ownDetailFields, ownFormSections, type CreateSpaceGraphQLInput, type CreateSpaceGraphQLPayload, type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
 const SPACE_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 
@@ -21,11 +21,14 @@ export class NewSpaceDraft {
     public readonly Space: mjBizAppsCollaborationSpaceEntity;
     public readonly Leaf: BaseEntity;
     public readonly DetailFields: readonly DetailField[];
+    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
+    public readonly FormSections: string[] | null;
 
-    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, own: readonly DetailField[]) {
+    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, own: readonly DetailField[], sections: string[] | null) {
         this.Space = space;
         this.Leaf = leaf;
         this.DetailFields = own;
+        this.FormSections = sections;
     }
 
     /** Makes the draft for a type. A type with no subtype gives a plain space and no detail fields. */
@@ -44,7 +47,7 @@ export class NewSpaceDraft {
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];
-        return new NewSpaceDraft(space, leaf, own);
+        return new NewSpaceDraft(space, leaf, own, attached ? ownFormSections(attached) : null);
     }
 
     public get HasDetails(): boolean {
@@ -89,10 +92,13 @@ export type SaveDetailsOutcome = { ok: true } | { ok: false; message: string };
 export class SpaceDetails {
     public readonly Leaf: BaseEntity;
     public readonly Fields: readonly DetailField[];
+    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
+    public readonly FormSections: string[] | null;
 
-    private constructor(leaf: BaseEntity, fields: readonly DetailField[]) {
+    private constructor(leaf: BaseEntity, fields: readonly DetailField[], sections: string[] | null) {
         this.Leaf = leaf;
         this.Fields = fields;
+        this.FormSections = sections;
     }
 
     /** Loads a space and returns its details, or null when the space is plain (its type names no subtype) or can't be read. */
@@ -101,7 +107,7 @@ export class SpaceDetails {
         if (!(await space.Load(spaceId))) return null;
         const leaf: BaseEntity = space.LeafEntity;
         if (leaf === space) return null;
-        return new SpaceDetails(leaf, ownDetailFields(leaf));
+        return new SpaceDetails(leaf, ownDetailFields(leaf), ownFormSections(leaf));
     }
 
     /** True while a detail was changed and not saved. */

@@ -62,8 +62,8 @@ when `mj` is not on the path of the member you are in.
    pnpm run mj:migrate:examples
    ```
 
-8. **The test metadata:** `pnpm run mj:push:tests` pushes the two example entities' permissions first
-   (`metadata-tests/entity-permissions`), then the harness's stub agent and three example space types
+8. **The test metadata:** `pnpm run mj:push:tests` pushes the two example entities' permissions and the categories of their own columns first
+   (`metadata-tests/entity-permissions` and `metadata-tests/entity-fields`; the categories give each subtype's columns a section of their own in its form), then the harness's stub agent and three example space types
    (`metadata-tests/agents` and `metadata-tests/space-types`; see [reviewing the data](reviewing-the-data.md#the-test-agent)). The
    `extensions`, `subtypes` and `lifecycle` checks need the types. Then run `node scripts/strip-sync-blocks.mjs` again: it cleans
    `metadata-tests/` too.
