@@ -1,6 +1,6 @@
 # PR 9: finish the chat, then anchors, grants, data reach, notes and pins
 
-**What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.6, with its D38 to D47. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
+**What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.6, with its D38 to D48. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
 
 **Who does what.**
 - **Ian runs it,** with an AI coding agent as the builder: the builder writes the code, and Ian supervises it and decides.
@@ -39,7 +39,7 @@ It didn't start [#8's stages 1 to 4](pr8-plan.md#6-stage-1-the-schema), and of t
 
 | Stage | What | Pull request | Starts after |
 |---|---|---|---|
-| **0** | Finish the chat, on MJ `next` in a local workspace: fix #8's final review first, then walk the UI for what isn't built and test the extension model end to end, with subtypes and their screens (D42), rights by authorization (D40, D41) and Home's query (D45). It ends with a review of the findings | PR 9 | #8's merge |
+| **0** | Finish the chat, on MJ `next` in a local workspace: fix #8's final review first, then walk the UI for what isn't built and test the extension model end to end, with subtypes and their screens (D42), rights by authorization (D40, D41) and Home's query (D45). The core defects it found are fixed in one MemberJunction pull request beside it (D48). It ends with a review of the findings | PR 9 | #8's merge |
 | **1** | The schema: B14, B15, B21's and B22's tables, `DataReach`, one baseline, CI against a database | Its own | Stage 0 |
 | **2** | The server: B16, B17, B18 and B24, with [#8's plan § 4](pr8-plan.md#4-what-it-depends-on)'s grants closed | Its own | Stage 1 |
 | **3** | Agents: B20 | Its own | Stage 2 |
@@ -104,7 +104,7 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 
 ### 3.6 Where stage 0 stands
 
-At `368456e`, on 2026-09-29:
+At `fc312e0`, on 2026-09-29:
 - **#8's final review:** every item is closed but the screenshots, which wait on sign-ins for the named users.
 - **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the dialogs' last points (57), Home's counts (60), the screenshot row (70) and the hand-built controls (73).
 - **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
@@ -112,9 +112,10 @@ At `368456e`, on 2026-09-29:
   - **UI drivers' tabs and Overview cards are wired in the section,** contributions only add, and each Overview card declares its side. The page asks a driver before an invite and before a conversation starts; its other hooks (header chips and actions, settings sections, new-space steps, the details form, and the checks before a message or a new sub-space) aren't called yet;
   - **configuration works,** with `Admin.RoleNames` removed and `Labels.Bands` left for a type that needs it;
   - **subtypes** are D42's work, still to do (75, 76, 77).
-- **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
-- **Tests:** Core's 132, EngineBase's 18, CoreEntitiesServer's 212, Server's 10, IntegrationTests' 52, the page's 108 and the example types' 44 pass, and so do the widgets' 125 in a clean install. Both harnesses pass twice from one load of the world, with 71 checks on the server and 58 on the client.
-- **To finish:** the latest review's items; D41, D42 and D45; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
+- **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
+- **Decided on 2026-09-29, and built on the server:** the checks that went by a role's name ask the *Administer Spaces* authorization (D41), and Home's counts come from one approved query the server runs (D45). `WhoCanStart` is `Anyone` or `Owners` (D43).
+- **Tests:** Core's 133, EngineBase's 18, CoreEntitiesServer's 219, Server's 10, IntegrationTests' 52, the page's 113 and the example types' 45 pass, and so do the widgets' 129 in a clean install. The harnesses hold 71 checks on the server and 59 on the client; at `368456e`, both passed twice from one load of the world.
+- **To finish:** the latest review's items; D41 in the page, D42, and the rest of D45; the MemberJunction pull request of D48; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
 
 ## 4. Stages 1 to 4
 

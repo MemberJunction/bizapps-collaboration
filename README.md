@@ -144,7 +144,7 @@ Collaboration is pre-release: version 0.1 hasn't shipped yet. ✅ is in the code
 | ✅ | **Every write checked on the server,** in the entity classes, so the API, MCP and the screens obey the same rules. |
 | ✅ | **One settings model,** from the app's defaults down through the type, parent spaces and the space. |
 | ✅ | **Rights through MemberJunction's Authorizations:** changing a space type needs *Configure Space Types*; changing a space's settings needs *Configure Spaces* and an owner seat; closing or reopening needs *Close and Reopen Spaces* and an owner seat. |
-| 🚧 | **No right decided by a role's name:** the last checks that go by role (creating a top-level space, two settings, assigning across levels, backdating a close) move onto one authorization. |
+| ✅ | **No right decided by a role's name:** one authorization, *Administer Spaces*, decides creating a top-level space, two settings, assigning across levels and backdating a close. UI, Developer and Integration hold it by default, and a host edits the grants. |
 | 🗺️ | **PostgreSQL,** beside SQL Server. |
 
 ### Extensibility

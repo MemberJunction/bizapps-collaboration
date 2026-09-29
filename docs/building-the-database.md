@@ -31,7 +31,8 @@ when `mj` is not on the path of the member you are in.
    works either way. The push writes `sync` blocks back into common's files; put them back as they were.
 4. **This app's migrations:** `pnpm run mj:migrate`.
 5. **A Create grant on row filters, in the database only.** A fresh MemberJunction database grants no role Create on
-   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Name = 'System'`. Developer is enough:
+   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. MemberJunction fixes this in
+   [MJ#4837](https://github.com/MemberJunction/MJ/issues/4837); until that's in MJ `next`, grant it yourself, to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Name = 'System'`. Developer is enough:
 
    ```sql
    UPDATE ep SET CanCreate = 1, CanUpdate = 1, CanDelete = 1
@@ -42,7 +43,8 @@ when `mj` is not on the path of the member you are in.
 6. **This app's metadata, one directory at a time, in the order of `metadata/.mj-sync.json`'s `directoryOrder`.**
    A single `mj sync push --dir=metadata` fails on an empty database: the push reads authorizations, entity permissions and
    field-security flags from a cache it loads when it starts, so a rule that depends on a row created earlier in the same push
-   sees nothing. Each directory's push commits, so the next one starts with a fresh cache:
+   sees nothing. Each directory's push commits, so the next one starts with a fresh cache. MemberJunction fixes this in
+   [MJ#4836](https://github.com/MemberJunction/MJ/issues/4836); until that's in MJ `next`, push one directory at a time:
 
    ```bash
    for d in $(node -e "console.log(require('./metadata/.mj-sync.json').directoryOrder.join(' '))"); do

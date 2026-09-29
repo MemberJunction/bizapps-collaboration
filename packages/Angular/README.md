@@ -14,7 +14,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 - It's registered with `@RegisterClass(BaseResourceComponent, 'CollaborationSectionResource')`, the `DriverClass` that `metadata/applications/` names.
 - Its tab shows the open space's name, or "Spaces", with the `fa-people-group` icon.
 - It's the whole Explorer surface:
-  - Home (the spaces you reach, with counts), Inbox, My Tasks and Files;
+  - Home (the spaces you reach, with the counts `GetHomeCounts` reads), Inbox, My Tasks and Files;
   - a space's page, with Overview, Library, Work (list, board and timeline), Chat, People, Settings, and any tabs a type or another app contributes;
   - the share, upload and new-conversation dialogs.
 - Settings closes and reopens a space, and the confirmation shows what `GetCloseConsequence` says a close will do.
@@ -37,4 +37,3 @@ The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 19 `
 
 - The New Space screen with a type's own fields, Settings → Details and an About card, for a type with its own table (the plan's D42).
 - Header chips, needs-you items and agenda items from contributions.
-- Home's counts from one query run on the server (the plan's D45).

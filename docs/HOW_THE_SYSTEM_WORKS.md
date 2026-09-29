@@ -4,7 +4,7 @@ This page states the rules Collaboration enforces. Each rule is marked:
 - **built:** in the code as it stands, which carries everything #7 and #8 merged;
 - **planned:** with the item in [the plan](../plans/plan.md) that builds it. [PR 9's plan](../plans/pr9-plan.md) orders what's left.
 
-D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for #7 and by D40 to D47 for PR 9 ([its § 3.7](../plans/plan.md#37-decided-on-2026-09-29-rights-subtypes-and-home)).
+D1 to D7 are the plan's decisions of 2026-09-26 ([its § 3.2](../plans/plan.md#32-the-design-review-of-2026-09-26)), extended by D18 to D23 for #7 and by D40 to D48 for PR 9 ([its § 3.7](../plans/plan.md#37-decided-on-2026-09-29-rights-subtypes-and-home)).
 
 ## Spaces and reach
 
@@ -20,7 +20,7 @@ A space is a tree. The root is a relationship: a client, a board, a cohort. The 
   - An agent uses a closed space only while its access is `ReadOnlyWithAgent` and hasn't ended (`agentMayQuote`).
   - `fnCollaborationAncestorMembers` applies the same test at every step up, so a parent whose access has ended no longer lists its people under a sub-space.
 - **Generic space types (D18). Built.** Only generic space types ship with the app: Workspace, Team, Project, Working Group, Event, Community, and Cohort; role types include generic Outside Admin and Outside Member.
-- **Closing stamp. Built.** Closing a space stamps `ClosedAt` (the server's clock; only staff may backdate it), and stamps `PostCloseAccess` and `PostCloseAccessDays` resolved from the space's settings, then each ancestor's, then its type's and the app's.
+- **Closing stamp. Built.** Closing a space stamps `ClosedAt` (the server's clock; only someone with *Administer Spaces* may backdate it), and stamps `PostCloseAccess` and `PostCloseAccessDays` resolved from the space's settings, then each ancestor's, then its type's and the app's.
   - A space's or an ancestor's value counts only when the type lists the key in `SpaceOverridable`. No shipped type does, so today the type or the app decides, and the app's setting is `ReadOnly` with no day limit.
   - Closing archives the space's active conversations and removes their Edit grants. Reopening clears `ClosedAt` and restores both.
 - **Closing and reopening: their own authorization. Built.** A close or a reopen needs the `Close and Reopen Spaces` authorization and an owner seat on the space (or on an ancestor it inherits from). It is granted apart from `Configure Spaces`, which changes a space's settings, and by default to Space Participant, UI, Developer and Integration (D40). A space created open is closed later; a create with a `ClosedAt` is refused.
@@ -142,6 +142,6 @@ pnpm run test:integration    # both integration harnesses, against a database
 ```
 
 - `pnpm test` runs every package's unit tests: `node:test` in `collaboration-core`, `collaboration-core-entities-server`, `collaboration-server` and `collaboration-ng`, and Vitest in the others. It runs the repo scripts' self-tests first.
-- The integration harnesses run 71 server checks and 58 client checks, in ten bundles each (`extensions` runs only on the server, `lifecycle` only on the client), and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata, the test metadata (`pnpm run mj:push:tests`) and the sample world; the client harness also needs a running MJAPI.
+- The integration harnesses run 71 server checks and 59 client checks, in ten bundles each (`extensions` runs only on the server, `lifecycle` only on the client), and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata, the test metadata (`pnpm run mj:push:tests`) and the sample world; the client harness also needs a running MJAPI.
 - `scripts/persona-check.sql` checks the Space Participant role's grants against a database.
 

@@ -4,7 +4,7 @@ This plan makes Collaboration a base that other apps build on without Collaborat
 
 It replaces [the UX plan's § 9](ux/IMPLEMENTATION_PLAN.md#9-extension-points-for-apps-on-top), and it settles the rules for chats and agents ([§ 8](#8-chats-history-and-agents)).
 
-**Status:** agreed on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, D16 to D25 on 2026-09-27, D26 to D35 later that day (the plan's v0.5: anchors, grants, data reach, notes and meetings), and D40 to D47 on 2026-09-29. PR #7 built the base of this model and PR #8 the chat; both have merged. PR 9 finishes the chat and builds subtypes end to end (D42). D26 to D35's changes come in the stages after it, from [PR 9's plan](../plans/pr9-plan.md) ([§ 13](#13-order-of-work)). What isn't built yet is marked where it's described. Where this document and the plan disagree, the plan wins.
+**Status:** agreed on 2026-09-26, and amended by the decisions in [the plan](../plans/plan.md): its D1, D2 and D8 to D11 the same day, D16 to D25 on 2026-09-27, D26 to D35 later that day (the plan's v0.5: anchors, grants, data reach, notes and meetings), and D40 to D48 on 2026-09-29. PR #7 built the base of this model and PR #8 the chat; both have merged. PR 9 finishes the chat and builds subtypes end to end (D42). D26 to D35's changes come in the stages after it, from [PR 9's plan](../plans/pr9-plan.md) ([§ 13](#13-order-of-work)). What isn't built yet is marked where it's described. Where this document and the plan disagree, the plan wins.
 
 ## Contents
 
@@ -587,7 +587,7 @@ These are in the plan's workstream A:
   - there's no live feed of other people's messages (A12.6).
 - Who a conversation message is from (A19, in [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789), open). Until it ships, a type's message hooks aren't enforced (the plan's D44).
 - Bound view and dashboard properties, hidden action parameters and locked query parameters (A14 to A17, in MJ#4789), which grants and a granted query need ([§ 11](#11-security-rules-for-plug-ins)).
-- A read-only chat area for a closed space. Until then Collaboration hides the composer itself (the plan's D47).
+- A read-only chat area for a closed space ([MJ#4838](https://github.com/MemberJunction/MJ/issues/4838), fixed in the MemberJunction pull request of the plan's D48). Until that's in MJ `next`, Collaboration hides the composer itself.
 
 ## 10. Examples
 
