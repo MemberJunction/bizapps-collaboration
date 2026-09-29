@@ -34,7 +34,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-upload-dialog` | `CollabUploadDialogComponent` | Uploads a file to a space, in a band the seat may choose |
 | `mjc-new-conversation-dialog` | `CollabNewConversationDialogComponent` | Starts a conversation: its name and kind (General, Topic or Internal Only) |
 | `mjc-space-work` | `CollabSpaceWorkComponent` | The Work tab's task list |
-| `mjc-space-chat` | `CollabSpaceChatComponent` | MJ's chat area for a space's conversation, with the host rules from the server |
+| `mjc-space-chat` | `CollabSpaceChatComponent` | MJ's chat area for a space's conversation, with the host rules from the server and no voice call |
 | `mjc-space-people` | `CollabSpacePeopleComponent` | The People tab: who reaches the space, and invitations |
 | `mjc-space-settings` | `CollabSpaceSettingsComponent` | The Settings tab, including close and reopen |
 
@@ -51,5 +51,5 @@ pnpm --filter @mj-biz-apps/collaboration-ng-widgets run build
 pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
 ```
 
-The build is `ngc`, into `dist/`. The tests use Vitest, 125 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail and Settings in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
+The build is `ngc`, into `dist/`. The tests use Vitest, 131 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings and a space's conversation (with a stand-in for MJ's chat area) in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
 

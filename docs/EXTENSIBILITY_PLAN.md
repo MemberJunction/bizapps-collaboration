@@ -480,7 +480,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
   - works out the history floor and the search bound below;
   - runs the agent, and writes its reply.
 - **So the rules hold on the server,** not only in the browser. The chat area's inputs only keep the screen honest: its `@` list, its placeholder and its buttons.
-- **Settings for group chats:** voice and the header's agent picker are to be off, since they'd bypass the rules. Collaboration replaces the chat area's header with its own, so MJ's agent picker isn't shown, but it doesn't set `AllowRealtime`, so voice stays at MJ's default, on. Chats keep the name in `SpaceChat.Name`, so MJ's auto-naming is off. MJ has no live feed of other people's messages yet ([§ 9](#9-mj-changes)); an open chat is to refresh when it regains focus and on a capped timer, which Collaboration doesn't do yet.
+- **Settings for group chats:** voice and the header's agent picker are to be off, since they'd bypass the rules. Collaboration replaces the chat area's header with its own, so MJ's agent picker isn't shown, and it sets `AllowRealtime` to false, so no composer offers a voice call. Chats keep the name in `SpaceChat.Name`, so MJ's auto-naming is off. MJ has no live feed of other people's messages yet ([§ 9](#9-mj-changes)); an open chat is to refresh when it regains focus and on a capped timer, which Collaboration doesn't do yet.
 
 ### What an agent sees
 

@@ -104,7 +104,7 @@ When the app runs and the code is familiar, write down what the UI pass, the ext
 
 ### 3.6 Where stage 0 stands
 
-At `fc312e0`, on 2026-09-29:
+At `4c03dd9`, on 2026-09-29:
 - **#8's final review:** every item is closed but the screenshots, which wait on sign-ins for the named users.
 - **The pass through the UI** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5883938837), items 42 to 74): most items are closed. Left are the dialogs' last points (57), Home's counts (60), the screenshot row (70) and the hand-built controls (73).
 - **The extension model** ([its list](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5884125457), items 75 to 104):
@@ -113,9 +113,9 @@ At `fc312e0`, on 2026-09-29:
   - **configuration works,** with `Admin.RoleNames` removed and `Labels.Bands` left for a type that needs it;
   - **subtypes** are D42's work, still to do (75, 76, 77).
 - **Added in review:** closing and reopening have their own authorization (D40); once a closed space's access has ended, its `OwnerID` keeps it; a close's confirmation reads from the server what the close will do, and only someone who may close the space can ask; ancestor seats honor post-close access at every hop; and the dialogs draw through MJ's `mj-dialog`.
-- **Decided on 2026-09-29, and built on the server:** the checks that went by a role's name ask the *Administer Spaces* authorization (D41), and Home's counts come from one approved query the server runs (D45). `WhoCanStart` is `Anyone` or `Owners` (D43).
-- **Tests:** Core's 133, EngineBase's 18, CoreEntitiesServer's 219, Server's 10, IntegrationTests' 52, the page's 113 and the example types' 45 pass, and so do the widgets' 129 in a clean install. The harnesses hold 71 checks on the server and 59 on the client; at `368456e`, both passed twice from one load of the world.
-- **To finish:** the latest review's items; D41 in the page, D42, and the rest of D45; the MemberJunction pull request of D48; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
+- **Decided on 2026-09-29, and built:** the checks that went by a role's name ask the *Administer Spaces* authorization, and Settings offers agent retrieval only to someone who holds it (D41). Home's counts come from one approved query that only Integration may run, which the server runs as the system user (D45). `WhoCanStart` is `Anyone` or `Owners` (D43). A space's conversations offer no voice call.
+- **Tests:** Core's 133, EngineBase's 18, CoreEntitiesServer's 219, Server's 10, IntegrationTests' 52, the page's 113 and the example types' 45 pass in a clean install. The widgets' 131 pass in the builder's workspace; in a clean install `render.test.ts` doesn't load yet, so 112 run there. The harnesses hold 71 checks on the server and 60 on the client; at `4c03dd9`, the builder ran both twice from one load of the world, and both passed.
+- **To finish:** the latest review's items; D41's tests, D42, and Home's pills (D45); the MemberJunction pull request of D48; the screenshots, once the builder can sign in as the named users; and § 3.5's findings.
 
 ## 4. Stages 1 to 4
 
