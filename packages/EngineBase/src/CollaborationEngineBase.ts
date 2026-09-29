@@ -264,9 +264,13 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         return match?.Value ?? undefined;
     }
 
+    private _invalidSettingsError: InvalidAppSettingsError | null = null;
+
     public get CollaborationSettings(): CollaborationSettings {
         if (this._cachedParsedSettings !== undefined) {
             if (this._cachedParsedSettings === null) {
+                // A row that was read and refused stays refused, with its reasons: not "missing", which sends the operator to seed it
+                if (this._invalidSettingsError) throw this._invalidSettingsError;
                 throw new MissingAppSettingsError();
             }
             return this._cachedParsedSettings;
@@ -288,13 +292,17 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 // Fail closed: a row that doesn't validate is not a configuration, and resolving with it would let a typo
                 // ('Owner' for 'Owners') quietly widen who may start a conversation
                 LogError(`Invalid CollaborationSettings in Application Settings: ${validation.errors.join(', ')}`);
-                throw new InvalidAppSettingsError(validation.errors);
+                this._invalidSettingsError = new InvalidAppSettingsError(validation.errors);
+                throw this._invalidSettingsError;
             }
             this._cachedParsedSettings = parsed as CollaborationSettings;
             return this._cachedParsedSettings;
         } catch (e) {
             this._cachedParsedSettings = null;
-            if (e instanceof InvalidAppSettingsError) throw e;
+            if (e instanceof InvalidAppSettingsError) {
+                this._cachedParsedSettings = null;
+                throw e;
+            }
             throw new MissingAppSettingsError(
                 `Failed to parse CollaborationSettings JSON: ${e instanceof Error ? e.message : String(e)}`
             );

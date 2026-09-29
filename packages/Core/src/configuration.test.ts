@@ -304,3 +304,12 @@ describe('which types a space may contain', () => {
         assert.match(refuseChildType(capped, 'project', 2) ?? '', /most its type allows \(2\)/);
     });
 });
+
+describe('tab labels merge without regard to key case', () => {
+    it("lets a type's 'library' beat the app's 'Library', and a space's beat both when the type lets it", () => {
+        const app: CollaborationSettings = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Labels: { Tabs: { Library: 'Files', Work: 'Tasks' } } };
+        const type: CollaborationSettings = { Labels: { Tabs: { library: 'Documents' } }, SpaceOverridable: ['Labels'] };
+        const resolved = ResolveCollaborationSettings({ spaces: [{ Labels: { Tabs: { WORK: 'Deliverables' } } }], type, app });
+        assert.deepEqual(resolved.Labels?.Tabs, { library: 'Documents', work: 'Deliverables' });
+    });
+});

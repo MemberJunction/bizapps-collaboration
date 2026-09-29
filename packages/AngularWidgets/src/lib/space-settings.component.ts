@@ -55,19 +55,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field full-width">
-              <label class="field-label">Space Name</label>
+              <label class="field-label" for="settings-name">Space Name</label>
               <input
                 type="text"
                 class="form-input"
+                id="settings-name"
                 [(ngModel)]="formData.name"
                 placeholder="e.g. Northwind relationship"
               />
             </div>
 
             <div class="form-field full-width">
-              <label class="field-label">Description</label>
+              <label class="field-label" for="settings-description">Description</label>
               <textarea
                 class="form-textarea"
+                id="settings-description"
                 [(ngModel)]="formData.description"
                 placeholder="Describe what this space is for..."
                 rows="2"
@@ -75,29 +77,32 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field">
-              <label class="field-label">Icon</label>
+              <label class="field-label" for="settings-icon">Icon</label>
               <div class="input-with-icon">
                 <i [class]="formData.iconClass || 'fa-solid fa-compass'" class="icon-preview"></i>
                 <input
                   type="text"
                   class="form-input with-prefix"
-                  [(ngModel)]="formData.iconClass"
+                  id="settings-icon"
+                [(ngModel)]="formData.iconClass"
                   placeholder="fa-solid fa-compass"
                 />
               </div>
             </div>
 
             <div class="form-field">
-              <label class="field-label">Theme Color</label>
+              <label class="field-label" for="settings-color-text">Theme Color</label>
               <div class="color-picker-row">
                 <input
                   type="color"
+                  aria-label="Theme color picker"
                   class="color-input"
                   [(ngModel)]="formData.color"
                 />
                 <input
                   type="text"
                   class="form-input color-text"
+                  id="settings-color-text"
                   [(ngModel)]="formData.color"
                   placeholder="#RRGGBB"
                 />
@@ -105,10 +110,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field full-width">
-              <label class="field-label">Background Banner Image URL</label>
+              <label class="field-label" for="settings-banner">Background Banner Image URL</label>
               <input
                 type="url"
                 class="form-input"
+                id="settings-banner"
                 [(ngModel)]="formData.backgroundImageUrl"
                 placeholder="https://images.unsplash.com/..."
               />
@@ -130,8 +136,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field full-width">
-              <label class="field-label">Agent Retrieval</label>
-              <div class="radio-group">
+              <div class="field-label" id="settings-retrieval-label">Agent Retrieval</div>
+              <div class="radio-group" role="radiogroup" aria-labelledby="settings-retrieval-label">
                 <label class="radio-label">
                   <input
                     type="radio"
@@ -186,8 +192,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
           <div class="form-grid">
             <div class="form-field">
-              <label class="field-label">Retention Policy</label>
-              <select [(ngModel)]="formData.retention" class="form-select">
+              <label class="field-label" for="settings-retention">Retention Policy</label>
+              <select id="settings-retention" [(ngModel)]="formData.retention" class="form-select">
                 <option value="">Type default ({{ formData.typeDefaultRetention || 'Indefinite' }})</option>
                 <option value="Indefinite">Indefinite (No automatic archiving)</option>
                 <option value="Year">1 Year</option>
@@ -196,10 +202,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             </div>
 
             <div class="form-field">
-              <label class="field-label">Space Type</label>
+              <label class="field-label" for="settings-type">Space Type</label>
               <input
                 type="text"
                 class="form-input"
+                id="settings-type"
                 [value]="formData.spaceType"
                 disabled
               />

@@ -583,14 +583,22 @@ export function ResolveCollaborationSettings(
         DEFAULT_COLLABORATION_SETTINGS.Agents.ListMode
     );
 
-    let tabs: Record<string, string> | undefined = {
-        ...(appConfig.Labels?.Tabs ?? {}),
-        ...(typeConfig?.Labels?.Tabs ?? {}),
+    // Tab keys merge without regard to case: the app's 'Library' and a type's 'library' are one key, and the nearer level wins
+    const mergeTabs = (into: Record<string, string>, from: Record<string, string> | undefined): Record<string, string> => {
+        const merged = { ...into };
+        for (const [key, label] of Object.entries(from ?? {})) {
+            for (const existing of Object.keys(merged)) {
+                if (existing.toLowerCase().trim() === key.toLowerCase().trim()) delete merged[existing];
+            }
+            merged[key.toLowerCase().trim()] = label;
+        }
+        return merged;
     };
+    let tabs: Record<string, string> | undefined = mergeTabs(mergeTabs({}, appConfig.Labels?.Tabs), typeConfig?.Labels?.Tabs);
     if (isOverridable('Labels.Tabs') || isOverridable('Labels')) {
         for (const s of [...spaces].reverse()) {
             if (s.Labels?.Tabs) {
-                tabs = { ...tabs, ...s.Labels.Tabs };
+                tabs = mergeTabs(tabs, s.Labels.Tabs);
             }
         }
     }

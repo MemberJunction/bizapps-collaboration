@@ -235,6 +235,8 @@ export interface SpaceMemberModel {
   /** The space the seat sits on, when it isn't this one (the seat is inherited). */
   source?: string;
   inherited?: boolean;
+  /** Set when the person's own seat on this space is Invited or Removed while they still reach it through an ancestor. */
+  ownSeatNote?: string;
   /** Whether the viewer may approve, remove or change the role of this seat. */
   canManage?: boolean;
 }

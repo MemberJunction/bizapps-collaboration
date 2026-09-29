@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { SpaceTabDescriptor } from '@mj-biz-apps/collaboration-ng-widgets';
-import { buildSpaceTabs, resolveTabId, tabKey } from './space-tabs.ts';
+import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabKey } from './space-tabs.ts';
 
 const allPanels = { MessagingPanel: true, LibraryPanel: true, WorkPanel: true };
 const identity = (defaults: SpaceTabDescriptor[]): SpaceTabDescriptor[] => defaults;
@@ -58,5 +58,23 @@ describe("a space's tabs", () => {
         assert.equal(resolveTabId(model, 'discussions'), 'Chat');
         assert.equal(resolveTabId(model, 'meetings'), 'Meetings');
         assert.equal(resolveTabId(model, 'nope'), null);
+    });
+});
+
+describe('a UI driver that throws', () => {
+    it('still gives the space its built-in tabs, and reports the failure', () => {
+        const errors: unknown[] = [];
+        const model = buildSpaceTabsSafely({
+            panels: { ...allPanels, WorkPanel: false },
+            finalize: () => { throw new Error('the driver broke'); },
+            labelFor: keepLabel,
+        }, (e) => errors.push(e));
+        assert.equal(errors.length, 1);
+        assert.deepEqual(model.tabs.map((tab) => tab.id), ['Overview', 'Library', 'Chat', 'People', 'Settings']);
+    });
+
+    it('gives the driver its tabs when it does not throw', () => {
+        const model = buildSpaceTabsSafely({ panels: allPanels, finalize: (d) => d.slice(0, 2), labelFor: keepLabel }, () => { throw new Error('unexpected'); });
+        assert.deepEqual(model.tabs.map((tab) => tab.id), ['Overview', 'Library']);
     });
 });

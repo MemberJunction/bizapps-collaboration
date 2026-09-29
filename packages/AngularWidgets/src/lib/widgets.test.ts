@@ -1118,6 +1118,53 @@ describe('the upload dialog keeps its promises', () => {
   });
 });
 
+describe('Copy link says how it went', () => {
+  const invited = () => {
+    const people = new CollabSpacePeopleComponent();
+    people.RedemptionUrl = 'https://host.example/redeem?t=abc';
+    return people;
+  };
+
+  it('says Copied when the clipboard takes the link, and resets when the link changes', async () => {
+    const people = invited();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    people.Clipboard = { writeText };
+    await people.CopyLink();
+    expect(writeText).toHaveBeenCalledWith('https://host.example/redeem?t=abc');
+    expect(people.linkStatus()).toBe('copied');
+    people.RedemptionUrl = 'https://host.example/redeem?t=def';
+    expect(people.linkStatus()).toBe('idle');
+  });
+
+  it('says it could not copy when the clipboard refuses, or there is none', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refused = invited();
+    refused.Clipboard = { writeText: vi.fn().mockRejectedValue(new Error('denied')) };
+    await refused.CopyLink();
+    expect(refused.linkStatus()).toBe('failed');
+    const none = invited();
+    none.Clipboard = null;
+    await none.CopyLink();
+    expect(none.linkStatus()).toBe('failed');
+    vi.restoreAllMocks();
+  });
+});
+
+describe('the Team row keeps Share as a control of its own', () => {
+  it("emits the share request, and not the row's selection, when Share is activated", () => {
+    const row = new CollabItemRowComponent();
+    const shared = vi.fn();
+    const selected = vi.fn();
+    row.ShareRequested.subscribe(shared);
+    row.RowSelectRequested.subscribe(selected);
+    const stop = vi.fn();
+    row.onShareClick({ stopPropagation: stop });
+    expect(shared).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalled();
+    expect(selected).not.toHaveBeenCalled();
+  });
+});
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();

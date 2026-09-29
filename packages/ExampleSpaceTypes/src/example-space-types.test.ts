@@ -277,12 +277,27 @@ describe('ExampleBoardUIDriver and Contributions', () => {
             'meetings',
             'papers',
             'motions',
-            'members',
+            'people',
             'chat',
         ]);
         expect(tabs.find((t) => t.key === 'meetings')?.component).toBe(ExampleBoardMeetingsTab);
         expect(tabs.find((t) => t.key === 'papers')?.component).toBe(ExampleBoardPapersTab);
         expect(tabs.find((t) => t.key === 'motions')?.component).toBe(ExampleBoardMotionsTab);
+    });
+
+    it("keeps the built-in tabs it doesn't name, replaces the ones it does by key, and leaves no two tabs tied", () => {
+        const builtIn: SpaceTabDescriptor[] = [
+            { key: 'Overview', label: 'Overview', sortKey: 10 },
+            { key: 'Library', label: 'Library', sortKey: 20 },
+            { key: 'Work', label: 'Work', sortKey: 30 },
+            { key: 'Chat', label: 'Chat', sortKey: 40 },
+            { key: 'People', label: 'People', sortKey: 50 },
+            { key: 'Settings', label: 'Settings', sortKey: 100 },
+        ];
+        const tabs = uiDriver.GetTabs(uiCtx, builtIn);
+        expect(tabs.map((t) => normalizeContributionKey(t.key))).toEqual(['overview', 'meetings', 'papers', 'motions', 'library', 'work', 'people', 'chat', 'settings']);
+        expect(tabs.find((t) => normalizeContributionKey(t.key) === 'people')?.label).toBe('Members');
+        expect(new Set(tabs.map((t) => t.sortKey)).size).toBe(tabs.length);
     });
 
     it('GetOverviewCards returns Frame 08 overview cards', () => {

@@ -5,13 +5,14 @@ import type { SpaceBand, TaskItemModel } from './types';
 import { isTaskClosed, isTaskInProgress, taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-space-work',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent],
+  imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent, MJClickableDirective],
   template: `
     <div class="work-container">
       <!-- Header stats -->
@@ -172,7 +173,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   />
                 </div>
 
-                <div class="td-title">
+                <div class="td-title" [mjClickable]="task.name">
                   <span class="task-name">{{ task.name }}</span>
                   @if (task.description) {
                     <span class="task-desc">{{ task.description }}</span>

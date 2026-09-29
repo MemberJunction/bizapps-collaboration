@@ -178,10 +178,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
 
         if (isClosing) {
+            // The server's clock decides when a space closed: a browser a few seconds ahead must not be refused, so a client's
+            // stamp later than now is set to now. One far ahead is still refused.
             const closedDate = new Date(this.ClosedAt!).getTime();
-            if (closedDate > Date.now()) {
+            const skewAllowedMs = 5 * 60 * 1000;
+            if (closedDate > Date.now() + skewAllowedMs) {
                 return fail(result, 'ClosedAt', 'Space change refused: ClosedAt cannot be in the future.');
             }
+            if (closedDate > Date.now()) this.ClosedAt = new Date();
         }
 
         if (isReopening) {

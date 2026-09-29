@@ -44,6 +44,7 @@ export interface LibrarySmartView {
           class="fold"
           [mjClickable]="'All material'"
           [class.on]="ActiveFolderId === 'all'"
+          [attr.aria-current]="ActiveFolderId === 'all' ? 'true' : null"
           (click)="onSelectFolder('all')"
         >
           <i class="fa-solid fa-layer-group"></i>
@@ -57,6 +58,7 @@ export interface LibrarySmartView {
             class="fold"
             [mjClickable]="col.name"
             [class.on]="ActiveFolderId === col.id"
+            [attr.aria-current]="ActiveFolderId === col.id ? 'true' : null"
             (click)="onSelectFolder(col.id)"
           >
             <i class="fa-solid fa-folder"></i>
@@ -72,6 +74,7 @@ export interface LibrarySmartView {
             class="fold"
             [mjClickable]="view.name"
             [class.on]="ActiveFolderId === view.id"
+            [attr.aria-current]="ActiveFolderId === view.id ? 'true' : null"
             (click)="onSelectFolder(view.id)"
           >
             <i [class]="view.iconClass"></i>
@@ -125,9 +128,9 @@ export interface LibrarySmartView {
             </thead>
             <tbody>
               @for (row of FilteredRows; track row.id) {
-                <tr [class.sel]="IsSelected(row.id)" [mjClickable]="row.name" (click)="onSelectRow(row)">
+                <tr [class.sel]="IsSelected(row.id)" [attr.aria-selected]="IsSelected(row.id)" (click)="onSelectRow(row)">
                   <td>
-                    <div class="row gap10">
+                    <div class="row gap10" [mjClickable]="row.name">
                       <mjc-file-icon [Kind]="row.kind" Size="sm" />
                       <div class="grow">
                         <div class="fw6 fs13 ellipsis title">{{ row.name }}</div>

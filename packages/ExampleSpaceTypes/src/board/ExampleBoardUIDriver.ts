@@ -49,7 +49,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Meetings',
                 icon: 'fa-solid fa-calendar-days',
                 badgeCount: 4,
-                sortKey: 20,
+                sortKey: 11,
                 component: ExampleBoardMeetingsTab,
             },
             {
@@ -57,7 +57,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Papers',
                 icon: 'fa-solid fa-folder-open',
                 badgeCount: 18,
-                sortKey: 30,
+                sortKey: 12,
                 component: ExampleBoardPapersTab,
             },
             {
@@ -65,11 +65,11 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 label: 'Motions',
                 icon: 'fa-solid fa-gavel',
                 badgeCount: 1,
-                sortKey: 40,
+                sortKey: 13,
                 component: ExampleBoardMotionsTab,
             },
             {
-                key: 'members',
+                key: 'people',
                 label: 'Members',
                 icon: 'fa-solid fa-user-group',
                 badgeCount: 7,
@@ -79,7 +79,7 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
                 key: 'chat',
                 label: 'Chat',
                 icon: 'fa-solid fa-comments',
-                sortKey: 60,
+                sortKey: 55,
             },
         ];
         // What other apps contributed to boards stays: the board replaces the parts it names, and keeps the rest

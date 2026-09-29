@@ -126,7 +126,7 @@ describe('the kind of change a space or an item save is', () => {
     it('names a create, a close, a reopen, a move and a plain update for the space, and the matching kind for its parent', () => {
         assert.deepEqual(decideSpaceKinds({ ...none, isNew: true }), { spaceKind: 'Create', childKind: 'CreateChild' });
         assert.deepEqual(decideSpaceKinds({ ...none, isClosing: true }), { spaceKind: 'Close', childKind: 'CloseChild' });
-        assert.deepEqual(decideSpaceKinds({ ...none, isReopening: true }), { spaceKind: 'Reopen', childKind: 'UpdateChild' });
+        assert.deepEqual(decideSpaceKinds({ ...none, isReopening: true }), { spaceKind: 'Reopen', childKind: 'ReopenChild' });
         assert.deepEqual(decideSpaceKinds({ ...none, isMoving: true }), { spaceKind: 'Move', childKind: 'MoveChildIn' });
     });
 

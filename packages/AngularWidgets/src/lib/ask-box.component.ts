@@ -28,6 +28,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <input
           type="text"
           [placeholder]="Placeholder"
+          [attr.aria-label]="Title || Placeholder"
           [(ngModel)]="Query"
           [disabled]="IsSubmitting"
           (keydown.enter)="onSend()"

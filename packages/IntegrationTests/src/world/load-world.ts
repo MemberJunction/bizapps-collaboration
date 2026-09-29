@@ -320,6 +320,12 @@ export async function loadWorld(): Promise<void> {
     }
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
+    // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer (and a closed
+    // space's banner) only for an open conversation. Closed this month's is made before the close below, which archives it.
+    await seedSpaceConversations('studio', 'ada', 'sam', true);
+    await seedSpaceConversations('sealed-child', 'sam', 'ada', true);
+    await seedSpaceConversations('closed-recent', 'ada', 'bea', true);
+
     for (const space of spaceRows.filter((s) => s.ClosedAt)) {
         const spaceId = spaceIds.get(space.Key);
         const parentSpace = space.Parent ? spaceRows.find((item) => item.Key === space.Parent) : null;
@@ -356,9 +362,10 @@ export async function loadWorld(): Promise<void> {
 
 
     async function seedSpaceConversations(
-        spaceKey: 'discovery' | 'northwind' | 'committee',
+        spaceKey: string,
         teamActorKey: string,
-        otherActorKey: string
+        otherActorKey: string,
+        generalOnly = false,
     ) {
         const targetSpaceId = spaceIds.get(spaceKey);
         if (!targetSpaceId) {
@@ -418,6 +425,9 @@ export async function loadWorld(): Promise<void> {
                 { actorKey: teamActorKey, text: `Let's keep discussions and general updates posted here.` },
             ]
         );
+
+        // Spaces the UI pass opens need a conversation to show the composer, and a closed one its archived chat
+        if (generalOnly) return;
 
         // 2. Topic conversation
         await ensureConvoAndPosts(
@@ -599,7 +609,7 @@ async function assertCatalog(
 
     const chatsCheck = await view.RunView<{ ID: string; SpaceID: string; Name: string; Kind: string; Status: string }>({
         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
-        ExtraFilter: `SpaceID IN (${['discovery', 'northwind', 'committee'].map(k => `'${spaceIds.get(k)}'`).join(',')}) AND Status = 'Active'`,
+        ExtraFilter: `SpaceID IN (${['discovery', 'northwind', 'committee', 'studio', 'sealed-child'].map(k => `'${spaceIds.get(k)}'`).join(',')}) AND Status = 'Active'`,
         Fields: ['ID', 'SpaceID', 'Name', 'Kind', 'Status'],
         ResultType: 'simple',
     }, user);
@@ -616,9 +626,20 @@ async function assertCatalog(
         { space: 'committee', name: 'committee-general', kind: 'General' },
         { space: 'committee', name: 'committee-deliverables', kind: 'Topic' },
         { space: 'committee', name: 'committee-internal', kind: 'Private' },
+        { space: 'studio', name: 'studio-general', kind: 'General' },
+        { space: 'sealed-child', name: 'sealed-child-general', kind: 'General' },
     ];
     if (chatsCheck.Results.length !== expectedChats.length) {
         throw new Error(`Expected ${expectedChats.length} active space chats, found ${chatsCheck.Results.length}.`);
+    }
+    const closedChat = await view.RunView<{ Status: string }>({
+        EntityName: 'MJ_BizApps_Collaboration: Space Chats',
+        ExtraFilter: `SpaceID = '${spaceIds.get('closed-recent')}' AND Name = 'closed-recent-general'`,
+        Fields: ['Status'],
+        ResultType: 'simple',
+    }, user);
+    if (!closedChat.Success || closedChat.Results?.[0]?.Status?.trim() !== 'Archived') {
+        throw new Error(`Closed this month's conversation must exist and be Archived by the close, saw ${JSON.stringify(closedChat.Results)}.`);
     }
     for (const ec of expectedChats) {
         const sid = spaceIds.get(ec.space);

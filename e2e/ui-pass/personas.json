@@ -83,7 +83,8 @@
                 "composer": false,
                 "newConversationButton": false,
                 "settingsLink": false
-            }
+            },
+            "openConversation": false
         },
         {
             "name": "nora",

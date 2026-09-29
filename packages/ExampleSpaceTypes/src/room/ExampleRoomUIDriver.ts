@@ -7,6 +7,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseSpaceTypeUIDriver,
+    overlayDescriptors,
     type SpaceUIContext,
     type SpaceOverviewCardDescriptor,
     type BeforeInviteEvent,
@@ -23,15 +24,16 @@ export class ExampleRoomUIDriver extends BaseSpaceTypeUIDriver {
         _ctx: SpaceUIContext,
         defaultCards: SpaceOverviewCardDescriptor[]
     ): SpaceOverviewCardDescriptor[] {
-        return [
-            ...defaultCards,
+        // The card is also registered as a contribution for this type, so it may already be among the defaults: it replaces
+        // itself by key, and never draws twice
+        return overlayDescriptors(defaultCards, [
             {
                 key: 'deal-summary',
                 title: 'Deal Overview',
                 sortKey: 15,
                 component: ExampleRoomDealSummaryCard,
             },
-        ];
+        ]);
     }
 
     /**

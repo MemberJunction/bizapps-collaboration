@@ -49,4 +49,28 @@ describe('who reaches a space', () => {
         assert.deepEqual(people.map((p) => p.row.UserID).sort(), ['ada', 'sam']);
         assert.ok(people.every((p) => !p.inherited));
     });
+
+    it("keeps Sam reaching Field notes through Northwind when his guest seat there is Removed or Invited, and says so beside him", () => {
+        const withGuest = (status: string) => [...seats, { SpaceID: id(11), UserID: 'sam', Status: status }];
+        for (const status of ['Removed', 'Invited']) {
+            const people = nearestSeats(withGuest(status), accessChain(id(11), spaces));
+            const sam = people.find((p) => p.row.UserID === 'sam');
+            assert.equal(sam?.row.Status, 'Active', status);
+            assert.equal(sam?.from.name, 'Northwind relationship');
+            assert.equal(sam?.ownSeatStatus, status);
+        }
+    });
+
+    it("lists a person nothing else reaches by their own Removed or Invited seat", () => {
+        const people = nearestSeats(seats, accessChain(id(2), spaces));
+        assert.equal(people.find((p) => p.row.UserID === 'remy')?.row.Status, 'Removed');
+    });
+
+    it("follows a parent the viewer can't read, unnamed, and stops there", () => {
+        const visible = spaces.filter((s) => s.ID !== id(1));
+        const chain = accessChain(id(2), visible);
+        assert.deepEqual(chain.map((c) => c.name), ['Discovery', '']);
+        const people = nearestSeats(seats, chain);
+        assert.deepEqual(people.map((p) => p.row.UserID).sort(), ['ada', 'bea', 'casey', 'remy', 'sam']);
+    });
 });

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceMemberModel } from './types';
@@ -83,7 +83,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>{{ InviteOutcome!.message }}</span>
           @if (RedemptionUrl) {
             <input type="text" class="invite-link" readonly [value]="RedemptionUrl" aria-label="Sign-in link" />
-            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ linkCopied ? 'Copied' : 'Copy link' }}</button>
+            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ linkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
+            @if (linkStatus() === 'failed') {
+              <span class="invite-outcome-error" role="alert">Couldn't copy the link. Select it and copy it.</span>
+            }
           }
           <button type="button" class="cancel-invite-btn" (click)="DismissInviteOutcome()">Dismiss</button>
         </div>
@@ -159,6 +162,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (m.inherited && m.source) {
                       <span class="person-source">from {{ m.source }}</span>
                     }
+                    @if (m.ownSeatNote) {
+                      <span class="person-source">{{ m.ownSeatNote }}</span>
+                    }
                   </div>
                 </div>
 
@@ -192,7 +198,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                         <button type="button" class="cancel-invite-btn" (click)="pending = null">Cancel</button>
                       } @else {
                         @if (m.status === 'Invited') {
-                          <button type="button" class="cancel-invite-btn" (click)="Ask(m, 'approve')">Approve</button>
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
                         }
                         @if (m.status === 'Active' && RoleOptions.length > 0) {
                           <select class="invite-select role-select" [attr.aria-label]="'Change role for ' + m.name" [ngModel]="m.roleCode" (ngModelChange)="AskRole(m, $event)">
@@ -202,7 +208,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                           </select>
                         }
                         @if (m.status !== 'Removed') {
-                          <button type="button" class="cancel-invite-btn" (click)="Ask(m, 'remove')">Remove</button>
+                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Remove ' + m.name" (click)="Ask(m, 'remove')">Remove</button>
                         }
                       }
                     }
@@ -545,7 +551,14 @@ export class CollabSpacePeopleComponent {
   /** Shows the Approve / Remove / Change role column. Each row still shows its buttons only when the seat may change it. */
   @Input() CanManageSeats = false;
   /** The sign-in link the server returned when the host has no email channel: shown with a Copy button. */
-  @Input() RedemptionUrl: string | null = null;
+  @Input() set RedemptionUrl(url: string | null) {
+    this._redemptionUrl = url;
+    this.linkStatus.set('idle');
+  }
+  get RedemptionUrl(): string | null {
+    return this._redemptionUrl;
+  }
+  private _redemptionUrl: string | null = null;
 
   /** The person's email and the role they are invited to. Which band the seat lands in follows from the role, on the server. */
   @Output() InviteMemberRequested = new EventEmitter<{ email: string; role: string }>();
@@ -580,7 +593,10 @@ export class CollabSpacePeopleComponent {
 
   /** The action waiting for its confirmation. */
   public pending: { id: string; kind: 'approve' | 'remove' | 'role'; roleCode?: string } | null = null;
-  public linkCopied = false;
+  /** How the last Copy went. A signal, so the OnPush view repaints when the clipboard answers. */
+  public linkStatus = signal<'idle' | 'copied' | 'failed'>('idle');
+  /** Where Copy writes. The browser's clipboard when there is one (there isn't on a plain-HTTP host). */
+  @Input() Clipboard: Pick<Clipboard, 'writeText'> | null = typeof navigator !== 'undefined' ? navigator.clipboard ?? null : null;
 
   public Ask(member: SpaceMemberModel, kind: 'approve' | 'remove'): void {
     this.pending = { id: member.id, kind };
@@ -617,9 +633,20 @@ export class CollabSpacePeopleComponent {
     else if (pending.roleCode) this.ChangeRoleRequested.emit({ member, roleCode: pending.roleCode });
   }
 
-  public CopyLink(): void {
+  public async CopyLink(): Promise<void> {
     if (!this.RedemptionUrl) return;
-    void navigator.clipboard?.writeText(this.RedemptionUrl).then(() => { this.linkCopied = true; });
+    if (!this.Clipboard) {
+      console.error('Copy link: this page has no clipboard access (it needs a secure connection).');
+      this.linkStatus.set('failed');
+      return;
+    }
+    try {
+      await this.Clipboard.writeText(this.RedemptionUrl);
+      this.linkStatus.set('copied');
+    } catch (error) {
+      console.error(`Copy link failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.linkStatus.set('failed');
+    }
   }
 
   // The list shows every seat, invited and removed ones too; these counts, like the header's, count only Active ones.

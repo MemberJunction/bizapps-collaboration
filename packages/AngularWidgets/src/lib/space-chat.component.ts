@@ -24,6 +24,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
     <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
+      <!-- A closed space says so on its Chat tab, whether or not a conversation is open -->
+      @if (IsReadOnly) {
+        <div class="space-closed-banner" role="status">
+          <i class="fa-solid fa-lock" aria-hidden="true"></i>
+          <span>This space is closed. Conversations are read-only.</span>
+        </div>
+      }
       @if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
           [environmentId]="EnvironmentId"
@@ -94,12 +101,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </ng-template>
 
         </mj-conversation-chat-area>
-        @if (IsReadOnly) {
-          <div class="space-closed-banner" role="status">
-            <i class="fa-solid fa-lock" aria-hidden="true"></i>
-            <span>This space is closed. Conversations are read-only.</span>
-          </div>
-        }
       } @else {
         <div class="no-conversation-state">
           <div class="empty-icon-wrap">

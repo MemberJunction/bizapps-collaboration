@@ -177,8 +177,8 @@ export interface CollabUploadSubmitPayload {
             </div>
 
             <div class="form-group half">
-              <label class="f-label">Who can see this?</label>
-              <div class="band-options">
+              <div class="f-label" id="band-choice-label">Who can see this?</div>
+              <div class="band-options" role="radiogroup" aria-labelledby="band-choice-label">
                 @if (IsBandAllowed('Shared')) {
                 <label class="band-option" [class.selected]="selectedBand === 'Shared'">
                   <input

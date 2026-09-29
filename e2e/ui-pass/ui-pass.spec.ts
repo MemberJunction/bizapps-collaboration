@@ -14,6 +14,8 @@ interface Persona {
     space?: string;
     spaceId?: string;
     noSpaces?: boolean;
+    /** Whether the row opens a conversation before probing. False for a closed space, whose banner shows without one. */
+    openConversation?: boolean;
     expect?: Record<Expectation, boolean>;
 }
 
@@ -25,6 +27,7 @@ const personas = (JSON.parse(readFileSync(resolve(here, 'personas.json'), 'utf8'
 // A matrix that can pass by asserting nothing is not a check
 if (personas.length === 0) throw new Error('personas.json lists no personas.');
 for (const persona of personas) {
+    if (!persona.label) throw new Error(`${persona.name}: every row needs a label, or its tests are skipped.`);
     if (persona.noSpaces) continue;
     if (!persona.spaceId || !persona.space) throw new Error(`${persona.label}: a space and its id are required.`);
     for (const key of EXPECTATIONS) {
@@ -48,10 +51,15 @@ async function openSpace(page: Page, persona: Persona, tab: string): Promise<voi
     await expect(page.locator('mjc-space-header').getByText(persona.space!, { exact: true }).first()).toBeVisible();
 }
 
-/** The chat area needs a conversation before it shows its composer; open the first one the rail lists, when there is one. */
-async function openFirstConversation(page: Page): Promise<void> {
+/**
+ * The chat area draws its composer (and a closed space's banner) only for an open conversation, so a row that probes them needs
+ * one to open. The world seeds a General conversation in each such space; when the rail lists none, the row fails with that said.
+ */
+async function openFirstConversation(page: Page, persona: Persona): Promise<void> {
     const first = page.locator('mjc-space-rail .convo-link').first();
-    if (await first.count()) await first.click();
+    await expect(first, `${persona.label}: the rail lists no conversation, so the composer and the closed banner can't be probed`).toBeVisible();
+    await first.click();
+    await expect(page.locator('mjc-space-chat')).toBeVisible();
 }
 
 async function shoot(page: Page, persona: Persona, step: string): Promise<void> {
@@ -77,7 +85,7 @@ for (const persona of personas) {
         test(`${persona.label} sees what its seat allows`, async ({ page }) => {
             // The rail is on every tab; the chat area is on the Chat tab
             await openSpace(page, persona, 'chat');
-            await openFirstConversation(page);
+            if (persona.openConversation !== false) await openFirstConversation(page, persona);
             for (const key of EXPECTATIONS) {
                 if (persona.expect![key]) await expect(probe(page, key), key).toBeVisible();
                 else await expect(probe(page, key), key).toBeHidden();
@@ -92,8 +100,8 @@ for (const persona of personas) {
             }
         });
 
-        test(`${persona.label}: Settings & Assistant`, async ({ page }) => {
-            test.skip(!persona.expect!.settingsLink, 'this seat has no Settings & Assistant');
+        test(`${persona.label}: Settings`, async ({ page }) => {
+            test.skip(!persona.expect!.settingsLink, 'this seat has no Settings');
             await openSpace(page, persona, 'settings');
             await shoot(page, persona, 'settings');
         });

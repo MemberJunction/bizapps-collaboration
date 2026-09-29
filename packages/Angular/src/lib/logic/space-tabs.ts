@@ -17,7 +17,7 @@ export const BUILT_IN_TABS: readonly BuiltInTab[] = [
     { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check', panel: 'WorkPanel', sortKey: 30 },
     { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments', panel: 'MessagingPanel', sortKey: 40 },
     { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group', sortKey: 50 },
-    { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders', sortKey: 60 },
+    { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders', sortKey: 100 },
 ];
 
 /** Deep links spelled another way for the same tab. */
@@ -83,4 +83,17 @@ export function buildSpaceTabs(input: SpaceTabInputs): SpaceTabModel {
 export function resolveTabId(model: SpaceTabModel, key: string): string | null {
     const wanted = tabKey(key);
     return model.tabs.find((tab) => tabKey(tab.id) === wanted)?.id ?? null;
+}
+
+/**
+ * `buildSpaceTabs`, for a driver that may throw: on a failure the error goes to `onError` and the space still gets its built-in
+ * tabs (the ones its type's panels allow), so one faulty driver or contribution can't take a space down.
+ */
+export function buildSpaceTabsSafely(input: SpaceTabInputs, onError: (error: unknown) => void): SpaceTabModel {
+    try {
+        return buildSpaceTabs(input);
+    } catch (error) {
+        onError(error);
+        return buildSpaceTabs({ panels: input.panels, finalize: (defaults) => defaults, labelFor: (_key, label) => label });
+    }
 }

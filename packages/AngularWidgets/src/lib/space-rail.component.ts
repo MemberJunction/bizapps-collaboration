@@ -13,6 +13,15 @@ interface SpaceNavPref {
   collapsed: boolean;
 }
 
+const DEFAULT_RAIL_TABS: TabItem[] = [
+  { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-chart-pie' },
+  { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open' },
+  { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check' },
+  { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments' },
+  { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group' },
+  { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders' },
+];
+
 @Component({
   selector: 'mjc-space-rail',
   standalone: true,
@@ -86,105 +95,25 @@ interface SpaceNavPref {
             }
 
             <div class="nav-links-list">
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Overview'"
-                (click)="onTabClick('Overview')"
-                [title]="isCollapsed ? 'Overview' : ''">
-                <i class="fa-solid fa-chart-pie link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Overview</span>
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Library'"
-                (click)="onTabClick('Library')"
-                [title]="isCollapsed ? 'Library' : ''">
-                <i class="fa-solid fa-folder-open link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Library</span>
-                  @if (LibraryCount > 0) {
-                    <span class="link-badge">{{ LibraryCount }}</span>
-                  }
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Work'"
-                (click)="onTabClick('Work')"
-                [title]="isCollapsed ? 'Work' : ''">
-                <i class="fa-solid fa-list-check link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Work</span>
-                  @if (TaskCount > 0) {
-                    <span class="link-badge">{{ TaskCount }}</span>
-                  }
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'Chat'"
-                (click)="onTabClick('Chat')"
-                [title]="isCollapsed ? 'Chat' : ''">
-                <i class="fa-solid fa-comments link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">Chat</span>
-                }
-              </button>
-
-              <button
-                type="button"
-                class="space-nav-link"
-                [class.active]="ActiveTab === 'People'"
-                (click)="onTabClick('People')"
-                [title]="isCollapsed ? 'People' : ''">
-                <i class="fa-solid fa-user-group link-icon"></i>
-                @if (!isCollapsed) {
-                  <span class="link-label">People</span>
-                  @if (MemberCount > 0) {
-                    <span class="link-badge">{{ MemberCount }}</span>
-                  }
-                }
-              </button>
-
-              @if (CanConfigure) {
-                <button
-                  type="button"
-                  class="space-nav-link"
-                  [class.active]="ActiveTab === 'Settings'"
-                  (click)="onTabClick('Settings')"
-                  [title]="isCollapsed ? 'Settings' : ''">
-                  <i class="fa-solid fa-sliders link-icon"></i>
-                  @if (!isCollapsed) {
-                    <span class="link-label">Settings</span>
-                  }
-                </button>
-              }
-
-              <!-- Dynamic Plugin Tabs (from drivers e.g. Meetings, Papers, Motions) -->
-              @for (tab of ExtraTabs; track tab.id) {
-                <button
-                  type="button"
-                  class="space-nav-link"
-                  [class.active]="ActiveTab === tab.id"
-                  (click)="onTabClick(tab.id)"
-                  [title]="isCollapsed ? tab.label : ''">
-                  <i class="fa-solid link-icon" [class]="tab.iconClass || 'fa-layer-group'"></i>
-                  @if (!isCollapsed) {
-                    <span class="link-label">{{ tab.label }}</span>
-                    @if (tab.count) {
-                      <span class="link-badge">{{ tab.count }}</span>
+              @for (tab of Tabs; track tab.id) {
+                @if (tab.id !== 'Settings' || CanConfigure) {
+                  <button
+                    type="button"
+                    class="space-nav-link"
+                    [class.active]="ActiveTab === tab.id"
+                    [attr.aria-current]="ActiveTab === tab.id ? 'page' : null"
+                    (click)="onTabClick(tab.id)"
+                    [title]="isCollapsed ? tab.label : ''"
+                    [attr.aria-label]="tab.label">
+                    <i class="link-icon" [class]="tab.iconClass || 'fa-solid fa-layer-group'" aria-hidden="true"></i>
+                    @if (!isCollapsed) {
+                      <span class="link-label">{{ tab.label }}</span>
+                      @if (badgeFor(tab) > 0) {
+                        <span class="link-badge">{{ badgeFor(tab) }}</span>
+                      }
                     }
-                  }
-                </button>
+                  </button>
+                }
               }
             </div>
           </div>
@@ -931,7 +860,8 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() SpaceIcon = 'fa-shapes';
   @Input() SpaceBand: SpaceBand = 'Shared';
   @Input() ActiveTab = 'Overview';
-  @Input() ExtraTabs: TabItem[] = [];
+  /** The tabs of the space shown, as its type arranged them: the rail lists exactly these, with these labels. */
+  @Input() Tabs: TabItem[] = DEFAULT_RAIL_TABS;
 
   /** Whether the caller may configure this space. Settings & Assistant is offered only to those who can. */
   @Input() CanConfigure = false;
@@ -977,6 +907,16 @@ export class CollabSpaceRailComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  /** The count a tab's link shows: the library's items, the tasks, the people, or the tab's own. */
+  public badgeFor(tab: TabItem): number {
+    switch (tab.id) {
+      case 'Library': return this.LibraryCount;
+      case 'Work': return this.TaskCount;
+      case 'People': return this.MemberCount;
+      default: return tab.count ?? 0;
+    }
   }
 
   public onNewConversation(): void {

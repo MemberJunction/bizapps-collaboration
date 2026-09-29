@@ -119,7 +119,9 @@ export interface SubSpaceSummary {
                 <div class="fw7 fs14">Team only</div>
                 <div class="fs12 muted">{{ FirmName ? 'Only ' + FirmName + ' staff' : 'Only the team can see these' }} · {{ TeamTotalCount || TeamItems.length }} {{ (TeamTotalCount || TeamItems.length) === 1 ? 'item' : 'items' }} · never quoted to {{ ClientOrgName || 'outside participants' }}</div>
               </div>
-              <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+              @if (ShowLibraryLink) {
+                <a class="link fs12 open-lib-link" [mjClickable]="'Open library'" (click)="onOpenLibrary($event)">Open library</a>
+              }
             </div>
             @if (TeamItems.length === 0) {
               <mj-empty-state Icon="fa-solid fa-lock" Title="No team files yet" Message="Files only the team can see appear here."></mj-empty-state>
@@ -163,10 +165,12 @@ export interface SubSpaceSummary {
             <div class="card-h">
               <span class="h3">Discussion</span>
               <mjc-band-chip [Band]="DiscussionBand" [Label]="(DiscussionBand === 'Team' ? 'Team only' : 'Everyone') + ' · ' + AudienceCount" />
-              <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
+              @if (ShowChatLink) {
+                <a class="link open-chat-link" [mjClickable]="'Open chat'" (click)="onOpenChat($event)">Open chat</a>
+              }
             </div>
             @if (RoomMessages.length === 0) {
-              <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" Message="Start a conversation from the ask box or the Chat tab."></mj-empty-state>
+              <mj-empty-state Icon="fa-solid fa-comments" Title="No messages yet" [Message]="CanStartConversation ? 'Start a conversation from the ask box or the Chat tab.' : 'No messages yet.'"></mj-empty-state>
             }
             <div class="mini-msgs">
               @for (msg of RoomMessages; track msg.id || $index) {
@@ -437,12 +441,17 @@ export interface SubSpaceSummary {
 export class CollabSpaceOverviewComponent {
   @Input() public SpaceName = '';
   @Input() public SpaceId = '';
+  /** False when the space's type has no Library (or Chat): the entry points to it aren't offered. */
+  @Input() public ShowLibraryLink = true;
+  @Input() public ShowChatLink = true;
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
   @Input() public FirmName = '';
   @Input() public ClientOrgName = '';
   @Input() public ClientPersonaName = '';
   @Input() public AudienceCount = 0;
+  /** Everyone who can see the Shared band, whichever conversation is open: the Shared card counts these. */
+  @Input() public SharedAudienceCount = 0;
 
   @Input() public SharedBandTitle = '';
   @Input() public SharedBandSubtitle = '';
@@ -485,7 +494,7 @@ export class CollabSpaceOverviewComponent {
 
   public get SharedSubtitle(): string {
     if (this.SharedBandSubtitle) return this.SharedBandSubtitle;
-    return `${this.AudienceCount} ${this.AudienceCount === 1 ? 'person' : 'people'} can see these`;
+    return `${this.SharedAudienceCount} ${this.SharedAudienceCount === 1 ? 'person' : 'people'} can see these`;
   }
 
   public clearAskBox(): void {

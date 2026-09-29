@@ -15,7 +15,8 @@ export interface ChainSpace {
 
 /**
  * The spaces whose seats reach `spaceId`, nearest first: the space itself, then each parent while the child inherits
- * membership. A sealed space (one that doesn't inherit) stops the walk, and so does a parent that can't be found.
+ * membership. A sealed space (one that doesn't inherit) stops the walk. A parent the viewer can't read still counts (its Active
+ * seats are readable): it joins the chain unnamed, and the walk ends there, since nothing is known of what lies above it.
  */
 export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): ChainSpace[] {
     const chain: ChainSpace[] = [];
@@ -26,7 +27,12 @@ export function accessChain(spaceId: string, spaces: readonly TreeSpace[]): Chai
         chain.push({ id: current.ID, name: current.Name });
         if (!current.InheritsMembership || !current.ParentID) break;
         const parentId: string = current.ParentID;
-        current = spaces.find((s) => UUIDsEqual(s.ID, parentId));
+        const parent = spaces.find((s) => UUIDsEqual(s.ID, parentId));
+        if (!parent) {
+            chain.push({ id: parentId, name: '' });
+            break;
+        }
+        current = parent;
     }
     return chain;
 }
@@ -37,20 +43,31 @@ export interface ReachedSeat<T> {
     from: ChainSpace;
     /** True when the seat sits on an ancestor rather than on the space itself: it is shown, but changed only where it sits. */
     inherited: boolean;
+    /** The status of the person's own seat on this space when it isn't the one they reach through (Invited or Removed). */
+    ownSeatStatus?: string;
 }
 
 /**
- * One seat per person: the nearest one along the chain. A nearer seat shadows a farther one, so a person removed on the space
- * itself doesn't reappear through its parent.
+ * One seat per person, the way the server counts it: the nearest ACTIVE seat along the chain. An Invited or Removed seat on the
+ * space itself doesn't stop an ancestor's Active seat from counting, so it is not what the person is listed under; it is shown
+ * beside them (`ownSeatStatus`), or as its own row for a person nothing else reaches.
  */
-export function nearestSeats<T extends { SpaceID: string; UserID: string }>(rows: readonly T[], chain: readonly ChainSpace[]): ReachedSeat<T>[] {
+export function nearestSeats<T extends { SpaceID: string; UserID: string; Status: string }>(rows: readonly T[], chain: readonly ChainSpace[]): ReachedSeat<T>[] {
     const byUser = new Map<string, ReachedSeat<T>>();
     chain.forEach((link, depth) => {
         for (const row of rows) {
-            if (!UUIDsEqual(row.SpaceID, link.id)) continue;
+            if (row.Status !== 'Active' || !UUIDsEqual(row.SpaceID, link.id)) continue;
             const key = row.UserID.toLowerCase();
             if (!byUser.has(key)) byUser.set(key, { row, from: link, inherited: depth > 0 });
         }
     });
+    const own = chain[0];
+    for (const row of own ? rows : []) {
+        if (row.Status === 'Active' || !UUIDsEqual(row.SpaceID, own.id)) continue;
+        const key = row.UserID.toLowerCase();
+        const listed = byUser.get(key);
+        if (listed) listed.ownSeatStatus = row.Status;
+        else byUser.set(key, { row, from: own, inherited: false });
+    }
     return [...byUser.values()];
 }
