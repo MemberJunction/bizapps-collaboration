@@ -314,16 +314,15 @@ describe('resolveSpaceChatHostRules', () => {
         assert.deepEqual(result.allowedAgentIds, [OTHER_AGENT_ID]);
     });
 
-    it('does not name a disabled agent as the default, and falls back to the shipped agent', async () => {
+    it('names no default and lists no agent when a space that replaced the list has no Active agent: the shipped one does not stand in', async () => {
         const provider = createMockProvider({
             spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
             spaceAgents: [{ AgentID: DISABLED_AGENT_ID, IsDefault: true }],
         });
         const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
         assert.equal(result.ok, true);
-        assert.equal(result.defaultAgentId, SHIPPED_AGENT_ID);
-        assert.equal(result.defaultAgentName, SHIPPED_AGENT_NAME);
-        assert.deepEqual(result.allowedAgentIds, [SHIPPED_AGENT_ID]);
+        assert.equal(result.defaultAgentId, null);
+        assert.deepEqual(result.allowedAgentIds, []);
     });
 
     it('drops an agent that does not exist from the list', async () => {

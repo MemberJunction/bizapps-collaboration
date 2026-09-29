@@ -262,6 +262,34 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         assert.equal(result.defaultAgentId, null);
     });
 
+    it('refuses, rather than skipping a link, when a type configuration does not parse', async () => {
+        currentOptions = { typeConfig: '{ not json' };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+    });
+
+    it('refuses when a space that holds agent rows has a configuration that does not parse', async () => {
+        currentOptions = {
+            spaceConfig: '{ not json',
+            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+    });
+
+    it('gives no agents and no default when a level replaced the list and none of its agents is Active, and the shipped one is Active', async () => {
+        currentOptions = {
+            spaceConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            typeConfig: JSON.stringify({ SpaceOverridable: ['Agents.ListMode'] }),
+            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+            inactiveAgentIds: [CHILD_AGENT_ID],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+        assert.deepEqual(result.allowedAgentIds, []);
+        assert.equal(result.defaultAgentId, null);
+    });
+
     it('uses the shipped agent as the last resort when nothing configured is Active', async () => {
         currentOptions = {
             agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],

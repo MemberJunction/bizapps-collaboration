@@ -633,3 +633,30 @@ export function ResolveCollaborationSettings(
         Extensions: extensions,
     };
 }
+
+/**
+ * Whether a space of `childTypeCode` may sit under a space whose type has `parentTypeConfig`. A type that lists no
+ * `Children.AllowedTypeCodes` allows any child; a listed (even empty) list allows exactly those. `MaxOpen` caps the open children.
+ * Returns the refusal, or null.
+ */
+export function refuseChildType(
+    parentTypeConfig: CollaborationSettings | null | undefined,
+    childTypeCode: string | null | undefined,
+    openSiblings: number,
+): string | null {
+    const children = parentTypeConfig?.Children;
+    if (!children) return null;
+    const allowed = children.AllowedTypeCodes;
+    if (allowed) {
+        const code = (childTypeCode ?? '').toLowerCase().trim();
+        if (!allowed.some((candidate) => candidate.toLowerCase().trim() === code)) {
+            return allowed.length === 0
+                ? 'This kind of space cannot contain sub-spaces.'
+                : `A space of type "${childTypeCode ?? 'unknown'}" cannot sit under this kind of space (allowed: ${allowed.join(', ')}).`;
+        }
+    }
+    if (children.MaxOpen !== undefined && openSiblings >= children.MaxOpen) {
+        return `This space already holds ${openSiblings} open sub-spaces, the most its type allows (${children.MaxOpen}).`;
+    }
+    return null;
+}

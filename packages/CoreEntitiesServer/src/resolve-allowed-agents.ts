@@ -81,13 +81,16 @@ export async function resolveAllowedAgents(
             },
             userToUse
         );
-        if (parentRes.Success && parentRes.Results && parentRes.Results.length > 0) {
-            const parentSpace = parentRes.Results[0];
-            spaceChain.unshift(parentSpace); // Insert at beginning so root is first
-            currentParentId = parentSpace.ParentID;
-        } else {
-            break;
+        // Fails closed: a parent that can't be read is not the top of the chain, and an agent list resolved without it could be wrong
+        if (!parentRes.Success) {
+            throw refuse(`the parent space ${currentParentId} could not be read: ${parentRes.ErrorMessage ?? 'unknown error'}`);
         }
+        if (!parentRes.Results || parentRes.Results.length === 0) {
+            throw refuse(`the parent space ${currentParentId} was not found.`);
+        }
+        const parentSpace = parentRes.Results[0];
+        spaceChain.unshift(parentSpace); // Insert at beginning so root is first
+        currentParentId = parentSpace.ParentID;
     }
 
     // Load SpaceType configuration from CollaborationEngine once without per-request full reload
@@ -100,14 +103,15 @@ export async function resolveAllowedAgents(
         try {
             typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
         } catch (err) {
-            LogError(`Failed to parse SpaceType configuration for ${spaceTypeId}: ${err instanceof Error ? err.message : String(err)}`);
-            typeConfig = null;
+            throw refuse(`the space type ${spaceTypeId} has a configuration that does not parse: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
     // App-wide level from CollaborationEngine
     const appRows = CollaborationEngine.Instance.AppSpaceAgents;
     let currentList: SpaceAgentItem[] = [];
+    // Set when a level's ListMode: 'Replace' chose the list: the shipped assistant must not stand in for it
+    let listWasReplaced = false;
 
     if (appRows.length > 0) {
         currentList = appRows.map((r) => ({
@@ -139,6 +143,7 @@ export async function resolveAllowedAgents(
             }));
 
             if (typeListMode === 'Replace') {
+                listWasReplaced = true;
                 currentList = mappedType;
             } else {
                 // Extend: deduplicate by agentId, keeping type entry if collision
@@ -160,7 +165,10 @@ export async function resolveAllowedAgents(
         userToUse
     );
 
-    const spaceAgentRows = agentsRes.Success && agentsRes.Results ? agentsRes.Results : [];
+    if (!agentsRes.Success) {
+        throw refuse(`the space agent rows could not be read: ${agentsRes.ErrorMessage ?? 'unknown error'}`);
+    }
+    const spaceAgentRows = agentsRes.Results ?? [];
 
     // Space levels (top-down from root to target space)
     for (const sp of spaceChain) {
@@ -171,8 +179,8 @@ export async function resolveAllowedAgents(
             if (sp.Configuration) {
                 try {
                     spaceConfig = JSON.parse(sp.Configuration) as ISpaceConfiguration;
-                } catch {
-                    spaceConfig = null;
+                } catch (err) {
+                    throw refuse(`space ${sp.ID} has a configuration that does not parse: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
             const rules: EffectiveSpaceRules = ResolveSpaceRules(typeConfig, spaceConfig);
@@ -186,6 +194,7 @@ export async function resolveAllowedAgents(
             }));
 
             if (spaceListMode === 'Replace') {
+                listWasReplaced = true;
                 currentList = mappedSpace;
             } else {
                 const existingIds = new Set(mappedSpace.map((m) => normalizeId(m.agentId)));
@@ -203,8 +212,8 @@ export async function resolveAllowedAgents(
         }
     }
     currentList = currentList.filter((item) => activeIds.has(normalizeId(item.agentId)));
-    if (currentList.length === 0) {
-        // Nothing configured is Active: the shipped agent is the last resort, when it is Active itself
+    if (currentList.length === 0 && !listWasReplaced) {
+        // Nothing configured is Active and no level replaced the list: the shipped agent is the last resort, when it is Active itself
         const shipped = await loadActiveAgentIds(rv, userToUse, [COLLABORATION_DEFAULT_AGENT_ID]);
         if (shipped.has(normalizeId(COLLABORATION_DEFAULT_AGENT_ID))) {
             currentList = [{ agentId: COLLABORATION_DEFAULT_AGENT_ID, isDefault: true, source: 'App' }];
@@ -240,4 +249,10 @@ async function loadActiveAgentIds(rv: RunView, user: UserInfo | undefined, agent
         throw new Error(`Allowed agents refused: the agents could not be read: ${res.ErrorMessage ?? 'unknown error'}`);
     }
     return new Set((res.Results ?? []).map((row) => normalizeId(row.ID)));
+}
+
+/** A refusal of the agent list: logged, and thrown by the caller, so nothing resolves with a link of the chain missing. */
+function refuse(message: string): Error {
+    LogError(`resolveAllowedAgents: ${message}`);
+    return new Error(`Agent list refused: ${message}`);
 }

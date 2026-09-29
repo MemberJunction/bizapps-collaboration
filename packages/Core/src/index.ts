@@ -76,6 +76,7 @@ export {
     DEFAULT_SPACE_RULES,
     DEFAULT_COLLABORATION_SETTINGS,
     MissingAppSettingsError,
+    refuseChildType,
     ResolveCollaborationSettings,
     ResolveSpaceRules,
     ValidateCollaborationSettings,

@@ -319,6 +319,25 @@ const checks: NamedCheck[] = [
             Assert(gone.length === 0, 'Closed, the board deletes');
         },
     },
+    {
+        Id: 'extensions.EX8',
+        Name: "EX8 — a type's Children.AllowedTypeCodes is enforced: nothing may sit under a cohort, and a workspace may hold a project",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const types = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_TYPE_ENTITY, "Code IN ('project', 'workspace')", ['ID', 'Code']);
+            const project = types.find((t) => t.Code === 'project')?.ID;
+            Assert(!!project, 'The Project type is on this host');
+            const COHORT = 'C1000001-0000-4000-8000-000000000005';
+            const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
+            const underCohort = await newSpace(ctx, ada, { name: 'EX8-under-cohort', typeId: project!, parentId: COHORT, inherits: true });
+            Assert(!(await underCohort.Save()), 'A project under a cohort must be refused');
+            Assert(/cannot contain sub-spaces/.test(underCohort.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${underCohort.LatestResult?.CompleteMessage ?? ''}`);
+            const underWorkspace = await newSpace(ctx, ada, { name: 'EX8-under-workspace', typeId: project!, parentId: DISCOVERY, inherits: true });
+            Assert(await underWorkspace.Save(), `A project under a workspace is accepted: ${underWorkspace.LatestResult?.CompleteMessage ?? ''}`);
+            await cleanupSpace(ctx.Provider, ctx.User, underWorkspace.ID);
+        },
+    },
 ];
 
 registerChecks(checks);

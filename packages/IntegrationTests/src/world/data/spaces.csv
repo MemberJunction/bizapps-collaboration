@@ -6,7 +6,7 @@ committee,C1000001-0000-4000-8000-000000000004,Audit committee,committee,,ada,1,
 cohort,C1000001-0000-4000-8000-000000000005,Spring cohort,cohort,,ada,1,Included,,,fa-solid fa-graduation-cap,#1565c0,https://images.unsplash.com/photo-cohort
 field-notes,C1000001-0000-4000-8000-000000000011,Field notes,workspace,discovery,ada,1,Included,,,fa-solid fa-note-sticky,#00838f,https://images.unsplash.com/photo-field-notes
 delivery-room,C1000001-0000-4000-8000-000000000012,Delivery room,workspace,delivery,ada,1,Included,,,fa-solid fa-box-archive,#c2185b,https://images.unsplash.com/photo-delivery-room
-cohort-archive,C1000001-0000-4000-8000-000000000013,Cohort archive,cohort,cohort,ada,1,Included,past,,fa-solid fa-archive,#5d4037,https://images.unsplash.com/photo-cohort-archive
+cohort-archive,C1000001-0000-4000-8000-000000000013,Cohort archive,cohort,,ada,1,Included,past,,fa-solid fa-archive,#5d4037,https://images.unsplash.com/photo-cohort-archive
 harbor,C1000001-0000-4000-8000-000000000006,Harbor relationship,workspace,,harbor,1,Included,,,fa-solid fa-anchor,#0277bd,https://images.unsplash.com/photo-harbor
 closed-recent,C1000001-0000-4000-8000-000000000007,Closed this month,workspace,northwind,ada,1,Included,recent,Month,fa-solid fa-calendar-xmark,#78909c,https://images.unsplash.com/photo-closed-recent
 closed-past,C1000001-0000-4000-8000-000000000008,Closed last year,workspace,northwind,ada,1,ExcludedEntirely,past,Month,fa-solid fa-calendar-minus,#b0bec5,https://images.unsplash.com/photo-closed-past

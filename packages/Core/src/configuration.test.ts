@@ -6,6 +6,7 @@ import {
     ResolveSpaceRules,
     ValidateCollaborationSettings,
     validateSpaceConfiguration,
+    refuseChildType,
     validateSpaceTypeConfiguration,
     type CollaborationSettings,
     type ISpaceConfiguration,
@@ -283,5 +284,23 @@ describe('Configuration & ResolveSpaceRules', () => {
             assert.equal(res5.valid, false);
             assert.match(res5.errors[0], /StorageAccountID cannot be overridden by space/);
         });
+    });
+});
+
+describe('which types a space may contain', () => {
+    it('allows any child when the type lists none, exactly the listed ones when it lists some, and none for an empty list', () => {
+        assert.equal(refuseChildType(null, 'project', 0), null);
+        assert.equal(refuseChildType({}, 'project', 0), null);
+        const team = { Children: { AllowedTypeCodes: ['project', 'Working-Group'] } };
+        assert.equal(refuseChildType(team, 'PROJECT', 0), null);
+        assert.equal(refuseChildType(team, 'working-group', 0), null);
+        assert.match(refuseChildType(team, 'cohort', 0) ?? '', /cannot sit under this kind of space/);
+        assert.match(refuseChildType({ Children: { AllowedTypeCodes: [] } }, 'project', 0) ?? '', /cannot contain sub-spaces/);
+    });
+
+    it('refuses a child beyond MaxOpen, and counts only the open ones passed in', () => {
+        const capped = { Children: { MaxOpen: 2 } };
+        assert.equal(refuseChildType(capped, 'project', 1), null);
+        assert.match(refuseChildType(capped, 'project', 2) ?? '', /most its type allows \(2\)/);
     });
 });
