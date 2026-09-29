@@ -16,9 +16,9 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 - It's the whole Explorer surface:
   - Home (the spaces you reach, with the counts `GetHomeCounts` reads; Open Tasks and Invitations Waiting open the rows behind them, from `GetHomeLists`), Inbox, My Tasks and Files;
   - a space's page, with Overview, Library, Work (list, board and timeline), Chat, People, Settings, and any tabs a type or another app contributes;
-  - the share, upload, new-conversation and New space dialogs. New space is offered from the rail's + to someone who holds *Administer Spaces* and may create Space rows: it lists the active types, draws a type's details when the type names a subtype, and asks the server's `CreateSpace` to write the space, its subtype and the person's owner seat in one transaction.
+  - the share, upload, new-conversation and New space dialogs. New space is offered from the rail's + to someone who holds *Administer Spaces* and may create Space rows: it lists the active types, draws a type's details when the type names a subtype, and asks the server's `CreateSpace` to write the space, its subtype and the person's owner seat in one transaction. When kinds are picked in quick succession, only the latest pick's draft reaches the screen (`NewSpacePicks`, over `LatestOnly`).
 - A space whose type names a subtype shows its details in a Details card in Settings, editable by someone who may change settings, and read-only in an About card on the Overview (`src/lib/logic/space-details.ts`).
-- One component draws those details on all three screens (`SpaceDetailsViewComponent`, `src/lib/space-details-view.component.ts`): a component the type's UI driver gives, else MJ's form for the subtype through `mj-entity-form-host` (no toolbar, no related entities, no record links), else a field for each column the subtype adds. `planDetailsView` (`src/lib/logic/details-view.ts`) decides which.
+- One component draws those details on all three screens (`SpaceDetailsViewComponent`, `src/lib/space-details-view.component.ts`): a component the type's UI driver gives; else MJ's form for the subtype through `mj-entity-form-host` (no toolbar, no related entities, no record links), when the subtype's own columns sit in sections of it that hold none of the space's, showing only those sections (`VisibleSectionKeys`); else a field for each column the subtype adds. `planDetailsView` (`src/lib/logic/details-view.ts`) decides which, and `ownFormSections` in `collaboration-entities` finds the sections.
 - Settings closes and reopens a space, and the confirmation shows what `GetCloseConsequence` says a close will do.
 - The query parameters are `view`, `space`, `tab`, `item`, `conv` and `workView`, and back and forward restore them. It calls `SetAgentContext` and `NotifyLoadComplete()`.
 - The page's decisions that don't need Angular live in `src/lib/logic/`, as plain functions with their own tests.
@@ -33,10 +33,9 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. Its `test` script typechecks and runs the 23 `node:test` files in `src/lib/logic/` (135 tests), and the root `pnpm test` runs them too.
+The build is `ngc`, into `dist/`. Its `test` script typechecks, runs 23 of the 24 `node:test` files in `src/lib/logic/` (136 tests; `new-space-picks.test.ts` isn't in the list), then runs Vitest on the rendered tests (`*.render.test.ts`, in jsdom: five of the details view, with stand-ins for MJ's form host and fields). The root `pnpm test` runs them too.
 
 ## Not done yet
 
 - A sub-space made through the New space dialog.
-- A subtype's generated form draws the space's own columns as well as the subtype's, since they share one section; the details screens should show only the subtype's own section.
 - Header chips, needs-you items and agenda items from contributions.

@@ -5,7 +5,7 @@ Two example space types that exercise the extension model end to end: a board an
 - **Private.** It's never published, and `mj-app.json` doesn't list it.
 - **Layer:** `widgets`.
 - **Four entries:** `.` for the browser (the UI drivers and their components, and CodeGen's forms for the two subtype entities), `./server` for the server (the server drivers, a lifecycle subscriber, a signal provider, and `RESOLVER_PATHS`, which names the resolvers entry for MJAPI), `./resolvers` for a host's MJAPI (the GraphQL resolvers CodeGen writes for the two subtype entities), and `./entities` for a process that reads and writes the subtypes but must not run the server's rules (the entity classes only).
-- **Depends on:** Angular 21 (`common`, `core`), Collaboration's `core`, `core-entities-server`, `entities` and `ng-widgets`, MJ's `core`, `core-entities`, `global`, `ng-base-forms`, `ng-base-types`, `ng-entity-viewer`, `ng-link-directives` and `ng-ui-components`, `class-validator` and `zod`. Peer: MJ's `server`, for the resolvers.
+- **Depends on:** Angular 21 (`common`, `core`, `forms`), Collaboration's `core`, `core-entities-server`, `entities` and `ng-widgets`, MJ's `core`, `core-entities`, `global`, `ng-base-forms`, `ng-base-types`, `ng-entity-viewer`, `ng-link-directives` and `ng-ui-components`, `class-validator` and `zod`. Peer: MJ's `server`, for the resolvers.
 
 ## What's in it
 
@@ -24,8 +24,9 @@ The types themselves are rows in `metadata-tests/space-types/`, with a third, `e
 **`ExampleAnySpaceNoticeCard`** is a card another app could add to every space type.
 
 **Their tables.** `migrations/` creates the board's and the room's own tables, `ExampleBoard` and `ExampleRoom`, in a schema of their own, `__mj_BizAppsCollabExamples`, followed by CodeGen's output for them. Each is keyed by its space's ID, and that key is a foreign key to `Space`. The keys don't cascade: MJ deletes a subtype's row through the subtype's own `Delete()`, so its permissions, its record changes and its driver all run; a test database that applied the migration before that change keeps keys that cascade until it's built again.
-- The package has its own CodeGen config (`mj.config.cjs`), which generates only that schema, into this package. `codegen-schema-info.json` declares both tables IsA children of Space. The entity classes, the resolvers and the Angular forms are in `src/generated/`.
-- Only a test database gets the schema. Apply it before `pnpm run mj:push:tests`, which pushes the two entities' permissions from `metadata-tests/entity-permissions/` (see [building the database](../../docs/building-the-database.md)):
+- The package has its own CodeGen config (`mj.config.cjs`), which generates only that schema, into this package. `codegen-schema-info.json` declares both tables IsA children of Space. The entity classes, the resolvers and the Angular forms are in `src/generated/`. The config names the `./entities` entry as the entity package, so the resolvers import only the entity classes, and neither server build compiles a file of the browser entry.
+- Each column a subtype adds has a category (`Board Details`, `Deal Details`), set in `metadata-tests/entity-fields/`, so each form puts those columns in a section of their own (`boardDetails`, `dealDetails`), apart from the space's `details`, and the space's screens show that section alone. Push the categories before running CodeGen for the package: it lays out the forms by them.
+- Only a test database gets the schema. Apply it before `pnpm run mj:push:tests`, which pushes the two entities' permissions and their columns' categories from `metadata-tests/entity-permissions/` and `metadata-tests/entity-fields/` (see [building the database](../../docs/building-the-database.md)):
 
   ```bash
   pnpm run mj:migrate:examples
@@ -42,9 +43,3 @@ pnpm --filter @mj-biz-apps/collaboration-example-space-types test
 ```
 
 Both builds make `dist/resolvers.js`. The tests typecheck the package and run Vitest, 45 tests in `example-space-types.test.ts`. The root `pnpm test` runs them too. Against a database, the `extensions` checks (EX1 to EX12) run the server drivers; they and the `subtypes` checks (ST1 to ST4) create boards and rooms through their subtypes, and the client's `subtypes` checks (SC1 to SC3) create and edit boards over GraphQL.
-
-## Not done yet
-
-- CodeGen's forms for the two entities put the space's own columns in the same section as the subtype's, so the space's screens, which show them through MJ's form host, draw the whole space record (the extensibility plan's [§ 7](../../docs/EXTENSIBILITY_PLAN.md#7-isa-subtypes-and-their-forms)).
-- The generated resolvers import the entity classes from the package's browser entry (`entityPackageName` in `mj.config.cjs`), so an MJAPI that loads them loads the browser code too.
-- The forms import `@angular/forms`, which the package doesn't declare, so a clean install can't load its browser entry.

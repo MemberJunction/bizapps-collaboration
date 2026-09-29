@@ -36,7 +36,7 @@ On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subcl
 - Only MemberJunction's `next` calls `ResolveLoadHint` ([MJ#4787](https://github.com/MemberJunction/MJ/pull/4787)); a release without it never does.
 - `LoadSpaceSubtypeResolver()` keeps it from being tree-shaken; both startup exports (`LoadBizAppsCollaborationServer` and `LoadBizAppsCollaborationClient`) call it.
 
-**`ownDetailFields(leaf)`** (`src/detail-fields.ts`) reads a subtype record's own columns, the ones a space's screens ask for, from its entity metadata, through `collaboration-core`'s `detailFields`.
+**`ownDetailFields(leaf)`** (`src/detail-fields.ts`) reads a subtype record's own columns, the ones a space's screens ask for, from its entity metadata, through `collaboration-core`'s `detailFields`. **`ownFormSections(leaf)`**, beside it, names the sections of the subtype's generated form that hold only those columns (`subtypeFormSections`), or returns null when the form can't be shown without the space's own columns.
 
 **`CollaborationSpacePermissionProvider`** (`src/space-permission-provider.ts`) answers MJ's permission checks for the `Collaboration Spaces` permission domain and the `Space` resource type, both seeded in `metadata/`.
 - It's registered with `@RegisterClass(PermissionProviderBase, 'CollaborationSpacePermissionProvider')`, the class name the domain's metadata row names.
