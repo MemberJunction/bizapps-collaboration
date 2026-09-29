@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
-import { coreSchema, sqlUuid } from './ids.js';
+import { CHECK_SPACE_PREFIX, coreSchema, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
@@ -41,7 +41,7 @@ export async function purgeWorld(): Promise<void> {
     if (!DB_HOST || !DB_DATABASE || !DB_USERNAME || !DB_PASSWORD) throw new Error('Set DB_HOST, DB_DATABASE, DB_USERNAME and DB_PASSWORD.');
     const dir = dataDir();
     const userIds = idList(readCsv(join(dir, 'personas.csv')), 'persona');
-    const spaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
+    const worldSpaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
     const typeIds = idList(readCsv(join(dir, 'types.csv')), 'space type');
     const core = coreSchema();
     const pool = await sql.connect({
@@ -52,6 +52,11 @@ export async function purgeWorld(): Promise<void> {
         password: DB_PASSWORD,
         options: { trustServerCertificate: true, encrypt: false },
     });
+    // Spaces a check created and did not clean up (its run died first) go with the world; they carry the check marker
+    const markedSpaces = await pool.request().query<{ ID: string }>(
+        `SELECT ID FROM __mj_BizAppsCollaboration.Space WHERE Name LIKE '${CHECK_SPACE_PREFIX.replace(/'/g, "''")}%'`,
+    );
+    const spaceIds = [worldSpaceIds, ...(markedSpaces.recordset ?? []).map((row) => sqlUuid(row.ID, 'check space'))].join(',');
     const stored = await pool.request().query(`
         SELECT f.ProviderKey AS ProviderKey
         FROM [${core}].[File] AS f

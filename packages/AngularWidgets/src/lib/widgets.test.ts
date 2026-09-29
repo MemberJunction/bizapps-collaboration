@@ -332,24 +332,27 @@ describe('CollabSpaceRailComponent', () => {
     expect(newConvoEmitted).toBe(true);
   });
 
-  it('binds conversations with unread counts and bands', () => {
+  it('binds conversations with their bands, and highlights the open one when the URL differs in case', () => {
     const comp = new CollabSpaceRailComponent();
+    const GENERAL = 'A1B2C3D4-0000-4000-8000-00000000000A';
+    const INTERNAL = 'B1B2C3D4-0000-4000-8000-00000000000B';
     comp.Conversations = [
-      { id: 'c1', name: 'General', kind: 'General', band: 'Shared', unreadCount: 3 },
-      { id: 'c2', name: 'Internal Sync', kind: 'Private', band: 'Team', unreadCount: 0 },
+      { id: GENERAL, name: 'General', kind: 'General', band: 'Shared' },
+      { id: INTERNAL, name: 'Internal Sync', kind: 'Private', band: 'Team' },
     ];
-    comp.ActiveConversationId = 'c1';
+    comp.ActiveConversationId = GENERAL.toLowerCase();
 
     let selectedConv = '';
     comp.ConversationSelectRequested.subscribe(id => {
       selectedConv = id;
     });
 
-    comp.onConversationClick('c2');
-    expect(selectedConv).toBe('c2');
-    expect(comp.Conversations[0].unreadCount).toBe(3);
+    comp.onConversationClick(INTERNAL);
+    expect(selectedConv).toBe(INTERNAL);
     expect(comp.Conversations[0].band).toBe('Shared');
     expect(comp.Conversations[1].band).toBe('Team');
+    expect(comp.IsActiveConversation(comp.Conversations[0].id)).toBe(true);
+    expect(comp.IsActiveConversation(comp.Conversations[1].id)).toBe(false);
   });
 });
 
@@ -775,6 +778,54 @@ describe('CollabUploadDialogComponent', () => {
       fileType: undefined,
       file: undefined,
       url: 'https://docs.google.com/document/d/999/edit',
+    });
+  });
+
+  describe('the band it starts on and offers', () => {
+    function submitted(comp: CollabUploadDialogComponent): CollabUploadSubmitPayload | null {
+      comp.setMode('link');
+      comp.linkUrl = 'https://docs.google.com/document/d/999/edit';
+      comp.docTitle = 'Plan';
+      let payload: CollabUploadSubmitPayload | null = null;
+      comp.SubmitRequested.subscribe(p => {
+        payload = p;
+      });
+      comp.onSubmit();
+      return payload;
+    }
+
+    it("starts on the band the space type's default gives this seat, and sends it", () => {
+      // Ada in Discovery, a Team-default space, where she may choose either band
+      const ada = new CollabUploadDialogComponent();
+      ada.AllowedBands = ['Shared', 'Team'];
+      ada.StartBand = 'Team';
+      expect(ada.selectedBand).toBe('Team');
+      expect(submitted(ada)?.band).toBe('Team');
+    });
+
+    it('offers a seat that can only keep material on Team just that band', () => {
+      // Sam, a Member in Discovery
+      const sam = new CollabUploadDialogComponent();
+      sam.AllowedBands = ['Team'];
+      sam.StartBand = 'Team';
+      expect(sam.IsBandAllowed('Team')).toBe(true);
+      expect(sam.IsBandAllowed('Shared')).toBe(false);
+      expect(submitted(sam)?.band).toBe('Team');
+    });
+
+    it('offers a client just Shared', () => {
+      const client = new CollabUploadDialogComponent();
+      client.AllowedBands = ['Shared'];
+      client.StartBand = 'Shared';
+      expect(client.IsBandAllowed('Team')).toBe(false);
+      expect(submitted(client)?.band).toBe('Shared');
+    });
+
+    it("sends no band when the seat wasn't resolved and nothing was chosen, so the server applies the type's default", () => {
+      const unknown = new CollabUploadDialogComponent();
+      unknown.StartBand = null;
+      expect(unknown.selectedBand).toBeNull();
+      expect(submitted(unknown)?.band).toBeNull();
     });
   });
 

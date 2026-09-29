@@ -422,14 +422,28 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             return true;
         }
 
+        const reached = await this.ReachedSeat(user, spaceId, md);
+        return !!reached?.role.isOwnerRole;
+    }
+
+    /**
+     * The seat through which a user reaches a space: their own seat on it, or one on an ancestor it inherits from.
+     * Null when they don't reach it, or when the tree or the seats can't be read.
+     */
+    public async ReachedSeat(
+        user: UserInfo,
+        spaceId: string,
+        provider?: IMetadataProvider
+    ): Promise<ReturnType<typeof membershipReaches>> {
+        const md = provider ?? Metadata.Provider;
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(spaceId.trim()) || !user?.ID || !uuidRegex.test(user.ID.trim())) {
-            return false;
+            return null;
         }
 
         try {
             const memberEntity = md.EntityByName('MJ_BizApps_Collaboration: Space Members');
-            if (!memberEntity) return false;
+            if (!memberEntity) return null;
 
             const rv = RunView.FromMetadataProvider(md);
             const spaces: SpaceNode[] = [];
@@ -491,7 +505,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }
 
             if (spaces.length === 0) {
-                return false;
+                return null;
             }
 
             const spaceFilter = spaces.map(sp => `'${sp.id}'`).join(',');
@@ -510,7 +524,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
             }, user);
 
             if (!memberRes.Success || !memberRes.Results) {
-                return false;
+                return null;
             }
 
             const memberships: MemberSnapshot[] = memberRes.Results.map(m => {
@@ -532,11 +546,10 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 };
             });
 
-            const reached = membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
-            return !!reached?.role.isOwnerRole;
+            return membershipReaches(spaces, memberships, user.ID, spaceId, new Date(), false);
         } catch (e) {
-            LogError(`Error verifying space owner role for user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            LogError(`Error resolving the seat of user ${user.ID} on space ${spaceId}: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
         }
     }
 }

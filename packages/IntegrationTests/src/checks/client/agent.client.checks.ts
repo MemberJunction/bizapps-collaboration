@@ -1,4 +1,3 @@
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
@@ -16,7 +15,7 @@ import {
     SPACE_ITEM_ENTITY,
 } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
-import { cleanupConversation, registerChecks } from '../cleanup-helpers.js';
+import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
 import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const createdDetailIds: string[] = [];
@@ -156,7 +155,7 @@ const checks: NamedCheck[] = [
             Assert(agentScopes.length === 1, 'Agent is linked to 1 Search Scope');
             Assert(agentScopes[0].SearchScopeID.toLowerCase() === SEARCH_SCOPE_ID.toLowerCase(), 'Linked to Collaboration Space Scope');
 
-            // Note: ExplainScope has no GraphQL endpoint in MJ 6.1.3; covered on server harness.
+            // Note: ExplainScope has no GraphQL endpoint on MJ next; the server harness covers it.
         },
     },
     {
@@ -417,25 +416,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
     Setup: async (ctx: IntegrationCheckContext) => {
         testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
     },
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        if (testAgentAttachmentId) {
-            const attachmentId = testAgentAttachmentId;
-            testAgentAttachmentId = null;
-            await detachTestAgent(ctx, attachmentId);
-        }
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`agent client Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`agent client Teardown failed to delete detail ${id}: ${err}`);
-                    }
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
                 }
-            }
-        }
-    },
+            },
+            ...createdDetailIds.splice(0).map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
+        ]),
 });

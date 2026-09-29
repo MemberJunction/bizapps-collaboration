@@ -689,7 +689,7 @@ const checks: NamedCheck[] = [
             let devMemberId: string | null = null;
             let devMemberCreated = false;
             // A seat Dev already held is put back the way it was; only a seat this check created is deleted
-            let devSeatBefore: { SpaceRoleTypeID: string; Band: string; Status: string } | null = null;
+            let devSeatBefore: Pick<mjBizAppsCollaborationSpaceMemberEntity, 'SpaceRoleTypeID' | 'Band' | 'Status'> | null = null;
             if (existingDevMembers.length > 0) {
                 devMemberId = existingDevMembers[0].ID;
                 const devMember = await adaCtx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, adaCtx.User);
@@ -727,6 +727,9 @@ const checks: NamedCheck[] = [
                         restoreDev.Configuration = devOrigConfig;
                         const restoredConfig = await restoreDev.Save();
                         Assert(restoredConfig, `Restoring Discovery Configuration as Dev over wire must succeed: ${restoreDev.LatestResult?.CompleteMessage ?? ''}`);
+                        const verifyRestore = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ctx.User);
+                        Assert(await verifyRestore.Load(DISCOVERY_SPACE_ID), 'Read Discovery back after restoring its Configuration');
+                        Assert(verifyRestore.Configuration === devOrigConfig, "Discovery's Configuration is back to what it was");
                     });
                 }
             } finally {
@@ -739,8 +742,8 @@ const checks: NamedCheck[] = [
                         const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
                         Assert(await seat.Load(seatId), "Reload Dev's existing seat to put it back");
                         seat.SpaceRoleTypeID = seatBefore.SpaceRoleTypeID;
-                        seat.Band = seatBefore.Band as typeof seat.Band;
-                        seat.Status = seatBefore.Status as typeof seat.Status;
+                        seat.Band = seatBefore.Band;
+                        seat.Status = seatBefore.Status;
                         Assert(await seat.Save(), `Putting Dev's seat back must succeed: ${seat.LatestResult?.CompleteMessage ?? ''}`);
                         const verify = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ctx.User);
                         Assert(await verify.Load(seatId), "Read Dev's seat back after restoring it");

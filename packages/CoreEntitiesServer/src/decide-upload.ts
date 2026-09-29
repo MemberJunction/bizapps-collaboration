@@ -1,5 +1,5 @@
 import { type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { authorizeItemWrite, membershipReaches, requestedItemBand, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, membershipReaches, uploadBandChoice, type Band } from '@mj-biz-apps/collaboration-core';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceItemEntity,
@@ -35,13 +35,11 @@ export async function decideUploadBand(
     if (!reach) {
         return { ok: false, message: 'Upload refused: the signer does not reach this space.' };
     }
-    if (chosenBand === 'Team' && !reach.role.canSeeTeamBand) {
-        return { ok: false, message: 'Upload refused: this seat cannot place material in the Team band.' };
+    const choice = uploadBandChoice(type.DefaultBand, reach.role.canSeeTeamBand, reach.role.canPromoteBand);
+    if (chosenBand && !choice.allowed.includes(chosenBand)) {
+        return { ok: false, message: `Upload refused: this seat cannot place material in the ${chosenBand} band.` };
     }
-    if (chosenBand === 'Shared' && reach.role.canSeeTeamBand && !reach.role.canPromoteBand) {
-        return { ok: false, message: 'Upload refused: this seat cannot place material in the Shared band.' };
-    }
-    const requested = chosenBand ?? requestedItemBand(type.DefaultBand, reach.role.canSeeTeamBand, reach.role.canPromoteBand);
+    const requested = chosenBand ?? choice.start;
     const decision = authorizeItemWrite({
         callerUserId: user.ID,
         previousSpaceId: null,

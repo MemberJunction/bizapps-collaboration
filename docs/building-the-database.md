@@ -31,7 +31,7 @@ when `mj` is not on the path of the member you are in.
    `sync` blocks back into common's files; put them back as they were.
 4. **This app's migrations:** `pnpm run mj:migrate`.
 5. **A Create grant on row filters, in the database only.** A fresh MemberJunction database grants no role Create on
-   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds:
+   `MJ: Row Level Security Filters`, and this app's push creates 35 of them. Grant it to the role the sync user holds. `mj sync push` runs as MemberJunction's system user, which holds Developer, UI and Integration; find the roles with `SELECT r.Name FROM __mj.[User] u JOIN __mj.UserRole ur ON ur.UserID = u.ID JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Type = 'Owner'`. Developer is enough:
 
    ```sql
    UPDATE ep SET CanCreate = 1, CanUpdate = 1, CanDelete = 1
@@ -61,16 +61,16 @@ when `mj` is not on the path of the member you are in.
 
 - **Server:** `pnpm run test:integration:server`. It needs only the database.
 - **Client:** `pnpm run test:integration:client`. It needs an MJAPI on the same database with this app's packages loaded, started with the
-  test agent's driver imported (`--import <repo>/packages/IntegrationTests/dist/agents/index.js`), `MJ_API_KEY`, and `MJAPI_URL` or
+  test agent's and the storage driver's entries imported (the start command is in [reviewing the data](reviewing-the-data.md#files) and [the test agent](reviewing-the-data.md#the-test-agent)), `MJ_API_KEY`, and `MJAPI_URL` or
   `GRAPHQL_PORT`. Pick a port outside the fetch specification's blocked list: Node's `fetch` refuses 4190, for one.
 - Run each **from a purge and a fresh load, and then a second time** on that load.
 - Unset the four `STORAGE_BOX_*` variables to store files in the local directory. A run against real Box storage depends on Box's
   latency and limits; report it on its own line.
 
-## A database that was built before round 78
+## A database built with the old catch-all agent grants
 
-Round 78 removed five Space Participant read grants whose filter was `(1 = 1)`: they let any client read every agent and every
-search scope permission, other users' names included. A long-lived database still holds them, `mj sync push` never deletes, and
+An earlier version gave Space Participant five read grants whose filter was `(1 = 1)`: they let any client read every agent and every
+search scope permission, other users' names included. Narrow, per-filter grants replace them. A long-lived database still holds the old ones, `mj sync push` never deletes, and
 check `agent.AG10` fails while they remain. Remove them:
 
 ```sql

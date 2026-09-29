@@ -193,6 +193,23 @@ export async function resolveAllowedAgents(
         }
     }
 
+    // Only Active agents run. A disabled or pending agent stays out of the list, and when it was the default the next default takes
+    // over, so the ask box never tags an agent that won't run.
+    const activeIds = await loadActiveAgentIds(rv, userToUse, currentList.map((a) => a.agentId));
+    for (const item of currentList) {
+        if (!activeIds.has(normalizeId(item.agentId))) {
+            LogError(`resolveAllowedAgents: agent ${item.agentId} is configured for space ${spaceId}${item.isDefault ? ' as its default' : ''} but is not Active; it is left out.`);
+        }
+    }
+    currentList = currentList.filter((item) => activeIds.has(normalizeId(item.agentId)));
+    if (currentList.length === 0) {
+        // Nothing configured is Active: the shipped agent is the last resort, when it is Active itself
+        const shipped = await loadActiveAgentIds(rv, userToUse, [COLLABORATION_DEFAULT_AGENT_ID]);
+        if (shipped.has(normalizeId(COLLABORATION_DEFAULT_AGENT_ID))) {
+            currentList = [{ agentId: COLLABORATION_DEFAULT_AGENT_ID, isDefault: true, source: 'App' }];
+        }
+    }
+
     const allowedAgentIds = currentList.map((a) => a.agentId);
     const defaultItem = currentList.find((a) => a.isDefault) ?? currentList[0];
     const defaultAgentId = defaultItem?.agentId ?? COLLABORATION_DEFAULT_AGENT_ID;
@@ -202,4 +219,24 @@ export async function resolveAllowedAgents(
         defaultAgentId,
         agents: currentList,
     };
+}
+
+/** The IDs among `agentIds` whose agent is Active. A read that fails refuses, as a list that can't be checked is not one to run. */
+async function loadActiveAgentIds(rv: RunView, user: UserInfo | undefined, agentIds: readonly string[]): Promise<Set<string>> {
+    const ids = [...new Set(agentIds.map((id) => normalizeId(id)).filter((id) => id.length > 0))];
+    if (ids.length === 0) return new Set();
+    const res = await rv.RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: AI Agents',
+            ExtraFilter: `Status = 'Active' AND ID IN (${ids.map((id) => `'${id}'`).join(',')})`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        },
+        user,
+    );
+    if (!res.Success) {
+        LogError(`resolveAllowedAgents: could not read the agents: ${res.ErrorMessage ?? 'unknown error'}`);
+        throw new Error(`Allowed agents refused: the agents could not be read: ${res.ErrorMessage ?? 'unknown error'}`);
+    }
+    return new Set((res.Results ?? []).map((row) => normalizeId(row.ID)));
 }

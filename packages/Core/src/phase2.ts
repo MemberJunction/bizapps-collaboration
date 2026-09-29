@@ -49,6 +49,22 @@ export function requestedItemBand(defaultBand: Band | null, canSeeTeamBand: bool
     return 'Team';
 }
 
+/**
+ * The bands a seat may choose for an upload, and the one to start on. A seat that can't see Team can only share; one that
+ * can see Team but can't promote can only keep material on Team; one that does both may choose either. The start is what
+ * `requestedItemBand` picks from the type's default, or the first band the seat may choose when that isn't one of them.
+ * The server, the upload dialog and the Work tab all read this one rule.
+ */
+export function uploadBandChoice(
+    defaultBand: Band | null,
+    canSeeTeamBand: boolean,
+    canPromoteBand: boolean,
+): { allowed: readonly Band[]; start: Band } {
+    const allowed: readonly Band[] = !canSeeTeamBand ? ['Shared'] : canPromoteBand ? ['Shared', 'Team'] : ['Team'];
+    const wanted = requestedItemBand(defaultBand, canSeeTeamBand, canPromoteBand);
+    return { allowed, start: allowed.includes(wanted) ? wanted : allowed[0] };
+}
+
 export type LibraryDecision = { ok: true } | { ok: false; message: string };
 
 function refuse(message: string): LibraryDecision {

@@ -27,6 +27,7 @@ const SHIPPED_AGENT_NAME = SHIPPED_AGENT.fields.Name;
 const OTHER_AGENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER_AGENT_NAME = 'Other Space Agent';
 const MISSING_AGENT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const DISABLED_AGENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 /** A stand-in for a metadata class the resolver only reads a few members of. */
 function stubOf<T extends object>(partial: Partial<T>): T {
@@ -84,14 +85,17 @@ describe('resolveSpaceChatHostRules', () => {
 
     /** The agents table: a filter returns only the rows it names, as a database would. */
     const AGENT_ROWS = [
-        { ID: SHIPPED_AGENT_ID, Name: SHIPPED_AGENT_NAME },
-        { ID: OTHER_AGENT_ID, Name: OTHER_AGENT_NAME },
+        { ID: SHIPPED_AGENT_ID, Name: SHIPPED_AGENT_NAME, Status: 'Active' },
+        { ID: OTHER_AGENT_ID, Name: OTHER_AGENT_NAME, Status: 'Active' },
+        { ID: DISABLED_AGENT_ID, Name: 'Disabled Space Agent', Status: 'Disabled' },
     ];
     function agentsMatching(filter: string | undefined): readonly object[] {
         const named = filter?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi);
-        if (!named) return AGENT_ROWS;
+        const activeOnly = !!filter && /Status = 'Active'/.test(filter);
+        const byStatus = activeOnly ? AGENT_ROWS.filter((row) => row.Status === 'Active') : AGENT_ROWS;
+        if (!named) return byStatus;
         const wanted = new Set(named.map((id) => id.toLowerCase()));
-        return AGENT_ROWS.filter((row) => wanted.has(row.ID.toLowerCase()));
+        return byStatus.filter((row) => wanted.has(row.ID.toLowerCase()));
     }
 
     function createMockProvider(options: MockHostRulesOptions = {}): IMetadataProvider {
@@ -310,15 +314,26 @@ describe('resolveSpaceChatHostRules', () => {
         assert.deepEqual(result.allowedAgentIds, [OTHER_AGENT_ID]);
     });
 
-    it('reports a default agent that does not exist without a name', async () => {
+    it('does not name a disabled agent as the default, and falls back to the shipped agent', async () => {
+        const provider = createMockProvider({
+            spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
+            spaceAgents: [{ AgentID: DISABLED_AGENT_ID, IsDefault: true }],
+        });
+        const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
+        assert.equal(result.ok, true);
+        assert.equal(result.defaultAgentId, SHIPPED_AGENT_ID);
+        assert.equal(result.defaultAgentName, SHIPPED_AGENT_NAME);
+        assert.deepEqual(result.allowedAgentIds, [SHIPPED_AGENT_ID]);
+    });
+
+    it('drops an agent that does not exist from the list', async () => {
         const provider = createMockProvider({
             spaceConfiguration: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
             spaceAgents: [{ AgentID: MISSING_AGENT_ID, IsDefault: true }],
         });
         const result = await resolveSpaceChatHostRules(provider, callerUser, SPACE_ID);
         assert.equal(result.ok, true);
-        assert.equal(result.defaultAgentId, MISSING_AGENT_ID);
-        assert.equal(result.defaultAgentName, null);
+        assert.equal(result.allowedAgentIds.includes(MISSING_AGENT_ID), false);
     });
 
     it('does not tell a caller without Team that an internal conversation is archived', async () => {

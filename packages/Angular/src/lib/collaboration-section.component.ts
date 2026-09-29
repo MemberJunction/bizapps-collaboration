@@ -1,16 +1,16 @@
 import { Component, ChangeDetectionStrategy, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
-import { allowedUploadBands } from './logic/upload-bands.js';
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { buildSettingsModel, changedSettings } from './logic/settings-model.js';
+import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { isSelectionCurrent } from './logic/selection-guard.js';
 import {
@@ -865,7 +865,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                 <mjc-space-work
                                                                     [Tasks]="spaceTasks"
                                                                     [SpaceName]="spaceTitle"
-                                                                    [DefaultBand]="spaceAudienceBand"
+                                                                    [DefaultBand]="bandChoice?.start ?? spaceAudienceBand"
                                                                     [CanCreateTask]="!isSpaceClosed && canContribute"
                                                                     (TaskSelectRequested)="onTaskSelected($event)"
                                                                     (TaskToggleRequested)="onTaskToggled($event)"
@@ -975,7 +975,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [SpaceId]="activeSpaceId"
                                 [ClientOrgName]="clientOrgName"
                                 [IsSubmitting]="isUploading"
-                                [AllowedBands]="uploadAllowedBands"
+                                [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                [StartBand]="bandChoice?.start ?? null"
                                 (CancelRequested)="onUploadDialogCancel()"
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
                             />
@@ -1014,16 +1015,30 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isUploadDialogOpen = false;
 
     /**
-     * The bands the caller's own seat on this space may choose for an upload. A seat that can't see Team
-     * can only share; one that can see Team but not promote can only keep material on Team. When the caller's
-     * seat isn't in the loaded list (an inherited seat), both are offered and the server decides.
+     * The bands the caller's seat on this space may choose for an upload, and the one to start on, from Core's
+     * uploadBandChoice. The seat is the one the caller reaches the space through, an inherited seat on an ancestor included.
+     * Null until it is resolved, or when it can't be: the dialog then offers both bands, starts on none, and the server
+     * applies the space type's default.
      */
-    public get uploadAllowedBands(): readonly SpaceBand[] {
-        const currentUserId = this.currentUser?.ID;
-        const member = currentUserId ? this.spaceMembers.find(m => UUIDsEqual(m.userId, currentUserId)) : undefined;
-        const roleType = member?.roleId ? CollaborationEngineBase.Instance.SpaceRoleTypeById(member.roleId) : null;
-        return allowedUploadBands(roleType);
+    public readonly bothBands: readonly SpaceBand[] = ['Shared', 'Team'];
+    public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
+
+    private async updateBandChoice(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
+        let choice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
+        try {
+            const user = this.currentUser;
+            const seat = user ? await CollaborationEngineBase.Instance.ReachedSeat(user, space.ID, this.ProviderToUse) : null;
+            if (seat) {
+                const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
+                choice = uploadBandChoice(type?.DefaultBand ?? null, seat.role.canSeeTeamBand, seat.role.canPromoteBand);
+            }
+        } catch (error) {
+            LogError(`Failed to resolve the caller's seat on space ${space.ID}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (!isCurrent()) return;
+        this.bandChoice = choice;
     }
+
     public isUploading = false;
     public isNewConversationDialogOpen = false;
     public isCreatingConversation = false;
@@ -1462,6 +1477,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.activeConversationId = '';
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
+        this.bandChoice = null;
 
         // Reset host rules immediately so previous space's buttons / ask box do not linger
         this.hostRulesRequestId++;
@@ -1559,6 +1575,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         await this.updateCanConfigureCurrentSpace();
         if (this.selectSpaceRequestId !== requestId || !UUIDsEqual(this.activeSpaceId, spaceId)) return;
+        await this.updateBandChoice(space, () => isSelectionCurrent(requestId, this.selectSpaceRequestId, spaceId, this.activeSpaceId));
 
         // Each loader checks the selection itself, before it writes: a slow read for a space
         // the person has already left must not put its lists under the space they're in now
@@ -1784,7 +1801,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             } else if (!spaceChatsRes?.Success) {
                 LogError(`Failed to load space conversations for space ${spaceId}: ${spaceChatsRes?.ErrorMessage ?? 'unknown error'}`);
             }
-            const seenConvIds = new Set(items.map(i => i.id.toLowerCase()));
+            const seenConvIds = new Set(items.map(i => NormalizeUUID(i.id)));
 
             if (seenConvIds.size > 0) {
                 try {
@@ -2532,7 +2549,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     MimeType: payload.fileType || 'application/octet-stream',
                     Base64Data: base64Data,
                     Folder: payload.folder || 'Deliverables',
-                    Band: payload.band,
+                    Band: payload.band ?? undefined,
                 });
                 if (!uploadRes.Success) {
                     throw new Error(uploadRes.ErrorMessage || 'Failed to upload space file');

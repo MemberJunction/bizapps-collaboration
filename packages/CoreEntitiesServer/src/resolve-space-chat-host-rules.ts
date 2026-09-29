@@ -160,7 +160,23 @@ export async function resolveSpaceChatHostRules(
     const agentReplyMode = chatSettings.agentReplyMode;
 
     // 3. Resolve allowed agents & default agent
-    const allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
+    let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
+    try {
+        allowed = await resolveAllowedAgents(provider, spaceId, systemUser);
+    } catch (agentsError) {
+        return {
+            ok: false,
+            message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.',
+            agentReplyMode: 'MentionOnly',
+            allowedAgentIds: [],
+            defaultAgentId: null,
+            defaultAgentName: null,
+            agentHistoryFrom: null,
+            mentionPeople: [],
+            canStartConversation: false,
+            allowedConversationKinds: [],
+        };
+    }
     const allowedAgentIds = allowed.allowedAgentIds;
     const defaultAgentId = allowed.defaultAgentId ?? null;
     let defaultAgentName: string | null = null;

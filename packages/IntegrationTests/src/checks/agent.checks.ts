@@ -1,5 +1,4 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval } from '@mj-biz-apps/collaboration-core-entities-server';
@@ -22,14 +21,15 @@ import {
     TASK_ENTITY,
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wire.js';
-import { cleanupConversation, registerChecks } from './cleanup-helpers.js';
-import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
+import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import { attachAgentToSpace, attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
 const SEARCH_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
 const PROMPT_ID = 'F8DE6158-9A74-4C23-8B39-44F4C68B6E32';
 const EXPANSION_QUERY_ID = 'FA742FD3-00D4-461F-A356-0265D72C39F4';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
+const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const DELIVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000003';
 const CLOSED_PAST_SPACE_ID = 'C1000001-0000-4000-8000-000000000008';
@@ -166,7 +166,7 @@ const checks: NamedCheck[] = [
 
             // 8. Verify SearchEngine.ExplainScope
             if (isClientTransport(ctx)) {
-                // ExplainScope has no GraphQL endpoint in MJ 6.1.3; covered on server harness
+                // ExplainScope has no GraphQL endpoint on MJ next; covered on the server harness
                 return;
             }
             const bea = await GetPersonaUser(ctx, 'bea');
@@ -640,7 +640,6 @@ const checks: NamedCheck[] = [
         Name: "AG8 — A conversation's kind bounds the search itself: its lane filter, run on the real tables, returns Shared for General and Shared plus Team for Private",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (isClientTransport(ctx)) return; // ExplainScope has no GraphQL endpoint in MJ 6.1.3; the server harness covers it
             const ada = await GetPersonaUser(ctx, 'ada');
             const bea = await GetPersonaUser(ctx, 'bea');
 
@@ -750,6 +749,28 @@ const checks: NamedCheck[] = [
                 );
                 Assert(generalLanes.tasks.includes("Band IN ('Shared')") && !generalLanes.tasks.includes("'Team'"), `General Tasks lane is bounded to the Shared band (got: ${generalLanes.tasks})`);
 
+                // A real search as Bea, on a General chat: the Tasks lane finds a Shared task by name and never a Team one
+                const nameOf = async (root: string) => (await FindRows<{ Name: string }>(ctx, TASK_ENTITY, `ID = '${root}'`, ['Name']))[0]?.Name;
+                const sharedName = await nameOf([...sharedRoots][0]);
+                const teamName = await nameOf([...teamRoots][0]);
+                Assert(!!sharedName && !!teamName, 'The seeded Shared and Team root tasks have names');
+                const searchAs = async (user: UserInfo, chatId: string, query: string) =>
+                    SearchEngine.Instance.Search(
+                        { Query: query, ScopeIDs: [SEARCH_SCOPE_ID], SearchContext: { PrimaryScopeRecordID: chatId }, AIAgentID: AGENT_ID, MaxResults: 20, Mode: 'preview' },
+                        user,
+                    );
+                const found = (result: Awaited<ReturnType<typeof searchAs>>, root: string): boolean =>
+                    result.Results.some((r) => r.RecordID.toLowerCase().endsWith(root.toLowerCase()));
+                const sharedRoot = [...sharedRoots][0];
+                const teamRoot = [...teamRoots][0];
+                const sharedHits = await searchAs(bea, generalChatId, sharedName!);
+                Assert(sharedHits.Success === true && found(sharedHits, sharedRoot), `Bea's search in a General chat finds the Shared task "${sharedName}"`);
+                const teamHitsAsBea = await searchAs(bea, generalChatId, teamName!);
+                Assert(teamHitsAsBea.Success === true && !found(teamHitsAsBea, teamRoot), `Bea's search in a General chat never finds the Team task "${teamName}"`);
+                // The negative control: the same words find the Team task when the chat is Internal Only and the asker sees Team
+                const teamHitsAsAda = await searchAs(ada, privateChatId!, teamName!);
+                Assert(teamHitsAsAda.Success === true && found(teamHitsAsAda, teamRoot), `Ada's search in a Private chat finds the Team task "${teamName}", so its absence above is the audience's doing`);
+
                 const privateLanes = await laneFilters(privateChatId!);
                 const privateRows = await laneRows(privateLanes.items);
                 Assert(reaches(privateRows, photoFileId), 'Private lane reaches the Shared site-photo.png');
@@ -769,7 +790,6 @@ const checks: NamedCheck[] = [
         Name: "AG9 — A client's agent reads stay narrow: no other user's permission row, no agent outside the spaces they reach",
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (isClientTransport(ctx)) return;
             const bea = await GetPersonaUser(ctx, 'bea');
             const view = View(ctx);
             const beaRoleIds = new Set(bea.UserRoles.map((r) => r.RoleID.toLowerCase()));
@@ -797,17 +817,33 @@ const checks: NamedCheck[] = [
             );
             Assert(!agentPerms.Success || (agentPerms.Results?.length ?? 0) === 0, 'Bea reads no AI Agent Permissions row');
 
-            // Agents: the shipped agent, and none that no reached space runs. The test agent is attached to Northwind, which Bea does not
-            // reach, but it is an ancestor of Discovery, which she does, so she may run it; a second row proves the negative.
-            const agents = await view.RunView<{ ID: string }>(
-                { EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple' },
-                bea,
+            // Agents: the shipped agent; the test agent, which the bundle attaches to Northwind, an ancestor of Discovery (so Bea may run it
+            // there); and no agent that only a space she does not reach runs
+            const readAgentIds = async (): Promise<string[]> => {
+                const res = await view.RunView<{ ID: string }>({ EntityName: AI_AGENT_ENTITY, Fields: ['ID'], ResultType: 'simple' }, bea);
+                Assert(res.Success === true, `Bea reads AI Agents: ${res.ErrorMessage ?? ''}`);
+                return (res.Results ?? []).map((a) => a.ID.toLowerCase());
+            };
+            const before = await readAgentIds();
+            Assert(before.includes(AGENT_ID.toLowerCase()), 'Bea reads the shipped space agent');
+            Assert(before.includes(COLLABORATION_TEST_AGENT_ID.toLowerCase()), "Bea reads the test agent, attached to Northwind, an ancestor of Discovery, which she reaches");
+
+            const others = await FindRows<{ ID: string }>(
+                ctx,
+                AI_AGENT_ENTITY,
+                `ID NOT IN ('${AGENT_ID}', '${COLLABORATION_TEST_AGENT_ID}') AND Status = 'Active'`,
+                ['ID'],
             );
-            Assert(agents.Success === true, `Bea reads AI Agents: ${agents.ErrorMessage ?? ''}`);
-            const agentIds = (agents.Results ?? []).map((a) => a.ID.toLowerCase());
-            Assert(agentIds.includes(AGENT_ID.toLowerCase()), 'Bea reads the shipped space agent');
-            const everyAgent = await FindRows<{ ID: string }>(ctx, AI_AGENT_ENTITY, '1=1', ['ID']);
-            Assert(everyAgent.length > agentIds.length, `The host has agents Bea does not read (host ${everyAgent.length}, Bea ${agentIds.length})`);
+            Assert(others.length > 0, 'The host has another active agent to attach to a space Bea does not reach');
+            const elsewhere = others[0].ID;
+            Assert(!before.includes(elsewhere.toLowerCase()), 'Bea does not read an agent that no space of hers runs');
+            const attachmentId = await attachAgentToSpace(ctx, elsewhere, HARBOR_SPACE_ID);
+            try {
+                const during = await readAgentIds();
+                Assert(!during.includes(elsewhere.toLowerCase()), 'Attached to Harbor, which Bea does not reach, the agent is still not one she reads');
+            } finally {
+                await detachTestAgent(ctx, attachmentId);
+            }
         },
     },
     {
@@ -818,7 +854,7 @@ const checks: NamedCheck[] = [
             const filters = await FindRows<{ ID: string }>(ctx, ROW_LEVEL_SECURITY_FILTER_ENTITY, `Name = 'Collaboration: Agent Catalog'`, ['ID']);
             Assert(
                 filters.length === 0,
-                'The retired "Collaboration: Agent Catalog" row filter (1 = 1) is still in this database. It lets a client read every agent and scope permission. Clean it up as docs/reviewing-the-data.md says.',
+                'The retired "Collaboration: Agent Catalog" row filter (1 = 1) is still in this database. It lets a client read every agent and scope permission. Clean it up as docs/building-the-database.md says.',
             );
             const grants = await FindRows<{ ID: string }>(
                 ctx,
@@ -837,25 +873,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent', {
     Setup: async (ctx: IntegrationCheckContext) => {
         testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
     },
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        if (testAgentAttachmentId) {
-            const attachmentId = testAgentAttachmentId;
-            testAgentAttachmentId = null;
-            await detachTestAgent(ctx, attachmentId);
-        }
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`agent Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`agent Teardown failed to delete detail ${id}: ${err}`);
-                    }
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
                 }
-            }
-        }
-    },
+            },
+            ...createdDetailIds.splice(0).map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a agent check posted')),
+        ]),
 });

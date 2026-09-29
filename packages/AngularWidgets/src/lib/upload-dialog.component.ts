@@ -10,7 +10,8 @@ import type { FileKind, SpaceBand } from './types';
 export interface CollabUploadSubmitPayload {
   mode: 'upload' | 'link';
   title: string;
-  band: SpaceBand;
+  /** The band the person has on screen, or null when they made no choice and the space type's default applies. */
+  band: SpaceBand | null;
   folder: string;
   fileName?: string;
   fileSize?: number;
@@ -205,6 +206,9 @@ export interface CollabUploadSubmitPayload {
                     <div class="b-opt-sub">Internal team only</div>
                   </div>
                 </label>
+                }
+                @if (selectedBand === null) {
+                  <div class="b-opt-note">No choice made: this space type's default applies.</div>
                 }
               </div>
             </div>
@@ -487,6 +491,10 @@ export interface CollabUploadSubmitPayload {
       flex-direction: column;
       gap: 2px;
     }
+    .b-opt-note {
+      font-size: var(--mj-text-xs, 12px);
+      color: var(--mj-text-muted);
+    }
     .b-opt-sub {
       font-size: 11px;
       color: var(--mj-text-muted, #64748b);
@@ -514,19 +522,18 @@ export class CollabUploadDialogComponent {
   @Input() AllowLinks = false;
 
   /** The bands this seat may choose. The server refuses any other, so the dialog offers only these. */
-  @Input() set AllowedBands(bands: readonly SpaceBand[]) {
-    this.allowedBands = bands;
-    if (bands.length > 0 && !bands.includes(this.selectedBand)) {
-      this.selectedBand = bands[0];
-    }
+  @Input() AllowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
+
+  /**
+   * The band the dialog starts on: the space type's default for this seat. When it's null the seat wasn't resolved, nothing
+   * is selected, and an upload with no choice made takes the space type's default on the server.
+   */
+  @Input() set StartBand(band: SpaceBand | null) {
+    this.selectedBand = band;
   }
-  get AllowedBands(): readonly SpaceBand[] {
-    return this.allowedBands;
-  }
-  private allowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
 
   public IsBandAllowed(band: SpaceBand): boolean {
-    return this.allowedBands.includes(band);
+    return this.AllowedBands.includes(band);
   }
 
   @Output() CancelRequested = new EventEmitter<void>();
@@ -537,7 +544,7 @@ export class CollabUploadDialogComponent {
   public linkUrl = '';
   public docTitle = '';
   public docFolder = 'Deliverables';
-  public selectedBand: SpaceBand = 'Shared';
+  public selectedBand: SpaceBand | null = null;
   public detectedKind: FileKind = 'doc';
   public detectedService: { label: string; icon: string } | null = null;
   public isDragging = false;

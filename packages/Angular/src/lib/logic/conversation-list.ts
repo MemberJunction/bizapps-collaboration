@@ -1,4 +1,4 @@
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { SpaceConversationItem } from '@mj-biz-apps/collaboration-ng-widgets';
 
 /** A space chat row as the rail reads it. */
@@ -14,7 +14,7 @@ export function buildConversationEntries(rows: readonly ChatRow[]): SpaceConvers
     const entries: SpaceConversationItem[] = [];
     for (const row of rows) {
         if (!row.ConversationID) continue;
-        const key = row.ConversationID.toLowerCase();
+        const key = NormalizeUUID(row.ConversationID);
         if (seen.has(key)) continue;
         seen.add(key);
         entries.push({

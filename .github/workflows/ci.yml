@@ -22,12 +22,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm test
-      - run: node scripts/check-mj-tokens.mjs
+      # These three read the source and the installed packages, not a build, so they run before the build and are not held up by it
       - run: node scripts/strip-sync-blocks.mjs --check
+      - run: node scripts/check-mj-tokens.mjs
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
+      - run: pnpm run build
+      - run: pnpm test
       - run: node --check test-harnesses/integration.mjs && node --check test-harnesses/integration-client.mjs
       - name: Install Playwright Chromium
         run: pnpm --filter @mj-biz-apps/collaboration-e2e exec playwright install --with-deps chromium

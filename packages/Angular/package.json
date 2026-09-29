@@ -10,7 +10,7 @@
   "files": ["/dist"],
   "scripts": {
     "build": "ngc",
-    "test": "node --experimental-strip-types --test src/lib/logic/settings-model.test.ts src/lib/logic/conversation-list.test.ts src/lib/logic/upload-bands.test.ts src/lib/logic/seat-summary.test.ts src/lib/logic/selection-guard.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/logic/settings-model.test.ts src/lib/logic/conversation-list.test.ts src/lib/logic/seat-summary.test.ts src/lib/logic/selection-guard.test.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

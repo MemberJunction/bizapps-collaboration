@@ -12,3 +12,9 @@ export function coreSchema(): string {
     if (!/^[_A-Za-z][_A-Za-z0-9]*$/.test(name)) throw new Error(`MJ_CORE_SCHEMA "${name}" is not a SQL identifier.`);
     return name;
 }
+
+/**
+ * Every space a check creates starts with this. A run that dies before its cleanup leaves such a space behind, and the purge
+ * deletes what carries the marker (with everything in it) while still refusing any other space it doesn't know.
+ */
+export const CHECK_SPACE_PREFIX = 'COLLAB-CHECK ';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { agentMayQuote, authorizeItemWrite, visibleSpaces } from './rules.ts';
-import { authorizeNoticeWrite, authorizeUseWrite, foldersIn, openMode, recordUse, requestedItemBand, shareRecipients, storedContentType } from './phase2.ts';
+import { authorizeNoticeWrite, authorizeUseWrite, foldersIn, openMode, recordUse, requestedItemBand, shareRecipients, storedContentType, uploadBandChoice } from './phase2.ts';
 import { itemsIn, phase0Items, phase0Members, phase0Spaces } from './phase0.fixture.ts';
 
 describe('phase 0 uses one set of rules', () => {
@@ -131,4 +131,26 @@ describe('phase 2 library, share, and use', () => {
         const at = new Date('2026-09-23T12:00:00Z');
         assert.deepEqual(recordUse('brief', 'bea', at, 'open'), { itemId: 'brief', userId: 'bea', at, kind: 'open' });
     });
+});
+
+describe('uploadBandChoice', () => {
+    // [default band, can see Team, can promote] -> the bands the seat may choose, and where the dialog starts
+    const cases: Array<[string, 'Shared' | 'Team' | null, boolean, boolean, readonly string[], string]> = [
+        ['Team default, staff owner (sees Team, promotes)', 'Team', true, true, ['Shared', 'Team'], 'Team'],
+        ['Team default, staff member (sees Team, cannot promote)', 'Team', true, false, ['Team'], 'Team'],
+        ['Team default, client (cannot see Team)', 'Team', false, false, ['Shared'], 'Shared'],
+        ['Shared default, staff owner', 'Shared', true, true, ['Shared', 'Team'], 'Shared'],
+        ['Shared default, staff member (sees Team, cannot promote)', 'Shared', true, false, ['Team'], 'Team'],
+        ['Shared default, client', 'Shared', false, false, ['Shared'], 'Shared'],
+        ['no default, staff owner', null, true, true, ['Shared', 'Team'], 'Team'],
+        ['no default, client', null, false, false, ['Shared'], 'Shared'],
+    ];
+    for (const [name, defaultBand, canSee, canPromote, allowed, start] of cases) {
+        it(name, () => {
+            const choice = uploadBandChoice(defaultBand, canSee, canPromote);
+            assert.deepEqual(choice.allowed, allowed);
+            assert.equal(choice.start, start);
+            assert.ok(choice.allowed.includes(choice.start), 'the start is always a band the seat may choose');
+        });
+    }
 });

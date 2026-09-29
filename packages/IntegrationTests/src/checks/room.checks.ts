@@ -7,7 +7,8 @@ import { CONVERSATION_DETAIL_ENTITY, CONVERSATION_ENTITY, SPACE_CHAT_ENTITY, SPA
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
-import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, registerChecks } from './cleanup-helpers.js';
+import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import { CHECK_SPACE_PREFIX } from '../world/ids.js';
 import { attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -319,7 +320,7 @@ const checks: NamedCheck[] = [
 
             const closedTestSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             closedTestSpace.NewRecord();
-            closedTestSpace.Name = `RM4-Closed-Test-${Date.now()}`;
+            closedTestSpace.Name = `${CHECK_SPACE_PREFIX}RM4-Closed-Test-${Date.now()}`;
             closedTestSpace.SpaceTypeID = typeId;
             closedTestSpace.ParentID = NORTHWIND_SPACE_ID;
             closedTestSpace.InheritsMembership = true;
@@ -598,7 +599,7 @@ const checks: NamedCheck[] = [
 
             const closedSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             closedSpace.NewRecord();
-            closedSpace.Name = `RM6-Closed-Space-${Date.now()}`;
+            closedSpace.Name = `${CHECK_SPACE_PREFIX}RM6-Closed-Space-${Date.now()}`;
             closedSpace.SpaceTypeID = typeId;
             closedSpace.ParentID = NORTHWIND_SPACE_ID;
             closedSpace.InheritsMembership = true;
@@ -886,7 +887,7 @@ const checks: NamedCheck[] = [
 
             const testSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             testSpace.NewRecord();
-            testSpace.Name = `RM10-New-Space-${Date.now()}`;
+            testSpace.Name = `${CHECK_SPACE_PREFIX}RM10-New-Space-${Date.now()}`;
             testSpace.SpaceTypeID = typeId;
             testSpace.ParentID = DISCOVERY_SPACE_ID;
             testSpace.OwnerID = ada.ID;
@@ -944,7 +945,7 @@ const checks: NamedCheck[] = [
             // Create child space under Northwind (Sam inherits contributing Team membership)
             const testSpace = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
             testSpace.NewRecord();
-            testSpace.Name = `RM11-Close-Reopen-${Date.now()}`;
+            testSpace.Name = `${CHECK_SPACE_PREFIX}RM11-Close-Reopen-${Date.now()}`;
             testSpace.SpaceTypeID = typeId;
             testSpace.ParentID = NORTHWIND_SPACE_ID;
             testSpace.InheritsMembership = true;
@@ -1134,26 +1135,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('room', {
     Setup: async (ctx: IntegrationCheckContext) => {
         testAgentAttachmentId = await attachTestAgent(ctx, NORTHWIND_SPACE_ID);
     },
-    Teardown: async (ctx: IntegrationCheckContext) => {
-        if (testAgentAttachmentId) {
-            const attachmentId = testAgentAttachmentId;
-            testAgentAttachmentId = null;
-            await detachTestAgent(ctx, attachmentId);
-        }
-        // Clean up messages created in RM5
-        while (createdDetailIds.length > 0) {
-            const id = createdDetailIds.pop();
-            if (id) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, ctx.User);
-                if (await detail.Load(id)) {
-                    const deleted = await detail.Delete();
-                    if (!deleted) {
-                        const err = detail.LatestResult?.CompleteMessage ?? 'Delete returned false';
-                        console.error(`room Teardown failed to delete detail ${id}: ${err}`);
-                        throw new Error(`room Teardown failed to delete detail ${id}: ${err}`);
-                    }
+    Teardown: async (ctx: IntegrationCheckContext) =>
+        runAllSteps([
+            async () => {
+                if (testAgentAttachmentId) {
+                    const attachmentId = testAgentAttachmentId;
+                    testAgentAttachmentId = null;
+                    await detachTestAgent(ctx, attachmentId);
                 }
-            }
-        }
-    },
+            },
+            ...createdDetailIds.splice(0).map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, id, 'a message a room check posted')),
+        ]),
 });

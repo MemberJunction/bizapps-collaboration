@@ -268,6 +268,31 @@ const checks: NamedCheck[] = [
             Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
         },
     },
+    {
+        Id: 'library.LB7',
+        Name: 'LB7 — in Discovery, an upload with no band chosen lands on Team over the wire, and a member who can only keep material on Team is refused Shared',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const samCtx = await getPersonaClientContext(ctx, 'sam');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const samClient = new CollaborationClient(samCtx.GraphQLProvider);
+            const content = (name: string) => Buffer.from(`LB7 ${name}`).toString('base64');
+
+            const byDefault = await adaClient.UploadSpaceFile({ SpaceID: DISCOVERY_SPACE_ID, FileName: `lb7-default-${Date.now()}.txt`, MimeType: 'text/plain', Base64Data: content('default'), Folder: 'Briefs' });
+            Assert(byDefault.Success === true && !!byDefault.ItemID, `Ada uploads with no band chosen: ${byDefault.ErrorMessage ?? ''}`);
+            if (byDefault.ItemID) createdItemIds.push(byDefault.ItemID);
+            const bands = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.ItemID}'`, ['Band']);
+            Assert(bands[0]?.Band === 'Team', `No band chosen takes Discovery's default, Team (saw ${bands[0]?.Band})`);
+
+            const refusedName = `lb7-refused-${Date.now()}.txt`;
+            const refused = await samClient.UploadSpaceFile({ SpaceID: DISCOVERY_SPACE_ID, FileName: refusedName, MimeType: 'text/plain', Base64Data: content('refused'), Folder: 'Briefs', Band: 'Shared' });
+            Assert(!refused.Success, 'Sam choosing Shared is refused over the wire');
+            Assert(refused.ErrorMessage === 'Upload refused: this seat cannot place material in the Shared band.', `Refusal names the band: ${refused.ErrorMessage ?? ''}`);
+            const stored = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID'], undefined, { BypassCache: true });
+            Assert(stored.length === 0, 'A refused upload stores nothing');
+        },
+    },
 ];
 
 registerChecks(checks);

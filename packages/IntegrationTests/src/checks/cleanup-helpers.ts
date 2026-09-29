@@ -25,7 +25,8 @@ async function readAll<T extends { ID: string }>(
     entityName: string,
     extraFilter: string,
 ): Promise<T[]> {
-    const res = await rv.RunView<T>({ EntityName: entityName, ExtraFilter: extraFilter, Fields: ['ID'], ResultType: 'simple' }, user);
+    // BypassCache: a provider replays an identical read for a few seconds, and rows the server wrote (a turn's agent run) would be missing from it
+    const res = await rv.RunView<T>({ EntityName: entityName, ExtraFilter: extraFilter, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, user);
     Assert(res.Success === true, `Cleanup could not read ${entityName} where ${extraFilter}: ${res.ErrorMessage ?? 'unknown error'}`);
     return res.Results ?? [];
 }
@@ -78,6 +79,28 @@ export async function cleanupStep(step: () => Promise<void>): Promise<void> {
     } catch (error) {
         reportCleanupFailure(error);
     }
+}
+
+/**
+ * Runs every step even when one fails, then throws the first failure. A bundle's Teardown uses it so one row that won't delete
+ * doesn't leave the rest behind.
+ */
+export async function runAllSteps(steps: ReadonlyArray<() => Promise<void>>): Promise<void> {
+    let first: unknown;
+    let failed = false;
+    for (const step of steps) {
+        try {
+            await step();
+        } catch (error) {
+            if (!failed) {
+                failed = true;
+                first = error;
+            } else {
+                console.error(`Teardown step also failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+    if (failed) throw first;
 }
 
 /** Registers a bundle's checks, each one reporting its cleanup failures as described on `reportCleanupFailure`. */

@@ -12,15 +12,17 @@ const checkOnly = process.argv.includes('--check');
 const skippedDirs = new Set(['node_modules', '.backups', 'sql_logging']);
 const problems = [];
 
-/** Returns the value without `sync` keys, and whether it held any. */
+/** Returns the value without its records' `sync` blocks, and whether it held any. */
 function withoutSync(value) {
     let found = false;
     const strip = (val) => {
         if (Array.isArray(val)) return val.map(strip);
         if (val !== null && typeof val === 'object') {
             const out = {};
+            // A `sync` block sits on a record, beside its `fields`; a `sync` key anywhere else is somebody's data
+            const isRecord = 'fields' in val;
             for (const [key, child] of Object.entries(val)) {
-                if (key === 'sync') {
+                if (key === 'sync' && isRecord) {
                     found = true;
                     continue;
                 }

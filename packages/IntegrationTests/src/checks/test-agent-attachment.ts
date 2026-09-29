@@ -40,6 +40,17 @@ export async function attachTestAgent(ctx: IntegrationCheckContext, spaceId: str
     return attachment.ID;
 }
 
+/** Attaches any agent to a space, for a check that needs an agent a caller does not reach. Detach it with `detachTestAgent`. */
+export async function attachAgentToSpace(ctx: IntegrationCheckContext, agentId: string, spaceId: string): Promise<string> {
+    const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENT_ENTITY, ctx.User);
+    attachment.NewRecord();
+    attachment.AgentID = agentId;
+    attachment.SpaceID = spaceId;
+    attachment.IsDefault = false;
+    await RequireSave(attachment, 'Space Agent');
+    return attachment.ID;
+}
+
 /** Removes an attachment and reads it back to confirm it is gone. */
 export async function detachTestAgent(ctx: IntegrationCheckContext, attachmentId: string): Promise<void> {
     const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENT_ENTITY, ctx.User);

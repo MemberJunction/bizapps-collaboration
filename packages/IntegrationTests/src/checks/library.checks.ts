@@ -336,9 +336,61 @@ const checks: NamedCheck[] = [
             Assert(!learnerIds.includes(internal.itemId.toLowerCase()), 'Lee cannot read the Team upload');
 
             // A seat that cannot see Team cannot choose it, and nothing is stored
-            const refused = await upload(lee, 'Team', `lb8-refused-${Date.now()}.txt`);
+            const refusedName = `lb8-refused-${Date.now()}.txt`;
+            const refused = await upload(lee, 'Team', refusedName);
             Assert(!refused.ok, 'Lee choosing Team is refused');
+            const storedRefused = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID']);
+            Assert(storedRefused.length === 0, 'A refused upload stores nothing');
             Assert(!refused.ok && refused.message === 'Upload refused: this seat cannot place material in the Team band.', `Refusal names the band: ${refused.ok ? '' : refused.message}`);
+        },
+    },
+    {
+        Id: 'library.LB9',
+        Name: "LB9 — in Discovery, a Team-default space, an upload with no band chosen lands on Team, and a member who can only keep material on Team is refused Shared",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const sam = await GetPersonaUser(ctx, 'sam');
+
+            const upload = async (user: typeof ada, chosen: 'Shared' | 'Team' | null, name: string) =>
+                uploadSpaceFile({
+                    user,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: DISCOVERY_SPACE_ID,
+                    folder: 'Briefs',
+                    fileName: name,
+                    mimeType: 'text/plain',
+                    content: Buffer.from(`LB9 ${name}`),
+                    gate: () => decideUploadBand(ctx.Provider, user, DISCOVERY_SPACE_ID, chosen),
+                });
+
+            // Ada and Sam both reach Discovery through Northwind, an inherited seat. Discovery is a Workspace: its default band is Team.
+            const byDefault = await upload(ada, null, `lb9-default-${Date.now()}.txt`);
+            Assert(byDefault.ok, `Ada's upload with no band chosen: ${byDefault.ok ? '' : byDefault.message}`);
+            if (!byDefault.ok) throw new Error(byDefault.message);
+            createdItemIds.push(byDefault.itemId);
+            createdFileIds.push(byDefault.fileId);
+            const defaultItem = await FindRows<{ Band: string }>(ctx, SPACE_ITEM_ENTITY, `ID = '${byDefault.itemId}'`, ['Band']);
+            Assert(defaultItem[0]?.Band === 'Team', `An upload with no band chosen takes Discovery's default, Team (saw ${defaultItem[0]?.Band})`);
+
+            // Sam is a member: he can see Team but not promote, so Shared is a band he may not choose
+            const refusedName = `lb9-refused-${Date.now()}.txt`;
+            const refused = await upload(sam, 'Shared', refusedName);
+            Assert(!refused.ok, 'Sam choosing Shared is refused');
+            Assert(!refused.ok && refused.message === 'Upload refused: this seat cannot place material in the Shared band.', `Refusal names the band: ${refused.ok ? '' : refused.message}`);
+            const stored = await FindRows<{ ID: string }>(ctx, FILE_ENTITY, `Name = '${refusedName}'`, ['ID']);
+            Assert(stored.length === 0, 'A refused upload stores nothing');
+
+            // What he may do is keep it on Team
+            const kept = await upload(sam, 'Team', `lb9-team-${Date.now()}.txt`);
+            Assert(kept.ok, `Sam's upload with Team chosen: ${kept.ok ? '' : kept.message}`);
+            if (!kept.ok) throw new Error(kept.message);
+            createdItemIds.push(kept.itemId);
+            createdFileIds.push(kept.fileId);
         },
     },
 ];

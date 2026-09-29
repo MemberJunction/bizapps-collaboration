@@ -179,7 +179,12 @@ export async function executeSpaceChatTurn(
     const historyOnAdd = chatSettings.historyOnAdd;
 
     // 6. Resolve allowed agents
-    const allowed = await resolveAllowedAgents(provider, spaceId, system);
+    let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
+    try {
+        allowed = await resolveAllowedAgents(provider, spaceId, system);
+    } catch (agentsError) {
+        return { ok: false, message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.' };
+    }
     const resolvedDefault = parseUuid(allowed.defaultAgentId) ?? COLLABORATION_DEFAULT_AGENT_ID;
 
     // Load agent entities for allowed agents to supply MentionParser
