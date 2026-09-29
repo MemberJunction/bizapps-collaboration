@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { detailFields, missingDetails, visibleDetailFields, type DetailFieldShape } from './space-details.ts';
+import { detailFields, missingDetails, visibleDetailFields, type DetailFieldShape } from './detail-fields.ts';
 
 const field = (over: Partial<DetailFieldShape> & { Name: string }): DetailFieldShape => ({
     DisplayName: over.Name, IsPrimaryKey: false, IsVirtual: false, AllowUpdateAPI: true, AllowsNull: true, DefaultValue: null, Sequence: 10, ...over,

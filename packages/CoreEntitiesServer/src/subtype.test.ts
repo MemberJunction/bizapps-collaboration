@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { refuseSubtypePairing } from '../dist/SpaceEntityServer.js';
+import { sameSubtype } from '../dist/space-driver-call.js';
 import { refuseSubtypeEntity, type SubtypeEntityShape } from '../dist/subtype-rules.js';
 
 describe('a space type and its subtype go together', () => {
@@ -88,5 +89,18 @@ describe("an entity a space type names as its subtype", () => {
             { RoleID: ROLE_OUTSIDER, Role: 'Outsider', CanRead: false, ReadRLSFilterID: null },
         ] });
         assert.equal(refuseSubtypeEntity(spaces, lower, none), null);
+    });
+});
+
+describe('two types name the same subtype', () => {
+    it('when both name none, or the same entity however it is spaced or cased', () => {
+        assert.equal(sameSubtype({ SpaceExtensionEntity: null }, { SpaceExtensionEntity: '  ' }), true);
+        assert.equal(sameSubtype(undefined, { SpaceExtensionEntity: null }), true);
+        assert.equal(sameSubtype({ SpaceExtensionEntity: 'Example Boards' }, { SpaceExtensionEntity: ' example boards ' }), true);
+    });
+
+    it('not when one names a subtype and the other names none, or another', () => {
+        assert.equal(sameSubtype({ SpaceExtensionEntity: 'Example Boards' }, { SpaceExtensionEntity: null }), false);
+        assert.equal(sameSubtype({ SpaceExtensionEntity: 'Example Boards' }, { SpaceExtensionEntity: 'Example Rooms' }), false);
     });
 });

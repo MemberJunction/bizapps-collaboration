@@ -469,9 +469,7 @@ export class CollabSpaceOverviewComponent {
   @Input() public ShowLibraryLink = true;
   @Input() public ShowChatLink = true;
   /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
-  /** The space's type keeps details of its own (a subtype): the host draws them, read-only, in the `[mjcAbout]` slot. */
-  @Input() public HasAbout = false;
-  @Input() public AboutTitle = '';
+  /** Cards the space's type, and other apps, add to the Overview. Each is mounted as a component. */
   @Input() public ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
 
   /** The contributed cards this viewer may see, one per key: a driver may append what an earlier one already gave, and a key draws once. */
@@ -486,6 +484,9 @@ export class CollabSpaceOverviewComponent {
       return true;
     });
   }
+  /** The space's type keeps details of its own (a subtype): the host draws them, read-only, in the `[mjcAbout]` slot. */
+  @Input() public HasAbout = false;
+  @Input() public AboutTitle = '';
   @Input() public FirmName = '';
   @Input() public ClientOrgName = '';
   @Input() public ClientPersonaName = '';

@@ -59,7 +59,7 @@ when `mj` is not on the path of the member you are in.
    own, in a schema of their own, as IsA children of Space; the migration holds their CodeGen output too:
 
    ```bash
-   mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations
+   pnpm run mj:migrate:examples
    ```
 
 8. **The test metadata:** `pnpm run mj:push:tests` pushes the two example entities' permissions first

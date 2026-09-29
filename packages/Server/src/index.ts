@@ -4,7 +4,7 @@
  * subclasses imported below replace them, because @RegisterClass keeps
  * the higher priority.
  */
-import '@mj-biz-apps/collaboration-entities';
+import { LoadSpaceSubtypeResolver } from '@mj-biz-apps/collaboration-entities';
 import '@mj-biz-apps/collaboration-actions';
 import {
     LoadItemUseEntityServer,
@@ -34,11 +34,13 @@ export const RESOLVER_PATHS = [
     resolve(here, 'home-counts.resolver.{js,ts}'),
     resolve(here, 'home-lists.resolver.{js,ts}'),
     resolve(here, 'create-space-conversation.resolver.{js,ts}'),
+    resolve(here, 'create-space.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';
 
 export function LoadBizAppsCollaborationServer(): void {
+    LoadSpaceSubtypeResolver();
     LoadItemUseEntityServer();
     LoadShareNoticeEntityServer();
     LoadSpaceEntityServer();

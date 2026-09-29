@@ -1,6 +1,15 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": [
+      "node"
+    ]
+  },
   "include": [],
-  "files": ["src/server.ts"]
+  "files": [
+    "src/server.ts",
+    "src/entities.ts"
+  ]
 }

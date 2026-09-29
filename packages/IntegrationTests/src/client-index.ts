@@ -20,6 +20,7 @@ import './checks/client/library.client.checks.js';
 import './checks/client/agent.client.checks.js';
 import './checks/client/features.client.checks.js';
 import './checks/client/lifecycle.client.checks.js';
+import './checks/client/subtypes.client.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

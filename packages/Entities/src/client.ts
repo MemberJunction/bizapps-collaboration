@@ -134,6 +134,30 @@ export interface CloseConsequenceGraphQLPayload {
     KeeperCanReopen?: boolean;
 }
 
+/** A new space: its type, its name, and the subtype's own columns by field name. */
+export interface CreateSpaceGraphQLInput {
+    TypeID: string;
+    Name: string;
+    Description?: string;
+    Details?: Record<string, unknown>;
+}
+
+export interface CreateSpaceGraphQLPayload {
+    Success: boolean;
+    SpaceID?: string;
+    ErrorMessage?: string;
+}
+
+const CREATE_SPACE_MUTATION = `
+mutation CreateSpace($input: CreateSpaceInput!) {
+    CreateSpace(input: $input) {
+        Success
+        SpaceID
+        ErrorMessage
+    }
+}
+`;
+
 /** What Home counts across every space the signed-in person reaches. */
 export interface HomeCountsGraphQLPayload {
     Success: boolean;
@@ -345,6 +369,13 @@ export class CollaborationClient {
     async GetHomeCounts(): Promise<HomeCountsGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_HOME_COUNTS_QUERY, {});
         return (res?.GetHomeCounts as HomeCountsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    /** Makes a top-level space and seats the signed-in person as its owner, in one transaction. */
+    async CreateSpace(input: CreateSpaceGraphQLInput): Promise<CreateSpaceGraphQLPayload> {
+        const { Details, ...rest } = input;
+        const res = await this.activeExecutor.ExecuteGQL(CREATE_SPACE_MUTATION, { input: { ...rest, ...(Details ? { Details: JSON.stringify(Details) } : {}) } });
+        return (res?.CreateSpace as CreateSpaceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async GetHomeLists(): Promise<HomeListsGraphQLPayload> {

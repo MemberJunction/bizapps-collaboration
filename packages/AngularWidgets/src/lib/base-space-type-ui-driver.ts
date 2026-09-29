@@ -78,14 +78,21 @@ export interface SpaceNewStepDescriptor {
 
 /**
  * The details a type keeps of its own (its subtype's columns), as the New space dialog, Settings → Details and the Overview's About
- * card draw them. By default every column the subtype adds is shown. A driver returns `undefined` to show none, or names fields to
- * hide; a field the space can't be saved without is shown regardless.
+ * card draw them. By default a subtype with a registered form shows that form (MemberJunction's form host: no toolbar, no related
+ * entities), and one without shows a field for each column it adds. A driver returns `undefined` to show none, names fields to
+ * hide, or gives a component of its own; a field the space can't be saved without is shown regardless.
  */
 export interface SpaceDetailsFormDescriptor {
     /** The subtype entity the details are of. */
     entityName: string;
-    /** Subtype fields left out of the form (an optional field only). */
+    /** Subtype fields left out of the field list (an optional field only). It does not trim a form, which lays out its own fields. */
     hiddenFieldNames?: string[];
+    /**
+     * An Angular component that draws the details in place of the form and the field list. It is mounted with `Record` (the
+     * subtype's record, whose fields it edits directly) and `EditMode` (false on the Overview's About card) as inputs, and its
+     * changes are seen through the DOM events it raises (`input`, `change`).
+     */
+    component?: Type<unknown>;
 }
 
 // ============================================================================

@@ -22,7 +22,7 @@ import { type BaseSpaceTypeServerDriver, type ChildSpaceChangeKind, type SpaceCh
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, loadAncestorChain, mayAdminister, loadWriteContext, requireSystemUser } from './load-graph.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
-import { failDelete, refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
+import { failDelete, failSave, refusalOf, resolveSpaceDriver, sameSubtype, subtypeOf } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { asMetadata, parseUuid } from './uuid.js';
@@ -325,7 +325,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (!previousType) {
                 return fail(result, 'SpaceTypeID', "Space change refused: the space's previous type could not be read.");
             }
-            if ((previousType.SpaceExtensionEntity ?? null) !== (spaceType.SpaceExtensionEntity ?? null)) {
+            if (!sameSubtype(previousType, spaceType)) {
                 return fail(result, 'SpaceTypeID', 'Space change refused: the two types do not share a subtype table, so the space cannot move between them.');
             }
             let previousConfig: ISpaceTypeConfiguration | null = null;
@@ -676,13 +676,32 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         // A space that has its subtype attached is deleted through that subtype, which deletes its own row and then this one. Core
         // delegates from here too, but its one-delete-at-a-time guard then waits on this very call when the subtype comes back for
-        // the parent row, so the delete never returns. Delegating first keeps that call from being pending; the driver is asked
-        // once, when the subtype's delete reaches this row.
+        // the parent row, so the delete never returns (MemberJunction/MJ#4850). Delegating first keeps that call from being pending;
+        // the driver is asked once, when the subtype's delete reaches this row. Remove this when the fix is in MJ `next`.
         const leaf = this.LeafEntity;
         if (leaf !== this && !options?.IsParentEntityDelete) return leaf.Delete(options);
         const refusal = await this.driverRefusalForDelete();
         if (refusal) return failDelete(this, refusal);
         return super.Delete(options);
+    }
+
+    /**
+     * The space's rules for a change, for a save whose only change is in its subtype's own columns (MJ validates a parent only when
+     * the parent itself changed): the right that Settings asks for, and the type's driver, told the subtype's old values.
+     */
+    private async refuseSubtypeOnlyChange(user: UserInfo): Promise<string | null> {
+        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
+            return "Space change refused: changing a space's details needs the 'Configure Spaces' authorization and an owner seat on the space.";
+        }
+        const resolved = await resolveSpaceDriver(this, this.ProviderToUse, user, this.ID);
+        if (!resolved.ok) return resolved.message;
+        const leaf = this.LeafEntity;
+        const oldValues: Record<string, unknown> = {};
+        for (const field of leaf.Fields) {
+            if (field.Dirty && !field.Name.startsWith('__mj_')) oldValues[field.Name] = field.OldValue;
+        }
+        return refusalOf(await resolved.call.driver.ValidateSpaceChange({ ...resolved.call.base, kind: 'Update', oldValues }));
     }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
@@ -705,6 +724,17 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const parentChanged = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
         const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
         const structureChanged = parentChanged || inheritsChanged;
+
+        // A subtype's own columns can change with the space itself untouched: MJ then saves the space first and skips its validation,
+        // so the space's rules for a change are applied here
+        if (this.savingAsSubtype && this.IsSaved && !own.changed && signedIn) {
+            const refusal = await this.refuseSubtypeOnlyChange(signedIn);
+            if (refusal) {
+                this.readingForSave = null;
+                this.savingAsSubtype = null;
+                return failSave(this, refusal);
+            }
+        }
 
         let ok = false;
         try {

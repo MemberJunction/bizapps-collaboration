@@ -257,7 +257,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
       @if (HasDetails) {
         <!-- The details the space's type keeps of its own: drawn by the host, saved on their own -->
-        <div class="settings-sections details-section" aria-labelledby="settings-details-title">
+        <section class="settings-sections details-section" aria-labelledby="settings-details-title">
           <div class="settings-card">
             <div class="card-title-row">
               <i class="fa-solid fa-list-check section-ic" aria-hidden="true"></i>
@@ -291,7 +291,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               </div>
             }
           </div>
-        </div>
+        </section>
       }
 
       <ng-template #lifecycle>

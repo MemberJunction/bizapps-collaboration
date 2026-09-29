@@ -1,97 +1,21 @@
 import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type {
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceTypeEntity,
-} from '@mj-biz-apps/collaboration-entities';
-
-/** A column of an entity as this module reads it: the parts of `EntityFieldInfo` that decide whether a form asks for it. */
-export interface DetailFieldShape {
-    Name: string;
-    DisplayName: string;
-    IsPrimaryKey: boolean;
-    IsVirtual: boolean;
-    AllowUpdateAPI: boolean;
-    AllowsNull: boolean;
-    /** The database default, or null when there is none. */
-    DefaultValue: string | null;
-    Sequence: number;
-}
-
-/** A field a space's subtype keeps of its own, as the dialog and the settings ask for it. */
-export interface DetailField {
-    name: string;
-    label: string;
-    /** The person must fill it in: the column allows no null and has no default. */
-    required: boolean;
-}
-
-/**
- * The columns a subtype adds to a space, in the order the entity gives them. A subtype's entity also carries the space's own
- * columns (the primary key, the parent's fields, the audit columns, and view-only columns): those are the space's, not its details.
- */
-export function detailFields(fields: readonly DetailFieldShape[], parentFieldNames: ReadonlySet<string>): DetailField[] {
-    return fields
-        .filter((f) => !f.IsPrimaryKey && !f.IsVirtual && f.AllowUpdateAPI && !f.Name.startsWith('__mj_') && !parentFieldNames.has(f.Name))
-        .sort((a, b) => a.Sequence - b.Sequence)
-        .map((f) => ({
-            name: f.Name,
-            label: f.DisplayName,
-            required: !f.AllowsNull && (f.DefaultValue === null || f.DefaultValue === undefined || f.DefaultValue === ''),
-        }));
-}
-
-function isFilled(value: unknown): boolean {
-    if (value === null || value === undefined) return false;
-    return typeof value === 'string' ? value.trim().length > 0 : true;
-}
-
-/** The subtype's own detail fields, read from the entity object's metadata. */
-export function ownDetailFields(leaf: BaseEntity): DetailField[] {
-    return detailFields(
-        leaf.EntityInfo.Fields.map((f) => ({
-            Name: f.Name,
-            DisplayName: f.DisplayNameOrName,
-            IsPrimaryKey: f.IsPrimaryKey,
-            IsVirtual: f.IsVirtual,
-            AllowUpdateAPI: f.AllowUpdateAPI,
-            AllowsNull: f.AllowsNull,
-            DefaultValue: f.DefaultValue ?? null,
-            Sequence: f.Sequence,
-        })),
-        leaf.EntityInfo.ParentEntityFieldNames,
-    );
-}
-
-/**
- * The fields a UI driver's details form leaves in: those it does not name as hidden, compared without regard to case. A required
- * field stays whatever the driver says, since a space can't be saved without it.
- */
-export function visibleDetailFields(fields: readonly DetailField[], hiddenFieldNames: readonly string[] | undefined): DetailField[] {
-    const hidden = new Set((hiddenFieldNames ?? []).map((n) => n.toLowerCase()));
-    return fields.filter((f) => f.required || !hidden.has(f.name.toLowerCase()));
-}
-
-/** The required details that have no value yet. */
-export function missingDetails(fields: readonly DetailField[], valueOf: (name: string) => unknown): DetailField[] {
-    return fields.filter((f) => f.required && !isFilled(valueOf(f.name)));
-}
+import { missingDetails, visibleDetailFields, type DetailField } from '@mj-biz-apps/collaboration-core';
+import { ownDetailFields, type CreateSpaceGraphQLInput, type CreateSpaceGraphQLPayload, type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 
 const SPACE_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
-const SPACE_MEMBER_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
+
+/** What a save of the draft came to: the new space's id, or the words to show. The space and its owner's seat are written together, so a refusal leaves nothing behind. */
+export type NewSpaceOutcome = { status: 'created'; spaceId: string } | { status: 'refused'; message: string };
+
+/** What the draft needs of the server: the operation that makes the space and its owner's seat in one transaction. */
+export interface SpaceCreator {
+    CreateSpace(input: CreateSpaceGraphQLInput): Promise<CreateSpaceGraphQLPayload>;
+}
 
 /**
- * What a save of the draft came to. `unseated` means the space was written but the seat that makes the person its owner was not:
- * the space exists, and the screen opens it and says what is missing.
- */
-export type NewSpaceOutcome =
-    | { status: 'created'; spaceId: string }
-    | { status: 'unseated'; spaceId: string; message: string }
-    | { status: 'refused'; message: string };
-
-/**
- * A space that is being made: its own record, and, when its type keeps details in a subtype of Space, that subtype record attached
- * to it, so one save writes both rows. The screen draws the subtype's own fields from `DetailFields` and reads them back from `Leaf`.
+ * A space that is being made: a record of it, and, when its type keeps details in a subtype of Space, that subtype record attached,
+ * so the screen can draw the subtype's own fields (`DetailFields`) and read what was typed back from `Leaf`. Nothing is saved from
+ * here: Create sends the type, the name and those values to the server, which writes the space and the owner's seat together.
  */
 export class NewSpaceDraft {
     public readonly Space: mjBizAppsCollaborationSpaceEntity;
@@ -115,7 +39,8 @@ export class NewSpaceDraft {
         space.SpaceTypeID = type.ID;
         space.OwnerID = user.ID;
         space.InheritsMembership = type.DefaultInheritsMembership;
-        // The type names the subtype, and the resolver answers from it: the child is attached to this very object
+        // The type names the subtype, and the resolver answers from it: the child is attached to this very object. Core logs a load
+        // error here for a row that can't exist yet (MemberJunction/MJ#4859); nothing is wrong.
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];
@@ -131,39 +56,28 @@ export class NewSpaceDraft {
         return missingDetails(this.DetailFields, (name) => this.Leaf.Get(name));
     }
 
-    /**
-     * Saves the space (through its subtype, which writes both rows) and seats the person as its owner.
-     * A failed seat is reported, not hidden: the space exists, and its owner can still open it.
-     */
-    public async Save(
-        provider: IMetadataProvider,
-        user: UserInfo,
-        input: { name: string; description: string; ownerRoleId: string | undefined },
-    ): Promise<NewSpaceOutcome> {
-        this.Space.Name = input.name;
-        this.Space.Description = input.description || null;
-        if (!(await this.Leaf.Save())) {
-            const result = this.Leaf.LatestResult ?? this.Space.LatestResult;
-            return { status: 'refused', message: result?.CompleteMessage || 'The space could not be created.' };
+    /** What was typed into the subtype's fields, by field name. A field with no value is left out, so the column's own default applies. */
+    public Details(): Record<string, unknown> {
+        const values: Record<string, unknown> = {};
+        for (const field of this.DetailFields) {
+            const value = this.Leaf.Get(field.name);
+            if (value !== null && value !== undefined && value !== '') values[field.name] = value;
         }
-        const spaceId = this.Space.ID;
-        if (!input.ownerRoleId) {
-            return { status: 'unseated', spaceId, message: 'The space was created, but there is no owner role to seat you in.' };
-        }
-        const seat = await provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, user);
-        seat.NewRecord();
-        seat.SpaceID = spaceId;
-        seat.UserID = user.ID;
-        seat.SpaceRoleTypeID = input.ownerRoleId;
-        seat.Band = 'Team';
-        seat.Status = 'Active';
-        if (!(await seat.Save())) {
-            return { status: 'unseated', spaceId, message: `The space was created, but you could not be seated as its owner: ${seat.LatestResult?.CompleteMessage ?? 'unknown error'}` };
-        }
-        return { status: 'created', spaceId };
+        return values;
+    }
+
+    /** Asks the server to make the space and seat the person as its owner, together. */
+    public async Create(creator: SpaceCreator, input: { name: string; description: string }): Promise<NewSpaceOutcome> {
+        const res = await creator.CreateSpace({
+            TypeID: this.Space.SpaceTypeID,
+            Name: input.name,
+            Description: input.description || undefined,
+            ...(this.HasDetails ? { Details: this.Details() } : {}),
+        });
+        if (res.Success && res.SpaceID) return { status: 'created', spaceId: res.SpaceID };
+        return { status: 'refused', message: res.ErrorMessage || 'The space could not be created.' };
     }
 }
-
 
 /** What saving a space's details came to. */
 export type SaveDetailsOutcome = { ok: true } | { ok: false; message: string };

@@ -8,6 +8,11 @@ export function subtypeOf(spaceType: { SpaceExtensionEntity?: string | null } | 
     return spaceType?.SpaceExtensionEntity?.trim() || null;
 }
 
+/** Whether two types name the same subtype (or both none), trimmed and without regard to case, as `refuseSubtypePairing` compares. */
+export function sameSubtype(a: { SpaceExtensionEntity?: string | null } | null | undefined, b: { SpaceExtensionEntity?: string | null } | null | undefined): boolean {
+    return (subtypeOf(a) ?? '').toLowerCase() === (subtypeOf(b) ?? '').toLowerCase();
+}
+
 /** What a driver call needs: the space, its type, the driver, and the context every hook takes. */
 export interface SpaceDriverCall {
     driver: BaseSpaceTypeServerDriver;
@@ -52,6 +57,16 @@ export function failDelete(entity: BaseEntity, message: string): false {
     const result = new BaseEntityResult();
     result.Success = false;
     result.Type = 'delete';
+    result.Message = message;
+    entity.RegisterResultHistoryEntry(result);
+    return false;
+}
+
+/** Records a refused save on the entity's result history and returns false, as a save that fails must. */
+export function failSave(entity: BaseEntity, message: string): false {
+    const result = new BaseEntityResult();
+    result.Success = false;
+    result.Type = entity.IsSaved ? 'update' : 'create';
     result.Message = message;
     entity.RegisterResultHistoryEntry(result);
     return false;

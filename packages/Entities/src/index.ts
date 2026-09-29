@@ -4,3 +4,4 @@ export { LoadCollaborationPermissionProvider } from './space-permission-provider
 export * from './client.js';
 import './space-subtype-resolver.js';
 export { LoadSpaceSubtypeResolver, SpaceSubtypeDirectory, SpaceSubtypeResolver } from './space-subtype-resolver.js';
+export * from './detail-fields.js';

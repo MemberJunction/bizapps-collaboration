@@ -487,14 +487,16 @@ describe('New space, rendered', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('There is no kind of space you can start.');
   });
 
-  it('moves focus to the name when a kind is chosen', async () => {
+  it('leaves focus on the kind that was chosen: an arrow key in a radio group picks, and the name comes next in the tab order', async () => {
     vi.useFakeTimers();
     const fixture = render();
     vi.runAllTimers();
+    const radio = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[type="radio"]')!;
+    radio.focus();
     fixture.componentRef.setInput('SelectedTypeId', 't-workspace');
     fixture.detectChanges();
     vi.runAllTimers();
-    expect((document.activeElement as HTMLElement).id).toBe('new-space-name');
+    expect(document.activeElement).toBe(radio);
   });
 });
 
@@ -535,6 +537,8 @@ describe('A space\'s own details, rendered', () => {
     const withDetails = await renderSettings();
     const host = withDetails.nativeElement as HTMLElement;
     expect(host.querySelector('#settings-details-title')?.textContent).toContain('Board details');
+    // The heading names the card as a region: `aria-labelledby` on a plain div names nothing
+    expect(host.querySelector('section[aria-labelledby="settings-details-title"]')).not.toBeNull();
     expect(host.querySelector('.details-fields #projected-field')).not.toBeNull();
     const without = await renderSettings({ hasDetails: false });
     expect((without.nativeElement as HTMLElement).querySelector('#settings-details-title')).toBeNull();
@@ -613,7 +617,9 @@ describe("Home's lists, rendered", () => {
     expect(host.querySelector('section')?.getAttribute('aria-labelledby')).toBe('hl-title-approvals');
     const buttons = host.querySelectorAll<HTMLButtonElement>('.hl-row');
     expect(buttons).toHaveLength(2);
-    expect(buttons[0].getAttribute('aria-label')).toBe('Bea is invited as Contributor, Northwind. Review on People');
+    // No `aria-label`: it would replace the visible text and leave out the detail line, so the text names the button
+    expect(buttons[0].hasAttribute('aria-label')).toBe(false);
+    for (const text of ['Bea is invited as Contributor', 'Invited Sep 28, 2026', 'Northwind', 'Review on People']) expect(buttons[0].textContent).toContain(text);
     buttons[1].click();
     expect(selected).toHaveBeenCalledWith('s2');
   });

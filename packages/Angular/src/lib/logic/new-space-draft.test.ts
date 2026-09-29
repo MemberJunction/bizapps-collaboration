@@ -61,45 +61,41 @@ describe('making a new space', () => {
         assert.deepEqual(draft.MissingDetails(), []);
     });
 
-    it('saves through the subtype, then seats the person as the owner, in the Team band and Active', async () => {
-        const { space, saved } = fakeSpace({ child: { fields: [], values: {} } });
-        const seat = seatStub();
-        const draft = await NewSpaceDraft.Start(providerOf(space, seat), USER, TYPE);
-        const outcome = await draft.Save(providerOf(space, seat), USER, { name: 'Board', description: '', ownerRoleId: 'role-owner' });
-        assert.deepEqual(outcome, { status: 'created', spaceId: 'space-1' });
-        assert.deepEqual(saved, ['leaf']);
-        assert.equal(space['Name'], 'Board');
-        assert.equal(space['Description'], null);
-        assert.deepEqual([seat['SpaceID'], seat['UserID'], seat['SpaceRoleTypeID'], seat['Band'], seat['Status']], ['space-1', 'user-1', 'role-owner', 'Team', 'Active']);
-    });
-
-    it('saves a plain space through itself', async () => {
-        const { space, saved } = fakeSpace({});
+    it('collects what was typed into the subtype fields, and leaves out what has no value so the column default applies', async () => {
+        const values: Record<string, unknown> = { TermName: '2026', Cadence: '', Quorum: 0 };
+        const { space } = fakeSpace({ child: { fields: [field('ID', { IsPrimaryKey: true }), field('TermName', { AllowsNull: false }), field('Cadence'), field('Quorum'), field('Notes')], values } });
         const draft = await NewSpaceDraft.Start(providerOf(space, seatStub()), USER, TYPE);
-        const outcome = await draft.Save(providerOf(space, seatStub()), USER, { name: 'Ws', description: 'notes', ownerRoleId: 'role-owner' });
-        assert.equal(outcome.status, 'created');
-        assert.deepEqual(saved, ['space']);
-        assert.equal(space['Description'], 'notes');
+        assert.deepEqual(draft.Details(), { TermName: '2026', Quorum: 0 });
     });
 
-    it("reports the server's refusal, and seats no one", async () => {
-        const { space } = fakeSpace({ saveOk: false, message: 'A board may not sit here.' });
-        const seat = seatStub();
-        let seatsMade = 0;
-        seat['NewRecord'] = () => { seatsMade += 1; };
-        const draft = await NewSpaceDraft.Start(providerOf(space, seat), USER, TYPE);
-        const outcome = await draft.Save(providerOf(space, seat), USER, { name: 'x', description: '', ownerRoleId: 'role-owner' });
-        assert.deepEqual(outcome, { status: 'refused', message: 'A board may not sit here.' });
-        assert.equal(seatsMade, 0);
+    it('asks the server to make the space and seat the person, sending the type, the name and the details, and returns the new id', async () => {
+        const { space } = fakeSpace({ child: { fields: [field('TermName', { AllowsNull: false })], values: { TermName: '2026' } } });
+        space['SpaceTypeID'] = 'type-1';
+        const sent: unknown[] = [];
+        const creator = { CreateSpace: async (input: unknown) => { sent.push(input); return { Success: true, SpaceID: 'space-9' }; } };
+        const draft = await NewSpaceDraft.Start(providerOf(space, seatStub()), USER, TYPE);
+        const outcome = await draft.Create(creator, { name: 'Board', description: '' });
+        assert.deepEqual(outcome, { status: 'created', spaceId: 'space-9' });
+        assert.deepEqual(sent, [{ TypeID: 'type-1', Name: 'Board', Description: undefined, Details: { TermName: '2026' } }]);
     });
 
-    it('says the space exists when the seat is refused or there is no owner role', async () => {
+    it('sends no details for a plain type, and the description when there is one', async () => {
         const { space } = fakeSpace({});
-        const draft = await NewSpaceDraft.Start(providerOf(space, seatStub(false, 'No.')), USER, TYPE);
-        const refused = await draft.Save(providerOf(space, seatStub(false, 'No.')), USER, { name: 'x', description: '', ownerRoleId: 'role-owner' });
-        assert.deepEqual(refused, { status: 'unseated', spaceId: 'space-1', message: 'The space was created, but you could not be seated as its owner: No.' });
-        const noRole = await draft.Save(providerOf(space, seatStub()), USER, { name: 'x', description: '', ownerRoleId: undefined });
-        assert.equal(noRole.status, 'unseated');
+        space['SpaceTypeID'] = 'type-1';
+        const sent: Array<Record<string, unknown>> = [];
+        const creator = { CreateSpace: async (input: object) => { sent.push({ ...input }); return { Success: true, SpaceID: 'space-9' }; } };
+        const draft = await NewSpaceDraft.Start(providerOf(space, seatStub()), USER, TYPE);
+        await draft.Create(creator, { name: 'Ws', description: 'notes' });
+        assert.equal('Details' in sent[0], false);
+        assert.equal(sent[0]['Description'], 'notes');
+    });
+
+    it("returns the server's refusal, which leaves no space and no seat behind", async () => {
+        const { space } = fakeSpace({});
+        space['SpaceTypeID'] = 'type-1';
+        const draft = await NewSpaceDraft.Start(providerOf(space, seatStub()), USER, TYPE);
+        assert.deepEqual(await draft.Create({ CreateSpace: async () => ({ Success: false, ErrorMessage: 'A board may not sit here.' }) }, { name: 'x', description: '' }), { status: 'refused', message: 'A board may not sit here.' });
+        assert.deepEqual(await draft.Create({ CreateSpace: async () => ({ Success: false }) }, { name: 'x', description: '' }), { status: 'refused', message: 'The space could not be created.' });
     });
 });
 

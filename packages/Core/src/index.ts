@@ -108,3 +108,4 @@ export type {
     AgentCandidateItem,
     AgentMayQuoteResult,
 } from './retrieval.js';
+export { detailFields, missingDetails, visibleDetailFields, type DetailField, type DetailFieldShape } from './detail-fields.js';

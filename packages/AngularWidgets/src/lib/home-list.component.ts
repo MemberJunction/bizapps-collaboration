@@ -48,7 +48,7 @@ export interface HomeListRow {
         <ul class="hl-rows">
           @for (row of Rows; track row.key) {
             <li>
-              <button type="button" class="hl-row" [attr.aria-label]="row.title + ', ' + row.spaceName + '. ' + row.actionLabel" (click)="RowSelected.emit(row.key)">
+              <button type="button" class="hl-row" (click)="RowSelected.emit(row.key)">
                 <span class="hl-ic"><i [class]="row.iconClass" aria-hidden="true"></i></span>
                 <span class="hl-main">
                   <span class="hl-row-title">{{ row.title }}</span>

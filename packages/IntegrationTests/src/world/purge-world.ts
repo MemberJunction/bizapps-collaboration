@@ -145,6 +145,11 @@ export async function purgeWorld(): Promise<void> {
                 DELETE FROM __mj_BizAppsCollaboration.SpaceAgent WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
+            -- The example subtypes' rows go before the spaces they specialise: their keys are foreign keys to Space, with no cascade
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleBoard') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleBoard WHERE ID IN (${spaceIds});
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleRoom') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleRoom WHERE ID IN (${spaceIds});
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});

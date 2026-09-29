@@ -87,6 +87,13 @@ Three pieces of that host live outside this repository. None of the values below
 
 Staff accounts hold `UI` or `Developer`, so a magic link is not issued for them. They use the host's Auth0 sign-in. That callback has to include port `4217`, or the staff half of a signed-in run uses an Explorer whose callback is already registered and whose API is this one.
 
+**The example types on that host.** A host that shows the example board and room has to load their package on both sides, or the page can read a board's columns but not save them (Settings → Details, over GraphQL) and shows no form for them. The example package is built by the ordinary `pnpm run build`, which makes `dist/resolvers.js` too. Then, in that host's `mj.config.cjs`:
+
+- `dynamicPackages.server` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types/server', AppName: 'mj-bizapps-collaboration' }`. The package's `/server` entry exports `RESOLVER_PATHS`, which MJAPI reads off every server package it loads, so the generated resolvers of the two subtype entities join the schema. Creating a space needs none of this: `CreateSpace` runs on the server and writes the subtype itself.
+- `dynamicPackages.client` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types', AppName: 'mj-bizapps-collaboration' }`, so the Explorer's class manifest imports the package and registers the two forms and the UI drivers.
+
+The database needs the example schema (`pnpm run mj:migrate:examples`) and the test metadata (`pnpm run mj:push:tests`). Without the client entry the details screens fall back to a field for each column, which is the default for a subtype that has no form.
+
 These are the four files the checks lean on. `files.csv` holds eleven more: Ada's Team files in the committee, Northwind, Delivery, Studio and Sealed child, and Casey's Shared `executive-roadmap.pdf` on Northwind.
 
 | Key | Who uploads | Where | Band |

@@ -29,6 +29,21 @@ async function seatOwner(ctx: IntegrationCheckContext, spaceId: string): Promise
     Assert(await seat.Save(), `Ada is seated as the owner: ${seat.LatestResult?.CompleteMessage ?? ''}`);
 }
 
+/** Ada, an owner of the space, seats another person in it. */
+async function seatOther(ctx: IntegrationCheckContext, spaceId: string, personaKey: string, roleFilter: string): Promise<void> {
+    const ada = await GetPersonaUser(ctx, 'ada');
+    const person = await GetPersonaUser(ctx, personaKey);
+    const [role] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, roleFilter, ['ID']);
+    const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+    seat.NewRecord();
+    seat.SpaceID = spaceId;
+    seat.UserID = person.ID;
+    seat.SpaceRoleTypeID = role.ID;
+    seat.Band = 'Team';
+    seat.Status = 'Active';
+    Assert(await seat.Save(), `Ada seats ${personaKey}: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+}
+
 const checks: NamedCheck[] = [
     {
         Id: 'subtypes.ST1',
@@ -57,9 +72,11 @@ const checks: NamedCheck[] = [
                 const [boardRow] = await FindRows<{ ID: string; TermName: string; QuorumPercentage: number }>(ctx, BOARDS, `ID = '${id}'`, ['ID', 'TermName', 'QuorumPercentage'], ada, { BypassCache: true });
                 Assert(boardRow?.TermName === '2026 to 2027' && boardRow.QuorumPercentage === 60, `The ExampleBoard row exists with its own columns: ${JSON.stringify(boardRow)}`);
 
-                // Reload through the parent: the child is found again, and an edit of its own column saves
+                // Reload through the parent: the child is found again, and an edit of its own column saves. Dev holds Configure Spaces, and Ada seats Dev as an owner.
                 await seatOwner(ctx, id);
-                const reloaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                await seatOther(ctx, id, 'dev', "Code = 'owner'");
+                const dev = await GetPersonaUser(ctx, 'dev');
+                const reloaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
                 Assert(await reloaded.Load(id), 'The space reloads');
                 const leaf = reloaded.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
                 Assert(leaf.EntityInfo.Name === BOARDS && leaf.TermName === '2026 to 2027', 'Its subtype comes back with it');
@@ -80,6 +97,58 @@ const checks: NamedCheck[] = [
             } finally {
                 const leftover = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}'`, ['ID'], undefined, { BypassCache: true });
                 if (leftover.length) await cleanupSpace(ctx.Provider, ctx.User, id);
+            }
+        },
+    },
+    {
+        Id: 'subtypes.ST4',
+        Name: "ST4 — a change to only a subtype's own columns meets the space's rules: an owner without Configure Spaces and a plain member are refused, and Dev, an owner who holds it, is allowed",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const boardType = await typeId(ctx, 'example-board');
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            space.NewRecord();
+            space.Name = `${CHECK_SPACE_PREFIX}ST4 board ${Date.now()}`;
+            space.SpaceTypeID = boardType;
+            space.OwnerID = ada.ID;
+            space.InheritsMembership = false;
+            await space.EnsureISAChild();
+            (space.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity).TermName = 'Original';
+            Assert(await space.LeafEntity.Save(), `Ada creates a board: ${space.LeafEntity.LatestResult?.CompleteMessage ?? ''}`);
+            const id = space.ID;
+            try {
+                await seatOwner(ctx, id);
+                await seatOther(ctx, id, 'dev', "Code = 'owner'");
+                await seatOther(ctx, id, 'bea', 'CanSeeTeamBand = 1 AND IsOwnerRole = 0');
+                const editAs = async (personaKey: string, term: string) => {
+                    const user = await GetPersonaUser(ctx, personaKey);
+                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
+                    Assert(await loaded.Load(id), `${personaKey} loads the board`);
+                    const leaf = loaded.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+                    leaf.TermName = term;
+                    return { saved: await leaf.Save(), message: leaf.LatestResult?.CompleteMessage ?? '' };
+                };
+                const termNow = async () => (await FindRows<{ TermName: string }>(ctx, BOARDS, `ID = '${id}'`, ['TermName'], undefined, { BypassCache: true }))[0]?.TermName;
+
+                const owner = await editAs('ada', 'By Ada');
+                Assert(!owner.saved && /Configure Spaces/.test(owner.message), `An owner without Configure Spaces is refused: ${owner.message}`);
+                const member = await editAs('bea', 'By Bea');
+                Assert(!member.saved && /Configure Spaces/.test(member.message), `A plain member is refused: ${member.message}`);
+                Assert((await termNow()) === 'Original', 'Neither refused edit changed the row');
+                const dev = await editAs('dev', 'By Dev');
+                Assert(dev.saved, `Dev, an owner who holds Configure Spaces, is allowed: ${dev.message}`);
+                Assert((await termNow()) === 'By Dev', 'and the row changed');
+            } finally {
+                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
+                if (!closed) {
+                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                    if (await loaded.Load(id)) {
+                        loaded.ClosedAt = new Date(Date.now() - 60_000);
+                        await loaded.Save();
+                    }
+                }
+                await cleanupSpace(ctx.Provider, ctx.User, id);
             }
         },
     },

@@ -8,7 +8,14 @@
 -- the shipped schema into the published packages, and these tables are not for shipping.
 --
 -- CodeGen adds the __mj_CreatedAt and __mj_UpdatedAt columns, so they are not written here.
--- Run with:  mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations
+-- The foreign keys do not cascade: MJ deletes the subtype's row first, through the subtype's own Delete, so its permissions, its
+-- record changes and its driver all run. A cascade would only act when something deletes a Space row without its subtype, and
+-- then skip all of that. This is what a downstream app copies.
+--
+-- Run with:  pnpm run mj:migrate:examples   (mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations)
+--
+-- A database that applied the earlier V202609270001 (the same two tables in the collaboration schema, before they moved out of it)
+-- has them there still: drop __mj_BizAppsCollaboration.ExampleBoard and ExampleRoom by hand, along with their entity rows.
 -- =============================================================================
 
 IF OBJECT_ID(N'${flyway:defaultSchema}.ExampleBoard', N'U') IS NULL
@@ -22,7 +29,7 @@ BEGIN
         [QuorumPercentage] INT NOT NULL CONSTRAINT [DF_ExampleBoard_Quorum] DEFAULT (50),
         [BoardCharterUrl] NVARCHAR(500) NULL,
         CONSTRAINT [PK_ExampleBoard] PRIMARY KEY CLUSTERED ([ID] ASC),
-        CONSTRAINT [FK_ExampleBoard_Space] FOREIGN KEY ([ID]) REFERENCES [__mj_BizAppsCollaboration].[Space] ([ID]) ON DELETE CASCADE
+        CONSTRAINT [FK_ExampleBoard_Space] FOREIGN KEY ([ID]) REFERENCES [__mj_BizAppsCollaboration].[Space] ([ID])
     );
 END;
 GO
@@ -38,7 +45,7 @@ BEGIN
         [DealValue] DECIMAL(18, 2) NULL,
         [WinProbability] INT NULL,
         CONSTRAINT [PK_ExampleRoom] PRIMARY KEY CLUSTERED ([ID] ASC),
-        CONSTRAINT [FK_ExampleRoom_Space] FOREIGN KEY ([ID]) REFERENCES [__mj_BizAppsCollaboration].[Space] ([ID]) ON DELETE CASCADE
+        CONSTRAINT [FK_ExampleRoom_Space] FOREIGN KEY ([ID]) REFERENCES [__mj_BizAppsCollaboration].[Space] ([ID])
     );
 END;
 GO

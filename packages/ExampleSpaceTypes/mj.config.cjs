@@ -24,6 +24,7 @@ module.exports = {
 
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
+    { type: 'Angular', directory: './src/generated/forms', options: [{ name: 'maxComponentsPerModule', value: 20 }] },
     { type: 'GraphQLServer', directory: './src/generated/server' },
     { type: 'EntitySubclasses', directory: './src/generated/entities' },
   ],

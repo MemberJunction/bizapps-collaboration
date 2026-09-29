@@ -333,11 +333,6 @@ export class CollabNewSpaceDialogComponent extends CollabDialogBase implements O
     if (submitting && submitting.previousValue === true && submitting.currentValue === false) {
       this.ScheduleFirstFocus();
     }
-    // The name field appears once a kind is chosen: focus moves to it, so the next thing typed is the name
-    const selected = changes['SelectedTypeId'];
-    if (selected && !selected.firstChange && selected.currentValue && !selected.previousValue) {
-      this.ScheduleFirstFocus();
-    }
   }
 
   public get trimmedName(): string {

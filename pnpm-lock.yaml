@@ -343,9 +343,18 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.3
         version: 6.1.3
+      '@memberjunction/ng-base-forms':
+        specifier: 6.1.3
+        version: 6.1.3(dde02ba3642bac54f2fc5e07be67eba7)
       '@memberjunction/ng-base-types':
         specifier: 6.1.3
         version: 6.1.3(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
+      '@memberjunction/ng-entity-viewer':
+        specifier: 6.1.3
+        version: 6.1.3(3f24f567b9198ae0f17e33ac85b44a1b)
+      '@memberjunction/ng-link-directives':
+        specifier: 6.1.3
+        version: 6.1.3(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2))(rxjs@7.8.2)(ws@8.21.3)
       '@memberjunction/ng-ui-components':
         specifier: 6.1.3
         version: 6.1.3(f5517fe63f1c615d5901e88463cf954b)
