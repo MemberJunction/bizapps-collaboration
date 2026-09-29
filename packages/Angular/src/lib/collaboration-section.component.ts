@@ -15,6 +15,7 @@ import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { railFlags, railModeFor } from './logic/rail-flags.js';
 import { grantableRoles, type RoleOption } from './logic/grantable-roles.js';
 import { accessChain, nearestSeats } from './logic/reached-people.js';
 import { shareAudience } from './logic/share-audience.js';
@@ -553,7 +554,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                 } @else {
                     <div class="mjc-shell">
                         <mjc-space-rail
-                            [Mode]="activeView === 'home' ? 'home' : 'space'"
+                            [Mode]="railMode"
                             [ActiveNav]="activeView"
                             [Spaces]="spaces"
                             [ActiveSpaceId]="activeSpaceId"
@@ -593,7 +594,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 </div>
                                             </div>
                                             <div class="home-quick-stats">
-                                                <div class="stat-pill" (click)="activeTab = 'Overview'; activeView = 'space'">
+                                                <div class="stat-pill" (click)="onTabSelectRequested('Overview')">
                                                     <span class="stat-val">{{ activeSpacesCount }}</span>
                                                     <span class="stat-lbl">Active Spaces</span>
                                                 </div>
@@ -1514,6 +1515,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 level,
                 hasChildren: children.length > 0,
                 isExpanded: true,
+                ...railFlags(space),
             });
             for (const child of children) {
                 visit(child, Math.min(level + 1, 2) as 0 | 1 | 2);
@@ -2351,13 +2353,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
+    /** The rail on the page shown: the home rail on Home and the global pages, the space rail on a space. */
+    public get railMode(): 'home' | 'space' {
+        return railModeFor(this.activeView);
+    }
+
     public onTabSelectRequested(tabId: string): void {
+        this.activeView = 'space';
         if (tabId === 'Settings' && !this.canConfigureCurrentSpace) {
             tabId = 'Overview';
             SharedService.Instance.CreateSimpleNotification('You do not have permission to configure this space.', 'warning', 3000);
         }
         this.activeTab = tabId;
-        this.UpdateQueryParams({ tab: tabId.toLowerCase() });
+        this.UpdateQueryParams({ view: 'space', tab: tabId.toLowerCase() });
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -2418,11 +2426,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onSpaceConversationSelected(convId: string): void {
+        this.activeView = 'space';
         this.activeConversationId = convId;
         const item = this.spaceConversations.find(c => UUIDsEqual(c.id, convId));
         this.chatAudienceBand = item?.band === 'Team' ? 'Team' : 'Shared';
         this.activeTab = 'Chat';
-        this.UpdateQueryParams({ tab: 'chat', conv: convId });
+        this.UpdateQueryParams({ view: 'space', tab: 'chat', conv: convId });
         void this.loadOverviewMessages(convId, this.currentSelection());
         void this.loadSpaceChatHostRules(this.activeSpaceId, convId);
         this.syncStateWithAgent();

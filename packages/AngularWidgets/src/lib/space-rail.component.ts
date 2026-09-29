@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, OnInit, HostListener } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output, OnInit, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -312,14 +312,16 @@ interface SpaceNavPref {
 
         <div class="nav-section">
           <span>Spaces</span>
-          <button
-            type="button"
-            class="icon-btn-inline"
-            (click)="SpaceCreateRequested.emit()"
-            title="New Space"
-            aria-label="New Space">
-            <i class="fa-solid fa-plus"></i>
-          </button>
+          @if (CanCreateSpace) {
+            <button
+              type="button"
+              class="icon-btn-inline"
+              (click)="SpaceCreateRequested.emit()"
+              title="New Space"
+              aria-label="New Space">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          }
         </div>
 
         <div class="tree-list">
@@ -356,25 +358,36 @@ interface SpaceNavPref {
           }
         </div>
 
-        <div class="nav-footer">
-          <button
-            type="button"
-            class="nav-item"
-            [class.active]="ActiveNav === 'assistant'"
-            (click)="selectNav('assistant')">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>Assistant</span>
-          </button>
-          <button
-            type="button"
-            class="nav-item"
-            [class.active]="ActiveNav === 'settings'"
-            (click)="selectNav('settings')">
-            <i class="fa-solid fa-gear"></i>
-            <span>Settings</span>
-          </button>
-        </div>
       </nav>
+    }
+
+    @if (jumpOpen) {
+      <div class="jump-scrim" (click)="closeJump()"></div>
+      <div class="jump-palette" role="dialog" aria-modal="true" aria-label="Jump to a space">
+        <input
+          #jumpInput
+          type="text"
+          class="jump-input"
+          placeholder="Jump to a space"
+          aria-label="Jump to a space"
+          [value]="jumpQuery"
+          (input)="onJumpInput($event)"
+          (keydown.enter)="jumpToFirst()"
+          (keydown.escape)="closeJump()"
+        />
+        <ul class="jump-list">
+          @for (match of jumpMatches; track match.id) {
+            <li>
+              <button type="button" class="jump-item" (click)="jumpTo(match)">
+                <span>{{ match.name }}</span>
+              </button>
+            </li>
+          }
+          @if (jumpMatches.length === 0) {
+            <li class="jump-none">No space matches.</li>
+          }
+        </ul>
+      </div>
     }
   `,
   styles: [
@@ -723,6 +736,16 @@ interface SpaceNavPref {
       height: 100%;
       user-select: none;
     }
+    .jump-scrim { position: fixed; inset: 0; background: var(--mj-bg-overlay); z-index: 1000; }
+    .jump-palette {
+      position: fixed; top: 96px; left: 50%; transform: translateX(-50%); width: 420px; max-width: calc(100vw - 32px);
+      background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 10px; z-index: 1001; padding: 8px;
+    }
+    .jump-input { width: 100%; box-sizing: border-box; padding: 8px 10px; }
+    .jump-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 320px; overflow: auto; }
+    .jump-item { width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; cursor: pointer; color: var(--mj-text-primary); border-radius: 6px; }
+    .jump-item:hover, .jump-item:focus { background: var(--mj-bg-surface-sunken); }
+    .jump-none { padding: 8px 10px; color: var(--mj-text-muted); }
     .jump {
       display: flex;
       align-items: center;
@@ -925,6 +948,8 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
   @Input() CanStartConversation = false;
+  /** The new-space dialog isn't built yet, so the + is offered only when a host provides one. */
+  @Input() CanCreateSpace = false;
 
   @Output() NavSelectRequested = new EventEmitter<string>();
   @Output() SpaceOpenRequested = new EventEmitter<string>();
@@ -936,6 +961,8 @@ export class CollabSpaceRailComponent implements OnInit {
   @Output() ConversationSelectRequested = new EventEmitter<string>();
   @Output() NewConversationRequested = new EventEmitter<void>();
   @Output() BackToSpacesRequested = new EventEmitter<void>();
+
+  @ViewChild('jumpInput') private jumpInput?: ElementRef<HTMLInputElement>;
 
   public navWidth = 280;
   public isCollapsed = false;
@@ -1026,8 +1053,51 @@ export class CollabSpaceRailComponent implements OnInit {
     this.SpaceOpenRequested.emit(id);
   }
 
+  public jumpOpen = false;
+  public jumpQuery = '';
+
+  /** The spaces whose names contain what was typed, in the tree's order. */
+  public get jumpMatches(): RailSpaceNode[] {
+    const needle = this.jumpQuery.trim().toLowerCase();
+    return this.Spaces.filter((s) => !needle || s.name.toLowerCase().includes(needle));
+  }
+
   public onJumpClick(): void {
+    this.OpenJump();
+  }
+
+  public OpenJump(): void {
+    this.jumpOpen = true;
+    this.jumpQuery = '';
     this.JumpOpenRequested.emit();
+    setTimeout(() => this.jumpInput?.nativeElement.focus());
+  }
+
+  public closeJump(): void {
+    this.jumpOpen = false;
+  }
+
+  public onJumpInput(event: Event): void {
+    this.jumpQuery = (event.target as HTMLInputElement).value;
+  }
+
+  public jumpToFirst(): void {
+    const first = this.jumpMatches[0];
+    if (first) this.jumpTo(first);
+  }
+
+  public jumpTo(space: RailSpaceNode): void {
+    this.jumpOpen = false;
+    this.SpaceOpenRequested.emit(space.id);
+  }
+
+  /** ⌘J (Ctrl+J elsewhere) opens the palette from anywhere on the page. */
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeyDown(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'preventDefault'>): void {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+      event.preventDefault();
+      this.OpenJump();
+    }
   }
 
   public toggleSpace(s: RailSpaceNode, event: Event): void {

@@ -1041,6 +1041,41 @@ describe('the People tab acts on seats and shows the invite the way the seat may
   });
 });
 
+describe('the rail: Jump to a space and the new-space button', () => {
+  const nodes: RailSpaceNode[] = [
+    { id: 's1', name: 'Northwind relationship', color: '', iconClass: '', level: 0, hasChildren: true, isExpanded: true },
+    { id: 's2', name: 'Discovery', color: '', iconClass: '', level: 1, hasChildren: false, isExpanded: false },
+  ];
+
+  it('opens on ⌘J, narrows by what is typed, and Enter opens the first match', () => {
+    const rail = new CollabSpaceRailComponent();
+    rail.Spaces = nodes;
+    const opened = vi.fn();
+    rail.SpaceOpenRequested.subscribe(opened);
+    const key = { key: 'j', metaKey: true, ctrlKey: false, preventDefault: vi.fn() };
+    rail.onDocumentKeyDown(key);
+    expect(rail.jumpOpen).toBe(true);
+    rail.jumpQuery = 'disc';
+    expect(rail.jumpMatches.map((s) => s.id)).toEqual(['s2']);
+    rail.jumpToFirst();
+    expect(opened).toHaveBeenCalledWith('s2');
+    expect(rail.jumpOpen).toBe(false);
+  });
+
+  it('ignores other keys and closes on Escape', () => {
+    const rail = new CollabSpaceRailComponent();
+    rail.onDocumentKeyDown({ key: 'k', metaKey: true, ctrlKey: false, preventDefault: vi.fn() });
+    expect(rail.jumpOpen).toBe(false);
+    rail.OpenJump();
+    rail.closeJump();
+    expect(rail.jumpOpen).toBe(false);
+  });
+
+  it('does not offer the new-space button until a host provides the dialog', () => {
+    expect(new CollabSpaceRailComponent().CanCreateSpace).toBe(false);
+  });
+});
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();
