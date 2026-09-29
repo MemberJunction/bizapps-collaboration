@@ -11,7 +11,7 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, SettingsSession } from './logic/settings-model.js';
-import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -960,6 +960,10 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [Settings]="spaceSettings"
                                                     [isSaving]="isSavingSettings"
                                                     [saveSuccessMessage]="settingsSaveSuccess"
+                                                    [saveInfoMessage]="settingsInfoMessage"
+                                                    [IsRootSpace]="!activeSpaceRecord?.ParentID"
+                                                    (CloseSpaceRequested)="onChangeSpaceLifecycle(true)"
+                                                    (ReopenSpaceRequested)="onChangeSpaceLifecycle(false)"
                                                     (SaveSettingsRequested)="onSaveSettings($event)"
                                                 />
                                             }
@@ -998,6 +1002,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [ClientOrgName]="clientOrgName"
                                 [IsSubmitting]="isUploading"
                                 [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                [MaxBytes]="uploadMaxBytes"
+                                [FolderSuggestions]="libraryFolderNames"
                                 [StartBand]="bandChoice?.start ?? null"
                                 (CancelRequested)="onUploadDialogCancel()"
                                 (SubmitRequested)="onUploadDialogSubmit($event)"
@@ -1043,6 +1049,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * applies the space type's default.
      */
     public readonly bothBands: readonly SpaceBand[] = ['Shared', 'Team'];
+    public readonly uploadMaxBytes = SPACE_UPLOAD_MAX_BYTES;
+
+    /** The space's own collections, offered as folder suggestions in the upload dialog. */
+    public get libraryFolderNames(): string[] {
+        return this.libraryCollections.map(c => c.name);
+    }
     public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
     /** The seat the caller reaches the current space through, once resolved; null until then or when they have none. */
     private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
@@ -1403,6 +1415,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private settingsSession = new SettingsSession(this.spaceSettings);
     public isSavingSettings = false;
     public settingsSaveSuccess = '';
+    public settingsInfoMessage = '';
 
     private get graphQLExecutor(): GraphQLExecutor {
         const p = this.ProviderToUse;
@@ -1570,6 +1583,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceTasks = [];
         this.taskCount = 0;
         this.canConfigureCurrentSpace = false;
+        // The last space's save message must not greet the next space's Settings
+        this.settingsSaveSuccess = '';
+        this.settingsInfoMessage = '';
         // The next space has no drawer: what the last one showed is closed, and its item leaves the URL
         this.isDrawerOpen = false;
         this.selectedItemId = null;
@@ -2365,6 +2381,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             SharedService.Instance.CreateSimpleNotification('You do not have permission to configure this space.', 'warning', 3000);
         }
         this.activeTab = tabId;
+        this.settingsSaveSuccess = '';
+        this.settingsInfoMessage = '';
         this.UpdateQueryParams({ view: 'space', tab: tabId.toLowerCase() });
         this.syncStateWithAgent();
         this.RefreshView();
@@ -3109,6 +3127,45 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return this.changeSeat(change.member, (seat) => { seat.SpaceRoleTypeID = roleId; }, 'change the role');
     }
 
+    /** Closes or reopens the space shown. A reopen carries no other change, so it is saved on its own. */
+    public async onChangeSpaceLifecycle(closing: boolean): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const isCurrent = this.currentSelection();
+        const verb = closing ? 'close' : 'reopen';
+        try {
+            const spaceEntity = await this.ProviderToUse.GetEntityObject<mjBizAppsCollaborationSpaceEntity>('MJ_BizApps_Collaboration: Spaces');
+            if (!isValidUuid(spaceId) || !(await spaceEntity.Load(spaceId))) {
+                SharedService.Instance.CreateSimpleNotification(`Could not ${verb} the space: it was not found.`, 'error', 5000);
+                return;
+            }
+            spaceEntity.ClosedAt = closing ? new Date() : null;
+            if (!(await spaceEntity.Save())) {
+                const msg = spaceEntity.LatestResult?.CompleteMessage || `Could not ${verb} the space.`;
+                LogError(`Could not ${verb} space ${spaceId}: ${msg}`);
+                SharedService.Instance.CreateSimpleNotification(msg, 'error', 6000);
+                return;
+            }
+            const raw = this.rawSpaces.find(sp => UUIDsEqual(sp.ID, spaceId));
+            if (raw) {
+                raw.ClosedAt = spaceEntity.ClosedAt;
+                this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+            }
+            if (isCurrent()) {
+                this.settingsSession.Open({ ...this.settingsSession.Shown, status: closing ? 'Closed' : 'Active' });
+                this.spaceSettings = this.settingsSession.Shown;
+                this.settingsSaveSuccess = closing ? 'The space is closed.' : 'The space is open again.';
+                this.settingsInfoMessage = '';
+            }
+            SharedService.Instance.CreateSimpleNotification(closing ? 'Space closed.' : 'Space reopened.', 'info', 3000);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`Error trying to ${verb} space ${spaceId}: ${msg}`);
+            SharedService.Instance.CreateSimpleNotification(`Could not ${verb} the space: ${msg}`, 'error', 6000);
+        } finally {
+            this.RefreshView();
+        }
+    }
+
     public async onSaveSettings(settings: SpaceSettingsModel): Promise<void> {
         if (!this.canConfigureCurrentSpace) {
             const msg = 'Cannot save space settings: user lacks Configure Spaces authorization';
@@ -3123,6 +3180,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const stillShown = this.currentSelection();
         this.isSavingSettings = true;
         this.settingsSaveSuccess = '';
+        this.settingsInfoMessage = '';
         this.RefreshView();
         try {
             const targetId = savedCopy.id || this.activeSpaceId;
@@ -3135,8 +3193,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
             if (Object.keys(changes).length === 0) {
                 this.isSavingSettings = false;
-                this.settingsSaveSuccess = 'No changes to save.';
-                SharedService.Instance.CreateSimpleNotification(this.settingsSaveSuccess, 'info', 3000);
+                this.settingsInfoMessage = 'No changes to save.';
+                SharedService.Instance.CreateSimpleNotification(this.settingsInfoMessage, 'info', 3000);
                 this.RefreshView();
                 return;
             }

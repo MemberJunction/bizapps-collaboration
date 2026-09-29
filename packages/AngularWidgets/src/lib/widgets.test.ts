@@ -1076,6 +1076,48 @@ describe('the rail: Jump to a space and the new-space button', () => {
   });
 });
 
+describe('the upload dialog keeps its promises', () => {
+  const fileOf = (name: string, size: number): File => ({ name, size, type: 'application/pdf' } as File);
+
+  it('refuses a 12 MB file with a readable message, before reading it', () => {
+    const dialog = new CollabUploadDialogComponent();
+    dialog.onFileSelected({ target: { files: [fileOf('big.pdf', 12 * 1024 * 1024)] } } as unknown as Event);
+    expect(dialog.selectedFile).toBeNull();
+    expect(dialog.fileError).toBe('That file is 12 MB. Files can be up to 10 MB.');
+  });
+
+  it('takes a file within the limit, and stores it under the name typed with its own extension', () => {
+    const dialog = new CollabUploadDialogComponent();
+    const submitted = vi.fn();
+    dialog.SubmitRequested.subscribe(submitted);
+    dialog.onFileSelected({ target: { files: [fileOf('scan0042.pdf', 2 * 1024 * 1024)] } } as unknown as Event);
+    dialog.docTitle = 'Signed engagement letter';
+    dialog.onSubmit();
+    expect(dialog.fileError).toBe('');
+    expect(submitted).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'Signed engagement letter.pdf', title: 'Signed engagement letter' }));
+  });
+
+  it('closes on Escape, and not while it is saving', () => {
+    const dialog = new CollabUploadDialogComponent();
+    const cancelled = vi.fn();
+    dialog.CancelRequested.subscribe(cancelled);
+    const escape = { key: 'Escape', shiftKey: false, preventDefault: vi.fn() };
+    dialog.OnDialogKeyDown(escape);
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    dialog.IsSubmitting = true;
+    dialog.OnDialogKeyDown(escape);
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the share dialog on Escape', () => {
+    const dialog = new CollabShareCheckDialogComponent();
+    const cancelled = vi.fn();
+    dialog.CancelRequested.subscribe(cancelled);
+    dialog.OnDialogKeyDown({ key: 'Escape', shiftKey: false, preventDefault: vi.fn() });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
     const comp = new CollabSpaceChatComponent();

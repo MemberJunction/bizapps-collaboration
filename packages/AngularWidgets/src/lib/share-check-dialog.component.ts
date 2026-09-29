@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { CollabDialogBase } from './dialog-base';
 import type { FileKind, FindingModel, RecipientPersonModel } from './types';
 import { CollabShareCheckComponent } from './share-check.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -10,7 +11,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [CollabShareCheckComponent],
   template: `
     <div class="scrim" (click)="onCancel()"></div>
-    <div class="modal share-modal">
+    <div #dialogBox class="modal share-modal" role="dialog" aria-modal="true" [attr.aria-label]="Title || 'Share an item'">
       <mjc-share-check
         [Title]="Title"
         [ItemName]="ItemName"
@@ -72,7 +73,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
   `],
 })
-export class CollabShareCheckDialogComponent {
+export class CollabShareCheckDialogComponent extends CollabDialogBase {
+  @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
+  protected override Dismiss(): void { this.onCancel(); }
+
   @Input() public Title = '';
   @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';

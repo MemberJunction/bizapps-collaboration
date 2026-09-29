@@ -32,14 +32,20 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </button>
       </div>
 
-      @if (saveSuccessMessage) {
-        <div class="alert-success">
-          <i class="fa-solid fa-circle-check"></i>
+      @if (bannerVisible && saveSuccessMessage) {
+        <div class="alert-success" role="status">
+          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
           <span>{{ saveSuccessMessage }}</span>
         </div>
       }
+      @if (bannerVisible && saveInfoMessage) {
+        <div class="alert-info" role="status">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>{{ saveInfoMessage }}</span>
+        </div>
+      }
 
-      <div class="settings-sections">
+      <div class="settings-sections" (input)="onEdit()" (change)="onEdit()">
         <!-- 1. Profile & Appearance -->
         <div class="settings-card">
           <div class="card-title-row">
@@ -139,6 +145,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   </div>
                 </label>
 
+                @if (!IsRootSpace) {
                 <label class="radio-label">
                   <input
                     type="radio"
@@ -148,9 +155,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   />
                   <div>
                     <div class="radio-title">Excluded from Parent Scope</div>
-                    <div class="radio-sub">Files remain searchable directly within this space, but will not bleed into parent space questions.</div>
+                    <div class="radio-sub">Files remain searchable directly within this space, but will not be included in questions asked in the parent space.</div>
                   </div>
                 </label>
+                }
 
                 <label class="radio-label">
                   <input
@@ -197,18 +205,31 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               />
             </div>
 
+            @if (!IsRootSpace) {
+              <div class="form-field full-width">
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="formData.inheritsMembership"
+                    class="checkbox-input"
+                  />
+                  <div>
+                    <div class="cb-title">Inherit parent space membership</div>
+                    <div class="cb-sub">Members of the parent space automatically receive access to this sub-space.</div>
+                  </div>
+                </label>
+              </div>
+            }
+
             <div class="form-field full-width">
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="formData.inheritsMembership"
-                  class="checkbox-input"
-                />
-                <div>
-                  <div class="cb-title">Inherit parent space membership</div>
-                  <div class="cb-sub">Members of the parent space automatically receive access to this sub-space.</div>
-                </div>
-              </label>
+              <div class="cb-title">Status: {{ formData.status }}</div>
+              @if (confirmingLifecycle) {
+                <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? It becomes read-only for everyone.' }}</div>
+                <button type="button" class="save-btn" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = false">Cancel</button>
+              } @else {
+                <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+              }
             </div>
           </div>
         </div>
@@ -269,13 +290,34 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         cursor: not-allowed;
       }
 
+      .alert-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--mj-status-info-bg);
+        border: 1px solid var(--mj-status-info-border);
+        color: var(--mj-status-info-text);
+        padding: 10px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .cancel-lifecycle-btn {
+        margin-top: 8px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
       .alert-success {
         display: flex;
         align-items: center;
         gap: 8px;
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #166534;
+        background: var(--mj-status-success-bg);
+        border: 1px solid var(--mj-status-success-border);
+        color: var(--mj-status-success-text);
         padding: 10px 16px;
         border-radius: 6px;
         font-size: 13px;
@@ -458,6 +500,27 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   @Input() Settings!: SpaceSettingsModel;
   @Input() isSaving = false;
   @Input() saveSuccessMessage = '';
+  /** Something to say that isn't a success, such as "No changes to save.". */
+  @Input() saveInfoMessage = '';
+  /** A root space has no parent, so the sub-space options aren't offered. */
+  @Input() IsRootSpace = false;
+
+  @Output() CloseSpaceRequested = new EventEmitter<void>();
+  @Output() ReopenSpaceRequested = new EventEmitter<void>();
+
+  /** The banner shows a message until the person edits, and again for the next message. */
+  public bannerVisible = true;
+  public confirmingLifecycle = false;
+
+  public onEdit(): void {
+    this.bannerVisible = false;
+  }
+
+  public confirmLifecycle(): void {
+    this.confirmingLifecycle = false;
+    if (this.formData.status === 'Closed') this.ReopenSpaceRequested.emit();
+    else this.CloseSpaceRequested.emit();
+  }
 
   @Output() SaveSettingsRequested = new EventEmitter<SpaceSettingsModel>();
 
@@ -470,7 +533,9 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['Settings'] && this.Settings) {
       this.initFormData();
+      this.confirmingLifecycle = false;
     }
+    if (changes['saveSuccessMessage'] || changes['saveInfoMessage']) this.bannerVisible = true;
   }
 
   private initFormData(): void {

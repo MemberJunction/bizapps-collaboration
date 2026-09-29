@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { CollabDialogBase } from './dialog-base';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -34,11 +35,11 @@ export interface CollabUploadSubmitPayload {
   ],
   template: `
     <div class="overlay" (click)="onBackdropClick($event)">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <div #dialogBox class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
         <header class="d-header">
           <div class="d-title-group">
             <h2 id="dialog-title" class="d-title">Add document to {{ SpaceName || 'Space' }}</h2>
-            <p class="d-sub">Upload a local file to storage or link a cloud document (Google Docs, Microsoft 365, SharePoint).</p>
+            <p class="d-sub">{{ AllowLinks ? 'Upload a local file or link a cloud document.' : 'Upload a file from your computer.' }}</p>
           </div>
           <button type="button" class="btn-close" (click)="onCancel()" aria-label="Close dialog">
             <i class="fa-solid fa-xmark"></i>
@@ -85,7 +86,12 @@ export interface CollabUploadSubmitPayload {
                   (dragover)="onDragOver($event)"
                   (dragleave)="onDragLeave($event)"
                   (drop)="onFileDrop($event)"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Choose a file to upload"
                   (click)="fileInput.click()"
+                  (keydown.enter)="fileInput.click()"
+                  (keydown.space)="fileInput.click(); $event.preventDefault()"
                 >
                   <input
                     #fileInput
@@ -95,7 +101,10 @@ export interface CollabUploadSubmitPayload {
                   />
                   <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
                   <div class="drop-text"><b>Click to upload</b> or drag and drop</div>
-                  <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to 50MB)</div>
+                  <div class="drop-sub">PDF, DOCX, XLSX, PPTX, PNG, JPG (up to {{ formatBytes(MaxBytes) }})</div>
+                  @if (fileError) {
+                    <div class="file-error" role="alert">{{ fileError }}</div>
+                  }
                 </div>
               } @else {
                 <div class="file-chosen-bar">
@@ -139,7 +148,7 @@ export interface CollabUploadSubmitPayload {
 
           <!-- Common fields: Title, Folder, Band -->
           <div class="form-group">
-            <label for="doc-title-input" class="f-label">Title</label>
+            <label for="doc-title-input" class="f-label">Name</label>
             <input
               id="doc-title-input"
               type="text"
@@ -156,16 +165,14 @@ export interface CollabUploadSubmitPayload {
                 id="doc-folder-input"
                 type="text"
                 class="mj-input"
-                placeholder="e.g. Deliverables, Briefs, Discovery"
+                placeholder="e.g. Contracts, Photos"
                 list="folder-suggestions"
                 [(ngModel)]="docFolder"
               />
               <datalist id="folder-suggestions">
-                <option value="Deliverables"></option>
-                <option value="Briefs"></option>
-                <option value="Discovery"></option>
-                <option value="Working Papers"></option>
-                <option value="Reports"></option>
+                @for (name of FolderSuggestions; track name) {
+                  <option [value]="name"></option>
+                }
               </datalist>
             </div>
 
@@ -216,9 +223,6 @@ export interface CollabUploadSubmitPayload {
         </div>
 
         <footer class="d-footer">
-          <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
-            Cancel
-          </button>
           <button
             mjButton
             variant="primary"
@@ -232,6 +236,9 @@ export interface CollabUploadSubmitPayload {
               <i [class]="activeMode === 'upload' ? 'fa-solid fa-arrow-up-from-bracket' : 'fa-solid fa-link'"></i>
               {{ activeMode === 'upload' ? 'Upload file' : 'Link document' }}
             }
+          </button>
+          <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
+            Cancel
           </button>
         </footer>
       </div>
@@ -415,6 +422,7 @@ export interface CollabUploadSubmitPayload {
       border-color: var(--mj-brand-primary, #0076b6);
       background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, transparent);
     }
+    .file-error { color: var(--mj-status-error); font-size: 12px; margin-top: 6px; }
     .hidden-file-input {
       display: none;
     }
@@ -514,12 +522,21 @@ export interface CollabUploadSubmitPayload {
     }
   `],
 })
-export class CollabUploadDialogComponent {
+export class CollabUploadDialogComponent extends CollabDialogBase {
+  @ViewChild('dialogBox') private dialogBox?: ElementRef<HTMLElement>;
+  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogBox; }
+  protected override Dismiss(): void { if (!this.IsSubmitting) this.onCancel(); }
+
   @Input() SpaceName = '';
   @Input() SpaceId = '';
   @Input() ClientOrgName = '';
   @Input() IsSubmitting = false;
   @Input() AllowLinks = false;
+  /** The largest file the server takes. A bigger one is refused here, before it is read. */
+  @Input() MaxBytes = 10 * 1024 * 1024;
+  /** The space's own folders, offered as suggestions. */
+  @Input() FolderSuggestions: readonly string[] = [];
+  public fileError = '';
 
   /** The bands this seat may choose. The server refuses any other, so the dialog offers only these. */
   @Input() AllowedBands: readonly SpaceBand[] = ['Shared', 'Team'];
@@ -543,7 +560,7 @@ export class CollabUploadDialogComponent {
   public selectedFile: File | null = null;
   public linkUrl = '';
   public docTitle = '';
-  public docFolder = 'Deliverables';
+  public docFolder = 'General';
   public selectedBand: SpaceBand | null = null;
   public detectedKind: FileKind = 'doc';
   public detectedService: { label: string; icon: string } | null = null;
@@ -595,6 +612,11 @@ export class CollabUploadDialogComponent {
   }
 
   private handleFile(file: File): void {
+    if (file.size > this.MaxBytes) {
+      this.fileError = `That file is ${this.formatBytes(file.size)}. Files can be up to ${this.formatBytes(this.MaxBytes)}.`;
+      return;
+    }
+    this.fileError = '';
     this.selectedFile = file;
     if (!this.docTitle) {
       // Strip extension for title
@@ -677,7 +699,7 @@ export class CollabUploadDialogComponent {
       band: this.selectedBand,
       folder: this.docFolder.trim() || 'General',
       kind: this.detectedKind,
-      fileName: this.selectedFile?.name,
+      fileName: this.selectedFile ? this.fileNameFromTitle(this.selectedFile.name) : undefined,
       fileSize: this.selectedFile?.size,
       fileType: this.selectedFile?.type,
       file: this.selectedFile || undefined,
@@ -685,6 +707,13 @@ export class CollabUploadDialogComponent {
     };
 
     this.SubmitRequested.emit(payload);
+  }
+
+  /** The stored file takes the name typed here, keeping the original's extension. */
+  private fileNameFromTitle(original: string): string {
+    const extension = /\.[^/.]+$/.exec(original)?.[0] ?? '';
+    const title = this.docTitle.trim();
+    return title.toLowerCase().endsWith(extension.toLowerCase()) ? title : `${title}${extension}`;
   }
 
   public formatBytes(bytes: number): string {
