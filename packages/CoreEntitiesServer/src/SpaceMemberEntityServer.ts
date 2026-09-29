@@ -1,8 +1,9 @@
-import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
+import type { MemberChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
@@ -55,7 +56,9 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             }
             const dirty = this.Fields.filter((field) => field.Dirty).map((field) => field.Name);
             if (dirty.length === 1 && dirty[0] === 'Status' && isSelfRemoval({ callerUserId: caller, inviteeUserId: invitee, nextStatus: this.Status })) {
-                return result;
+                // Leaving skips the invite rules, but not the type's: a type may refuse a member leaving, or react to it
+                const refusedLeave = await this.judgeWithDriver(user, spaceId, 'Remove');
+                return refusedLeave ? fail(result, refusedLeave.field, refusedLeave.message) : result;
             }
         }
         if (!context.role) {
@@ -92,41 +95,41 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
 
         // Extensibility Driver Validation
+        const isNew = !this.IsSaved;
+        const statusChanged = this.Fields.some((f) => f.Name === 'Status' && f.Dirty);
+        const roleChanged = this.Fields.some((f) => f.Name === 'SpaceRoleTypeID' && f.Dirty);
+        const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
+        let memberKind: MemberChangeKind = 'Invite';
+        if (this.Status === 'Removed' && (statusChanged || isNew)) {
+            memberKind = 'Remove';
+        } else if (roleChanged) {
+            memberKind = 'RoleChange';
+        } else if (bandChanged) {
+            memberKind = 'BandChange';
+        }
+        const refused = await this.judgeWithDriver(user, spaceId, memberKind);
+        if (refused) return fail(result, refused.field, refused.message);
+
+        return result;
+    }
+
+    /** Asks the space type's driver to judge this seat change. Null when it accepts. */
+    private async judgeWithDriver(user: UserInfo, spaceId: string, kind: MemberChangeKind): Promise<{ field: string; message: string } | null> {
         try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
-            const isNew = !this.IsSaved;
-            const statusChanged = this.Fields.some((f) => f.Name === 'Status' && f.Dirty);
-            const roleChanged = this.Fields.some((f) => f.Name === 'SpaceRoleTypeID' && f.Dirty);
-            const bandChanged = this.Fields.some((f) => f.Name === 'Band' && f.Dirty);
-
-            let memberKind: 'Invite' | 'RoleChange' | 'BandChange' | 'Remove' = 'Invite';
-            if (this.Status === 'Removed' && (statusChanged || isNew)) {
-                memberKind = 'Remove';
-            } else if (roleChanged) {
-                memberKind = 'RoleChange';
-            } else if (bandChanged) {
-                memberKind = 'BandChange';
-            } else if (isNew) {
-                memberKind = 'Invite';
-            }
-
-            const driverValidation = await spaceInfo.driver.ValidateMemberChange({
+            const verdict = await spaceInfo.driver.ValidateMemberChange({
                 actingUser: user,
                 provider: this.ProviderToUse,
                 space: spaceInfo.space,
                 spaceType: spaceInfo.spaceType,
                 effectiveRules: ResolveSpaceRules(null, null),
                 member: this,
-                kind: memberKind,
+                kind,
             });
-            if (!driverValidation.ok) {
-                return fail(result, driverValidation.field ?? 'SpaceRoleTypeID', driverValidation.message ?? 'Member change refused by driver.');
-            }
+            return verdict.ok ? null : { field: verdict.field ?? 'SpaceRoleTypeID', message: verdict.message ?? 'Member change refused by driver.' };
         } catch (driverErr) {
-            return fail(result, 'SpaceID', driverErr instanceof Error ? driverErr.message : 'Member change refused: driver could not be resolved.');
+            return { field: 'SpaceID', message: driverErr instanceof Error ? driverErr.message : 'Member change refused: driver could not be resolved.' };
         }
-
-        return result;
     }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {

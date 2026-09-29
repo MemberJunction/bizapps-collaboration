@@ -15,9 +15,9 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'people-fls': 3,
     'parent-assignees': 6,
     'room': 11,
-    'write-gates': 7,
+    'write-gates': 8,
     'row-filters': 4,
-    'library': 7,
+    'library': 8,
     'agent': 7,
     'features': 5,
 };

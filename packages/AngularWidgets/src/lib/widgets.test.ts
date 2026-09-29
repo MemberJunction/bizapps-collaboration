@@ -1047,25 +1047,49 @@ describe('CollabSpacePeopleComponent', () => {
     expect(comp.filteredMembers[0].name).toBe('Ada Lovelace');
   });
 
-  it('emits InviteMemberRequested with form fields and resets form', () => {
-    const comp = new CollabSpacePeopleComponent();
-    let invited: { email: string; role: string; band: string } | null = null;
-    comp.InviteMemberRequested.subscribe(i => {
-      invited = i;
+  describe('inviting a person', () => {
+    function withForm(): { comp: CollabSpacePeopleComponent; invited: Array<{ email: string; role: string }> } {
+      const comp = new CollabSpacePeopleComponent();
+      const invited: Array<{ email: string; role: string }> = [];
+      comp.InviteMemberRequested.subscribe(i => invited.push(i));
+      comp.isInviting = true;
+      comp.inviteEmail = 'newperson@example.com';
+      comp.inviteRole = 'client-member';
+      return { comp, invited };
+    }
+
+    it('emits the email and the role, and leaves the form as it is until the server answers', () => {
+      const { comp, invited } = withForm();
+      comp.submitInvite();
+      expect(invited).toEqual([{ email: 'newperson@example.com', role: 'client-member' }]);
+      expect(comp.inviteEmail).toBe('newperson@example.com');
+      expect(comp.isInviting).toBe(true);
     });
 
-    comp.inviteEmail = 'newperson@example.com';
-    comp.inviteRole = 'admin';
-    comp.inviteBand = 'Shared';
-    comp.submitInvite();
-
-    expect(invited).toEqual({
-      email: 'newperson@example.com',
-      role: 'admin',
-      band: 'Shared',
+    it('clears and closes the form when the invite succeeded, and shows what the server said', () => {
+      const { comp } = withForm();
+      comp.submitInvite();
+      comp.InviteOutcome = { ok: true, message: 'They are seated as Invited. The sign-in link waits until an owner approves them.' };
+      expect(comp.inviteEmail).toBe('');
+      expect(comp.isInviting).toBe(false);
+      expect(comp.InviteOutcome?.message).toContain('waits until an owner approves');
     });
-    expect(comp.inviteEmail).toBe('');
-    expect(comp.isInviting).toBe(false);
+
+    it('keeps the form open, with the email, when the invite was refused', () => {
+      const { comp } = withForm();
+      comp.submitInvite();
+      comp.InviteOutcome = { ok: false, message: 'Invite refused: this role cannot invite.' };
+      expect(comp.inviteEmail).toBe('newperson@example.com');
+      expect(comp.isInviting).toBe(true);
+      expect(comp.InviteOutcome?.ok).toBe(false);
+    });
+
+    it('sends nothing for a blank email', () => {
+      const { comp, invited } = withForm();
+      comp.inviteEmail = '   ';
+      comp.submitInvite();
+      expect(invited).toEqual([]);
+    });
   });
 });
 

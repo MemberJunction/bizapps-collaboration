@@ -7,7 +7,10 @@ import {
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
+    PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
+    USER_ENTITY,
+    USER_ROLE_ENTITY,
 } from '../entity-names.js';
 
 /** The harness signs its cleanups as the system user: it owns the rows the checks create. */
@@ -79,6 +82,36 @@ export async function cleanupStep(step: () => Promise<void>): Promise<void> {
     } catch (error) {
         reportCleanupFailure(error);
     }
+}
+
+/**
+ * Removes what an invite hung on the account it created: its seats, person record, sign-in invites and their child rows, role and
+ * application grants. Every read is checked and every delete read back. The account and its notifications stay until the purge.
+ */
+export async function deleteInvitee(provider: IMetadataProvider, user: UserInfo, email: string): Promise<void> {
+    await cleanupStep(async () => {
+        requireHarnessUser(user);
+        const rv = RunView.FromMetadataProvider(provider);
+        const quoted = email.replace(/'/g, "''");
+        const removeAll = async (entityName: string, filter: string, what: string): Promise<void> => {
+            for (const row of await readAll(rv, user, entityName, filter)) {
+                await deleteRowAndConfirmUnguarded(provider, user, entityName, row.ID, what);
+            }
+        };
+        for (const invite of await readAll(rv, user, 'MJ: Magic Link Invites', `Email = '${quoted}'`)) {
+            await removeAll('MJ: Magic Link Redemptions', `InviteID = '${invite.ID}'`, 'a redemption');
+            await removeAll('MJ: Magic Link Invite Applications', `InviteID = '${invite.ID}'`, "an invite's application");
+            await removeAll('MJ: Magic Link Invite Roles', `InviteID = '${invite.ID}'`, "an invite's role");
+            await deleteRowAndConfirmUnguarded(provider, user, 'MJ: Magic Link Invites', invite.ID, 'a sign-in invite');
+        }
+        for (const account of await readAll(rv, user, USER_ENTITY, `Email = '${quoted}'`)) {
+            await removeAll(SPACE_MEMBER_ENTITY, `UserID = '${account.ID}'`, "the invitee's seat");
+            await removeAll(PERSON_ENTITY, `LinkedUserID = '${account.ID}'`, "the invitee's person record");
+            await removeAll(USER_ROLE_ENTITY, `UserID = '${account.ID}'`, "the invitee's role grant");
+            await removeAll('MJ: User Applications', `UserID = '${account.ID}'`, "the invitee's application grant");
+            // The account itself, and its notifications, stay until the purge: the system user may not delete a notification
+        }
+    });
 }
 
 /**

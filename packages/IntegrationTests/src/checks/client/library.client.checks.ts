@@ -293,6 +293,33 @@ const checks: NamedCheck[] = [
             Assert(stored.length === 0, 'A refused upload stores nothing');
         },
     },
+    {
+        Id: 'library.LB8',
+        Name: "LB8 — opening a file in MemberJunction's viewer follows the band: Bea's media token works for her Shared photo and is refused for Ada's Team brief",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const files = await FindRows<{ ID: string; Name: string }>(ctx, FILE_ENTITY, `Name IN ('site-photo.png', 'discovery-brief.pdf')`, ['ID', 'Name']);
+            const photo = files.find((f) => f.Name === 'site-photo.png');
+            const brief = files.find((f) => f.Name === 'discovery-brief.pdf');
+            Assert(!!photo && !!brief, 'The world seeds site-photo.png (Shared) and discovery-brief.pdf (Team)');
+
+            const mint = async (fileId: string) => {
+                const result = await beaCtx.GraphQLProvider.ExecuteGQL(
+                    `mutation CreateMediaAccessToken($fileId: String!) { CreateMediaAccessToken(fileId: $fileId) { Success Url ErrorMessage } }`,
+                    { fileId },
+                );
+                return result?.CreateMediaAccessToken as { Success: boolean; Url?: string | null; ErrorMessage?: string | null } | undefined;
+            };
+
+            // The Files form gets its media through this mutation, which loads the file as the caller
+            const shared = await mint(photo!.ID);
+            Assert(shared?.Success === true && !!shared.Url, `Bea's media token for her Shared photo: ${shared?.ErrorMessage ?? 'no answer'}`);
+            const team = await mint(brief!.ID);
+            Assert(!!team && team.Success === false, "Bea's media token for Ada's Team brief must be refused");
+            Assert(!team?.Url, 'No URL comes back for a refused token');
+        },
+    },
 ];
 
 registerChecks(checks);

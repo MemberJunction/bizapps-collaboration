@@ -1,22 +1,30 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { WellKnownUserSource, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
+import { WellKnownUserSource, type EntityInfo, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
+import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { seedAppSettings } from './app-settings.test-support.ts';
 
-function mockResult<T>(results: T[]): RunViewResult<T> {
+/** The mock hands back whatever row type its caller asked for; this and `stubOf` are the two places a cast is made. */
+function mockResult<T>(results: readonly object[]): RunViewResult<T> {
     return {
         Success: true,
-        Results: results,
+        Results: results as unknown as T[],
         RowCount: results.length,
         TotalRowCount: results.length,
         ExecutionTime: 0,
         ErrorMessage: '',
     };
+}
+
+/** A stand-in for an entity or engine object the code under test only reads a few members of. */
+function stubOf<T>(value: object): T {
+    return value as unknown as T;
 }
 
 describe('executeSpaceChatTurn', () => {
@@ -58,7 +66,7 @@ describe('executeSpaceChatTurn', () => {
             }
             return {
                 success: true,
-                agentRun: run as never,
+                agentRun: stubOf<MJAIAgentRunEntityExtended>(run),
                 result: 'Mocked agent response',
                 finalPayload: 'Mocked agent response',
             };
@@ -78,6 +86,8 @@ describe('executeSpaceChatTurn', () => {
         hasExistingAgentRun?: boolean;
         hasExistingReplyDetail?: boolean;
         agentRunReadFails?: boolean;
+        /** The reply's save fails once it carries this status (the final save, when 'Complete'). */
+        detailSaveFailsWhenStatus?: string;
         callerHasReach?: boolean;
         messageUserId?: string;
         messageRole?: string;
@@ -124,20 +134,20 @@ describe('executeSpaceChatTurn', () => {
 
         const provider: Partial<IMetadataProvider & IRunViewProvider> = {
             EntityByName() {
-                return {
+                return stubOf<EntityInfo>({
                     ID: 'mock-entity-id',
                     GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
-                } as never;
+                });
             },
             EntityByID() {
-                return { Name: 'mock-entity' } as never;
+                return stubOf<EntityInfo>({ Name: 'mock-entity' });
             },
             async GetEntityObject(entityName: string) {
                 if (entityName === 'MJ_BizApps_Collaboration: Spaces') {
-                    return {
+                    return stubOf<never>({
                         RunViewProviderToUse: provider,
                         ProviderToUse: provider,
-                    } as never;
+                    });
                 }
                 if (entityName === 'MJ: Conversation Details') {
                     const detail = {
@@ -160,10 +170,10 @@ describe('executeSpaceChatTurn', () => {
                         },
                         async Save() {
                             savedDetails.push({ ...this });
-                            return true;
+                            return this.Status !== options.detailSaveFailsWhenStatus;
                         },
                     };
-                    return detail as never;
+                    return stubOf<never>(detail);
                 }
                 if (entityName === 'MJ: AI Agent Runs') {
                     const run = {
@@ -189,7 +199,7 @@ describe('executeSpaceChatTurn', () => {
                             return true;
                         },
                     };
-                    return run as never;
+                    return stubOf<never>(run);
                 }
                 if (entityName === 'MJ: AI Agents') {
                     const agent = {
@@ -201,9 +211,9 @@ describe('executeSpaceChatTurn', () => {
                             return id.toLowerCase() === ALLOWED_AGENT_ID.toLowerCase();
                         },
                     };
-                    return agent as never;
+                    return stubOf<never>(agent);
                 }
-                return undefined as never;
+                return stubOf<never>({});
             },
             async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
                 const { EntityName, ExtraFilter = '' } = params;
@@ -220,7 +230,7 @@ describe('executeSpaceChatTurn', () => {
                             AllowParentAssignees: true,
                             ClosedAt: closedAt,
                             Configuration: options.spaceConfiguration ?? null,
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -237,7 +247,7 @@ describe('executeSpaceChatTurn', () => {
                             Band: 'Team',
                             SpaceRoleTypeID: canContribute ? ROLE_CONTRIB_ID : ROLE_NON_CONTRIB_ID,
                             __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -252,7 +262,7 @@ describe('executeSpaceChatTurn', () => {
                             CanSeeTeamBand: true,
                             IsOwnerRole: true,
                             CanContribute: true,
-                        } as unknown as T,
+                        },
                         {
                             ID: ROLE_NON_CONTRIB_ID,
                             Level: 10,
@@ -262,7 +272,7 @@ describe('executeSpaceChatTurn', () => {
                             CanSeeTeamBand: false,
                             IsOwnerRole: false,
                             CanContribute: false,
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -287,7 +297,7 @@ describe('executeSpaceChatTurn', () => {
                                 },
                                 SpaceOverridable: ['Chats.AgentReplyMode'],
                             }),
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -301,7 +311,7 @@ describe('executeSpaceChatTurn', () => {
                             ConversationID: CONVERSATION_ID,
                             Kind: 'General',
                             Status: 'Active',
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -322,7 +332,7 @@ describe('executeSpaceChatTurn', () => {
                                     ListMode: 'Extend',
                                 },
                             }),
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -338,7 +348,7 @@ describe('executeSpaceChatTurn', () => {
                         };
                     }
                     if (hasExistingAgentRun && String(ExtraFilter).includes(USER_MESSAGE_ID)) {
-                        return mockResult<T>([{ ID: 'run-existing-1', ExternalReferenceID: USER_MESSAGE_ID } as unknown as T]);
+                        return mockResult<T>([{ ID: 'run-existing-1', ExternalReferenceID: USER_MESSAGE_ID }]);
                     }
                     return mockResult<T>([]);
                 }
@@ -353,7 +363,7 @@ describe('executeSpaceChatTurn', () => {
                                     SpaceTypeID: null,
                                     SpaceID: SPACE_ID,
                                     IsDefault: true,
-                                }) as unknown as T,
+                                }),
                         ),
                     );
                 }
@@ -363,7 +373,7 @@ describe('executeSpaceChatTurn', () => {
                         {
                             ID: ALLOWED_AGENT_ID,
                             Name: 'Sage',
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -373,7 +383,7 @@ describe('executeSpaceChatTurn', () => {
                             ID: CALLER_ID,
                             Name: 'Caller',
                             Email: 'caller@example.com',
-                        } as unknown as T,
+                        },
                     ]);
                 }
 
@@ -387,7 +397,7 @@ describe('executeSpaceChatTurn', () => {
 
                 if (EntityName === 'MJ: Conversation Details') {
                     if (options.hasExistingReplyDetail && String(ExtraFilter).includes(USER_MESSAGE_ID)) {
-                        return mockResult<T>([{ ID: 'detail-reply-1', ParentID: USER_MESSAGE_ID, Role: 'AI' } as unknown as T]);
+                        return mockResult<T>([{ ID: 'detail-reply-1', ParentID: USER_MESSAGE_ID, Role: 'AI' }]);
                     }
                     return mockResult<T>([]);
                 }
@@ -562,7 +572,7 @@ describe('executeSpaceChatTurn', () => {
         AgentRunner.prototype.RunAgent = async () => ({
             success: false,
             errorMessage: 'Simulated LLM failure',
-            agentRun: { ID: 'failed-run' } as never,
+            agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'failed-run' }),
         });
         try {
             const provider = createMockProvider({
@@ -575,6 +585,63 @@ describe('executeSpaceChatTurn', () => {
             const errorReply = provider.savedDetails[provider.savedDetails.length - 1];
             assert.equal(errorReply.Status, 'Error');
             assert.match(errorReply.Message ?? '', /Simulated LLM failure/);
+        } finally {
+            AgentRunner.prototype.RunAgent = origRunner;
+        }
+    });
+
+    it('marks the reply Error when the history read fails, and shows the failure', async () => {
+        const held = ConversationEngine.LoadWindowRowsFresh;
+        ConversationEngine.LoadWindowRowsFresh = async () => {
+            throw new Error('the history read failed');
+        };
+        try {
+            const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
+            const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+            assert.equal(result.ok, false);
+            assert.match(result.message, /the history read failed/);
+            const reply = provider.savedDetails[provider.savedDetails.length - 1];
+            assert.equal(reply.Status, 'Error');
+            assert.match(reply.Message ?? '', /the history read failed/);
+        } finally {
+            ConversationEngine.LoadWindowRowsFresh = held;
+        }
+    });
+
+    it('marks the reply Error when its final save fails, instead of leaving it In-Progress', async () => {
+        const provider = createMockProvider({
+            messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
+            detailSaveFailsWhenStatus: 'Complete',
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        assert.equal(result.ok, false);
+        const statuses = provider.savedDetails.map((detail) => detail.Status);
+        assert.deepEqual(statuses.slice(-2), ['Complete', 'Error'], `the reply's saves were ${statuses.join(', ')}`);
+    });
+
+    it('runs one turn when two calls arrive for the same message at once', async () => {
+        const origRunner = AgentRunner.prototype.RunAgent;
+        let runs = 0;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            runs++;
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            if (typeof params.onAgentRunCreated === 'function') await params.onAgentRunCreated('run-mocked-2');
+            return { success: true, agentRun: stubOf<MJAIAgentRunEntityExtended>({ ID: 'run-mocked-2', Message: 'Mocked agent response' }), result: 'Mocked agent response' };
+        };
+        try {
+            const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
+            const [first, second] = await Promise.all([
+                executeSpaceChatTurn(provider, callerUser, defaultInput),
+                executeSpaceChatTurn(provider, callerUser, defaultInput),
+            ]);
+            assert.equal(runs, 1, 'the agent ran once');
+            assert.deepEqual([first.ok, second.ok].sort(), [false, true]);
+            const refused = first.ok ? second : first;
+            assert.equal(refused.ok === false && refused.message, 'This message has already been processed by an agent turn.');
+            // Once the turn has finished, the claim is released: a later call is judged by the saved reply, not by the claim
+            const later = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+            assert.equal(runs, 2, 'a later call is not blocked by the claim');
+            assert.equal(later.ok, true);
         } finally {
             AgentRunner.prototype.RunAgent = origRunner;
         }

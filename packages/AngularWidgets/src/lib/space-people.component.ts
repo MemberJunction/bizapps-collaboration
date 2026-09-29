@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import type { SpaceBand, SpaceMemberModel } from './types';
+import type { SpaceMemberModel } from './types';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -86,23 +86,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <option value="member">Member</option>
               <option value="admin">Admin</option>
               <option value="client-member">Outside Member</option>
+              <option value="client-admin">Outside Admin</option>
               <option value="guest">Guest</option>
-            </select>
-            <select [(ngModel)]="inviteBand" class="invite-select">
-              <option value="Team">Team only</option>
-              <option value="Shared">Shared with Outside</option>
             </select>
             <button
               class="send-invite-btn"
-              [disabled]="!inviteEmail.trim()"
+              [disabled]="!inviteEmail.trim() || IsSendingInvite"
+              [attr.aria-busy]="IsSendingInvite"
               (click)="submitInvite()"
             >
-              Send Invite
+              {{ IsSendingInvite ? 'Sending…' : 'Send Invite' }}
             </button>
-            <button class="cancel-invite-btn" (click)="isInviting = false">
+            <button class="cancel-invite-btn" [disabled]="IsSendingInvite" (click)="isInviting = false">
               Cancel
             </button>
           </div>
+          @if (InviteOutcome) {
+            <div class="invite-outcome" [class.invite-outcome-error]="!InviteOutcome.ok" role="status">{{ InviteOutcome.message }}</div>
+          }
         </div>
       }
 
@@ -324,6 +325,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .invite-outcome {
+        margin-top: 8px;
+        font-size: var(--mj-text-sm, 13px);
+        color: var(--mj-text-secondary);
+      }
+      .invite-outcome-error {
+        color: var(--mj-status-error);
+      }
       .cancel-invite-btn {
         background: transparent;
         border: none;
@@ -452,7 +461,24 @@ export class CollabSpacePeopleComponent {
   @Input() Members: SpaceMemberModel[] = [];
   @Input() SpaceName = '';
 
-  @Output() InviteMemberRequested = new EventEmitter<{ email: string; role: string; band: SpaceBand }>();
+  /** The person's email and the role they are invited to. Which band the seat lands in follows from the role, on the server. */
+  @Output() InviteMemberRequested = new EventEmitter<{ email: string; role: string }>();
+
+  /** True while the invite is with the server: the form stays as it is. */
+  @Input() IsSendingInvite = false;
+
+  /** What the server said. The form clears and closes only when it succeeded; a refusal leaves the form open with the message. */
+  @Input() set InviteOutcome(outcome: { ok: boolean; message: string } | null) {
+    this.outcome = outcome;
+    if (outcome?.ok) {
+      this.inviteEmail = '';
+      this.isInviting = false;
+    }
+  }
+  get InviteOutcome(): { ok: boolean; message: string } | null {
+    return this.outcome;
+  }
+  private outcome: { ok: boolean; message: string } | null = null;
 
   public searchQuery = '';
   public audienceFilter: 'all' | 'Team' | 'Shared' = 'all';
@@ -460,7 +486,6 @@ export class CollabSpacePeopleComponent {
   public isInviting = false;
   public inviteEmail = '';
   public inviteRole = 'member';
-  public inviteBand: SpaceBand = 'Team';
 
   public get TotalMembers(): number {
     return this.Members.length;
@@ -500,10 +525,7 @@ export class CollabSpacePeopleComponent {
     this.InviteMemberRequested.emit({
       email: this.inviteEmail.trim(),
       role: this.inviteRole,
-      band: this.inviteBand,
     });
-    this.inviteEmail = '';
-    this.isInviting = false;
   }
 
   public formatRoleClass(roleCode: string): string {

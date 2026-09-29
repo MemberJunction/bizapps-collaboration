@@ -22,7 +22,7 @@ The generated entity classes for Collaboration's schema, the typed client for it
 
 On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Space types and role types are metadata rows and have no server subclass.
 
-**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's five GraphQL mutations: `MintSpaceLink`, `UploadSpaceFile`, `CreateSpaceTask`, `PostSpaceMessage` and `OpenSpaceFile`.
+**`CollaborationClient`** (`src/client.ts`) is a typed client for the app's four GraphQL mutations: `MintSpaceLink`, `UploadSpaceFile` (which takes the band the person chose), `CreateSpaceTask` and `PostSpaceMessage`. A library file opens in MemberJunction's own viewer, which loads it as the caller; there is no mutation for it here.
 - Pass it an executor: any object with `ExecuteGQL`, such as MJ's GraphQL data provider.
 - Without one, it falls back to the global `Metadata.Provider`. `CollaborationClient.isAvailable()` says whether a provider can run GraphQL.
 

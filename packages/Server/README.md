@@ -21,8 +21,7 @@ The server bootstrap: the function MJAPI calls at startup, and the GraphQL resol
 | Mutation | Input | What it does |
 |---|---|---|
 | `MintSpaceLink` | `SpaceID`, `Email`, `RoleID` | Seats a person by email. The seat is saved through the member gate, so the invitation ceiling, approval and cap apply. It creates the MJ user and Person when needed, grants `Space Participant`, and issues a one-use magic link of kind `app-session` for an Active seat. The link is emailed, returned to a host issuer, or withheld (see the host's `magicLink` settings in the root README). |
-| `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder` | Stores the file and files it as a space item. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. |
-| `OpenSpaceFile` | `itemId` | Loads the item and its file as the caller, records an `open` item use, and returns the bytes with the stored type and how the browser may show it. |
+| `UploadSpaceFile` | `SpaceID`, `FileName`, `MimeType`, `Base64Data`, `Folder`, `Band?` | Stores the file and files it as a space item, in the band the person chose (Shared or Team; a band the seat cannot hold is refused), or the space type's default when none is chosen. Refuses a file over the cap: 10 MB, or `COLLABORATION_UPLOAD_MAX_BYTES` when set. |
 | `CreateSpaceTask` | `SpaceID`, `Name`, `Band` | Creates a root task and files it in the space. |
 | `PostSpaceMessage` | `SpaceID`, `Text`, `ConversationID?`, `ExecuteAgent?` | Posts the caller's message to the space's room, optionally running the agent when requested or triggered. |
 

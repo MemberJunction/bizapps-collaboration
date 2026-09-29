@@ -18,3 +18,9 @@ export function coreSchema(): string {
  * deletes what carries the marker (with everything in it) while still refusing any other space it doesn't know.
  */
 export const CHECK_SPACE_PREFIX = 'COLLAB-CHECK ';
+
+/**
+ * The address domain of the accounts an invite check makes. The system user may not delete a notification, so those accounts stay
+ * until the purge, which removes every account in this domain with what hangs on it.
+ */
+export const INVITEE_EMAIL_DOMAIN = 'collab-invite.example';

@@ -55,6 +55,30 @@ export async function executeSpaceChatTurn(
     user: UserInfo,
     input: ExecuteSpaceChatTurnInput
 ): Promise<ExecuteSpaceChatTurnResult> {
+    // Two calls for one message can both pass the "already replied" reads before either writes its reply, so a message is
+    // claimed here for the length of its turn. This holds within one server; a second server would need a database constraint.
+    const claim = parseUuid(input.userMessageId)?.toLowerCase();
+    if (claim) {
+        if (turnsInFlight.has(claim)) {
+            return { ok: false, message: 'This message has already been processed by an agent turn.' };
+        }
+        turnsInFlight.add(claim);
+    }
+    try {
+        return await runClaimedTurn(provider, user, input);
+    } finally {
+        if (claim) turnsInFlight.delete(claim);
+    }
+}
+
+/** Messages whose turn is running now. */
+const turnsInFlight = new Set<string>();
+
+async function runClaimedTurn(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    input: ExecuteSpaceChatTurnInput
+): Promise<ExecuteSpaceChatTurnResult> {
     const spaceId = parseUuid(input.spaceId);
     const conversationId = parseUuid(input.conversationId);
     const userMessageId = parseUuid(input.userMessageId);
@@ -377,6 +401,12 @@ export async function executeSpaceChatTurn(
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to save assistant reply';
         LogError(`executeSpaceChatTurn: failed to save assistant reply: ${errMsg}`);
+        // Don't leave the reply at In-Progress: mark it Error, so the conversation shows the turn failed
+        assistantDetail.Status = 'Error';
+        assistantDetail.Message = errMsg;
+        if (!(await assistantDetail.Save())) {
+            LogError(`executeSpaceChatTurn: failed to mark the reply Error after its save failed: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+        }
         return { ok: false, message: errMsg };
     }
 

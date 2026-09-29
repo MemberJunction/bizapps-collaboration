@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { rm } from 'node:fs/promises';
 import { readCsv } from './csv.js';
-import { CHECK_SPACE_PREFIX, coreSchema, sqlUuid } from './ids.js';
+import { CHECK_SPACE_PREFIX, coreSchema, INVITEE_EMAIL_DOMAIN, sqlUuid } from './ids.js';
 import { worldStorageRoot } from './seed-files.js';
 import { BoxFileStorage } from '@memberjunction/storage';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, COLLABORATION_STORAGE_PROVIDER_ID, getBoxStorageConfig } from './local-storage-account.js';
@@ -182,6 +182,21 @@ export async function purgeWorld(): Promise<void> {
             IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
                 DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (${userIds});
             DELETE FROM [${core}].UserRole WHERE UserID IN (${userIds});
+
+            -- Accounts an invite check made: the system user can't delete their notifications, so the purge does, with the rest of what hangs on them
+            SELECT ID INTO #invitees FROM [${core}].[User] WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}';
+            DELETE FROM [${core}].UserNotification WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE RecipientUserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE UserID IN (SELECT ID FROM #invitees);
+            IF OBJECT_ID('__mj_BizAppsCommon.Person') IS NOT NULL
+                DELETE FROM __mj_BizAppsCommon.Person WHERE LinkedUserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].UserRole WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].UserApplication WHERE UserID IN (SELECT ID FROM #invitees);
+            DELETE FROM [${core}].MagicLinkInviteRole WHERE InviteID IN (SELECT ID FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}');
+            DELETE FROM [${core}].MagicLinkInviteApplication WHERE InviteID IN (SELECT ID FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}');
+            DELETE FROM [${core}].MagicLinkInvite WHERE Email LIKE '%@${INVITEE_EMAIL_DOMAIN.replace(/'/g, "''")}';
+            DELETE FROM [${core}].[User] WHERE ID IN (SELECT ID FROM #invitees);
 
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #worldfiles WHERE FileID IS NOT NULL);

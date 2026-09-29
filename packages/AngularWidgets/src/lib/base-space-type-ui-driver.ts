@@ -101,7 +101,7 @@ export interface BeforeCreateChildSpaceEvent extends CancellableSpaceUIEvent {
 export interface BeforeStartChatEvent extends CancellableSpaceUIEvent {
     spaceId: string;
     name?: string;
-    kind: 'Room' | 'Chat';
+    kind: 'General' | 'Topic' | 'Private';
     participantUserIds?: string[];
 }
 

@@ -9,6 +9,7 @@ import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJViewTo
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
+import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { buildSettingsModel, changedSettings } from './logic/settings-model.js';
 import { uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
@@ -930,6 +931,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 <mjc-space-people
                                                     [Members]="spaceMembers"
                                                     [SpaceName]="spaceTitle"
+                                                    [IsSendingInvite]="isSendingInvite"
+                                                    [InviteOutcome]="inviteOutcome"
                                                     (InviteMemberRequested)="onInviteMember($event)"
                                                 />
                                             }
@@ -2323,72 +2326,22 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             return;
         }
 
-        const actualFileId = targetItem.fileId || fileId;
-        const targetItemId = targetItem.id;
-
+        this.isOpeningFile = true;
+        this.openingFileLabel = 'Opening…';
+        this.RefreshView();
         try {
-            this.isOpeningFile = true;
-            this.openingFileLabel = 'Opening...';
-            this.RefreshView();
-
-            // 1. Primary path: Open natively in MJ Explorer
-            if (this.navigationService && actualFileId) {
-                try {
-                    const pkey = CompositeKey.FromID(actualFileId);
-                    this.navigationService.OpenEntityRecord('MJ: Files', pkey);
-                    void this.recordSpaceItemOpen(targetItemId);
-                    // Keep indicator briefly for smooth UI feedback during tab activation
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    return;
-                } catch (navErr) {
-                    LogError('Failed to open file via NavigationService: ' + (navErr instanceof Error ? navErr.message : String(navErr)));
-                    // Fall through to download fallback
-                }
+            const nav = this.navigationService;
+            const outcome = await openSpaceFile(
+                {
+                    open: nav ? (id) => { nav.OpenEntityRecord('MJ: Files', CompositeKey.FromID(id)); } : null,
+                    recordOpen: (itemId) => this.recordSpaceItemOpen(itemId),
+                },
+                { id: targetItem.id, fileId: targetItem.fileId || fileId },
+            );
+            if (!outcome.ok) {
+                LogError(`Opening a space file failed: ${outcome.message}`);
+                SharedService.Instance.CreateSimpleNotification(outcome.message, 'error', 5000);
             }
-
-            // 2. Fallback path: Download / open in new tab via OpenSpaceFile mutation
-            this.openingFileLabel = 'Downloading...';
-            this.RefreshView();
-            const client = new CollaborationClient(this.graphQLExecutor);
-            const res = await client.OpenSpaceFile(targetItemId);
-            if (!res.Success || !res.Base64) {
-                const msg = res.ErrorMessage || 'Failed to open file';
-                LogError('OpenSpaceFile failed: ' + msg);
-                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
-                return;
-            }
-
-            const mimeType = res.MimeType || 'application/octet-stream';
-            const fileName = res.Name || 'download';
-            const byteCharacters = atob(res.Base64);
-            const byteNumbers = new Array<number>(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-
-            const isInline = res.Mode === 'inline' || (res.Mode !== 'download' && (mimeType.startsWith('image/') || mimeType === 'application/pdf' || mimeType.startsWith('text/')));
-            if (isInline) {
-                const newWin = window.open(url, '_blank');
-                if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                }
-            } else {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error opening space file: ' + msg);
@@ -2399,21 +2352,32 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    private async recordSpaceItemOpen(itemId: string): Promise<void> {
+    /** Records that the person opened the item, once, as them. A refused or failed write is logged, and the open is not shown as recorded. */
+    private async recordSpaceItemOpen(itemId: string): Promise<boolean> {
+        const fields = openUseFields(itemId, this.activeSpaceRecord?.ID, this.currentUser?.ID, new Date());
+        if (!fields) {
+            LogError(`The open of item ${itemId} was not recorded: the person or the space is not known.`);
+            return false;
+        }
         try {
-            const md = new Metadata();
-            const use = await md.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses');
-            if (use && this.activeSpaceRecord?.ID) {
-                use.NewRecord();
-                use.ItemID = itemId;
-                use.SpaceID = this.activeSpaceRecord.ID;
-                use.UserID = this.currentUser?.ID || '';
-                use.UsedAt = new Date();
-                use.Kind = 'open';
-                await use.Save();
+            const use = await this.ProviderToUse.GetEntityObject<mjBizAppsCollaborationItemUseEntity>('MJ_BizApps_Collaboration: Item Uses', this.currentUser ?? undefined);
+            use.NewRecord();
+            use.ItemID = fields.ItemID;
+            use.SpaceID = fields.SpaceID;
+            use.UserID = fields.UserID;
+            use.UsedAt = fields.UsedAt;
+            use.Kind = fields.Kind;
+            if (!(await use.Save())) {
+                LogError(`The open of item ${itemId} was not recorded: ${use.LatestResult?.CompleteMessage ?? 'the save was refused'}`);
+                return false;
             }
+            if (this.selectedItemId && UUIDsEqual(this.selectedItemId, itemId)) {
+                this.previewRecentUses = [{ id: use.ID, text: 'You opened this', timestamp: 'Just now' }, ...this.previewRecentUses];
+            }
+            return true;
         } catch (err) {
-            console.debug('Failed to record space item use:', err);
+            LogError(`The open of item ${itemId} was not recorded: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
         }
     }
 
@@ -2833,73 +2797,46 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public async onInviteMember(payload: { email: string; role: string; band: SpaceBand }): Promise<void> {
+    /** True while an invite is with the server: the People form stays as it is. */
+    public isSendingInvite = false;
+    /** What the server said about the last invite: the form clears and closes only when it succeeded. */
+    public inviteOutcome: { ok: boolean; message: string } | null = null;
+
+    /**
+     * Invites a person through MintSpaceLink, which saves the seat through the member gate and emails a sign-in link.
+     * The person needs no account yet, and a client admin (whose role may invite) can do it: the browser reads no other user.
+     */
+    public async onInviteMember(payload: { email: string; role: string }): Promise<void> {
+        const failed = (message: string): void => {
+            LogError(`Invite refused: ${message}`);
+            this.inviteOutcome = { ok: false, message };
+            SharedService.Instance.CreateSimpleNotification(message, 'error', 5000);
+        };
+        this.isSendingInvite = true;
+        this.inviteOutcome = null;
+        this.RefreshView();
         try {
-            const md = this.ProviderToUse;
-            const rv = new RunView(this.RunViewToUse);
-            let userId: string | null = null;
-            const userRes = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Users',
-                ExtraFilter: `Email = '${payload.email.replace(/'/g, "''")}'`,
-                ResultType: 'simple',
-                MaxRows: 1,
-            });
-            if (userRes?.Success && userRes.Results?.[0]) {
-                userId = userRes.Results[0].ID;
-            } else {
-                const msg = 'User not found in system with email: ' + payload.email;
-                LogError(msg);
-                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
+            const roleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(payload.role)?.ID;
+            if (!roleId) {
+                failed(`Invite refused: there is no role called ${payload.role}.`);
                 return;
             }
-
-            const existingMember = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Members',
-                ExtraFilter: `SpaceID = '${this.activeSpaceId}' AND UserID = '${userId}'`,
-                ResultType: 'simple',
-                MaxRows: 1,
-            });
-            if (existingMember?.Success && existingMember.Results?.[0]) {
-                SharedService.Instance.CreateSimpleNotification('User is already a member of this space.', 'warning', 4000);
+            const client = new CollaborationClient(this.graphQLExecutor);
+            const result = await client.MintSpaceLink({ SpaceID: this.activeSpaceId, Email: payload.email, RoleID: roleId });
+            if (!result.Success) {
+                failed(result.ErrorMessage || 'Invite refused.');
                 return;
             }
-
-            const roleRes = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ_BizApps_Collaboration: Space Role Types',
-                ExtraFilter: `Code = '${payload.role.toLowerCase()}'`,
-                ResultType: 'simple',
-                MaxRows: 1,
-            });
-            const roleId = roleRes?.Success && roleRes.Results?.[0]?.ID;
-            if (!roleId || !userId) {
-                const msg = 'Could not find space role type: ' + payload.role;
-                LogError(msg);
-                SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
-                return;
-            }
-
-            const memberEntity = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>('MJ_BizApps_Collaboration: Space Members');
-            memberEntity.NewRecord();
-            memberEntity.SpaceID = this.activeSpaceId;
-            memberEntity.UserID = userId;
-            memberEntity.SpaceRoleTypeID = roleId;
-            memberEntity.Band = payload.band;
-            memberEntity.Status = 'Active';
-            const saved = await memberEntity.Save();
-            if (!saved) {
-                const errMsg = memberEntity.LatestResult?.CompleteMessage || 'Failed to save member.';
-                LogError('Failed to invite member: ' + errMsg);
-                SharedService.Instance.CreateSimpleNotification('Failed to invite member: ' + errMsg, 'error', 5000);
-                return;
-            }
-
+            // On success the server's message says what happened: seated, Invited awaiting approval, already seated, and whether a link was sent
+            const message = result.ErrorMessage || 'They are seated.';
+            this.inviteOutcome = { ok: true, message };
+            SharedService.Instance.CreateSimpleNotification(message, 'info', 6000);
             await this.loadSpaceMembers(this.activeSpaceId, this.currentSelection());
-            SharedService.Instance.CreateSimpleNotification('Member invited successfully.', 'info', 3000);
+        } catch (error) {
+            failed(error instanceof Error ? error.message : String(error));
+        } finally {
+            this.isSendingInvite = false;
             this.RefreshView();
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            LogError('Error inviting member: ' + msg);
-            SharedService.Instance.CreateSimpleNotification('Error inviting member: ' + msg, 'error', 5000);
         }
     }
 

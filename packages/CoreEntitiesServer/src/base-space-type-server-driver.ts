@@ -59,7 +59,7 @@ export interface ItemChangeContext extends DriverBaseContext {
 
 export interface ChatChangeContext extends DriverBaseContext {
     chatName: string;
-    chatKind: 'General' | 'Private' | 'Room' | 'Topic';
+    chatKind: 'General' | 'Topic' | 'Private';
     isNew: boolean;
 }
 

@@ -15,13 +15,15 @@ import {
     SPACE_ITEM_ENTITY,
     SPACE_MEMBER_ENTITY,
     SPACE_ROLE_TYPE_ENTITY,
+    USER_ENTITY,
     SPACE_TYPE_ENTITY,
     TASK_ACTIVITY_ENTITY,
     TASK_ENTITY,
     TASK_LINK_ENTITY,
 } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext, SameID, View } from '../../wire.js';
-import { cleanupConversation, cleanupStep, deleteRowAndConfirm, registerChecks } from '../cleanup-helpers.js';
+import { INVITEE_EMAIL_DOMAIN } from '../../world/ids.js';
+import { cleanupConversation, cleanupStep, deleteInvitee, deleteRowAndConfirm, registerChecks } from '../cleanup-helpers.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
@@ -776,6 +778,48 @@ const checks: NamedCheck[] = [
             );
             const after = await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ENTITY, `ID = '${DISCOVERY_SPACE_ID}'`, ['SpaceTypeID']);
             Assert(SameID(after[0]?.SpaceTypeID, originalTypeId), "Discovery's type is unchanged");
+        },
+    },
+    {
+        Id: 'write-gates.WG8',
+        Name: 'WG8 — a staff owner and an outside admin each invite a person with no account, over the wire: the seat is saved, the account is made, and the message says what happened',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const stamp = Date.now();
+            const outsiders = [
+                { persona: 'ada', email: `wg8-ada-${stamp}@${INVITEE_EMAIL_DOMAIN}`, roleCode: 'client-member' },
+                { persona: 'casey', email: `wg8-casey-${stamp}@${INVITEE_EMAIL_DOMAIN}`, roleCode: 'client-member' },
+            ];
+            const roles = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'client-member'", ['ID', 'Code']);
+            Assert(roles.length === 1, 'The Outside member role is on this host');
+            try {
+                for (const who of outsiders) {
+                    const personaCtx = await getPersonaClientContext(ctx, who.persona);
+                    const client = new CollaborationClient(personaCtx.GraphQLProvider);
+                    const result = await client.MintSpaceLink({ SpaceID: DISCOVERY_SPACE_ID, Email: who.email, RoleID: roles[0].ID });
+                    Assert(result.Success === true, `${who.persona} inviting a new outside email over the wire: ${result.ErrorMessage ?? ''}`);
+                    Assert((result.ErrorMessage ?? '').length > 0, `${who.persona}'s invite says what happened (saw an empty message)`);
+
+                    // The wire may replay an identical read, and the seat was written by the server: read past it
+                    const accounts = await FindRows<{ ID: string }>(ctx, USER_ENTITY, `Email = '${who.email}'`, ['ID'], undefined, { BypassCache: true });
+                    Assert(accounts.length === 1, `An account was made for ${who.email}`);
+                    const seats = await FindRows<{ ID: string; Status: string; Band: string }>(
+                        ctx,
+                        SPACE_MEMBER_ENTITY,
+                        `SpaceID = '${DISCOVERY_SPACE_ID}' AND UserID = '${accounts[0].ID}'`,
+                        ['ID', 'Status', 'Band'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    Assert(seats.length === 1, `${who.persona}'s invite saved exactly one seat (saw ${seats.length})`);
+                    Assert(seats[0].Band === 'Shared', `An Outside member's seat is on the Shared band (saw ${seats[0].Band})`);
+                    Assert(seats[0].Status === 'Active' || seats[0].Status === 'Invited', `The seat is Active or Invited (saw ${seats[0].Status})`);
+                }
+            } finally {
+                for (const who of outsiders) {
+                    await deleteInvitee(ctx.Provider, ctx.User, who.email);
+                }
+            }
         },
     },
 ];

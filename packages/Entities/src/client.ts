@@ -104,14 +104,6 @@ export interface SpaceChatHostRulesGraphQLPayload {
     }[];
 }
 
-export interface OpenSpaceFilePayload {
-    Success: boolean;
-    Base64?: string;
-    MimeType?: string;
-    Name?: string;
-    Mode?: string;
-    ErrorMessage?: string;
-}
 
 const CREATE_SPACE_CONVERSATION_MUTATION = `
 mutation CreateSpaceConversation($input: CreateSpaceConversationInput!) {
@@ -202,18 +194,6 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
 }
 `;
 
-const OPEN_SPACE_FILE_MUTATION = `
-mutation OpenSpaceFile($itemId: String!) {
-    OpenSpaceFile(itemId: $itemId) {
-        Success
-        Base64
-        MimeType
-        Name
-        Mode
-        ErrorMessage
-    }
-}
-`;
 
 export function hasExecuteGQL(target: object | null | undefined): target is GraphQLExecutor {
     return target != null && 'ExecuteGQL' in target && typeof (target as { ExecuteGQL?: () => Promise<Record<string, object | null | undefined>> }).ExecuteGQL === 'function';
@@ -221,7 +201,7 @@ export function hasExecuteGQL(target: object | null | undefined): target is Grap
 
 /**
  * Typed client for Collaboration GraphQL mutations:
- * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage, OpenSpaceFile.
+ * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage.
  */
 export class CollaborationClient {
     constructor(private readonly executor: GraphQLExecutor) {
@@ -268,10 +248,6 @@ export class CollaborationClient {
         return (res?.CreateSpaceConversation as CreateSpaceConversationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
-    async OpenSpaceFile(itemId: string): Promise<OpenSpaceFilePayload> {
-        const res = await this.activeExecutor.ExecuteGQL(OPEN_SPACE_FILE_MUTATION, { itemId });
-        return (res?.OpenSpaceFile as OpenSpaceFilePayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
-    }
 
     async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_CHAT_HOST_RULES_QUERY, { spaceId, conversationId });

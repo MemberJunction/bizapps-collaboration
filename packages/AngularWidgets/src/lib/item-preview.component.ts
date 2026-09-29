@@ -72,14 +72,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               variant="secondary"
               class="btn secondary open-file-btn"
               [disabled]="IsOpeningFile"
+              [attr.aria-busy]="IsOpeningFile"
               (click)="onOpenFile()"
-              [title]="IsOpeningFile ? (OpeningLabel || 'Opening document...') : 'Open Document'"
+              [title]="IsOpeningFile ? (OpeningLabel || 'Opening document…') : 'Open Document'"
             >
               @if (IsOpeningFile) {
-                <i class="fa-solid fa-spinner fa-spin"></i>
-                <span>{{ OpeningLabel || 'Opening...' }}</span>
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                <span>{{ OpeningLabel || 'Opening…' }}</span>
               } @else {
-                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                 <span>Open Document</span>
               }
             </button>
@@ -284,7 +285,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       &:disabled {
         opacity: 0.65;
         cursor: not-allowed;
-        pointer-events: none;
       }
     }
 
