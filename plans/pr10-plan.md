@@ -42,7 +42,7 @@
 
 There's no version pin for now (D39). The work runs in a local pnpm workspace where MemberJunction's `next` and the app repos sit side by side, so everything builds against MJ's latest source:
 1. **A plain parent folder of sibling clones:** MJ; bizapps-collaboration on this pull request's branch, `claude/hopeful-bell-6ldk4v`; bizapps-common; bizapps-tasks; bizapps-committees when [§ 9](#9-the-rest-of-the-plan)'s Committees work starts; and any other repo you change.
-2. **MJ's clone is on the branch of [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891),** `fix/core-defects-4836-4870`, until it merges into MJ `next`, and on `next` after that. Any other MemberJunction fix this work needs goes on a branch of its own in the same clone ([§ 2.2](#22-the-rule)).
+2. **MJ's clone is on the branch of [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891),** `fix/core-defects-4836-4870`, until it merges into MJ `next`, and on `next` after that. Keep it at the branch's latest commit: the branch moves while it's reviewed, so pull it and rebuild MJ from the parent before each step. Any other MemberJunction fix this work needs goes on a branch of its own in the same clone ([§ 2.2](#22-the-rule)).
 3. **One workspace over them,** made by `mj dev workspace`, as [MJ's quickstart](https://github.com/MemberJunction/MJ/blob/next/guides/DEV_WORKSPACE_QUICKSTART.md) says: build MJ once, run the generator from the parent, and let it remove the members' own installs. Install and build only from the parent. Never install inside a member, and never hand-link packages.
 4. **No MJ pin, and no lockfile churn for it.** Leave the `@memberjunction/*` versions in every `package.json` as they are. When you add or change any other dependency, update this repo's own `pnpm-lock.yaml` from a standalone clone (`pnpm install --lockfile-only`), so CI's frozen install still passes.
 5. **A database of your own.** Two agents migrating or pushing metadata to one database break each other. Build it by [the database guide](../docs/building-the-database.md), and load the world by [the data guide](../docs/reviewing-the-data.md).
@@ -66,8 +66,8 @@ Each comes out with the MemberJunction fix it waits on. The tests that pinned th
 
 | MJ issue | What the app does today | What replaces it |
 |---|---|---|
-| [MJ#4836](https://github.com/MemberJunction/MJ/issues/4836) | [The database guide](../docs/building-the-database.md)'s step 6 pushes the metadata one directory at a time | One `mj sync push --dir=metadata`. The plan's author edits the guide |
-| [MJ#4837](https://github.com/MemberJunction/MJ/issues/4837) | The guide's step 5 has you grant Developer *Create* on row-level security filters by hand, in SQL | MJ's own metadata carries the grant, so step 5 goes. The plan's author edits the guide |
+| [MJ#4836](https://github.com/MemberJunction/MJ/issues/4836) | [The database guide](../docs/building-the-database.md)'s step 6 pushes the metadata one directory at a time | One `mj sync push --dir=metadata`. **Done** in the guide on 2026-09-30, from the day-one baseline |
+| [MJ#4837](https://github.com/MemberJunction/MJ/issues/4837) | The guide's step 5 has you grant Developer *Create* on row-level security filters by hand, in SQL | MJ's own metadata carries the grant, so step 5 goes. **Done** in the guide on 2026-09-30, from the day-one baseline |
 | [MJ#4838](https://github.com/MemberJunction/MJ/issues/4838) | The chat hides MJ's composer from outside (`::ng-deep .message-input-container-wrapper`, `W/space-chat.component.ts:288`) and binds `!IsReadOnly` into six of the chat area's inputs (`:47-48`, `:51`, `:53-55`) | The chat area's own `ReadOnly` input. The lock (`:82-83`, `:114-115`) and the New buttons (`:93`, `:141`) are the app's own and stay |
 | [MJ#4839](https://github.com/MemberJunction/MJ/issues/4839) | `W/dialog-base.ts` does the focus handling for the new-conversation, new-space, share-check and upload dialogs | `mj-dialog`'s own focus handling and `AriaLabel`. `dialog-base.ts` goes |
 | [MJ#4850](https://github.com/MemberJunction/MJ/issues/4850) | `SES:677-687`: `Delete()` hands a space with a subtype to the subtype first. `packages/IntegrationTests/src/checks/cleanup-helpers.ts:56-63` deletes through the subtype | A plain `Delete()` |
@@ -277,6 +277,6 @@ The plan's § 11 also lists what Amith is to confirm in review.
 ## 14. Day one
 
 1. **Read,** in this order: this plan; [PR 9's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5900284445); the plan's [§ 3.6](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat) to [§ 3.8](plan.md#38-decided-on-2026-09-29-pr-10-carries-the-rest) (D38 to D52); [PR 9's plan](pr9-plan.md) § 3; [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md); [how the system works](../docs/HOW_THE_SYSTEM_WORKS.md); [the meetings plan](meetings-plan.md); and the repo's `CLAUDE.md`.
-2. **Set up the workspace** ([§ 2.1](#21-work-on-mj-next)), with MJ's clone on MJ#4891's branch.
+2. **Set up the workspace** ([§ 2.1](#21-work-on-mj-next)), with MJ's clone on MJ#4891's branch at its latest commit.
 3. **Build a database, load the world** from a purge, run both harnesses, and post the tallies and each package's `pnpm test` count as this pull request's first comment. They're the baseline every punch list compares against.
 4. **Start with [§ 2.3](#23-take-out-pr-9s-workarounds-122-and-123),** then the rest of stage 0.
