@@ -1,7 +1,8 @@
 // A host's class-registration manifest imports every `@RegisterClass` class by name from its package's entry, and skips one
 // the entry doesn't export, with only a log line. So a registered class that isn't exported reaches a host only if something
 // else happens to import its module. Fails when a class decorated with `@RegisterClass` in a published package's `src` isn't
-// exported from that package's entry (its `main`, read back to `src`).
+// exported from that package's entry (its `main`, read back to `src`). The example space types are private, but a test host
+// loads them the same way and a type's author copies them, so they're checked too.
 //
 //   node scripts/check-registered-exports.mjs
 //   node scripts/check-registered-exports.mjs --self-test
@@ -71,10 +72,13 @@ function sourceFiles(dir, files = []) {
     return files;
 }
 
-/** The registered classes of one published package that its entry doesn't export, as "file: Class". */
-export function checkPackage(packageDir) {
+/** The folder of the example space types' packages: private, and loaded by a test host like published ones. */
+const EXAMPLES_DIR = join('packages', 'ExampleSpaceTypes');
+
+/** The registered classes of one host-loaded package that its entry doesn't export, as "file: Class". */
+export function checkPackage(packageDir, hostLoadsIt = false) {
     const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
-    if (manifest.private || !manifest.main) return [];
+    if ((manifest.private && !hostLoadsIt) || !manifest.main) return [];
     const entry = join(packageDir, 'src', manifest.main.replace(/^dist\//, '').replace(/\.js$/, '.ts'));
     if (!existsSync(entry)) return [`${packageDir}: its entry ${entry} was not found`];
     const exported = entryExports(entry);
@@ -116,10 +120,17 @@ if (process.argv.includes('--self-test')) {
         if (!JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).private) checked += 1;
         void before;
     }
+    let examples = 0;
+    for (const name of readdirSync(EXAMPLES_DIR)) {
+        const dir = join(EXAMPLES_DIR, name);
+        if (!existsSync(join(dir, 'package.json'))) continue;
+        missing.push(...checkPackage(dir, true));
+        examples += 1;
+    }
     if (missing.length > 0) {
         console.error(missing.join('\n'));
         console.error(`${missing.length} registered class(es) a host's manifest would skip. Export each from its package's entry.`);
         process.exit(1);
     }
-    console.log(`registered exports ok (${checked} published packages: every @RegisterClass class is exported from its entry)`);
+    console.log(`registered exports ok (${checked} published packages and ${examples} example packages: every @RegisterClass class is exported from its entry)`);
 }

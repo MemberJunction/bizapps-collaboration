@@ -17,7 +17,7 @@ import { MaxLength } from 'class-validator';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 
-import { mjBizAppsCollabExamplesExampleBoardEntity, mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types/entities';
+import { mjBizAppsCollabExamplesExampleBoardEntity, mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
     
 
 //****************************************************************************

@@ -9,12 +9,8 @@ import {
     type DriverValidationResult,
     type TaskFiledContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import {
-    ExampleBoardServerDriver,
-    ExampleRoomServerDriver,
-    mjBizAppsCollabExamplesExampleBoardEntity,
-    mjBizAppsCollabExamplesExampleRoomEntity,
-} from '@mj-biz-apps/collaboration-example-space-types/server';
+import { ExampleBoardServerDriver, ExampleRoomServerDriver } from '@mj-biz-apps/collaboration-example-space-types-server';
+import { mjBizAppsCollabExamplesExampleBoardEntity, mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
