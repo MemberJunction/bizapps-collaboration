@@ -751,6 +751,19 @@ describe('executeSpaceChatTurn', () => {
         });
     });
 
+    it("a fault in the observer does not fail a turn that answers when it ends: the reply is saved and reported, and the observer's error is only logged", async () => {
+        const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
+        const outcomes: { success: boolean; result: boolean }[] = [];
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            observer: { OnFinished: (outcome) => { outcomes.push({ success: outcome.success, result: !!outcome.result }); throw new Error('the observer broke'); } },
+        });
+        assert.equal(result.ok, true, 'the turn answers although its observer threw');
+        assert.deepEqual(outcomes, [{ success: true, result: true }], "the observer heard the end, with the run's result");
+        const reply = provider.savedDetails[provider.savedDetails.length - 1];
+        assert.equal(reply.Status, 'Complete');
+    });
+
     it('refuses an untagged message under Always when no agent is Active', async () => {
         const provider = createMockProvider({
             messageText: 'Hello without any agent mention',

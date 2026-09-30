@@ -78,8 +78,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
               <div class="header-right">
                 @if (IsReadOnly) {
-                  <span class="read-only-lock" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
-                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                  <span class="read-only-lock-wrap">
+                    <button
+                      type="button"
+                      class="read-only-lock"
+                      [title]="ReadOnlyNote"
+                      [attr.aria-label]="ReadOnlyNote"
+                      [attr.aria-expanded]="ReasonShown"
+                      aria-controls="mjc-read-only-reason"
+                      (focus)="onLockFocus()"
+                      (blur)="onLockBlur()"
+                      (click)="onLockClick()">
+                      <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    </button>
+                    @if (ReasonShown) {
+                      <span class="read-only-reason" id="mjc-read-only-reason" role="status">{{ ReadOnlyNote }}</span>
+                    }
                   </span>
                 }
                 @if (ParticipantCount > 0) {
@@ -110,8 +124,22 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       } @else {
         <div class="no-conversation-state">
           @if (IsReadOnly) {
-            <span class="read-only-lock read-only-lock-corner" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
-              <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            <span class="read-only-lock-wrap read-only-lock-corner">
+              <button
+                type="button"
+                class="read-only-lock"
+                [title]="ReadOnlyNote"
+                [attr.aria-label]="ReadOnlyNote"
+                [attr.aria-expanded]="ReasonShown"
+                aria-controls="mjc-read-only-reason"
+                (focus)="onLockFocus()"
+                (blur)="onLockBlur()"
+                (click)="onLockClick()">
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+              </button>
+              @if (ReasonShown) {
+                <span class="read-only-reason" id="mjc-read-only-reason" role="status">{{ ReadOnlyNote }}</span>
+              }
             </span>
           }
           <div class="empty-icon-wrap">
@@ -283,23 +311,46 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         gap: 6px;
       }
 
-      /* A conversation that can't be posted in says why on hover: a lock, not a banner that takes a row */
+      /* A conversation that can't be posted in says why from a lock, not a banner that takes a row: on hover, and, since a
+         keyboard has no hover and a touch screen no pointer, on focus and on tap, from a button that shows the reason beside it */
+      .read-only-lock-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
       .read-only-lock {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 26px;
         height: 26px;
+        padding: 0;
         border-radius: 999px;
         font-size: 13px;
         color: var(--mj-status-warning, #d97706);
         background: var(--mj-bg-surface-sunken, #f1f5f9);
         border: 1px solid var(--mj-border-default, #e2e8f0);
-        cursor: help;
+        cursor: pointer;
       }
       .read-only-lock:focus-visible {
         outline: 2px solid var(--mj-brand-primary, #0076b6);
         outline-offset: 2px;
+      }
+      .read-only-reason {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 2;
+        min-width: 220px;
+        max-width: 320px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--mj-text-primary);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        box-shadow: var(--mj-shadow-md);
       }
       .read-only-lock-corner {
         position: absolute;
@@ -319,6 +370,30 @@ export class CollabSpaceChatComponent implements OnInit {
   /** The conversation can be read and not posted in: MJ's chat area takes `ReadOnly` and shows `ReadOnlyNote` where the composer was, and the header's lock says why. */
   @Input() public IsReadOnly = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
+
+  /** The lock's reason is on screen: shown while the lock has focus, and toggled by a tap or a click. */
+  public ReasonShown = false;
+  /** Focus opened the reason, so the click that follows a mouse-down keeps it open instead of closing it again. */
+  private reasonOpenedByFocus = false;
+
+  public onLockFocus(): void {
+    this.ReasonShown = true;
+    this.reasonOpenedByFocus = true;
+  }
+
+  public onLockBlur(): void {
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
+  public onLockClick(): void {
+    if (this.reasonOpenedByFocus) {
+      this.reasonOpenedByFocus = false;
+      this.ReasonShown = true;
+      return;
+    }
+    this.ReasonShown = !this.ReasonShown;
+  }
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';

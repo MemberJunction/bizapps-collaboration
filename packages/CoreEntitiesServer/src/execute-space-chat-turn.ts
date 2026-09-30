@@ -11,7 +11,7 @@ import {
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
@@ -33,6 +33,8 @@ export interface TurnOutcome {
     success: boolean;
     /** The agent's run, when it got as far as making one. */
     agentRun: MJAIAgentRunEntity | null;
+    /** What the agent's run returned, when it returned: the partial result and the completion are published from it. */
+    result?: ExecuteAgentResult;
     /** The reason, when it failed. It is for the log and for whoever watches: the conversation itself says only that the assistant could not answer. */
     errorMessage?: string;
 }
@@ -357,6 +359,7 @@ async function runClaimedTurn(
         let agentRunId: string | undefined;
         let agentReplyText: string | null = null;
         let finishedRun: MJAIAgentRunEntity | null = null;
+        let finishedResult: ExecuteAgentResult | undefined;
 
         try {
             // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
@@ -415,6 +418,7 @@ async function runClaimedTurn(
                 };
 
                 const runResult = await runner.RunAgent(runnerParams);
+                finishedResult = runResult ?? undefined;
                 if (runResult?.agentRun?.ID) {
                     agentRunId = runResult.agentRun.ID;
                     finishedRun = runResult.agentRun;
@@ -449,7 +453,7 @@ async function runClaimedTurn(
             if (!errorSaved) {
                 LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
             }
-            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: agentErrorMessage ?? ASSISTANT_FAILED_MESSAGE });
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: agentErrorMessage ?? ASSISTANT_FAILED_MESSAGE });
             return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
         }
 
@@ -465,11 +469,11 @@ async function runClaimedTurn(
             if (!(await assistantDetail.Save())) {
                 LogError(`executeSpaceChatTurn: failed to mark the reply Error after its save failed: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
             }
-            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: errMsg });
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: errMsg });
             return { ok: false, message: errMsg };
         }
 
-        tellFinished({ replyDetailId: assistantDetail.ID, success: true, agentRun: finishedRun });
+        tellFinished({ replyDetailId: assistantDetail.ID, success: true, agentRun: finishedRun, result: finishedResult });
         return {
             ok: true,
             replyDetailIds: [assistantDetail.ID],

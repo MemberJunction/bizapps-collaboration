@@ -10,6 +10,7 @@ import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClicka
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
+import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
 import { type CollaborationSettings, DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
@@ -3811,26 +3812,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
-            const res = await client.ExecuteSpaceChatTurn({
-                SpaceID: this.activeSpaceId,
-                ConversationID: request.ConversationId,
-                UserMessageID: request.UserMessageId,
-                AgentID: request.AgentId,
-                // The chat follows the run's live status from the reply row, as it does for any conversation's agent
-                Background: true,
-            });
-            return {
-                Success: res.Success,
-                ErrorMessage: res.ErrorMessage,
-                ReplyDetailIds: res.ReplyDetailIDs,
-                AgentRunId: res.AgentRunID,
-            };
+            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request)));
         } catch (error) {
             LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
-            return {
-                Success: false,
-                ErrorMessage: error instanceof Error ? error.message : 'The chat turn failed.',
-            };
+            return spaceTurnFailure(error);
         }
     };
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, EventEmitter, type Type } from '@angular/core';
+import { Component, ContentChild, EventEmitter, TemplateRef, type Type } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
@@ -254,23 +255,24 @@ describe('the dialogs, rendered', () => {
     }
   });
 
-  it('opens on the first field, on the marked control when there is one, and on a button in the body or actions, never the close button, when there is neither', () => {
-    vi.useFakeTimers();
+  it('opens on the first field, on the marked control when there is one, and on a button in the body or actions, never the close button, when there is neither', async () => {
+    // mj-dialog moves the focus on the microtask after its container is drawn
+    const settle = () => Promise.resolve();
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);
     convo.detectChanges();
-    vi.runAllTimers();
+    await settle();
     expect((document.activeElement as HTMLElement).id).toBe('convo-name');
     convo.destroy();
 
     const upload = TestBed.createComponent(CollabUploadDialogComponent);
     upload.detectChanges();
-    vi.runAllTimers();
+    await settle();
     expect((document.activeElement as HTMLElement).hasAttribute('data-autofocus')).toBe(true);
     upload.destroy();
 
     const share = TestBed.createComponent(CollabShareCheckDialogComponent);
     share.detectChanges();
-    vi.runAllTimers();
+    await settle();
     const active = document.activeElement as HTMLElement;
     expect(active.tagName).toBe('BUTTON');
     expect(active.getAttribute('aria-label')).not.toBe('Close dialog');
@@ -338,7 +340,7 @@ describe('the dialogs, rendered', () => {
     expect(document.activeElement).toBe(last);
   });
 
-  it('holds the trap from the container, where the focus starts: Tab goes to the first control, Shift+Tab to the last', async () => {
+  it('holds the trap from the container, where the focus starts: Shift+Tab wraps to the last control, and a plain Tab is left to the browser, which goes to the first', async () => {
     const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -348,8 +350,8 @@ describe('the dialogs, rendered', () => {
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('button'));
     expect(tabFrom(container, true).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(buttons[buttons.length - 1]);
-    expect(tabFrom(container).defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(buttons[0]);
+    // mj-dialog wraps only at the ends: from the container, the browser's own Tab already lands on the first control
+    expect(tabFrom(container).defaultPrevented).toBe(false);
   });
 
   it('keeps the focus on the dialog while a save has every control off, in the dialogs that open on a field', async () => {
@@ -384,6 +386,8 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
+  /** The header slot the space projects, drawn where MJ's chat area draws it, so a test can read the header's lock. */
+  @ContentChild(TemplateRef) public header?: TemplateRef<unknown>;
   public AllowRealtime = true;
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
@@ -395,7 +399,8 @@ class ChatAreaStub {
 }
 declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
-  template: '<ng-content></ng-content>',
+  imports: [NgTemplateOutlet],
+  template: '<ng-content></ng-content><ng-container *ngTemplateOutlet="header ?? null"></ng-container>',
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
     'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
@@ -753,6 +758,53 @@ describe('the conversation of a space, read-only', () => {
     const styles = (CollabSpaceChatComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('\n');
     expect(styles).not.toMatch(/::\S*deep\b/);
     expect(styles).not.toContain('message-input-container');
+  });
+
+  it("shows the header's lock over an open conversation too, with the reason as its label", async () => {
+    const note = 'You can read this conversation, but you have no seat that lets you post.';
+    const host = await render({ IsReadOnly: true, ReadOnlyNote: note });
+    const lock = host.querySelector<HTMLButtonElement>('.space-chat-header-slot .read-only-lock');
+    expect(lock?.tagName).toBe('BUTTON');
+    expect(lock?.getAttribute('title')).toBe(note);
+    expect(lock?.getAttribute('aria-label')).toBe(note);
+    expect(lock?.getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('.read-only-reason')).toBeNull();
+  });
+
+  it('shows the reason on focus, for a keyboard, and toggles it on a tap or click, for a touch screen, without a click after focus closing it', async () => {
+    const note = 'You can read this conversation, but you have no seat that lets you post.';
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', null);
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('IsReadOnly', true);
+    fixture.componentRef.setInput('ReadOnlyNote', note);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const lock = host.querySelector<HTMLButtonElement>('.read-only-lock')!;
+    const reason = () => host.querySelector('.read-only-reason')?.textContent?.trim() ?? null;
+    lock.dispatchEvent(new FocusEvent('focus'));
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    expect(lock.getAttribute('aria-expanded')).toBe('true');
+    // The click that follows the mouse-down that focused the lock keeps the reason open
+    lock.click();
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    // A second tap closes it, a third opens it again
+    lock.click();
+    fixture.detectChanges();
+    expect(reason()).toBeNull();
+    lock.click();
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    // Leaving the lock closes it
+    lock.dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+    expect(reason()).toBeNull();
+    expect(lock.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('shows no lock while it can be posted in, and says the space is closed unless told otherwise', async () => {
