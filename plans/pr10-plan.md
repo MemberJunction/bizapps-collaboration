@@ -172,6 +172,8 @@ Each item keeps its number. Paths are at `96a19b6`.
 
 Each stage is done when its checks in #8's plan pass, its items here are closed, and the push's comment shows it. A stage's data change is proposed in a comment before its migration, as the extensibility plan's § 3 asks.
 
+**Stage 1's design comment is in** ([the proposal](https://github.com/MemberJunction/bizapps-collaboration/pull/10#issuecomment-5906462452), [its review](https://github.com/MemberJunction/bizapps-collaboration/pull/10#issuecomment-5906758213)), and #8's plan § 13 records the five points it settled. Its migration follows once the review's items 142 to 149 are answered, Amith makes call 16, and stage 0 is done.
+
 ## 6. Meetings: a first-class app in bizapps-tasks
 
 Meetings and agendas are work, so they live in bizapps-tasks, where every app gets them (D33), and they're a first-class app there, not a corner of Committees (Amith, 2026-09-29; the plan's D52). **[The meetings plan](meetings-plan.md) is the design:** the entities down to their columns, the *Meetings* application in Explorer, calendar sync, the AI, the screens, the tests and what's done when. It's built in its own pull request in bizapps-tasks ([§ 3](#3-the-pull-requests-beside-this-one)).
