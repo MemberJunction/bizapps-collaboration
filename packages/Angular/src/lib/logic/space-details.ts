@@ -23,12 +23,20 @@ export class NewSpaceDraft {
     public readonly DetailFields: readonly DetailField[];
     /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
     public readonly FormSections: string[] | null;
+    /** The subtype the type attached to the space, when it names one. */
+    private readonly subtype: BaseEntity | null;
 
-    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, own: readonly DetailField[], sections: string[] | null) {
+    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, subtype: BaseEntity | null, own: readonly DetailField[], sections: string[] | null) {
         this.Space = space;
         this.Leaf = leaf;
+        this.subtype = subtype;
         this.DetailFields = own;
         this.FormSections = sections;
+    }
+
+    /** The form's sections once the type's UI driver has said which columns it hides: a section of only hidden columns is left out. */
+    public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
+        return this.subtype ? ownFormSections(this.subtype, hiddenFieldNames) : null;
     }
 
     /** Makes the draft for a type. A type with no subtype gives a plain space and no detail fields. */
@@ -46,7 +54,7 @@ export class NewSpaceDraft {
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];
-        return new NewSpaceDraft(space, leaf, own, attached ? ownFormSections(attached) : null);
+        return new NewSpaceDraft(space, leaf, attached, own, attached ? ownFormSections(attached) : null);
     }
 
     public get HasDetails(): boolean {
@@ -98,6 +106,11 @@ export class SpaceDetails {
         this.Leaf = leaf;
         this.Fields = fields;
         this.FormSections = sections;
+    }
+
+    /** The form's sections once the type's UI driver has said which columns it hides: a section of only hidden columns is left out. */
+    public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
+        return ownFormSections(this.Leaf, hiddenFieldNames);
     }
 
     /** Loads a space and returns its details, or null when the space is plain (its type names no subtype) or can't be read. */

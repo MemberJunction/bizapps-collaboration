@@ -16,7 +16,8 @@ export class mjBizAppsCollabExamplesExampleBoardFormComponent extends BaseFormCo
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'boardDetails', sectionName: 'Board Details', isExpanded: true }
+            { sectionKey: 'boardDetails', sectionName: 'Board Details', isExpanded: true },
+            { sectionKey: 'nextMeeting', sectionName: 'Next Meeting', isExpanded: true }
         ]);
     }
 }

@@ -2387,11 +2387,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             const details = await SpaceDetails.Load(this.ProviderToUse, user, space.ID);
             if (!isCurrent()) return;
-            const view = details && this.uiContext
+            const uiContext = this.uiContext;
+            // The driver's hidden columns decide which of the form's sections can be shown alone
+            const descriptor = details && uiContext ? this.detailsDescriptor(this.uiDriver, uiContext, details.Leaf.EntityInfo.Name) : undefined;
+            const view = details && uiContext
                 ? await planDetailsView({
                     fields: details.Fields,
-                    formSections: details.FormSections,
-                    descriptor: this.detailsDescriptor(this.uiDriver, this.uiContext, details.Leaf.EntityInfo.Name),
+                    formSections: details.FormSectionsHiding(descriptor?.hiddenFieldNames),
+                    descriptor,
                     hasForm: () => this.hasFormFor(details.Leaf),
                 })
                 : null;
@@ -3617,10 +3620,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const draft = await NewSpaceDraft.Start(this.ProviderToUse, user, type);
             const driver = this.uiDriverFor(type.UIDriverClass, type.Code, `a new ${type.Name} space`, `driver:new:${type.ID}`);
             const ctx: SpaceUIContext = { space: null, type, spaceTypeCode: type.Code, viewer: user, rules: structuredClone(DEFAULT_SPACE_RULES) };
+            const descriptor = draft.HasDetails ? this.detailsDescriptor(driver, ctx, draft.Leaf.EntityInfo.Name) : undefined;
             const view = await planDetailsView({
                 fields: draft.DetailFields,
-                formSections: draft.FormSections,
-                descriptor: draft.HasDetails ? this.detailsDescriptor(driver, ctx, draft.Leaf.EntityInfo.Name) : undefined,
+                // The driver's hidden columns decide which of the form's sections can be shown alone
+                formSections: draft.FormSectionsHiding(descriptor?.hiddenFieldNames),
+                descriptor,
                 hasForm: () => this.hasFormFor(draft.Leaf),
             });
             return { draft, view };

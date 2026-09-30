@@ -24,7 +24,7 @@
       "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Boards&Name=NextMeetingDate"
     },
     "fields": {
-      "Category": "Board Details",
+      "Category": "Next Meeting",
       "GeneratedFormSection": "Category",
       "AutoUpdateCategory": 0
     }
@@ -34,7 +34,7 @@
       "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Boards&Name=NextMeetingLocation"
     },
     "fields": {
-      "Category": "Board Details",
+      "Category": "Next Meeting",
       "GeneratedFormSection": "Category",
       "AutoUpdateCategory": 0
     }
