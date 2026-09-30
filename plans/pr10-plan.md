@@ -42,7 +42,7 @@
 
 There's no version pin for now (D39). The work runs in a local pnpm workspace where MemberJunction's `next` and the app repos sit side by side, so everything builds against MJ's latest source:
 1. **A plain parent folder of sibling clones:** MJ; bizapps-collaboration on this pull request's branch, `claude/hopeful-bell-6ldk4v`; bizapps-common; bizapps-tasks; bizapps-committees when [§ 9](#9-the-rest-of-the-plan)'s Committees work starts; and any other repo you change.
-2. **MJ's clone is on the branch of [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891),** `fix/core-defects-4836-4870`, until it merges into MJ `next`, and on `next` after that. Keep it at the branch's latest commit: the branch moves while it's reviewed, so pull it and rebuild MJ from the parent before each step. Any other MemberJunction fix this work needs goes on a branch of its own in the same clone ([§ 2.2](#22-the-rule)).
+2. **MJ's clone is on `next`,** at its latest commit. [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891) merged into it on 2026-09-30 (merge commit `d174331`), so the workspace leaves that pull request's branch. `next` moves, so pull it and rebuild MJ from the parent before each step. Any other MemberJunction fix this work needs goes on a branch of its own in the same clone ([§ 2.2](#22-the-rule)).
 3. **One workspace over them,** made by `mj dev workspace`, as [MJ's quickstart](https://github.com/MemberJunction/MJ/blob/next/guides/DEV_WORKSPACE_QUICKSTART.md) says: build MJ once, run the generator from the parent, and let it remove the members' own installs. Install and build only from the parent. Never install inside a member, and never hand-link packages.
 4. **No MJ pin, and no lockfile churn for it.** Leave the `@memberjunction/*` versions in every `package.json` as they are. When you add or change any other dependency, update this repo's own `pnpm-lock.yaml` from a standalone clone (`pnpm install --lockfile-only`), so CI's frozen install still passes.
 5. **A database of your own.** Two agents migrating or pushing metadata to one database break each other. Build it by [the database guide](../docs/building-the-database.md), and load the world by [the data guide](../docs/reviewing-the-data.md).
@@ -80,9 +80,9 @@ Each comes out with the MemberJunction fix it waits on. The tests that pinned th
 **Low, answered:** the widget starts MJ's status subscription through the Angular service's `initialize()` (`W/space-chat.component.ts:319-322`), as MJ's own workspace does (`conversation-workspace.component.ts:894`). That method isn't deprecated; the deprecated call is the runtime's `initialize()`, inside MJ's service. Nothing changes here.
 
 **The order:**
-1. **MJ#4891 lands in MJ `next`,** with all ten issues. It holds eight today, and the plan's author asks for [MJ#4884](https://github.com/MemberJunction/MJ/issues/4884) and [MJ#4885](https://github.com/MemberJunction/MJ/issues/4885) in it too (D48). Amith reviews and merges it.
-2. **While it's open,** take the workarounds out here against its branch in the workspace, and run both harnesses there.
-3. **Once it's in MJ `next`,** run both harnesses again on `next`.
+1. **MJ#4891 lands in MJ `next`,** with all ten issues, [MJ#4884](https://github.com/MemberJunction/MJ/issues/4884) and [MJ#4885](https://github.com/MemberJunction/MJ/issues/4885) included (D48). **Done:** Amith merged it on 2026-09-30 (merge commit `d174331`).
+2. **While it's open,** take the workarounds out here against its branch in the workspace, and run both harnesses there. The builder did this in `fa7df55`, `31f9697` and `911951c`, against the branch at `a16e982`.
+3. **Once it's in MJ `next`,** run both harnesses again on `next`. This is the step now.
 
 **Done when:**
 - none of the sites above is left: `git grep -nE "::ng-deep|dialog-base|CollabDialogBase" -- packages` finds nothing, no comment excuses a MemberJunction defect, and no doc describes a stopgap for one. A test that pins a fix may name its MJ issue;
@@ -92,7 +92,7 @@ Each comes out with the MemberJunction fix it waits on. The tests that pinned th
 
 | Repo | Pull request | What | Built by | Reviewed and merged by |
 |---|---|---|---|---|
-| MemberJunction | [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891) | The ten core fixes of D47 and D48 ([§ 2.3](#23-take-out-pr-9s-workarounds-122-and-123)) | The builder of D48 | The plan's author reviews; Amith reviews and merges |
+| MemberJunction | [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891) | The ten core fixes of D47 and D48 ([§ 2.3](#23-take-out-pr-9s-workarounds-122-and-123)) | The builder of D48 | The plan's author reviewed it; Amith merged it on 2026-09-30 (`d174331`) |
 | MemberJunction | [MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) | A14 to A19: properties on views and dashboards, bound action parameters, locked query parameters, calendars, and who a message is from | Colin (D36) | MJ's reviewers; Amith |
 | MemberJunction | One per item or group of [the plan's workstream A](plan.md#6-workstream-a-memberjunction-core) not in the two above | A1 to A13 ([§ 9](#9-the-rest-of-the-plan)), the urgent A12.1, A12.2 and A12.13 first | This pull request's builder, unless Amith names someone | The plan's author reviews; Amith merges |
 | bizapps-common | [bizapps-common#186](https://github.com/MemberJunction/bizapps-common/pull/186) | People's field-level security (item 32, D46) | Already written | Amith |
@@ -133,7 +133,7 @@ Each item keeps its number. Paths are at `96a19b6`.
 **Low:** `packages/IntegrationTests/src/world/load-world.ts:344` still says a closed space shows a banner.
 
 **The browser pass and the screenshots.** Amith gives the builder a tester account. Take the screenshots:
-- with the workspace's MJ on `next` after MJ#4891 is in it, so they show what merges;
+- with the workspace's MJ on `next`, so they show what merges;
 - as named users with seats: staff, and a seated client, with the real agent answering. A Developer who reads every space without a seat sees neither the composer nor Upload and New;
 - in light and dark where an item asks;
 - committed under `docs/screenshots/pr10/` with the Playwright script that takes them, and embedded in the push's comment.
@@ -279,6 +279,6 @@ The plan's § 11 also lists what Amith is to confirm in review.
 ## 14. Day one
 
 1. **Read,** in this order: this plan; [PR 9's final review](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5900284445); the plan's [§ 3.6](plan.md#36-decided-on-2026-09-29-8-merges-after-the-chat) to [§ 3.8](plan.md#38-decided-on-2026-09-29-pr-10-carries-the-rest) (D38 to D52); [PR 9's plan](pr9-plan.md) § 3; [the extensibility plan](../docs/EXTENSIBILITY_PLAN.md); [how the system works](../docs/HOW_THE_SYSTEM_WORKS.md); [the meetings plan](meetings-plan.md); and the repo's `CLAUDE.md`.
-2. **Set up the workspace** ([§ 2.1](#21-work-on-mj-next)), with MJ's clone on MJ#4891's branch at its latest commit.
+2. **Set up the workspace** ([§ 2.1](#21-work-on-mj-next)), with MJ's clone on `next` at its latest commit.
 3. **Build a database, load the world** from a purge, run both harnesses, and post the tallies and each package's `pnpm test` count as this pull request's first comment. They're the baseline every punch list compares against.
 4. **Start with [§ 2.3](#23-take-out-pr-9s-workarounds-122-and-123),** then the rest of stage 0.

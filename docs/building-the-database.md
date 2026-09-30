@@ -7,10 +7,9 @@ below is needed on a database built from nothing.
 
 - A pnpm workspace with MemberJunction and the app repos side by side, from MJ's
   [`DEV_WORKSPACE_QUICKSTART.md`](https://github.com/MemberJunction/MJ/blob/next/guides/DEV_WORKSPACE_QUICKSTART.md):
-  MJ, bizapps-common, bizapps-tasks and this repo, joined by `mj dev workspace`. MJ is on `next` with
-  [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891) in it; until that pull request merges, it's on its branch,
-  `fix/core-defects-4836-4870`, at the latest commit. Install and build **only from the parent folder**. Never run
-  `pnpm install` in a member, and never link a package by hand.
+  MJ, bizapps-common, bizapps-tasks and this repo, joined by `mj dev workspace`. MJ is on `next`, at its latest
+  commit. Install and build **only from the parent folder**. Never run `pnpm install` in a member, and never link a
+  package by hand.
 - **bizapps-common with People field-level security on.** The world's checks (FLS3) need
   `EnableFieldLevelSecurity` on `MJ_BizApps_Common: People`. It is set in common's
   `metadata/entities/.entities.json` on the branch of bizapps-common pull request 186, and on no other branch yet. Use that
