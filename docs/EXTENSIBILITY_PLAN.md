@@ -87,8 +87,11 @@ flowchart LR
 |---|---|
 | `metadata/` | Its `SpaceType` rows, with the driver keys, `SpaceExtensionEntity` and `Configuration`. Its allowed-agent rows, entity permissions and row-level security filters. |
 | `migrations/` | Its subtype tables, declared as IsA children of `Space` in its `codegen-schema-info.json`, with the CodeGen output. |
+| A shared package | The subtype entities' classes, listed under `packages.shared` in `mj-app.json`. The server and the client package import it, so loading either registers the subtypes. |
 | A server package | The server driver and the subtype entities' server classes, registered at module level and listed under `packages.server` in `mj-app.json`, which the installer adds to the host's `dynamicPackages.server`. |
 | A client package | The UI driver and its contributions, listed under `packages.client` in `mj-app.json`, with `"sideEffects": true` or a `Load*()` anchor. |
+
+Each package has one entry, which holds one tier: a host's class manifest imports every registered class from a package's entry, so an entry that mixes tiers puts browser code in the server's manifest. Each declares MJ, Angular and Collaboration's packages as peer dependencies with exact dev anchors, as Collaboration's own packages declare bizapps-common and bizapps-tasks, so a host keeps one copy of each: a driver registered against a second copy of Collaboration's base class is never found. The example types (§ 10.3) are split this way.
 
 Collaboration owns the engine, the base classes, its schema, and the default behavior every type gets when it names no driver.
 
@@ -658,12 +661,12 @@ The bizapps catalog's best second example is a room for a deal in bizapps-sales,
   | Cohort | A learning cohort or peer group | `RequestToJoin` | `Listed` | `Shared` | none |
 
   Each is a type row with a `Configuration`: which types it allows under it, generic labels, chat rules and the keys a space may override. None sets any other setting, so the app's defaults apply, and none names a driver. The sample world keeps its own copies of any type its checks need.
-- **Two example plug-ins,** in a private `packages/ExampleSpaceTypes` that ships nowhere, are to use every hook between them:
+- **Two example plug-ins,** in three private packages under `packages/ExampleSpaceTypes` that ship nowhere, split by tier as § 2 says a type ships, are to use every hook between them:
   - `example-board`, shaped like Committees: its own subtype table, rules for sub-spaces, a synced roster, tabs, cards and chips. It draws frame 08 in the gallery.
   - `example-room`, shaped like the deal room: a space opened for a record through `EnsureSpaceForRecord`, two synced rosters and a copied card.
   - `example-chapter` (the plan's B24, in stage 2 of [PR 10's plan](../plans/pr10-plan.md)): a Chapter entity with Members, a primary anchor, a data reach on Members, a granted view and dashboard with bound properties, a granted aggregate query, a granted action with a bound parameter, and sub-spaces of the same type and of another.
 - **Where they stand:** today they override every server hook and most UI hooks. `example-board` and `example-room` name their tables as subtypes (D42), so both are created through them. The room's `SyncSeats` passes through to the base, which isn't built, and nothing calls `EnsureSpaceForRecord` for it, so its roster sync and its record opening aren't exercised; its deal card is static. A third test type, `example-vault`, has no plug-ins. The type rows are in `metadata-tests/`, pushed with `pnpm run mj:push:tests`.
-- **Their tables** are in a test-only migration folder in that package (`migrations/`, schema `__mj_BizAppsCollabExamples`, each with its primary key as a foreign key to `Space`), and no host ever gets it. The package has its own CodeGen config with the IsA relationships in `codegen-schema-info.json`; the migration carries CodeGen's output, and `src/generated/` holds the entity classes and GraphQL resolvers (`./resolvers`, which a host that shows the example types must load). Their entity permissions are in `metadata-tests/entity-permissions/`, pushed first by `pnpm run mj:push:tests`.
+- **Their tables** are in a test-only migration folder beside those packages (`migrations/`, schema `__mj_BizAppsCollabExamples`, each with its primary key as a foreign key to `Space`), and no host ever gets it. The folder has its own CodeGen config with the IsA relationships in `codegen-schema-info.json`; the migration carries CodeGen's output, which writes the entity classes into the entities package, the GraphQL resolvers into the server package (named by its `RESOLVER_PATHS`, so a host that shows the example types must load that package) and the forms into the client package. Their entity permissions are in `metadata-tests/entity-permissions/`, pushed first by `pnpm run mj:push:tests`.
 - **They're private** because a shipped example type would show up in every host's New space list. Developers read them as the reference implementation, and the integration suite and the gallery load them.
 
 ## 11. Security rules for plug-ins

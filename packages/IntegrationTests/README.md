@@ -4,7 +4,7 @@ Collaboration's integration checks, and the sample world they run against.
 
 - **Private.** It's never published, and `mj-app.json` doesn't list it.
 - **Layer:** `runtime`.
-- **Depends on:** Collaboration's `core`, `entities`, `core-entities-server` and `example-space-types` packages from the workspace; MJ's `core`, `core-entities`, `global`, `generic-database-provider`, `graphql-dataprovider`, `sqlserver-dataprovider`, `api-keys`, `storage`, `testing-integration`, `ai-agents`, `ai-core-plus`, `ai-engine-base` and `search-engine`; bizapps-common's and bizapps-tasks' entity packages; and `mssql`.
+- **Depends on:** Collaboration's `core`, `entities` and `core-entities-server` packages, and the example types' `-entities` and `-server` packages, from the workspace; MJ's `core`, `core-entities`, `global`, `generic-database-provider`, `graphql-dataprovider`, `sqlserver-dataprovider`, `api-keys`, `storage`, `testing-integration`, `ai-agents`, `ai-core-plus`, `ai-engine-base` and `search-engine`; bizapps-common's and bizapps-tasks' entity packages; and `mssql`.
 
 ## What's in it
 
