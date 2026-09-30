@@ -16,6 +16,7 @@ import {
 } from '@memberjunction/ng-conversations';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -31,10 +32,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
+  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, SharedGenericModule],
   template: `
     <div class="chat-container">
-      @if (ConversationId && CurrentUser) {
+      @if (IsPending) {
+        <div class="chat-pending" role="status" aria-live="polite">
+          <mj-loading Size="small" [showText]="false"></mj-loading>
+        </div>
+      } @else if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
           [EnvironmentId]="EnvironmentId"
           [CurrentUser]="CurrentUser"
@@ -357,6 +362,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         top: 10px;
         right: 16px;
       }
+      .chat-pending {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        min-height: 120px;
+      }
     `,
   ],
 })
@@ -369,6 +381,8 @@ export class CollabSpaceChatComponent implements OnInit {
 
   /** The conversation can be read and not posted in: MJ's chat area takes `ReadOnly` and shows `ReadOnlyNote` where the composer was, and the header's lock says why. */
   @Input() public IsReadOnly = false;
+  /** The caller's seat is not known yet: neither a composer nor a note nor a lock, only a quiet wait, so nobody is told they can't post before the page knows. */
+  @Input() public IsPending = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
 
   /** The lock's reason is on screen: shown while the lock has focus, and toggled by a tap or a click. */

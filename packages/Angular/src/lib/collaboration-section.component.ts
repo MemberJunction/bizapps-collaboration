@@ -11,6 +11,7 @@ import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
+import { chatState, type ChatState } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
 import { type CollaborationSettings, DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
@@ -1018,7 +1019,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
-                                                    [IsReadOnly]="isSpaceClosed || !canContribute"
+                                                    [IsReadOnly]="chatStateNow.kind === 'closed' || chatStateNow.kind === 'noSeat'"
+                                                    [IsPending]="chatStateNow.kind === 'pending'"
                                                     [ReadOnlyNote]="chatReadOnlyNote"
                                                     [OutsideParticipantCount]="outsideParticipantCount"
                                                     [ConversationId]="activeConversationId"
@@ -1237,6 +1239,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
     /** The seat the caller reaches the current space through, once resolved; null until then or when they have none. */
     private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
+    /** The caller's seat on the current space has been resolved, whether or not they have one: kept apart from what it is. */
+    private seatKnown = false;
     /** The current space type's default band for new material and tasks: the Work tab's default while the seat is unresolved. */
     public typeDefaultBand: SpaceBand | null = null;
     /** The roles the caller's seat may hand out: the invite form and the role picker offer these, highest first. */
@@ -1260,6 +1264,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (!isCurrent()) return;
         this.bandChoice = choice;
         this.callerSeat = resolved;
+        this.seatKnown = true;
         this.typeDefaultBand = type?.DefaultBand ?? null;
         this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
     }
@@ -1832,11 +1837,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return roleType ? roleType.CanContribute : false;
     }
 
-    /** Why the conversation can't be posted in: a closed space, or a person with no seat that lets them post. */
+    /**
+     * The Chat tab's state, decided in one place (`logic/chat-state.ts`): closed, pending until the seat is known, no seat that
+     * lets them post, or open. The chat's `ReadOnly`, its note and its lock all follow it.
+     */
+    public get chatStateNow(): ChatState {
+        return chatState({ isClosed: this.isSpaceClosed, seatKnown: this.seatKnown, canContribute: this.canContribute, overList: !this.activeConversationId });
+    }
+
+    /** Why the conversation can't be posted in, or empty while it can or while the seat is not yet known. */
     public get chatReadOnlyNote(): string {
-        return this.isSpaceClosed
-            ? 'This space is closed. Conversations are read-only.'
-            : "You can read this conversation but can't post in it: you have no seat in this space that lets you post.";
+        const state = this.chatStateNow;
+        return state.kind === 'closed' || state.kind === 'noSeat' ? state.note : '';
     }
 
     public get discussionAudienceCount(): number {
@@ -2190,6 +2202,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceConversations = [];
         this.bandChoice = null;
         this.callerSeat = null;
+        this.seatKnown = false;
         this.typeDefaultBand = null;
         this.inviteOutcome = null;
 
