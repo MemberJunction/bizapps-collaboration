@@ -45,7 +45,7 @@ The server's write gates, the browser and the SQL function `fnCollaborationAcces
 pnpm --filter @mj-biz-apps/collaboration-core run build
 ```
 
-The build is `tsc`, into `dist/`. The tests use `node:test`: `rules`, `phase0`, `view-models`, `configuration`, `detail-fields` and `retrieval`, 146 tests in all. The root `pnpm test` runs all six. This package's own `test` script runs `rules.test.ts` only.
+The build is `tsc`, into `dist/`. The tests use `node:test`: `rules`, `phase0`, `view-models`, `configuration`, `detail-fields` and `retrieval`, 147 tests in all. The root `pnpm test` runs all six. This package's own `test` script runs `rules.test.ts` only.
 
 ## Not done yet
 

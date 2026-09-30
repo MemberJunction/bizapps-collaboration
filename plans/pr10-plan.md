@@ -111,12 +111,12 @@ Each item keeps its number. Paths are at `96a19b6`.
 
 **🟡 120: the board's About card shows the next meeting its driver hides.** A form ignores a driver's `hiddenFieldNames` (`packages/Angular/src/lib/logic/details-view.ts:38-40`), and the example board's generated form has one section holding all six of its columns, so the Overview shows the board's real next meeting beside the static next-meeting card, which says something else ([the note](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5897632418)).
 - **Fix:** treat a hidden column like one of the space's own: a form section that holds only hidden columns is left out, and a section that mixes hidden and shown columns means the field list. `subtypeFormSections` in Core already has that shape; give it the hidden names once the driver's descriptor is known. A required column is never hidden, as in `visibleDetailFields`. Give the next meeting's two columns a category of their own in `metadata-tests/entity-fields/`, so the board's form shows *Board Details* alone.
-- **Done when:** unit tests pin both rules, and the browser pass shows the board's form with its four other columns on New space, Settings' Details card and the About card.
+- **Done when:** unit tests pin both rules, and the browser pass shows the board's form with its four other columns on New space, Settings' Details card and the About card. **Code done** at `1153a62`; the browser pass is left.
 
 **🟡 121: until the seat is known, the chat tells everyone, owners included, that they can't post.** Opening a space clears the caller's seat, shows the tab, and only then resolves the seat again, so for a moment `canContribute` is false for everyone ([punch list 21](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5897893910)).
 - **Fix:** keep whether the seat is known apart from what it is. Decide the chat's state in one function under `logic/`, with a test per case: a closed space gets the closed note; before the seat is known, no composer and no note; a seat that can't post, or none, gets the no-seat note; otherwise the chat is open. Bind MJ's `ReadOnly` input ([§ 2.3](#23-take-out-pr-9s-workarounds-122-and-123)) and the lock to its answer.
 - **Lows:** the note says "this conversation", but the lock also shows over the list, where "this space's conversations" fits; name the lock's class for what it is now.
-- **Done when:** the function's cases pass, the page uses it, and the browser pass shows an owner switching spaces on the Chat tab with no note, and a reader with no seat seeing it.
+- **Done when:** the function's cases pass, the page uses it, and the browser pass shows an owner switching spaces on the Chat tab with no note, and a reader with no seat seeing it. **Code done** at `8114679`, with the two Lows; the browser pass is left, and a lookup that fails still reads as no seat (punch list 4's 139).
 
 **🟡 124: three deletions pass every test** ([the final review](https://github.com/MemberJunction/bizapps-collaboration/pull/9#issuecomment-5900284445)): the guard that keeps an observer's fault out of the turn (`packages/CoreEntitiesServer/src/execute-space-chat-turn.ts:346-352`), whose test runs where the call has already answered; the header lock's reason and label (`W/space-chat.component.ts:83`), since the tests render only the corner lock (`:115`); and the page's `Background: true` (`packages/Angular/src/lib/collaboration-section.component.ts:3820`). **Done when:** a test fails without each, or without what replaces it after 123. **Done** at `911951c`, in `execute-space-chat-turn.test.ts`, `render.test.ts` and `logic/agent-turn.test.ts`.
 
@@ -128,7 +128,7 @@ Each item keeps its number. Paths are at `96a19b6`.
 - dates by locale, with a year where it's needed, and no "Invalid Date";
 - two doc comments on the wrong member: `canSeeTeamSide`'s sits on `outsideParticipantCount`, and the rail has two on one member.
 - Where an MJ component can't do what a screen needs, the fix goes in MJ ([§ 2.2](#22-the-rule)).
-- **Done when:** none of those hand-built controls is left, a unit test covers the date formatter's locale and bad input, and a screenshot shows the rail and the tabs with one set of names.
+- **Done when:** none of those hand-built controls is left, a unit test covers the date formatter's locale and bad input, and a screenshot shows the rail and the tabs with one set of names. **Code done** at `6fdc8aa`; the screenshot is left.
 
 **Low:** `packages/IntegrationTests/src/world/load-world.ts:344` still says a closed space shows a banner.
 
