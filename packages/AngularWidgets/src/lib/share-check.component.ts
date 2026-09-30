@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { FindingModel, FileKind, RecipientPersonModel } from './types';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
@@ -14,7 +14,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     CollabAvatarComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
-    MJButtonDirective,
+    MJAlertComponent, MJButtonDirective,
   ],
   template: `
     <div class="m-h" [class.mj-dialog-titlebar]="Framed">
@@ -102,7 +102,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>Applied</span>
                   </span>
                 } @else {
-                  <button mjButton variant="secondary" size="sm" class="btn sm apply-btn" (click)="onApplyFix(fix)">
+                  <button type="button" mjButton variant="secondary" size="sm" class="apply-btn" (click)="onApplyFix(fix)">
                     <i class="fa-solid fa-check"></i>
                     <span>Apply</span>
                   </button>
@@ -113,15 +113,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
       } @else {
         @if (ReviewCompleted) {
-          <div class="no-findings-banner">
-            <i class="fa-solid fa-circle-check"></i>
-            <span>No policy findings</span>
-          </div>
+          <mj-alert class="no-findings" Variant="success" Message="No policy findings" />
         } @else {
-          <div class="no-findings-banner not-reviewed">
-            <i class="fa-solid fa-circle-info"></i>
-            <span>Not reviewed. No policy check has run on this item.</span>
-          </div>
+          <mj-alert class="no-findings" Variant="info" Message="Not reviewed. No policy check has run on this item." />
         }
       }
 
@@ -146,18 +140,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     @if (Framed) {
     <div class="m-f mj-dialog-actions">
       @if (Findings && Findings.length > 0) {
-        <button mjButton variant="primary" class="btn primary" (click)="onApplyAndShare()">
+        <button type="button" mjButton variant="primary" (click)="onApplyAndShare()">
           <i class="fa-solid fa-check"></i>
           <span>{{ primaryButtonText }}</span>
         </button>
-        <button mjButton variant="secondary" class="btn" (click)="onShareAsIs()">Share as is</button>
+        <button type="button" mjButton variant="secondary" (click)="onShareAsIs()">Share as is</button>
       } @else {
-        <button mjButton variant="primary" class="btn primary" (click)="onShareAsIs()">
+        <button type="button" mjButton variant="primary" (click)="onShareAsIs()">
           <i class="fa-solid fa-share"></i>
           <span>Share</span>
         </button>
       }
-      <button mjButton variant="flat" class="btn ghost cancel-btn" (click)="onCancel()">Cancel</button>
+      <button type="button" mjButton variant="flat" class="cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
     }
   `,
@@ -254,23 +248,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
     }
 
-    .no-findings-banner {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: var(--mj-bg-surface-sunken);
-      border: 1px solid var(--mj-border-default);
-      border-radius: 8px;
-      font-size: 13px;
-      color: var(--mj-text-secondary);
-      margin-bottom: 16px;
-
-      i {
-        color: var(--mj-status-success);
-        font-size: 15px;
-      }
-    }
 
     .review {
       border: 1px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
@@ -432,51 +409,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
     .cancel-btn {
       margin-left: auto;
-    }
-
-    .btn {
-      min-height: 44px;
-      height: 44px;
-      padding: 0 20px;
-      border-radius: var(--mj-radius-md);
-      border: 1px solid var(--mj-border-default);
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-
-      &.sm {
-        min-height: 32px;
-        height: 33.5px;
-        padding: 0 12px;
-        font-size: 13px;
-        gap: 6px;
-      }
-
-      &.primary {
-        background: var(--mj-brand-primary);
-        color: var(--mj-brand-on-primary);
-        border: 0;
-
-        &:hover {
-          background: var(--mj-brand-primary-hover);
-        }
-      }
-
-      &.ghost {
-        background: transparent;
-        border: 0;
-        color: var(--mj-text-secondary);
-
-        &:hover {
-          background: var(--mj-bg-surface-hover);
-        }
-      }
     }
 
     .row {

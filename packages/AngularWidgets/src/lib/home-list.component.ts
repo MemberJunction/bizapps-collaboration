@@ -30,9 +30,9 @@ export interface HomeListRow {
     <section class="hl" [attr.aria-labelledby]="'hl-title-' + Id">
       <header class="hl-head">
         <h2 class="hl-title" [id]="'hl-title-' + Id">{{ Title }}</h2>
-        <button type="button" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
+        <button type="button" mjButton variant="icon" size="sm" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
       </header>
       @if (IsLoading) {
         <div class="hl-state" role="status"><mj-loading Size="small" [showText]="false"></mj-loading> <span>Reading…</span></div>
@@ -92,17 +92,6 @@ export interface HomeListRow {
         margin: 0;
         font-size: 14px;
         font-weight: 700;
-      }
-      .hl-close {
-        border: none;
-        background: transparent;
-        color: var(--mj-text-secondary);
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 6px;
-      }
-      .hl-close:hover {
-        background: var(--mj-bg-surface-hover);
       }
       .hl-rows {
         list-style: none;

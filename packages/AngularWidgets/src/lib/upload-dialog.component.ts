@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -30,6 +31,8 @@ export interface CollabUploadSubmitPayload {
     FormsModule,
     MJButtonDirective,
     MJDialogComponent,
+    MJTabNavComponent,
+    SharedGenericModule,
     MJDialogActionsComponent,
     CollabBandChipComponent,
     CollabFileIconComponent,
@@ -41,30 +44,7 @@ export interface CollabUploadSubmitPayload {
 
         <!-- Segmented Tab switcher -->
         @if (AllowLinks) {
-          <div class="tab-strip" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              class="tab-btn"
-              [class.active]="activeMode === 'upload'"
-              [attr.aria-selected]="activeMode === 'upload'"
-              (click)="setMode('upload')"
-            >
-              <i class="fa-solid fa-arrow-up-from-bracket"></i>
-              <span>Upload file</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              class="tab-btn"
-              [class.active]="activeMode === 'link'"
-              [attr.aria-selected]="activeMode === 'link'"
-              (click)="setMode('link')"
-            >
-              <i class="fa-solid fa-link"></i>
-              <span>Link cloud doc</span>
-            </button>
-          </div>
+          <mj-tab-nav class="mode-tabs" [Tabs]="modeTabs" [ActiveKey]="activeMode" (TabChange)="setMode($event === 'link' ? 'link' : 'upload')" />
         }
 
         <div class="d-body">
@@ -107,8 +87,8 @@ export interface CollabUploadSubmitPayload {
                     <span class="file-name ellipsis">{{ selectedFile.name }}</span>
                     <span class="file-size">{{ formatBytes(selectedFile.size) }}</span>
                   </div>
-                  <button type="button" class="btn-clear" (click)="clearFile()" title="Remove file">
-                    <i class="fa-solid fa-trash-can"></i>
+                  <button type="button" mjButton variant="icon" size="sm" (click)="clearFile()" title="Remove file" ariaLabel="Remove file">
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                   </button>
                 </div>
               }
@@ -227,7 +207,7 @@ export interface CollabUploadSubmitPayload {
             [disabled]="!canSubmit || IsSubmitting"
           >
             @if (IsSubmitting) {
-              <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+              <mj-loading Size="small" [showText]="false"></mj-loading> Saving...
             } @else {
               <i [class]="activeMode === 'upload' ? 'fa-solid fa-arrow-up-from-bracket' : 'fa-solid fa-link'"></i>
               {{ activeMode === 'upload' ? 'Upload file' : 'Link document' }}
@@ -252,33 +232,6 @@ export interface CollabUploadSubmitPayload {
       font-size: 12.5px;
       color: var(--mj-text-muted, #64748b);
       line-height: 1.4;
-    }
-    .tab-strip {
-      display: flex;
-      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
-      padding: 0 20px;
-      gap: 8px;
-    }
-    .tab-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      font-size: 13px;
-      font-weight: 600;
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--mj-text-secondary, #475569);
-      cursor: pointer;
-      margin-bottom: -1px;
-    }
-    .tab-btn.active {
-      color: var(--mj-brand-primary, #0076b6);
-      border-bottom-color: var(--mj-brand-primary, #0076b6);
-      background: var(--mj-bg-surface-card, #ffffff);
-      border-radius: 6px 6px 0 0;
     }
     .d-body {
       display: flex;
@@ -399,18 +352,6 @@ export interface CollabUploadSubmitPayload {
       font-size: 11.5px;
       color: var(--mj-text-muted, #64748b);
     }
-    .btn-clear {
-      background: transparent;
-      border: none;
-      color: var(--mj-text-muted, #94a3b8);
-      cursor: pointer;
-      padding: 6px;
-      border-radius: 4px;
-    }
-    .btn-clear:hover {
-      color: var(--mj-status-error);
-      background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
-    }
     .band-options {
       display: flex;
       flex-direction: column;
@@ -481,6 +422,11 @@ export class CollabUploadDialogComponent {
   @Output() SubmitRequested = new EventEmitter<CollabUploadSubmitPayload>();
 
   public activeMode: 'upload' | 'link' = 'upload';
+  /** The two ways to add a document, as the dialog's tabs. */
+  public readonly modeTabs: TabConfig[] = [
+    { key: 'upload', label: 'Upload file', icon: 'fa-solid fa-arrow-up-from-bracket' },
+    { key: 'link', label: 'Link cloud doc', icon: 'fa-solid fa-link' },
+  ];
   public selectedFile: File | null = null;
   public linkUrl = '';
   public docTitle = '';

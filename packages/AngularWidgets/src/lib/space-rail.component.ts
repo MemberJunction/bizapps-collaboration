@@ -1,7 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, Output, OnInit, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LogError } from '@memberjunction/core';
-import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { CollabTypeTileComponent } from './type-tile.component';
@@ -26,7 +26,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
 @Component({
   selector: 'mjc-space-rail',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent, CollabBandChipComponent, MJClickableDirective],
+  imports: [CommonModule, CollabTypeTileComponent, CollabBandChipComponent, MJButtonDirective, MJClickableDirective],
   template: `
     @if (Mode === 'space') {
       <!-- Space-Dedicated Workspace Rail (Option A) -->
@@ -51,7 +51,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
             <div class="space-identity-left">
               <button
                 type="button"
-                class="btn-back-spaces"
+                mjButton variant="flat" size="sm" class="btn-back-spaces"
                 (click)="onBackToSpaces()"
                 title="Back to all spaces">
                 <i class="fa-solid fa-arrow-left"></i>
@@ -80,7 +80,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
 
           <button
             type="button"
-            class="btn-nav-toggle"
+            mjButton variant="icon" size="sm" class="btn-nav-toggle"
             (click)="toggleCollapse()"
             [title]="isCollapsed ? 'Expand navigation' : 'Collapse navigation'">
             <i class="fa-solid" [class]="isCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
@@ -129,7 +129,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                 @if (CanStartConversation) {
                   <button
                     type="button"
-                    class="btn-add-section"
+                    mjButton variant="icon" size="sm" class="btn-add-section"
                     (click)="onNewConversation()"
                     title="New Conversation"
                     aria-label="New Conversation">
@@ -142,7 +142,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                 <div class="collapsed-add-row">
                   <button
                     type="button"
-                    class="btn-collapsed-add"
+                    mjButton variant="icon" size="sm" class="btn-collapsed-add"
                     (click)="onNewConversation()"
                     title="New Conversation"
                     aria-label="New Conversation">
@@ -248,7 +248,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
           @if (CanCreateSpace) {
             <button
               type="button"
-              class="icon-btn-inline"
+              mjButton variant="icon" size="sm" class="icon-btn-inline"
               (click)="SpaceCreateRequested.emit()"
               title="New Space"
               aria-label="New Space">
@@ -388,23 +388,10 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       flex: 1;
     }
 
-    .btn-back-spaces {
-      background: transparent;
-      border: none;
-      color: var(--mj-text-muted, #64748b);
-      font-size: 11.5px;
-      font-weight: 600;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0;
-      text-align: left;
-      transition: color 0.15s ease;
-    }
-    .btn-back-spaces:hover {
-      color: var(--mj-brand-primary, #0076b6);
-    }
+
+    /* MJ's buttons draw these controls; only their place in the rail is set here */
+    .btn-back-spaces { align-self: flex-start; padding-left: 0; }
+    .btn-nav-toggle { flex-shrink: 0; }
 
     .space-title-row {
       display: flex;
@@ -448,25 +435,6 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       text-overflow: ellipsis;
     }
 
-    .btn-nav-toggle {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--mj-text-muted, #94a3b8);
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-grid;
-      place-items: center;
-      font-size: 11px;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
-    .btn-nav-toggle:hover {
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
-      border-color: var(--mj-border-strong, #cbd5e1);
-    }
 
     .space-nav-body {
       flex: 1;
@@ -507,47 +475,11 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       padding: 0;
     }
 
-    .btn-add-section {
-      background: transparent;
-      border: none;
-      color: var(--mj-text-muted, #94a3b8);
-      cursor: pointer;
-      font-size: 11px;
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-      transition: all 0.15s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .btn-add-section:hover {
-      color: var(--mj-text-primary, #0f172a);
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-    }
 
     .collapsed-add-row {
       display: flex;
       justify-content: center;
       padding: 4px 0;
-    }
-    .btn-collapsed-add {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      background: transparent;
-      border: 1px dashed var(--mj-text-muted);
-      color: var(--mj-text-secondary, #475569);
-      cursor: pointer;
-      display: inline-grid;
-      place-items: center;
-      font-size: 12px;
-      transition: all 0.15s ease;
-    }
-    .btn-collapsed-add:hover {
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-      color: var(--mj-text-primary, #0f172a);
-      border-color: var(--mj-brand-primary, #0076b6);
     }
 
     .nav-links-list {
@@ -761,18 +693,6 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       text-transform: uppercase;
       color: var(--mj-text-muted);
     }
-    .icon-btn-inline {
-      border: none;
-      background: none;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 4px;
-    }
-    .icon-btn-inline:hover {
-      color: var(--mj-text-primary);
-      background: var(--mj-bg-surface-sunken);
-    }
     .tree-list {
       flex: 1 1 auto;
       overflow-y: auto;
@@ -889,7 +809,7 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() InboxCount = 0;
   @Input() Spaces: RailSpaceNode[] = [];
   @Input() CanStartConversation = false;
-  /** The new-space dialog isn't built yet, so the + is offered only when a host provides one. */
+  /** The + that starts a space is offered only to someone the host says may start one. */
   @Input() CanCreateSpace = false;
 
   @Output() NavSelectRequested = new EventEmitter<string>();

@@ -3,6 +3,7 @@ import { LogError } from '@memberjunction/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceMemberModel } from './types';
+import { MJButtonDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -11,7 +12,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-people',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent, CollabAvatarComponent, CollabBandChipComponent],
   template: `
     <div class="people-container">
       <!-- Summary metrics header -->
@@ -45,35 +46,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             placeholder="Search people by name or email..."
             aria-label="Search people by name or email"
             [(ngModel)]="SearchQuery"
-            class="search-input"
+            class="mj-input search-input"
           />
         </div>
 
-        <div class="filter-group">
-          <button
-            class="pill-btn"
-            [class.active]="audienceFilter === 'all'"
-            (click)="audienceFilter = 'all'"
-          >All</button>
+        <div class="filter-group" role="group" aria-label="Audience">
+          <mj-filter-chip Label="All" [Active]="audienceFilter === 'all'" (Clicked)="audienceFilter = 'all'" />
           @if (CanSeeTeamSide) {
-            <button
-              class="pill-btn"
-              [class.active]="audienceFilter === 'Team'"
-              (click)="audienceFilter = 'Team'"
-            >Team</button>
+            <mj-filter-chip Label="Team" [Active]="audienceFilter === 'Team'" (Clicked)="audienceFilter = 'Team'" />
           }
-          <button
-            class="pill-btn"
-            [class.active]="audienceFilter === 'Shared'"
-            (click)="audienceFilter = 'Shared'"
-          >Outside / Shared</button>
+          <mj-filter-chip Label="Outside / Shared" [Active]="audienceFilter === 'Shared'" (Clicked)="audienceFilter = 'Shared'" />
         </div>
 
         <div class="spacer"></div>
 
         @if (CanInvite) {
-          <button class="invite-btn" (click)="ToggleInviteForm()">
-            <i class="fa-solid fa-user-plus"></i>
+          <button type="button" mjButton variant="primary" size="sm" (click)="ToggleInviteForm()">
+            <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
             <span>Invite person</span>
           </button>
         }
@@ -84,12 +73,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>{{ InviteOutcome!.message }}</span>
           @if (RedemptionUrl) {
             <input type="text" class="invite-link" readonly [value]="RedemptionUrl" aria-label="Sign-in link" />
-            <button type="button" class="cancel-invite-btn copy-link-btn" (click)="CopyLink()">{{ LinkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
+            <button type="button" mjButton variant="flat" size="sm" class="copy-link-btn" (click)="CopyLink()">{{ LinkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
             @if (LinkStatus() === 'failed') {
               <span class="invite-outcome-error" role="alert">Couldn't copy the link. Select it and copy it.</span>
             }
           }
-          <button type="button" class="cancel-invite-btn" (click)="DismissInviteOutcome()">Dismiss</button>
+          <button type="button" mjButton variant="flat" size="sm" (click)="DismissInviteOutcome()">Dismiss</button>
         </div>
       }
 
@@ -103,22 +92,28 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               placeholder="Email address..."
               aria-label="Email address"
               [(ngModel)]="inviteEmail"
-              class="invite-input"
+              class="mj-input invite-input"
             />
-            <select [(ngModel)]="inviteRole" class="invite-select" aria-label="Role">
-              @for (option of RoleOptions; track option.code) {
-                <option [value]="option.code">{{ option.label }}</option>
-              }
-            </select>
+            <mj-dropdown
+              class="invite-role"
+              AriaLabel="Role"
+              [Data]="RoleOptions"
+              TextField="label"
+              ValueField="code"
+              [ValuePrimitive]="true"
+              [(ngModel)]="inviteRole" />
             <button
-              class="send-invite-btn"
+              type="button"
+              mjButton
+              variant="primary"
+              size="sm"
               [disabled]="!inviteEmail.trim() || IsSendingInvite"
               [attr.aria-busy]="IsSendingInvite"
               (click)="submitInvite()"
             >
               {{ IsSendingInvite ? 'Sending…' : 'Send Invite' }}
             </button>
-            <button class="cancel-invite-btn" [disabled]="IsSendingInvite" (click)="CancelInvite()">
+            <button type="button" mjButton variant="flat" size="sm" [disabled]="IsSendingInvite" (click)="CancelInvite()">
               Cancel
             </button>
           </div>
@@ -143,11 +138,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="table-body">
           @if (FilteredMembers.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-user-group empty-ic"></i>
-              <div class="empty-title">No members match your filter</div>
-              <div class="empty-sub">Try changing your search term or audience filter.</div>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-user-group" Title="No members match your filter" Message="Try changing your search term or audience filter." Size="compact" />
           } @else {
             @for (m of FilteredMembers; track m.id) {
               <div class="member-row">
@@ -167,15 +158,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                       <span class="person-source">
                         Their own seat here is {{ m.ownSeat.status }}
                         @if (m.ownSeat.canApprove && Pending?.id !== m.ownSeat.id) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
+                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
                         }
                         @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && Pending?.id !== m.ownSeat.id) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
+                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
                         }
                         @if (Pending?.id === m.ownSeat.id) {
                           {{ PendingQuestion(OwnSeatOf(m)) }}
-                          <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                          <button type="button" class="cancel-invite-btn" (click)="Pending = null">Cancel</button>
+                          <button type="button" mjButton variant="primary" size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
+                          <button type="button" mjButton variant="flat" size="sm" (click)="Pending = null">Cancel</button>
                         }
                       </span>
                     }
@@ -208,21 +199,25 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
                       @if (Pending?.id === m.id) {
                         <span class="fs12">{{ PendingQuestion(m) }}</span>
-                        <button type="button" class="send-invite-btn" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                        <button type="button" class="cancel-invite-btn" (click)="Pending = null">Cancel</button>
+                        <button type="button" mjButton variant="primary" size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" mjButton variant="flat" size="sm" (click)="Pending = null">Cancel</button>
                       } @else {
                         @if (m.canApprove) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
+                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
                         }
                         @if (m.canChangeRole && RoleOptions.length > 0) {
-                          <select class="invite-select role-select" [attr.aria-label]="'Change role for ' + m.name" [ngModel]="m.roleCode" (ngModelChange)="AskRole(m, $event)">
-                            @for (option of RoleChoicesFor(m); track option.code) {
-                              <option [value]="option.code">{{ option.label }}</option>
-                            }
-                          </select>
+                          <mj-dropdown
+                            class="role-select"
+                            [AriaLabel]="'Change role for ' + m.name"
+                            [Data]="RoleChoicesFor(m)"
+                            TextField="label"
+                            ValueField="code"
+                            [ValuePrimitive]="true"
+                            [ngModel]="m.roleCode"
+                            (ngModelChange)="AskRole(m, $event)" />
                         }
                         @if (m.canRemove) {
-                          <button type="button" class="cancel-invite-btn" [attr.aria-label]="(m.status === 'Invited' ? 'Withdraw the seat of ' : 'Remove ') + m.name" (click)="Ask(m, 'remove')">{{ m.status === 'Invited' ? 'Withdraw' : 'Remove' }}</button>
+                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="(m.status === 'Invited' ? 'Withdraw the seat of ' : 'Remove ') + m.name" (click)="Ask(m, 'remove')">{{ m.status === 'Invited' ? 'Withdraw' : 'Remove' }}</button>
                         }
                       }
                     }
@@ -293,56 +288,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-text-muted, #94a3b8);
         font-size: 13px;
       }
+      /* MJ's .mj-input draws the field; this keeps room for the search icon and a width */
       .search-input {
-        padding: 7px 12px 7px 32px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 6px;
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-primary, #0f172a);
-        outline: none;
+        padding-left: 32px;
         width: 240px;
       }
       .filter-group {
         display: flex;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        padding: 3px;
-        border-radius: 6px;
-        gap: 2px;
-      }
-      .pill-btn {
-        border: none;
-        background: transparent;
-        padding: 5px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        border-radius: 4px;
-        color: var(--mj-text-secondary, #64748b);
-        cursor: pointer;
-      }
-      .pill-btn.active {
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-primary, #0f172a);
-        box-shadow: var(--mj-shadow-sm);
+        gap: 6px;
       }
       .spacer { flex: 1 1 auto; }
-      .invite-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse);
-        border: none;
-        padding: 7px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .invite-btn:hover {
-        background: var(--mj-brand-primary-hover, #005a8c);
-      }
 
       .invite-form-card {
         background: var(--mj-bg-surface, #ffffff);
@@ -367,32 +322,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
       .invite-input {
         flex: 1 1 200px;
-        padding: 6px 10px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 4px;
-        outline: none;
       }
-      .invite-select {
-        padding: 6px 10px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 4px;
-        background: var(--mj-bg-surface, #ffffff);
-      }
-      .send-invite-btn {
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse);
-        border: none;
-        padding: 6px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .send-invite-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+      .invite-role {
+        min-width: 160px;
       }
       .invite-outcome {
         margin-top: 8px;
@@ -412,14 +344,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         border: 1px solid var(--mj-border-default);
         border-radius: var(--mj-radius-md);
         background: var(--mj-bg-surface);
-      }
-      .cancel-invite-btn {
-        background: transparent;
-        border: none;
-        color: var(--mj-text-secondary, #64748b);
-        padding: 6px 10px;
-        font-size: 13px;
-        cursor: pointer;
       }
 
       .members-card {
@@ -515,28 +439,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-text-secondary, #64748b);
       }
 
-      .empty-state {
-        padding: 48px 24px;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-      }
-      .empty-ic {
-        font-size: 32px;
-        color: var(--mj-text-muted, #cbd5e1);
-        margin-bottom: 4px;
-      }
-      .empty-title {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--mj-text-primary, #0f172a);
-      }
-      .empty-sub {
-        font-size: 13px;
-        color: var(--mj-text-secondary, #64748b);
-      }
     `,
   ],
 })

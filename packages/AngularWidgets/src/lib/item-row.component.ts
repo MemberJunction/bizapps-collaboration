@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJClickableDirective } from '@memberjunction/ng-ui-components';
 import type { FileKind, ItemRowModel } from './types';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -8,7 +8,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-item-row',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabFileIconComponent, MJClickableDirective],
+  imports: [CollabFileIconComponent, MJButtonDirective, MJClickableDirective],
   template: `
     <div class="trow" (click)="onSelect()">
       <!-- The keyboard control is this block, not the whole row: the Share button beside it is a control of its own -->
@@ -29,7 +29,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <span class="chip plain">{{ StatusLabel }}</span>
       }
       @if (CanShare) {
-        <button type="button" class="btn sm share-btn" (click)="onShareClick($event)">
+        <button type="button" mjButton variant="secondary" size="sm" class="share-btn" (click)="onShareClick($event)">
           <i class="fa-solid fa-share-from-square"></i>
           <span>Share…</span>
         </button>
@@ -81,30 +81,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       vertical-align: middle;
     }
 
-    .share-btn {
-      color: var(--mjc-shared, #0284c7);
-      border-color: var(--mjc-shared-border, #bae6fd);
-      background: var(--mj-bg-surface-sunken, #f0f9ff);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      min-height: 32px;
-      border-radius: var(--mj-radius-md, 8px);
-      border: 1px solid var(--mjc-shared-border, #bae6fd);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      cursor: pointer;
-
-      i {
-        color: var(--mjc-shared, #0284c7);
-        font-size: 13px;
-      }
-
-      &:hover {
-        background: var(--mjc-shared-bg, #e0f2fe);
-      }
-    }
 
     .chip {
       display: inline-flex;

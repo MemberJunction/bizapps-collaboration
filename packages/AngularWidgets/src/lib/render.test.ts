@@ -595,7 +595,7 @@ describe('A space\'s own details, rendered', () => {
     buttonNamed(host, 'Discard changes')!.click();
     expect(fixture.componentInstance.saved).toHaveBeenCalledTimes(1);
     expect(fixture.componentInstance.discarded).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('.alert-success')?.textContent).toContain('Details saved.');
+    expect(host.querySelector('mj-alert.details-outcome')?.textContent).toContain('Details saved.');
     const failed = await renderSettings({ error: 'Quorum must be between 1 and 100.' });
     expect((failed.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain('Quorum must be between 1 and 100.');
   });

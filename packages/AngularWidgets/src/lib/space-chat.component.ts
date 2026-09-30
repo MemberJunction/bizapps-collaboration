@@ -15,7 +15,7 @@ import {
   type AgentTurnHandler,
 } from '@memberjunction/ng-conversations';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -32,7 +32,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, SharedGenericModule],
+  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
   template: `
     <div class="chat-container">
       @if (IsPending) {
@@ -147,40 +147,13 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               }
             </span>
           }
-          <div class="empty-icon-wrap">
-            <i class="fa-solid fa-comments"></i>
-          </div>
-          @if (HasConversations) {
-            <h3 class="empty-title">Select a Conversation</h3>
-            <p class="empty-desc">
-              @if (CanStartConversation) {
-                Choose a conversation from the space sidebar or start a new one.
-              } @else {
-                Choose a conversation from the space sidebar to read it.
-              }
-            </p>
-          } @else {
-            <h3 class="empty-title">No conversations yet</h3>
-            <p class="empty-desc">
-              @if (CanStartConversation) {
-                Start a new conversation to begin collaborating.
-              } @else {
-                There are no conversations in this space.
-              }
-            </p>
-          }
-          @if (CanStartConversation && !IsReadOnly) {
-            <button
-              type="button"
-              mjButton
-              variant="primary"
-              size="md"
-              class="btn-new-convo"
-              (click)="onNewConversation()">
-              <i class="fa-solid fa-plus"></i>
-              <span>New Conversation</span>
-            </button>
-          }
+          <mj-empty-state
+            Icon="fa-solid fa-comments"
+            [Title]="HasConversations ? 'Select a Conversation' : 'No conversations yet'"
+            [Message]="emptyMessage"
+            [ActionText]="CanStartConversation && !IsReadOnly ? 'New Conversation' : ''"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="onNewConversation()" />
         </div>
       }
     </div>
@@ -276,33 +249,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         text-align: center;
       }
 
-      .empty-icon-wrap {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        display: grid;
-        place-items: center;
-        font-size: 26px;
-        color: var(--mj-brand-primary, #0076b6);
-        margin-bottom: 16px;
-      }
 
-      .empty-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
-        margin-bottom: 6px;
-      }
 
-      .empty-desc {
-        max-width: 420px;
-        font-size: 13.5px;
-        color: var(--mj-text-secondary, #64748b);
-        line-height: 1.5;
-        margin-bottom: 20px;
-      }
 
       .btn-new-convo-header {
         display: inline-flex;
@@ -310,11 +258,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         gap: 6px;
       }
 
-      .btn-new-convo {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
 
       /* A conversation that can't be posted in says why from a lock, not a banner that takes a row: on hover, and, since a
          keyboard has no hover and a touch screen no pointer, on focus and on tap, from a button that shows the reason beside it */
@@ -384,6 +327,12 @@ export class CollabSpaceChatComponent implements OnInit {
   /** The caller's seat is not known yet: neither a composer nor a note nor a lock, only a quiet wait, so nobody is told they can't post before the page knows. */
   @Input() public IsPending = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
+
+  /** What the empty conversation area says, for someone who may start a conversation and for someone who may only read. */
+  public get emptyMessage(): string {
+    if (this.HasConversations) return this.CanStartConversation ? 'Choose a conversation from the space sidebar or start a new one.' : 'Choose a conversation from the space sidebar to read it.';
+    return this.CanStartConversation ? 'Start a new conversation to begin collaborating.' : 'There are no conversations in this space.';
+  }
 
   /** The lock's reason is on screen: shown while the lock has focus, and toggled by a tap or a click. */
   public ReasonShown = false;
