@@ -875,6 +875,44 @@ describe('the conversation of a space, read-only', () => {
     host.remove();
   });
 
+  it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const chats = [1, 2].map(() => {
+      const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+      fixture.componentRef.setInput('ConversationId', null);
+      fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+      fixture.componentRef.setInput('IsReadOnly', true);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(host);
+      return { fixture, host, lock: host.querySelector<HTMLButtonElement>('.read-only-lock')!, wrap: host.querySelector<HTMLElement>('.read-only-lock-wrap')! };
+    });
+    const shown = (chat: (typeof chats)[number]) => chat.host.querySelector('.read-only-reason') !== null;
+    const draw = () => chats.forEach((chat) => chat.fixture.detectChanges());
+
+    // The first chat's reason opens by a pointer's click on its lock
+    chats[0].lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[0])).toBe(true);
+
+    // A tap inside the second chat's lock, beside its button, is outside the first chat: the first's reason closes
+    chats[1].wrap.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[0])).toBe(false);
+
+    // The same tap beside the second chat's own lock leaves its reason open
+    chats[1].lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[1])).toBe(true);
+    chats[1].wrap.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[1])).toBe(true);
+    expect(shown(chats[0])).toBe(false);
+    chats.forEach((chat) => chat.host.remove());
+  });
+
   it('shows no lock while it can be posted in, and says the space is closed unless told otherwise', async () => {
     expect((await render({ ConversationId: null })).querySelector('.read-only-lock')).toBeNull();
     expect((await render({ IsReadOnly: true, ConversationId: null })).querySelector('.read-only-lock')?.getAttribute('title')).toContain('This space is closed.');

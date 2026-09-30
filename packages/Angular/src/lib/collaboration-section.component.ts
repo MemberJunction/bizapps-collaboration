@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -1868,6 +1868,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return state.kind === 'closed' || state.kind === 'noSeat' || state.kind === 'seatUnknown' ? state.note : '';
     }
 
+    private readonly changeDetector = inject(ChangeDetectorRef);
+
     /** The seat lookup failed and is tried again, for the space still shown. */
     public async onRetrySeatLookup(): Promise<void> {
         const space = this.activeSpaceRecord;
@@ -1876,6 +1878,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.seatLookup = 'pending';
         await this.updateBandChoice(space, () => UUIDsEqual(this.activeSpaceId, spaceId));
         await this.updateCanConfigureCurrentSpace();
+        // The section is OnPush: what the lookup set after its awaits is drawn now, not at the next click
+        this.changeDetector.markForCheck();
     }
 
     public get discussionAudienceCount(): number {

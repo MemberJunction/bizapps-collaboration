@@ -346,6 +346,9 @@ async function runClaimedTurn(
 
     /** The observer hears how the turn ended, once; a fault in it never becomes the turn's own. */
     let finishedTold = false;
+    /** The run and its result once the agent has answered, kept outside the turn so a throw after the run still reports them. */
+    let finishedRun: MJAIAgentRunEntity | null = null;
+    let finishedResult: ExecuteAgentResult | undefined;
     const tellFinished = (outcome: TurnOutcome): void => {
         finishedTold = true;
         try {
@@ -360,8 +363,6 @@ async function runClaimedTurn(
         let agentErrorMessage: string | null = null;
         let agentRunId: string | undefined;
         let agentReplyText: string | null = null;
-        let finishedRun: MJAIAgentRunEntity | null = null;
-        let finishedResult: ExecuteAgentResult | undefined;
 
         try {
             // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
@@ -487,8 +488,9 @@ async function runClaimedTurn(
 
     /**
      * The turn, held to its promise even when something throws after the reply row was written (a `Save()` throws when the database
-     * can't be reached): the row is marked Error, once, and the observer is told the turn failed, with the row's id. Without that a
-     * reply would stay In-Progress in the conversation and on screen, since the chat follows it only through the published completion.
+     * can't be reached): the row is marked Error, once, and the observer is told the turn failed, with the row's id and the run when
+     * there is one, since the chat reads a completion's run. Without that a reply would stay In-Progress in the conversation and on
+     * screen, since the chat follows it only through the published completion.
      */
     const settleTurn = async (): Promise<ExecuteSpaceChatTurnResult> => {
         try {
@@ -505,7 +507,7 @@ async function runClaimedTurn(
             } catch (markError) {
                 LogError(`executeSpaceChatTurn: failed to mark the reply Error after the turn threw: ${markError instanceof Error ? markError.message : String(markError)}`);
             }
-            if (!finishedTold) tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: null, errorMessage: reason });
+            if (!finishedTold) tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: reason });
             return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
         }
     };

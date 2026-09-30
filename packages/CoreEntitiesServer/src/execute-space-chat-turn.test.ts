@@ -773,11 +773,11 @@ describe('executeSpaceChatTurn', () => {
         const mention = `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`;
         // In the background: the call has answered, so the observer's word is the only thing that tells the chat the reply finished
         const background = createMockProvider({ messageText: mention, detailSaveThrowsWhenStatus: 'Complete' });
-        const outcomes: { replyDetailId: string; success: boolean; errorMessage: string | undefined }[] = [];
+        const outcomes: { replyDetailId: string; success: boolean; errorMessage: string | undefined; runId: string | undefined; hasResult: boolean }[] = [];
         const started = await executeSpaceChatTurn(background, callerUser, {
             ...defaultInput,
             background: true,
-            observer: { OnFinished: (outcome) => { outcomes.push({ replyDetailId: outcome.replyDetailId, success: outcome.success, errorMessage: outcome.errorMessage }); } },
+            observer: { OnFinished: (outcome) => { outcomes.push({ replyDetailId: outcome.replyDetailId, success: outcome.success, errorMessage: outcome.errorMessage, runId: outcome.agentRun?.ID, hasResult: !!outcome.result }); } },
         });
         assert.equal(started.ok, true);
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -785,6 +785,9 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(outcomes[0].success, false);
         assert.equal(outcomes[0].replyDetailId, started.ok ? started.replyDetailIds[0] : '');
         assert.match(outcomes[0].errorMessage ?? '', /could not be reached/);
+        // The run had finished before the throw, so the failure carries it: the chat reads a completion's run
+        assert.equal(outcomes[0].runId, 'run-mocked-1', 'the failure names the run that finished');
+        assert.equal(outcomes[0].hasResult, true, 'and carries its result');
         assert.equal(background.savedDetails[background.savedDetails.length - 1].Status, 'Error', 'the row is marked Error, not left In-Progress');
         // The claim is released: a later call for the same message is judged again
         const later = await executeSpaceChatTurn(createMockProvider({ messageText: mention }), callerUser, defaultInput);

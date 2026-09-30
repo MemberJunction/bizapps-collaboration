@@ -24,7 +24,7 @@ import { CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabSpacePeopleComponent } from './space-people.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabNewConversationDialogComponent, NewConversationSubmitPayload } from './new-conversation-dialog.component.ts';
-import { SimpleChange } from '@angular/core';
+import { SimpleChange, ElementRef } from '@angular/core';
 import { filterLibraryRows } from './library-filter.ts';
 import { taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status.ts';
 import {
@@ -1191,16 +1191,18 @@ describe('Copy link says how it went', () => {
 
 /** The status-push subscription the space's chat starts; these tests don't look at it. */
 const streamingStub = { initialize: () => undefined } as unknown as ConversationStreamingService;
+/** The chat's own element, which only the lock's outside-click reads; these tests have no DOM. */
+const hostStub = { nativeElement: { contains: () => false } } as unknown as ElementRef<HTMLElement>;
 
 describe('CollabSpaceChatComponent', () => {
   it('initializes host inputs with proper defaults', () => {
-    const comp = new CollabSpaceChatComponent(streamingStub);
+    const comp = new CollabSpaceChatComponent(streamingStub, hostStub);
     expect(comp.AllowMentions).toBe(true);
     expect(comp.AllowAttachments).toBe(false);
   });
 
   it('emits the new-conversation request', () => {
-    const comp = new CollabSpaceChatComponent(streamingStub);
+    const comp = new CollabSpaceChatComponent(streamingStub, hostStub);
 
     let newConvoEmitted = false;
     comp.NewConversationRequested.subscribe(() => {

@@ -45,6 +45,22 @@ async function seatOther(ctx: IntegrationCheckContext, spaceId: string, personaK
     Assert(await seat.Save(), `Ada seats ${personaKey}: ${seat.LatestResult?.CompleteMessage ?? ''}`);
 }
 
+/**
+ * Closes a board that is still open, then removes it: a board can't be deleted while it is open. Run in a `finally`, where an assert
+ * would hide the check's own failure, so a close that fails is logged with its message instead.
+ */
+async function closeThenCleanup(ctx: IntegrationCheckContext, owner: Awaited<ReturnType<typeof GetPersonaUser>>, spaceId: string): Promise<void> {
+    const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${spaceId}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
+    if (!closed) {
+        const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, owner);
+        if (await loaded.Load(spaceId)) {
+            loaded.ClosedAt = new Date(Date.now() - 60_000);
+            if (!(await loaded.Save())) console.error(`subtypes: the board ${spaceId} did not close before cleanup: ${loaded.LatestResult?.CompleteMessage ?? ''}`);
+        }
+    }
+    await cleanupSpace(ctx.Provider, ctx.User, spaceId);
+}
+
 const checks: NamedCheck[] = [
     {
         Id: 'subtypes.ST1',
@@ -141,15 +157,7 @@ const checks: NamedCheck[] = [
                 Assert(dev.saved, `Dev, an owner who holds Configure Spaces, is allowed: ${dev.message}`);
                 Assert((await termNow()) === 'By Dev', 'and the row changed');
             } finally {
-                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
-                if (!closed) {
-                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                    if (await loaded.Load(id)) {
-                        loaded.ClosedAt = new Date(Date.now() - 60_000);
-                        await loaded.Save();
-                    }
-                }
-                await cleanupSpace(ctx.Provider, ctx.User, id);
+                await closeThenCleanup(ctx, ada, id);
             }
         },
     },
@@ -283,13 +291,40 @@ const checks: NamedCheck[] = [
                 Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
                 Assert((await quorumNow()) === 75, 'and the row changed');
             } finally {
-                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
-                if (!closed) {
-                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                    if (await loaded.Load(id)) {
-                        loaded.ClosedAt = new Date(Date.now() - 60_000);
-                        await loaded.Save();
-                    }
+                await closeThenCleanup(ctx, ada, id);
+            }
+        },
+    },
+    {
+        Id: 'subtypes.ST6',
+        Name: 'ST6 — creating a space with its subtype logs no error: neither CreateSpace nor EnsureISAChild on a new space reads a subtype row that cannot exist yet',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const boardType = await typeId(ctx, 'example-board');
+            // LogError lands on console.error: everything written there while a space is created is what this check judges
+            const logged: string[] = [];
+            const consoleError = console.error;
+            console.error = (...args: unknown[]) => { logged.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ')); };
+            let id: string | null = null;
+            try {
+                const made = await createSpace(ctx.Provider as unknown as Parameters<typeof createSpace>[0], ada, { TypeID: boardType, Name: `${CHECK_SPACE_PREFIX}ST6 board ${Date.now()}`, Details: { TermName: 'Original' } });
+                Assert(made.status === 'created', `CreateSpace makes a board: ${made.status === 'refused' ? made.message : ''}`);
+                id = made.status === 'created' ? made.spaceId : null;
+                const fresh = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                fresh.NewRecord();
+                fresh.SpaceTypeID = boardType;
+                Assert(!!(await fresh.EnsureISAChild()), 'EnsureISAChild on a new space attaches its subtype');
+            } finally {
+                console.error = consoleError;
+            }
+            const loadErrors = logged.filter((line) => /load|row|IS-A|ISA/i.test(line));
+            Assert(loadErrors.length === 0, `Nothing about a load or a row was logged while the space was created: ${JSON.stringify(loadErrors)}`);
+            if (id) {
+                const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                if (await loaded.Load(id)) {
+                    loaded.ClosedAt = new Date(Date.now() - 60_000);
+                    Assert(await loaded.Save(), `The board is closed before it is removed: ${loaded.LatestResult?.CompleteMessage ?? ''}`);
                 }
                 await cleanupSpace(ctx.Provider, ctx.User, id);
             }
@@ -335,50 +370,7 @@ const checks: NamedCheck[] = [
                 Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
                 Assert((await quorumNow()) === 75, 'and the row changed');
             } finally {
-                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
-                if (!closed) {
-                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                    if (await loaded.Load(id)) {
-                        loaded.ClosedAt = new Date(Date.now() - 60_000);
-                        await loaded.Save();
-                    }
-                }
-                await cleanupSpace(ctx.Provider, ctx.User, id);
-            }
-        },
-    },
-    {
-        Id: 'subtypes.ST6',
-        Name: 'ST6 — creating a space with its subtype logs no error: neither CreateSpace nor EnsureISAChild on a new space reads a subtype row that cannot exist yet',
-        RequiresMutation: true,
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const ada = await GetPersonaUser(ctx, 'ada');
-            const boardType = await typeId(ctx, 'example-board');
-            // LogError lands on console.error: everything written there while a space is created is what this check judges
-            const logged: string[] = [];
-            const consoleError = console.error;
-            console.error = (...args: unknown[]) => { logged.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ')); };
-            let id: string | null = null;
-            try {
-                const made = await createSpace(ctx.Provider as unknown as Parameters<typeof createSpace>[0], ada, { TypeID: boardType, Name: `${CHECK_SPACE_PREFIX}ST6 board ${Date.now()}`, Details: { TermName: 'Original' } });
-                Assert(made.status === 'created', `CreateSpace makes a board: ${made.status === 'refused' ? made.message : ''}`);
-                id = made.status === 'created' ? made.spaceId : null;
-                const fresh = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                fresh.NewRecord();
-                fresh.SpaceTypeID = boardType;
-                Assert(!!(await fresh.EnsureISAChild()), 'EnsureISAChild on a new space attaches its subtype');
-            } finally {
-                console.error = consoleError;
-            }
-            const loadErrors = logged.filter((line) => /load|row|IS-A|ISA/i.test(line));
-            Assert(loadErrors.length === 0, `Nothing about a load or a row was logged while the space was created: ${JSON.stringify(loadErrors)}`);
-            if (id) {
-                const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
-                if (await loaded.Load(id)) {
-                    loaded.ClosedAt = new Date(Date.now() - 60_000);
-                    Assert(await loaded.Save(), `The board is closed before it is removed: ${loaded.LatestResult?.CompleteMessage ?? ''}`);
-                }
-                await cleanupSpace(ctx.Provider, ctx.User, id);
+                await closeThenCleanup(ctx, ada, id);
             }
         },
     },

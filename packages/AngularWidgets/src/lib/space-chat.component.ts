@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   Inject,
@@ -319,7 +320,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   ],
 })
 export class CollabSpaceChatComponent implements OnInit {
-  constructor(@Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService) {}
+  constructor(
+    @Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService,
+    /** This chat's own element: a click in another chat's lock on the same page is outside it. */
+    @Inject(ElementRef) private readonly host: ElementRef<HTMLElement>,
+  ) {}
 
   public ngOnInit(): void {
     this.streaming.initialize();
@@ -373,12 +378,13 @@ export class CollabSpaceChatComponent implements OnInit {
     this.reasonOpenedByFocus = false;
   }
 
-  /** A tap or click outside the lock closes the reason: it covers what is under it. */
+  /** A tap or click outside this chat's own lock closes the reason: it covers what is under it. Another chat's lock on the same page is outside. */
   @HostListener('document:click', ['$event'])
   public onDocumentClick(event: Pick<MouseEvent, 'target'>): void {
     if (!this.ReasonShown) return;
     const target = event.target;
-    if (target instanceof Element && target.closest('.read-only-lock-wrap')) return;
+    const lockWrap = target instanceof Element ? target.closest('.read-only-lock-wrap') : null;
+    if (lockWrap && this.host.nativeElement.contains(lockWrap)) return;
     this.ReasonShown = false;
     this.reasonOpenedByFocus = false;
   }
