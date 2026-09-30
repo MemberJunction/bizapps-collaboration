@@ -146,6 +146,33 @@ describe('ExampleBoardServerDriver', () => {
         expect(driver.ValidateSpaceChange(closeCtx(0)).ok).toBe(true);
     });
 
+    it("ValidateSpaceChange judges a change to the board's own columns from the old value it is handed and the new one on the board row: an open board's quorum may rise, not fall, and a closed board's may do either", () => {
+        const update = (closedAt: Date | null, before: number, after: number): SpaceChangeContext => {
+            const space = createMockSpace('b-1', 'Audit Committee', closedAt);
+            (space as unknown as { LeafEntity: { QuorumPercentage: number } }).LeafEntity = { QuorumPercentage: after };
+            return {
+                kind: 'Update',
+                actingUser: createMockUser(),
+                provider: {} as unknown as IMetadataProvider,
+                space,
+                spaceType: createMockSpaceType(),
+                effectiveRules: createMockRules(),
+                subtypeEntityName: 'MJ_BizApps_Collaboration_Examples: Example Boards',
+                oldValues: { QuorumPercentage: before },
+            };
+        };
+        const lowered = driver.ValidateSpaceChange(update(null, 60, 50));
+        expect(lowered.ok).toBe(false);
+        expect(lowered.message).toContain('60% to 50%');
+        expect(lowered.field).toBe('QuorumPercentage');
+        expect(driver.ValidateSpaceChange(update(null, 60, 75)).ok).toBe(true);
+        expect(driver.ValidateSpaceChange(update(new Date('2026-09-01T00:00:00Z'), 60, 50)).ok).toBe(true);
+        // A change to other columns, or one with no old value to compare, is not this rule's business
+        const other = update(null, 60, 50);
+        other.oldValues = { TermName: 'Old' };
+        expect(driver.ValidateSpaceChange(other).ok).toBe(true);
+    });
+
     it('ValidateSpaceChange refuses deleting active board space', () => {
         const space = createMockSpace('b-1', 'Audit Committee', null);
         const ctx: SpaceChangeContext = {

@@ -675,22 +675,19 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
     }
 
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
-        // A space that has its subtype attached is deleted through that subtype, which deletes its own row and then this one. Core
-        // delegates from here too, but its one-delete-at-a-time guard then waits on this very call when the subtype comes back for
-        // the parent row, so the delete never returns (MemberJunction/MJ#4850). Delegating first keeps that call from being pending;
-        // the driver is asked once, when the subtype's delete reaches this row. Remove this when the fix is in MJ `next`.
-        const leaf = this.LeafEntity;
-        if (leaf !== this && !options?.IsParentEntityDelete) return leaf.Delete(options);
-        const refusal = await this.driverRefusalForDelete();
-        if (refusal) return failDelete(this, refusal);
+        // A space with its subtype attached is deleted through it: core hands the delete to the subtype, which deletes its own row and
+        // comes back for this one with IsParentEntityDelete, inside one transaction. The driver is asked once, when the delete reaches
+        // this row, whichever side it started from.
+        if (this.LeafEntity === this || options?.IsParentEntityDelete) {
+            const refusal = await this.driverRefusalForDelete();
+            if (refusal) return failDelete(this, refusal);
+        }
         return super.Delete(options);
     }
 
     /** What the subtype's own columns held before this save, by name: only the columns that changed. Empty when nothing did. */
     private subtypeOldValues(): Record<string, unknown> {
         const oldValues: Record<string, unknown> = {};
-        // The subtype is not reachable from a parent its own save made: no old values are known
-        if (this.LeafEntity === this) return oldValues;
         for (const field of this.LeafEntity.Fields) {
             if (field.Dirty && !field.Name.startsWith('__mj_')) oldValues[field.Name] = field.OldValue;
         }
@@ -708,7 +705,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         const resolved = await resolveSpaceDriver(this, this.ProviderToUse, user, this.ID);
         if (!resolved.ok) return resolved.message;
-        return refusalOf(await resolved.call.driver.ValidateSpaceChange({ ...resolved.call.base, kind: 'Update', oldValues }));
+        // The space being saved, not the stored one: its LeafEntity carries the subtype's new values, as `oldValues` carries the old
+        return refusalOf(await resolved.call.driver.ValidateSpaceChange({ ...resolved.call.base, space: this, kind: 'Update', oldValues }));
     }
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
@@ -733,13 +731,12 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const structureChanged = parentChanged || inheritsChanged;
 
         // A subtype's own columns can change with the space itself untouched: MJ then saves the space first and skips its validation,
-        // so the space's rules for a change are applied here. MJ saves the parent chain whether or not the subtype is dirty. When the
-        // subtype is in reach (it was loaded through the space) a save that changes nothing has nothing to judge, and nobody is asked
-        // or told. When it is not (the subtype's own save made this space, as an API call does), its changes can't be seen from here,
-        // so the save is judged as a change with no old values, as MJ gives a parent no word of its child's state (see D48).
-        const subtypeSeen = this.LeafEntity !== this;
+        // so the space's rules for a change are applied here, with the subtype's changed columns and what they held. The subtype is in
+        // reach whichever side the save started from: loaded through the space, or built on its own and linked back to the space it
+        // made. MJ saves the parent chain whether or not the subtype is dirty, so a save that changes nothing has nothing to
+        // judge, and nobody is asked or told.
         const subtypeOldValues = this.savingAsSubtype && this.IsSaved && !own.changed ? this.subtypeOldValues() : null;
-        const subtypeOnlyChange = subtypeOldValues !== null && (!subtypeSeen || Object.keys(subtypeOldValues).length > 0);
+        const subtypeOnlyChange = subtypeOldValues !== null && Object.keys(subtypeOldValues).length > 0;
         if (subtypeOnlyChange) {
             const refusal = signedIn ? await this.refuseSubtypeOnlyChange(signedIn, subtypeOldValues) : 'Space change refused: there is no signed-in user.';
             if (refusal) {

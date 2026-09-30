@@ -19,7 +19,8 @@ import { AvatarItem } from './types';
           [PersonId]="av.id || ''"
           [Size]="Size"
           [IsOutside]="!!av.isOutside"
-          [IsOnline]="!!av.isOnline">
+          [IsOnline]="!!av.isOnline"
+          [Stacked]="true">
         </mjc-avatar>
       }
       @if (computedMoreCount > 0) {
@@ -40,20 +41,15 @@ import { AvatarItem } from './types';
       display: inline-flex;
       align-items: center;
     }
-    .stack ::ng-deep mjc-avatar {
+    /* The avatars' own elements are in this template, so they overlap from here; what each draws inside, its ring, is its own (Stacked) */
+    .stack mjc-avatar {
       margin-left: -6px;
     }
-    .stack ::ng-deep mjc-avatar:first-child {
+    .stack mjc-avatar:first-child {
       margin-left: 0;
     }
-    .stack ::ng-deep mjc-avatar.ext + mjc-avatar.ext {
+    .stack mjc-avatar.ext + mjc-avatar.ext {
       margin-left: -2px;
-    }
-    .stack ::ng-deep .av {
-      box-shadow: 0 0 0 2px var(--mj-bg-surface);
-    }
-    .stack ::ng-deep .av.ext {
-      box-shadow: 0 0 0 1.5px var(--mj-bg-surface), 0 0 0 3px var(--mjc-shared-strong);
     }
     .more {
       margin-left: 4px;

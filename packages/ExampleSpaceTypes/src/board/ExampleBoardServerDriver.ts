@@ -21,6 +21,7 @@ import {
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
+import { type mjBizAppsCollabExamplesExampleBoardEntity } from '../generated/entities/entity_subclasses.js';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CollaborationEngine, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readExtension, stringList } from '../extension-config.js';
@@ -50,6 +51,9 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     /**
      * Validates changes to the board space:
      * - Cannot delete an active board (must be closed first)
+     * - Cannot close a board while motions are open for voting
+     * - Cannot lower an open board's quorum (a rule on the subtype's own columns: the old value comes with the change, the new one is on
+     *   the board row itself, whichever side the save started from)
      */
     public override ValidateSpaceChange(
         ctx: SpaceChangeContext
@@ -57,6 +61,17 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
         // A board with motions open (the count comes from the space's own configuration, kept by whatever runs the votes) stays open
         if (ctx.kind === 'Close' && Number(readExtension(ctx.space.Configuration, KEY)['OpenMotions'] ?? 0) > 0) {
             return { ok: false, message: 'Cannot close a Board space while motions are open for voting.' };
+        }
+        if (ctx.kind === 'Update' && ctx.space.ClosedAt == null && ctx.oldValues && 'QuorumPercentage' in ctx.oldValues) {
+            const before = Number(ctx.oldValues['QuorumPercentage']);
+            const after = Number((ctx.space.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity).QuorumPercentage);
+            if (Number.isFinite(before) && Number.isFinite(after) && after < before) {
+                return {
+                    ok: false,
+                    message: `A board's quorum can be raised while it is open, not lowered (${before}% to ${after}%). Close the board to change its rules.`,
+                    field: 'QuorumPercentage',
+                };
+            }
         }
         if (ctx.kind === 'Delete') {
             const isClosed = ctx.space.ClosedAt != null;

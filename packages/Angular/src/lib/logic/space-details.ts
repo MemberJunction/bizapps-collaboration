@@ -42,8 +42,7 @@ export class NewSpaceDraft {
         space.SpaceTypeID = type.ID;
         space.OwnerID = user.ID;
         space.InheritsMembership = type.DefaultInheritsMembership;
-        // The type names the subtype, and the resolver answers from it: the child is attached to this very object. Core logs a load
-        // error here for a row that can't exist yet (MemberJunction/MJ#4859); nothing is wrong.
+        // The type names the subtype, and the resolver answers from it: the child is attached to this very object
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];

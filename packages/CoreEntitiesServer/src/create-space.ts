@@ -54,7 +54,6 @@ export async function createSpace(provider: DatabaseProviderBase, user: UserInfo
     space.InheritsMembership = type.DefaultInheritsMembership;
     space.Name = name;
     space.Description = input.Description?.trim() || null;
-    // Core logs a load error here for a row that can't exist yet (MemberJunction/MJ#4859); nothing is wrong
     const attached = await space.EnsureISAChild();
     const leaf: BaseEntity = attached ? space.LeafEntity : space;
 

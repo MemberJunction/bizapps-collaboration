@@ -157,12 +157,9 @@ export class BaseSpaceTypeServerDriver {
     /**
      * Validate a change to the space itself.
      *
-     * A change to only the columns of the space's subtype (a board's term, a deal's stage) is judged here too, as kind `Update`.
-     * What the context holds then depends on how the subtype was saved. Saved through a space that was loaded (a server-side save),
-     * `oldValues` names the subtype's changed columns and `subtypeEntityName` names the subtype. Saved from a client over the wire,
-     * MJ builds the subtype from its own side, and its parent, this space, has no link back to it: `oldValues` is empty and the new
-     * values aren't in reach, so a rule about a subtype column can't be enforced from here (MemberJunction/MJ#4870). Put such a rule
-     * in the subtype entity's own server class until then.
+     * A change to only the columns of the space's subtype (a board's term, a deal's stage) is judged here too, as kind `Update`:
+     * `oldValues` names the subtype's changed columns and what they held, `subtypeEntityName` names the subtype, and the new values
+     * are on the space's `LeafEntity`. That holds whether the subtype was saved through a loaded space or from a client over the wire.
      */
     public ValidateSpaceChange(
         _ctx: SpaceChangeContext
@@ -176,7 +173,7 @@ export class BaseSpaceTypeServerDriver {
      * wraps both rows) and `CreateSpace` run it inside that transaction, and for a change to only the subtype's columns before the
      * subtype's own row is written. Outside work (email, HTTP) belongs in `provider.RunAfterCommit`, which runs once the whole
      * transaction has committed. A change to only the subtype's columns is told here alone, not to the parent's driver, with the
-     * same context as `ValidateSpaceChange` gave (over the wire, no old values).
+     * same context as `ValidateSpaceChange` gave.
      */
     public OnSpaceChanged(_ctx: SpaceChangeContext): Promise<void> | void {}
 

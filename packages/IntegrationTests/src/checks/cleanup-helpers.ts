@@ -57,13 +57,10 @@ async function deleteRowAndConfirmUnguarded(
     // `InnerLoad` skips that discovery, and deleting the parent under a live child row is not a delete this app makes.
     const loaded = entity instanceof mjBizAppsCollaborationSpaceEntity ? await entity.Load(id) : await entity.InnerLoad(CompositeKey.FromID(id));
     if (loaded) {
-        // A space with its subtype attached is deleted through the subtype: `Delete()` on the parent never returns (MJ#4850). The server's
-        // Space class hands the delete over itself; a client-side entity object has no such class, so the leaf is asked here.
-        const target = entity instanceof mjBizAppsCollaborationSpaceEntity ? entity.LeafEntity : entity;
-        const deleted = await target.Delete();
-        // Over GraphQL the server deletes a subtype's space along with the subtype, and the client then sends the space's delete too, which
-        // finds nothing: `Delete()` answers false with the space already gone. The read-back below is what decides.
-        if (!deleted && target === entity) {
+        // A space with its subtype attached is deleted through the subtype by core itself, in one transaction, on the server and over
+        // GraphQL alike. `Delete()`'s answer is checked; the read-back below is the confirmation.
+        const deleted = await entity.Delete();
+        if (!deleted) {
             Assert(false, `Delete of ${what} ${id} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }

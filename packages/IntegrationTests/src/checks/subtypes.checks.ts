@@ -1,6 +1,7 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types/server';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
+import { createSpace } from '@mj-biz-apps/collaboration-core-entities-server';
 import { SPACE_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 import { CHECK_SPACE_PREFIX } from '../world/ids.js';
@@ -240,6 +241,93 @@ const checks: NamedCheck[] = [
             const room = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
             Assert(await room.Load(await typeId(ctx, 'example-room')), 'The room type loads');
             Assert(room.SpaceExtensionEntity === ROOMS, `The room type names ${ROOMS}`);
+        },
+    },
+    {
+        Id: 'subtypes.ST5',
+        Name: "ST5 — a save of only a board's own column reaches the type's driver with the old value and the new one: lowering an open board's quorum is refused, naming both, and raising it lands",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const boardType = await typeId(ctx, 'example-board');
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            space.NewRecord();
+            space.Name = `${CHECK_SPACE_PREFIX}ST5 board ${Date.now()}`;
+            space.SpaceTypeID = boardType;
+            space.OwnerID = ada.ID;
+            space.InheritsMembership = false;
+            await space.EnsureISAChild();
+            const board = space.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+            board.TermName = 'Original';
+            board.QuorumPercentage = 60;
+            Assert(await board.Save(), `Ada creates a board: ${board.LatestResult?.CompleteMessage ?? ''}`);
+            const id = space.ID;
+            try {
+                await seatOwner(ctx, id);
+                await seatOther(ctx, id, 'dev', "Code = 'owner'");
+                // Dev holds Configure Spaces and an owner seat, so only the driver's own rule decides
+                const setQuorum = async (quorum: number) => {
+                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                    Assert(await loaded.Load(id), 'Dev loads the board');
+                    const leaf = loaded.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+                    leaf.QuorumPercentage = quorum;
+                    return { saved: await leaf.Save(), message: leaf.LatestResult?.CompleteMessage ?? '' };
+                };
+                const quorumNow = async () => (await FindRows<{ QuorumPercentage: number }>(ctx, BOARDS, `ID = '${id}'`, ['QuorumPercentage'], undefined, { BypassCache: true }))[0]?.QuorumPercentage;
+
+                const lowered = await setQuorum(50);
+                Assert(!lowered.saved && /60% to 50%/.test(lowered.message), `Lowering the quorum is refused by the driver, which names the old value and the new one: ${lowered.message}`);
+                Assert((await quorumNow()) === 60, 'The refused save changed nothing');
+                const raised = await setQuorum(75);
+                Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
+                Assert((await quorumNow()) === 75, 'and the row changed');
+            } finally {
+                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
+                if (!closed) {
+                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                    if (await loaded.Load(id)) {
+                        loaded.ClosedAt = new Date(Date.now() - 60_000);
+                        await loaded.Save();
+                    }
+                }
+                await cleanupSpace(ctx.Provider, ctx.User, id);
+            }
+        },
+    },
+    {
+        Id: 'subtypes.ST6',
+        Name: 'ST6 — creating a space with its subtype logs no error: neither CreateSpace nor EnsureISAChild on a new space reads a subtype row that cannot exist yet',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const boardType = await typeId(ctx, 'example-board');
+            // LogError lands on console.error: everything written there while a space is created is what this check judges
+            const logged: string[] = [];
+            const consoleError = console.error;
+            console.error = (...args: unknown[]) => { logged.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ')); };
+            let id: string | null = null;
+            try {
+                const made = await createSpace(ctx.Provider as unknown as Parameters<typeof createSpace>[0], ada, { TypeID: boardType, Name: `${CHECK_SPACE_PREFIX}ST6 board ${Date.now()}`, Details: { TermName: 'Original' } });
+                Assert(made.status === 'created', `CreateSpace makes a board: ${made.status === 'refused' ? made.message : ''}`);
+                id = made.status === 'created' ? made.spaceId : null;
+                const fresh = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                fresh.NewRecord();
+                fresh.SpaceTypeID = boardType;
+                Assert(!!(await fresh.EnsureISAChild()), 'EnsureISAChild on a new space attaches its subtype');
+            } finally {
+                console.error = consoleError;
+            }
+            const loadErrors = logged.filter((line) => /load|row|IS-A|ISA/i.test(line));
+            Assert(loadErrors.length === 0, `Nothing about a load or a row was logged while the space was created: ${JSON.stringify(loadErrors)}`);
+            if (id) {
+                const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                if (await loaded.Load(id)) {
+                    loaded.ClosedAt = new Date(Date.now() - 60_000);
+                    Assert(await loaded.Save(), `The board is closed before it is removed: ${loaded.LatestResult?.CompleteMessage ?? ''}`);
+                }
+                await cleanupSpace(ctx.Provider, ctx.User, id);
+            }
         },
     },
 ];

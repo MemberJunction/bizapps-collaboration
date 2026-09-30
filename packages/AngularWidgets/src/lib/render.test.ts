@@ -241,7 +241,7 @@ describe('the dialogs, rendered', () => {
     }
   });
 
-  it("leaves focus to mj-dialog (MJ#4839): none of the dialogs turns its autofocus, Tab trap or focus return off, or handles Tab itself", () => {
+  it("leaves focus to mj-dialog: none of the dialogs turns its autofocus, Tab trap or focus return off, or handles Tab itself", () => {
     for (const Dialog of [CollabNewConversationDialogComponent, CollabUploadDialogComponent, CollabShareCheckDialogComponent, CollabNewSpaceDialogComponent]) {
       const fixture = TestBed.createComponent(Dialog as Type<unknown>);
       fixture.detectChanges();
@@ -734,7 +734,7 @@ describe('the conversation of a space, read-only', () => {
     expect(host.textContent).not.toContain(note);
   });
 
-  it("hands MJ's chat area ReadOnly and the reason, instead of hiding its composer from outside (MJ#4838)", async () => {
+  it("hands MJ's chat area ReadOnly and the reason, instead of hiding its composer from outside", async () => {
     const note = 'This space is closed. Conversations are read-only.';
     TestBed.resetTestingModule();
     provideStreamingStub();
@@ -749,9 +749,9 @@ describe('the conversation of a space, read-only', () => {
     const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
     expect(area.ReadOnly).toBe(true);
     expect(area.ReadOnlyMessage).toBe(note);
-    // No style reaches into MJ's markup: the composer is MJ's to hide
+    // No style reaches into MJ's markup through the piercing combinator: the composer is MJ's to hide
     const styles = (CollabSpaceChatComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('\n');
-    expect(styles).not.toContain('ng-deep');
+    expect(styles).not.toMatch(/::\S*deep\b/);
     expect(styles).not.toContain('message-input-container');
   });
 

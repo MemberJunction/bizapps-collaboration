@@ -134,6 +134,40 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'subtypes.SC4',
+        Name: "SC4 — a client's save of only a board's own column reaches the type's driver with the old value and the new one: lowering an open board's quorum is refused, naming both, and raising it lands",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await getPersonaContext(ctx, 'ada');
+            const dev = await getPersonaContext(ctx, 'dev');
+            const client = new CollaborationClient((await getPersonaClientContext(ctx, 'ada')).GraphQLProvider);
+            const made = await client.CreateSpace({ TypeID: await boardTypeId(ctx), Name: `${CHECK_SPACE_PREFIX}SC4 board ${Date.now()}`, Details: { TermName: 'Original', QuorumPercentage: 60 } });
+            Assert(made.Success && !!made.SpaceID, `CreateSpace succeeds: ${made.ErrorMessage ?? ''}`);
+            const id = made.SpaceID as string;
+            try {
+                await seatOther(ada, id, dev.User.ID, "Code = 'owner'", ctx);
+                // Dev holds Configure Spaces and an owner seat, so only the driver's own rule decides
+                const setQuorum = async (quorum: number) => {
+                    const loaded = await dev.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev.User);
+                    Assert(await loaded.Load(id), 'Dev loads the board');
+                    const leaf = loaded.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+                    leaf.QuorumPercentage = quorum;
+                    return { saved: await leaf.Save(), message: leaf.LatestResult?.CompleteMessage ?? '' };
+                };
+                const quorumNow = async () => (await FindRows<{ QuorumPercentage: number }>(ctx, BOARDS, `ID = '${id}'`, ['QuorumPercentage'], undefined, { BypassCache: true }))[0]?.QuorumPercentage;
+
+                const lowered = await setQuorum(50);
+                Assert(!lowered.saved && /60% to 50%/.test(lowered.message), `Lowering the quorum is refused by the driver, which names the old value and the new one: ${lowered.message}`);
+                Assert((await quorumNow()) === 60, 'The refused save changed nothing');
+                const raised = await setQuorum(75);
+                Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
+                Assert((await quorumNow()) === 75, 'and the row changed');
+            } finally {
+                await closeAndRemove(ctx, ada, id);
+            }
+        },
+    },
 ];
 
 registerChecks(checks);
