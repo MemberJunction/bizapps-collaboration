@@ -143,6 +143,6 @@ pnpm run test:integration    # both integration harnesses, against a database
 ```
 
 - `pnpm test` runs every package's unit tests: `node:test` in `collaboration-core`, `collaboration-core-entities-server`, `collaboration-server` and `collaboration-ng`, and Vitest in the others. It runs the repo scripts' self-tests first.
-- The integration harnesses run 76 server checks in eleven bundles and 65 client checks in eleven (`extensions` runs only on the server, `lifecycle` only on the client), and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata, the example types' schema, the test metadata (`pnpm run mj:push:tests`) and the sample world; the client harness also needs a running MJAPI that loads the example types' server entry.
+- The integration harnesses run 78 server checks in eleven bundles and 66 client checks in eleven (`extensions` runs only on the server, `lifecycle` only on the client), and a count assertion fails a run that ran fewer. They need a database with the migrations, the metadata, the example types' schema, the test metadata (`pnpm run mj:push:tests`) and the sample world; the client harness also needs a running MJAPI that loads the example types' server entry.
 - `scripts/persona-check.sql` checks the Space Participant role's grants against a database.
 

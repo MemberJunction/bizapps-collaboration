@@ -12,13 +12,13 @@ Collaboration's integration checks, and the sample world they run against.
 
 | Bundle | Server checks | Client checks | What it covers |
 |---|---|---|---|
-| `collab-world` | 3 | 3 | The world loaded as the catalog says |
+| `collab-world` | 4 | 4 | The world loaded as the catalog says |
 | `people-fls` | 3 | 3 | What a participant reads of People |
 | `parent-assignees` | 6 | 6 | Assigning people seated above a space, with the switch on and off |
 | `room` | 12 | 11 | A space's conversations: who reads and starts them, posting, agent replies, and close and reopen |
 | `write-gates` | 10 | 8 | The gates on spaces, seats, items, share notices and item uses, invitations and a change of type |
 | `extensions` | 12 | none | The example types' drivers, and `Children` rules (EX1 to EX12) |
-| `subtypes` | 4 | 3 | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3); a change to only the board's own columns refused without *Configure Spaces* and an owner seat (ST4). Over GraphQL: `CreateSpace` writing the board and its owner seat together (SC1), refusing what a space can't be made from and leaving nothing behind (SC2), and the board's own columns saved only with the right (SC3) |
+| `subtypes` | 6 | 4 | A type's own table as an IsA child of Space: a board created in one save, edited, reloaded and deleted (ST1); a type and its subtype going together (ST2); a type refused for naming an entity that isn't a subtype of Spaces (ST3); a change to only the board's own columns refused without *Configure Spaces* and an owner seat (ST4); a save of only the board's quorum reaching its driver with the old value and the new, so lowering an open board's quorum is refused and raising it lands (ST5); and a space created with its subtype, through `CreateSpace` and through `EnsureISAChild`, logging no load error (ST6). Over GraphQL: `CreateSpace` writing the board and its owner seat together (SC1), refusing what a space can't be made from and leaving nothing behind (SC2), the board's own columns saved only with the right (SC3), and the quorum rule on a client's save (SC4) |
 | `row-filters` | 4 | 4 | What each persona reads |
 | `library` | 6 | 8 | The seeded items, uploads and deletes |
 | `agent` | 10 | 7 | The agent's bounded retrieval, its search scope, and turns on the stub agent |
