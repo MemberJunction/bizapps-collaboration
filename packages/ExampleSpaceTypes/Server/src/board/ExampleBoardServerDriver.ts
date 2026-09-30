@@ -21,7 +21,7 @@ import {
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
-import { type mjBizAppsCollabExamplesExampleBoardEntity } from '../generated/entities/entity_subclasses.js';
+import { type mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { CollaborationEngine, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readExtension, stringList } from '../extension-config.js';
