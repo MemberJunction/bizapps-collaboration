@@ -29,7 +29,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <span class="chip plain">{{ StatusLabel }}</span>
       }
       @if (CanShare) {
-        <button type="button" mjButton variant="secondary" size="sm" class="share-btn" (click)="onShareClick($event)">
+        <button type="button" mjButton Variant="secondary" Size="sm" class="share-btn" (click)="onShareClick($event)">
           <i class="fa-solid fa-share-from-square"></i>
           <span>Share…</span>
         </button>

@@ -51,7 +51,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
             <div class="space-identity-left">
               <button
                 type="button"
-                mjButton variant="flat" size="sm" class="btn-back-spaces"
+                mjButton Variant="flat" Size="sm" class="btn-back-spaces"
                 (click)="onBackToSpaces()"
                 title="Back to all spaces">
                 <i class="fa-solid fa-arrow-left"></i>
@@ -80,7 +80,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
 
           <button
             type="button"
-            mjButton variant="icon" size="sm" class="btn-nav-toggle"
+            mjButton Variant="icon" Size="sm" class="btn-nav-toggle"
             (click)="toggleCollapse()"
             [title]="isCollapsed ? 'Expand navigation' : 'Collapse navigation'">
             <i class="fa-solid" [class]="isCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
@@ -129,7 +129,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                 @if (CanStartConversation) {
                   <button
                     type="button"
-                    mjButton variant="icon" size="sm" class="btn-add-section"
+                    mjButton Variant="icon" Size="sm" class="btn-add-section"
                     (click)="onNewConversation()"
                     title="New Conversation"
                     aria-label="New Conversation">
@@ -142,7 +142,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                 <div class="collapsed-add-row">
                   <button
                     type="button"
-                    mjButton variant="icon" size="sm" class="btn-collapsed-add"
+                    mjButton Variant="icon" Size="sm" class="btn-collapsed-add"
                     (click)="onNewConversation()"
                     title="New Conversation"
                     aria-label="New Conversation">
@@ -248,7 +248,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
           @if (CanCreateSpace) {
             <button
               type="button"
-              mjButton variant="icon" size="sm" class="icon-btn-inline"
+              mjButton Variant="icon" Size="sm" class="icon-btn-inline"
               (click)="SpaceCreateRequested.emit()"
               title="New Space"
               aria-label="New Space">

@@ -24,7 +24,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="fw6 fs13 ellipsis title">{{ Title }}</div>
         <div class="fs12 muted ellipsis sub">{{ Subtitle }}</div>
       </div>
-      <button type="button" mjButton variant="secondary" size="sm" (click)="onAction()">{{ ActionLabel }}</button>
+      <button type="button" mjButton Variant="secondary" Size="sm" (click)="onAction()">{{ ActionLabel }}</button>
     </div>
   `,
   styles: [COLLAB_TOKENS_CSS, `

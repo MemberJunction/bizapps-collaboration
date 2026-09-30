@@ -26,6 +26,8 @@ jobs:
       - run: node scripts/strip-sync-blocks.mjs --check
       - run: node scripts/check-mj-tokens.mjs --self-test && node scripts/check-mj-tokens.mjs
       - run: node scripts/check-downstream-names.mjs
+      - run: node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs
+      - run: node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
       - run: pnpm run build

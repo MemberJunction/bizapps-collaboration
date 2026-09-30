@@ -167,6 +167,12 @@ describe('ExampleBoardServerDriver', () => {
         expect(lowered.field).toBe('QuorumPercentage');
         expect(driver.ValidateSpaceChange(update(null, 60, 75)).ok).toBe(true);
         expect(driver.ValidateSpaceChange(update(new Date('2026-09-01T00:00:00Z'), 60, 50)).ok).toBe(true);
+        // A quorum change whose new value can't be read is refused, not passed: the rule has nothing to compare
+        const unreadable = update(null, 60, 50);
+        (unreadable.space as unknown as { LeafEntity: { QuorumPercentage: unknown } }).LeafEntity = { QuorumPercentage: undefined };
+        const refused = driver.ValidateSpaceChange(unreadable);
+        expect(refused.ok).toBe(false);
+        expect(refused.message).toContain("can't be judged");
         // A change to other columns, or one with no old value to compare, is not this rule's business
         const other = update(null, 60, 50);
         other.oldValues = { TermName: 'Old' };

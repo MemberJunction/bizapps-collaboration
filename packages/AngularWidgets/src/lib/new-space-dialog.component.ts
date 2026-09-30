@@ -129,18 +129,18 @@ export interface NewSpaceSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="md"
+          Variant="primary"
+          Size="md"
           [disabled]="!canSubmit"
           (click)="onSubmit()"
         >
           @if (IsSubmitting) {
-            <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
+            <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
           } @else {
             <i class="fa-solid fa-plus" aria-hidden="true"></i> Create space
           }
         </button>
-        <button type="button" mjButton variant="secondary" size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
+        <button type="button" mjButton Variant="secondary" Size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
       </mj-dialog-actions>
     </mj-dialog>
   `,

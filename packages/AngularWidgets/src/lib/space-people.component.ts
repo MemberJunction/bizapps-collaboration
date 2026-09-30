@@ -61,7 +61,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="spacer"></div>
 
         @if (CanInvite) {
-          <button type="button" mjButton variant="primary" size="sm" (click)="ToggleInviteForm()">
+          <button type="button" mjButton Variant="primary" Size="sm" (click)="ToggleInviteForm()">
             <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
             <span>Invite person</span>
           </button>
@@ -73,12 +73,12 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <span>{{ InviteOutcome!.message }}</span>
           @if (RedemptionUrl) {
             <input type="text" class="invite-link" readonly [value]="RedemptionUrl" aria-label="Sign-in link" />
-            <button type="button" mjButton variant="flat" size="sm" class="copy-link-btn" (click)="CopyLink()">{{ LinkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
+            <button type="button" mjButton Variant="flat" Size="sm" class="copy-link-btn" (click)="CopyLink()">{{ LinkStatus() === 'copied' ? 'Copied' : 'Copy link' }}</button>
             @if (LinkStatus() === 'failed') {
               <span class="invite-outcome-error" role="alert">Couldn't copy the link. Select it and copy it.</span>
             }
           }
-          <button type="button" mjButton variant="flat" size="sm" (click)="DismissInviteOutcome()">Dismiss</button>
+          <button type="button" mjButton Variant="flat" Size="sm" (click)="DismissInviteOutcome()">Dismiss</button>
         </div>
       }
 
@@ -105,15 +105,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <button
               type="button"
               mjButton
-              variant="primary"
-              size="sm"
+              Variant="primary"
+              Size="sm"
               [disabled]="!inviteEmail.trim() || IsSendingInvite"
               [attr.aria-busy]="IsSendingInvite"
               (click)="submitInvite()"
             >
               {{ IsSendingInvite ? 'Sending…' : 'Send Invite' }}
             </button>
-            <button type="button" mjButton variant="flat" size="sm" [disabled]="IsSendingInvite" (click)="CancelInvite()">
+            <button type="button" mjButton Variant="flat" Size="sm" [disabled]="IsSendingInvite" (click)="CancelInvite()">
               Cancel
             </button>
           </div>
@@ -158,15 +158,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                       <span class="person-source">
                         Their own seat here is {{ m.ownSeat.status }}
                         @if (m.ownSeat.canApprove && Pending?.id !== m.ownSeat.id) {
-                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
+                          <button type="button" mjButton Variant="flat" Size="sm" [attr.aria-label]="'Approve the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'approve')">Approve</button>
                         }
                         @if (m.ownSeat.canRemove && m.ownSeat.status !== 'Removed' && Pending?.id !== m.ownSeat.id) {
-                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
+                          <button type="button" mjButton Variant="flat" Size="sm" [attr.aria-label]="'Withdraw the seat of ' + m.name" (click)="Ask(OwnSeatOf(m), 'remove')">Withdraw</button>
                         }
                         @if (Pending?.id === m.ownSeat.id) {
                           {{ PendingQuestion(OwnSeatOf(m)) }}
-                          <button type="button" mjButton variant="primary" size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                          <button type="button" mjButton variant="flat" size="sm" (click)="Pending = null">Cancel</button>
+                          <button type="button" mjButton Variant="primary" Size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
+                          <button type="button" mjButton Variant="flat" Size="sm" (click)="Pending = null">Cancel</button>
                         }
                       </span>
                     }
@@ -199,11 +199,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     @if (!m.inherited && (m.canApprove || m.canRemove || m.canChangeRole)) {
                       @if (Pending?.id === m.id) {
                         <span class="fs12">{{ PendingQuestion(m) }}</span>
-                        <button type="button" mjButton variant="primary" size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
-                        <button type="button" mjButton variant="flat" size="sm" (click)="Pending = null">Cancel</button>
+                        <button type="button" mjButton Variant="primary" Size="sm" [disabled]="IsBusy" (click)="ConfirmPending()">Confirm</button>
+                        <button type="button" mjButton Variant="flat" Size="sm" (click)="Pending = null">Cancel</button>
                       } @else {
                         @if (m.canApprove) {
-                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
+                          <button type="button" mjButton Variant="flat" Size="sm" [attr.aria-label]="'Approve ' + m.name" (click)="Ask(m, 'approve')">Approve</button>
                         }
                         @if (m.canChangeRole && RoleOptions.length > 0) {
                           <mj-dropdown
@@ -217,7 +217,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                             (ngModelChange)="AskRole(m, $event)" />
                         }
                         @if (m.canRemove) {
-                          <button type="button" mjButton variant="flat" size="sm" [attr.aria-label]="(m.status === 'Invited' ? 'Withdraw the seat of ' : 'Remove ') + m.name" (click)="Ask(m, 'remove')">{{ m.status === 'Invited' ? 'Withdraw' : 'Remove' }}</button>
+                          <button type="button" mjButton Variant="flat" Size="sm" [attr.aria-label]="(m.status === 'Invited' ? 'Withdraw the seat of ' : 'Remove ') + m.name" (click)="Ask(m, 'remove')">{{ m.status === 'Invited' ? 'Withdraw' : 'Remove' }}</button>
                         }
                       }
                     }

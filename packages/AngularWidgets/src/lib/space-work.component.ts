@@ -65,7 +65,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="spacer"></div>
 
         @if (CanCreateTask) {
-          <button type="button" mjButton variant="primary" size="sm" (click)="openAddTask()">
+          <button type="button" mjButton Variant="primary" Size="sm" (click)="openAddTask()">
             <i class="fa-solid fa-plus" aria-hidden="true"></i>
             <span>Add task</span>
           </button>
@@ -100,10 +100,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             [Data]="priorityChoices"
             [ValuePrimitive]="true"
             [(ngModel)]="newTaskPriority" />
-          <button type="button" mjButton variant="primary" size="sm" [disabled]="!newTaskName.trim()" (click)="submitNewTask()">
+          <button type="button" mjButton Variant="primary" Size="sm" [disabled]="!newTaskName.trim()" (click)="submitNewTask()">
             Add
           </button>
-          <button type="button" mjButton variant="flat" size="sm" (click)="isAddingTask = false">
+          <button type="button" mjButton Variant="flat" Size="sm" (click)="isAddingTask = false">
             Cancel
           </button>
         </div>

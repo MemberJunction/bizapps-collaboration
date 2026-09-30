@@ -6,12 +6,12 @@ import { type BaseEntity, CompositeKey, LogError, RunView, type UserInfo } from 
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
-import { chatState, type ChatState } from './logic/chat-state.js';
+import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
 import { type CollaborationSettings, DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
@@ -164,6 +164,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
+        MJAlertComponent,
         MJClickableDirective,
         MJEmptyStateComponent,
         MJViewToggleComponent,
@@ -596,14 +597,14 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             <mj-page-body [Padding]="false">
                 @if (isLoading) {
                     <div class="collab-loading-state">
-                        <mj-loading text="Loading workspace..."></mj-loading>
+                        <mj-loading Text="Loading workspace..."></mj-loading>
                     </div>
                 } @else if (loadErrorMessage) {
                     <div class="collab-error-state">
                         <i class="fa-solid fa-triangle-exclamation"></i>
                         <h3>Error Loading Workspace</h3>
                         <p>{{ loadErrorMessage }}</p>
-                        <button mjButton variant="primary" size="md" (click)="onRetryLoad()">Try again</button>
+                        <button mjButton Variant="primary" Size="md" (click)="onRetryLoad()">Try again</button>
                     </div>
                 } @else if (!hasAccess) {
                     <mjc-no-access [Seats]="seats" />
@@ -850,6 +851,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 }
 
                                 @default {
+                                    @if (seatLookup === 'failed') {
+                                        <mj-alert
+                                            class="seat-lookup-failed"
+                                            Variant="warning"
+                                            Role="alert"
+                                            Title="We couldn't check what you can do in this space"
+                                            Message="Until that's known, posting, uploading, inviting and sharing are hidden. Nothing about your seat has changed.">
+                                            <button actions type="button" mjButton Variant="secondary" Size="sm" (click)="onRetrySeatLookup()">Try again</button>
+                                        </mj-alert>
+                                    }
                                     <mjc-space-header
                                         [Breadcrumbs]="breadcrumbs"
                                         [TypeColor]="headerTypeColor"
@@ -870,17 +881,17 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             />
                                             @if (activeTab === 'Overview') {
                                                 @if (canInviteHere) {
-                                                    <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
+                                                    <button mjButton Variant="secondary" Size="md" (click)="onInviteClicked()">
                                                         <i class="fa-solid fa-user-plus"></i>Invite
                                                     </button>
                                                 }
                                                 @if (canAddHere && hasTab('Work')) {
-                                                    <button mjButton variant="primary" size="md" (click)="onNewClicked()">
+                                                    <button mjButton Variant="primary" Size="md" (click)="onNewClicked()">
                                                         <i class="fa-solid fa-plus"></i>New
                                                     </button>
                                                 }
                                             } @else if (canAddHere && hasTab('Library') && !contributedTabComponent) {
-                                                <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
+                                                <button mjButton Variant="primary" Size="md" (click)="onUploadClicked()">
                                                     <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
                                                 </button>
                                             }
@@ -894,7 +905,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
 
                                     <div class="content-area">
                                         @if (isLoadingSpace) {
-                                            <mj-loading text="Loading space..."></mj-loading>
+                                            <mj-loading Text="Loading space..."></mj-loading>
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
@@ -1019,7 +1030,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
-                                                    [IsReadOnly]="chatStateNow.kind === 'closed' || chatStateNow.kind === 'noSeat'"
+                                                    [IsReadOnly]="chatStateNow.kind === 'closed' || chatStateNow.kind === 'noSeat' || chatStateNow.kind === 'seatUnknown'"
                                                     [IsPending]="chatStateNow.kind === 'pending'"
                                                     [ReadOnlyNote]="chatReadOnlyNote"
                                                     [OutsideParticipantCount]="outsideParticipantCount"
@@ -1239,8 +1250,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
     /** The seat the caller reaches the current space through, once resolved; null until then or when they have none. */
     private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
-    /** The caller's seat on the current space has been resolved, whether or not they have one: kept apart from what it is. */
-    private seatKnown = false;
+    /**
+     * Whether the caller's seat on the current space has been looked up, kept apart from what it is: pending until the lookup
+     * returns, known when it did (with a seat or without one), failed when it threw. A failed lookup is not "no seat".
+     */
+    public seatLookup: SeatLookup = 'pending';
     /** The current space type's default band for new material and tasks: the Work tab's default while the seat is unresolved. */
     public typeDefaultBand: SpaceBand | null = null;
     /** The roles the caller's seat may hand out: the invite form and the role picker offer these, highest first. */
@@ -1251,6 +1265,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async updateBandChoice(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
         let choice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
         let resolved: typeof this.callerSeat = null;
+        let lookup: SeatLookup = 'known';
         const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
         try {
             const user = this.currentUser;
@@ -1259,12 +1274,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 choice = uploadBandChoice(type?.DefaultBand ?? null, resolved.role.canSeeTeamBand, resolved.role.canPromoteBand);
             }
         } catch (error) {
+            // The page couldn't check: that is said as such, with a way to try again, and not as a person who has no seat
+            lookup = 'failed';
             LogError(`Failed to resolve the caller's seat on space ${space.ID}: ${error instanceof Error ? error.message : String(error)}`);
         }
         if (!isCurrent()) return;
         this.bandChoice = choice;
         this.callerSeat = resolved;
-        this.seatKnown = true;
+        this.seatLookup = lookup;
         this.typeDefaultBand = type?.DefaultBand ?? null;
         this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
     }
@@ -1842,13 +1859,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * lets them post, or open. The chat's `ReadOnly`, its note and its lock all follow it.
      */
     public get chatStateNow(): ChatState {
-        return chatState({ isClosed: this.isSpaceClosed, seatKnown: this.seatKnown, canContribute: this.canContribute, overList: !this.activeConversationId });
+        return chatState({ isClosed: this.isSpaceClosed, seat: this.seatLookup, canContribute: this.canContribute, overList: !this.activeConversationId });
     }
 
     /** Why the conversation can't be posted in, or empty while it can or while the seat is not yet known. */
     public get chatReadOnlyNote(): string {
         const state = this.chatStateNow;
-        return state.kind === 'closed' || state.kind === 'noSeat' ? state.note : '';
+        return state.kind === 'closed' || state.kind === 'noSeat' || state.kind === 'seatUnknown' ? state.note : '';
+    }
+
+    /** The seat lookup failed and is tried again, for the space still shown. */
+    public async onRetrySeatLookup(): Promise<void> {
+        const space = this.activeSpaceRecord;
+        if (!space) return;
+        const spaceId = space.ID;
+        this.seatLookup = 'pending';
+        await this.updateBandChoice(space, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        await this.updateCanConfigureCurrentSpace();
     }
 
     public get discussionAudienceCount(): number {
@@ -2202,7 +2229,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceConversations = [];
         this.bandChoice = null;
         this.callerSeat = null;
-        this.seatKnown = false;
+        this.seatLookup = 'pending';
         this.typeDefaultBand = null;
         this.inviteOutcome = null;
 

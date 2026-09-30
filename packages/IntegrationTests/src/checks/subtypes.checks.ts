@@ -296,6 +296,58 @@ const checks: NamedCheck[] = [
         },
     },
     {
+        Id: 'subtypes.ST7',
+        Name: "ST7 — a board saved on its own, the way a client's save arrives, reaches the type's driver with the old value and the new one: lowering an open board's quorum is refused, and raising it lands",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const dev = await GetPersonaUser(ctx, 'dev');
+            const boardType = await typeId(ctx, 'example-board');
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            space.NewRecord();
+            space.Name = `${CHECK_SPACE_PREFIX}ST7 board ${Date.now()}`;
+            space.SpaceTypeID = boardType;
+            space.OwnerID = ada.ID;
+            space.InheritsMembership = false;
+            await space.EnsureISAChild();
+            const made = space.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity;
+            made.TermName = 'Original';
+            made.QuorumPercentage = 60;
+            Assert(await made.Save(), `Ada creates a board: ${made.LatestResult?.CompleteMessage ?? ''}`);
+            const id = space.ID;
+            try {
+                await seatOwner(ctx, id);
+                await seatOther(ctx, id, 'dev', "Code = 'owner'");
+                // The subtype built from its own side, not through a loaded space: MJ's resolver does this for a client's save. The space
+                // it builds for itself has to be linked back to it, or the space can't see what changed and the driver's rule is skipped.
+                const setQuorum = async (quorum: number) => {
+                    const board = await ctx.Provider.GetEntityObject<mjBizAppsCollabExamplesExampleBoardEntity>(BOARDS, dev);
+                    Assert(await board.Load(id), 'Dev loads the board by its own entity');
+                    board.QuorumPercentage = quorum;
+                    return { saved: await board.Save(), message: board.LatestResult?.CompleteMessage ?? '' };
+                };
+                const quorumNow = async () => (await FindRows<{ QuorumPercentage: number }>(ctx, BOARDS, `ID = '${id}'`, ['QuorumPercentage'], undefined, { BypassCache: true }))[0]?.QuorumPercentage;
+
+                const lowered = await setQuorum(50);
+                Assert(!lowered.saved && /60% to 50%/.test(lowered.message), `Lowering the quorum is refused by the driver, which names the old value and the new one: ${lowered.message}`);
+                Assert((await quorumNow()) === 60, 'The refused save changed nothing');
+                const raised = await setQuorum(75);
+                Assert(raised.saved, `Raising the quorum is allowed: ${raised.message}`);
+                Assert((await quorumNow()) === 75, 'and the row changed');
+            } finally {
+                const [closed] = await FindRows<{ ID: string }>(ctx, SPACE_ENTITY, `ID = '${id}' AND ClosedAt IS NOT NULL`, ['ID'], undefined, { BypassCache: true });
+                if (!closed) {
+                    const loaded = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                    if (await loaded.Load(id)) {
+                        loaded.ClosedAt = new Date(Date.now() - 60_000);
+                        await loaded.Save();
+                    }
+                }
+                await cleanupSpace(ctx.Provider, ctx.User, id);
+            }
+        },
+    },
+    {
         Id: 'subtypes.ST6',
         Name: 'ST6 — creating a space with its subtype logs no error: neither CreateSpace nor EnsureISAChild on a new space reads a subtype row that cannot exist yet',
         RequiresMutation: true,

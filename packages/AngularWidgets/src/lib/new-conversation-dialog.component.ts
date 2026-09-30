@@ -91,13 +91,13 @@ export interface NewConversationSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="md"
+          Variant="primary"
+          Size="md"
           [disabled]="!trimmedName || IsSubmitting"
           (click)="onSubmit()"
         >
           @if (IsSubmitting) {
-            <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
+            <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
           } @else {
             <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Conversation
           }
@@ -105,8 +105,8 @@ export interface NewConversationSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="secondary"
-          size="md"
+          Variant="secondary"
+          Size="md"
           [disabled]="IsSubmitting"
           (click)="onCancel()"
         >

@@ -35,7 +35,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         </div>
       </div>
       @if (Framed) {
-        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" ariaLabel="Close dialog">
+        <button mjButton Variant="icon" class="icon-btn-ghost close-btn" (click)="onCancel()" AriaLabel="Close dialog">
           <i class="fa-solid fa-xmark muted"></i>
         </button>
       }
@@ -102,7 +102,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                     <span>Applied</span>
                   </span>
                 } @else {
-                  <button type="button" mjButton variant="secondary" size="sm" class="apply-btn" (click)="onApplyFix(fix)">
+                  <button type="button" mjButton Variant="secondary" Size="sm" class="apply-btn" (click)="onApplyFix(fix)">
                     <i class="fa-solid fa-check"></i>
                     <span>Apply</span>
                   </button>
@@ -140,18 +140,18 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     @if (Framed) {
     <div class="m-f mj-dialog-actions">
       @if (Findings && Findings.length > 0) {
-        <button type="button" mjButton variant="primary" (click)="onApplyAndShare()">
+        <button type="button" mjButton Variant="primary" (click)="onApplyAndShare()">
           <i class="fa-solid fa-check"></i>
           <span>{{ primaryButtonText }}</span>
         </button>
-        <button type="button" mjButton variant="secondary" (click)="onShareAsIs()">Share as is</button>
+        <button type="button" mjButton Variant="secondary" (click)="onShareAsIs()">Share as is</button>
       } @else {
-        <button type="button" mjButton variant="primary" (click)="onShareAsIs()">
+        <button type="button" mjButton Variant="primary" (click)="onShareAsIs()">
           <i class="fa-solid fa-share"></i>
           <span>Share</span>
         </button>
       }
-      <button type="button" mjButton variant="flat" class="cancel-btn" (click)="onCancel()">Cancel</button>
+      <button type="button" mjButton Variant="flat" class="cancel-btn" (click)="onCancel()">Cancel</button>
     </div>
     }
   `,

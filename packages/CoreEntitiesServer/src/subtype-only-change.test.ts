@@ -145,6 +145,23 @@ describe("a change to only a subtype's own columns", () => {
         assert.deepEqual(driver.told[0].oldValues, { TermName: 'Original' });
     });
 
+    it("is refused when the space can't see the subtype that is saving it: a change nobody could judge doesn't pass, and neither the right nor the driver is asked", async () => {
+        configure = true;
+        configureAsked = 0;
+        const driver = new SpyDriver();
+        drivers.set(SPACE.toLowerCase(), driver);
+        const { space, history } = savedSpace({});
+        // MJ links a space to the subtype that saves it. Without the link, `LeafEntity` is the space itself.
+        Object.defineProperty(space, 'LeafEntity', { value: space, writable: true });
+        assert.equal(await SpaceEntityServer.prototype.Save.call(space, asSubtype(BOARDS)), false);
+        assert.match(history[0]?.Message ?? '', /can't see the subtype that is saving it/);
+        assert.equal(driver.asked.length, 0);
+        assert.equal(driver.told.length, 0);
+        assert.equal(configureAsked, 0);
+        // A plain save, which no subtype started, is not held to it
+        assert.equal(await SpaceEntityServer.prototype.Save.call(savedSpace({}).space, asSubtype(null)), true);
+    });
+
     it("is told to the space's own driver only: a parent's driver hears no child change, and is not asked", async () => {
         configure = true;
         const PARENT = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';

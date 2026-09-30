@@ -21,20 +21,21 @@ export class NewSpaceDraft {
     public readonly Space: mjBizAppsCollaborationSpaceEntity;
     public readonly Leaf: BaseEntity;
     public readonly DetailFields: readonly DetailField[];
-    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
-    public readonly FormSections: string[] | null;
     /** The subtype the type attached to the space, when it names one. */
     private readonly subtype: BaseEntity | null;
 
-    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, subtype: BaseEntity | null, own: readonly DetailField[], sections: string[] | null) {
+    private constructor(space: mjBizAppsCollaborationSpaceEntity, leaf: BaseEntity, subtype: BaseEntity | null, own: readonly DetailField[]) {
         this.Space = space;
         this.Leaf = leaf;
         this.subtype = subtype;
         this.DetailFields = own;
-        this.FormSections = sections;
     }
 
-    /** The form's sections once the type's UI driver has said which columns it hides: a section of only hidden columns is left out. */
+    /**
+     * The sections of the subtype's generated form that hold only its own, shown columns, or null when the form can't be shown alone.
+     * They depend on which columns the type's UI driver hides, so there is no way to ask for them without saying: a section of only
+     * hidden columns is left out, and one that mixes hidden and shown columns means the field list.
+     */
     public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
         return this.subtype ? ownFormSections(this.subtype, hiddenFieldNames) : null;
     }
@@ -54,7 +55,7 @@ export class NewSpaceDraft {
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;
         const own = attached ? ownDetailFields(attached) : [];
-        return new NewSpaceDraft(space, leaf, attached, own, attached ? ownFormSections(attached) : null);
+        return new NewSpaceDraft(space, leaf, attached, own);
     }
 
     public get HasDetails(): boolean {
@@ -99,16 +100,15 @@ export type SaveDetailsOutcome = { ok: true } | { ok: false; message: string };
 export class SpaceDetails {
     public readonly Leaf: BaseEntity;
     public readonly Fields: readonly DetailField[];
-    /** The sections of the subtype's generated form that hold only its own columns, or null when the form can't be shown alone. */
-    public readonly FormSections: string[] | null;
-
-    private constructor(leaf: BaseEntity, fields: readonly DetailField[], sections: string[] | null) {
+    private constructor(leaf: BaseEntity, fields: readonly DetailField[]) {
         this.Leaf = leaf;
         this.Fields = fields;
-        this.FormSections = sections;
     }
 
-    /** The form's sections once the type's UI driver has said which columns it hides: a section of only hidden columns is left out. */
+    /**
+     * The sections of the subtype's generated form that hold only its own, shown columns, or null when the form can't be shown alone.
+     * They depend on which columns the type's UI driver hides, so there is no way to ask for them without saying.
+     */
     public FormSectionsHiding(hiddenFieldNames: readonly string[] | undefined): string[] | null {
         return ownFormSections(this.Leaf, hiddenFieldNames);
     }
@@ -119,7 +119,7 @@ export class SpaceDetails {
         if (!(await space.Load(spaceId))) return null;
         const leaf: BaseEntity = space.LeafEntity;
         if (leaf === space) return null;
-        return new SpaceDetails(leaf, ownDetailFields(leaf), ownFormSections(leaf));
+        return new SpaceDetails(leaf, ownDetailFields(leaf));
     }
 
     /** True while a detail was changed and not saved. */

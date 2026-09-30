@@ -20,7 +20,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           <div class="fw7 fs14 ellipsis title">{{ Title }}</div>
           <div class="fs12 muted meta">{{ Meta }}</div>
         </div>
-        <button mjButton variant="icon" class="icon-btn-ghost close-btn" (click)="onClose()" ariaLabel="Close preview">
+        <button mjButton Variant="icon" class="icon-btn-ghost close-btn" (click)="onClose()" AriaLabel="Close preview">
           <i class="fa-solid fa-xmark muted"></i>
         </button>
       </div>
@@ -66,7 +66,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="preview-actions">
           @if (CanShare) {
-            <button type="button" mjButton variant="primary" class="share-btn-full" (click)="onShare()">
+            <button type="button" mjButton Variant="primary" class="share-btn-full" (click)="onShare()">
               <i class="fa-solid fa-share-from-square" aria-hidden="true"></i>
               <span>{{ ShareButtonLabel || 'Share' }}</span>
             </button>
@@ -75,7 +75,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <button
               type="button"
               mjButton
-              variant="secondary"
+              Variant="secondary"
               class="open-file-btn"
               [disabled]="IsOpeningFile"
               [attr.aria-busy]="IsOpeningFile"
@@ -83,7 +83,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               [title]="IsOpeningFile ? (OpeningLabel || 'Opening document…') : 'Open Document'"
             >
               @if (IsOpeningFile) {
-                <mj-loading Size="small" [showText]="false"></mj-loading>
+                <mj-loading Size="small" [ShowText]="false"></mj-loading>
                 <span>{{ OpeningLabel || 'Opening…' }}</span>
               } @else {
                 <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>

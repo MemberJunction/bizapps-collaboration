@@ -344,8 +344,10 @@ async function runClaimedTurn(
         return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
     }
 
-    /** The observer hears how the turn ended; a fault in it never becomes the turn's own. */
+    /** The observer hears how the turn ended, once; a fault in it never becomes the turn's own. */
+    let finishedTold = false;
     const tellFinished = (outcome: TurnOutcome): void => {
+        finishedTold = true;
         try {
             input.observer?.OnFinished?.(outcome);
         } catch (observerError) {
@@ -483,13 +485,36 @@ async function runClaimedTurn(
         };
     };
 
+    /**
+     * The turn, held to its promise even when something throws after the reply row was written (a `Save()` throws when the database
+     * can't be reached): the row is marked Error, once, and the observer is told the turn failed, with the row's id. Without that a
+     * reply would stay In-Progress in the conversation and on screen, since the chat follows it only through the published completion.
+     */
+    const settleTurn = async (): Promise<ExecuteSpaceChatTurnResult> => {
+        try {
+            return await finishTurn();
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            LogError(`executeSpaceChatTurn: the turn threw after its reply row was written: ${reason}`);
+            try {
+                assistantDetail.Status = 'Error';
+                assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
+                if (!(await assistantDetail.Save())) {
+                    LogError(`executeSpaceChatTurn: failed to mark the reply Error after the turn threw: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+                }
+            } catch (markError) {
+                LogError(`executeSpaceChatTurn: failed to mark the reply Error after the turn threw: ${markError instanceof Error ? markError.message : String(markError)}`);
+            }
+            if (!finishedTold) tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: null, errorMessage: reason });
+            return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
+        }
+    };
+
     if (input.background) {
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
-        void finishTurn()
-            .catch((error: unknown) => LogError(`executeSpaceChatTurn: the background turn failed: ${error instanceof Error ? error.message : String(error)}`))
-            .finally(handoff.release);
+        void settleTurn().finally(handoff.release);
         return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name) };
     }
-    return finishTurn();
+    return settleTurn();
 }

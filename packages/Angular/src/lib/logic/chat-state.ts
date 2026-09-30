@@ -7,15 +7,22 @@
 export type ChatState =
     | { kind: 'closed'; note: string }
     | { kind: 'pending' }
+    | { kind: 'seatUnknown'; note: string }
     | { kind: 'noSeat'; note: string }
     | { kind: 'open' };
+
+/**
+ * What the page knows of the caller's seat on the space shown: not yet looked up, looked up (with a seat or without one), or a
+ * lookup that failed. A failed lookup is not "no seat": the page couldn't check, and says so, with a way to try again.
+ */
+export type SeatLookup = 'pending' | 'known' | 'failed';
 
 export interface ChatStateInput {
     /** The space is closed: conversations are read-only for everyone. */
     isClosed: boolean;
-    /** The caller's seat on this space has been resolved, whether or not they have one. */
-    seatKnown: boolean;
-    /** The resolved seat may post. Meaningless while `seatKnown` is false. */
+    /** Whether the caller's seat on this space has been resolved. */
+    seat: SeatLookup;
+    /** The resolved seat may post. Meaningless unless `seat` is `known`. */
     canContribute: boolean;
     /** The lock stands over the list of conversations rather than over one of them. */
     overList: boolean;
@@ -29,9 +36,13 @@ export function noSeatChatNote(overList: boolean): string {
         : "You can read this conversation but can't post in it: you have no seat in this space that lets you post.";
 }
 
+/** Said when the seat couldn't be looked up: the conversation can still be read, and nobody is told they have no seat. */
+export const SEAT_UNKNOWN_CHAT_NOTE = "We couldn't check whether you can post here, so this is read-only for now. Try again above.";
+
 export function chatState(input: ChatStateInput): ChatState {
     if (input.isClosed) return { kind: 'closed', note: CLOSED_CHAT_NOTE };
-    if (!input.seatKnown) return { kind: 'pending' };
+    if (input.seat === 'pending') return { kind: 'pending' };
+    if (input.seat === 'failed') return { kind: 'seatUnknown', note: SEAT_UNKNOWN_CHAT_NOTE };
     if (!input.canContribute) return { kind: 'noSeat', note: noSeatChatNote(input.overList) };
     return { kind: 'open' };
 }

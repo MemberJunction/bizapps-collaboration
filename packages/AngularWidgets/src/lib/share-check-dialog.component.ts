@@ -11,7 +11,9 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   imports: [MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, CollabShareCheckComponent],
   template: `
     <mj-dialog [Visible]="true" [Title]="Title || 'Share an item'" [Width]="680" (Close)="onCancel()">
-    <div class="share-modal">
+    <!-- The dialog has no field, so mj-dialog would open on its first button: Share, when there are no findings. The focus starts
+         here instead, on the content itself, so that Enter right after it opens shares nothing. -->
+    <div class="share-modal" data-autofocus tabindex="-1">
       <mjc-share-check
         #check
         [Framed]="false"
@@ -37,24 +39,29 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     </div>
     <mj-dialog-actions>
       @if (Findings && Findings.length > 0) {
-        <button mjButton variant="primary" (click)="check.onApplyAndShare()">
+        <button mjButton Variant="primary" (click)="check.onApplyAndShare()">
           <i class="fa-solid fa-check"></i>
           <span>{{ check.primaryButtonText }}</span>
         </button>
-        <button mjButton variant="secondary" (click)="check.onShareAsIs()">Share as is</button>
+        <button mjButton Variant="secondary" (click)="check.onShareAsIs()">Share as is</button>
       } @else {
-        <button mjButton variant="primary" (click)="check.onShareAsIs()">
+        <button mjButton Variant="primary" (click)="check.onShareAsIs()">
           <i class="fa-solid fa-share"></i>
           <span>Share</span>
         </button>
       }
-      <button mjButton variant="flat" (click)="onCancel()">Cancel</button>
+      <button mjButton Variant="flat" (click)="onCancel()">Cancel</button>
     </mj-dialog-actions>
     </mj-dialog>
   `,
   styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: contents;
+    }
+
+    /* A place for the focus to start, not a control: it takes no outline */
+    .share-modal:focus {
+      outline: none;
     }
 
     .share-modal {

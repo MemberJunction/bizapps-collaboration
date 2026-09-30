@@ -36,8 +36,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="sm"
+          Variant="primary"
+          Size="sm"
           class="send"
           [disabled]="IsSubmitting || !Query.trim()"
           (click)="onSend()"

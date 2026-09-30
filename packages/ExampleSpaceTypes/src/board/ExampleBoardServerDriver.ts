@@ -65,7 +65,11 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
         if (ctx.kind === 'Update' && ctx.space.ClosedAt == null && ctx.oldValues && 'QuorumPercentage' in ctx.oldValues) {
             const before = Number(ctx.oldValues['QuorumPercentage']);
             const after = Number((ctx.space.LeafEntity as mjBizAppsCollabExamplesExampleBoardEntity).QuorumPercentage);
-            if (Number.isFinite(before) && Number.isFinite(after) && after < before) {
+            // A rule that compares two values can't pass a change it can't read: refuse, don't wave it through
+            if (!Number.isFinite(before) || !Number.isFinite(after)) {
+                return { ok: false, message: "A board's quorum change can't be judged: its old or new value couldn't be read.", field: 'QuorumPercentage' };
+            }
+            if (after < before) {
                 return {
                     ok: false,
                     message: `A board's quorum can be raised while it is open, not lowered (${before}% to ${after}%). Close the board to change its rules.`,

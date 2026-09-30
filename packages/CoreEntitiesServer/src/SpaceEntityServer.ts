@@ -735,6 +735,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         // reach whichever side the save started from: loaded through the space, or built on its own and linked back to the space it
         // made. MJ saves the parent chain whether or not the subtype is dirty, so a save that changes nothing has nothing to
         // judge, and nobody is asked or told.
+        // The subtype that is saving this space has to be in reach: a space has one subtype, and MJ links the space to it. Were the
+        // link missing, the subtype's changes couldn't be seen, and a change to only its columns would pass unjudged. That is an
+        // invariant, checked: the save is refused rather than let through.
+        if (this.savingAsSubtype && this.LeafEntity === this) {
+            this.readingForSave = null;
+            this.savingAsSubtype = null;
+            return failSave(this, "Space change refused: the space can't see the subtype that is saving it, so its change can't be judged.");
+        }
         const subtypeOldValues = this.savingAsSubtype && this.IsSaved && !own.changed ? this.subtypeOldValues() : null;
         const subtypeOnlyChange = subtypeOldValues !== null && Object.keys(subtypeOldValues).length > 0;
         if (subtypeOnlyChange) {

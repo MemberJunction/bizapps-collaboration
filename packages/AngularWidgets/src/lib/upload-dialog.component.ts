@@ -87,7 +87,7 @@ export interface CollabUploadSubmitPayload {
                     <span class="file-name ellipsis">{{ selectedFile.name }}</span>
                     <span class="file-size">{{ formatBytes(selectedFile.size) }}</span>
                   </div>
-                  <button type="button" mjButton variant="icon" size="sm" (click)="clearFile()" title="Remove file" ariaLabel="Remove file">
+                  <button type="button" mjButton Variant="icon" Size="sm" (click)="clearFile()" title="Remove file" AriaLabel="Remove file">
                     <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                   </button>
                 </div>
@@ -201,19 +201,19 @@ export interface CollabUploadSubmitPayload {
         <mj-dialog-actions>
           <button
             mjButton
-            variant="primary"
-            size="md"
+            Variant="primary"
+            Size="md"
             (click)="onSubmit()"
             [disabled]="!canSubmit || IsSubmitting"
           >
             @if (IsSubmitting) {
-              <mj-loading Size="small" [showText]="false"></mj-loading> Saving...
+              <mj-loading Size="small" [ShowText]="false"></mj-loading> Saving...
             } @else {
               <i [class]="activeMode === 'upload' ? 'fa-solid fa-arrow-up-from-bracket' : 'fa-solid fa-link'"></i>
               {{ activeMode === 'upload' ? 'Upload file' : 'Link document' }}
             }
           </button>
-          <button mjButton variant="secondary" size="md" (click)="onCancel()" [disabled]="IsSubmitting">
+          <button mjButton Variant="secondary" Size="md" (click)="onCancel()" [disabled]="IsSubmitting">
             Cancel
           </button>
         </mj-dialog-actions>

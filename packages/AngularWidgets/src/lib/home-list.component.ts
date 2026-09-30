@@ -30,17 +30,17 @@ export interface HomeListRow {
     <section class="hl" [attr.aria-labelledby]="'hl-title-' + Id">
       <header class="hl-head">
         <h2 class="hl-title" [id]="'hl-title-' + Id">{{ Title }}</h2>
-        <button type="button" mjButton variant="icon" size="sm" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
+        <button type="button" mjButton Variant="icon" Size="sm" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
       </header>
       @if (IsLoading) {
-        <div class="hl-state" role="status"><mj-loading Size="small" [showText]="false"></mj-loading> <span>Reading…</span></div>
+        <div class="hl-state" role="status"><mj-loading Size="small" [ShowText]="false"></mj-loading> <span>Reading…</span></div>
       } @else if (ErrorMessage) {
         <div class="hl-state hl-error" role="alert">
           <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
           <span>{{ ErrorMessage }}</span>
-          <button type="button" mjButton variant="secondary" size="sm" (click)="RetryRequested.emit()">Try again</button>
+          <button type="button" mjButton Variant="secondary" Size="sm" (click)="RetryRequested.emit()">Try again</button>
         </div>
       } @else if (Rows.length === 0) {
         <div class="hl-state" role="status">{{ EmptyMessage }}</div>

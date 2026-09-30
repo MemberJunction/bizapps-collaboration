@@ -23,14 +23,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="sm"
+          Variant="primary"
+          Size="sm"
           [disabled]="isSaving"
           [attr.aria-busy]="isSaving"
           (click)="saveChanges()"
         >
           @if (isSaving) {
-            <mj-loading Size="small" [showText]="false"></mj-loading>
+            <mj-loading Size="small" [ShowText]="false"></mj-loading>
             <span>Saving...</span>
           } @else {
             <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -273,14 +273,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             }
             @if (DetailsEditable) {
               <div class="details-actions">
-                <button type="button" mjButton variant="primary" size="sm" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" [attr.aria-busy]="IsSavingDetails" (click)="SaveDetailsRequested.emit()">
+                <button type="button" mjButton Variant="primary" Size="sm" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" [attr.aria-busy]="IsSavingDetails" (click)="SaveDetailsRequested.emit()">
                   @if (IsSavingDetails) {
-                    <mj-loading Size="small" [showText]="false"></mj-loading> <span>Saving...</span>
+                    <mj-loading Size="small" [ShowText]="false"></mj-loading> <span>Saving...</span>
                   } @else {
                     <i class="fa-solid fa-check" aria-hidden="true"></i> <span>Save details</span>
                   }
                 </button>
-                <button type="button" mjButton variant="flat" size="sm" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
+                <button type="button" mjButton Variant="flat" Size="sm" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
               </div>
             }
           </div>
@@ -293,10 +293,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <div class="cb-title">Status: {{ formData.status }}</div>
               @if (confirmingLifecycle) {
                 <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
-                <button type="button" mjButton [variant]="formData.status === 'Closed' ? 'primary' : 'danger'" size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
-                <button type="button" mjButton variant="flat" size="sm" (click)="confirmingLifecycle = false">Cancel</button>
+                <button type="button" mjButton [Variant]="formData.status === 'Closed' ? 'primary' : 'danger'" Size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <button type="button" mjButton Variant="flat" Size="sm" (click)="confirmingLifecycle = false">Cancel</button>
               } @else {
-                <button type="button" mjButton variant="outline" size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+                <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
         }

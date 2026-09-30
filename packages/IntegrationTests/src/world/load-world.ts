@@ -341,7 +341,7 @@ export async function loadWorld(): Promise<void> {
     }
 
     // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer only for an open
-    // conversation (a closed space's banner shows without one, and its archived conversation is read-only). Closed this month's is made
+    // conversation (a closed space's lock shows without one, and its archived conversation is read-only). Closed this month's is made
     // before the close below, which archives it.
     await seedSpaceConversations('studio', 'ada', 'sam', true);
     await seedSpaceConversations('sealed-child', 'sam', 'ada', true);

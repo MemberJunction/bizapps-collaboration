@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
+  HostListener,
   Inject,
   Input,
   OnInit,
@@ -37,7 +38,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     <div class="chat-container">
       @if (IsPending) {
         <div class="chat-pending" role="status" aria-live="polite">
-          <mj-loading Size="small" [showText]="false"></mj-loading>
+          <mj-loading Size="small" [ShowText]="false"></mj-loading>
         </div>
       } @else if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
@@ -90,14 +91,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                       [title]="ReadOnlyNote"
                       [attr.aria-label]="ReadOnlyNote"
                       [attr.aria-expanded]="ReasonShown"
-                      aria-controls="mjc-read-only-reason"
+                      [attr.aria-controls]="ReasonId"
                       (focus)="onLockFocus()"
                       (blur)="onLockBlur()"
-                      (click)="onLockClick()">
+                      (keydown.escape)="onLockEscape()"
+                      (click)="onLockClick($event)">
                       <i class="fa-solid fa-lock" aria-hidden="true"></i>
                     </button>
                     @if (ReasonShown) {
-                      <span class="read-only-reason" id="mjc-read-only-reason" role="status">{{ ReadOnlyNote }}</span>
+                      <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
                     }
                   </span>
                 }
@@ -111,8 +113,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <button
                     type="button"
                     mjButton
-                    variant="primary"
-                    size="sm"
+                    Variant="primary"
+                    Size="sm"
                     class="btn-new-convo-header"
                     (click)="onNewConversation()"
                     title="New Conversation"
@@ -136,14 +138,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 [title]="ReadOnlyNote"
                 [attr.aria-label]="ReadOnlyNote"
                 [attr.aria-expanded]="ReasonShown"
-                aria-controls="mjc-read-only-reason"
+                [attr.aria-controls]="ReasonId"
                 (focus)="onLockFocus()"
                 (blur)="onLockBlur()"
-                (click)="onLockClick()">
+                (keydown.escape)="onLockEscape()"
+                (click)="onLockClick($event)">
                 <i class="fa-solid fa-lock" aria-hidden="true"></i>
               </button>
               @if (ReasonShown) {
-                <span class="read-only-reason" id="mjc-read-only-reason" role="status">{{ ReadOnlyNote }}</span>
+                <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
               }
             </span>
           }
@@ -334,9 +337,17 @@ export class CollabSpaceChatComponent implements OnInit {
     return this.CanStartConversation ? 'Start a new conversation to begin collaborating.' : 'There are no conversations in this space.';
   }
 
-  /** The lock's reason is on screen: shown while the lock has focus, and toggled by a tap or a click. */
+  private static nextReasonId = 0;
+  /** This instance's id for the reason, which the lock's `aria-controls` names: several chats can be on one page. */
+  public readonly ReasonId = `mjc-read-only-reason-${++CollabSpaceChatComponent.nextReasonId}`;
+
+  /**
+   * The lock's reason is on screen: shown while the lock has focus, toggled by a tap, a click, Enter or Space, and closed by
+   * Escape or by a tap or click anywhere else. It is the button's own label too, so it carries no live-region role of its own:
+   * a screen reader has already read it.
+   */
   public ReasonShown = false;
-  /** Focus opened the reason, so the click that follows a mouse-down keeps it open instead of closing it again. */
+  /** Focus opened the reason, so the pointer's click that follows the mouse-down that focused the lock keeps it open. */
   private reasonOpenedByFocus = false;
 
   public onLockFocus(): void {
@@ -349,14 +360,29 @@ export class CollabSpaceChatComponent implements OnInit {
     this.reasonOpenedByFocus = false;
   }
 
-  public onLockClick(): void {
-    if (this.reasonOpenedByFocus) {
-      this.reasonOpenedByFocus = false;
-      this.ReasonShown = true;
-      return;
-    }
-    this.ReasonShown = !this.ReasonShown;
+  /** A click made by Enter or Space (`detail` 0) always toggles; only a pointer's click right after focus is the one that keeps the reason open. */
+  public onLockClick(event: Pick<MouseEvent, 'detail'>): void {
+    const pointerAfterFocus = this.reasonOpenedByFocus && event.detail > 0;
+    this.reasonOpenedByFocus = false;
+    this.ReasonShown = pointerAfterFocus ? true : !this.ReasonShown;
   }
+
+  /** Escape closes the reason and leaves the focus on the lock. */
+  public onLockEscape(): void {
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
+  /** A tap or click outside the lock closes the reason: it covers what is under it. */
+  @HostListener('document:click', ['$event'])
+  public onDocumentClick(event: Pick<MouseEvent, 'target'>): void {
+    if (!this.ReasonShown) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('.read-only-lock-wrap')) return;
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';
