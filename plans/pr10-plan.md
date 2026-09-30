@@ -85,7 +85,7 @@ Each comes out with the MemberJunction fix it waits on. The tests that pinned th
 3. **Once it's in MJ `next`,** run both harnesses again on `next`.
 
 **Done when:**
-- none of the sites above is left: `git grep -n "ng-deep\|dialog-base\|MJ#48" -- packages` finds nothing, and no doc describes a stopgap for a MemberJunction defect;
+- none of the sites above is left: `git grep -nE "::ng-deep|dialog-base|CollabDialogBase" -- packages` finds nothing, no comment excuses a MemberJunction defect, and no doc describes a stopgap for one. A test that pins a fix may name its MJ issue;
 - the unit tests and both harnesses pass in the workspace on MJ `next` with MJ#4891 in it, and the push's comment gives the counts.
 
 ## 3. The pull requests beside this one
