@@ -33,26 +33,24 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
   template: `
-    <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
+    <div class="chat-container">
       @if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
-          [environmentId]="EnvironmentId"
-          [currentUser]="CurrentUser"
-          [conversationId]="ConversationId"
-          [applicationScope]="'Application'"
-          [applicationId]="ApplicationId"
-          [linkedEntityId]="SpaceEntityId"
-          [linkedRecordId]="SpaceId"
-          [defaultAgentId]="DefaultAgentId"
-          [allowMentions]="AllowMentions && !IsReadOnly"
-          [allowAgentMentions]="!IsReadOnly"
-          [allowEntityMentions]="false"
-          [allowSkillCommands]="false"
-          [allowAttachments]="AllowAttachments && !IsReadOnly"
+          [EnvironmentId]="EnvironmentId"
+          [CurrentUser]="CurrentUser"
+          [ConversationId]="ConversationId"
+          [ApplicationScope]="'Application'"
+          [ApplicationId]="ApplicationId"
+          [LinkedEntityId]="SpaceEntityId"
+          [LinkedRecordId]="SpaceId"
+          [DefaultAgentId]="DefaultAgentId"
+          [ReadOnly]="IsReadOnly"
+          [ReadOnlyMessage]="ReadOnlyNote"
+          [AllowMentions]="AllowMentions"
+          [AllowEntityMentions]="false"
+          [AllowSkillCommands]="false"
+          [AllowAttachments]="AllowAttachments"
           [AllowRealtime]="false"
-          [AllowPinning]="!IsReadOnly"
-          [AllowMessageEdit]="!IsReadOnly"
-          [AllowMessageDelete]="!IsReadOnly"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
           [MentionPeople]="MentionPeople"
@@ -285,10 +283,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         gap: 6px;
       }
 
-      .read-only-chat ::ng-deep .message-input-container-wrapper {
-        display: none !important;
-      }
-
       /* A conversation that can't be posted in says why on hover: a lock, not a banner that takes a row */
       .read-only-lock {
         display: inline-flex;
@@ -322,7 +316,7 @@ export class CollabSpaceChatComponent implements OnInit {
     this.streaming.initialize();
   }
 
-  /** The conversation can be read and not posted in: the composer is hidden and `ReadOnlyNote` says why. */
+  /** The conversation can be read and not posted in: MJ's chat area takes `ReadOnly` and shows `ReadOnlyNote` where the composer was, and the header's lock says why. */
   @Input() public IsReadOnly = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
   @Input() public ConversationId: string | null = null;

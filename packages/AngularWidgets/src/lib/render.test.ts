@@ -4,7 +4,7 @@ import { Component, EventEmitter, type Type } from '@angular/core';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
 import { ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { CollabBandChipComponent } from './band-chip.component.ts';
@@ -241,7 +241,20 @@ describe('the dialogs, rendered', () => {
     }
   });
 
-  it('focuses the first field when it opens, the marked control when there is one, and the container, not a button, when there is neither', () => {
+  it("leaves focus to mj-dialog (MJ#4839): none of the dialogs turns its autofocus, Tab trap or focus return off, or handles Tab itself", () => {
+    for (const Dialog of [CollabNewConversationDialogComponent, CollabUploadDialogComponent, CollabShareCheckDialogComponent, CollabNewSpaceDialogComponent]) {
+      const fixture = TestBed.createComponent(Dialog as Type<unknown>);
+      fixture.detectChanges();
+      const dialog = fixture.debugElement.query((node) => node.name === 'mj-dialog').injector.get(MJDialogComponent);
+      expect([dialog.AutoFocus, dialog.TrapFocus, dialog.RestoreFocus]).toEqual([true, true, true]);
+      // No listener of the dialog's own on the document: MJ's handler sits on its container
+      const def = (Dialog as unknown as { ɵcmp: { hostBindings: unknown } }).ɵcmp;
+      expect(def.hostBindings).toBeNull();
+      fixture.destroy();
+    }
+  });
+
+  it('opens on the first field, on the marked control when there is one, and on a button in the body or actions, never the close button, when there is neither', () => {
     vi.useFakeTimers();
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);
     convo.detectChanges();
@@ -258,13 +271,13 @@ describe('the dialogs, rendered', () => {
     const share = TestBed.createComponent(CollabShareCheckDialogComponent);
     share.detectChanges();
     vi.runAllTimers();
-    expect(document.activeElement?.classList.contains('mj-dialog-container')).toBe(true);
-    expect(document.activeElement?.tagName).not.toBe('BUTTON');
+    const active = document.activeElement as HTMLElement;
+    expect(active.tagName).toBe('BUTTON');
+    expect(active.getAttribute('aria-label')).not.toBe('Close dialog');
+    expect((share.nativeElement as HTMLElement).contains(active)).toBe(true);
   });
 
-  it('gives focus back to what opened the dialog when it closes, and to the main area when that is gone', () => {
-    const main = document.createElement('main');
-    document.body.appendChild(main);
+  it('gives focus back to what opened the dialog when it closes, and leaves it on the page when that is gone', () => {
     const opener = document.createElement('button');
     document.body.appendChild(opener);
     opener.focus();
@@ -280,9 +293,11 @@ describe('the dialogs, rendered', () => {
     second.focus();
     const again = TestBed.createComponent(CollabNewConversationDialogComponent);
     again.detectChanges();
+    document.body.querySelector<HTMLElement>('input')?.focus();
     second.remove();
     again.destroy();
-    expect(document.activeElement).toBe(main);
+    // mj-dialog blurs to the body rather than picking a landing place of its own
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('asks for the share when Share is clicked, and not when Cancel is', async () => {
@@ -302,10 +317,11 @@ describe('the dialogs, rendered', () => {
     expect(shared).toHaveBeenCalledTimes(1);
   });
 
+  /** Tab from an element inside the dialog: the key bubbles to mj-dialog's container, where its trap listens. */
   const tabFrom = (element: HTMLElement, shiftKey = false): KeyboardEvent => {
     element.focus();
     const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
-    document.dispatchEvent(tab);
+    element.dispatchEvent(tab);
     return tab;
   };
 
@@ -328,7 +344,7 @@ describe('the dialogs, rendered', () => {
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
     const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
-    container.setAttribute('tabindex', '-1');
+    expect(container.getAttribute('tabindex')).toBe('-1');
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('button'));
     expect(tabFrom(container, true).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(buttons[buttons.length - 1]);
@@ -343,13 +359,12 @@ describe('the dialogs, rendered', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       const host = fixture.nativeElement as HTMLElement;
-      // Every control is off, as it is while the save runs: the container is what is left, and it was never made focusable by an open on a field
+      // Every control is off, as it is while the save runs: the container, which mj-dialog keeps focusable and out of the tab order, is what is left
       host.querySelectorAll<HTMLElement>('input, select, textarea, button').forEach((el) => el.setAttribute('disabled', ''));
       host.querySelectorAll<HTMLElement>('[tabindex]').forEach((el) => {
         if (!el.classList.contains('mj-dialog-container')) el.setAttribute('tabindex', '-1');
       });
       const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
-      container.removeAttribute('tabindex');
       const tab = tabFrom(container, true);
       expect(tab.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(container);
@@ -370,6 +385,9 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
   public AllowRealtime = true;
+  /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
+  public ReadOnly = false;
+  public ReadOnlyMessage: string | null = null;
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
   public ComposerDraftConsumed = new EventEmitter<void>();
@@ -379,9 +397,9 @@ declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
   template: '<ng-content></ng-content>',
   inputs: [
-    'environmentId', 'currentUser', 'conversationId', 'applicationScope', 'applicationId', 'linkedEntityId', 'linkedRecordId', 'defaultAgentId',
-    'assistantDisplayName', 'allowMentions', 'allowAgentMentions', 'allowEntityMentions', 'allowSkillCommands', 'allowAttachments', 'AllowRealtime',
-    'AllowPinning', 'AllowMessageEdit', 'AllowMessageDelete', 'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
+    'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
+    'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
+    'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
   outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
@@ -706,7 +724,7 @@ describe('the conversation of a space, read-only', () => {
     return fixture.nativeElement as HTMLElement;
   };
 
-  it('says why it can be read and not posted in, as a lock with the reason on hover, not a banner', async () => {
+  it('says why it can be read and not posted in, as a lock with the reason on hover, not a banner of its own', async () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     const host = await render({ IsReadOnly: true, ConversationId: null, ReadOnlyNote: note });
     const lock = host.querySelector('.read-only-lock');
@@ -714,7 +732,27 @@ describe('the conversation of a space, read-only', () => {
     expect(lock?.getAttribute('aria-label')).toBe(note);
     expect(host.querySelector('.space-closed-banner')).toBeNull();
     expect(host.textContent).not.toContain(note);
-    expect(host.querySelector('.chat-container')?.classList.contains('read-only-chat')).toBe(true);
+  });
+
+  it("hands MJ's chat area ReadOnly and the reason, instead of hiding its composer from outside (MJ#4838)", async () => {
+    const note = 'This space is closed. Conversations are read-only.';
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('IsReadOnly', true);
+    fixture.componentRef.setInput('ReadOnlyNote', note);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    expect(area.ReadOnly).toBe(true);
+    expect(area.ReadOnlyMessage).toBe(note);
+    // No style reaches into MJ's markup: the composer is MJ's to hide
+    const styles = (CollabSpaceChatComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('\n');
+    expect(styles).not.toContain('ng-deep');
+    expect(styles).not.toContain('message-input-container');
   });
 
   it('shows no lock while it can be posted in, and says the space is closed unless told otherwise', async () => {

@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
-import { CollabDialogBase } from './dialog-base';
 import type { FileKind, FindingModel, RecipientPersonModel } from './types';
 import { CollabShareCheckComponent } from './share-check.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -66,10 +65,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
     }
   `],
 })
-export class CollabShareCheckDialogComponent extends CollabDialogBase {
-  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
-
+export class CollabShareCheckDialogComponent {
   @Input() public Title = '';
   @Input() public ItemName = '';
   @Input() public Kind: FileKind = 'doc';

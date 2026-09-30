@@ -1,5 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { CollabDialogBase } from './dialog-base';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
@@ -451,10 +450,7 @@ export interface CollabUploadSubmitPayload {
     }
   `],
 })
-export class CollabUploadDialogComponent extends CollabDialogBase {
-  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
-
+export class CollabUploadDialogComponent {
   @Input() SpaceName = '';
   @Input() SpaceId = '';
   @Input() ClientOrgName = '';

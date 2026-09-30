@@ -5,6 +5,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   Output,
   SimpleChanges,
   ViewChild,
@@ -13,7 +14,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface NewConversationSubmitPayload {
@@ -270,7 +270,7 @@ export interface NewConversationSubmitPayload {
     `,
   ],
 })
-export class CollabNewConversationDialogComponent extends CollabDialogBase implements OnChanges {
+export class CollabNewConversationDialogComponent implements OnChanges, OnDestroy {
   @Input() public SpaceName = '';
   @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
   @Input() public IsSubmitting = false;
@@ -279,23 +279,32 @@ export class CollabNewConversationDialogComponent extends CollabDialogBase imple
   @Output() public SubmitRequested = new EventEmitter<NewConversationSubmitPayload>();
 
   @ViewChild('nameInput') private nameInputElement?: ElementRef<HTMLInputElement>;
-  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  private refocusTimer: ReturnType<typeof setTimeout> | undefined;
 
   public name = '';
   public kind: 'General' | 'Topic' | 'Private' = 'General';
 
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
-  /** The name field, so a dialog that opens (or finishes a submit) is ready to type in. */
-  protected override FirstFocus(): HTMLElement | null { return this.nameInputElement?.nativeElement ?? null; }
-
+  /**
+   * `mj-dialog` focuses the name field when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
+   * that a submit ended: the controls come back on, and the name field takes the focus again on the next turn, so a refusal is ready to fix.
+   */
   public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['IsSubmitting']) {
-      const prev = changes['IsSubmitting'].previousValue;
-      const curr = changes['IsSubmitting'].currentValue;
-      if (prev === true && curr === false) {
-        this.ScheduleFirstFocus();
-      }
+    const submitting = changes['IsSubmitting'];
+    if (submitting && submitting.previousValue === true && submitting.currentValue === false) {
+      this.scheduleRefocus();
     }
+  }
+
+  public ngOnDestroy(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+  }
+
+  private scheduleRefocus(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+    this.refocusTimer = setTimeout(() => {
+      this.refocusTimer = undefined;
+      this.nameInputElement?.nativeElement.focus();
+    }, 0);
   }
 
   public get canShowPrivate(): boolean {

@@ -40,7 +40,7 @@ Collaboration's Angular widgets. They take plain values, emit events, and work i
 | `mjc-space-people` | `CollabSpacePeopleComponent` | The People tab: who reaches the space, and invitations |
 | `mjc-space-settings` | `CollabSpaceSettingsComponent` | The Settings tab, including close and reopen, and a Details card for the type's own details, which the host draws in the `[mjcSettingsDetails]` slot, with a Save and Discard of its own |
 
-The four dialogs draw through MJ's `mj-dialog`. `CollabDialogBase` (`dialog-base.ts`) adds their first focus, a Tab trap and the return of focus.
+The four dialogs draw through MJ's `mj-dialog`, which also gives them their first focus, keeps Tab inside and returns focus on close. The New conversation and New space dialogs only add one thing of their own: when a submit ends, the name field takes the focus again.
 
 **The extension model's browser half:** `BaseSpaceTypeUIDriver` (a type's UI driver) and `UIDriverRegistry`, the contribution bases `BaseSpaceTab`, `BaseSpaceOverviewCard` and `BaseSpaceSettingsSection`, and `assembleSpaceContributions` and `overlayDescriptors`, which merge what a type and other apps contribute. A driver's `GetDetailsForm` says how a type's details are drawn: `undefined` for none, `hiddenFieldNames` to leave optional fields out of the field list, or `component` for a component of its own, mounted with `Record` and `EditMode`.
 
