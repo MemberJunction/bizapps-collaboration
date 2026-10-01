@@ -119,3 +119,4 @@ export {
     type DetailFieldShape,
     type FieldSectionShape,
 } from './detail-fields.js';
+export { mimeTypeForFileName } from './file-types.js';

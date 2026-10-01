@@ -231,6 +231,17 @@ describe('the dialogs, rendered', () => {
     expect(host.querySelector('.mj-dialog-body')?.textContent).not.toContain('Cancel');
   });
 
+  it('shows the moment a share was recorded as the host formatted it, not as "today at" an ISO string', async () => {
+    const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
+    fixture.componentRef.setInput('AuthorName', 'Ada Owner');
+    fixture.componentRef.setInput('Timestamp', 'Oct 1, 2026, 1:19 AM');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Recorded as shared by Ada Owner on Oct 1, 2026, 1:19 AM');
+    expect(text).not.toContain('today at');
+  });
+
   it('holds the upload and new-conversation footers in the dialog actions, not in the scrolling body', async () => {
     const upload = TestBed.createComponent(CollabUploadDialogComponent);
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);

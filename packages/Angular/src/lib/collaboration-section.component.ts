@@ -3477,7 +3477,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }));
         this.shareRecipientCount = this.shareRecipients.length;
         this.shareAuthorName = this.currentUser?.FirstLast || this.currentUser?.Name || 'Current User';
-        this.shareTimestamp = new Date().toISOString();
+        this.shareTimestamp = formatDateTime(new Date());
         this.shareReviewHeader = 'Policy review';
         this.shareReviewSub = 'A check on what is being shared';
         this.shareFindings = [];

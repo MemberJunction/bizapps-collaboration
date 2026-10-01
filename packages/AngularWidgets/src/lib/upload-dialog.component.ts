@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent, MJTabNavComponent, type TabConfig } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { mimeTypeForFileName } from '@mj-biz-apps/collaboration-core';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -567,7 +568,8 @@ export class CollabUploadDialogComponent {
       kind: this.detectedKind,
       fileName: this.selectedFile ? this.fileNameFromTitle(this.selectedFile.name) : undefined,
       fileSize: this.selectedFile?.size,
-      fileType: this.selectedFile?.type,
+      // The browser leaves `type` empty for a kind it doesn't know (a .docx with no Office installed); the extension then decides
+      fileType: this.selectedFile ? mimeTypeForFileName(this.selectedFile.name, this.selectedFile.type) : undefined,
       file: this.selectedFile || undefined,
       url: this.activeMode === 'link' ? this.linkUrl.trim() : undefined,
     };

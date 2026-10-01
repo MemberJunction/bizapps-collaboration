@@ -131,7 +131,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
           </div>
           <div class="eff">
             <i class="fa-solid fa-signature"></i>
-            <span>Recorded as shared by <b>{{ AuthorName }}</b> {{ formattedTimestamp }}. A sent notification can’t be recalled.</span>
+            <span>Recorded as shared by <b>{{ AuthorName }}</b> on {{ formattedTimestamp }}. A sent notification can’t be recalled.</span>
           </div>
         </div>
       </div>
@@ -507,9 +507,9 @@ export class CollabShareCheckComponent {
     return count > 0 ? `Apply ${count} fixes and share` : 'Share';
   }
 
+  /** The moment the share was recorded, as the host formatted it for the person's locale (`formatDateTime`); shown as given. */
   public get formattedTimestamp(): string {
-    if (!this.Timestamp) return '';
-    return this.Timestamp.startsWith('today at ') ? this.Timestamp : `today at ${this.Timestamp}`;
+    return this.Timestamp.trim();
   }
 
   public getQuotationParts(fix: FindingModel): { before: string; marked: string; after: string } {
