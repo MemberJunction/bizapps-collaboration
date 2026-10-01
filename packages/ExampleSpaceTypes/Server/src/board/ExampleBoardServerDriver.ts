@@ -23,7 +23,7 @@ import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity } from '@mj-biz-apps/collaboration-entities';
 import { type mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { CollaborationEngine, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
 import { readExtension, stringList } from '../extension-config.js';
 
 const KEY = 'example-board';
@@ -95,7 +95,6 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
 
     /**
      * Validates child spaces under the board:
-     * - A room can't sit under a board (by the child's type code).
      * - Sub-committees the type names as sealed (`Extensions.example-board.SealedChildNames`) must not inherit membership.
      */
     public override ValidateChildSpaceChange(
@@ -103,10 +102,6 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
     ): DriverValidationResult {
         // Every kind that leaves a child open under the board: a created, moved-in, changed or reopened sub-committee
         if (ctx.kind !== 'CreateChild' && ctx.kind !== 'MoveChildIn' && ctx.kind !== 'UpdateChild' && ctx.kind !== 'ReopenChild') return { ok: true };
-        const childTypeCode = CollaborationEngine.Instance.SpaceTypeById(ctx.childSpace.SpaceTypeID)?.Code;
-        if (childTypeCode === 'example-room') {
-            return { ok: false, message: 'Boards cannot contain Deal Rooms.', field: 'ParentID' };
-        }
         const sealedNames = stringList(readExtension(ctx.spaceType.Configuration, KEY)['SealedChildNames'], 'SealedChildNames');
         const childName = (ctx.childSpace.Name ?? '').toLowerCase();
         if (ctx.childSpace.InheritsMembership && sealedNames.some((name) => childName.includes(name))) {

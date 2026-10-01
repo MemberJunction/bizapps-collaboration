@@ -9,15 +9,15 @@ import {
     type DriverValidationResult,
     type TaskFiledContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import { ExampleBoardServerDriver, ExampleRoomServerDriver } from '@mj-biz-apps/collaboration-example-space-types-server';
-import { mjBizAppsCollabExamplesExampleBoardEntity, mjBizAppsCollabExamplesExampleRoomEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
+import { ExampleBoardServerDriver } from '@mj-biz-apps/collaboration-example-space-types-server';
+import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 import { CHECK_SPACE_PREFIX } from '../world/ids.js';
 import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks } from './cleanup-helpers.js';
 
-/** The two test-only types (`metadata-tests/space-types`): each names the example package's driver of the same key. */
+/** A test-only type (`metadata-tests/space-types`): the example type names the example package's driver of the same key. */
 async function loadTypeByCode(ctx: IntegrationCheckContext, code: string): Promise<mjBizAppsCollaborationSpaceTypeEntity> {
     const rows = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, `Code = '${code}'`, ['ID']);
     Assert(rows.length === 1, `The ${code} test type is on this host (run "pnpm run mj:push:tests" once per database)`);
@@ -46,10 +46,6 @@ async function newSpace(ctx: IntegrationCheckContext, owner: Awaited<ReturnType<
     const leaf = await space.EnsureISAChild();
     if (leaf instanceof mjBizAppsCollabExamplesExampleBoardEntity) {
         leaf.TermName = '2026 to 2027';
-    } else if (leaf instanceof mjBizAppsCollabExamplesExampleRoomEntity) {
-        leaf.DealID = 'D-1';
-        leaf.AccountName = 'Acme';
-        leaf.DealStage = 'Prospecting';
     }
     return space;
 }
@@ -101,12 +97,12 @@ class Ex5SpyDriver extends BaseSpaceTypeServerDriver {
 /** Creates a marked test type (as Dev, who holds Configure Space Types) that names the given server driver. */
 async function newTestType(ctx: IntegrationCheckContext, label: string, driver: string): Promise<mjBizAppsCollaborationSpaceTypeEntity> {
     const dev = await GetPersonaUser(ctx, 'dev');
-    const source = await loadTypeByCode(ctx, 'example-room');
+    const source = await loadTypeByCode(ctx, 'example-board');
     const type = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
     type.NewRecord();
     type.Code = `${label}-${Date.now()}`;
     type.Name = `${CHECK_SPACE_PREFIX}${label} type`;
-    type.Vocabulary = 'room';
+    type.Vocabulary = 'board';
     type.Discoverability = source.Discoverability;
     type.JoinMode = source.JoinMode;
     type.MessagingPanel = true;
@@ -141,14 +137,12 @@ async function cleanupTaskFiled(ctx: IntegrationCheckContext, taskId: string, it
 const checks: NamedCheck[] = [
     {
         Id: 'extensions.EX1',
-        Name: 'EX1 — the real driver registry resolves both example drivers from their type rows, and refuses a type naming a driver that is not registered',
+        Name: 'EX1 — the real driver registry resolves the example driver from its type row, and refuses a type naming a driver that is not registered',
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const board = await loadTypeByCode(ctx, 'example-board');
-            const room = await loadTypeByCode(ctx, 'example-room');
             const registry = ServerDriverRegistry.Instance;
             Assert(registry.GetDriverForType(board) instanceof ExampleBoardServerDriver, 'example-board resolves to the board driver');
-            Assert(registry.GetDriverForType(room) instanceof ExampleRoomServerDriver, 'example-room resolves to the room driver');
 
             const unregistered = await loadTypeByCode(ctx, 'example-board');
             unregistered.ServerDriverClass = 'no-such-driver';
@@ -198,19 +192,22 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'extensions.EX3',
-        Name: 'EX3 — an example room refuses any sub-space',
+        Name: "EX3 — a sub-space of a type its parent's list leaves out is refused at creation, from the parent type's configuration",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
-            const room = await loadTypeByCode(ctx, 'example-room');
-            const parent = await newSpace(ctx, ada, { name: 'EX3-Room', typeId: room.ID });
-            Assert(await parent.Save(), `Ada creates an example room: ${parent.LatestResult?.CompleteMessage ?? ''}`);
+            const board = await loadTypeByCode(ctx, 'example-board');
+            const [workspace] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+            Assert(!!workspace, 'The workspace type is on this host');
+            const parent = await newSpace(ctx, ada, { name: 'EX3-Board', typeId: board.ID });
+            Assert(await parent.Save(), `Ada creates an example board: ${parent.LatestResult?.CompleteMessage ?? ''}`);
             try {
                 await seatOwner(ctx, ada, parent.ID);
-                const child = await newSpace(ctx, ada, { name: 'EX3-Child', typeId: room.ID, parentId: parent.ID });
-                Assert(!(await child.Save()), 'A sub-space under a room must be refused');
+                // The board lists only boards (Children.AllowedTypeCodes), so a workspace under it is refused before any driver is asked
+                const child = await newSpace(ctx, ada, { name: 'EX3-Workspace', typeId: workspace.ID, parentId: parent.ID });
+                Assert(!(await child.Save()), 'A sub-space of a type the parent does not list must be refused');
                 const why = child.LatestResult?.CompleteMessage ?? '';
-                Assert(/cannot contain child spaces/.test(why), `The room's own message comes back: ${why}`);
+                Assert(/cannot sit under this kind of space \(allowed: example-board\)/.test(why), `The refusal names the parent's list: ${why}`);
             } finally {
                 await closeAndRemove(ctx, parent.ID);
             }
@@ -451,7 +448,8 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
             const board = await loadTypeByCode(ctx, 'example-board');
-            const room = await loadTypeByCode(ctx, 'example-room');
+            const [workspace] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'workspace'", ['ID']);
+            Assert(!!workspace, 'The workspace type is on this host');
             const parent = await newSpace(ctx, ada, { name: 'EX11-Board', typeId: board.ID });
             const outsider = await newSpace(ctx, ada, { name: 'EX11-Outsider', typeId: board.ID });
             Assert(await parent.Save() && await outsider.Save(), 'Ada creates two example boards');
@@ -482,10 +480,10 @@ const checks: NamedCheck[] = [
                 filing.ParentID = parent.ID;
                 Assert(await filing.Save(), `A closed board may move under a full one: ${filing.LatestResult?.CompleteMessage ?? ''}`);
 
-                // The board lists only boards, so a sub-space cannot become a room
+                // The board lists only boards, so a sub-space cannot become a workspace
                 const retype = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await retype.Load(held.ID), 'The open sub-space loads');
-                retype.SpaceTypeID = room.ID;
+                retype.SpaceTypeID = workspace.ID;
                 Assert(!(await retype.Save()), 'Retyping a sub-space to a type its parent does not list must be refused');
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);

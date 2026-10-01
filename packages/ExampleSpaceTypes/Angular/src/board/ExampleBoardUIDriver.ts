@@ -16,7 +16,6 @@ import {
     type SpaceSettingsSectionDescriptor,
     type SpaceNewStepDescriptor,
     type SpaceDetailsFormDescriptor,
-    type BeforeCreateChildSpaceEvent,
     type AfterSpaceOpenedEvent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { ExampleBoardMeetingsTab } from './components/ExampleBoardMeetingsTab.js';
@@ -212,15 +211,6 @@ export class ExampleBoardUIDriver extends BaseSpaceTypeUIDriver {
 
     // Closing a board with motions open is refused on the server, from the space's own configuration
     // (ExampleBoardServerDriver.ValidateSpaceChange); the screen has nothing more to add.
-
-    public override BeforeCreateChildSpace(
-        event: BeforeCreateChildSpaceEvent
-    ): void {
-        if (event.childTypeCode === 'example-room') {
-            event.cancel = true;
-            event.cancelReason = 'Boards cannot contain Deal Rooms.';
-        }
-    }
 
     public override AfterSpaceOpened(_event: AfterSpaceOpenedEvent): void {
         // Board space opened hook

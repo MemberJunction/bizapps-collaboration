@@ -16,7 +16,6 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
 import { mjBizAppsCollabExamplesExampleBoardFormComponent } from "./Entities/mjBizAppsCollabExamplesExampleBoard/mjbizappscollabexamplesexampleboard.form.component";
-import { mjBizAppsCollabExamplesExampleRoomFormComponent } from "./Entities/mjBizAppsCollabExamplesExampleRoom/mjbizappscollabexamplesexampleroom.form.component";
    
 
 @NgModule({
@@ -39,28 +38,9 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
-    mjBizAppsCollabExamplesExampleRoomFormComponent
 ],
 imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_23 { }
-    
-
-
-@NgModule({
-declarations: [
-],
-imports: [
-    GeneratedForms_SubModule_16,
-    GeneratedForms_SubModule_23
+    GeneratedForms_SubModule_16
 ]
 })
 export class GeneratedFormsModule { }

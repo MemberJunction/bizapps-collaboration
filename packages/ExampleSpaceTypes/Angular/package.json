@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Private reference implementation: the example space types' UI drivers, tabs, cards and subtype forms (example-board and example-room).",
+  "description": "Private reference implementation: the example space type's UI driver, tabs, cards and subtype form (example-board).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "mjUILayer": "widgets",

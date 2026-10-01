@@ -8,7 +8,6 @@ import { CHECK_SPACE_PREFIX } from '../world/ids.js';
 import { cleanupSpace, registerChecks } from './cleanup-helpers.js';
 
 const BOARDS = 'MJ_BizApps_Collaboration_Examples: Example Boards';
-const ROOMS = 'MJ_BizApps_Collaboration_Examples: Example Rooms';
 
 async function typeId(ctx: IntegrationCheckContext, code: string): Promise<string> {
     const [row] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, `Code = '${code}'`, ['ID']);
@@ -219,12 +218,12 @@ const checks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const dev = await GetPersonaUser(ctx, 'dev');
             const source = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
-            Assert(await source.Load(await typeId(ctx, 'example-room')), 'The example room type loads');
+            Assert(await source.Load(await typeId(ctx, 'example-board')), 'The example board type loads');
             const type = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
             type.NewRecord();
             type.Code = `st3-${Date.now()}`;
             type.Name = `${CHECK_SPACE_PREFIX}st3 type`;
-            type.Vocabulary = 'room';
+            type.Vocabulary = 'board';
             type.Discoverability = source.Discoverability;
             type.JoinMode = source.JoinMode;
             type.MessagingPanel = true;
@@ -242,13 +241,8 @@ const checks: NamedCheck[] = [
             Assert(!saved, 'A type naming an entity that is not a subtype of Spaces must be refused');
             Assert(/is not an IsA child of/.test(type.LatestResult?.CompleteMessage ?? ''), `The refusal says so: ${type.LatestResult?.CompleteMessage ?? ''}`);
 
-            // The two example types name their own subtypes, and pass
-            const board = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
-            Assert(await board.Load(await typeId(ctx, 'example-board')), 'The board type loads');
-            Assert(board.SpaceExtensionEntity === BOARDS, `The board type names ${BOARDS}`);
-            const room = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceTypeEntity>(SPACE_TYPE_ENTITY, dev);
-            Assert(await room.Load(await typeId(ctx, 'example-room')), 'The room type loads');
-            Assert(room.SpaceExtensionEntity === ROOMS, `The room type names ${ROOMS}`);
+            // The example type names its own subtype, and passes
+            Assert(source.SpaceExtensionEntity === BOARDS, `The board type names ${BOARDS}`);
         },
     },
     {

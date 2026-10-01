@@ -54,44 +54,11 @@
     },
     "fields": {
       "Code": "example-room",
-      "Name": "Example room",
-      "Vocabulary": "room",
-      "Discoverability": "Hidden",
-      "JoinMode": "InviteOnly",
-      "MessagingPanel": true,
-      "LibraryPanel": true,
-      "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
-      "DefaultAgentRetrieval": "Included",
-      "DefaultAllowParentAssignees": true,
-      "DefaultBand": "Team",
-      "InviteApproval": "Approve",
-      "IsActive": true,
-      "IconClass": "fa-solid fa-handshake",
-      "Color": "#6d4c41",
-      "ServerDriverClass": "example-room",
-      "UIDriverClass": "example-room",
-      "Configuration": {
-        "Children": {
-          "AllowedTypeCodes": []
-        },
-        "SpaceOverridable": [
-          "Extensions.example-room"
-        ],
-        "Extensions": {
-          "example-room": {
-            "AnchorEntities": [
-              "deals",
-              "opportunities"
-            ],
-            "BlockedPhrases": [
-              "internal margin target",
-              "confidential deal floor"
-            ]
-          }
-        }
-      },
-      "SpaceExtensionEntity": "MJ_BizApps_Collaboration_Examples: Example Rooms"
+      "Name": "Example room"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-10-01T16:27:04.187Z"
     }
   },
   {

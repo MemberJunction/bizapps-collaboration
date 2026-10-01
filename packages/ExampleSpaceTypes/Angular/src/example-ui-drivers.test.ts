@@ -12,8 +12,6 @@ import {
     ExampleBoardAgendaCard,
     ExampleBoardVoteCard,
     ExampleBoardMembersCard,
-    ExampleRoomUIDriver,
-    ExampleRoomDealSummaryCard,
 } from './index.js';
 import type { Type } from '@angular/core';
 import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
@@ -25,9 +23,6 @@ import {
     type SpaceUIContext,
     type SpaceTabDescriptor,
     type SpaceOverviewCardDescriptor,
-    type BeforeCreateChildSpaceEvent,
-    type BeforeInviteEvent,
-    type BeforePostMessageEvent,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import { type mjBizAppsCollaborationSpaceEntity, type mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
@@ -177,18 +172,6 @@ describe('ExampleBoardUIDriver and Contributions', () => {
         expect(actions.some((a) => a.key === 'download-pack')).toBe(true);
     });
 
-    it('BeforeCreateChildSpace prevents adding deal rooms under a board', () => {
-        const event: BeforeCreateChildSpaceEvent = {
-            cancel: false,
-            parentSpaceId: 'board-1',
-            childTypeCode: 'example-room',
-            name: 'Acme Deal',
-        };
-        uiDriver.BeforeCreateChildSpace(event);
-        expect(event.cancel).toBe(true);
-        expect(event.cancelReason).toContain('Boards cannot contain Deal Rooms');
-    });
-
     it('assembleSpaceContributions discovers and orders example-board tabs and cards', () => {
         const defaultTabs: SpaceTabDescriptor[] = [
             { key: 'overview', label: 'Overview', sortKey: 10 },
@@ -268,8 +251,8 @@ describe('cross-app contributions and their rules', () => {
 
     it('relabels a tab by its key without regard to case', () => {
         const uiCtx: SpaceUIContext = { spaceTypeCode: 'workspace', rules: { ...createMockRules(), Labels: { Tabs: { library: 'Documents' } } }, space: createMockSpace(), type: createMockSpaceType('workspace'), viewer: createMockUser() };
-        expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'Library', 'Library')).toBe('Documents');
-        expect(new ExampleRoomUIDriver().GetTabLabel(uiCtx, 'People', 'People')).toBe('People');
+        expect(new ExampleBoardUIDriver().GetTabLabel(uiCtx, 'Library', 'Library')).toBe('Documents');
+        expect(new ExampleBoardUIDriver().GetTabLabel(uiCtx, 'People', 'People')).toBe('People');
     });
 
     it('overlayDescriptors sorts by sortKey', () => {
@@ -312,64 +295,5 @@ describe('ExampleBoard Providers', () => {
         expect(chips.length).toBe(2);
         expect(chips[0].label).toBe('FY2026 term');
         expect(chips[1].label).toBe('Meets quarterly');
-    });
-});
-
-describe('ExampleRoomUIDriver', () => {
-    let uiDriver: ExampleRoomUIDriver;
-    let uiCtx: SpaceUIContext;
-
-    beforeEach(() => {
-        uiDriver = new ExampleRoomUIDriver();
-        uiCtx = {
-            spaceTypeCode: 'example-room',
-            rules: createMockRules(),
-            space: createMockSpace('room-1', 'Acme Deal Room'),
-            type: createMockSpaceType('example-room'),
-            viewer: createMockUser(),
-        };
-    });
-
-    it('draws the deal card once when the real contributions are assembled, as the section does', () => {
-        const assembled = assembleSpaceContributions<SpaceOverviewCardDescriptor>(
-            BaseSpaceOverviewCard,
-            'example-room',
-            [],
-            (reg, meta) => ({ key: meta.contributionKey, title: meta.title ?? meta.contributionKey, sortKey: meta.sortKey, component: reg.SubClass as Type<BaseSpaceOverviewCard> }),
-        );
-        const cards = uiDriver.GetOverviewCards(uiCtx, assembled);
-        expect(cards.filter((c) => normalizeContributionKey(c.key) === 'deal-summary')).toHaveLength(1);
-        expect(cards.find((c) => c.key === 'deal-summary')?.component).toBe(ExampleRoomDealSummaryCard);
-    });
-
-    it('GetOverviewCards includes Deal Overview card', () => {
-        const cards = uiDriver.GetOverviewCards(uiCtx, []);
-        expect(cards.some((c) => c.key === 'deal-summary')).toBe(true);
-        expect(cards.find((c) => c.key === 'deal-summary')?.component).toBe(ExampleRoomDealSummaryCard);
-    });
-
-    it('BeforeInvite cancels invite for opt-out contacts', () => {
-        const event: BeforeInviteEvent = {
-            cancel: false,
-            spaceId: 'room-1',
-            email: 'client-optout@example.com',
-            role: 'Buyer',
-            band: 'Shared',
-        };
-        uiDriver.BeforeInvite(event);
-        expect(event.cancel).toBe(true);
-        expect(event.cancelReason).toContain('opted out');
-    });
-
-    it('BeforePostMessage cancels if message contains confidential deal floor', () => {
-        const event: BeforePostMessageEvent = {
-            cancel: false,
-            spaceId: 'room-1',
-            chatId: 'chat-1',
-            messageText: 'Note: internal margin target is confidential.',
-        };
-        uiDriver.BeforePostMessage(event);
-        expect(event.cancel).toBe(true);
-        expect(event.cancelReason).toContain('Cannot post confidential margin');
     });
 });

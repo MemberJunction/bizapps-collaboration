@@ -20,7 +20,7 @@ module.exports = {
 
   entityPackageName: '@mj-biz-apps/collaboration-example-space-types-entities',
 
-  // Declares ExampleBoard and ExampleRoom as IsA children of Spaces
+  // Declares ExampleBoard as an IsA child of Spaces
   additionalSchemaInfo: './codegen-schema-info.json',
 
   output: [

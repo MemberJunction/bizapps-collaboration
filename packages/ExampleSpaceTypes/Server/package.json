@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Private reference implementation: the example space types' server drivers and the subtype entities' GraphQL resolvers (example-board and example-room).",
+  "description": "Private reference implementation: the example space type's server driver and the subtype entity's GraphQL resolvers (example-board).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "mjUILayer": "runtime",
