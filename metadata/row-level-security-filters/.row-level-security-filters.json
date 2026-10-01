@@ -348,5 +348,65 @@
       "Description": "Search scope permission rows that name the caller or a role the caller holds. No other user's row.",
       "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR RoleID IN (SELECT ur.RoleID FROM [__mj].[UserRole] AS ur WHERE ur.UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "0D82D31C-FAEB-4E16-AAC0-9826A4012F3D"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Anchors",
+      "Description": "The anchors of spaces the caller reaches (stage 1, B14). Read only for a participant.",
+      "FilterText": "(SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3DB29677-9A4F-4B78-86E2-00B2513F8702"
+    },
+    "fields": {
+      "Name": "Collaboration: Visible Notes",
+      "Description": "A space's notes by band, as items are (Team for a seat that sees Team, Shared for any seat that reaches the space), plus the caller's own private notes (stage 1, B21, D33).",
+      "FilterText": "((Visibility = N'Space' AND (SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1) OR (Band = N'Shared' AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))) OR (Visibility = N'Private' AND AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9E22CDA4-B6B0-4194-846A-F3735F7B3E9E"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Notes",
+      "Description": "Only the author edits or deletes a note, and a note is created as its author (stage 1, item 146).",
+      "FilterText": "(AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C6E545E2-CF57-44DF-9D64-192DC679A630"
+    },
+    "fields": {
+      "Name": "Collaboration: Own Pins",
+      "Description": "A member's own pins, in spaces they still reach, so Home lists pins only from spaces the member is in (stage 1, B22, D32, item 149).",
+      "FilterText": "(UserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) AND SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AFA9CE9A-0473-4094-B22E-AF292A347F9B"
+    },
+    "fields": {
+      "Name": "Collaboration: Grants In Reach",
+      "Description": "For MJ's UI role: the app's and the types' grants, and a space's grants where the space is in reach (stage 1, item 149). Space Participant reads no grant at all.",
+      "FilterText": "(SpaceID IS NULL OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D23DF8A4-A120-44B4-9102-39EA034C9BA0"
+    },
+    "fields": {
+      "Name": "Collaboration: Active Space Type Statuses",
+      "Description": "The statuses of active space types: what a participant needs to read a space's status and the moves its type allows (stage 1).",
+      "FilterText": "(SpaceTypeID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[SpaceType] WHERE IsActive = 1))"
+    }
   }
 ]

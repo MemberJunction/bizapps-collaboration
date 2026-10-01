@@ -1,0 +1,182 @@
+[
+  {
+    "primaryKey": {
+      "ID": "E29D7F27-9CE7-4571-80A4-B4C9A651F327"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "06116C76-F1EB-44A1-AB50-D755280CF3C3"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "52EDF5E0-E9FE-46E5-9975-4FFEF7BEABE2"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "270EAED7-6A1C-46F4-9240-C0895201FAAF"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "23E37181-DE1F-4937-B433-21B976B6B3B0"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "in-recess",
+      "Name": "In recess",
+      "Sequence": 5,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5852A81B-B85D-4AC8-97F0-37204F49DFE2"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-board",
+      "Code": "dissolved",
+      "Name": "Dissolved",
+      "Sequence": 6,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AB299CCC-625C-4B19-811C-467F7652FF0E"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-vault",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D58B8731-0A88-4A96-BD06-D0125E085DAB"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-vault",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6ECA8BFA-9DBE-4845-85CB-FE66E0C14A5C"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-vault",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9C456184-395F-4866-8B05-1F191C801D86"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-vault",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  }
+]

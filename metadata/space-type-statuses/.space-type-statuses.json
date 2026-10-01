@@ -1,0 +1,511 @@
+[
+  {
+    "_comments": [
+      "The statuses every shipped type starts with (the design doc, Ian's call of Oct 1): Active (default; writes, visible), Paused (read-only, visible, may change), Closed (read-only, visible, terminal: moves forward only, to Archived), Archived (read-only, hidden, terminal, frozen). A space chooses among its type's statuses and cannot add one; staff holding Configure Space Types add a status to a type."
+    ]
+  },
+  {
+    "primaryKey": {
+      "ID": "57B2ADB8-3EF7-42EB-992E-4327D188C6DF"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=workspace",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "9E61F3E8-B6B2-4A13-A1F2-346ED020B17F"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=workspace",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7EC17751-39CC-4844-99B6-B4F6D04205B2"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=workspace",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "15FA7983-3F8F-4B0E-A1AB-6A9DC940A579"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=workspace",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "07ABE2F4-7A74-41A3-B118-8436B4CB36F6"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=team",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E2E17A5D-CB48-40ED-8981-F83FEBB90553"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=team",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AAAD4E8B-D452-4959-A4FA-11E5B483E5DB"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=team",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AE64A9AA-C489-4BB9-B5EB-C2133D17D2C6"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=team",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "458FF3FA-90C5-4302-9FBA-190396132312"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=project",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "FCE5F1BC-34EF-4892-B1E8-7AAEB8DF8D37"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=project",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "1A544A07-397A-4601-BF05-A46F4719BB8E"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=project",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F475D9F3-F9A9-42F7-A509-F3AD5D395C23"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=project",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F7955131-55CC-466D-8F08-B97060BCEDFB"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=working-group",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E04A431B-CA98-4B3A-9EF2-ACAA1F742C01"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=working-group",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4D1623FC-B2F0-4C33-9DE0-B6DE1F2EABDE"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=working-group",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "3F1B3BA9-31C5-485A-BADC-FF0EB2609150"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=working-group",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "7FB52E4F-F191-44EA-9496-094D1D6B5CA7"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=event",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8E55A4A9-FBBC-4413-9023-E3B2594676B1"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=event",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "E80B4312-22B4-4701-AD77-2CD5ED4497BD"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=event",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "8573C635-6549-4C70-AE16-00E04B05D222"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=event",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "21F560A6-2798-49D9-9E29-1A4E6FE3FA2D"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=community",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "F8EEE08E-94FD-4762-960F-093F00471A3D"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=community",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "AEB127DA-EC82-4660-AA76-D4238628C102"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=community",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "A7222319-D61C-4868-8B9D-DE3F63B78104"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=community",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4901A970-7379-4E6F-BA91-FEDB8118FAFF"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=cohort",
+      "Code": "active",
+      "Name": "Active",
+      "Sequence": 1,
+      "IsDefault": true,
+      "ReadOnly": false,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "43BEB125-31B7-4416-87CB-FFB265C0AC56"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=cohort",
+      "Code": "paused",
+      "Name": "Paused",
+      "Sequence": 2,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": false
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "93943F11-6252-4173-B8BD-6FBCA0F18949"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=cohort",
+      "Code": "closed",
+      "Name": "Closed",
+      "Sequence": 3,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": true,
+      "AgentRetrieval": true,
+      "CanChangeAfter": true,
+      "NotifyMembersOnEnter": true,
+      "IsTerminal": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "721EC4DD-BD49-4E8C-A487-4ADDB2FB0937"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=cohort",
+      "Code": "archived",
+      "Name": "Archived",
+      "Sequence": 4,
+      "IsDefault": false,
+      "ReadOnly": true,
+      "Visible": false,
+      "AgentRetrieval": false,
+      "CanChangeAfter": false,
+      "NotifyMembersOnEnter": false,
+      "IsTerminal": true
+    }
+  }
+]

@@ -8,6 +8,7 @@
     "entity-fields",
     "agents",
     "space-types",
+    "space-type-statuses",
     "tests",
     "test-suites"
   ],

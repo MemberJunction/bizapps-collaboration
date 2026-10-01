@@ -1,0 +1,81 @@
+[
+  {
+    "_comments": [
+      "JSON types for the two Configuration columns (extension item 104) and the two grant columns (stage 1 \u00a7 3), so CodeGen emits typed accessors. Definitions under JSONType-interfaces/ mirror packages/Core/src."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Types"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Types&Name=Configuration"
+          },
+          "fields": {
+            "JSONType": "CollaborationSettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/CollaborationSettings.ts"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Spaces"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Spaces&Name=Configuration"
+          },
+          "fields": {
+            "JSONType": "CollaborationSettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/CollaborationSettings.ts"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Grants"
+    },
+    "fields": {
+      "Name": "MJ_BizApps_Collaboration: Space Grants"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Grants&Name=Bindings"
+          },
+          "fields": {
+            "JSONType": "SpaceGrantBindings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/SpaceGrantBindings.ts"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Grants&Name=Settings"
+          },
+          "fields": {
+            "JSONType": "AgentGrantSettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/AgentGrantSettings.ts"
+          }
+        }
+      ]
+    }
+  }
+]
