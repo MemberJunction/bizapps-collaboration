@@ -338,3 +338,30 @@ describe("WhoCanStart is 'Anyone' or 'Owners'", () => {
         assert.match(result.errors.join(' '), /WhoCanStart/);
     });
 });
+
+describe('stage 1 configuration: Grants and DataReach', () => {
+    it('accepts a well-formed DataReach declaration and a Grants list mode on a type', () => {
+        const typeConfig: ISpaceTypeConfiguration = {
+            Grants: { Agent: { ListMode: 'Replace' } },
+            DataReach: [{ Entity: 'MJ_BizApps_Common: People', Path: 'MemberID.ChapterID', AnchorRole: 'chapter', Band: 'Shared', Fields: ['Name', 'Email'] }],
+        };
+        assert.deepEqual(validateSpaceTypeConfiguration(typeConfig), { valid: true, errors: [] });
+    });
+
+    it('refuses an unknown grant kind, a two-hop path, an empty allow-list and a band outside the two', () => {
+        const result = validateSpaceTypeConfiguration({
+            Grants: { Widget: { ListMode: 'Extend' }, Query: { ListMode: 'Merge' } },
+            DataReach: [{ Entity: 'X', Path: 'A.B.C', AnchorRole: 'chapter', Band: 'Public', Fields: [] }],
+        });
+        assert.equal(result.valid, false);
+        assert.equal(result.errors.length, 5, result.errors.join(' | '));
+    });
+
+    it("refuses DataReach on a space, and a space's Grants list mode unless the type lets it", () => {
+        const typeConfig: ISpaceTypeConfiguration = { SpaceOverridable: ['Grants.Agent'] };
+        assert.equal(validateSpaceConfiguration({ DataReach: [] } as ISpaceConfiguration, typeConfig).valid, false);
+        assert.equal(validateSpaceConfiguration({ Grants: { Agent: { ListMode: 'Replace' } } } as ISpaceConfiguration, typeConfig).valid, true);
+        assert.equal(validateSpaceConfiguration({ Grants: { Query: { ListMode: 'Replace' } } } as ISpaceConfiguration, typeConfig).valid, false);
+    });
+});
+

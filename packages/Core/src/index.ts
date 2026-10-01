@@ -92,9 +92,37 @@ export type {
     ISpaceConfiguration,
     ISpaceRules,
     ISpaceTypeConfiguration,
+    DataReachDeclaration,
     ResolveCollaborationSettingsParams,
     ResolvedCollaborationSettings,
 } from './configuration.js';
+export { validateDataReachDeclaration } from './configuration.js';
+export {
+    GRANT_KINDS,
+    GRANT_KIND_ENTITY,
+    AGENT_LIMIT_NAMES,
+    isGrantKind,
+    parseBindingExpression,
+    validateSpaceGrantBindings,
+    validateAgentGrantSettings,
+    type GrantKind,
+    type BindingExpression,
+    type SpaceGrantBindings,
+    type AgentGrantSettings,
+    type AgentLimitName,
+    type AgentDefinitionForGrant,
+} from './grants.js';
+export {
+    SHIPPED_STATUSES,
+    defaultStatus,
+    statusChangeRefusal,
+    reachableStatuses,
+    statusAllowsWrites,
+    validateStatusList,
+    type SpaceTypeStatusAttributes,
+    type StatusChangeRefusal,
+    type StatusChangeRefusalCode,
+} from './statuses.js';
 export {
     effectiveRetrievalScope,
     agentMayQuoteCandidate,
