@@ -151,10 +151,13 @@ const SHOTS = [
     {
         name: '12-staff-chat-switch-no-note', who: 'staff', item: '121',
         run: async (page) => {
+            // Staff's chat page lists sections and conversations, not child spaces, so the switch is a navigation.
             await page.goto(spaceUrl(NORTHWIND, 'chat'));
-            await page.getByText('Discovery').first().click();
+            await page.getByText('New Conversation').first().waitFor();
+            await page.goto(spaceUrl(DISCOVERY, 'chat'));
+            await page.getByText('New Conversation').first().waitFor();
             await page.waitForTimeout(800);
-            await assertScreen(page, '12', { absent: ["can't post", 'not on the roster'] });
+            await assertScreen(page, '12', { present: ['Discovery'], absent: ["can't post", 'not on the roster'] });
         },
     },
 ];
