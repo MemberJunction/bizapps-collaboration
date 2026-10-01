@@ -2,15 +2,16 @@
  * CollaborationEngineBase — browser-safe metadata engine for BizApps Collaboration
  * (modeled on AIEngineBase and AccountingEngineBase, punch list 2 item 54).
  *
- * Caches all Collaboration metadata with CacheLocal: true:
+ * Caches, with CacheLocal: true, the Collaboration metadata every seated person can read:
  * - Space Types
  * - Space Role Types
- * - Task Types
  * - Application Settings
- * - Authorizations & Authorization Roles
- * - App- and type-level Space Agents, Skills, and Knowledge Sources
  *
- * Provides typed getters and O(1) lookups by ID and code, reset on reload.
+ * MemberJunction's BaseEngine loads an engine's entities all or nothing, so what a Space Participant has no read on (the
+ * authorization catalog, the app- and type-level agents, skills and knowledge sources) lives in CollaborationAdminEngineBase:
+ * a guest's workspace must not fail because an engine also wanted a staff-only row.
+ *
+ * Provides typed getters and O(1) lookups by ID and code, reset on reload. The rights checks read MemberJunction's metadata.
  */
 
 import {
@@ -40,18 +41,11 @@ import {
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
 import type {
-    mjBizAppsCollaborationSpaceAgentEntity,
-    mjBizAppsCollaborationSpaceAgentSkillEntity,
-    mjBizAppsCollaborationSpaceKnowledgeSourceEntity,
     mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { SpaceSubtypeDirectory } from '@mj-biz-apps/collaboration-entities';
-import type {
-    MJApplicationSettingEntity,
-    MJAuthorizationEntity,
-    MJAuthorizationRoleEntity,
-} from '@memberjunction/core-entities';
+import type { MJApplicationSettingEntity } from '@memberjunction/core-entities';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
 
@@ -82,18 +76,12 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
     private _spaceTypes: mjBizAppsCollaborationSpaceTypeEntity[] = [];
     private _spaceRoleTypes: mjBizAppsCollaborationSpaceRoleTypeEntity[] = [];
     private _applicationSettings: MJApplicationSettingEntity[] = [];
-    private _authorizations: MJAuthorizationEntity[] = [];
-    private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
-    private _appAndTypeSpaceAgents: mjBizAppsCollaborationSpaceAgentEntity[] = [];
-    private _appAndTypeSpaceAgentSkills: mjBizAppsCollaborationSpaceAgentSkillEntity[] = [];
-    private _appAndTypeSpaceKnowledgeSources: mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] = [];
 
     // O(1) memoized lookup indexes, reset on reload in AdditionalLoading()
     private _spaceTypesById: Map<string, mjBizAppsCollaborationSpaceTypeEntity> | null = null;
     private _spaceTypesByCode: Map<string, mjBizAppsCollaborationSpaceTypeEntity> | null = null;
     private _spaceRoleTypesById: Map<string, mjBizAppsCollaborationSpaceRoleTypeEntity> | null = null;
     private _spaceRoleTypesByCode: Map<string, mjBizAppsCollaborationSpaceRoleTypeEntity> | null = null;
-    private _authorizationsByName: Map<string, MJAuthorizationEntity> | null = null;
     private _cachedParsedSettings: CollaborationSettings | null | undefined = undefined;
 
     public static get Instance(): CollaborationEngineBase {
@@ -123,34 +111,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
                 EntityName: 'MJ: Application Settings',
                 CacheLocal: true,
             },
-            {
-                PropertyName: '_authorizations',
-                EntityName: 'MJ: Authorizations',
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_authorizationRoles',
-                EntityName: 'MJ: Authorization Roles',
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_appAndTypeSpaceAgents',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agents',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceAgentSkills',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agent Skills',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceKnowledgeSources',
-                EntityName: 'MJ_BizApps_Collaboration: Space Knowledge Sources',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
         ];
 
         return await this.Load(params, md, forceRefresh ?? false, contextUser);
@@ -162,7 +122,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._spaceTypesByCode = null;
         this._spaceRoleTypesById = null;
         this._spaceRoleTypesByCode = null;
-        this._authorizationsByName = null;
         this._cachedParsedSettings = undefined;
         this._settingsError = null;
         // The subtype each space type names, for the Spaces subtype resolver: it answers a load's hint from memory, never by a read
@@ -181,26 +140,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
 
     public get ApplicationSettings(): MJApplicationSettingEntity[] {
         return this.GetConfigData<MJApplicationSettingEntity>('_applicationSettings');
-    }
-
-    public get Authorizations(): MJAuthorizationEntity[] {
-        return this.GetConfigData<MJAuthorizationEntity>('_authorizations');
-    }
-
-    public get AuthorizationRoles(): MJAuthorizationRoleEntity[] {
-        return this.GetConfigData<MJAuthorizationRoleEntity>('_authorizationRoles');
-    }
-
-    public get AppAndTypeSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentEntity>('_appAndTypeSpaceAgents');
-    }
-
-    public get AppAndTypeSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentSkillEntity>('_appAndTypeSpaceAgentSkills');
-    }
-
-    public get AppAndTypeSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceKnowledgeSourceEntity>('_appAndTypeSpaceKnowledgeSources');
     }
 
     // ─── Lookups by ID and Code ────────────────────────────────────────────────
@@ -343,59 +282,7 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         });
     }
 
-    // ─── Agents, Skills, Knowledge ─────────────────────────────────────────────
-
-    public get AppSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.AppAndTypeSpaceAgents.filter(
-            a => !a.SpaceTypeID && !a.SpaceID
-        );
-    }
-
-    public SpaceAgentsForType(typeId: string): mjBizAppsCollaborationSpaceAgentEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgents.filter(
-            a => a.SpaceTypeID && normalizeKey(a.SpaceTypeID) === key && !a.SpaceID
-        );
-    }
-
-    public get AppSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => !s.SpaceTypeID && !s.SpaceID
-        );
-    }
-
-    public SpaceAgentSkillsForType(typeId: string): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => s.SpaceTypeID && normalizeKey(s.SpaceTypeID) === key && !s.SpaceID
-        );
-    }
-
-    public get AppSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => !k.SpaceTypeID && !k.SpaceID
-        );
-    }
-
-    public SpaceKnowledgeSourcesForType(typeId: string): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => k.SpaceTypeID && normalizeKey(k.SpaceTypeID) === key && !k.SpaceID
-        );
-    }
-
     // ─── Authorizations ────────────────────────────────────────────────────────
-
-    public AuthorizationByName(name: string): MJAuthorizationEntity | undefined {
-        if (!this._authorizationsByName) {
-            const map = new Map<string, MJAuthorizationEntity>();
-            for (const a of this.Authorizations) {
-                if (a.Name) map.set(normalizeKey(a.Name), a);
-            }
-            this._authorizationsByName = map;
-        }
-        return this._authorizationsByName.get(normalizeKey(name));
-    }
 
     /**
      * Resolves a child authorization under the "Collaboration" root authorization strictly.

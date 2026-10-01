@@ -28,6 +28,7 @@ import {
     ValidateCollaborationSettings,
 } from '@mj-biz-apps/collaboration-core';
 import {
+    CollaborationAdminEngineBase,
     CollaborationEngineBase,
     COLLABORATION_APP_ID,
     COLLABORATION_SETTINGS_NAME,
@@ -61,10 +62,15 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
         return CollaborationEngineBase.Instance;
     }
 
+    /** The staff-only metadata (the authorization catalog, the app- and type-level agents, skills and knowledge sources). */
+    protected get Admin(): CollaborationAdminEngineBase {
+        return CollaborationAdminEngineBase.Instance;
+    }
+
     // ─── Delegated properties and methods from CollaborationEngineBase ─────────
 
     public get Loaded(): boolean {
-        return this.Base.Loaded;
+        return this.Base.Loaded && this.Admin.Loaded;
     }
 
     public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
@@ -86,35 +92,35 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     }
 
     public get Authorizations(): MJAuthorizationEntity[] {
-        return this.Base.Authorizations;
+        return this.Admin.Authorizations;
     }
 
     public get AuthorizationRoles(): MJAuthorizationRoleEntity[] {
-        return this.Base.AuthorizationRoles;
+        return this.Admin.AuthorizationRoles;
     }
 
     public get AppAndTypeSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.Base.AppAndTypeSpaceAgents;
+        return this.Admin.AppAndTypeSpaceAgents;
     }
 
     public get AppAndTypeSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.Base.AppAndTypeSpaceAgentSkills;
+        return this.Admin.AppAndTypeSpaceAgentSkills;
     }
 
     public get AppAndTypeSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.Base.AppAndTypeSpaceKnowledgeSources;
+        return this.Admin.AppAndTypeSpaceKnowledgeSources;
     }
 
     public get AppSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.Base.AppSpaceAgents;
+        return this.Admin.AppSpaceAgents;
     }
 
     public get AppSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.Base.AppSpaceAgentSkills;
+        return this.Admin.AppSpaceAgentSkills;
     }
 
     public get AppSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.Base.AppSpaceKnowledgeSources;
+        return this.Admin.AppSpaceKnowledgeSources;
     }
 
     public SpaceTypeById(id: string | null | undefined): mjBizAppsCollaborationSpaceTypeEntity | undefined {
@@ -149,27 +155,29 @@ export class CollaborationEngine extends BaseSingleton<CollaborationEngine> {
     }
 
     public SpaceAgentsForType(typeId: string): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.Base.SpaceAgentsForType(typeId);
+        return this.Admin.SpaceAgentsForType(typeId);
     }
 
     public SpaceAgentSkillsForType(typeId: string): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.Base.SpaceAgentSkillsForType(typeId);
+        return this.Admin.SpaceAgentSkillsForType(typeId);
     }
 
     public SpaceKnowledgeSourcesForType(typeId: string): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.Base.SpaceKnowledgeSourcesForType(typeId);
+        return this.Admin.SpaceKnowledgeSourcesForType(typeId);
     }
 
     public AuthorizationByName(name: string): MJAuthorizationEntity | undefined {
-        return this.Base.AuthorizationByName(name);
+        return this.Admin.AuthorizationByName(name);
     }
 
+    /** Configures both engines. A user who can't read the admin engine's rows gets it empty and constrained, and the base engine still. */
     public async Config(
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<void> {
-        return await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.Admin.Config(forceRefresh, contextUser, provider);
     }
 
     // ─── Server-Only: Authorization Rights ─────────────────────────────────────

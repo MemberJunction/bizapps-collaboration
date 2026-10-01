@@ -75,11 +75,6 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         (engine as unknown as { _spaceTypes: unknown[] })._spaceTypes = mockTypes;
         (engine as unknown as { _spaceRoleTypes: unknown[] })._spaceRoleTypes = mockRoleTypes;
         (engine as unknown as { _applicationSettings: unknown[] })._applicationSettings = mockAppSettings;
-        (engine as unknown as { _authorizations: unknown[] })._authorizations = [];
-        (engine as unknown as { _authorizationRoles: unknown[] })._authorizationRoles = [];
-        (engine as unknown as { _appAndTypeSpaceAgents: unknown[] })._appAndTypeSpaceAgents = [];
-        (engine as unknown as { _appAndTypeSpaceAgentSkills: unknown[] })._appAndTypeSpaceAgentSkills = [];
-        (engine as unknown as { _appAndTypeSpaceKnowledgeSources: unknown[] })._appAndTypeSpaceKnowledgeSources = [];
 
         // Reset indexes
         void (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
