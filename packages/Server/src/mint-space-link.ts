@@ -24,7 +24,7 @@ import '@mj-biz-apps/common-entities';
 import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
 import { callerMayReceiveLink, handInviteToEngine, inviteEmail, linkHandoff, magicLinkBlocksAccount, membershipReaches, refuseInvite } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
-import { loadWriteContext, requireSystemUser } from '@mj-biz-apps/collaboration-core-entities-server';
+import { loadWriteContext, requireSystemUser, spaceTypeAudience } from '@mj-biz-apps/collaboration-core-entities-server';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
@@ -95,6 +95,10 @@ export async function mintSpaceLink(input: {
     }
     const granted = context.role;
     if (!granted) return { ok: false, message: 'Invite refused: that role is not on this host.' };
+    // The staff-only promise (item 157): a type that seats staff only issues no Space Participant link
+    if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
+        return { ok: false, message: "Invite refused: this space's type seats staff only, so no Space Participant link is issued for it." };
+    }
     const system = await requireSystemUser(space);
     const found = await findUserId(input.provider, email, system);
     if (found.ok === false) return { ok: false, message: found.message };

@@ -32,6 +32,8 @@ import { cleanupSpace, cleanupStep, deleteWhere, registerChecks } from './cleanu
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COMMITTEE_SPACE_ID = 'C1000001-0000-4000-8000-000000000004';
+const COMMITTEE_TYPE_ID = 'E1000001-0000-4000-8000-000000000002';
 type Persona = Awaited<ReturnType<typeof GetPersonaUser>>;
 
 async function typeOf(ctx: IntegrationCheckContext, spaceId: string): Promise<string> {
@@ -466,6 +468,160 @@ const checks: NamedCheck[] = [
                 Assert(!!space.StatusID, `${space.Name} carries a status`);
                 const [status] = await FindRows<{ Code: string }>(ctx, SPACE_TYPE_STATUS_ENTITY, `ID = '${space.StatusID}'`, ['Code']);
                 Assert(status?.Code === 'closed', `${space.Name} is Closed, got ${status?.Code}`);
+            }
+        },
+    },
+    {
+        Id: 'stage1.S9',
+        Name: 'S9 — the staff-only promise (item 157): a type that seats staff only takes no seat whose role cannot see Team, no sub-space that inherits membership from a parent participants reach, and no retype of a space participants reach; a grant of a query to it goes in',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const dana = await GetPersonaUser(ctx, 'dana');
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const dev = await GetPersonaUser(ctx, 'dev'); // Developer: holds Configure Spaces, which a retype takes
+            const [vault] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'example-vault'", ['ID']);
+            Assert(!!vault, 'The test vault type (metadata-tests/space-types, Seats.Audience StaffOnly) exists');
+            const newSpace = async (as: Persona, name: string, typeId: string, parentId: string | null, inherits: boolean) => {
+                const row = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, as);
+                row.NewRecord();
+                row.Name = `${CHECK_SPACE_PREFIX}S9-${name}-${Date.now()}`;
+                row.SpaceTypeID = typeId;
+                row.ParentID = parentId;
+                row.InheritsMembership = inherits;
+                row.OwnerID = as.ID;
+                return row;
+            };
+            const made: string[] = [];
+            try {
+                // 1. A vault at the root: a guest has no seat, a member who sees Team does
+                const root = await newSpace(ada, 'vault', vault.ID, null, false);
+                Assert(await root.Save() && !!root.ID, `Ada creates a vault space: ${root.LatestResult?.CompleteMessage ?? ''}`);
+                made.push(root.ID);
+                // A root space starts with no roster: its owner seats herself first, as the world loader does
+                await seat(ctx, ada, root.ID, ada.ID, 'owner', 'Team');
+                const [guestRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'guest'", ['ID']);
+                const guestSeat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                guestSeat.NewRecord();
+                guestSeat.SpaceID = root.ID;
+                guestSeat.UserID = dana.ID;
+                guestSeat.SpaceRoleTypeID = guestRole.ID;
+                guestSeat.Band = 'Shared';
+                guestSeat.Status = 'Active';
+                Assert(!(await guestSeat.Save()) && /seats staff only/.test(guestSeat.LatestResult?.CompleteMessage ?? ''), `A guest seat in a staff-only space is refused, naming the promise: ${guestSeat.LatestResult?.CompleteMessage ?? 'allowed'}`);
+                await seat(ctx, ada, root.ID, sam.ID, 'member', 'Team');
+
+                // 2. A vault under the committee, which seats Dana as a guest: inheriting its roster is refused, standing on its own is not
+                const under = await newSpace(ada, 'under-committee', vault.ID, COMMITTEE_SPACE_ID, true);
+                Assert(!(await under.Save()) && /participants reach/.test(under.LatestResult?.CompleteMessage ?? ''), `A staff-only sub-space cannot inherit membership from a parent participants reach: ${under.LatestResult?.CompleteMessage ?? 'allowed'}`);
+                under.InheritsMembership = false;
+                Assert(await under.Save() && !!under.ID, `The same sub-space goes in without inheriting: ${under.LatestResult?.CompleteMessage ?? ''}`);
+                made.push(under.ID);
+
+                // 3. A workspace at the root that seats Dana as a guest: it cannot move onto the vault type
+                const reached = await newSpace(ada, 'reached', await typeOf(ctx, NORTHWIND_SPACE_ID), null, false);
+                Assert(await reached.Save() && !!reached.ID, `Ada creates a workspace: ${reached.LatestResult?.CompleteMessage ?? ''}`);
+                made.push(reached.ID);
+                await seat(ctx, ada, reached.ID, ada.ID, 'owner', 'Team');
+                await seat(ctx, ada, reached.ID, dana.ID, 'guest', 'Shared');
+                await seat(ctx, ada, reached.ID, dev.ID, 'owner', 'Team');
+                const retype = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await retype.Load(reached.ID), 'Dev loads the workspace');
+                retype.SpaceTypeID = vault.ID;
+                Assert(!(await retype.Save()) && /participants reach this space/.test(retype.LatestResult?.CompleteMessage ?? ''), `A space participants reach cannot be retyped onto a staff-only type: ${retype.LatestResult?.CompleteMessage ?? 'allowed'}`);
+
+                // 4. The promise is what the grant gate reads: a query goes to the vault type, where it is refused to a type that seats participants (S5)
+                const [query] = await FindRows<{ ID: string }>(ctx, 'MJ: Queries', 'ID IS NOT NULL', ['ID']);
+                if (query) {
+                    const grant = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANT_ENTITY, ctx.User);
+                    grant.NewRecord();
+                    grant.SpaceTypeID = vault.ID;
+                    grant.Kind = 'Query';
+                    grant.TargetRecordID = query.ID;
+                    grant.Band = 'Team';
+                    grant.IsDefault = false;
+                    grant.Mode = 'Extend';
+                    grant.Sequence = 0;
+                    const ok = await grant.Save();
+                    const message = grant.LatestResult?.CompleteMessage ?? '';
+                    if (ok) await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, 'a stage 1 type grant'));
+                    Assert(ok, `A query is granted to a type that seats staff only: ${message}`);
+                }
+            } finally {
+                for (const id of made.reverse()) await cleanupSpace(ctx.Provider, ctx.User, id);
+            }
+        },
+    },
+    {
+        Id: 'stage1.S10',
+        Name: "S10 — a retype carries the space's anchors (item 149): their SpaceTypeID follows the space, and a retype onto a type whose other space already holds the primary anchor is refused, naming that space",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const dev = await GetPersonaUser(ctx, 'dev'); // Developer: holds Configure Spaces, which a retype takes
+            const [vault] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'example-vault'", ['ID']);
+            Assert(!!vault, 'The test vault type exists');
+            const workspaceTypeId = await typeOf(ctx, NORTHWIND_SPACE_ID);
+            const [filesEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', "Name = 'MJ: Files'", ['ID']);
+            const [anyItem] = await FindRows<{ RecordID: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${NORTHWIND_SPACE_ID}' AND EntityID = '${filesEntity.ID}'`, ['RecordID']);
+            Assert(!!anyItem, 'Northwind holds a file item to anchor to');
+            const recordId = anyItem.RecordID.replace(/^ID\|/i, '');
+            const made: string[] = [];
+            try {
+                const first = await EnsureSpaceForRecord({ typeCode: 'workspace', entityName: 'MJ: Files', recordId, spaceName: `${CHECK_SPACE_PREFIX}S10-anchored`, contextUser: dev, provider: ctx.Provider });
+                made.push(first.ID);
+                // A retype takes Configure Spaces, the lifecycle right (the space moves onto the new type's status row) and an owner seat: Dev seats himself
+                await seat(ctx, dev, first.ID, dev.ID, 'owner', 'Team');
+                const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, dev);
+                Assert(await space.Load(first.ID), 'Dev loads the anchored space');
+                space.SpaceTypeID = vault.ID;
+                Assert(await space.Save(), `Dev retypes the space onto the vault type (nobody but him reaches it): ${space.LatestResult?.CompleteMessage ?? ''}`);
+                const anchors = await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ANCHOR_ENTITY, `SpaceID = '${first.ID}'`, ['SpaceTypeID'], undefined, { BypassCache: true });
+                Assert(anchors.length === 1 && anchors[0].SpaceTypeID.toLowerCase() === vault.ID.toLowerCase(), `The anchor followed the space to its new type: ${JSON.stringify(anchors)}`);
+
+                // A workspace is free to anchor the record again now; then the first space cannot come back as a workspace
+                const second = await EnsureSpaceForRecord({ typeCode: 'workspace', entityName: 'MJ: Files', recordId, spaceName: `${CHECK_SPACE_PREFIX}S10-second`, contextUser: dev, provider: ctx.Provider });
+                made.push(second.ID);
+                Assert(second.ID.toLowerCase() !== first.ID.toLowerCase(), 'A second workspace now anchors the record');
+                space.SpaceTypeID = workspaceTypeId;
+                const back = await space.Save();
+                const message = space.LatestResult?.CompleteMessage ?? '';
+                Assert(!back && /already anchored/.test(message) && message.includes(second.Name), `The retype back is refused, naming the space that holds the anchor: ${back ? 'allowed' : message}`);
+            } finally {
+                for (const id of made.reverse()) {
+                    await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_ANCHOR_ENTITY, `SpaceID = '${id}'`, 'a stage 1 anchor'));
+                    await cleanupSpace(ctx.Provider, ctx.User, id);
+                }
+            }
+        },
+    },
+    {
+        Id: 'stage1.S11',
+        Name: "S11 — Grants In Reach (item 158): a type's grants are read where the caller reaches a space of that type and nowhere else; the app's grants read the same for everyone with the UI role",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const sam = await GetPersonaUser(ctx, 'sam');
+            const harbor = await GetPersonaUser(ctx, 'harbor');
+            const [agent] = await FindRows<{ ID: string }>(ctx, AI_AGENT_ENTITY, "Status = 'Active'", ['ID']);
+            const grant = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANT_ENTITY, ctx.User);
+            grant.NewRecord();
+            grant.SpaceTypeID = COMMITTEE_TYPE_ID;
+            grant.Kind = 'Agent';
+            grant.TargetRecordID = agent.ID;
+            grant.Band = 'Shared';
+            grant.IsDefault = false;
+            grant.Mode = 'Extend';
+            grant.Sequence = 0;
+            Assert(await grant.Save(), `The system grants an agent to the committee type: ${grant.LatestResult?.CompleteMessage ?? ''}`);
+            try {
+                const samSees = await FindRows<{ ID: string }>(ctx, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, ['ID'], sam, { BypassCache: true });
+                Assert(samSees.length === 1, `Sam, seated on the Audit committee, reads the committee type's grant (${samSees.length})`);
+                const harborSees = await FindRows<{ ID: string }>(ctx, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, ['ID'], harbor, { BypassCache: true });
+                Assert(harborSees.length === 0, `Harbor, who reaches no committee, does not read it (${harborSees.length})`);
+                const appRows = await FindRows<{ ID: string }>(ctx, SPACE_GRANT_ENTITY, 'SpaceID IS NULL AND SpaceTypeID IS NULL', ['ID'], undefined, { BypassCache: true });
+                const harborApp = await FindRows<{ ID: string }>(ctx, SPACE_GRANT_ENTITY, 'SpaceID IS NULL AND SpaceTypeID IS NULL', ['ID'], harbor, { BypassCache: true });
+                Assert(harborApp.length === appRows.length, `The app's grants read the same for Harbor as for the system (${harborApp.length} of ${appRows.length})`);
+            } finally {
+                await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, 'a stage 1 type grant'));
             }
         },
     },

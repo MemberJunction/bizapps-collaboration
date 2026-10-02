@@ -395,8 +395,8 @@
     },
     "fields": {
       "Name": "Collaboration: Grants In Reach",
-      "Description": "For MJ's UI role: the app's and the types' grants, and a space's grants where the space is in reach (stage 1, item 149). Space Participant reads no grant at all.",
-      "FilterText": "(SpaceID IS NULL OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
+      "Description": "For MJ's UI role, one reach for every level (stage 1, items 149 and 158): the app's grants; a type's grants where the caller reaches a space of that type; a space's grants where the caller reaches the space. Space Participant reads no grant at all.",
+      "FilterText": "((SpaceID IS NULL AND SpaceTypeID IS NULL) OR (SpaceID IS NULL AND SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))"
     }
   },
   {

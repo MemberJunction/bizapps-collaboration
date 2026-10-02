@@ -18,6 +18,8 @@ export interface WriteContext {
     memberCap: number | null;
     memberCount: number;
     ownerCount: number;
+    /** The target space's type, for the rules that read the type's promise (item 157). */
+    typeId?: string | null;
 }
 
 export interface SpaceRow {
@@ -92,7 +94,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0 };
+        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
@@ -152,6 +154,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         memberCap: typeRows[0]?.MemberCap ?? null,
         memberCount: counted.length,
         ownerCount: owners.length,
+        typeId: typeId ? parseUuid(typeId) : null,
     };
 }
 

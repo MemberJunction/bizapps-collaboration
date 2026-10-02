@@ -14,8 +14,10 @@ import {
     type ISpaceConfiguration,
     type ISpaceTypeConfiguration,
     type SpaceTypeStatusAttributes,
+    typeSeatsAudience,
 } from '@mj-biz-apps/collaboration-core';
 import {
+    mjBizAppsCollaborationSpaceAnchorEntity,
     mjBizAppsCollaborationSpaceChatEntity,
     mjBizAppsCollaborationSpaceEntity,
     type mjBizAppsCollaborationSpaceTypeEntity,
@@ -24,6 +26,8 @@ import {
 import { type BaseSpaceTypeServerDriver, type ChildSpaceChangeKind, type SpaceChangeKind } from './base-space-type-server-driver.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, loadAncestorChain, mayAdminister, loadWriteContext, requireSystemUser } from './load-graph.js';
+import { primaryAnchorCollision } from './SpaceAnchorEntityServer.js';
+import { spaceSeatsParticipants } from './space-audience.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { failDelete, failSave, refusalOf, resolveSpaceDriver, sameSubtype, subtypeOf } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
@@ -645,6 +649,58 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             }
         }
 
+        // ── The staff-only promise (item 157) and the anchors a retype carries (item 149) ────────────────────────────────────────
+        // A type that seats staff only may carry grants of a view, a query or a component, so none of its spaces may be reached by
+        // a participant: a space of the type does not inherit membership from a parent that participants reach (at create, and when
+        // the parent, the inheritance or the type changes), and a space that participants reach does not move onto such a type. And a
+        // retype keeps the space's anchors, so it is refused where another space of the new type already holds its primary anchor.
+        {
+            const staffOnly = typeSeatsAudience((typeConfig ?? null) as CollaborationSettings | null) === 'StaffOnly';
+            const parentNow = parseUuid(String(getFieldVal<string>(this, 'ParentID') ?? ''));
+            const inheritsNow = !!getFieldVal<boolean>(this, 'InheritsMembership');
+            const inheritsDirty = this.IsSaved && this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
+            const parentDirty = this.IsSaved && this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
+            const savedId = this.IsSaved ? parseUuid(String(getFieldVal<string>(this, 'ID') ?? '')) : null;
+            const needsPromise = staffOnly && ((inheritsNow && !!parentNow && (!this.IsSaved || inheritsDirty || parentDirty || typeChanging)) || (typeChanging && !!savedId));
+            if (needsPromise || (typeChanging && savedId && typeId)) {
+                let system: UserInfo;
+                try {
+                    system = await requireSystemUser(this);
+                } catch (error) {
+                    return fail(result, 'SpaceTypeID', `Space change refused: the system user could not read the roster: ${error instanceof Error ? error.message : String(error)}`);
+                }
+                const rv = new RunView(this.RunViewProviderToUse);
+                if (staffOnly && inheritsNow && parentNow && (!this.IsSaved || inheritsDirty || parentDirty || typeChanging)) {
+                    try {
+                        if (await spaceSeatsParticipants(rv, system, parentNow)) {
+                            return fail(result, 'InheritsMembership', 'Space change refused: a space of a type that seats staff only cannot inherit membership from a parent that participants reach.');
+                        }
+                    } catch (error) {
+                        return fail(result, 'InheritsMembership', `Space change refused: the parent's roster could not be read: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+                if (staffOnly && typeChanging && savedId) {
+                    try {
+                        if (await spaceSeatsParticipants(rv, system, savedId)) {
+                            return fail(result, 'SpaceTypeID', 'Space change refused: participants reach this space, and the new type seats staff only.');
+                        }
+                    } catch (error) {
+                        return fail(result, 'SpaceTypeID', `Space change refused: the roster could not be read: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+                if (typeChanging && savedId && typeId) {
+                    try {
+                        const collision = await primaryAnchorCollision(rv, system, savedId, typeId);
+                        if (collision) {
+                            return fail(result, 'SpaceTypeID', `Space change refused: ${collision.space} of the new type is already anchored to ${collision.entity} ${collision.recordId}; a record anchors one space of a type.`);
+                        }
+                    } catch (error) {
+                        return fail(result, 'SpaceTypeID', `Space change refused: the anchors could not be read: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+            }
+        }
+
         return result;
     }
 
@@ -771,6 +827,34 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         return refusalOf(await parent.call.driver.ValidateChildSpaceChange({ ...parent.call.base, childSpace: this, kind: 'DeleteChild' }));
     }
 
+    /** A retype's anchors follow the space (item 149): their SpaceTypeID is rewritten as the system user, after the space is saved. */
+    private async carryAnchorsToType(typeId: string): Promise<void> {
+        const ANCHORS = 'MJ_BizApps_Collaboration: Space Anchors';
+        try {
+            const system = await requireSystemUser(this);
+            const view = new RunView(this.RunViewProviderToUse);
+            const anchors = await view.RunView<{ ID: string }>({
+                EntityName: ANCHORS,
+                ExtraFilter: `SpaceID = '${this.ID}' AND SpaceTypeID <> '${typeId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, system);
+            if (!anchors.Success) {
+                LogError(`The anchors of space ${this.ID} could not be read after its retype: ${anchors.ErrorMessage ?? 'unknown error'}`);
+                return;
+            }
+            const md = asMetadata(this.ProviderToUse) ?? new Metadata();
+            for (const row of anchors.Results ?? []) {
+                const anchor = await md.GetEntityObject<mjBizAppsCollaborationSpaceAnchorEntity>(ANCHORS, system);
+                if (!(await anchor.Load(row.ID))) continue;
+                anchor.SpaceTypeID = typeId;
+                if (!(await anchor.Save())) LogError(`Anchor ${row.ID} did not follow space ${this.ID} to its new type: ${anchor.LatestResult?.CompleteMessage ?? ''}`);
+            }
+        } catch (error) {
+            LogError(`The anchors of space ${this.ID} did not follow its retype: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         // A space with its subtype attached is deleted through it: core hands the delete to the subtype, which deletes its own row and
         // comes back for this one with IsParentEntityDelete, inside one transaction. The driver is asked once, when the delete reaches
@@ -858,6 +942,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             }
         }
 
+        // A retype carries the space's anchors (item 149): their SpaceTypeID follows the space once it is saved
+        const retypedTo = this.IsSaved && this.Fields.some((f) => f.Name === 'SpaceTypeID' && f.Dirty) ? parseUuid(String(getFieldVal<string>(this, 'SpaceTypeID') ?? '')) : null;
+
         let ok = false;
         try {
             ok = await super.Save(options);
@@ -871,6 +958,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const justReopened = decided.justReopened;
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
+            if (retypedTo) await this.carryAnchorsToType(retypedTo);
             if (justClosed) {
                 try {
                     const system = await requireSystemUser(this);

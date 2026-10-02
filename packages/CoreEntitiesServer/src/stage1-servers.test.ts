@@ -11,6 +11,9 @@ import { SpaceGrantEntityServer } from '../dist/SpaceGrantEntityServer.js';
 import { SpaceNoteEntityServer } from '../dist/SpaceNoteEntityServer.js';
 import { SpaceMemberPinEntityServer } from '../dist/SpaceMemberPinEntityServer.js';
 import { SpaceTypeStatusEntityServer } from '../dist/SpaceTypeStatusEntityServer.js';
+import { primaryAnchorCollision } from '../dist/SpaceAnchorEntityServer.js';
+import { spaceSeatsParticipants, spaceTypeAudience } from '../dist/space-audience.js';
+import { RunView } from '@memberjunction/core';
 
 const SYSTEM = '00000000-0000-4000-8000-000000000000';
 const ADA = 'AAAAAAAA-0000-4000-8000-000000000001';
@@ -20,6 +23,8 @@ const SPACE = 'C1000001-0000-4000-8000-000000000001';
 const OTHER_SPACE = 'C1000001-0000-4000-8000-000000000002';
 const CLOSED_SPACE = 'C1000001-0000-4000-8000-000000000003';
 const TYPE = 'B0000000-0000-4000-8000-000000000001';
+const STAFF_TYPE = 'B0000000-0000-4000-8000-000000000002';
+const ANCHORED_SPACE = 'C0000000-0000-4000-8000-000000000008';
 const OWNER_ROLE = 'A0000000-0000-4000-8000-000000000001';
 const GUEST_ROLE = 'A0000000-0000-4000-8000-000000000003';
 const DEALS = 'E0000000-0000-4000-8000-00000000000D';
@@ -49,6 +54,7 @@ const tables: Record<string, Row[]> = {
         { ID: SPACE, Name: 'Northwind', ParentID: null, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
         { ID: OTHER_SPACE, Name: 'Harbor', ParentID: null, InheritsMembership: true, OwnerID: BEA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
         { ID: CHILD_SPACE, Name: 'Discovery', ParentID: SPACE, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
+        { ID: ANCHORED_SPACE, Name: 'Anchored', ParentID: null, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: STAFF_TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
         { ID: CLOSED_SPACE, Name: 'Closed', ParentID: null, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: '2026-01-01T00:00:00Z', StatusID: null },
     ],
     'MJ_BizApps_Collaboration: Space Members': [
@@ -60,9 +66,14 @@ const tables: Record<string, Row[]> = {
         { ID: OWNER_ROLE, Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
         { ID: GUEST_ROLE, Level: 10, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: false },
     ],
-    'MJ_BizApps_Collaboration: Space Types': [{ ID: TYPE, InviteApproval: 'Approve', MemberCap: null, Configuration: null }],
+    'MJ_BizApps_Collaboration: Space Types': [
+        { ID: TYPE, InviteApproval: 'Approve', MemberCap: null, Configuration: null },
+        { ID: STAFF_TYPE, InviteApproval: 'Approve', MemberCap: null, Configuration: JSON.stringify({ Seats: { Audience: 'StaffOnly' } }) },
+    ],
     'MJ_BizApps_Collaboration: Space Anchors': [
         { ID: '70000000-0000-4000-8000-000000000001', SpaceID: OTHER_SPACE, Space: 'Harbor', SpaceTypeID: TYPE, EntityID: DEALS, RecordID: `ID|${DEAL_2}`, Role: 'primary', IsPrimary: true },
+        // A space of another type on Harbor's record: retyping it onto TYPE would collide (item 149)
+        { ID: '70000000-0000-4000-8000-000000000002', SpaceID: ANCHORED_SPACE, Space: 'Anchored', SpaceTypeID: STAFF_TYPE, EntityID: DEALS, RecordID: `ID|${DEAL_2}`, Role: 'primary', IsPrimary: true },
     ],
     'MJ_BizApps_Collaboration: Space Grants': [
         { ID: APP_GRANT, Kind: 'Agent', SpaceID: null, SpaceTypeID: null, TargetRecordID: AGENT },
@@ -172,6 +183,8 @@ before(() => {
     engine.UserCanConfigureSpaceTypes = () => rights.configureTypes;
     engine.EnsureLoaded = async () => undefined;
     engine.SpaceTypeById = ((id: string) => tables['MJ_BizApps_Collaboration: Space Types'].find((t) => String(t['ID']).toLowerCase() === id.toLowerCase())) as unknown as typeof engine.SpaceTypeById;
+    held['roleById'] = engine.SpaceRoleTypeById;
+    engine.SpaceRoleTypeById = ((id: string) => tables['MJ_BizApps_Collaboration: Space Role Types'].find((r) => String(r['ID']).toLowerCase() === String(id).toLowerCase())) as unknown as typeof engine.SpaceRoleTypeById;
 });
 after(() => {
     const engine = CollaborationEngine.Instance;
@@ -180,6 +193,33 @@ after(() => {
     engine.UserCanConfigureSpaceTypes = held['types'] as typeof engine.UserCanConfigureSpaceTypes;
     engine.EnsureLoaded = held['ensure'] as typeof engine.EnsureLoaded;
     engine.SpaceTypeById = held['typeById'] as typeof engine.SpaceTypeById;
+    engine.SpaceRoleTypeById = held['roleById'] as typeof engine.SpaceRoleTypeById;
+});
+
+describe('The staff-only promise and the anchors a retype carries (items 157 and 149)', () => {
+    const system = { ID: SYSTEM, Name: 'System' } as UserInfo;
+    const rv = () => new RunView(fakeProvider() as never);
+
+    it("reads a type's audience from its configuration, failing closed to StaffAndParticipants", () => {
+        assert.equal(spaceTypeAudience(STAFF_TYPE), 'StaffOnly');
+        assert.equal(spaceTypeAudience(TYPE), 'StaffAndParticipants');
+        assert.equal(spaceTypeAudience('not-a-type'), 'StaffAndParticipants');
+        assert.equal(spaceTypeAudience(null), 'StaffAndParticipants');
+    });
+
+    it('sees participants on a space through an active seat whose role cannot see Team, and through an inheriting child', async () => {
+        assert.equal(await spaceSeatsParticipants(rv(), system, SPACE), true, 'Northwind seats a guest');
+        assert.equal(await spaceSeatsParticipants(rv(), system, CHILD_SPACE), true, 'Discovery inherits Northwind\'s roster');
+        assert.equal(await spaceSeatsParticipants(rv(), system, OTHER_SPACE), false, 'Harbor seats nobody who cannot see Team');
+        assert.equal(await spaceSeatsParticipants(rv(), system, CLOSED_SPACE), false, 'an owner seat alone is staff');
+    });
+
+    it("names the space of the new type that already holds the retyped space's primary anchor", async () => {
+        const hit = await primaryAnchorCollision(rv(), system, ANCHORED_SPACE, TYPE);
+        assert.equal(hit?.space, 'Harbor');
+        assert.equal(await primaryAnchorCollision(rv(), system, ANCHORED_SPACE, STAFF_TYPE), null, 'its own type collides with nothing');
+        assert.equal(await primaryAnchorCollision(rv(), system, SPACE, TYPE), null, 'a space with no primary anchor collides with nothing');
+    });
 });
 
 describe('Space Anchors: the records a space is about', () => {

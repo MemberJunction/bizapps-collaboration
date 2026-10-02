@@ -5,7 +5,8 @@ export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMem
 export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEntityServer.js';
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
-export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, recordKeyParses, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
+export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, primaryAnchorCollision, recordKeyParses, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
+export { spaceSeatsParticipants, spaceTypeAudience, type SeatsAudience } from './space-audience.js';
 export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } from './SpaceGrantEntityServer.js';
 export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
 export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';

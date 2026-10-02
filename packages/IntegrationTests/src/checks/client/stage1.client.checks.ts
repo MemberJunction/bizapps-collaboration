@@ -28,6 +28,7 @@ import { cleanupSpace, cleanupStep, deleteWhere, registerChecks } from '../clean
 
 const NORTHWIND_SPACE_ID = 'C1000001-0000-4000-8000-000000000001';
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
+const COMMITTEE_TYPE_ID = 'E1000001-0000-4000-8000-000000000002';
 type Persona = Awaited<ReturnType<typeof getPersonaContext>>;
 
 const asPersona = (ctx: IntegrationCheckContext, persona: Persona): IntegrationCheckContext => ({ ...ctx, Provider: persona.Provider, User: persona.User } as IntegrationCheckContext);
@@ -288,6 +289,36 @@ const checks: NamedCheck[] = [
             } finally {
                 await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_GRANT_ENTITY, `SpaceID = '${space.ID}'`, 'a stage 1 grant'));
                 await cleanupSpace(ctx.Provider, ctx.User, space.ID);
+            }
+        },
+    },
+    {
+        Id: 'stage1.SC7',
+        Name: "SC7 — over the wire, Grants In Reach (item 158): a type's grant is read by someone seated on a space of that type and by nobody else with the UI role",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const sam = await getPersonaContext(ctx, 'sam');
+            const harbor = await getPersonaContext(ctx, 'harbor');
+            const [agent] = await FindRows<{ ID: string }>(ctx, AI_AGENT_ENTITY, "Status = 'Active'", ['ID']);
+            const [agentsEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', `Name = '${AI_AGENT_ENTITY}'`, ['ID']);
+            const grant = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANT_ENTITY, ctx.User);
+            grant.NewRecord();
+            grant.SpaceTypeID = COMMITTEE_TYPE_ID;
+            grant.Kind = 'Agent';
+            grant.TargetEntityID = agentsEntity.ID;
+            grant.TargetRecordID = agent.ID;
+            grant.Band = 'Shared';
+            grant.IsDefault = false;
+            grant.Mode = 'Extend';
+            grant.Sequence = 0;
+            Assert(await grant.Save(), `The system grants an agent to the committee type: ${grant.LatestResult?.CompleteMessage ?? ''}`);
+            try {
+                const samSees = await FindRows<{ ID: string }>(asPersona(ctx, sam), SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, ['ID'], sam.User, { BypassCache: true });
+                Assert(samSees.length === 1, `Sam, seated on the Audit committee, reads the committee type's grant over the wire (${samSees.length})`);
+                const harborSees = await FindRows<{ ID: string }>(asPersona(ctx, harbor), SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, ['ID'], harbor.User, { BypassCache: true });
+                Assert(harborSees.length === 0, `Harbor, who reaches no committee, does not read it over the wire (${harborSees.length})`);
+            } finally {
+                await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, 'a stage 1 type grant'));
             }
         },
     },

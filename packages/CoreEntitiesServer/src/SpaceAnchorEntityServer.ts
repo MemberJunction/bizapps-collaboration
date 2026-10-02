@@ -4,7 +4,7 @@
  * per space, and one space of a type per primary record; writes need Configure Spaces on the space (or Administer Spaces), or
  * come from the type's driver through `EnsureSpaceForRecord` or `SyncSeats`, which vouch for the row in process.
  */
-import { BaseEntity, type EntityInfo, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type UserInfo, type EntityInfo, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { mjBizAppsCollaborationSpaceAnchorEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
@@ -194,6 +194,38 @@ export class SpaceAnchorEntityServer extends mjBizAppsCollaborationSpaceAnchorEn
         }
         return super.Delete(options);
     }
+}
+
+/**
+ * The space of `typeId` that already holds one of `spaceId`'s primary anchors, if any (item 149): a retype onto `typeId` would put
+ * two spaces of one type on the same record. Read as the system user. Throws when a read fails, so the caller fails closed.
+ */
+export async function primaryAnchorCollision(
+    rv: RunView,
+    system: UserInfo,
+    spaceId: string,
+    typeId: string,
+): Promise<{ space: string; entity: string; recordId: string } | null> {
+    const own = await rv.RunView<{ EntityID: string; RecordID: string }>({
+        EntityName: ENTITY,
+        ExtraFilter: `SpaceID = '${spaceId}' AND IsPrimary = 1`,
+        Fields: ['EntityID', 'RecordID'],
+        ResultType: 'simple',
+    }, system);
+    if (!own.Success) throw new Error(own.ErrorMessage ?? "The space's anchors could not be read.");
+    for (const anchor of own.Results ?? []) {
+        const other = await rv.RunView<{ Space: string; Entity: string }>({
+            EntityName: ENTITY,
+            ExtraFilter: `SpaceTypeID = '${typeId}' AND EntityID = '${anchor.EntityID}' AND RecordID = '${String(anchor.RecordID).replace(/'/g, "''")}' AND IsPrimary = 1 AND SpaceID <> '${spaceId}'`,
+            Fields: ['Space', 'Entity'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        }, system);
+        if (!other.Success) throw new Error(other.ErrorMessage ?? "The type's anchors could not be read.");
+        const hit = other.Results?.[0];
+        if (hit) return { space: hit.Space || 'another space', entity: hit.Entity || anchor.EntityID, recordId: anchor.RecordID };
+    }
+    return null;
 }
 
 function fail(result: ValidationResult, field: string, message: string): ValidationResult {
