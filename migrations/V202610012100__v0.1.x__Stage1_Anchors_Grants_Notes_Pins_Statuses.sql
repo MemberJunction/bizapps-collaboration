@@ -421,6 +421,26 @@ IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_SpaceType_Defau
 GO
 ALTER TABLE [${flyway:defaultSchema}].[SpaceType] DROP COLUMN [PostCloseAccess], [PostCloseAccessDays], [DefaultInheritsMembership], [GovernancePanel], [DefaultRetention];
 GO
+-- The Entity Field rows of the dropped columns, with their value lists and the relationship that hung on the anchor's
+-- foreign key. When mj migrate ran before CodeGen, MJ's metadata refresh (spDeleteUnneededEntityFields) removed them
+-- between the two; replayed in one run, this file reaches CodeGen's capture below with them still in place, and the
+-- capture's spUpdateExistingEntityFieldsFromSchema renumbers Space Type's fields onto sequences the stale rows hold
+-- (UQ_EntityField_EntityID_Sequence). A build from nothing found it.
+DECLARE @dropped TABLE (ID UNIQUEIDENTIFIER NOT NULL);
+INSERT INTO @dropped (ID)
+SELECT f.ID
+FROM [${mjSchema}].[EntityField] AS f
+INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = f.EntityID
+WHERE e.SchemaName = N'${flyway:defaultSchema}'
+  AND ((e.BaseTable = N'Space' AND f.Name IN (N'AnchorEntityID', N'AnchorRecordID', N'AnchorEntity', N'PostCloseAccess', N'PostCloseAccessDays', N'Retention'))
+    OR (e.BaseTable = N'SpaceType' AND f.Name IN (N'PostCloseAccess', N'PostCloseAccessDays', N'DefaultInheritsMembership', N'GovernancePanel', N'DefaultRetention')));
+DELETE FROM [${mjSchema}].[EntityFieldValue] WHERE EntityFieldID IN (SELECT ID FROM @dropped);
+DELETE r
+FROM [${mjSchema}].[EntityRelationship] AS r
+INNER JOIN [${mjSchema}].[Entity] AS e ON e.ID = r.RelatedEntityID
+WHERE e.SchemaName = N'${flyway:defaultSchema}' AND e.BaseTable = N'Space' AND r.RelatedEntityJoinField = N'AnchorEntityID';
+DELETE FROM [${mjSchema}].[EntityField] WHERE ID IN (SELECT ID FROM @dropped);
+GO
 -- The create and update procedures of a table that only lost columns still name them. CodeGen regenerates an entity's
 -- procedures when it finds the entity changed, and it learns that from the Entity Field rows it has to delete; but the
 -- metadata refresh mj migrate runs right after the migrations deletes those rows first, so CodeGen sees nothing to do.
