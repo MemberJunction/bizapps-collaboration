@@ -326,7 +326,7 @@
     "fields": {
       "Name": "Collaboration: Agents In Reach",
       "Description": "Agents the caller may run in a space they reach: the shipped space agent, the app-wide and type rows, and the rows on a reached space or any ancestor of one. MemberJunction loads the agent as the caller before it judges a search scope.",
-      "FilterText": "(ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E' OR ID IN (SELECT sa.AgentID FROM [__mj_BizAppsCollaboration].[SpaceAgent] AS sa WHERE (sa.SpaceID IS NULL AND sa.SpaceTypeID IS NULL) OR sa.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationSpaceAndAncestors](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR sa.SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))))))"
+      "FilterText": "(ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E' OR ID IN (SELECT TRY_CAST(g.TargetRecordID AS UNIQUEIDENTIFIER) FROM [__mj_BizAppsCollaboration].[SpaceGrant] AS g WHERE g.Kind = N'Agent' AND ((g.SpaceID IS NULL AND g.SpaceTypeID IS NULL) OR g.SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationSpaceAndAncestors](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER))) OR g.SpaceTypeID IN (SELECT s.SpaceTypeID FROM [__mj_BizAppsCollaboration].[Space] AS s WHERE s.ID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)))))))"
     }
   },
   {

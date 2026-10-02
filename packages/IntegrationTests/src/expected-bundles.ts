@@ -10,6 +10,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'library': 6,
     'agent': 10,
     'features': 5,
+    'stage1': 8,
 };
 
 export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
@@ -24,4 +25,5 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'features': 5,
     'lifecycle': 6,
     'subtypes': 4,
+    'stage1': 6,
 };

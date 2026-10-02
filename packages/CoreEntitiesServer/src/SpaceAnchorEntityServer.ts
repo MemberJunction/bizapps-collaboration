@@ -1,8 +1,8 @@
 /**
  * SpaceAnchorEntityServer (B14, D26): the records a space is about. Each refusal is in `ValidateAsync`, as the plan's § 5 asks:
  * the space exists; the entity exists and the record's key parses for it; `SpaceTypeID` is the space's type; at most one primary
- * per space, and one space of a type per primary record; writes need Configure Spaces on the space, or come from the type's
- * driver through `EnsureSpaceForRecord` or `SyncSeats`, which vouch for the row in process.
+ * per space, and one space of a type per primary record; writes need Configure Spaces on the space (or Administer Spaces), or
+ * come from the type's driver through `EnsureSpaceForRecord` or `SyncSeats`, which vouch for the row in process.
  */
 import { BaseEntity, type EntityInfo, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -52,6 +52,17 @@ export function recordKeyParses(entity: Pick<EntityInfo, 'PrimaryKeys'>, recordI
     return values.size === keys.length;
 }
 
+/**
+ * One spelling of a record id, the one Space Items use: `ID|<value>` for a single-key entity (a bare value gets the key's name),
+ * MJ's composite form as given for a composite key. Two anchors on the same record then collide however they were written.
+ */
+export function canonicalAnchorRecordId(entity: Pick<EntityInfo, 'PrimaryKeys'>, recordId: string): string {
+    const raw = recordId.trim();
+    const keys = entity.PrimaryKeys ?? [];
+    if (keys.length === 1 && !raw.includes('|')) return `${keys[0].Name}|${raw}`;
+    return raw;
+}
+
 @RegisterClass(BaseEntity, ENTITY)
 export class SpaceAnchorEntityServer extends mjBizAppsCollaborationSpaceAnchorEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -63,10 +74,39 @@ export class SpaceAnchorEntityServer extends mjBizAppsCollaborationSpaceAnchorEn
         const user = this.ContextCurrentUser;
         if (!user) return false;
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        if (CollaborationEngine.Instance.UserMayAdministerSpaces(user, md)) return true;
         return CollaborationEngine.Instance.UserCanConfigureSpaces(user, spaceId, md);
     }
 
+    /** The space's type and a primary anchor's role, read ahead of MJ's required-field check, which runs before ValidateAsync. */
+    private async stampDefaults(): Promise<void> {
+        if (!(this.Role ?? '').trim() && this.IsPrimary) this.Role = 'primary';
+        const entityId = parseUuid(this.EntityID);
+        const entity = entityId ? (asMetadata(this.ProviderToUse) ?? Metadata.Provider).EntityByID(entityId) : null;
+        if (entity && (this.RecordID ?? '').trim()) {
+            const canonical = canonicalAnchorRecordId(entity, this.RecordID);
+            if (canonical !== this.RecordID) this.RecordID = canonical;
+        }
+        const spaceId = parseUuid(this.SpaceID);
+        if (spaceId && !parseUuid(this.SpaceTypeID)) {
+            try {
+                const system = await requireSystemUser(this);
+                const rows = await new RunView(this.RunViewProviderToUse).RunView<{ SpaceTypeID: string }>({ EntityName: SPACES, ExtraFilter: `ID = '${spaceId}'`, Fields: ['SpaceTypeID'], ResultType: 'simple', MaxRows: 1 }, system);
+                const typeId = parseUuid(rows.Results?.[0]?.SpaceTypeID);
+                if (rows.Success && typeId) this.SpaceTypeID = typeId;
+            } catch {
+                // the gate reports what it could not read
+            }
+        }
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        await this.stampDefaults();
+        return super.Save(options);
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
+        await this.stampDefaults();
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user) return fail(result, 'SpaceID', 'Anchor change refused: there is no signed-in user.');
@@ -115,7 +155,7 @@ export class SpaceAnchorEntityServer extends mjBizAppsCollaborationSpaceAnchorEn
         if (!givenType && spaceTypeId) this.SpaceTypeID = spaceTypeId;
 
         if (!(await this.mayWrite(spaceId))) {
-            return fail(result, 'SpaceID', "Anchor change refused: anchors are written with the 'Configure Spaces' authorization and an owner seat on the space, or by the type's driver.");
+            return fail(result, 'SpaceID', "Anchor change refused: anchors are written with the 'Configure Spaces' authorization and an owner seat on the space, with 'Administer Spaces', or by the type's driver.");
         }
 
         if (this.IsPrimary) {

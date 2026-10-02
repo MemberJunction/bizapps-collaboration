@@ -4,7 +4,8 @@
  * and each expression parses; an agent's settings stay inside its definition; and, until MJ#4789, § 4's four rules hold at every
  * level: a view with a binding, or a dashboard, is refused; a view with none, a query or a component only goes to a type that seats
  * staff only (`Seats.Audience`, absent fails closed); an action with a bound parameter is stored (the turn leaves it out).
- * Rights: the app's and a type's rows need 'Configure Space Types'; a space's need 'Configure Spaces' and an owner seat on it.
+ * Rights: the app's and a type's rows need 'Configure Space Types'; a space's need 'Configure Spaces' and an owner seat on it, or
+ * 'Administer Spaces' (the world loader and the harness write grants without a seat).
  */
 import { BaseEntity, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -57,6 +58,7 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         if (!user) return 'Grant change refused: there is no signed-in user.';
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
         if (spaceId) {
+            if (CollaborationEngine.Instance.UserMayAdministerSpaces(user, md)) return null;
             if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, spaceId, md))) {
                 return "Grant change refused: a space's grants are written with the 'Configure Spaces' authorization and an owner seat on the space.";
             }
@@ -68,12 +70,28 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         return null;
     }
 
+    /** The target's entity is its kind's (item 149): stamped when the row names none, ahead of MJ's required-field check. */
+    private stampTargetEntity(): void {
+        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        const kind = this.Kind;
+        if (isGrantKind(kind) && !parseUuid(this.TargetEntityID)) {
+            const stamped = md.EntityByName(GRANT_KIND_ENTITY[kind]);
+            if (stamped) this.TargetEntityID = stamped.ID;
+        }
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        this.stampTargetEntity();
+        return super.Save(options);
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
+        this.stampTargetEntity();
+        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        const kind = this.Kind;
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
         if (!user) return fail(result, 'Kind', 'Grant change refused: there is no signed-in user.');
-        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
-        const kind = this.Kind;
         if (!isGrantKind(kind)) return fail(result, 'Kind', `Grant change refused: "${String(kind)}" is not a kind of grant.`);
         const spaceId = this.SpaceID ? parseUuid(this.SpaceID) : null;
         if (this.SpaceID && !spaceId) return fail(result, 'SpaceID', 'Grant change refused: the space id is not valid.');
@@ -85,7 +103,7 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         const refused = await this.rightRefusal(spaceId);
         if (refused) return fail(result, spaceId ? 'SpaceID' : 'SpaceTypeID', refused);
 
-        // The target's entity is its kind's (item 149): stamped when empty, refused when it names another
+        // The target's entity is its kind's (item 149): refused when it names another
         const kindEntity = md.EntityByName(GRANT_KIND_ENTITY[kind]);
         if (!kindEntity) return fail(result, 'TargetEntityID', `Grant change refused: ${GRANT_KIND_ENTITY[kind]} is not in this database.`);
         const givenEntity = parseUuid(this.TargetEntityID);

@@ -478,6 +478,32 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
         }
     }
 
+    // The Library's artifact over this file (stage 1): its versions name the file row, so they and their artifact go first
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const versions = await rv.RunView<{ ID: string; ArtifactID: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `FileID = '${fileId}'`,
+            Fields: ['ID', 'ArtifactID'],
+            ResultType: 'simple',
+            MaxRows: 100,
+        }, user);
+        const artifactIds = new Set<string>();
+        for (const row of versions.Success ? versions.Results ?? [] : []) {
+            const version = await provider.GetEntityObject<BaseEntity>('MJ: Artifact Versions', user);
+            if (await version.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }])) && (await version.Delete())) artifactIds.add(row.ArtifactID);
+        }
+        for (const artifactId of artifactIds) {
+            const left = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Artifact Versions', ExtraFilter: `ArtifactID = '${artifactId}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, user);
+            if (left.Success && (left.Results?.length ?? 0) === 0) {
+                const artifact = await provider.GetEntityObject<BaseEntity>('MJ: Artifacts', user);
+                if (await artifact.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: artifactId }]))) await artifact.Delete();
+            }
+        }
+    } catch (error) {
+        LogError(`Space item artifact cleanup: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     let rowGone = false;
     if (fileEntity && fileEntity.IsSaved) {
         try {

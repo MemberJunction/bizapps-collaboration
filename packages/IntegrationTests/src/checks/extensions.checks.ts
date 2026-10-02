@@ -373,7 +373,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'extensions.EX9',
-        Name: "EX9 — a type's Children.MaxOpen caps the open sub-spaces, and a reopen counts like a create",
+        Name: "EX9 — a type's Children.MaxOpen caps the open sub-spaces; a closed sub-space frees its place and, being in a terminal status, is not reopened",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -393,7 +393,7 @@ const checks: NamedCheck[] = [
                 Assert(!secondSaved, 'A second open sub-space must be refused (MaxOpen is 1)');
                 Assert(/most its type allows \(1\)/.test(second.LatestResult?.CompleteMessage ?? ''), `The refusal names the cap: ${second.LatestResult?.CompleteMessage ?? ''}`);
 
-                // Close the first, file a second in its place, then try to reopen the first: over the cap again
+                // Close the first (it moves to the board's Closed status, terminal), file a second in its place, then try to reopen the first
                 const closing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await closing.Load(first.ID), 'The first sub-space loads');
                 closing.ClosedAt = new Date(Date.now() - 60_000);
@@ -405,7 +405,8 @@ const checks: NamedCheck[] = [
                 const reopening = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
                 Assert(await reopening.Load(first.ID), 'The closed sub-space loads');
                 reopening.ClosedAt = null;
-                Assert(!(await reopening.Save()), 'Reopening it would take the board past MaxOpen, and must be refused');
+                Assert(!(await reopening.Save()), 'A Closed sub-space is in a terminal status: it moves forward only, never back to Active');
+                Assert(/can only move forward, not back to Active/.test(reopening.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${reopening.LatestResult?.CompleteMessage ?? ''}`);
             } finally {
                 for (const id of created) await closeAndRemove(ctx, id);
             }

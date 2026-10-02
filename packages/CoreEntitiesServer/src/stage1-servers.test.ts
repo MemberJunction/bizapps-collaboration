@@ -32,6 +32,8 @@ const AGENT = 'F0000000-0000-4000-8000-000000000001';
 const QUERY = 'F0000000-0000-4000-8000-000000000002';
 const APP_GRANT = '90000000-0000-4000-8000-000000000001';
 const OTHER_GRANT = '90000000-0000-4000-8000-000000000002';
+const PARENT_GRANT = '90000000-0000-4000-8000-000000000003';
+const CHILD_SPACE = 'C0000000-0000-4000-8000-000000000009';
 const NOTE_1 = '80000000-0000-4000-8000-000000000001';
 const ACTIVE = 'E1000000-0000-4000-8000-000000000001';
 const PAUSED = 'E1000000-0000-4000-8000-000000000002';
@@ -46,6 +48,7 @@ const tables: Record<string, Row[]> = {
     'MJ_BizApps_Collaboration: Spaces': [
         { ID: SPACE, Name: 'Northwind', ParentID: null, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
         { ID: OTHER_SPACE, Name: 'Harbor', ParentID: null, InheritsMembership: true, OwnerID: BEA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
+        { ID: CHILD_SPACE, Name: 'Discovery', ParentID: SPACE, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: null, StatusID: null },
         { ID: CLOSED_SPACE, Name: 'Closed', ParentID: null, InheritsMembership: true, OwnerID: ADA, SpaceTypeID: TYPE, AgentRetrieval: 'Included', ClosedAt: '2026-01-01T00:00:00Z', StatusID: null },
     ],
     'MJ_BizApps_Collaboration: Space Members': [
@@ -64,6 +67,7 @@ const tables: Record<string, Row[]> = {
     'MJ_BizApps_Collaboration: Space Grants': [
         { ID: APP_GRANT, Kind: 'Agent', SpaceID: null, SpaceTypeID: null, TargetRecordID: AGENT },
         { ID: OTHER_GRANT, Kind: 'Agent', SpaceID: OTHER_SPACE, SpaceTypeID: null, TargetRecordID: AGENT },
+        { ID: PARENT_GRANT, Kind: 'Agent', SpaceID: SPACE, SpaceTypeID: null, TargetRecordID: AGENT },
     ],
     'MJ_BizApps_Collaboration: Space Notes': [{ ID: NOTE_1, SpaceID: SPACE, AuthorUserID: ADA }],
     'MJ_BizApps_Collaboration: Space Items': [{ ID: '60000000-0000-4000-8000-000000000001', SpaceID: SPACE, EntityID: DEALS, RecordID: `ID|${DEAL_1}` }],
@@ -336,8 +340,10 @@ describe('Space Member Pins: what a member keeps at the top of a space', () => {
         assert.match(errorOn(await validate(pin(ada, { TargetRecordID: null })), 'TargetRecordID'), /names its target entity and record/);
     });
 
-    it("pins a grant only when it is in force in the space: the app's yes, another space's no", async () => {
+    it("pins a grant only when it is in force in the space: the app's yes, an ancestor's yes, another space's no", async () => {
         assert.equal((await validate(pin(ada, { Kind: 'Grant', TargetEntityID: null, TargetRecordID: null, GrantID: APP_GRANT }))).Success, true);
+        const inherited = pin(ada, { SpaceID: CHILD_SPACE, Kind: 'Grant', TargetEntityID: null, TargetRecordID: null, GrantID: PARENT_GRANT });
+        assert.equal((await validate(inherited)).Success, true, errorOn(await validate(inherited)));
         assert.match(errorOn(await validate(pin(ada, { Kind: 'Grant', TargetEntityID: null, TargetRecordID: null, GrantID: OTHER_GRANT })), 'GrantID'), /not in force in this space/);
         assert.match(errorOn(await validate(pin(ada, { Kind: 'Grant', GrantID: APP_GRANT })), 'TargetRecordID'), /names no record/);
     });

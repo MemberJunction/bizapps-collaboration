@@ -1,13 +1,14 @@
 /**
  * SpaceMemberPinEntityServer (B22, D32, item 149): what a member keeps at the top of a space. The user is the caller, and reaches
  * the space; a Record pin's target is in the space (an item of it, or a note of it the caller can read) and a Grant pin's grant is
- * in force there (the app's, the space's type's, or the space's own). Only the owner removes a pin.
+ * in force there (the app's, the space's type's, the space's own or an ancestor's: the levels resolveAllowedAgents walks). The owner
+ * removes a pin, or someone who administers spaces.
  */
 import { BaseEntity, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { membershipReaches, type SpaceNode } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberPinEntity } from '@mj-biz-apps/collaboration-entities';
-import { callerUuid, loadWriteContext } from './load-graph.js';
+import { callerUuid, loadWriteContext, mayAdminister, requireSystemUser } from './load-graph.js';
 import { failDelete } from './space-driver-call.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
@@ -23,10 +24,22 @@ export class SpaceMemberPinEntityServer extends mjBizAppsCollaborationSpaceMembe
         return false;
     }
 
+    /** A pin is the caller's own: stamped ahead of MJ's required-field check, which runs before ValidateAsync. */
+    private stampOwner(): void {
+        const caller = callerUuid(this.ContextCurrentUser);
+        if (caller && !parseUuid(this.UserID)) this.UserID = caller;
+    }
+
+    public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
+        this.stampOwner();
+        return super.Save(options);
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
+        this.stampOwner();
+        const caller = callerUuid(this.ContextCurrentUser);
         const result = await super.ValidateAsync();
         const user = this.ContextCurrentUser;
-        const caller = callerUuid(user);
         if (!user || !caller) return fail(result, 'UserID', 'Pin change refused: there is no signed-in user.');
         const spaceId = parseUuid(this.SpaceID);
         if (!spaceId) return fail(result, 'SpaceID', 'Pin change refused: the space id is not valid.');
@@ -64,15 +77,25 @@ export class SpaceMemberPinEntityServer extends mjBizAppsCollaborationSpaceMembe
             const grantId = parseUuid(this.GrantID);
             if (!grantId) return fail(result, 'GrantID', 'Pin change refused: a Grant pin names its grant.');
             if (this.TargetEntityID || this.TargetRecordID) return fail(result, 'TargetRecordID', 'Pin change refused: a Grant pin names no record.');
-            const spaces = await rv.RunView<{ SpaceTypeID: string }>({ EntityName: SPACES, ExtraFilter: `ID = '${spaceId}'`, Fields: ['SpaceTypeID'], ResultType: 'simple', MaxRows: 1 }, user);
+            // A participant reads no grant rows (the server cuts a space's configuration to what they may see), so the grant in force
+            // is read as the system user: the question is whether it is in force here, not whether the caller may read its row
+            let system;
+            try {
+                system = await requireSystemUser(this);
+            } catch (error) {
+                return fail(result, 'GrantID', error instanceof Error ? error.message : 'Pin change refused: the system user is not available.');
+            }
+            const spaces = await rv.RunView<{ SpaceTypeID: string }>({ EntityName: SPACES, ExtraFilter: `ID = '${spaceId}'`, Fields: ['SpaceTypeID'], ResultType: 'simple', MaxRows: 1 }, system);
             const typeId = parseUuid(spaces.Results?.[0]?.SpaceTypeID);
+            // In force here: the app's, the space's type's, and the space's own or an ancestor's (what resolveAllowedAgents walks)
+            const chain = ancestorChain(context.spaces, spaceId);
             const grants = await rv.RunView<{ ID: string }>({
                 EntityName: GRANTS,
-                ExtraFilter: `ID = '${grantId}' AND ((SpaceID IS NULL AND SpaceTypeID IS NULL) OR SpaceID = '${spaceId}'${typeId ? ` OR (SpaceID IS NULL AND SpaceTypeID = '${typeId}')` : ''})`,
+                ExtraFilter: `ID = '${grantId}' AND ((SpaceID IS NULL AND SpaceTypeID IS NULL) OR ${chain.map((id) => `SpaceID = '${id}'`).join(' OR ')}${typeId ? ` OR (SpaceID IS NULL AND SpaceTypeID = '${typeId}')` : ''})`,
                 Fields: ['ID'],
                 ResultType: 'simple',
                 MaxRows: 1,
-            }, user);
+            }, system);
             if (!grants.Success) return fail(result, 'GrantID', `Pin change refused: the grants could not be read: ${grants.ErrorMessage ?? 'unknown error'}`);
             if (!grants.Results?.length) return fail(result, 'GrantID', 'Pin change refused: that grant is not in force in this space.');
         } else {
@@ -84,9 +107,24 @@ export class SpaceMemberPinEntityServer extends mjBizAppsCollaborationSpaceMembe
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         const caller = callerUuid(this.ContextCurrentUser);
         if (!caller) return failDelete(this, 'Pin delete refused: there is no signed-in user.');
-        if (parseUuid(this.UserID) !== caller) return failDelete(this, 'Pin delete refused: only its owner removes a pin.');
+        // The owner removes their pin; so may someone who administers spaces (a seat's removal, the harness's cleanup)
+        if (parseUuid(this.UserID) !== caller && !mayAdminister(this, this.ContextCurrentUser)) {
+            return failDelete(this, 'Pin delete refused: only its owner removes a pin.');
+        }
         return super.Delete(options);
     }
+}
+
+/** The space and its ancestors, nearest first; the space alone when the graph does not hold it. */
+function ancestorChain(spaces: ReadonlyArray<SpaceNode>, spaceId: string): string[] {
+    const byId = new Map(spaces.map((node) => [node.id.toLowerCase(), node]));
+    const chain: string[] = [];
+    let current: string | null = spaceId.toLowerCase();
+    while (current && !chain.includes(current)) {
+        chain.push(current);
+        current = byId.get(current)?.parentId?.toLowerCase() ?? null;
+    }
+    return chain;
 }
 
 function fail(result: ValidationResult, field: string, message: string): ValidationResult {

@@ -52,6 +52,10 @@ export function providerFilesPurgeSql(core: string, providerId: string): string 
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE ItemID IN (SELECT ID FROM #strayitems);
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE ItemID IN (SELECT ID FROM #strayitems);
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE ID IN (SELECT ID FROM #strayitems);
+            -- A Library document is an Artifact Version in file mode over its file row (stage 1): the version and its artifact go before the file
+            SELECT v.ID AS VersionID, v.ArtifactID INTO #fileversions FROM [${core}].ArtifactVersion AS v WHERE v.FileID IN (SELECT FileID FROM #providerfiles);
+            DELETE FROM [${core}].ArtifactVersion WHERE ID IN (SELECT VersionID FROM #fileversions);
+            DELETE FROM [${core}].Artifact WHERE ID IN (SELECT ArtifactID FROM #fileversions) AND NOT EXISTS (SELECT 1 FROM [${core}].ArtifactVersion AS left_ WHERE left_.ArtifactID = Artifact.ID);
             DELETE FROM [${core}].FileEntityRecordLink WHERE FileID IN (SELECT FileID FROM #providerfiles);
             DELETE FROM [${core}].[File] WHERE ID IN (SELECT FileID FROM #providerfiles);`;
 }

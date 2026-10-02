@@ -41,11 +41,17 @@ const EXPECTED_BEA_DISCOVERY_SPACES = new Set([
     FIELD_NOTES_SPACE_ID.toLowerCase(),
 ]);
 
+// Stage 1: a Closed space stays in an agent's reach (its status allows agent retrieval) until it is Archived, so the two closed
+// sub-spaces of Northwind that are not excluded entirely are in the answer; closed-past is ExcludedEntirely and stays out
+const CLOSED_RECENT_SPACE_ID = 'C1000001-0000-4000-8000-000000000007';
+const CLOSED_OPEN_SPACE_ID = 'C1000001-0000-4000-8000-000000000009';
 const EXPECTED_ADA_NORTHWIND_SPACES = new Set([
     NORTHWIND_SPACE_ID.toLowerCase(),
     DISCOVERY_SPACE_ID.toLowerCase(),
     FIELD_NOTES_SPACE_ID.toLowerCase(),
     SEALED_CHILD_SPACE_ID.toLowerCase(),
+    CLOSED_RECENT_SPACE_ID.toLowerCase(),
+    CLOSED_OPEN_SPACE_ID.toLowerCase(),
 ]);
 
 const EXPECTED_SKILL_NAMES = ['Find & act', 'Promote', 'Summarize'];

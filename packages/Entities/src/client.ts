@@ -132,8 +132,13 @@ export interface CloseConsequenceGraphQLPayload {
     Success: boolean;
     ErrorMessage?: string;
     /** ReadOnly, ReadOnlyWithAgent or None. */
-    Access?: string;
-    Days?: number;
+    /** The status the close moves the space to (its type's first terminal status), by code and name; absent for a type with no statuses. */
+    StatusCode?: string;
+    StatusName?: string;
+    /** What that status allows. */
+    ReadOnly?: boolean;
+    Visible?: boolean;
+    AgentRetrieval?: boolean;
     KeeperUserID?: string;
     KeeperName?: string;
     KeeperCanReopen?: boolean;
@@ -229,8 +234,11 @@ query GetCloseConsequence($spaceId: String!) {
     GetCloseConsequence(spaceId: $spaceId) {
         Success
         ErrorMessage
-        Access
-        Days
+        StatusCode
+        StatusName
+        ReadOnly
+        Visible
+        AgentRetrieval
         KeeperUserID
         KeeperName
         KeeperCanReopen

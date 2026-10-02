@@ -19,6 +19,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SHIPPED_STATUSES } from '@mj-biz-apps/collaboration-core';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
@@ -30,7 +31,7 @@ import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceGrantEntity,
+    mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceTypeStatusEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -54,6 +55,7 @@ const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
 const SPACE_GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
+const SPACE_TYPE_STATUSES = 'MJ_BizApps_Collaboration: Space Type Status';
 const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
@@ -220,6 +222,29 @@ export async function loadWorld(): Promise<void> {
         if (!(await record.Save())) throw new Error(`type ${type.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         types.set(type.Key, record.ID);
     }
+    // The world's types declare the shipped statuses (stage 1): Active, Paused, Closed, Archived, the same rows the shipped types
+    // get from metadata/space-type-statuses, so a world space closes to Closed and the checks move spaces between them.
+    await CollaborationEngine.Instance.Config(true, system, provider);
+    for (const type of typeRows) {
+        const typeId = types.get(type.Key)!;
+        for (const shipped of SHIPPED_STATUSES) {
+            if (await findId(provider, SPACE_TYPE_STATUSES, `SpaceTypeID = '${typeId}' AND Code = '${shipped.Code}'`, system)) continue;
+            const status = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceTypeStatusEntity>(SPACE_TYPE_STATUSES, system);
+            status.NewRecord();
+            status.SpaceTypeID = typeId;
+            status.Code = shipped.Code;
+            status.Name = shipped.Name;
+            status.Sequence = shipped.Sequence;
+            status.IsDefault = shipped.IsDefault;
+            status.ReadOnly = shipped.ReadOnly;
+            status.Visible = shipped.Visible;
+            status.AgentRetrieval = shipped.AgentRetrieval;
+            status.CanChangeAfter = shipped.CanChangeAfter;
+            status.NotifyMembersOnEnter = shipped.NotifyMembersOnEnter;
+            status.IsTerminal = shipped.IsTerminal;
+            if (!(await status.Save())) throw new Error(`status ${shipped.Code} of type ${type.Key}: ${status.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
+    }
     await CollaborationEngine.Instance.Config(true, system, provider);
 
     const roles = new Map<string, string>();
@@ -335,6 +360,7 @@ export async function loadWorld(): Promise<void> {
         record.NewRecord();
         record.SpaceID = spaceId;
         record.Kind = 'Agent';
+        record.TargetEntityID = provider.EntityByName(AI_AGENTS)!.ID;
         record.TargetRecordID = agentId;
         record.Band = 'Shared';
         record.IsDefault = row.IsDefault === '1';
@@ -568,10 +594,11 @@ async function assertCatalog(
         InheritsMembership: boolean;
         AgentRetrieval: string;
         ClosedAt: string | Date | null;
+        StatusID: string | null;
     }>({
         EntityName: SPACES,
         ExtraFilter: `ID IN (${spaceRows.map((row) => `'${row.ID}'`).join(',')})`,
-        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'ClosedAt'],
+        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'ClosedAt', 'StatusID'],
         ResultType: 'simple',
     }, user);
     if (!spaces.Success || spaces.Results?.length !== spaceRows.length) {
@@ -588,6 +615,7 @@ async function assertCatalog(
         if (found.SpaceTypeID.toLowerCase() !== requireMap(types, row.Type, 'space type').toLowerCase()) throw new Error(`${row.Key} type does not match the catalog.`);
         if (asBool(found.InheritsMembership) !== (row.InheritsMembership === '1')) throw new Error(`${row.Key} inheritance does not match the catalog.`);
         if (String(found.AgentRetrieval).trim() !== row.AgentRetrieval) throw new Error(`${row.Key} agent retrieval is ${found.AgentRetrieval}.`);
+        if (row.ClosedAt && !found.StatusID) throw new Error(`${row.Key} is closed and carries no status; the close should have stamped the type's first terminal status.`);
         const age = closedAgeDays(found.ClosedAt);
         const expected = row.ClosedAt === 'recent' ? 7 : row.ClosedAt === 'past' ? 400 : null;
         if (expected === null) {

@@ -1,7 +1,7 @@
 import { RunQuery } from '@memberjunction/core';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { CollaborationClient, mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
+import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, SPACE_TYPE_STATUS_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
 import { cleanupSpace, registerChecks } from '../cleanup-helpers.js';
@@ -45,13 +45,29 @@ async function seat(persona: PersonaContext, spaceId: string, userId: string, sp
     Assert(await seatRow.Save(), `A seat for ${userId} is saved: ${seatRow.LatestResult?.CompleteMessage ?? ''}`);
 }
 
-/** Closes a space as its owner and reads it back: the row must carry a ClosedAt and the type's first terminal status. */
+/** Closes a space as its owner and reads it back: the row must carry a ClosedAt and the type's first terminal status (Closed). */
 async function close(persona: PersonaContext, spaceId: string): Promise<void> {
     const space = await persona.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, persona.User);
     Assert(await space.Load(spaceId), 'The space to close loads');
     space.ClosedAt = new Date(Date.now() - 60_000);
     Assert(await space.Save(), `The space closes: ${space.LatestResult?.CompleteMessage ?? ''}`);
     Assert(!!space.StatusID, 'The close stamped the type\'s first terminal status on the space');
+}
+
+/** The id of one of a type's statuses, by code. */
+async function statusId(ctx: IntegrationCheckContext, typeId: string, code: string): Promise<string> {
+    const [row] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_STATUS_ENTITY, `SpaceTypeID = '${typeId}' AND Code = '${code}'`, ['ID']);
+    Assert(!!row, `The type declares the status ${code} (metadata-tests/space-type-statuses)`);
+    return row.ID;
+}
+
+/** Moves a space to a status as its owner, over the wire. */
+async function moveTo(persona: PersonaContext, spaceId: string, toStatusId: string): Promise<mjBizAppsCollaborationSpaceEntity> {
+    const space = await persona.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, persona.User);
+    Assert(await space.Load(spaceId), 'The space to move loads');
+    space.StatusID = toStatusId;
+    Assert(await space.Save(), `The space moves: ${space.LatestResult?.CompleteMessage ?? ''}`);
+    return space;
 }
 
 /** Removes what a check made: the space, its seats and what hangs on it (the harness deletes a closed space too). */
@@ -62,7 +78,7 @@ async function remove(ctx: IntegrationCheckContext, spaceId: string): Promise<vo
 const checks: NamedCheck[] = [
     {
         Id: 'lifecycle.LC1',
-        Name: "LC1 — a participant who owns a space by seat, and isn't its OwnerID, loses a space closed with no post-close access; only its OwnerID reads and reopens it",
+        Name: "LC1 — a participant who owns a space by seat, and isn't its OwnerID, loses an Archived (hidden) space; only its OwnerID still reads it, and nobody moves it back",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await getPersonaContext(ctx, 'ada');
@@ -76,20 +92,23 @@ const checks: NamedCheck[] = [
                 const beaBefore = await bea.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea.User);
                 Assert(await beaBefore.Load(vault.ID), 'While the space is open, Bea, an owner by seat, reads it');
 
+                // Closed is visible: an owner by seat still reads it, and cannot post or invite
                 await close(ada, vault.ID);
+                const beaClosed = await bea.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea.User);
+                Assert(await beaClosed.Load(vault.ID), 'A Closed space stays visible to an owner by seat');
 
-                // The row filter shows a space whose access ended to its OwnerID only: an owner by seat can no longer read it
+                // Archived hides it: the row filter shows a hidden space to its OwnerID only
+                const archived = await moveTo(ada, vault.ID, await statusId(ctx, typeId, 'archived'));
                 const beaAfter = await bea.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea.User);
-                Assert(!(await beaAfter.Load(vault.ID)), 'A closed space with no post-close access is hidden from an owner who is not its OwnerID, so she cannot reopen it');
+                Assert(!(await beaAfter.Load(vault.ID)), 'An Archived space is hidden from an owner who is not its OwnerID');
 
-                // Its OwnerID keeps the row, and reopens it through the client provider
-                const adaReopen = await ada.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada.User);
-                Assert(await adaReopen.Load(vault.ID), "The space's OwnerID still reads it after it closed");
-                adaReopen.ClosedAt = null;
-                Assert(await adaReopen.Save(), `The OwnerID reopens the space: ${adaReopen.LatestResult?.CompleteMessage ?? ''}`);
-
-                const beaReopened = await bea.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, bea.User);
-                Assert(await beaReopened.Load(vault.ID), 'Once it is open again, Bea reads it');
+                // Its OwnerID keeps the row, and even she cannot move it back: Archived is frozen
+                const adaBack = await ada.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada.User);
+                Assert(await adaBack.Load(vault.ID), "The space's OwnerID still reads it once it is Archived");
+                adaBack.StatusID = await statusId(ctx, typeId, 'active');
+                Assert(!(await adaBack.Save()), 'Nothing leaves Archived');
+                Assert(/cannot change status/.test(adaBack.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${adaBack.LatestResult?.CompleteMessage ?? ''}`);
+                Assert(archived.ClosedAt !== null, 'The close date stays on an Archived space');
             } finally {
                 await remove(ctx, vault.ID);
             }
@@ -97,7 +116,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'lifecycle.LC2',
-        Name: "LC2 — the seats of a parent closed with no post-close access are not offered under a sub-space its member reaches",
+        Name: "LC2 — the seats of an Archived (hidden) parent are not offered under a sub-space its member reaches",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await getPersonaContext(ctx, 'ada');
@@ -123,8 +142,8 @@ const checks: NamedCheck[] = [
                 // Control: while the parent is open its people are readable through the child, so the read below can see them
                 Assert((await seatsOfParent()) >= 1, "While the parent is open, Bea reads its seats through the sub-space she is seated on");
 
-                await close(ada, parent.ID);
-                Assert((await seatsOfParent()) === 0, 'A parent closed with no post-close access reaches no one: its seats are not offered under the sub-space');
+                await moveTo(ada, parent.ID, await statusId(ctx, typeId, 'archived'));
+                Assert((await seatsOfParent()) === 0, 'A hidden parent reaches no one: its seats are not offered under the sub-space');
                 // The close did not cut off Bea from the sub-space she is seated on: her own seat still reads
                 const ownSeats = await FindRows<{ ID: string }>(
                     { ...ctx, Provider: bea.Provider, User: bea.User } as IntegrationCheckContext,
@@ -143,7 +162,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'lifecycle.LC3',
-        Name: 'LC3 — the server says what closing would do: the stamped access (a sub-space takes its type\'s None), whose row it keeps, and whether they can reopen it',
+        Name: 'LC3 — the server says what closing would do: the status it moves to (the type\'s Closed: read-only, visible), whose row it keeps, and that nobody reopens it',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await getPersonaContext(ctx, 'ada');
@@ -158,10 +177,11 @@ const checks: NamedCheck[] = [
                 child = await createSpace(ada, 'LC3 child', typeId, parent.ID);
                 const read = await adaClient.GetCloseConsequence(child.ID);
                 Assert(read.Success, `The server reads what closing does: ${read.ErrorMessage ?? ''}`);
-                Assert(read.Access === 'None', `A sub-space of a vault stamps None, got ${read.Access}`);
+                Assert(read.StatusCode === 'closed', `The close moves the space to its type's Closed, got ${read.StatusCode}`);
+                Assert(read.ReadOnly === true && read.Visible === true && read.AgentRetrieval === true, `Closed is read-only, visible and open to agents: ${JSON.stringify([read.ReadOnly, read.Visible, read.AgentRetrieval])}`);
                 Assert(read.KeeperUserID?.toLowerCase() === ada.User.ID.toLowerCase(), "The keeper is the space's OwnerID");
                 Assert(read.KeeperName === ada.User.Name, `The keeper is named: ${read.KeeperName}`);
-                Assert(read.KeeperCanReopen === true, 'Ada holds an owner seat (through the parent) and the authorization, so she can reopen it');
+                Assert(read.KeeperCanReopen === false, 'Closed is terminal and only Archived follows it: nobody reopens the space, the keeper included');
 
                 // Someone who cannot read the space is told so, not given its keeper
                 const unseen = await beaClient.GetCloseConsequence(child.ID);

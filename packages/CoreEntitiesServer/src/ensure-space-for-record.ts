@@ -13,7 +13,7 @@ import {
     type mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { ServerDriverRegistry } from './server-driver-registry.js';
-import { releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
+import { canonicalAnchorRecordId, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
 import { asMetadata } from './uuid.js';
 
 export interface EnsureSpaceForRecordParams {
@@ -57,6 +57,10 @@ export async function EnsureSpaceForRecord(
         throw new Error(`Entity "${params.entityName}" could not be resolved.`);
     }
     const entityId = entityResult.Results[0].ID;
+    const entityInfo = metadata.EntityByID(entityId);
+    if (!entityInfo) throw new Error(`Entity "${params.entityName}" is not in this provider's metadata.`);
+    // The anchor's record id in the one spelling the anchors use, so the lookup and the row agree
+    const recordId = canonicalAnchorRecordId(entityInfo, params.recordId);
 
     // 2. Load Space Type: the anchor is looked up within the type, since one record may anchor a space of each type
     const typeResult = await rv.RunView<mjBizAppsCollaborationSpaceTypeEntity>({
@@ -74,7 +78,7 @@ export async function EnsureSpaceForRecord(
     // 3. Check if an anchored space already exists: the primary anchor of a space of this type on this record
     const existingResult = await rv.RunView<{ SpaceID: string }>({
         EntityName: 'MJ_BizApps_Collaboration: Space Anchors',
-        ExtraFilter: `SpaceTypeID = '${spaceType.ID}' AND EntityID = '${entityId}' AND RecordID = '${params.recordId.replace(/'/g, "''")}' AND IsPrimary = 1`,
+        ExtraFilter: `SpaceTypeID = '${spaceType.ID}' AND EntityID = '${entityId}' AND RecordID = '${recordId.replace(/'/g, "''")}' AND IsPrimary = 1`,
         Fields: ['SpaceID'],
         MaxRows: 1,
         ResultType: 'simple',
@@ -132,7 +136,7 @@ export async function EnsureSpaceForRecord(
     anchor.SpaceID = newSpace.ID;
     anchor.SpaceTypeID = spaceType.ID;
     anchor.EntityID = entityId;
-    anchor.RecordID = params.recordId;
+    anchor.RecordID = recordId;
     anchor.Role = params.anchorRole?.trim() || 'primary';
     anchor.IsPrimary = true;
     anchor.Sequence = 0;

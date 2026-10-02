@@ -8,6 +8,10 @@ import {
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
+    SPACE_ANCHOR_ENTITY,
+    SPACE_GRANT_ENTITY,
+    SPACE_NOTE_ENTITY,
+    SPACE_MEMBER_PIN_ENTITY,
     PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
     USER_ENTITY,
@@ -194,7 +198,7 @@ async function cleanupConversationUnguarded(
     }
 }
 
-/** Deletes a space with its conversations, items and seats, checking every read and delete and reading the space back. */
+/** Deletes a space with its conversations, pins, notes, grants, anchors, items and seats, checking every read and delete and reading the space back. */
 async function cleanupSpaceUnguarded(
     provider: IMetadataProvider,
     user: UserInfo,
@@ -212,7 +216,12 @@ async function cleanupSpaceUnguarded(
         await cleanupConversationUnguarded(provider, user, chat.ConversationID, chat.ID);
     }
 
+    // Stage 1 child rows go first: a pin hangs on an item and a seat, the rest on the space alone
     for (const [entityName, what] of [
+        [SPACE_MEMBER_PIN_ENTITY, 'Space Member Pin'],
+        [SPACE_NOTE_ENTITY, 'Space Note'],
+        [SPACE_GRANT_ENTITY, 'Space Grant'],
+        [SPACE_ANCHOR_ENTITY, 'Space Anchor'],
         [SPACE_ITEM_ENTITY, 'Space Item'],
         [SPACE_MEMBER_ENTITY, 'Space Member'],
     ] as const) {

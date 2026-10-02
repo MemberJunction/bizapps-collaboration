@@ -13,7 +13,7 @@ import {
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
@@ -21,6 +21,7 @@ import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { filterRoomReplyItems } from './post-space-message.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -133,8 +134,8 @@ async function runClaimedTurn(
     }
 
     const targetNode = context.spaces.find((s) => s.id.toLowerCase() === spaceId.toLowerCase());
-    if (targetNode?.closedAt) {
-        return { ok: false, message: 'A closed space does not take a new turn.' };
+    if (targetNode && spaceIsReadOnly(targetNode)) {
+        return { ok: false, message: targetNode.closedAt ? 'A closed space does not take a new turn.' : 'A read-only space does not take a new turn.' };
     }
 
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
@@ -150,10 +151,10 @@ async function runClaimedTurn(
     if (!driver.ok) return { ok: false, message: driver.message };
 
     // 1. Verify space is open
-    const spaceRes = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
+    const spaceRes = await view.RunView<{ ClosedAt: string | null; StatusID: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: SPACES,
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
+        Fields: ['ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -163,8 +164,9 @@ async function runClaimedTurn(
     }
 
     const targetSpace = spaceRes.Results[0];
-    if (targetSpace.ClosedAt) {
-        return { ok: false, message: 'A closed space does not take a new turn.' };
+    const refusal = spaceWriteRefusal(targetSpace);
+    if (refusal.readOnly) {
+        return { ok: false, message: spaceWriteRefusalMessage(refusal, 'turn') };
     }
 
     // 2. Verify conversation belongs to this space and is active

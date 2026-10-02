@@ -35,6 +35,7 @@ export async function attachTestAgent(ctx: IntegrationCheckContext, spaceId: str
     const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANT_ENTITY, ctx.User);
     attachment.NewRecord();
     attachment.Kind = 'Agent';
+    attachment.TargetEntityID = ctx.Provider.EntityByName(AI_AGENT_ENTITY)!.ID;
     attachment.TargetRecordID = COLLABORATION_TEST_AGENT_ID;
     attachment.SpaceID = spaceId;
     attachment.Band = 'Shared';
@@ -50,6 +51,7 @@ export async function attachAgentToSpace(ctx: IntegrationCheckContext, agentId: 
     const attachment = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANT_ENTITY, ctx.User);
     attachment.NewRecord();
     attachment.Kind = 'Agent';
+    attachment.TargetEntityID = ctx.Provider.EntityByName(AI_AGENT_ENTITY)!.ID;
     attachment.TargetRecordID = agentId;
     attachment.SpaceID = spaceId;
     attachment.Band = 'Shared';
