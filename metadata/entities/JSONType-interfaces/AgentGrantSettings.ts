@@ -16,5 +16,5 @@ export interface AgentGrantSettings {
     Limits?: Partial<Record<AgentLimitName, number>>;
 }
 
-export const AGENT_LIMIT_NAMES = ['MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun'] as const;
-export type AgentLimitName = (typeof AGENT_LIMIT_NAMES)[number];
+/** MJ's four per-run limits, named as its agent columns are (packages/Core/src/grants.ts holds the list as a constant). */
+export type AgentLimitName = 'MaxCostPerRun' | 'MaxTokensPerRun' | 'MaxIterationsPerRun' | 'MaxTimePerRun';

@@ -205,22 +205,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="settings-card">
           <div class="card-title-row">
             <i class="fa-solid fa-shield-halved section-ic"></i>
-            <span class="card-title">Access & Retention Lifecycle</span>
+            <span class="card-title">Access & Lifecycle</span>
           </div>
 
           <div class="form-grid">
-            <div class="form-field">
-              <label class="field-label" id="settings-retention-label">Retention Policy</label>
-              <mj-dropdown
-                id="settings-retention"
-                AriaLabelledBy="settings-retention-label"
-                [Data]="retentionChoices"
-                TextField="label"
-                ValueField="value"
-                [ValuePrimitive]="true"
-                [(ngModel)]="formData.retention" />
-            </div>
-
             <div class="form-field">
               <label class="field-label" for="settings-type">Space Type</label>
               <input
@@ -564,16 +552,6 @@ export class CollabSpaceSettingsComponent implements OnInit, OnChanges {
     return Object.keys(this.changedFields()).length > 0;
   }
   public confirmingLifecycle = false;
-
-  /** The retention a space may keep: the type's default, or one of its own. */
-  public get retentionChoices(): Array<{ value: string; label: string }> {
-    return [
-      { value: '', label: `Type default (${this.formData.typeDefaultRetention || 'Indefinite'})` },
-      { value: 'Indefinite', label: 'Indefinite (No automatic archiving)' },
-      { value: 'Year', label: '1 Year' },
-      { value: 'Month', label: '1 Month' },
-    ];
-  }
 
   public onEdit(): void {
     this.bannerVisible = false;

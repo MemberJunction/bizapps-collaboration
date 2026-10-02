@@ -24,7 +24,7 @@ import type { SpaceSettingsModel } from './types';
 
 const settings: SpaceSettingsModel = {
   id: 's1', name: 'Northwind', description: '', spaceType: 'Workspace', spaceTypeId: 't1', iconClass: 'fa-solid fa-briefcase', color: '#0076b6',
-  backgroundImageUrl: '', inheritsMembership: true, agentRetrieval: 'Included', retention: 'Indefinite', status: 'Active',
+  backgroundImageUrl: '', inheritsMembership: true, agentRetrieval: 'Included', status: 'Active',
 };
 
 beforeAll(() => {

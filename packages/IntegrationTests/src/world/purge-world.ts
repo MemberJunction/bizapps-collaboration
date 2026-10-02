@@ -160,10 +160,20 @@ export async function purgeWorld(): Promise<void> {
             DELETE FROM __mj_BizAppsCollaboration.ShareNotice WHERE SpaceID IN (${spaceIds}) OR RecipientUserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.ItemUse WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceMember WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
-            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgentSkill') IS NOT NULL
-                DELETE FROM __mj_BizAppsCollaboration.SpaceAgentSkill WHERE SpaceID IN (${spaceIds});
-            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAgent') IS NOT NULL
-                DELETE FROM __mj_BizAppsCollaboration.SpaceAgent WHERE SpaceID IN (${spaceIds});
+            -- Stage 1's rows on the world's spaces: grants, anchors, notes and pins (a pin's grant goes with the grants)
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceMemberPin') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceMemberPin WHERE SpaceID IN (${spaceIds}) OR UserID IN (${userIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceNote') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceNote WHERE SpaceID IN (${spaceIds}) OR AuthorUserID IN (${userIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceGrant') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceGrant WHERE SpaceID IN (${spaceIds}) OR SpaceTypeID IN (${typeIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceAnchor') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollaboration.SpaceAnchor WHERE SpaceID IN (${spaceIds}) OR SpaceTypeID IN (${typeIds});
+            IF OBJECT_ID('__mj_BizAppsCollaboration.SpaceTypeStatus') IS NOT NULL
+            BEGIN
+                UPDATE __mj_BizAppsCollaboration.Space SET StatusID = NULL WHERE ID IN (${spaceIds});
+                DELETE FROM __mj_BizAppsCollaboration.SpaceTypeStatus WHERE SpaceTypeID IN (${typeIds});
+            END
             DELETE FROM __mj_BizAppsCollaboration.SpaceChat WHERE SpaceID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID IN (${spaceIds});
             -- The example subtype's rows go before the spaces they specialise: their keys are foreign keys to Space, with no cascade

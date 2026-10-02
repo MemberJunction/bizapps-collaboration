@@ -1,4 +1,167 @@
 [{
+        "schemaName": "\b__mj_BizAppsCollabExamples\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Collaboration_Examples\b: \bExample\b \bBoards\b",
+            "Description": "\bA\b \bboard\b: \ba\b \bspace\b \bof\b \bthe\b \bexample\b-\bboard\b \btype\b, \bwith\b \bthe\b \bterms\b \bits\b \bmembers\b \bsit\b \bunder\b. \bShares\b \bits\b \bprimary\b \bkey\b \bwith\b \bthe\b \bSpace\b \brow\b \bit\b \bspecialises\b.",
+            "BaseView": "\bvwExampleBoards\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "\bThe\b \bSpace\b \bthis\b \bboard\b \bspecialises\b: \bthe\b \bsame\b \bvalue\b \bas\b \bSpace\b.\bID\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTermName\b", 
+                    "Description": "\bThe\b \bterm\b \bthe\b \bboard\b \bsits\b \bfor\b, \bfor\b \bexample\b \"\b2026\b \bto\b \b2027\b\".",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bMeetingCadence\b", 
+                    "Description": "\bHow\b \boften\b \bthe\b \bboard\b \bmeets\b, \bin\b \bwords\b: \"\bMonthly\b\", \"\bFirst\b \bTuesday\b\".",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bNextMeetingDate\b", 
+                    "Description": "\bWhen\b \bthe\b \bnext\b \bmeeting\b \bis\b.",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bNextMeetingLocation\b", 
+                    "Description": "\bWhere\b \bthe\b \bnext\b \bmeeting\b \bis\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bQuorumPercentage\b", 
+                    "Description": "\bThe\b \bpercentage\b \bof\b \bmembers\b \bwho\b \bmust\b \battend\b \bfor\b \ba\b \bvote\b \bto\b \bcount\b. \bDefaults\b \bto\b \b50\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bBoardCharterUrl\b", 
+                    "Description": "\bA\b \blink\b \bto\b \bthe\b \bboard\b \bcharter\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceTypeID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bParentID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bName\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bDescription\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bOwnerID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bInheritsMembership\b", 
+                    "Description": "",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bAgentRetrieval\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bStartedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bClosedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bAllowParentAssignees\b", 
+                    "Description": "",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bPlannedCloseAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bIconClass\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bColor\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bBackgroundImageURL\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bConfiguration\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bStatusID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": true 
+                }        
+            ]
+        }
+        ]
+    },{
         "schemaName": "\b__mj_BizAppsCollaboration\b", 
         "entities": [
         { 

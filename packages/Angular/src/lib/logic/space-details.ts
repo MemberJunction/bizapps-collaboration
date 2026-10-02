@@ -44,13 +44,15 @@ export class NewSpaceDraft {
     public static async Start(
         provider: IMetadataProvider,
         user: UserInfo,
-        type: Pick<mjBizAppsCollaborationSpaceTypeEntity, 'ID' | 'DefaultInheritsMembership'>,
+        type: Pick<mjBizAppsCollaborationSpaceTypeEntity, 'ID'>,
+        inheritsMembership: boolean = true,
     ): Promise<NewSpaceDraft> {
         const space = await provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, user);
         space.NewRecord();
         space.SpaceTypeID = type.ID;
         space.OwnerID = user.ID;
-        space.InheritsMembership = type.DefaultInheritsMembership;
+        // D22: the creator chooses whether the space inherits its parent's members; a top-level space has none to inherit
+        space.InheritsMembership = inheritsMembership;
         // The type names the subtype, and the resolver answers from it: the child is attached to this very object
         const attached = await space.EnsureISAChild();
         const leaf: BaseEntity = attached ? space.LeafEntity : space;

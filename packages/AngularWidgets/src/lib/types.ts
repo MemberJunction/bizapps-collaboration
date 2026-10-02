@@ -256,10 +256,7 @@ export interface SpaceSettingsModel {
   backgroundImageUrl: string;
   inheritsMembership: boolean;
   agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;
-  /** The space's own retention. Empty means it has none and uses its type's default. */
-  retention: 'Month' | 'Year' | 'Indefinite' | '' | string;
-  /** The space type's default retention, shown as what an empty retention means. */
-  typeDefaultRetention?: 'Month' | 'Year' | 'Indefinite' | string;
+  /** The name of the space's status (stage 1: one of its type's statuses). */
   status: string;
 }
 

@@ -2349,6 +2349,16 @@
         }
         ]
     },{
+        "schemaName": "\b__mj_BizAppsCollabExamples\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Collaboration_Examples\b: \bExample\b \bBoards\b",
+            "Description": "\bA\b \bboard\b: \ba\b \bspace\b \bof\b \bthe\b \bexample\b-\bboard\b \btype\b, \bwith\b \bthe\b \bterms\b \bits\b \bmembers\b \bsit\b \bunder\b. \bShares\b \bits\b \bprimary\b \bkey\b \bwith\b \bthe\b \bSpace\b \brow\b \bit\b \bspecialises\b.",
+            "BaseView": "\bvwExampleBoards\b", 
+            "Fields": ["\bID\b","\bTermName\b","\bMeetingCadence\b","\bNextMeetingDate\b","\bNextMeetingLocation\b","\bQuorumPercentage\b","\bBoardCharterUrl\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bConfiguration\b","\bStatusID\b"]
+        }
+        ]
+    },{
         "schemaName": "\b__mj_BizAppsCollaboration\b", 
         "entities": [
         { 

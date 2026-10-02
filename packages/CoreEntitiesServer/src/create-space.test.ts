@@ -76,12 +76,13 @@ describe('making a space and its owner seat', () => {
         engine.SpaceTypeById = held.type;
         engine.SpaceRoleTypeByCode = held.role;
     });
-    const usual = () => { type = { ID: TYPE_ID, Name: 'Board', IsActive: true, DefaultInheritsMembership: false }; ownerRole = { ID: OWNER_ROLE }; };
+    const usual = () => { type = { ID: TYPE_ID, Name: 'Board', IsActive: true }; ownerRole = { ID: OWNER_ROLE }; };
 
     it('writes the space and the seat in one transaction, seating the person as an active owner on the Team band', async () => {
         usual();
         const { provider, log, space, seat } = providerFor({ hasSubtype: true });
-        const result = await createSpace(provider, USER, { TypeID: TYPE_ID, Name: '  2026 Board ', Description: ' the board ', Details: { TermName: '2026' } });
+        // D22: the creator chooses whether the space inherits its parent's members; a top-level space says so itself
+        const result = await createSpace(provider, USER, { TypeID: TYPE_ID, Name: '  2026 Board ', Description: ' the board ', InheritsMembership: false, Details: { TermName: '2026' } });
         assert.deepEqual(result, { status: 'created', spaceId: SPACE_ID });
         assert.deepEqual(log, ['begin', 'space save', 'seat save', 'commit']);
         assert.deepEqual([space['Name'], space['Description'], space['OwnerID'], space['SpaceTypeID'], space['InheritsMembership']], ['2026 Board', 'the board', USER.ID, TYPE_ID, false]);

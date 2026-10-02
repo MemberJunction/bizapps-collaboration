@@ -27,11 +27,12 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     interface MockWorldOptions {
         typeConfig?: string | null;
         spaceConfig?: string | null;
-        agentRows?: Array<{ AgentID: string; SpaceTypeID?: string | null; SpaceID?: string | null; IsDefault?: boolean }>;
+        /** Agent grants (stage 1: `Space Grants` with Kind 'Agent'; the agent is `TargetRecordID`). */
+        agentRows?: Array<{ TargetRecordID: string; SpaceTypeID?: string | null; SpaceID?: string | null; IsDefault?: boolean; Settings?: string | null }>;
         /** Agents whose Status is not Active: the agents read leaves them out. */
         inactiveAgentIds?: string[];
-        knowledgeRows?: Array<{ ContentSourceID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
-        skillRows?: Array<{ SkillID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
+        /** KnowledgeSource grants: the content source is `TargetRecordID`. */
+        knowledgeRows?: Array<{ TargetRecordID: string; SpaceTypeID?: string | null; SpaceID?: string | null }>;
     }
 
     let currentOptions: MockWorldOptions = {};
@@ -41,9 +42,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
             const { EntityName, ExtraFilter = '' } = params;
             const typeConfig = currentOptions.typeConfig ?? null;
             const spaceConfig = currentOptions.spaceConfig ?? null;
-            const agentRows = currentOptions.agentRows ?? [];
-            const knowledgeRows = currentOptions.knowledgeRows ?? [];
-            const skillRows = currentOptions.skillRows ?? [];
+            const agentRows = (currentOptions.agentRows ?? []).map((row, index) => ({ ID: `agent-grant-${index}`, Kind: 'Agent', Settings: null, ...row }));
+            const knowledgeRows = (currentOptions.knowledgeRows ?? []).map((row, index) => ({ ID: `knowledge-grant-${index}`, Kind: 'KnowledgeSource', Settings: null, ...row }));
 
             if (EntityName === 'MJ: AI Agents') {
                 const wanted = [...ExtraFilter.matchAll(/'([0-9a-f-]{36})'/gi)].map((m) => m[1].toLowerCase());
@@ -92,25 +92,10 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 };
             }
 
-            if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
-                return {
-                    Success: true,
-                    Results: agentRows,
-                };
-            }
-
-            if (EntityName === 'MJ_BizApps_Collaboration: Space Knowledge Sources') {
-                return {
-                    Success: true,
-                    Results: knowledgeRows,
-                };
-            }
-
-            if (EntityName === 'MJ_BizApps_Collaboration: Space Agent Skills') {
-                return {
-                    Success: true,
-                    Results: skillRows,
-                };
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
+                // The engine loads every app- and type-level grant; the resolvers read a space's rows of one kind
+                const rows = ExtraFilter.includes("Kind = 'Agent'") ? agentRows : ExtraFilter.includes("Kind = 'KnowledgeSource'") ? knowledgeRows : [...agentRows, ...knowledgeRows];
+                return { Success: true, Results: rows };
             }
 
             return { Success: true, Results: [] };
@@ -139,7 +124,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it('app-wide SpaceAgent row is resolved when present', async () => {
         currentOptions = {
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -154,8 +139,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Extend' } }),
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
-                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -169,8 +154,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
-                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -190,9 +175,9 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
                 Agents: { ListMode: 'Replace' },
             }),
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
-                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
-                { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -206,8 +191,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it('leaves a disabled non-default agent out of the list', async () => {
         currentOptions = {
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
-                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: false },
             ],
             inactiveAgentIds: [TYPE_AGENT_ID],
         };
@@ -222,9 +207,9 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Extend' } }),
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
-                { AgentID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
-                { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: false },
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, IsDefault: true },
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
             ],
             inactiveAgentIds: [TYPE_AGENT_ID],
         };
@@ -238,8 +223,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it("falls back to the first Active agent when the disabled default was the only one marked default", async () => {
         currentOptions = {
             agentRows: [
-                { AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
-                { AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: false },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true },
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: false },
             ],
             inactiveAgentIds: [APP_AGENT_ID],
         };
@@ -252,7 +237,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
 
     it('returns no default and no agents when not even the shipped agent is Active', async () => {
         currentOptions = {
-            agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
+            agentRows: [{ TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
             inactiveAgentIds: [APP_AGENT_ID, COLLABORATION_DEFAULT_AGENT_ID],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -271,7 +256,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it('refuses when a space that holds agent rows has a configuration that does not parse', async () => {
         currentOptions = {
             spaceConfig: '{ not json',
-            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+            agentRows: [{ TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
         await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
@@ -281,7 +266,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         currentOptions = {
             spaceConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),
             typeConfig: JSON.stringify({ SpaceOverridable: ['Agents.ListMode'] }),
-            agentRows: [{ AgentID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
+            agentRows: [{ TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
             inactiveAgentIds: [CHILD_AGENT_ID],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -292,7 +277,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
 
     it('uses the shipped agent as the last resort when nothing configured is Active', async () => {
         currentOptions = {
-            agentRows: [{ AgentID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
+            agentRows: [{ TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, IsDefault: true }],
             inactiveAgentIds: [APP_AGENT_ID],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -305,8 +290,8 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it('resolves bound knowledge sources across type and space hierarchy', async () => {
         currentOptions = {
             knowledgeRows: [
-                { ContentSourceID: SOURCE_ID_1, SpaceTypeID: TYPE_ID, SpaceID: null },
-                { ContentSourceID: SOURCE_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
+                { TargetRecordID: SOURCE_ID_1, SpaceTypeID: TYPE_ID, SpaceID: null },
+                { TargetRecordID: SOURCE_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
@@ -317,11 +302,12 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         assert.ok(sources.includes(SOURCE_ID_2.toUpperCase()));
     });
 
-    it('resolves bound AI skills across type and space hierarchy', async () => {
+    it("resolves the AI skills the agent grants' settings name across type and space hierarchy", async () => {
         currentOptions = {
-            skillRows: [
-                { SkillID: SKILL_ID_1, SpaceTypeID: TYPE_ID, SpaceID: null },
-                { SkillID: SKILL_ID_2, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID },
+            agentRows: [
+                { TargetRecordID: TYPE_AGENT_ID, SpaceTypeID: TYPE_ID, SpaceID: null, Settings: JSON.stringify({ Skills: [SKILL_ID_1] }) },
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, Settings: JSON.stringify({ Skills: [SKILL_ID_2] }) },
+                { TargetRecordID: APP_AGENT_ID, SpaceTypeID: null, SpaceID: null, Settings: JSON.stringify({ Skills: 'None' }) },
             ],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);

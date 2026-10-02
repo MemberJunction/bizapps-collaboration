@@ -27,8 +27,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 Code: 'project',
                 Name: 'Project',
                 Configuration: JSON.stringify({
-                    PostCloseAccess: 'None',
-                    PostCloseAccessDays: 30,
+                    Chats: { WhoCanStart: 'Owners' },
                 }),
             },
         ];
@@ -56,8 +55,6 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 ApplicationID: COLLABORATION_APP_ID,
                 Name: 'CollaborationSettings',
                 Value: JSON.stringify({
-                    PostCloseAccess: 'ReadOnly',
-                    PostCloseAccessDays: null,
                     StorageAccountID: 'DEFAULT-APP-STORAGE',
                     Chats: {
                         WhoCanStart: 'Anyone',
@@ -132,7 +129,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
     it('reads parsed CollaborationSettings and resolves settings for a space', () => {
         const settings = engine.CollaborationSettings;
         expect(settings.StorageAccountID).toBe('DEFAULT-APP-STORAGE');
-        expect(settings.PostCloseAccess).toBe('ReadOnly');
+        expect(settings.Chats?.WhoCanStart).toBe('Anyone');
 
         // Space override with type config
         const resolved = engine.ResolveSettingsForSpace(
@@ -140,7 +137,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             'TYPE-111' // type has SpaceOverridable: ['StorageAccountID']
         );
         expect(resolved.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
-        expect(resolved.PostCloseAccess).toBe('ReadOnly'); // from app default
+        expect(resolved.Chats.WhoCanStart).toBe('Anyone'); // from app default
     });
 
     describe('settings fail closed', () => {
@@ -210,7 +207,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
                 // A reload that finds a good row reads it
                 internals._applicationSettings = held;
                 await reload();
-                expect(engine.CollaborationSettings.PostCloseAccess).toBe('ReadOnly');
+                expect(engine.CollaborationSettings.Chats?.WhoCanStart).toBe('Anyone');
             } finally {
                 internals._applicationSettings = held;
                 await reload();

@@ -1,6 +1,5 @@
 export {
     agentMayQuote,
-    isAgentPostCloseAccessPermitted,
     authorizeItemWrite,
     authorizeTaskAssignment,
     mayFileRootTask,
@@ -17,8 +16,11 @@ export {
     lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
-    isPostCloseAccessPermitted,
     membershipReaches,
+    spaceAllowsAgentRetrieval,
+    spaceIsReadOnly,
+    spaceIsVisible,
+    spaceReach,
     rosterActions,
     rosterBySeat,
     parentCreatesCycle,
@@ -26,7 +28,6 @@ export {
     promotionStamps,
     strandFromSavedRow,
     refuseInvite,
-    retentionDeadline,
     visibleSpaces,
     wouldStrandLastOwner,
 } from './rules.js';
@@ -41,7 +42,6 @@ export type {
     MemberSnapshot,
     PromotionDecision,
     RosterAction,
-    Retention,
     RoleFlags,
     RosterGroup,
     RosterStop,
@@ -96,7 +96,7 @@ export type {
     ResolveCollaborationSettingsParams,
     ResolvedCollaborationSettings,
 } from './configuration.js';
-export { validateDataReachDeclaration } from './configuration.js';
+export { typeSeatsAudience, validateDataReachDeclaration } from './configuration.js';
 export {
     GRANT_KINDS,
     GRANT_KIND_ENTITY,
@@ -115,10 +115,12 @@ export {
 export {
     SHIPPED_STATUSES,
     defaultStatus,
+    effectiveStatusReach,
     statusChangeRefusal,
     reachableStatuses,
     statusAllowsWrites,
     validateStatusList,
+    type SpaceStatusReach,
     type SpaceTypeStatusAttributes,
     type StatusChangeRefusal,
     type StatusChangeRefusalCode,

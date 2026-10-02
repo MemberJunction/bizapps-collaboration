@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    typeSeatsAudience,
     DEFAULT_SPACE_RULES,
     ResolveCollaborationSettings,
     ResolveSpaceRules,
@@ -134,8 +135,6 @@ describe('Configuration & ResolveSpaceRules', () => {
 
     describe('CollaborationSettings (Punch list 2 items 55, 12, 6)', () => {
         const appDefaults: CollaborationSettings = {
-            PostCloseAccess: 'ReadOnly',
-            PostCloseAccessDays: null,
             StorageAccountID: 'APP-STORAGE-001',
             Chats: {
                 WhoCanStart: 'Anyone',
@@ -160,20 +159,17 @@ describe('Configuration & ResolveSpaceRules', () => {
         it('resolves the chain in order: sub-space -> parent -> type -> app', () => {
             const typeConfig: CollaborationSettings = {
                 StorageAccountID: 'TYPE-STORAGE-002',
-                PostCloseAccess: 'ReadOnlyWithAgent',
-                PostCloseAccessDays: 90,
+                Chats: { WhoCanStart: 'Owners', AgentReplyMode: 'Always' },
                 SpaceOverridable: [
                     'StorageAccountID',
-                    'PostCloseAccess',
-                    'PostCloseAccessDays',
                     'Chats.WhoCanStart',
+                    'Chats.AgentReplyMode',
                 ],
             };
 
             const rootSpace: CollaborationSettings = {
                 StorageAccountID: 'ROOT-STORAGE-003',
-                PostCloseAccess: 'None',
-                PostCloseAccessDays: 30,
+                Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOnly' },
             };
 
             const parentSpace: CollaborationSettings = {
@@ -181,7 +177,7 @@ describe('Configuration & ResolveSpaceRules', () => {
             };
 
             const subSpace: CollaborationSettings = {
-                PostCloseAccessDays: 14,
+                Chats: { AgentReplyMode: 'MentionOrOneToOne' },
             };
 
             // spaces: [subSpace, parentSpace, rootSpace] (leaf to root)
@@ -191,14 +187,14 @@ describe('Configuration & ResolveSpaceRules', () => {
                 app: appDefaults,
             });
 
-            // PostCloseAccessDays: subSpace wins (14)
-            assert.equal(resolved.PostCloseAccessDays, 14);
+            // Chats.AgentReplyMode: subSpace wins
+            assert.equal(resolved.Chats.AgentReplyMode, 'MentionOrOneToOne');
             // StorageAccountID: subSpace has none, parentSpace has 'PARENT-STORAGE-004' so parentSpace wins
             assert.equal(resolved.StorageAccountID, 'PARENT-STORAGE-004');
-            // PostCloseAccess: subSpace & parentSpace have none, rootSpace has 'None' so rootSpace wins
-            assert.equal(resolved.PostCloseAccess, 'None');
-            // Chats.WhoCanStart: none of the spaces set it, type didn't, so app sets 'Anyone'
+            // Chats.WhoCanStart: subSpace & parentSpace have none, rootSpace has 'Anyone' so rootSpace wins over the type's 'Owners'
             assert.equal(resolved.Chats.WhoCanStart, 'Anyone');
+            // Chats.HistoryOnAdd: none of the spaces set it, type didn't, so app sets 'None'
+            assert.equal(resolved.Chats.HistoryOnAdd, 'None');
             // Agents.ListMode: app sets 'Extend'
             assert.equal(resolved.Agents.ListMode, 'Extend');
         });
@@ -206,13 +202,13 @@ describe('Configuration & ResolveSpaceRules', () => {
         it('enforces SpaceOverridable on space overrides', () => {
             const typeConfig: CollaborationSettings = {
                 StorageAccountID: 'TYPE-STORAGE',
-                PostCloseAccess: 'ReadOnly',
+                Chats: { WhoCanStart: 'Owners' },
                 SpaceOverridable: ['StorageAccountID'], // Only StorageAccountID is overridable!
             };
 
             const space: CollaborationSettings = {
                 StorageAccountID: 'SPACE-STORAGE',
-                PostCloseAccess: 'None', // NOT in SpaceOverridable!
+                Chats: { WhoCanStart: 'Anyone' }, // NOT in SpaceOverridable!
             };
 
             const resolved = ResolveCollaborationSettings({
@@ -223,16 +219,16 @@ describe('Configuration & ResolveSpaceRules', () => {
 
             // StorageAccountID is overridable, so space wins
             assert.equal(resolved.StorageAccountID, 'SPACE-STORAGE');
-            // PostCloseAccess is NOT overridable, so space's 'None' is ignored and type's 'ReadOnly' wins
-            assert.equal(resolved.PostCloseAccess, 'ReadOnly');
+            // Chats.WhoCanStart is NOT overridable, so the space's 'Anyone' is ignored and the type's 'Owners' wins
+            assert.equal(resolved.Chats.WhoCanStart, 'Owners');
         });
 
         it("refuses an app row that leaves a key unset or misspells a value", () => {
-            const complete = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' } };
+            const complete = { Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' } };
             assert.equal(ValidateCollaborationSettings(complete, 'app').valid, true);
             const partial = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Anyone' } }, 'app');
             assert.equal(partial.valid, false);
-            assert.ok(partial.errors.some((e) => /must set PostCloseAccess/.test(e)));
+            assert.ok(partial.errors.some((e) => /must set Chats.AgentReplyMode/.test(e)));
             assert.ok(partial.errors.some((e) => /must set Agents.ListMode/.test(e)));
             const misspelled = ValidateCollaborationSettings({ ...complete, Chats: { ...complete.Chats, WhoCanStart: 'Owner' } }, 'app');
             assert.equal(misspelled.valid, false);
@@ -257,15 +253,15 @@ describe('Configuration & ResolveSpaceRules', () => {
             assert.equal(res1.valid, false);
             assert.match(res1.errors[0], /Unknown settings key: FooBar/);
 
-            // Bad PostCloseAccess value
-            const res2 = ValidateCollaborationSettings({ PostCloseAccess: 'InvalidAccess' }, 'type');
+            // Bad StorageAccountID value
+            const res2 = ValidateCollaborationSettings({ StorageAccountID: 5 }, 'type');
             assert.equal(res2.valid, false);
-            assert.match(res2.errors[0], /Invalid PostCloseAccess/);
+            assert.match(res2.errors[0], /StorageAccountID must be a string or null/);
 
-            // Bad PostCloseAccessDays (negative)
-            const res3 = ValidateCollaborationSettings({ PostCloseAccessDays: -5 }, 'type');
+            // A retired key is unknown now: post-close access is a status
+            const res3 = ValidateCollaborationSettings({ PostCloseAccess: 'ReadOnly' }, 'type');
             assert.equal(res3.valid, false);
-            assert.match(res3.errors[0], /PostCloseAccessDays must be a non-negative integer/);
+            assert.match(res3.errors[0], /Unknown settings key: PostCloseAccess/);
 
             // Bad Chats.WhoCanStart
             const res4 = ValidateCollaborationSettings({ Chats: { WhoCanStart: 'Nobody' } }, 'type');
@@ -305,9 +301,20 @@ describe('which types a space may contain', () => {
     });
 });
 
+describe('Seats.Audience (item 142)', () => {
+    it('is a type key with two values, refused on a space, and fails closed to StaffAndParticipants when absent', () => {
+        assert.equal(ValidateCollaborationSettings({ Seats: { Audience: 'StaffOnly' } }, 'type').valid, true);
+        assert.match(ValidateCollaborationSettings({ Seats: { Audience: 'Everyone' } }, 'type').errors[0], /Seats.Audience must be StaffOnly or StaffAndParticipants/);
+        assert.match(ValidateCollaborationSettings({ Seats: { Audience: 'StaffOnly' } }, 'space', { SpaceOverridable: ['Seats'] }).errors[0], /Seats cannot be set on a space/);
+        assert.equal(typeSeatsAudience({ Seats: { Audience: 'StaffOnly' } }), 'StaffOnly');
+        assert.equal(typeSeatsAudience({}), 'StaffAndParticipants');
+        assert.equal(typeSeatsAudience(null), 'StaffAndParticipants');
+    });
+});
+
 describe('tab labels merge without regard to key case', () => {
     it("lets a type's 'library' beat the app's 'Library', and a space's 'WORK' beat the app's 'Work' when the type lets it", () => {
-        const app: CollaborationSettings = { PostCloseAccess: 'ReadOnly', PostCloseAccessDays: null, Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Labels: { Tabs: { Library: 'Files', Work: 'Tasks' } } };
+        const app: CollaborationSettings = { Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' }, Labels: { Tabs: { Library: 'Files', Work: 'Tasks' } } };
         const type: CollaborationSettings = { Labels: { Tabs: { library: 'Documents' } }, SpaceOverridable: ['Labels'] };
         const resolved = ResolveCollaborationSettings({ spaces: [{ Labels: { Tabs: { WORK: 'Deliverables' } } }], type, app });
         assert.deepEqual(resolved.Labels?.Tabs, { library: 'Documents', work: 'Deliverables' });

@@ -229,7 +229,6 @@ const checks: NamedCheck[] = [
             type.MessagingPanel = true;
             type.LibraryPanel = true;
             type.WorkPanel = true;
-            type.DefaultRetention = source.DefaultRetention;
             type.DefaultAgentRetrieval = source.DefaultAgentRetrieval;
             type.DefaultAllowParentAssignees = source.DefaultAllowParentAssignees;
             type.DefaultBand = source.DefaultBand;

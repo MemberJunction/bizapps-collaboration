@@ -8,7 +8,7 @@ import { cleanupSpace, registerChecks } from '../cleanup-helpers.js';
 
 type PersonaContext = Awaited<ReturnType<typeof getPersonaContext>>;
 
-/** The test type whose spaces close with no post-close access at all (`Configuration.PostCloseAccess` is None). */
+/** The test type whose closed spaces are hidden at once: its only terminal status is Archived (metadata-tests/space-type-statuses). */
 async function vaultTypeId(ctx: IntegrationCheckContext): Promise<string> {
     const [type] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'example-vault'", ['ID']);
     Assert(!!type, "The example vault type is on this host (run the test metadata push: 'mj:push:tests')");
@@ -45,13 +45,13 @@ async function seat(persona: PersonaContext, spaceId: string, userId: string, sp
     Assert(await seatRow.Save(), `A seat for ${userId} is saved: ${seatRow.LatestResult?.CompleteMessage ?? ''}`);
 }
 
-/** Closes a space as its owner and reads it back: the row must carry a ClosedAt, and 'None' post-close access. */
+/** Closes a space as its owner and reads it back: the row must carry a ClosedAt and the type's first terminal status. */
 async function close(persona: PersonaContext, spaceId: string): Promise<void> {
     const space = await persona.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, persona.User);
     Assert(await space.Load(spaceId), 'The space to close loads');
     space.ClosedAt = new Date(Date.now() - 60_000);
     Assert(await space.Save(), `The space closes: ${space.LatestResult?.CompleteMessage ?? ''}`);
-    Assert(space.PostCloseAccess === 'None', `The close wrote the resolved post-close access (None), got ${space.PostCloseAccess}`);
+    Assert(!!space.StatusID, 'The close stamped the type\'s first terminal status on the space');
 }
 
 /** Removes what a check made: the space, its seats and what hangs on it (the harness deletes a closed space too). */

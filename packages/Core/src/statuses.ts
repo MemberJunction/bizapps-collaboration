@@ -35,6 +35,19 @@ export const SHIPPED_STATUSES: readonly Omit<SpaceTypeStatusAttributes, 'ID'>[] 
     { Code: 'archived', Name: 'Archived', Sequence: 4, IsDefault: false, ReadOnly: true, Visible: false, AgentRetrieval: false, CanChangeAfter: false, NotifyMembersOnEnter: false, IsTerminal: true },
 ];
 
+/** What a space's effective status allows of it: the three attributes the access rules read. */
+export type SpaceStatusReach = Pick<SpaceTypeStatusAttributes, 'ReadOnly' | 'Visible' | 'AgentRetrieval'>;
+
+/**
+ * The reach of a space's effective status, as `fnCollaborationSpaceStatuses` works it out: the status the space names or the
+ * server derived for it; for a space of a type with no statuses yet, open = writable and visible, closed = read-only and
+ * visible, and an agent may quote either.
+ */
+export function effectiveStatusReach(status: SpaceStatusReach | null | undefined, closedAt: string | Date | null | undefined): SpaceStatusReach {
+    if (status) return { ReadOnly: !!status.ReadOnly, Visible: !!status.Visible, AgentRetrieval: !!status.AgentRetrieval };
+    return { ReadOnly: !!closedAt, Visible: true, AgentRetrieval: true };
+}
+
 /** The status a new space of the type starts in: the one marked default, else the lowest in sequence. */
 export function defaultStatus<T extends SpaceTypeStatusAttributes>(statuses: readonly T[]): T | null {
     if (statuses.length === 0) return null;

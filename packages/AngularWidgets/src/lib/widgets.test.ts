@@ -1497,7 +1497,6 @@ describe('CollabSpaceSettingsComponent', () => {
     backgroundImageUrl: 'https://example.com/banner.jpg',
     inheritsMembership: true,
     agentRetrieval: 'Included',
-    retention: 'Indefinite',
     status: 'Active',
   };
 

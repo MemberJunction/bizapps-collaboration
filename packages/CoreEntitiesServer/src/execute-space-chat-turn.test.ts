@@ -300,8 +300,6 @@ describe('executeSpaceChatTurn', () => {
                             UIDriverClass: null,
                             AllowSubSpaces: true,
                             Configuration: JSON.stringify({
-                                PostCloseAccess: 'ReadOnly',
-                                PostCloseAccessDays: null,
                                 Chats: {
                                     WhoCanStart: 'Anyone',
                                     AgentReplyMode: 'MentionOrOneToOne',
@@ -336,8 +334,6 @@ describe('executeSpaceChatTurn', () => {
                             ID: 'app-setting-1',
                             Name: 'Collaboration Settings',
                             Value: JSON.stringify({
-                                PostCloseAccess: 'ReadOnly',
-                                PostCloseAccessDays: null,
                                 Chats: {
                                     WhoCanStart: 'Anyone',
                                     AgentReplyMode: 'MentionOrOneToOne',
@@ -368,13 +364,14 @@ describe('executeSpaceChatTurn', () => {
                     return mockResult<T>([]);
                 }
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
                     const agentIds = options.allowedAgents ?? [ALLOWED_AGENT_ID];
                     return mockResult<T>(
                         agentIds.map(
                             (id) =>
                                 ({
-                                    AgentID: id,
+                                    Kind: 'Agent',
+                                    TargetRecordID: id,
                                     SpaceTypeID: null,
                                     SpaceID: SPACE_ID,
                                     IsDefault: true,

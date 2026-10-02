@@ -5,7 +5,7 @@
  * marks the engine permission-constrained. So the entities every seated person reads (space types, role types, the app's settings)
  * live in CollaborationEngineBase, and the ones a Space Participant has no read on live here:
  * - Authorizations and Authorization Roles (MemberJunction's catalog rows)
- * - App- and type-level Space Agents, Skills, and Knowledge Sources
+ * - App- and type-level Space Grants (stage 1: what the app and each type offer in their spaces; a space's own rows are read per space)
  *
  * A guest who can't read these gets an empty, constrained engine and a working workspace; the rights checks read MemberJunction's
  * metadata, not this engine. Readers of this engine check `IsPermissionConstrained` the way Explorer's own pages do, and treat it as none.
@@ -19,11 +19,8 @@ import {
     RegisterForStartup,
     type UserInfo,
 } from '@memberjunction/core';
-import type {
-    mjBizAppsCollaborationSpaceAgentEntity,
-    mjBizAppsCollaborationSpaceAgentSkillEntity,
-    mjBizAppsCollaborationSpaceKnowledgeSourceEntity,
-} from '@mj-biz-apps/collaboration-entities';
+import type { GrantKind } from '@mj-biz-apps/collaboration-core';
+import type { mjBizAppsCollaborationSpaceGrantEntity } from '@mj-biz-apps/collaboration-entities';
 import type { MJAuthorizationEntity, MJAuthorizationRoleEntity } from '@memberjunction/core-entities';
 
 const normalizeKey = (key: string | null | undefined): string => (key ?? '').trim().toLowerCase();
@@ -32,9 +29,7 @@ const normalizeKey = (key: string | null | undefined): string => (key ?? '').tri
 export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminEngineBase> {
     private _authorizations: MJAuthorizationEntity[] = [];
     private _authorizationRoles: MJAuthorizationRoleEntity[] = [];
-    private _appAndTypeSpaceAgents: mjBizAppsCollaborationSpaceAgentEntity[] = [];
-    private _appAndTypeSpaceAgentSkills: mjBizAppsCollaborationSpaceAgentSkillEntity[] = [];
-    private _appAndTypeSpaceKnowledgeSources: mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] = [];
+    private _appAndTypeSpaceGrants: mjBizAppsCollaborationSpaceGrantEntity[] = [];
 
     // Memoized lookup index, reset on reload in AdditionalLoading()
     private _authorizationsByName: Map<string, MJAuthorizationEntity> | null = null;
@@ -61,22 +56,11 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
                 CacheLocal: true,
             },
             {
-                PropertyName: '_appAndTypeSpaceAgents',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agents',
+                PropertyName: '_appAndTypeSpaceGrants',
+                EntityName: 'MJ_BizApps_Collaboration: Space Grants',
                 CacheLocal: true,
                 Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceAgentSkills',
-                EntityName: 'MJ_BizApps_Collaboration: Space Agent Skills',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
-            },
-            {
-                PropertyName: '_appAndTypeSpaceKnowledgeSources',
-                EntityName: 'MJ_BizApps_Collaboration: Space Knowledge Sources',
-                CacheLocal: true,
-                Filter: 'SpaceID IS NULL',
+                OrderBy: 'Sequence',
             },
         ];
         return await this.Load(params, md, forceRefresh ?? false, contextUser);
@@ -96,57 +80,32 @@ export class CollaborationAdminEngineBase extends BaseEngine<CollaborationAdminE
         return this.GetConfigData<MJAuthorizationRoleEntity>('_authorizationRoles');
     }
 
-    public get AppAndTypeSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentEntity>('_appAndTypeSpaceAgents');
+    /** The app's and every type's grants: the rows with no space. A space's own rows are read per space, by the resolver. */
+    public get AppAndTypeSpaceGrants(): mjBizAppsCollaborationSpaceGrantEntity[] {
+        return this.GetConfigData<mjBizAppsCollaborationSpaceGrantEntity>('_appAndTypeSpaceGrants');
     }
 
-    public get AppAndTypeSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceAgentSkillEntity>('_appAndTypeSpaceAgentSkills');
+    // ─── Grants ────────────────────────────────────────────────────────────────
+
+    /** The app-wide grants: no type, no space. */
+    public get AppSpaceGrants(): mjBizAppsCollaborationSpaceGrantEntity[] {
+        return this.AppAndTypeSpaceGrants.filter((g) => !g.SpaceTypeID && !g.SpaceID);
     }
 
-    public get AppAndTypeSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.GetConfigData<mjBizAppsCollaborationSpaceKnowledgeSourceEntity>('_appAndTypeSpaceKnowledgeSources');
-    }
-
-    // ─── Agents, Skills, Knowledge ─────────────────────────────────────────────
-
-    public get AppSpaceAgents(): mjBizAppsCollaborationSpaceAgentEntity[] {
-        return this.AppAndTypeSpaceAgents.filter(
-            a => !a.SpaceTypeID && !a.SpaceID
-        );
-    }
-
-    public SpaceAgentsForType(typeId: string): mjBizAppsCollaborationSpaceAgentEntity[] {
+    /** One type's grants. */
+    public SpaceGrantsForType(typeId: string): mjBizAppsCollaborationSpaceGrantEntity[] {
         const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgents.filter(
-            a => a.SpaceTypeID && normalizeKey(a.SpaceTypeID) === key && !a.SpaceID
-        );
+        return this.AppAndTypeSpaceGrants.filter((g) => g.SpaceTypeID && normalizeKey(g.SpaceTypeID) === key && !g.SpaceID);
     }
 
-    public get AppSpaceAgentSkills(): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => !s.SpaceTypeID && !s.SpaceID
-        );
+    /** The app-wide grants of one kind. */
+    public AppGrantsOfKind(kind: GrantKind): mjBizAppsCollaborationSpaceGrantEntity[] {
+        return this.AppSpaceGrants.filter((g) => g.Kind === kind);
     }
 
-    public SpaceAgentSkillsForType(typeId: string): mjBizAppsCollaborationSpaceAgentSkillEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceAgentSkills.filter(
-            s => s.SpaceTypeID && normalizeKey(s.SpaceTypeID) === key && !s.SpaceID
-        );
-    }
-
-    public get AppSpaceKnowledgeSources(): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => !k.SpaceTypeID && !k.SpaceID
-        );
-    }
-
-    public SpaceKnowledgeSourcesForType(typeId: string): mjBizAppsCollaborationSpaceKnowledgeSourceEntity[] {
-        const key = normalizeKey(typeId);
-        return this.AppAndTypeSpaceKnowledgeSources.filter(
-            k => k.SpaceTypeID && normalizeKey(k.SpaceTypeID) === key && !k.SpaceID
-        );
+    /** One type's grants of one kind. */
+    public TypeGrantsOfKind(typeId: string, kind: GrantKind): mjBizAppsCollaborationSpaceGrantEntity[] {
+        return this.SpaceGrantsForType(typeId).filter((g) => g.Kind === kind);
     }
 
     // ─── Authorizations ────────────────────────────────────────────────────────

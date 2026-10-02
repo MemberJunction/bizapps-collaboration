@@ -31,14 +31,17 @@ export interface DriverBaseContext {
 
 /**
  * What a change to a space means to the space's own driver. A kind is what the save asked for, read before anything rewrites the
- * row: a create; a close or a reopen (`ClosedAt` set or cleared); a move (the parent changed); else an update. A close or a reopen
- * that also moves the space is refused, so no save is two of these.
+ * row: a create; a close (the space enters a terminal status, stamping `ClosedAt`); a reopen (it leaves a read-only status for a
+ * writable one); any other status change (stage 1: Active to Paused, Closed to Archived); a move (the parent changed); else an
+ * update. A status change that also moves the space is refused, so no save is two of these.
  */
-export type SpaceChangeKind = 'Create' | 'Update' | 'Move' | 'Close' | 'Reopen' | 'Delete';
+export type SpaceChangeKind = 'Create' | 'Update' | 'Move' | 'Close' | 'Reopen' | 'StatusChange' | 'Delete';
 
 export interface SpaceChangeContext extends DriverBaseContext {
     kind: SpaceChangeKind;
     oldValues?: Record<string, unknown>;
+    /** For a Close, a Reopen or a StatusChange: the status codes the space leaves and enters (null for a type with no statuses). */
+    statusChange?: { fromCode: string | null; toCode: string | null };
 }
 
 /**

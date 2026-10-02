@@ -30,7 +30,7 @@ import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceAgentEntity,
+    mjBizAppsCollaborationSpaceGrantEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -53,7 +53,7 @@ import { seedWorldPlan } from './seed-plan.js';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
-const SPACE_AGENTS = 'MJ_BizApps_Collaboration: Space Agents';
+const SPACE_GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
 const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
@@ -217,7 +217,6 @@ export async function loadWorld(): Promise<void> {
         record.Vocabulary = type.Name;
         record.InviteApproval = type.InviteApproval as 'Approve' | 'AutoApprove';
         record.MemberCap = type.MemberCap ? Number(type.MemberCap) : null;
-        record.DefaultRetention = type.DefaultRetention as 'Month' | 'Year' | 'Indefinite';
         if (!(await record.Save())) throw new Error(`type ${type.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         types.set(type.Key, record.ID);
     }
@@ -257,7 +256,6 @@ export async function loadWorld(): Promise<void> {
         record.InheritsMembership = space.InheritsMembership === '1';
         record.AgentRetrieval = space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
         record.ClosedAt = null;
-        record.Retention = (space.Retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
         record.IconClass = space.IconClass || null;
         record.Color = space.Color || null;
         record.BackgroundImageURL = space.BackgroundImageURL || null;
@@ -325,18 +323,23 @@ export async function loadWorld(): Promise<void> {
     // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
-    // The agents a space allows (`agents.csv`): a person can tag them in its chat. A row on a space reaches its sub-spaces. The agent is
-    // MemberJunction's own, found by name, so a database without it stops here with the name rather than loading a world nobody can ask.
+    // The agents a space allows (`agents.csv`), as Agent grants of the space (stage 1): a person can tag them in its chat. A row on a
+    // space reaches its sub-spaces. The agent is MemberJunction's own, found by name, so a database without it stops here with the
+    // name rather than loading a world nobody can ask. The grant's target entity is MJ: AI Agents; its gate stamps it.
     for (const row of agentRows) {
         const spaceId = requireMap(spaceIds, row.Space, 'space');
         const agentId = await findId(provider, AI_AGENTS, `Name = '${quote(row.Agent)}' AND Status = 'Active'`, system);
         if (!agentId) throw new Error(`agents.csv names the agent ${row.Agent}, and this database has no active agent of that name.`);
-        if (await findId(provider, SPACE_AGENTS, `SpaceID = '${spaceId}' AND AgentID = '${agentId}'`, system)) continue;
-        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENTS, system);
+        if (await findId(provider, SPACE_GRANTS, `SpaceID = '${spaceId}' AND Kind = 'Agent' AND TargetRecordID = '${agentId}'`, system)) continue;
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANTS, system);
         record.NewRecord();
         record.SpaceID = spaceId;
-        record.AgentID = agentId;
+        record.Kind = 'Agent';
+        record.TargetRecordID = agentId;
+        record.Band = 'Shared';
         record.IsDefault = row.IsDefault === '1';
+        record.Mode = 'Extend';
+        record.Sequence = 0;
         if (!(await record.Save())) throw new Error(`agent ${row.Agent} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
     }
 
@@ -564,12 +567,11 @@ async function assertCatalog(
         SpaceTypeID: string;
         InheritsMembership: boolean;
         AgentRetrieval: string;
-        Retention: string | null;
         ClosedAt: string | Date | null;
     }>({
         EntityName: SPACES,
         ExtraFilter: `ID IN (${spaceRows.map((row) => `'${row.ID}'`).join(',')})`,
-        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'Retention', 'ClosedAt'],
+        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'ClosedAt'],
         ResultType: 'simple',
     }, user);
     if (!spaces.Success || spaces.Results?.length !== spaceRows.length) {
@@ -586,7 +588,6 @@ async function assertCatalog(
         if (found.SpaceTypeID.toLowerCase() !== requireMap(types, row.Type, 'space type').toLowerCase()) throw new Error(`${row.Key} type does not match the catalog.`);
         if (asBool(found.InheritsMembership) !== (row.InheritsMembership === '1')) throw new Error(`${row.Key} inheritance does not match the catalog.`);
         if (String(found.AgentRetrieval).trim() !== row.AgentRetrieval) throw new Error(`${row.Key} agent retrieval is ${found.AgentRetrieval}.`);
-        if ((found.Retention?.trim() || null) !== (row.Retention || null)) throw new Error(`${row.Key} retention is ${found.Retention}.`);
         const age = closedAgeDays(found.ClosedAt);
         const expected = row.ClosedAt === 'recent' ? 7 : row.ClosedAt === 'past' ? 400 : null;
         if (expected === null) {

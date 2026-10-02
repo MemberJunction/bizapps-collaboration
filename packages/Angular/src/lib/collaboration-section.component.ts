@@ -131,10 +131,8 @@ interface RawSpaceRecord {
     SpaceTypeID: mjBizAppsCollaborationSpaceEntity['SpaceTypeID'];
     InheritsMembership?: mjBizAppsCollaborationSpaceEntity['InheritsMembership'];
     AgentRetrieval?: mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-    Retention?: mjBizAppsCollaborationSpaceEntity['Retention'];
     ClosedAt?: mjBizAppsCollaborationSpaceEntity['ClosedAt'];
-    PostCloseAccess?: mjBizAppsCollaborationSpaceEntity['PostCloseAccess'];
-    PostCloseAccessDays?: mjBizAppsCollaborationSpaceEntity['PostCloseAccessDays'];
+    StatusID?: mjBizAppsCollaborationSpaceEntity['StatusID'];
     OwnerID?: mjBizAppsCollaborationSpaceEntity['OwnerID'];
     Configuration?: mjBizAppsCollaborationSpaceEntity['Configuration'];
 }
@@ -2015,8 +2013,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         backgroundImageUrl: '',
         inheritsMembership: true,
         agentRetrieval: 'Included',
-        retention: '',
-        typeDefaultRetention: 'Indefinite',
         status: 'Active',
     };
     /** What the Settings screen shows and what a save is measured against: a save writes only what differs from it. */
@@ -2355,11 +2351,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
 
         // Initialize space settings model
-        this.spaceSettings = buildSettingsModel(space, {
+        this.spaceSettings = buildSettingsModel({ ...space, StatusName: CollaborationEngineBase.Instance.EffectiveStatusForSpace(space)?.Name ?? null }, {
             name: resolvedType || '',
             icon: typeDef?.icon ?? null,
             color: typeDef?.color ?? null,
-            defaultRetention: CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.DefaultRetention ?? null,
         });
         this.settingsSession.Open(this.spaceSettings);
         this.spaceSettings = this.settingsSession.Shown;
@@ -2950,10 +2945,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ParentID: sp.ParentID ?? null,
                 InheritsMembership: !!sp.InheritsMembership,
                 ClosedAt: sp.ClosedAt,
-                PostCloseAccess: sp.PostCloseAccess,
-                PostCloseAccessDays: sp.PostCloseAccessDays,
-                TypePostCloseAccess: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccess ?? null,
-                TypePostCloseAccessDays: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccessDays ?? null,
+                Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
             })));
             if (chain.length === 0) chain.push({ id: spaceId, name: '' });
             const membersRes = await rv.RunView<{
@@ -4266,7 +4258,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     raw.BackgroundImageURL = savedCopy.backgroundImageUrl || null;
                     raw.InheritsMembership = savedCopy.inheritsMembership;
                     raw.AgentRetrieval = savedCopy.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-                    raw.Retention = (savedCopy.retention || null) as mjBizAppsCollaborationSpaceEntity['Retention'];
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                 }
 

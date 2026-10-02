@@ -8,15 +8,18 @@ import {
     refuseChildType,
     planSpaceWrite,
     ResolveSpaceRules,
+    statusChangeRefusal,
     ValidateCollaborationSettings,
     type CollaborationSettings,
     type ISpaceConfiguration,
     type ISpaceTypeConfiguration,
+    type SpaceTypeStatusAttributes,
 } from '@mj-biz-apps/collaboration-core';
 import {
     mjBizAppsCollaborationSpaceChatEntity,
     mjBizAppsCollaborationSpaceEntity,
     type mjBizAppsCollaborationSpaceTypeEntity,
+    type mjBizAppsCollaborationSpaceTypeStatusEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { type BaseSpaceTypeServerDriver, type ChildSpaceChangeKind, type SpaceChangeKind } from './base-space-type-server-driver.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
@@ -25,21 +28,34 @@ import { ServerDriverRegistry } from './server-driver-registry.js';
 import { failDelete, failSave, refusalOf, resolveSpaceDriver, sameSubtype, subtypeOf } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
+import { notifySpaceStatusChange } from './space-status-notices.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 
 /**
- * The kinds of change a space save is, for the space's own driver and for its parent's: a create; a close; a reopen; a move
- * (only when the parent changed); else an update. A child's rename is an UpdateChild, so rules on children still see it.
+ * The kinds of change a space save is, for the space's own driver and for its parent's: a create; a close (the space enters a
+ * terminal status); a reopen (it leaves a read-only status for a writable one); another status change; a move (only when the
+ * parent changed); else an update. A child's rename is an UpdateChild, so rules on children still see it; so is a status change
+ * that is neither a close nor a reopen.
  */
-export function decideSpaceKinds(change: { isNew: boolean; isClosing: boolean; isReopening: boolean; isMoving: boolean }): { spaceKind: SpaceChangeKind; childKind: ChildSpaceChangeKind } {
-    const spaceKind: SpaceChangeKind = change.isNew ? 'Create' : change.isClosing ? 'Close' : change.isReopening ? 'Reopen' : change.isMoving ? 'Move' : 'Update';
-    // A move outranks a close for the parent that receives the space. A save that closes or reopens and moves is refused in
+export function decideSpaceKinds(change: { isNew: boolean; isClosing: boolean; isReopening: boolean; isStatusChange?: boolean; isMoving: boolean }): { spaceKind: SpaceChangeKind; childKind: ChildSpaceChangeKind } {
+    const spaceKind: SpaceChangeKind = change.isNew ? 'Create' : change.isClosing ? 'Close' : change.isReopening ? 'Reopen' : change.isStatusChange ? 'StatusChange' : change.isMoving ? 'Move' : 'Update';
+    // A move outranks a close for the parent that receives the space. A save that changes status and moves is refused in
     // validation, so this order is a second guard: if that refusal ever went, a rule on incoming children would still see the move.
     const childKind: ChildSpaceChangeKind = change.isNew ? 'CreateChild' : change.isMoving ? 'MoveChildIn' : change.isClosing ? 'CloseChild' : change.isReopening ? 'ReopenChild' : 'UpdateChild';
     return { spaceKind, childKind };
 }
+
+/** A status row as the rules read it. */
+function statusAttributes(status: mjBizAppsCollaborationSpaceTypeStatusEntity): SpaceTypeStatusAttributes {
+    return {
+        ID: status.ID, Code: status.Code, Name: status.Name, Sequence: Number(status.Sequence), IsDefault: !!status.IsDefault, ReadOnly: !!status.ReadOnly,
+        Visible: !!status.Visible, AgentRetrieval: !!status.AgentRetrieval, CanChangeAfter: !!status.CanChangeAfter, NotifyMembersOnEnter: !!status.NotifyMembersOnEnter, IsTerminal: !!status.IsTerminal,
+    };
+}
+
+const sameId = (a: string | null | undefined, b: string | null | undefined): boolean => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * A space type and its subtype go together. A type that names an IsA child of Spaces (`SpaceExtensionEntity`) creates its spaces as
@@ -66,12 +82,23 @@ export function refuseSubtypePairing(input: { typeName: string; expected: string
     return null;
 }
 
-/** What a space save changes: read once, and handed to validation and to the reactions. */
+/**
+ * What a space save changes: read once from the fields, refined by validation once the type's statuses are known (the status the
+ * space leaves and enters, whether that is a close or a reopen), and handed to the reactions.
+ */
 interface SpaceChangeReading {
     spaceKind: SpaceChangeKind;
     childKind: ChildSpaceChangeKind;
     justClosed: boolean;
     justReopened: boolean;
+    /** What the ClosedAt field asked for, the old way: set on an open space, or cleared on a closed one. */
+    closeRequested: boolean;
+    reopenRequested: boolean;
+    /** The status the space leaves and the one it enters, as validation resolved them; null for a type with no statuses. */
+    statusFrom: SpaceTypeStatusAttributes | null;
+    statusTo: SpaceTypeStatusAttributes | null;
+    /** Whether the save moves the space to another status (a stamp of the status an unstamped space already derived is no move). */
+    statusChanged: boolean;
     oldParentId: string | null;
     oldValues: Record<string, unknown>;
     changed: boolean;
@@ -94,17 +121,25 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const field = (name: string) => this.Fields.find((f) => f.Name === name);
         const wasClosed = !isNew && !!field('ClosedAt')?.OldValue;
         const nowClosed = !!getFieldVal<Date | null>(this, 'ClosedAt');
+        const closedDirty = !isNew && !!field('ClosedAt')?.Dirty;
         // A create is never a close: a space made with a `ClosedAt` is refused in validation
-        const justClosed = !isNew && !wasClosed && nowClosed;
-        const justReopened = wasClosed && !nowClosed;
+        const closeRequested = closedDirty && !wasClosed && nowClosed;
+        const reopenRequested = closedDirty && wasClosed && !nowClosed;
+        const statusDirty = !isNew && !!field('StatusID')?.Dirty;
         const isMoving = !isNew && !!field('ParentID')?.Dirty;
         const typeField = field('SpaceTypeID');
         const typeChanged = !isNew && !!typeField?.Dirty;
-        const kinds = decideSpaceKinds({ isNew, isClosing: justClosed, isReopening: justReopened, isMoving });
+        // A first reading, from the fields alone; validation refines it once the type's statuses are known
+        const kinds = decideSpaceKinds({ isNew, isClosing: closeRequested, isReopening: reopenRequested, isStatusChange: statusDirty && !closeRequested && !reopenRequested, isMoving });
         return {
             ...kinds,
-            justClosed,
-            justReopened,
+            justClosed: closeRequested,
+            justReopened: reopenRequested,
+            closeRequested,
+            reopenRequested,
+            statusFrom: null,
+            statusTo: null,
+            statusChanged: statusDirty || closedDirty,
             oldParentId: isMoving ? parseUuid(String(field('ParentID')?.OldValue ?? '')) : null,
             oldValues: isNew ? {} : { ...this.dirtyOldValues(), ...(typeChanged ? { SpaceTypeID: typeField?.OldValue } : {}) },
             changed: isNew || this.Fields.some((f) => f.Dirty),
@@ -259,44 +294,123 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
 
         const configDirty = this.Fields.some((f) => f.Name === 'Configuration' && f.Dirty);
-        const closeFieldsDirty = this.Fields.some((f) => (f.Name === 'PostCloseAccess' || f.Name === 'PostCloseAccessDays') && f.Dirty);
-        const isClosing = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !!this.ClosedAt;
-        const isReopening = this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty) && !this.ClosedAt;
+        const isMoving = this.IsSaved && this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
+        const typeField = this.Fields.find((f) => f.Name === 'SpaceTypeID');
+        const typeChanged = this.IsSaved && !!typeField?.Dirty;
+        const previousTypeId = typeChanged && typeField?.OldValue ? parseUuid(String(typeField.OldValue)) : null;
+        const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
 
-        // Closing and reopening are governed by an authorization of their own, beside the owner seat the write rules already asked for
-        if ((change.justClosed || change.justReopened)
-            && !CollaborationEngine.Instance.UserHoldsLifecycleAuthorization(user, asMetadata(this.ProviderToUse) ?? Metadata.Provider)) {
-            return fail(result, 'ClosedAt', `Space change refused: ${change.justClosed ? 'closing' : 'reopening'} a space needs the 'Close and Reopen Spaces' authorization and an owner seat on the space.`);
-        }
-        if (isClosing) {
-            // One change at a time: a close that also moves the space would slip past the rules on incoming children
-            if (change.oldParentId !== null || this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty && this.IsSaved)) {
-                return fail(result, 'ParentID', 'Space change refused: close a space and move it in separate saves.');
+        // ── Statuses (stage 1) ────────────────────────────────────────────────────────────────────────────────────────────
+        // The status the space is in as the row stood, and the one this save puts it in: the one it names; on a retype the new
+        // type's status with the same code, else its default; the old way, by ClosedAt alone, read as a move to the type's first
+        // terminal status or back to its default; for a new space its type's default. A type with no statuses yet reads from
+        // ClosedAt alone, as the access functions do.
+        const engine = CollaborationEngine.Instance;
+        const statusField = this.Fields.find((f) => f.Name === 'StatusID');
+        const closedField = this.Fields.find((f) => f.Name === 'ClosedAt');
+        const statusDirty = this.IsSaved && !!statusField?.Dirty;
+        const closedDirty = this.IsSaved && !!closedField?.Dirty;
+        const statusIdNow = getFieldVal<string | null>(this, 'StatusID') ?? null;
+        const closedAtNow = getFieldVal<Date | string | null>(this, 'ClosedAt') ?? null;
+        const fromEntity = this.IsSaved ? engine.EffectiveStatusForSpace({
+            StatusID: statusDirty ? (statusField?.OldValue as string | null | undefined) : statusIdNow,
+            SpaceTypeID: previousTypeId ?? typeId,
+            ClosedAt: closedDirty ? (closedField?.OldValue as string | Date | null | undefined) : closedAtNow,
+        }) : undefined;
+        let toEntity: mjBizAppsCollaborationSpaceTypeStatusEntity | undefined;
+        let statusRefusalField = 'StatusID';
+        if (!this.IsSaved) {
+            if (statusIdNow) {
+                toEntity = engine.StatusById(statusIdNow);
+                if (!toEntity || !sameId(toEntity.SpaceTypeID, typeId)) return fail(result, 'StatusID', "Space change refused: the status is not one of the space type's.");
+                if (toEntity.IsTerminal) return fail(result, 'StatusID', 'Space change refused: a space is created open, and closed later.');
+            } else {
+                toEntity = engine.DefaultStatusForType(typeId);
+                if (toEntity) setFieldVal(this, 'StatusID', toEntity.ID);
             }
+        } else if (typeChanged) {
+            if (fromEntity && !fromEntity.CanChangeAfter && !mayAdminister(this, user)) {
+                return fail(result, 'SpaceTypeID', `Space change refused: a space that is ${fromEntity.Name} cannot change.`);
+            }
+            if (statusDirty && statusIdNow) {
+                toEntity = engine.StatusById(statusIdNow);
+                if (!toEntity || !sameId(toEntity.SpaceTypeID, typeId)) return fail(result, 'StatusID', "Space change refused: the status is not one of the new type's.");
+            } else {
+                toEntity = engine.StatusByCode(typeId, fromEntity?.Code) ?? engine.DefaultStatusForType(typeId);
+                if (!sameId(toEntity?.ID, statusIdNow) && (toEntity || statusIdNow)) setFieldVal(this, 'StatusID', toEntity?.ID ?? null);
+            }
+        } else if (statusDirty) {
+            if (!statusIdNow) return fail(result, 'StatusID', "Space change refused: a space's status is one of its type's; it cannot be cleared.");
+            toEntity = engine.StatusById(statusIdNow);
+            if (!toEntity || !sameId(toEntity.SpaceTypeID, typeId)) return fail(result, 'StatusID', "Space change refused: the status is not one of the space type's.");
+        } else if (closedDirty) {
+            statusRefusalField = 'ClosedAt';
+            if (change.closeRequested) toEntity = engine.FirstTerminalStatusForType(typeId);
+            else if (change.reopenRequested) toEntity = engine.DefaultStatusForType(typeId);
+            else toEntity = fromEntity;
+            if (toEntity && (change.closeRequested || change.reopenRequested)) setFieldVal(this, 'StatusID', toEntity.ID);
+        } else {
+            toEntity = fromEntity;
         }
-        // A closed space's date is the server's record of when it closed: only someone who may administer spaces (the world loader, tests) may restamp it
-        const restamp = this.IsSaved && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.OldValue && !!this.ClosedAt
-            && this.Fields.some((f) => f.Name === 'ClosedAt' && f.Dirty);
-        if (restamp && !mayAdminister(this, user)) {
-            return fail(result, 'ClosedAt', 'Space change refused: the date a space closed cannot be changed.');
+        const from = fromEntity ? statusAttributes(fromEntity) : null;
+        const to = toEntity ? statusAttributes(toEntity) : null;
+        const statusMoves = this.IsSaved && !!to && (!from || !sameId(from.ID, to.ID));
+        if (statusMoves && to && from && !typeChanged) {
+            const refusal = statusChangeRefusal(from, to);
+            if (refusal) return fail(result, statusRefusalField, `Space change refused: ${refusal.message}`);
         }
-
-        if (isReopening) {
-            const otherDirty = this.Fields.filter((f) => f.Dirty && f.Name !== 'ClosedAt' && !f.Name.startsWith('__mj_'));
+        // Closing and reopening, and every other status change, are governed by an authorization of their own, beside the owner
+        // seat the write rules ask for; the seat is found with the status filter off, so the owner of a hidden space is still its owner
+        const legacyLifecycle = this.IsSaved && !to && (change.closeRequested || change.reopenRequested);
+        if ((statusMoves || legacyLifecycle) && !(await engine.UserCanChangeSpaceStatus(user, this.ID, md))) {
+            return fail(result, statusRefusalField, "Space change refused: changing a space's status needs the 'Close and Reopen Spaces' authorization and an owner seat on the space.");
+        }
+        if ((statusMoves || legacyLifecycle) && !typeChanged) {
+            // One change at a time: a status change that also moved the space would slip past the rules on incoming children, and one
+            // that also edited it would let an edit into a read-only space
+            const otherDirty = this.Fields.filter((f) => f.Dirty && f.Name !== 'StatusID' && f.Name !== 'ClosedAt' && !f.Name.startsWith('__mj_'));
             if (otherDirty.length > 0) {
-                return fail(result, otherDirty[0].Name, 'Space change refused: reopening a space cannot modify other fields simultaneously.');
+                return fail(result, otherDirty[0].Name, otherDirty[0].Name === 'ParentID'
+                    ? "Space change refused: change a space's status and move it in separate saves."
+                    : "Space change refused: a status change is a save of its own; change the other fields separately.");
             }
+        } else if (this.IsSaved && from?.ReadOnly && !mayAdminister(this, user)) {
+            // A read-only status takes every write but a status change away
+            const edited = this.Fields.filter((f) => f.Dirty && !f.Name.startsWith('__mj_'));
+            if (edited.length > 0) return fail(result, edited[0].Name, `Space change refused: the space is ${from.Name} and takes no changes but a status change.`);
         }
+        // Entering a terminal status stamps ClosedAt with the server's clock; someone who may administer spaces (the world loader,
+        // tests) may backdate it, and a date ahead of the server is the server's own time
+        const entersTerminal = statusMoves && !!to?.IsTerminal && !from?.IsTerminal;
+        const stampClose = entersTerminal || (legacyLifecycle && change.closeRequested);
+        if (stampClose) {
+            const sent = closedDirty && closedAtNow ? new Date(closedAtNow).getTime() : Number.NaN;
+            if (!(closedDirty && mayAdminister(this, user) && Number.isFinite(sent) && sent <= Date.now())) setFieldVal(this, 'ClosedAt', new Date());
+        } else if (closedDirty && closedAtNow && !change.closeRequested) {
+            // A closed space's date is the server's record of when it closed: only someone who may administer spaces may restamp it
+            if (!mayAdminister(this, user)) return fail(result, 'ClosedAt', 'Space change refused: the date a space closed cannot be changed.');
+            if (new Date(closedAtNow).getTime() > Date.now()) setFieldVal(this, 'ClosedAt', new Date());
+        }
+        if (to && !to.IsTerminal && getFieldVal<Date | string | null>(this, 'ClosedAt') && (statusMoves || typeChanged)) setFieldVal(this, 'ClosedAt', null);
+        // The reading, refined: what the drivers and the reactions are told
+        change.statusFrom = from;
+        change.statusTo = to;
+        change.statusChanged = statusMoves;
+        change.justClosed = stampClose;
+        change.justReopened = (statusMoves && !!from?.ReadOnly && !!to && !to.ReadOnly) || (legacyLifecycle && change.reopenRequested);
+        const refined = decideSpaceKinds({ isNew: !this.IsSaved, isClosing: change.justClosed, isReopening: change.justReopened, isStatusChange: statusMoves && !change.justClosed && !change.justReopened, isMoving });
+        change.spaceKind = refined.spaceKind;
+        change.childKind = refined.childKind;
+        const isReopening = change.justReopened;
 
-        if (configDirty || (closeFieldsDirty && !isClosing)) {
+        if (configDirty) {
             const canConfig = await CollaborationEngine.Instance.UserCanConfigureSpaces(
                 user,
                 this.IsSaved ? this.ID : null,
-                asMetadata(this.ProviderToUse) ?? Metadata.Provider
+                md
             );
             if (!canConfig) {
-                const errorField = closeFieldsDirty && !isClosing ? 'PostCloseAccess' : 'Configuration';
-                return fail(result, errorField, "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
+                return fail(result, 'Configuration', "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
             }
         }
 
@@ -311,11 +425,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
         // A change of type moves the space out from under its old type's rules, so it takes the same right as a
         // configuration change, a subtype table both types share, and the judgement of both types' drivers.
-        const typeField = this.Fields.find((f) => f.Name === 'SpaceTypeID');
-        const typeChanged = this.IsSaved && !!typeField?.Dirty;
-        const previousTypeId = typeChanged && typeField?.OldValue ? parseUuid(String(typeField.OldValue)) : null;
         if (typeChanged && spaceType) {
-            const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
             if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
                 return fail(result, 'SpaceTypeID', "Space change refused: changing a space's type needs the 'Configure Spaces' authorization and an owner seat on the space.");
             }
@@ -431,7 +541,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         } catch (error) {
             return fail(result, 'ParentID', error instanceof Error ? error.message : 'Space change refused: the tree could not be read completely.');
         }
-        const here = hereId && hereContext ? membershipReaches(hereContext.spaces, hereContext.memberships, caller, hereId, new Date(), isReopening) : null;
+        const here = hereId && hereContext ? membershipReaches(hereContext.spaces, hereContext.memberships, caller, hereId, new Date(), statusMoves || legacyLifecycle) : null;
         const onParent = parentId && destination ? membershipReaches(destination.spaces, destination.memberships, caller, parentId) : null;
         const decision = authorizeSpaceWrite({
             kind,
@@ -462,27 +572,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
 
         const isNew = !this.IsSaved;
-        const isMoving = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
-
-        if (isClosing) {
-            let postClose: Awaited<ReturnType<typeof CollaborationEngine.Instance.ResolvePostCloseAccessForSpace>>;
-            try {
-                postClose = await CollaborationEngine.Instance.ResolvePostCloseAccessForSpace({
-                    spaceId: this.ID,
-                    currentConfig: parsedSpaceConfig,
-                    parentId: this.ParentID,
-                    spaceTypeId: this.SpaceTypeID,
-                    provider: asMetadata(this.ProviderToUse) ?? Metadata.Provider,
-                    contextUser: await requireSystemUser(this),
-                });
-            } catch (settingsError) {
-                return fail(result, 'ClosedAt', settingsError instanceof Error ? settingsError.message : 'Space settings refused.');
-            }
-            this.PostCloseAccess = postClose.access;
-            this.PostCloseAccessDays = postClose.days;
-        }
-
         const { spaceKind: changeKind, childKind, oldValues } = change;
+        const statusChange = change.statusChanged || change.justClosed || change.justReopened
+            ? { fromCode: change.statusFrom?.Code ?? null, toCode: change.statusTo?.Code ?? null }
+            : undefined;
 
         if (driver && spaceType) {
             const driverValidation = await driver.ValidateSpaceChange({
@@ -494,6 +587,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 subtypeEntityName: subtypeOf(spaceType),
                 kind: changeKind,
                 oldValues,
+                statusChange,
             });
             if (!driverValidation.ok) {
                 return fail(result, driverValidation.field ?? 'ID', driverValidation.message ?? 'Space change refused by driver.');
@@ -571,7 +665,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             const spaceType = await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this);
             typeCode = spaceType.Code;
             const driver = ServerDriverRegistry.Instance.GetDriverForType(spaceType);
-            await driver.OnSpaceChanged({ ...base, space: this, spaceType, subtypeEntityName: subtypeOf(spaceType), kind: decided.spaceKind, oldValues: decided.oldValues });
+            const statusChange = decided.statusChanged || decided.justClosed || decided.justReopened
+                ? { fromCode: decided.statusFrom?.Code ?? null, toCode: decided.statusTo?.Code ?? null }
+                : undefined;
+            await driver.OnSpaceChanged({ ...base, space: this, spaceType, subtypeEntityName: subtypeOf(spaceType), kind: decided.spaceKind, oldValues: decided.oldValues, statusChange });
         });
         if (tell === 'own') return;
         const parentId = getFieldVal<string | null>(this, 'ParentID');
@@ -700,6 +797,14 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
      */
     private async refuseSubtypeOnlyChange(user: UserInfo, oldValues: Record<string, unknown>): Promise<string | null> {
         const md = asMetadata(this.ProviderToUse) ?? Metadata.Provider;
+        const status = CollaborationEngine.Instance.EffectiveStatusForSpace({
+            StatusID: getFieldVal<string | null>(this, 'StatusID'),
+            SpaceTypeID: getFieldVal<string | null>(this, 'SpaceTypeID'),
+            ClosedAt: getFieldVal<Date | string | null>(this, 'ClosedAt'),
+        });
+        if (status?.ReadOnly && !mayAdminister(this, user)) {
+            return `Space change refused: the space is ${status.Name} and takes no changes but a status change.`;
+        }
         if (!(await CollaborationEngine.Instance.UserCanConfigureSpaces(user, this.ID, md))) {
             return "Space change refused: changing a space's details needs the 'Configure Spaces' authorization and an owner seat on the space.";
         }
@@ -716,16 +821,15 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         this.readingForSave = own;
         // MJ tells a parent's save which child started it: that is the subtype this save writes (null for a plain save)
         this.savingAsSubtype = options?.ISAActiveChildEntityName ?? null;
-        // The server's clock decides when a space closed. Someone who holds the Administer Spaces authorization (the world loader, tests) may backdate one; a date ahead of the
-        // server, from anyone, is the server's own time (a browser's clock can run ahead of it).
+        // The server's clock decides when a space closed. Someone who holds the Administer Spaces authorization (the world loader, tests) may
+        // backdate one; a date ahead of the server, from anyone, is the server's own time (a browser's clock can run ahead of it). A
+        // re-stamp of a closed space by someone who may administer spaces follows the same rule. Validation applies the rule again as the
+        // space enters a terminal status by its StatusID alone, with no ClosedAt sent.
         const signedIn = this.ContextCurrentUser;
-        // A re-stamp of a closed space by someone who may administer spaces follows the same rule: a date ahead of the server is the server's own time
         if (signedIn && this.ClosedAt && !!this.Fields.find((f) => f.Name === 'ClosedAt')?.Dirty) {
             const sent = new Date(this.ClosedAt).getTime();
-            if ((own.justClosed && !mayAdminister(this, signedIn)) || !(sent <= Date.now())) this.ClosedAt = new Date();
+            if ((own.closeRequested && !mayAdminister(this, signedIn)) || !(sent <= Date.now())) this.ClosedAt = new Date();
         }
-        const justClosed = own.justClosed;
-        const justReopened = own.justReopened;
         const parentChanged = this.Fields.some((f) => f.Name === 'ParentID' && f.Dirty);
         const inheritsChanged = this.Fields.some((f) => f.Name === 'InheritsMembership' && f.Dirty);
         const structureChanged = parentChanged || inheritsChanged;
@@ -761,7 +865,10 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             this.readingForSave = null;
             this.savingAsSubtype = null;
         }
+        // Validation refined the reading (the statuses the space left and entered): read it after the save, not before
         const decided = own;
+        const justClosed = decided.justClosed;
+        const justReopened = decided.justReopened;
         if (ok && this.ContextCurrentUser && this.ID) {
             const user = this.ContextCurrentUser;
             if (justClosed) {
@@ -790,10 +897,8 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                             }
                         }
                     }
-                    const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
-                    if (!syncRes.ok) {
-                        LogError(`Room edit grants sync failed on space close for space ${this.ID}: ${syncRes.message ?? ''}`);
-                    }
+                    // The conversation grants stay as they are: a closed space refuses posts through its status, and taking the grants
+                    // away and giving them back sent a share notice per member each time (finding 2)
                 } catch (closeErr) {
                     LogError(`Failed to archive space chats on space close: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
                 }
@@ -822,10 +927,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                                 }
                             }
                         }
-                    }
-                    const syncRes = await syncRoomEditGrantsForSpace(this.ProviderToUse, this.ID);
-                    if (!syncRes.ok) {
-                        LogError(`Room edit grants sync failed on space reopen for space ${this.ID}: ${syncRes.message ?? ''}`);
                     }
                 } catch (reopenErr) {
                     LogError(`Failed to restore space chats on space reopen: ${reopenErr instanceof Error ? reopenErr.message : String(reopenErr)}`);
@@ -856,6 +957,25 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                     timestamp: new Date(),
                 });
             }
+            if (decided.statusChanged && decided.statusTo) {
+                notifySpaceLifecycleSubscribers(this.ProviderToUse, {
+                    spaceId: this.ID,
+                    actingUserId: user.ID,
+                    event: 'AfterSpaceStatusChanged',
+                    timestamp: new Date(),
+                    data: { fromStatusCode: decided.statusFrom?.Code ?? null, toStatusCode: decided.statusTo.Code, toStatusId: decided.statusTo.ID ?? null },
+                });
+                // One notice per member, when the status asks for it (Paused and Closed by default); the person who moved it gets none
+                if (decided.statusTo.NotifyMembersOnEnter) {
+                    await notifySpaceStatusChange(this, {
+                        spaceId: this.ID,
+                        spaceName: this.Name || 'A space',
+                        actor: user,
+                        fromStatusName: decided.statusFrom?.Name ?? null,
+                        toStatusName: decided.statusTo.Name,
+                    });
+                }
+            }
         }
         return ok;
     }
@@ -873,6 +993,18 @@ function getFieldVal<T>(entity: BaseEntity, name: string): T | undefined {
     const desc = Object.getOwnPropertyDescriptor(entity, name);
     if (desc && 'value' in desc) return desc.value as T;
     return undefined;
+}
+
+/** Writes a field the way `getFieldVal` reads it: through the entity's own setter, or onto a plain field or own property. */
+function setFieldVal(entity: BaseEntity, name: string, value: unknown): void {
+    const desc = Object.getOwnPropertyDescriptor(entity, name);
+    if (desc && 'value' in desc) {
+        (entity as unknown as Record<string, unknown>)[name] = value;
+        const f = entity.Fields?.find((field) => field.Name === name);
+        if (f) (f as unknown as { Value: unknown }).Value = value;
+        return;
+    }
+    (entity as unknown as Record<string, unknown>)[name] = value;
 }
 
 export function LoadSpaceEntityServer(): void {

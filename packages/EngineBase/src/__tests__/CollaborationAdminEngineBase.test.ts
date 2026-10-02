@@ -3,7 +3,7 @@ import { CollaborationAdminEngineBase } from '../CollaborationAdminEngineBase.js
 import { CollaborationEngineBase } from '../CollaborationEngineBase.js';
 import type { BaseEnginePropertyConfig, IMetadataProvider } from '@memberjunction/core';
 
-type Row = { ID: string; Name?: string; SpaceTypeID: string | null; SpaceID: string | null };
+type Row = { ID: string; Name?: string; Kind?: string; SpaceTypeID: string | null; SpaceID: string | null };
 
 /** The entity names an engine's Config hands to Load, read by spying on the protected Load. */
 async function configuredEntities(engine: CollaborationEngineBase | CollaborationAdminEngineBase): Promise<string[]> {
@@ -23,44 +23,41 @@ describe('CollaborationAdminEngineBase: the staff-only metadata, apart from what
 
     beforeEach(() => {
         engine = CollaborationAdminEngineBase.Instance;
-        const agents: Row[] = [
-            { ID: 'A-APP', SpaceTypeID: null, SpaceID: null },
-            { ID: 'A-TYPE-1', SpaceTypeID: 'type-1', SpaceID: null },
-            { ID: 'A-TYPE-1-SPACE', SpaceTypeID: 'type-1', SpaceID: 'space-9' },
+        const grants: Row[] = [
+            { ID: 'A-APP', Kind: 'Agent', SpaceTypeID: null, SpaceID: null },
+            { ID: 'A-TYPE-1', Kind: 'Agent', SpaceTypeID: 'type-1', SpaceID: null },
+            { ID: 'A-TYPE-1-SPACE', Kind: 'Agent', SpaceTypeID: 'type-1', SpaceID: 'space-9' },
+            { ID: 'K-TYPE-2', Kind: 'KnowledgeSource', SpaceTypeID: 'type-2', SpaceID: null },
+            { ID: 'Q-APP', Kind: 'Query', SpaceTypeID: null, SpaceID: null },
         ];
-        const skills: Row[] = [{ ID: 'S-APP', SpaceTypeID: null, SpaceID: null }, { ID: 'S-TYPE-1', SpaceTypeID: 'TYPE-1', SpaceID: null }];
-        const knowledge: Row[] = [{ ID: 'K-TYPE-2', SpaceTypeID: 'type-2', SpaceID: null }];
         const seeded = engine as unknown as Record<string, unknown>;
-        seeded['_appAndTypeSpaceAgents'] = agents;
-        seeded['_appAndTypeSpaceAgentSkills'] = skills;
-        seeded['_appAndTypeSpaceKnowledgeSources'] = knowledge;
+        seeded['_appAndTypeSpaceGrants'] = grants;
         seeded['_authorizations'] = [{ ID: 'AUTH-1', Name: 'Configure Spaces' }, { ID: 'AUTH-2', Name: 'Administer Spaces' }];
         seeded['_authorizationRoles'] = [];
         seeded['_authorizationsByName'] = null;
     });
 
-    it('the base engine loads only the three entities every seated person reads, and the admin engine the five only staff read', async () => {
+    it('the base engine loads only the four entities every seated person reads, and the admin engine the three only staff read', async () => {
         expect(await configuredEntities(CollaborationEngineBase.Instance)).toEqual([
             'MJ_BizApps_Collaboration: Space Types',
+            'MJ_BizApps_Collaboration: Space Type Status',
             'MJ_BizApps_Collaboration: Space Role Types',
             'MJ: Application Settings',
         ]);
         expect(await configuredEntities(engine)).toEqual([
             'MJ: Authorizations',
             'MJ: Authorization Roles',
-            'MJ_BizApps_Collaboration: Space Agents',
-            'MJ_BizApps_Collaboration: Space Agent Skills',
-            'MJ_BizApps_Collaboration: Space Knowledge Sources',
+            'MJ_BizApps_Collaboration: Space Grants',
         ]);
     });
 
-    it('splits the app-level rows from a type-level rows, case-insensitively, and leaves a space-level row out of both', () => {
-        expect(engine.AppSpaceAgents.map((a) => a.ID)).toEqual(['A-APP']);
-        expect(engine.SpaceAgentsForType('TYPE-1').map((a) => a.ID)).toEqual(['A-TYPE-1']);
-        expect(engine.AppSpaceAgentSkills.map((s) => s.ID)).toEqual(['S-APP']);
-        expect(engine.SpaceAgentSkillsForType('type-1').map((s) => s.ID)).toEqual(['S-TYPE-1']);
-        expect(engine.AppSpaceKnowledgeSources).toEqual([]);
-        expect(engine.SpaceKnowledgeSourcesForType('type-2').map((k) => k.ID)).toEqual(['K-TYPE-2']);
+    it('splits the app-level grants from a type-level grants, case-insensitively and by kind, and leaves a space-level row out of both', () => {
+        expect(engine.AppSpaceGrants.map((g) => g.ID)).toEqual(['A-APP', 'Q-APP']);
+        expect(engine.SpaceGrantsForType('TYPE-1').map((g) => g.ID)).toEqual(['A-TYPE-1']);
+        expect(engine.AppGrantsOfKind('Agent').map((g) => g.ID)).toEqual(['A-APP']);
+        expect(engine.AppGrantsOfKind('KnowledgeSource')).toEqual([]);
+        expect(engine.TypeGrantsOfKind('type-2', 'KnowledgeSource').map((g) => g.ID)).toEqual(['K-TYPE-2']);
+        expect(engine.TypeGrantsOfKind('type-1', 'KnowledgeSource')).toEqual([]);
     });
 
     it('finds an authorization by name, case-insensitively, and forgets the index on a reload', async () => {

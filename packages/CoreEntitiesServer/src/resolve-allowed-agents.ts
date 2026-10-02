@@ -24,9 +24,10 @@ function normalizeId(id: string | null | undefined): string {
 }
 
 /**
- * Resolves the allowed agents for a space top-down:
- * 1. Collaboration app-wide defaults (SpaceAgent rows with SpaceTypeID IS NULL AND SpaceID IS NULL)
- * 2. SpaceType rows
+ * Resolves the allowed agents for a space top-down, from the Agent grants (stage 1: `Space Grants` with Kind 'Agent';
+ * `TargetRecordID` is the agent, `IsDefault` the one the ask box tags):
+ * 1. Collaboration app-wide grants (SpaceTypeID IS NULL AND SpaceID IS NULL)
+ * 2. the type's grants
  * 3. Root space down through the ancestor tree to the target space
  *
  * At each level, Agents.ListMode ('Extend' | 'Replace') controls inheritance:
@@ -108,14 +109,14 @@ export async function resolveAllowedAgents(
     }
 
     // App-wide level from CollaborationEngine
-    const appRows = CollaborationEngine.Instance.AppSpaceAgents;
+    const appRows = CollaborationEngine.Instance.AppGrantsOfKind('Agent');
     let currentList: SpaceAgentItem[] = [];
     // Set when a level's ListMode: 'Replace' chose the list: the shipped assistant must not stand in for it
     let listWasReplaced = false;
 
     if (appRows.length > 0) {
         currentList = appRows.map((r) => ({
-            agentId: r.AgentID,
+            agentId: r.TargetRecordID,
             isDefault: r.IsDefault ?? false,
             source: 'App',
         }));
@@ -132,11 +133,11 @@ export async function resolveAllowedAgents(
 
     // Type level from CollaborationEngine
     if (spaceTypeId) {
-        const typeRows = CollaborationEngine.Instance.SpaceAgentsForType(spaceTypeId);
+        const typeRows = CollaborationEngine.Instance.TypeGrantsOfKind(spaceTypeId, 'Agent');
         if (typeRows.length > 0) {
             const typeListMode = typeConfig?.Agents?.ListMode ?? 'Extend';
             const mappedType: SpaceAgentItem[] = typeRows.map((r) => ({
-                agentId: r.AgentID,
+                agentId: r.TargetRecordID,
                 isDefault: r.IsDefault ?? false,
                 source: 'Type',
                 spaceTypeId,
@@ -153,20 +154,20 @@ export async function resolveAllowedAgents(
         }
     }
 
-    // 2. Query only space-level SpaceAgent rows for any space in chain
+    // 2. Query only space-level Agent grants for any space in chain
     const chainIdsSql = spaceChain.map((s) => `'${s.ID}'`).join(',');
-    const agentsRes = await rv.RunView<{ ID: string; AgentID: string; SpaceID: string | null; IsDefault?: boolean }>(
+    const agentsRes = await rv.RunView<{ ID: string; TargetRecordID: string; SpaceID: string | null; IsDefault?: boolean }>(
         {
-            EntityName: 'MJ_BizApps_Collaboration: Space Agents',
-            ExtraFilter: `SpaceID IN (${chainIdsSql})`,
-            Fields: ['ID', 'AgentID', 'SpaceID', 'IsDefault'],
+            EntityName: 'MJ_BizApps_Collaboration: Space Grants',
+            ExtraFilter: `Kind = 'Agent' AND SpaceID IN (${chainIdsSql})`,
+            Fields: ['ID', 'TargetRecordID', 'SpaceID', 'IsDefault'],
             ResultType: 'simple',
         },
         userToUse
     );
 
     if (!agentsRes.Success) {
-        throw refuse(`the space agent rows could not be read: ${agentsRes.ErrorMessage ?? 'unknown error'}`);
+        throw refuse(`the space's agent grants could not be read: ${agentsRes.ErrorMessage ?? 'unknown error'}`);
     }
     const spaceAgentRows = agentsRes.Results ?? [];
 
@@ -187,7 +188,7 @@ export async function resolveAllowedAgents(
             const spaceListMode = rules.Agents.ListMode;
 
             const mappedSpace: SpaceAgentItem[] = spRows.map((r) => ({
-                agentId: r.AgentID,
+                agentId: r.TargetRecordID,
                 isDefault: r.IsDefault ?? false,
                 source: 'Space',
                 spaceId: sp.ID,
