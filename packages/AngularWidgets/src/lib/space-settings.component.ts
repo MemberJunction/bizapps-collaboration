@@ -2,13 +2,15 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnInit, Output
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { SpaceSettingsModel } from './types';
+import { MJAlertComponent, MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-space-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
   template: `
     <div class="settings-container">
       <div class="settings-header">
@@ -19,15 +21,19 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         @if (CanEdit) {
         <button
-          class="save-btn"
+          type="button"
+          mjButton
+          Variant="primary"
+          Size="sm"
           [disabled]="isSaving"
+          [attr.aria-busy]="isSaving"
           (click)="saveChanges()"
         >
           @if (isSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
+            <mj-loading Size="small" [ShowText]="false"></mj-loading>
             <span>Saving...</span>
           } @else {
-            <i class="fa-solid fa-check"></i>
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
             <span>Save changes</span>
           }
         </button>
@@ -35,23 +41,14 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       </div>
 
       @if (bannerVisible && saveSuccessMessage) {
-        <div class="alert-success" role="status">
-          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-          <span>{{ saveSuccessMessage }}</span>
-        </div>
+        <mj-alert Variant="success" Role="status" [Message]="saveSuccessMessage" />
       }
       @if (bannerVisible && saveInfoMessage) {
-        <div class="alert-info" role="status">
-          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <span>{{ saveInfoMessage }}</span>
-        </div>
+        <mj-alert Variant="info" Role="status" [Message]="saveInfoMessage" />
       }
 
       @if (!CanEdit) {
-        <div class="alert-info" role="status">
-          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <span>{{ ReadOnlyNote || "You can't change this space's settings." }}</span>
-        </div>
+        <mj-alert Variant="info" Role="status" [Message]="ReadOnlyNote || &quot;You can't change this space's settings.&quot;" />
         <div class="settings-sections">
           <div class="settings-card">
             <div class="form-grid">
@@ -73,7 +70,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <label class="field-label" for="settings-name">Space Name</label>
               <input
                 type="text"
-                class="form-input"
+                class="mj-input form-input"
                 id="settings-name"
                 [(ngModel)]="formData.name"
                 placeholder="e.g. Northwind relationship"
@@ -83,7 +80,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             <div class="form-field full-width">
               <label class="field-label" for="settings-description">Description</label>
               <textarea
-                class="form-textarea"
+                class="mj-textarea form-textarea"
                 id="settings-description"
                 [(ngModel)]="formData.description"
                 placeholder="Describe what this space is for..."
@@ -97,7 +94,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 <i [class]="formData.iconClass || 'fa-solid fa-compass'" class="icon-preview"></i>
                 <input
                   type="text"
-                  class="form-input with-prefix"
+                  class="mj-input form-input with-prefix"
                   id="settings-icon"
                 [(ngModel)]="formData.iconClass"
                   placeholder="fa-solid fa-compass"
@@ -116,7 +113,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 />
                 <input
                   type="text"
-                  class="form-input color-text"
+                  class="mj-input form-input color-text"
                   id="settings-color-text"
                   [(ngModel)]="formData.color"
                   placeholder="#RRGGBB"
@@ -128,7 +125,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <label class="field-label" for="settings-banner">Background Banner Image URL</label>
               <input
                 type="url"
-                class="form-input"
+                class="mj-input form-input"
                 id="settings-banner"
                 [(ngModel)]="formData.backgroundImageUrl"
                 placeholder="https://images.unsplash.com/..."
@@ -208,25 +205,15 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         <div class="settings-card">
           <div class="card-title-row">
             <i class="fa-solid fa-shield-halved section-ic"></i>
-            <span class="card-title">Access & Retention Lifecycle</span>
+            <span class="card-title">Access & Lifecycle</span>
           </div>
 
           <div class="form-grid">
             <div class="form-field">
-              <label class="field-label" for="settings-retention">Retention Policy</label>
-              <select id="settings-retention" [(ngModel)]="formData.retention" class="form-select">
-                <option value="">Type default ({{ formData.typeDefaultRetention || 'Indefinite' }})</option>
-                <option value="Indefinite">Indefinite (No automatic archiving)</option>
-                <option value="Year">1 Year</option>
-                <option value="Month">1 Month</option>
-              </select>
-            </div>
-
-            <div class="form-field">
               <label class="field-label" for="settings-type">Space Type</label>
               <input
                 type="text"
-                class="form-input"
+                class="mj-input form-input"
                 id="settings-type"
                 [value]="formData.spaceType"
                 disabled
@@ -267,27 +254,21 @@ import { COLLAB_TOKENS_CSS } from './tokens';
               <ng-content select="[mjcSettingsDetails]"></ng-content>
             </div>
             @if (DetailsMessage) {
-              <div class="alert-success" role="status">
-                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                <span>{{ DetailsMessage }}</span>
-              </div>
+              <mj-alert class="details-outcome" Variant="success" Role="status" [Message]="DetailsMessage" />
             }
             @if (DetailsError) {
-              <div class="alert-error" role="alert">
-                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-                <span>{{ DetailsError }}</span>
-              </div>
+              <mj-alert class="details-outcome" Variant="error" Role="alert" [Message]="DetailsError" />
             }
             @if (DetailsEditable) {
               <div class="details-actions">
-                <button type="button" class="save-btn" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" (click)="SaveDetailsRequested.emit()">
+                <button type="button" mjButton Variant="primary" Size="sm" [disabled]="!DetailsDirty || DetailsIncomplete || IsSavingDetails" [attr.aria-busy]="IsSavingDetails" (click)="SaveDetailsRequested.emit()">
                   @if (IsSavingDetails) {
-                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> <span>Saving...</span>
+                    <mj-loading Size="small" [ShowText]="false"></mj-loading> <span>Saving...</span>
                   } @else {
                     <i class="fa-solid fa-check" aria-hidden="true"></i> <span>Save details</span>
                   }
                 </button>
-                <button type="button" class="cancel-lifecycle-btn discard-btn" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
+                <button type="button" mjButton Variant="flat" Size="sm" [disabled]="!DetailsDirty || IsSavingDetails" (click)="DiscardDetailsRequested.emit()">Discard changes</button>
               </div>
             }
           </div>
@@ -295,18 +276,17 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
 
       <ng-template #lifecycle>
-        @if (CanChangeLifecycle) {
             <div class="form-field full-width">
               <div class="cb-title">Status: {{ formData.status }}</div>
-              @if (confirmingLifecycle) {
+              @if (!CanChangeLifecycle) {
+              } @else if (confirmingLifecycle) {
                 <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
-                <button type="button" class="save-btn" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
-                <button type="button" class="cancel-lifecycle-btn" (click)="confirmingLifecycle = false">Cancel</button>
+                <button type="button" mjButton [Variant]="formData.status === 'Closed' ? 'primary' : 'danger'" Size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
+                <button type="button" mjButton Variant="flat" Size="sm" (click)="confirmingLifecycle = false">Cancel</button>
               } @else {
-                <button type="button" class="cancel-lifecycle-btn" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
+                <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
-        }
       </ng-template>
     </div>
   `,
@@ -341,41 +321,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         margin-top: 4px;
       }
 
-      .save-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse);
-        border: none;
-        padding: 8px 20px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-        flex-shrink: 0;
-      }
-      .save-btn:hover:not(:disabled) {
-        background: var(--mj-brand-primary-hover, #005a8c);
-      }
-      .save-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
 
-      .alert-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--mj-status-info-bg);
-        border: 1px solid var(--mj-status-info-border);
-        color: var(--mj-status-info-text);
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
-      }
       .details-fields {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -385,41 +331,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: flex;
         gap: 10px;
         align-items: center;
-      }
-      .details-actions .discard-btn {
-        margin-top: 0;
-      }
-      .alert-error {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--mj-status-error-bg);
-        border: 1px solid var(--mj-status-error-border);
-        color: var(--mj-status-error-text);
-        padding: 10px 14px;
-        border-radius: 6px;
-        font-size: 13px;
-      }
-      .cancel-lifecycle-btn {
-        margin-top: 8px;
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: 1px solid var(--mj-border-default);
-        background: var(--mj-bg-surface);
-        color: var(--mj-text-primary);
-        cursor: pointer;
-      }
-      .alert-success {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--mj-status-success-bg);
-        border: 1px solid var(--mj-status-success-border);
-        color: var(--mj-status-success-text);
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
       }
 
       .settings-sections {
@@ -478,22 +389,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-text-secondary, #475569);
       }
 
-      .form-input, .form-textarea, .form-select {
-        padding: 8px 12px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 6px;
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-primary, #0f172a);
-        outline: none;
+      /* MJ's .mj-input and .mj-textarea draw the fields; the form only sizes them */
+      .form-input, .form-textarea {
+        width: 100%;
         box-sizing: border-box;
-      }
-      .form-input:focus, .form-textarea:focus, .form-select:focus {
-        border-color: var(--mj-brand-primary, #0076b6);
-      }
-      .form-input:disabled {
-        background: var(--mj-bg-surface-sunken, #f8fafc);
-        color: var(--mj-text-muted, #94a3b8);
       }
 
       .input-with-icon {

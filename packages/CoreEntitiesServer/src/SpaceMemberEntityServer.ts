@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
+import { spaceTypeAudience } from './space-audience.js';
 import type { MemberChangeKind } from './base-space-type-server-driver.js';
 import { failDelete, refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
@@ -89,6 +90,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         }
         if (!context.role) {
             return fail(result, 'SpaceRoleTypeID', 'Invite refused: that role does not exist.');
+        }
+        // The staff-only promise (item 157): a type that seats staff only takes no seat whose role cannot see the Team band
+        if (!context.role.canSeeTeamBand && this.Status !== 'Removed' && (!this.IsSaved || this.Fields.some((field) => (field.Name === 'SpaceRoleTypeID' || field.Name === 'Status') && field.Dirty))) {
+            if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
+                return fail(result, 'SpaceRoleTypeID', "Invite refused: this space's type seats staff only, so a role that cannot see the Team band has no seat here.");
+            }
         }
         const occupied = this.IsSaved && previous && previous !== 'Removed' ? Math.max(0, context.memberCount - 1) : context.memberCount;
         const currentRoleId = this.IsSaved ? parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceRoleTypeID')?.OldValue ?? roleId)) : null;

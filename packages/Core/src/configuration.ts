@@ -1,3 +1,4 @@
+import { GRANT_KINDS, isGrantKind, type GrantKind } from './grants.ts';
 /**
  * Configuration interfaces and rule resolution for Space, SpaceType, and App.
  * Follows the extensibility plan § 4 and punch list 2 items 55, 12, 6.
@@ -19,10 +20,6 @@ export type ConfigurationValue =
 export interface CollaborationSettings {
     /** Target storage account ID for file uploads. Resolves hierarchically. */
     StorageAccountID?: string | null;
-    /** Access level permitted after a space closes. App default is 'ReadOnly'. */
-    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
-    /** Duration in days after closing before post-close access lapses. null = indefinite. */
-    PostCloseAccessDays?: number | null;
     /** Chat behavior rules. */
     Chats?: {
         /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
@@ -48,8 +45,43 @@ export interface CollaborationSettings {
     };
     /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
     SpaceOverridable?: string[];
+    /** Who a type seats (item 142). 'StaffOnly' lets the type carry grants of a view, query or component; absent means 'StaffAndParticipants', which fails closed. A type's key; a space may not set it. */
+    Seats?: {
+        Audience?: 'StaffOnly' | 'StaffAndParticipants';
+    };
+    /** How this level's grants of each kind combine with the level above (D30). Default 'Extend'. */
+    Grants?: Partial<Record<GrantKind, { ListMode?: 'Extend' | 'Replace' }>>;
+    /** The entities a type's participants may read through an anchor (D28). A type's declaration; a space has none. */
+    DataReach?: DataReachDeclaration[];
     /** Behavior switches that the type's own drivers read, keyed by app. */
     Extensions?: Record<string, Record<string, ConfigurationValue>>;
+}
+
+/** One entity a type's participants may read, by a path to an anchor role (D28). */
+export interface DataReachDeclaration {
+    /** The MJ entity name. */
+    Entity: string;
+    /** A column of Entity, or one foreign-key hop: 'MemberID.ChapterID'. */
+    Path: string;
+    AnchorRole: string;
+    Band: 'Team' | 'Shared';
+    /** The allow-list of fields participants may read. */
+    Fields: string[];
+}
+
+/** Checks one DataReach declaration; the errors name the index so a list of them reads well. */
+export function validateDataReachDeclaration(declaration: unknown, index: number): string[] {
+    const at = `DataReach[${index}]`;
+    if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) return [`${at} must be an object.`];
+    const d = declaration as Partial<DataReachDeclaration>;
+    const errors: string[] = [];
+    if (typeof d.Entity !== 'string' || d.Entity.trim() === '') errors.push(`${at}.Entity must name an entity.`);
+    if (typeof d.Path !== 'string' || d.Path.trim() === '') errors.push(`${at}.Path must name a column, or one hop: Column.Column.`);
+    else if (d.Path.split('.').length > 2 || d.Path.split('.').some((part) => part.trim() === '')) errors.push(`${at}.Path "${d.Path}" may have at most one hop.`);
+    if (typeof d.AnchorRole !== 'string' || d.AnchorRole.trim() === '') errors.push(`${at}.AnchorRole must name an anchor role.`);
+    if (d.Band !== 'Team' && d.Band !== 'Shared') errors.push(`${at}.Band must be Team or Shared.`);
+    if (!Array.isArray(d.Fields) || d.Fields.length === 0 || d.Fields.some((f) => typeof f !== 'string' || f.trim() === '')) errors.push(`${at}.Fields must list at least one field.`);
+    return errors;
 }
 
 export interface ISpaceRules extends CollaborationSettings {}
@@ -184,6 +216,21 @@ export function validateSpaceTypeConfiguration(config: unknown): { valid: boolea
         errors.push('SpaceOverridable must be an array of strings.');
     }
 
+    if (c.Grants !== undefined) {
+        if (!c.Grants || typeof c.Grants !== 'object' || Array.isArray(c.Grants)) errors.push('Grants must be an object keyed by grant kind.');
+        else {
+            for (const [kind, rule] of Object.entries(c.Grants)) {
+                if (!isGrantKind(kind)) errors.push(`Grants.${kind}: not a grant kind (${GRANT_KINDS.join(', ')}).`);
+                else if (rule?.ListMode !== undefined && !['Extend', 'Replace'].includes(rule.ListMode)) errors.push(`Invalid Grants.${kind}.ListMode: ${String(rule.ListMode)}`);
+            }
+        }
+    }
+
+    if (c.DataReach !== undefined) {
+        if (!Array.isArray(c.DataReach)) errors.push('DataReach must be an array of declarations.');
+        else c.DataReach.forEach((d, i) => errors.push(...validateDataReachDeclaration(d, i)));
+    }
+
     return { valid: errors.length === 0, errors };
 }
 
@@ -217,6 +264,17 @@ export function validateSpaceConfiguration(
         errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
     }
 
+    if (sc.DataReach !== undefined) {
+        errors.push("DataReach is a type's declaration; a space cannot declare its own.");
+    }
+    if (sc.Grants) {
+        for (const kind of Object.keys(sc.Grants)) {
+            if (!overridable.has(`Grants.${kind}`) && !overridable.has('Grants')) {
+                errors.push(`Grants.${kind} cannot be overridden by space: not in type's SpaceOverridable.`);
+            }
+        }
+    }
+
     if (sc.Extensions) {
         for (const appName of Object.keys(sc.Extensions)) {
             if (!overridable.has(`Extensions.${appName}`) && !overridable.has('Extensions')) {
@@ -248,8 +306,6 @@ export interface ResolveCollaborationSettingsParams {
 
 export interface ResolvedCollaborationSettings {
     StorageAccountID: string | null;
-    PostCloseAccess: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
-    PostCloseAccessDays: number | null;
     Chats: {
         WhoCanStart: 'Anyone' | 'Owners';
         AgentReplyMode: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
@@ -270,8 +326,6 @@ export interface ResolvedCollaborationSettings {
 
 export const DEFAULT_COLLABORATION_SETTINGS: ResolvedCollaborationSettings = {
     StorageAccountID: null,
-    PostCloseAccess: 'ReadOnly',
-    PostCloseAccessDays: null,
     Chats: {
         WhoCanStart: 'Anyone',
         AgentReplyMode: 'MentionOrOneToOne',
@@ -286,13 +340,12 @@ export const DEFAULT_COLLABORATION_SETTINGS: ResolvedCollaborationSettings = {
 
 const KNOWN_SETTINGS_KEYS = new Set([
     'StorageAccountID',
-    'PostCloseAccess',
-    'PostCloseAccessDays',
     'Chats',
     'Agents',
     'Labels',
     'Children',
     'SpaceOverridable',
+    'Seats',
     'Extensions',
 ]);
 
@@ -320,16 +373,6 @@ export function ValidateCollaborationSettings(
 
     if (c['StorageAccountID'] !== undefined && c['StorageAccountID'] !== null && typeof c['StorageAccountID'] !== 'string') {
         errors.push('StorageAccountID must be a string or null.');
-    }
-
-    if (c['PostCloseAccess'] !== undefined && !['ReadOnly', 'ReadOnlyWithAgent', 'None'].includes(c['PostCloseAccess'] as string)) {
-        errors.push(`Invalid PostCloseAccess: ${String(c['PostCloseAccess'])}`);
-    }
-
-    if (c['PostCloseAccessDays'] !== undefined && c['PostCloseAccessDays'] !== null) {
-        if (typeof c['PostCloseAccessDays'] !== 'number' || c['PostCloseAccessDays'] < 0 || !Number.isInteger(c['PostCloseAccessDays'])) {
-            errors.push('PostCloseAccessDays must be a non-negative integer or null.');
-        }
     }
 
     if (c['Chats'] !== undefined) {
@@ -401,6 +444,15 @@ export function ValidateCollaborationSettings(
         errors.push('SpaceOverridable must be an array of strings.');
     }
 
+    if (c['Seats'] !== undefined) {
+        const seats = c['Seats'] as Record<string, unknown> | null;
+        if (!seats || typeof seats !== 'object' || Array.isArray(seats)) {
+            errors.push('Seats must be an object.');
+        } else if (seats['Audience'] !== undefined && !['StaffOnly', 'StaffAndParticipants'].includes(seats['Audience'] as string)) {
+            errors.push(`Seats.Audience must be StaffOnly or StaffAndParticipants, not ${String(seats['Audience'])}.`);
+        }
+    }
+
     if (c['Extensions'] !== undefined) {
         if (!c['Extensions'] || typeof c['Extensions'] !== 'object' || Array.isArray(c['Extensions'])) {
             errors.push('Extensions must be an object.');
@@ -411,8 +463,6 @@ export function ValidateCollaborationSettings(
         // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
         // half-written row would look like a working configuration (extensibility plan § 4)
         const requiredKeys: Array<[string, unknown]> = [
-            ['PostCloseAccess', c['PostCloseAccess']],
-            ['PostCloseAccessDays', c['PostCloseAccessDays']],
             ['Chats.WhoCanStart', (c['Chats'] as Record<string, unknown> | undefined)?.['WhoCanStart']],
             ['Chats.AgentReplyMode', (c['Chats'] as Record<string, unknown> | undefined)?.['AgentReplyMode']],
             ['Chats.HistoryOnAdd', (c['Chats'] as Record<string, unknown> | undefined)?.['HistoryOnAdd']],
@@ -426,7 +476,7 @@ export function ValidateCollaborationSettings(
     if (level === 'space') {
         const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
         // Keys that only a type or the app can hold: on a space they would do nothing, so they are refused instead
-        for (const typeOnly of ['Children', 'SpaceOverridable']) {
+        for (const typeOnly of ['Children', 'SpaceOverridable', 'Seats']) {
             if (c[typeOnly] !== undefined) errors.push(`${typeOnly} cannot be set on a space: it belongs to the space type.`);
         }
         const isAllowed = (dottedKey: string): boolean => {
@@ -437,12 +487,6 @@ export function ValidateCollaborationSettings(
 
         if (c['StorageAccountID'] !== undefined && !isAllowed('StorageAccountID')) {
             errors.push("StorageAccountID cannot be overridden by space: not in type's SpaceOverridable.");
-        }
-        if (c['PostCloseAccess'] !== undefined && !isAllowed('PostCloseAccess')) {
-            errors.push("PostCloseAccess cannot be overridden by space: not in type's SpaceOverridable.");
-        }
-        if (c['PostCloseAccessDays'] !== undefined && !isAllowed('PostCloseAccessDays')) {
-            errors.push("PostCloseAccessDays cannot be overridden by space: not in type's SpaceOverridable.");
         }
         if (c['Chats'] && typeof c['Chats'] === 'object') {
             const chats = c['Chats'] as Record<string, unknown>;
@@ -537,18 +581,6 @@ export function ResolveCollaborationSettings(
         DEFAULT_COLLABORATION_SETTINGS.StorageAccountID
     );
 
-    const postCloseAccess = resolveScalar(
-        'PostCloseAccess',
-        s => s.PostCloseAccess,
-        DEFAULT_COLLABORATION_SETTINGS.PostCloseAccess
-    );
-
-    const postCloseAccessDays = resolveScalar(
-        'PostCloseAccessDays',
-        s => s.PostCloseAccessDays,
-        DEFAULT_COLLABORATION_SETTINGS.PostCloseAccessDays
-    );
-
     const whoCanStart = resolveScalar(
         'Chats.WhoCanStart',
         s => s.Chats?.WhoCanStart,
@@ -615,8 +647,6 @@ export function ResolveCollaborationSettings(
 
     return {
         StorageAccountID: storageAccountId,
-        PostCloseAccess: postCloseAccess,
-        PostCloseAccessDays: postCloseAccessDays,
         Chats: {
             WhoCanStart: whoCanStart,
             AgentReplyMode: agentReplyMode,
@@ -656,4 +686,9 @@ export function refuseChildType(
         return `This space already holds ${openSiblings} open sub-spaces, the most its type allows (${children.MaxOpen}).`;
     }
     return null;
+}
+
+/** Who a type seats, as its configuration says; absent fails closed to 'StaffAndParticipants' (item 142). */
+export function typeSeatsAudience(typeConfig: CollaborationSettings | null | undefined): 'StaffOnly' | 'StaffAndParticipants' {
+    return typeConfig?.Seats?.Audience === 'StaffOnly' ? 'StaffOnly' : 'StaffAndParticipants';
 }

@@ -8,6 +8,8 @@ import { MJGlobal } from '@memberjunction/global';
 
 export type SpaceLifecycleEvent =
     | 'AfterSpaceClosed'
+    /** Stage 1: the space entered another status; `data` carries `fromStatusCode`, `toStatusCode` and `toStatusId`. A close raises both. */
+    | 'AfterSpaceStatusChanged'
     | 'AfterMemberAdded'
     | 'AfterMemberRemoved'
     | 'AfterItemPromoted';

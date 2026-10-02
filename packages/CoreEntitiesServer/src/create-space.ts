@@ -6,10 +6,16 @@ import { parseUuid } from './uuid.js';
 const SPACE_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const SPACE_MEMBER_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface CreateSpaceInput {
     TypeID: string;
     Name: string;
     Description?: string | null;
+    /** The parent, for a sub-space; absent for a top-level space. The parent's type says which types may sit under it. */
+    ParentID?: string | null;
+    /** Whether the space's members come from its parent (D22: the creator chooses). A top-level space has no parent to inherit from; default true. */
+    InheritsMembership?: boolean;
     /** The subtype's own columns, by field name. Only what the type's subtype adds to a space is accepted. */
     Details?: Record<string, unknown> | null;
 }
@@ -51,10 +57,13 @@ export async function createSpace(provider: DatabaseProviderBase, user: UserInfo
     space.NewRecord();
     space.SpaceTypeID = type.ID;
     space.OwnerID = user.ID;
-    space.InheritsMembership = type.DefaultInheritsMembership;
+    if (input.ParentID !== undefined && input.ParentID !== null && input.ParentID !== '') {
+        if (!UUID.test(input.ParentID)) return { status: 'refused', message: 'The parent space id is not valid.' };
+        space.ParentID = input.ParentID;
+    }
+    space.InheritsMembership = input.InheritsMembership ?? true;
     space.Name = name;
     space.Description = input.Description?.trim() || null;
-    // Core logs a load error here for a row that can't exist yet (MemberJunction/MJ#4859); nothing is wrong
     const attached = await space.EnsureISAChild();
     const leaf: BaseEntity = attached ? space.LeafEntity : space;
 

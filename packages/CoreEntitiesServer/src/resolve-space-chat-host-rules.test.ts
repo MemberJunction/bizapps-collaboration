@@ -218,9 +218,9 @@ describe('resolveSpaceChatHostRules', () => {
                     ]);
                 }
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
                     return mockResult<T>(
-                        spaceAgents.map((row, index) => ({ ID: `space-agent-${index}`, AgentID: row.AgentID, SpaceID: SPACE_ID, IsDefault: row.IsDefault })),
+                        spaceAgents.map((row, index) => ({ ID: `space-agent-${index}`, Kind: 'Agent', TargetRecordID: row.AgentID, SpaceID: SPACE_ID, IsDefault: row.IsDefault })),
                     );
                 }
 

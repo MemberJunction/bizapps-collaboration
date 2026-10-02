@@ -1,0 +1,125 @@
+{
+        "schemaName": "\b__mj_BizAppsTasks\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bActivities\b",
+            "Description": "",
+            "BaseView": "\bvwTaskActivities\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bPersonID\b","\bActivityType\b","\bPreviousValue\b","\bNewValue\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bAssignments\b",
+            "Description": "",
+            "BaseView": "\bvwTaskAssignments\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bAssigneeEntityID\b","\bAssigneeRecordID\b","\bRoleID\b","\bRoleNotes\b","\bStatus\b","\bAssignedByPersonID\b","\bAssignedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bAssigneeEntity\b","\bRole\b","\bAssignedByPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bCategories\b",
+            "Description": "",
+            "BaseView": "\bvwTaskCategories\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bParentID\b","\bColorCode\b","\bSequence\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bParent\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bComments\b",
+            "Description": "",
+            "BaseView": "\bvwTaskComments\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bParentID\b","\bPersonID\b","\bContent\b","\bIsEdited\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bPerson\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDecision\b \bOutcomes\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDecisionOutcomes\b", 
+            "Fields": ["\bID\b","\bName\b","\bCode\b","\bDescription\b","\bSequence\b","\bIsTerminal\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDecisions\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDecisions\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bOutcomeID\b","\bDecidedByPersonID\b","\bDecidedAt\b","\bDecisionNotes\b","\bTaskAssignmentID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bOutcome\b","\bDecidedByPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDependencies\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDependencies\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bDependsOnTaskID\b","\bDependencyType\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bDependsOnTask\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bLinks\b",
+            "Description": "",
+            "BaseView": "\bvwTaskLinks\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bEntityID\b","\bRecordID\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bNotification\b \bConfigs\b",
+            "Description": "",
+            "BaseView": "\bvwTaskNotificationConfigs\b", 
+            "Fields": ["\bID\b","\bTaskTypeID\b","\bOverdueNotificationsEnabled\b","\bOverdueGracePeriodHours\b","\bOverdueRepeatIntervalHours\b","\bNotifyAssignees\b","\bNotifyCreator\b","\bOverdueActionID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskType\b","\bOverdueAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bNotification\b \bLogs\b",
+            "Description": "",
+            "BaseView": "\bvwTaskNotificationLogs\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bNotificationType\b","\bNotifiedUserID\b","\bNotifiedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bNotifiedUser\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bRoles\b",
+            "Description": "",
+            "BaseView": "\bvwTaskRoles\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTag\b \bLinks\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTagLinks\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bTagID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bTag\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTags\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTags\b", 
+            "Fields": ["\bID\b","\bName\b","\bColorCode\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItem\b \bDependencies\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItemDependencies\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bDependsOnItemID\b","\bDependencyType\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bItem\b","\bDependsOnItem\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItem\b \bRoles\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItemRoles\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bRoleID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bItem\b","\bRole\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItems\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItems\b", 
+            "Fields": ["\bID\b","\bTemplateID\b","\bName\b","\bDescription\b","\bParentItemID\b","\bPriority\b","\bDaysFromStart\b","\bHoursEstimated\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTemplate\b","\bParentItem\b","\bRootParentItemID\b","\bParentItemIDDepth\b","\bParentItemIDPath\b","\bParentItemIDIsLeaf\b","\bParentItemIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplates\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplates\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bCategoryID\b","\bTypeID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCategory\b","\bType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bType\b \bStatus\b",
+            "Description": "\bDynamic\b \bdomain\b \bstatuses\b \band\b \blifecycle\b \bstages\b \bconfigured\b \bper\b \bTask\b \bType\b.",
+            "BaseView": "\bvwTaskTypeStatus\b", 
+            "Fields": ["\bID\b","\bTaskTypeID\b","\bName\b","\bCode\b","\bDescription\b","\bMacroStatus\b","\bSequence\b","\bIsDefault\b","\bIsTerminal\b","\bColor\b","\bIconClass\b","\bOnEnterActionID\b","\bOnExitActionID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskType\b","\bOnEnterAction\b","\bOnExitAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTypes\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bIconClass\b","\bDefaultPriority\b","\bOnAssignActionID\b","\bOnCompleteActionID\b","\bOnOverdueActionID\b","\bOnPercentChangeActionID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bOnRejectActionID\b","\bOnCancelActionID\b","\bCode\b","\bOnCreateActionID\b","\bOnStatusChangeActionID\b","\bOnAssignAction\b","\bOnCompleteAction\b","\bOnOverdueAction\b","\bOnPercentChangeAction\b","\bOnRejectAction\b","\bOnCancelAction\b","\bOnCreateAction\b","\bOnStatusChangeAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTasks\b",
+            "Description": "",
+            "BaseView": "\bvwTasks\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bTypeID\b","\bCategoryID\b","\bParentID\b","\bStatus\b","\bPriority\b","\bStartedAt\b","\bDueAt\b","\bCompletedAt\b","\bHoursEstimated\b","\bHoursActual\b","\bPercentComplete\b","\bSequence\b","\bBlockedReason\b","\bCompletionNotes\b","\bCreatedByPersonID\b","\bOverdueNotifiedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskTypeStatusID\b","\bPredictedSLABreachProbability\b","\bPredictedSLARiskBand\b","\bPredictedSLAScoredAt\b","\bType\b","\bCategory\b","\bParent\b","\bCreatedByPerson\b","\bTaskTypeStatus\b","\bRootParentID\b","\bIsSLABreached\b","\bLeadDays\b","\bAssignmentsCount\b","\bCommentsCount\b"]
+        }
+        ]
+    }

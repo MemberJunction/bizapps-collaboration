@@ -96,6 +96,8 @@ describe('executeSpaceChatTurn', () => {
         agentRunReadFails?: boolean;
         /** The reply's save fails once it carries this status (the final save, when 'Complete'). */
         detailSaveFailsWhenStatus?: string;
+        /** The reply's save throws once it carries this status, as `Save()` does when the database can't be reached. */
+        detailSaveThrowsWhenStatus?: string;
         callerHasReach?: boolean;
         messageUserId?: string;
         messageRole?: string;
@@ -179,6 +181,9 @@ describe('executeSpaceChatTurn', () => {
                             return id.toLowerCase() === USER_MESSAGE_ID.toLowerCase();
                         },
                         async Save() {
+                            if (options.detailSaveThrowsWhenStatus && this.Status === options.detailSaveThrowsWhenStatus) {
+                                throw new Error('the database could not be reached');
+                            }
                             savedDetails.push({ ...this });
                             return this.Status !== options.detailSaveFailsWhenStatus;
                         },
@@ -295,8 +300,6 @@ describe('executeSpaceChatTurn', () => {
                             UIDriverClass: null,
                             AllowSubSpaces: true,
                             Configuration: JSON.stringify({
-                                PostCloseAccess: 'ReadOnly',
-                                PostCloseAccessDays: null,
                                 Chats: {
                                     WhoCanStart: 'Anyone',
                                     AgentReplyMode: 'MentionOrOneToOne',
@@ -331,8 +334,6 @@ describe('executeSpaceChatTurn', () => {
                             ID: 'app-setting-1',
                             Name: 'Collaboration Settings',
                             Value: JSON.stringify({
-                                PostCloseAccess: 'ReadOnly',
-                                PostCloseAccessDays: null,
                                 Chats: {
                                     WhoCanStart: 'Anyone',
                                     AgentReplyMode: 'MentionOrOneToOne',
@@ -363,13 +364,14 @@ describe('executeSpaceChatTurn', () => {
                     return mockResult<T>([]);
                 }
 
-                if (EntityName === 'MJ_BizApps_Collaboration: Space Agents') {
+                if (EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
                     const agentIds = options.allowedAgents ?? [ALLOWED_AGENT_ID];
                     return mockResult<T>(
                         agentIds.map(
                             (id) =>
                                 ({
-                                    AgentID: id,
+                                    Kind: 'Agent',
+                                    TargetRecordID: id,
                                     SpaceTypeID: null,
                                     SpaceID: SPACE_ID,
                                     IsDefault: true,
@@ -749,6 +751,50 @@ describe('executeSpaceChatTurn', () => {
                 AgentRunner.prototype.RunAgent = held;
             }
         });
+    });
+
+    it("a fault in the observer does not fail a turn that answers when it ends: the reply is saved and reported, and the observer's error is only logged", async () => {
+        const provider = createMockProvider({ messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space` });
+        const outcomes: { success: boolean; result: boolean }[] = [];
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            observer: { OnFinished: (outcome) => { outcomes.push({ success: outcome.success, result: !!outcome.result }); throw new Error('the observer broke'); } },
+        });
+        assert.equal(result.ok, true, 'the turn answers although its observer threw');
+        assert.deepEqual(outcomes, [{ success: true, result: true }], "the observer heard the end, with the run's result");
+        const reply = provider.savedDetails[provider.savedDetails.length - 1];
+        assert.equal(reply.Status, 'Complete');
+    });
+
+    it("a turn that throws after the run still ends: the reply is marked Error, and the observer is told the turn failed, with the reply row's id, once", async () => {
+        const mention = `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`;
+        // In the background: the call has answered, so the observer's word is the only thing that tells the chat the reply finished
+        const background = createMockProvider({ messageText: mention, detailSaveThrowsWhenStatus: 'Complete' });
+        const outcomes: { replyDetailId: string; success: boolean; errorMessage: string | undefined; runId: string | undefined; hasResult: boolean }[] = [];
+        const started = await executeSpaceChatTurn(background, callerUser, {
+            ...defaultInput,
+            background: true,
+            observer: { OnFinished: (outcome) => { outcomes.push({ replyDetailId: outcome.replyDetailId, success: outcome.success, errorMessage: outcome.errorMessage, runId: outcome.agentRun?.ID, hasResult: !!outcome.result }); } },
+        });
+        assert.equal(started.ok, true);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        assert.equal(outcomes.length, 1, 'the observer hears the end once');
+        assert.equal(outcomes[0].success, false);
+        assert.equal(outcomes[0].replyDetailId, started.ok ? started.replyDetailIds[0] : '');
+        assert.match(outcomes[0].errorMessage ?? '', /could not be reached/);
+        // The run had finished before the throw, so the failure carries it: the chat reads a completion's run
+        assert.equal(outcomes[0].runId, 'run-mocked-1', 'the failure names the run that finished');
+        assert.equal(outcomes[0].hasResult, true, 'and carries its result');
+        assert.equal(background.savedDetails[background.savedDetails.length - 1].Status, 'Error', 'the row is marked Error, not left In-Progress');
+        // The claim is released: a later call for the same message is judged again
+        const later = await executeSpaceChatTurn(createMockProvider({ messageText: mention }), callerUser, defaultInput);
+        assert.equal(later.ok, true);
+
+        // In the foreground the call itself answers that the assistant failed, where it used to reject
+        const foreground = createMockProvider({ messageText: mention, detailSaveThrowsWhenStatus: 'Complete' });
+        const result = await executeSpaceChatTurn(foreground, callerUser, defaultInput);
+        assert.equal(result.ok, false);
+        assert.equal(foreground.savedDetails[foreground.savedDetails.length - 1].Status, 'Error');
     });
 
     it('refuses an untagged message under Always when no agent is Active', async () => {

@@ -8,6 +8,10 @@ import {
     SPACE_ENTITY,
     SPACE_ITEM_ENTITY,
     SPACE_CHAT_ENTITY,
+    SPACE_ANCHOR_ENTITY,
+    SPACE_GRANT_ENTITY,
+    SPACE_NOTE_ENTITY,
+    SPACE_MEMBER_PIN_ENTITY,
     PERSON_ENTITY,
     SPACE_MEMBER_ENTITY,
     USER_ENTITY,
@@ -57,13 +61,10 @@ async function deleteRowAndConfirmUnguarded(
     // `InnerLoad` skips that discovery, and deleting the parent under a live child row is not a delete this app makes.
     const loaded = entity instanceof mjBizAppsCollaborationSpaceEntity ? await entity.Load(id) : await entity.InnerLoad(CompositeKey.FromID(id));
     if (loaded) {
-        // A space with its subtype attached is deleted through the subtype: `Delete()` on the parent never returns (MJ#4850). The server's
-        // Space class hands the delete over itself; a client-side entity object has no such class, so the leaf is asked here.
-        const target = entity instanceof mjBizAppsCollaborationSpaceEntity ? entity.LeafEntity : entity;
-        const deleted = await target.Delete();
-        // Over GraphQL the server deletes a subtype's space along with the subtype, and the client then sends the space's delete too, which
-        // finds nothing: `Delete()` answers false with the space already gone. The read-back below is what decides.
-        if (!deleted && target === entity) {
+        // A space with its subtype attached is deleted through the subtype by core itself, in one transaction, on the server and over
+        // GraphQL alike. `Delete()`'s answer is checked; the read-back below is the confirmation.
+        const deleted = await entity.Delete();
+        if (!deleted) {
             Assert(false, `Delete of ${what} ${id} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
@@ -197,7 +198,7 @@ async function cleanupConversationUnguarded(
     }
 }
 
-/** Deletes a space with its conversations, items and seats, checking every read and delete and reading the space back. */
+/** Deletes a space with its conversations, pins, notes, grants, anchors, items and seats, checking every read and delete and reading the space back. */
 async function cleanupSpaceUnguarded(
     provider: IMetadataProvider,
     user: UserInfo,
@@ -215,7 +216,12 @@ async function cleanupSpaceUnguarded(
         await cleanupConversationUnguarded(provider, user, chat.ConversationID, chat.ID);
     }
 
+    // Stage 1 child rows go first: a pin hangs on an item and a seat, the rest on the space alone
     for (const [entityName, what] of [
+        [SPACE_MEMBER_PIN_ENTITY, 'Space Member Pin'],
+        [SPACE_NOTE_ENTITY, 'Space Note'],
+        [SPACE_GRANT_ENTITY, 'Space Grant'],
+        [SPACE_ANCHOR_ENTITY, 'Space Anchor'],
         [SPACE_ITEM_ENTITY, 'Space Item'],
         [SPACE_MEMBER_ENTITY, 'Space Member'],
     ] as const) {

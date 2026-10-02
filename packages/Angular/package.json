@@ -41,6 +41,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@angular/animations": "21.2.22",
     "@angular/common": "21.2.22",
     "@angular/core": "21.2.22",
     "@angular/forms": "21.2.22",
@@ -61,6 +62,7 @@
     "@mj-biz-apps/tasks-ng": "1.5.0",
     "@types/node": "24.10.11",
     "jsdom": "26.1.0",
+    "rxjs": "^7.8.2",
     "typescript": "5.9.3",
     "vitest": "^4.0.18"
   },

@@ -20,11 +20,13 @@ The generated entity classes for Collaboration's schema, the typed client for it
 | `MJ_BizApps_Collaboration: Item Uses` | `mjBizAppsCollaborationItemUseEntity` |
 | `MJ_BizApps_Collaboration: Share Notices` | `mjBizAppsCollaborationShareNoticeEntity` |
 | `MJ_BizApps_Collaboration: Space Chats` | `mjBizAppsCollaborationSpaceChatEntity` |
-| `MJ_BizApps_Collaboration: Space Agents` | `mjBizAppsCollaborationSpaceAgentEntity` |
-| `MJ_BizApps_Collaboration: Space Agent Skills` | `mjBizAppsCollaborationSpaceAgentSkillEntity` |
-| `MJ_BizApps_Collaboration: Space Knowledge Sources` | `mjBizAppsCollaborationSpaceKnowledgeSourceEntity` |
+| `MJ_BizApps_Collaboration: Space Type Status` | `mjBizAppsCollaborationSpaceTypeStatusEntity` |
+| `MJ_BizApps_Collaboration: Space Anchors` | `mjBizAppsCollaborationSpaceAnchorEntity` |
+| `MJ_BizApps_Collaboration: Space Grants` | `mjBizAppsCollaborationSpaceGrantEntity` |
+| `MJ_BizApps_Collaboration: Space Notes` | `mjBizAppsCollaborationSpaceNoteEntity` |
+| `MJ_BizApps_Collaboration: Space Member Pins` | `mjBizAppsCollaborationSpaceMemberPinEntity` |
 
-On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Space Types, Spaces, Space Members, Space Items, Item Uses and Share Notices, and those subclasses hold the write gates. Role types, chats, agents, skills and knowledge sources have none.
+On the server, `@mj-biz-apps/collaboration-core-entities-server` registers subclasses of Space Types, Space Type Status, Spaces, Space Members, Space Items, Item Uses, Share Notices, Space Anchors, Space Grants, Space Notes and Space Member Pins, and those subclasses hold the write gates. Role types and chats have none.
 
 **`CollaborationClient`** (`src/client.ts`) is a typed client for the app's seven GraphQL mutations and four queries: `CreateSpace`, `MintSpaceLink`, `UploadSpaceFile` (which takes the band the person chose), `CreateSpaceTask`, `PostSpaceMessage`, `CreateSpaceConversation`, `ExecuteSpaceChatTurn` (`Background` returns once the reply is In-Progress), `GetSpaceChatHostRules`, `GetCloseConsequence`, `GetHomeCounts` and `GetHomeLists`. `CreateSpace` sends a subtype's own columns as a JSON object of field name to value. A library file opens in MemberJunction's own viewer, which loads it as the caller; there is no mutation for it here.
 - Pass it an executor: any object with `ExecuteGQL`, such as a component's `ProviderToUse` or MJ's GraphQL data provider. It throws without one.

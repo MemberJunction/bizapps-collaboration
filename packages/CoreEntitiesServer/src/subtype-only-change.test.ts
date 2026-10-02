@@ -36,7 +36,7 @@ class SpyDriver extends BaseSpaceTypeServerDriver {
 }
 
 /** A saved space with its subtype attached, whose own fields are as told. */
-function savedSpace(opts: { spaceDirty?: boolean; parentId?: string | null; user?: object | null; leafOutOfReach?: boolean; leafFields?: Array<{ Name: string; Dirty: boolean; OldValue: unknown }> }) {
+function savedSpace(opts: { spaceDirty?: boolean; parentId?: string | null; user?: object | null; leafFields?: Array<{ Name: string; Dirty: boolean; OldValue: unknown }> }) {
     const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
     const history: Array<{ Message?: string; Type?: string }> = [];
     const leaf = { Fields: opts.leafFields ?? [{ Name: 'TermName', Dirty: true, OldValue: 'Original' }] };
@@ -48,8 +48,8 @@ function savedSpace(opts: { spaceDirty?: boolean; parentId?: string | null; user
         ParentID: { value: opts.parentId ?? null, writable: true },
         ClosedAt: { value: null, writable: true },
         ProviderToUse: { value: {}, writable: true },
-        // A space made by its subtype's own save has no subtype in reach: `LeafEntity` is the space itself
-        ...(opts.leafOutOfReach ? {} : { LeafEntity: { value: leaf, writable: true } }),
+        // The subtype is in reach whichever side the save started from: loaded through the space, or linked back to the space its own save made
+        LeafEntity: { value: leaf, writable: true },
         Fields: { value: [{ Name: 'Name', Dirty: !!opts.spaceDirty, OldValue: 'x' }, { Name: 'OwnerID', Dirty: false }], writable: true },
         RegisterResultHistoryEntry: { value: (entry: { Message?: string; Type?: string }) => history.push(entry), writable: true },
     });
@@ -110,7 +110,7 @@ describe("a change to only a subtype's own columns", () => {
         assert.equal(history[0]?.Type, 'update');
     });
 
-    it("is judged by the type's driver as an Update, told the subtype and what its columns held, and its refusal comes back", async () => {
+    it("is judged by the type's driver as an Update, on the space being saved (whose LeafEntity holds the new values), told the subtype and what its columns held, and its refusal comes back", async () => {
         configure = true;
         const driver = new SpyDriver({ ok: false, message: 'A board keeps its term while a vote is open.' });
         drivers.set(SPACE.toLowerCase(), driver);
@@ -120,6 +120,7 @@ describe("a change to only a subtype's own columns", () => {
         assert.equal(driver.asked[0].kind, 'Update');
         assert.equal(driver.asked[0].subtypeEntityName, BOARDS);
         assert.deepEqual(driver.asked[0].oldValues, { TermName: 'Original' });
+        assert.equal(driver.asked[0].space, space, 'the driver judges the space being saved, not a stored copy');
         assert.match(history[0]?.Message ?? '', /keeps its term while a vote is open/);
     });
 
@@ -144,18 +145,21 @@ describe("a change to only a subtype's own columns", () => {
         assert.deepEqual(driver.told[0].oldValues, { TermName: 'Original' });
     });
 
-    it("is judged, and heard with no old values, when the subtype isn't in reach (its own save made the space, as an API call does), since its changes can't be seen", async () => {
-        configure = false;
-        configureAsked = 0;
-        drivers.set(SPACE.toLowerCase(), new SpyDriver());
-        assert.equal(await SpaceEntityServer.prototype.Save.call(savedSpace({ leafOutOfReach: true }).space, asSubtype(BOARDS)), false, 'refused without the right');
-        assert.equal(configureAsked, 1);
+    it("is refused when the space can't see the subtype that is saving it: a change nobody could judge doesn't pass, and neither the right nor the driver is asked", async () => {
         configure = true;
+        configureAsked = 0;
         const driver = new SpyDriver();
         drivers.set(SPACE.toLowerCase(), driver);
-        assert.equal(await SpaceEntityServer.prototype.Save.call(savedSpace({ leafOutOfReach: true }).space, asSubtype(BOARDS)), true);
-        assert.equal(driver.asked.length, 1);
-        assert.deepEqual(driver.told.map((t) => [t.kind, t.oldValues]), [['Update', {}]]);
+        const { space, history } = savedSpace({});
+        // MJ links a space to the subtype that saves it. Without the link, `LeafEntity` is the space itself.
+        Object.defineProperty(space, 'LeafEntity', { value: space, writable: true });
+        assert.equal(await SpaceEntityServer.prototype.Save.call(space, asSubtype(BOARDS)), false);
+        assert.match(history[0]?.Message ?? '', /can't see the subtype that is saving it/);
+        assert.equal(driver.asked.length, 0);
+        assert.equal(driver.told.length, 0);
+        assert.equal(configureAsked, 0);
+        // A plain save, which no subtype started, is not held to it
+        assert.equal(await SpaceEntityServer.prototype.Save.call(savedSpace({}).space, asSubtype(null)), true);
     });
 
     it("is told to the space's own driver only: a parent's driver hears no child change, and is not asked", async () => {

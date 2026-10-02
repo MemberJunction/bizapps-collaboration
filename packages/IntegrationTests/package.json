@@ -12,7 +12,7 @@
     "./checks/*": "./dist/checks/*.js"
   },
   "scripts": {
-    "build": "pnpm --filter @mj-biz-apps/collaboration-example-space-types run build:server && tsc && node --input-type=module -e \"import {cpSync,mkdirSync} from 'node:fs'; mkdirSync('dist/world/data',{recursive:true}); cpSync('src/world/data','dist/world/data',{recursive:true})\"",
+    "build": "pnpm --filter @mj-biz-apps/collaboration-example-space-types-entities --filter @mj-biz-apps/collaboration-example-space-types-server run build && tsc && node --input-type=module -e \"import {cpSync,mkdirSync} from 'node:fs'; mkdirSync('dist/world/data',{recursive:true}); cpSync('src/world/data','dist/world/data',{recursive:true})\"",
     "load": "node dist/world/load-world.js",
     "purge": "node dist/world/purge-world.js",
     "test": "vitest run --exclude 'dist/**'"
@@ -34,7 +34,8 @@
     "@mj-biz-apps/collaboration-core": "workspace:*",
     "@mj-biz-apps/collaboration-core-entities-server": "workspace:*",
     "@mj-biz-apps/collaboration-entities": "workspace:*",
-    "@mj-biz-apps/collaboration-example-space-types": "workspace:*",
+    "@mj-biz-apps/collaboration-example-space-types-entities": "workspace:*",
+    "@mj-biz-apps/collaboration-example-space-types-server": "workspace:*",
     "@mj-biz-apps/common-entities": "5.46.0",
     "@mj-biz-apps/tasks-entities": "1.5.0",
     "mssql": "12.7.0"

@@ -11,9 +11,9 @@ import {
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
@@ -21,6 +21,7 @@ import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { filterRoomReplyItems } from './post-space-message.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
@@ -33,6 +34,8 @@ export interface TurnOutcome {
     success: boolean;
     /** The agent's run, when it got as far as making one. */
     agentRun: MJAIAgentRunEntity | null;
+    /** What the agent's run returned, when it returned: the partial result and the completion are published from it. */
+    result?: ExecuteAgentResult;
     /** The reason, when it failed. It is for the log and for whoever watches: the conversation itself says only that the assistant could not answer. */
     errorMessage?: string;
 }
@@ -131,8 +134,8 @@ async function runClaimedTurn(
     }
 
     const targetNode = context.spaces.find((s) => s.id.toLowerCase() === spaceId.toLowerCase());
-    if (targetNode?.closedAt) {
-        return { ok: false, message: 'A closed space does not take a new turn.' };
+    if (targetNode && spaceIsReadOnly(targetNode)) {
+        return { ok: false, message: targetNode.closedAt ? 'A closed space does not take a new turn.' : 'A read-only space does not take a new turn.' };
     }
 
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
@@ -148,10 +151,10 @@ async function runClaimedTurn(
     if (!driver.ok) return { ok: false, message: driver.message };
 
     // 1. Verify space is open
-    const spaceRes = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
+    const spaceRes = await view.RunView<{ ClosedAt: string | null; StatusID: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: SPACES,
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
+        Fields: ['ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -161,8 +164,9 @@ async function runClaimedTurn(
     }
 
     const targetSpace = spaceRes.Results[0];
-    if (targetSpace.ClosedAt) {
-        return { ok: false, message: 'A closed space does not take a new turn.' };
+    const refusal = spaceWriteRefusal(targetSpace);
+    if (refusal.readOnly) {
+        return { ok: false, message: spaceWriteRefusalMessage(refusal, 'turn') };
     }
 
     // 2. Verify conversation belongs to this space and is active
@@ -342,8 +346,13 @@ async function runClaimedTurn(
         return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
     }
 
-    /** The observer hears how the turn ended; a fault in it never becomes the turn's own. */
+    /** The observer hears how the turn ended, once; a fault in it never becomes the turn's own. */
+    let finishedTold = false;
+    /** The run and its result once the agent has answered, kept outside the turn so a throw after the run still reports them. */
+    let finishedRun: MJAIAgentRunEntity | null = null;
+    let finishedResult: ExecuteAgentResult | undefined;
     const tellFinished = (outcome: TurnOutcome): void => {
+        finishedTold = true;
         try {
             input.observer?.OnFinished?.(outcome);
         } catch (observerError) {
@@ -356,7 +365,6 @@ async function runClaimedTurn(
         let agentErrorMessage: string | null = null;
         let agentRunId: string | undefined;
         let agentReplyText: string | null = null;
-        let finishedRun: MJAIAgentRunEntity | null = null;
 
         try {
             // Load fresh window rows through ConversationEngine inside try so failures mark row Error (Item 5)
@@ -415,6 +423,7 @@ async function runClaimedTurn(
                 };
 
                 const runResult = await runner.RunAgent(runnerParams);
+                finishedResult = runResult ?? undefined;
                 if (runResult?.agentRun?.ID) {
                     agentRunId = runResult.agentRun.ID;
                     finishedRun = runResult.agentRun;
@@ -449,7 +458,7 @@ async function runClaimedTurn(
             if (!errorSaved) {
                 LogError(`executeSpaceChatTurn: failed to save assistant error status: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
             }
-            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: agentErrorMessage ?? ASSISTANT_FAILED_MESSAGE });
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: agentErrorMessage ?? ASSISTANT_FAILED_MESSAGE });
             return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
         }
 
@@ -465,11 +474,11 @@ async function runClaimedTurn(
             if (!(await assistantDetail.Save())) {
                 LogError(`executeSpaceChatTurn: failed to mark the reply Error after its save failed: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
             }
-            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, errorMessage: errMsg });
+            tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: errMsg });
             return { ok: false, message: errMsg };
         }
 
-        tellFinished({ replyDetailId: assistantDetail.ID, success: true, agentRun: finishedRun });
+        tellFinished({ replyDetailId: assistantDetail.ID, success: true, agentRun: finishedRun, result: finishedResult });
         return {
             ok: true,
             replyDetailIds: [assistantDetail.ID],
@@ -479,13 +488,37 @@ async function runClaimedTurn(
         };
     };
 
+    /**
+     * The turn, held to its promise even when something throws after the reply row was written (a `Save()` throws when the database
+     * can't be reached): the row is marked Error, once, and the observer is told the turn failed, with the row's id and the run when
+     * there is one, since the chat reads a completion's run. Without that a reply would stay In-Progress in the conversation and on
+     * screen, since the chat follows it only through the published completion.
+     */
+    const settleTurn = async (): Promise<ExecuteSpaceChatTurnResult> => {
+        try {
+            return await finishTurn();
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            LogError(`executeSpaceChatTurn: the turn threw after its reply row was written: ${reason}`);
+            try {
+                assistantDetail.Status = 'Error';
+                assistantDetail.Message = ASSISTANT_FAILED_MESSAGE;
+                if (!(await assistantDetail.Save())) {
+                    LogError(`executeSpaceChatTurn: failed to mark the reply Error after the turn threw: ${assistantDetail.LatestResult?.CompleteMessage ?? ''}`);
+                }
+            } catch (markError) {
+                LogError(`executeSpaceChatTurn: failed to mark the reply Error after the turn threw: ${markError instanceof Error ? markError.message : String(markError)}`);
+            }
+            if (!finishedTold) tellFinished({ replyDetailId: assistantDetail.ID, success: false, agentRun: finishedRun, result: finishedResult, errorMessage: reason });
+            return { ok: false, message: ASSISTANT_FAILED_MESSAGE };
+        }
+    };
+
     if (input.background) {
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
-        void finishTurn()
-            .catch((error: unknown) => LogError(`executeSpaceChatTurn: the background turn failed: ${error instanceof Error ? error.message : String(error)}`))
-            .finally(handoff.release);
+        void settleTurn().finally(handoff.release);
         return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name) };
     }
-    return finishTurn();
+    return settleTurn();
 }

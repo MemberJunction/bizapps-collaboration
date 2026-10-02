@@ -95,14 +95,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Retention"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -167,35 +159,11 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AnchorEntityID"
+            FieldName="StatusID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="AnchorRecordID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="PostCloseAccess"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="PostCloseAccessDays"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -331,50 +299,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Space Knowledge Sources Section -->
+    <!-- Space Anchors Section -->
     <mj-collapsible-panel
-        SectionKey="mJBizAppsCollaborationSpaceKnowledgeSources"
-        SectionName="Space Knowledge Sources"
+        SectionKey="mJBizAppsCollaborationSpaceAnchors"
+        SectionName="Space Anchors"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceKnowledgeSources')"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceAnchors')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Knowledge Sources','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Knowledge Sources','SpaceID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceKnowledgeSources')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Anchors','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Anchors','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceAnchors')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceKnowledgeSources', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Space Agent Skills Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsCollaborationSpaceAgentSkills"
-        SectionName="Space Agent Skills"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceAgentSkills')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Agent Skills','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Agent Skills','SpaceID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceAgentSkills')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceAgentSkills', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceAnchors', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -406,25 +349,75 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Space Agents Section -->
+    <!-- Space Member Pins Section -->
     <mj-collapsible-panel
-        SectionKey="mJBizAppsCollaborationSpaceAgents"
-        SectionName="Space Agents"
+        SectionKey="mJBizAppsCollaborationSpaceMemberPins"
+        SectionName="Space Member Pins"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceAgents')"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceMemberPins')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Agents','SpaceID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Agents','SpaceID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceAgents')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Member Pins','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Member Pins','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceMemberPins')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceAgents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceMemberPins', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Notes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceNotes"
+        SectionName="Space Notes"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceNotes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Notes','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Notes','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceNotes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceNotes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Space Grants Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpaceGrants"
+        SectionName="Space Grants"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpaceGrants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Grants','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Grants','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpaceGrants')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpaceGrants', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

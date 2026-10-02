@@ -5,14 +5,14 @@ import type { SpaceBand, TaskItemModel } from './types';
 import { isTaskClosed, isTaskInProgress, taskPriorityClass, taskPriorityLabel, taskStatusClass, taskStatusLabel } from './task-status';
 import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
-import { MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJClickableDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
 @Component({
   selector: 'mjc-space-work',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent, MJClickableDirective],
+  imports: [CommonModule, FormsModule, CollabAvatarComponent, CollabBandChipComponent, MJButtonDirective, MJClickableDirective, MJDropdownComponent, MJEmptyStateComponent, MJFilterChipComponent],
   template: `
     <div class="work-container">
       <!-- Header stats -->
@@ -44,53 +44,29 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             placeholder="Search tasks..."
             aria-label="Search tasks"
             [(ngModel)]="searchQuery"
-            class="search-input"
+            class="mj-input search-input"
           />
         </div>
 
-        <div class="filter-group">
-          <button
-            class="pill-btn"
-            [class.active]="statusFilter === 'all'"
-            (click)="statusFilter = 'all'"
-          >All</button>
-          <button
-            class="pill-btn"
-            [class.active]="statusFilter === 'active'"
-            (click)="statusFilter = 'active'"
-          >Active</button>
-          <button
-            class="pill-btn"
-            [class.active]="statusFilter === 'completed'"
-            (click)="statusFilter = 'completed'"
-          >Completed</button>
+        <div class="filter-group" role="group" aria-label="Status">
+          <mj-filter-chip Label="All" [Active]="statusFilter === 'all'" (Clicked)="statusFilter = 'all'" />
+          <mj-filter-chip Label="Active" [Active]="statusFilter === 'active'" (Clicked)="statusFilter = 'active'" />
+          <mj-filter-chip Label="Completed" [Active]="statusFilter === 'completed'" (Clicked)="statusFilter = 'completed'" />
         </div>
 
-        <div class="filter-group">
-          <button
-            class="pill-btn"
-            [class.active]="bandFilter === 'all'"
-            (click)="bandFilter = 'all'"
-          >All bands</button>
-          <button
-            class="pill-btn"
-            [class.active]="bandFilter === 'Shared'"
-            (click)="bandFilter = 'Shared'"
-          >Shared</button>
+        <div class="filter-group" role="group" aria-label="Audience">
+          <mj-filter-chip Label="All bands" [Active]="bandFilter === 'all'" (Clicked)="bandFilter = 'all'" />
+          <mj-filter-chip Label="Shared" [Active]="bandFilter === 'Shared'" (Clicked)="bandFilter = 'Shared'" />
           @if (CanSeeTeamSide) {
-            <button
-              class="pill-btn"
-              [class.active]="bandFilter === 'Team'"
-              (click)="bandFilter = 'Team'"
-            >Team</button>
+            <mj-filter-chip Label="Team" [Active]="bandFilter === 'Team'" (Clicked)="bandFilter = 'Team'" />
           }
         </div>
 
         <div class="spacer"></div>
 
         @if (CanCreateTask) {
-          <button class="add-task-btn" (click)="openAddTask()">
-            <i class="fa-solid fa-plus"></i>
+          <button type="button" mjButton Variant="primary" Size="sm" (click)="openAddTask()">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
             <span>Add task</span>
           </button>
         }
@@ -105,26 +81,29 @@ import { COLLAB_TOKENS_CSS } from './tokens';
             aria-label="Task title"
             [(ngModel)]="newTaskName"
             (keydown.enter)="submitNewTask()"
-            class="new-task-input"
+            class="mj-input new-task-input"
             autofocus
           />
           @if (AllowedBands.length > 1) {
-            <select [(ngModel)]="newTaskBand" class="new-task-select" aria-label="Who can see this task">
-              @for (band of AllowedBands; track band) {
-                <option [value]="band">{{ band === 'Shared' ? 'Shared with Outside' : 'Team only' }}</option>
-              }
-            </select>
+            <mj-dropdown
+              class="new-task-select"
+              AriaLabel="Who can see this task"
+              [Data]="bandChoices"
+              TextField="label"
+              ValueField="band"
+              [ValuePrimitive]="true"
+              [(ngModel)]="newTaskBand" />
           }
-          <select [(ngModel)]="newTaskPriority" class="new-task-select" aria-label="Priority">
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-            <option value="Critical">Critical</option>
-          </select>
-          <button class="save-task-btn" [disabled]="!newTaskName.trim()" (click)="submitNewTask()">
+          <mj-dropdown
+            class="new-task-select"
+            AriaLabel="Priority"
+            [Data]="priorityChoices"
+            [ValuePrimitive]="true"
+            [(ngModel)]="newTaskPriority" />
+          <button type="button" mjButton Variant="primary" Size="sm" [disabled]="!newTaskName.trim()" (click)="submitNewTask()">
             Add
           </button>
-          <button class="cancel-task-btn" (click)="isAddingTask = false">
+          <button type="button" mjButton Variant="flat" Size="sm" (click)="isAddingTask = false">
             Cancel
           </button>
         </div>
@@ -144,17 +123,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
         <div class="table-body">
           @if (filteredTasks.length === 0) {
-            <div class="no-tasks">
-              <i class="fa-solid fa-list-check empty-ic"></i>
-              <div class="empty-title">No tasks found</div>
-              <div class="empty-sub">
-                @if (searchQuery || statusFilter !== 'all' || bandFilter !== 'all') {
-                  Try clearing your filters or search query.
-                } @else {
-                  Get started by adding the first task to this space.
-                }
-              </div>
-            </div>
+            <mj-empty-state
+              Icon="fa-solid fa-list-check"
+              Title="No tasks found"
+              [Message]="searchQuery || statusFilter !== 'all' || bandFilter !== 'all' ? 'Try clearing your filters or search query.' : 'Get started by adding the first task to this space.'"
+              Size="compact" />
           } @else {
             @for (task of filteredTasks; track task.id) {
               <div
@@ -278,60 +251,16 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-text-muted, #94a3b8);
         font-size: 13px;
       }
+      /* MJ's .mj-input draws the field; this keeps room for the search icon and a width */
       .search-input {
-        padding: 7px 12px 7px 32px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 6px;
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-primary, #0f172a);
-        outline: none;
-        width: 200px;
-      }
-      .search-input:focus {
-        border-color: var(--mj-brand-primary, #0076b6);
+        padding-left: 32px;
+        width: 240px;
       }
       .filter-group {
         display: flex;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        padding: 3px;
-        border-radius: 6px;
-        gap: 2px;
-      }
-      .pill-btn {
-        border: none;
-        background: transparent;
-        padding: 5px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        border-radius: 4px;
-        color: var(--mj-text-secondary, #64748b);
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .pill-btn.active {
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-primary, #0f172a);
-        box-shadow: var(--mj-shadow-sm);
+        gap: 6px;
       }
       .spacer { flex: 1 1 auto; }
-      .add-task-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse);
-        border: none;
-        padding: 7px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-      .add-task-btn:hover {
-        background: var(--mj-brand-primary-hover, #005a8c);
-      }
 
       .add-task-row {
         display: flex;
@@ -344,41 +273,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         box-shadow: var(--mj-shadow-md);
       }
       .new-task-input {
-        flex: 1 1 auto;
-        padding: 6px 10px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 4px;
-        outline: none;
+        flex: 1 1 200px;
       }
       .new-task-select {
-        padding: 6px 10px;
-        font-size: 13px;
-        border: 1px solid var(--mj-border-subtle, #e2e8f0);
-        border-radius: 4px;
-        background: var(--mj-bg-surface, #ffffff);
-      }
-      .save-task-btn {
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse);
-        border: none;
-        padding: 6px 14px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .save-task-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .cancel-task-btn {
-        background: transparent;
-        border: none;
-        color: var(--mj-text-secondary, #64748b);
-        padding: 6px 10px;
-        font-size: 13px;
-        cursor: pointer;
+        min-width: 150px;
       }
 
       .tasks-table-card {
@@ -491,28 +389,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         color: var(--mj-text-secondary, #64748b);
       }
 
-      .no-tasks {
-        padding: 48px 24px;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-      }
-      .empty-ic {
-        font-size: 32px;
-        color: var(--mj-text-muted, #cbd5e1);
-        margin-bottom: 4px;
-      }
-      .empty-title {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--mj-text-primary, #0f172a);
-      }
-      .empty-sub {
-        font-size: 13px;
-        color: var(--mj-text-secondary, #64748b);
-      }
     `,
   ],
 })
@@ -546,6 +422,13 @@ export class CollabSpaceWorkComponent {
   public isAddingTask = false;
   public newTaskName = '';
   public newTaskBand: SpaceBand = 'Shared';
+  /** The priorities a new task may take, as the dropdown lists them. */
+  public readonly priorityChoices: readonly string[] = ['Low', 'Medium', 'High', 'Critical'];
+
+  /** The bands a new task may be on, each with the words the screen uses for it. */
+  public get bandChoices(): Array<{ band: SpaceBand; label: string }> {
+    return this.AllowedBands.map((band) => ({ band, label: band === 'Shared' ? 'Shared with Outside' : 'Team only' }));
+  }
   public newTaskPriority = 'Medium';
 
   public openAddTask(): void {

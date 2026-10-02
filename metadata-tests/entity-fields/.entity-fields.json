@@ -24,7 +24,7 @@
       "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Boards&Name=NextMeetingDate"
     },
     "fields": {
-      "Category": "Board Details",
+      "Category": "Next Meeting",
       "GeneratedFormSection": "Category",
       "AutoUpdateCategory": 0
     }
@@ -34,7 +34,7 @@
       "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Boards&Name=NextMeetingLocation"
     },
     "fields": {
-      "Category": "Board Details",
+      "Category": "Next Meeting",
       "GeneratedFormSection": "Category",
       "AutoUpdateCategory": 0
     }
@@ -55,66 +55,6 @@
     },
     "fields": {
       "Category": "Board Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=DealID"
-    },
-    "fields": {
-      "Category": "Deal Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=AccountName"
-    },
-    "fields": {
-      "Category": "Deal Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=DealStage"
-    },
-    "fields": {
-      "Category": "Deal Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=CloseDate"
-    },
-    "fields": {
-      "Category": "Deal Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=DealValue"
-    },
-    "fields": {
-      "Category": "Deal Details",
-      "GeneratedFormSection": "Category",
-      "AutoUpdateCategory": 0
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Rooms&Name=WinProbability"
-    },
-    "fields": {
-      "Category": "Deal Details",
       "GeneratedFormSection": "Category",
       "AutoUpdateCategory": 0
     }

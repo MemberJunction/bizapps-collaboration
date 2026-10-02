@@ -20,6 +20,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 - A space whose type names a subtype shows its details in a Details card in Settings, editable by someone who may change settings, and read-only in an About card on the Overview (`src/lib/logic/space-details.ts`).
 - One component draws those details on all three screens (`SpaceDetailsViewComponent`, `src/lib/space-details-view.component.ts`): a component the type's UI driver gives; else MJ's form for the subtype through `mj-entity-form-host` (no toolbar, no related entities, no record links), when the subtype's own columns sit in sections of it that hold none of the space's, showing only those sections (`VisibleSectionKeys`); else a field for each column the subtype adds. `planDetailsView` (`src/lib/logic/details-view.ts`) decides which, and `ownFormSections` in `collaboration-entities` finds the sections.
 - Settings closes and reopens a space, and the confirmation shows what `GetCloseConsequence` says a close will do.
+- The reader's seat decides what the space shows: the chat, the note and the lock (`chatState`, `src/lib/logic/chat-state.ts`), a band choice for an upload, the roles to grant. While the page is still checking the seat, the chat waits. When the check fails, the chat says the page couldn't check, and one alert above the space offers Try again; the reader isn't treated as seatless.
 - The query parameters are `view`, `space`, `tab`, `item`, `conv` and `workView`, and back and forward restore them. It calls `SetAgentContext` and `NotifyLoadComplete()`.
 - The page's decisions that don't need Angular live in `src/lib/logic/`, as plain functions with their own tests.
 
@@ -33,7 +34,7 @@ Collaboration's Explorer surface: the client bootstrap, the Explorer resource be
 pnpm --filter @mj-biz-apps/collaboration-ng run build
 ```
 
-The build is `ngc`, into `dist/`. Its `test` script typechecks, runs every `node:test` file in `src/lib/logic/` through a glob (`'src/lib/logic/*.test.ts'`, 140 tests), then runs Vitest on the rendered tests (`*.render.test.ts`, in jsdom: five of the details view, with stand-ins for MJ's form host and fields). The root `pnpm test` runs them too.
+The build is `ngc`, into `dist/`. Its `test` script typechecks, runs every `node:test` file in `src/lib/logic/` through a glob (`'src/lib/logic/*.test.ts'`, 149 tests), then runs Vitest on the rendered tests (`*.render.test.ts`, in jsdom: five of the details view, with stand-ins for MJ's form host and fields). The root `pnpm test` runs them too.
 
 ## Not done yet
 

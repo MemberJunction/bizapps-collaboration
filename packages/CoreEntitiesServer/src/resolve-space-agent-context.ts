@@ -1,10 +1,9 @@
 import { RunView, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
-import type {
-    mjBizAppsCollaborationSpaceAgentSkillEntity,
-    mjBizAppsCollaborationSpaceEntity,
-    mjBizAppsCollaborationSpaceKnowledgeSourceEntity,
-} from '@mj-biz-apps/collaboration-entities';
+import type { AgentGrantSettings } from '@mj-biz-apps/collaboration-core';
+import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceGrantEntity } from '@mj-biz-apps/collaboration-entities';
 import { CollaborationEngine } from './CollaborationEngine.js';
+
+const GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
 
 function normalizeId(id: string): string {
     return id.trim().toUpperCase();
@@ -53,101 +52,74 @@ async function loadSpaceHierarchy(
     return chain;
 }
 
+/** The grants of one kind in force for a space: the app's, its type's, and the rows of every space on the chain from the root down. */
+async function grantsInForce(
+    provider: IMetadataProvider,
+    spaceId: string,
+    kind: 'Agent' | 'KnowledgeSource',
+): Promise<Array<Pick<mjBizAppsCollaborationSpaceGrantEntity, 'ID' | 'TargetRecordID' | 'Settings' | 'SpaceID' | 'SpaceTypeID'>>> {
+    const chain = await loadSpaceHierarchy(provider, spaceId);
+    const target = chain[chain.length - 1];
+    const spaceTypeId = target.SpaceTypeID;
+
+    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
+    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
+    const rows: Array<Pick<mjBizAppsCollaborationSpaceGrantEntity, 'ID' | 'TargetRecordID' | 'Settings' | 'SpaceID' | 'SpaceTypeID'>> = [
+        ...CollaborationEngine.Instance.AppGrantsOfKind(kind),
+        ...(spaceTypeId ? CollaborationEngine.Instance.TypeGrantsOfKind(spaceTypeId, kind) : []),
+    ];
+
+    const chainIdsSql = chain.map((s) => `'${s.ID}'`).join(',');
+    const rv = RunView.FromMetadataProvider(provider);
+    const res = await rv.RunView<Pick<mjBizAppsCollaborationSpaceGrantEntity, 'ID' | 'TargetRecordID' | 'Settings' | 'SpaceID' | 'SpaceTypeID'>>(
+        {
+            EntityName: GRANTS,
+            ExtraFilter: `Kind = '${kind}' AND SpaceID IN (${chainIdsSql})`,
+            Fields: ['ID', 'TargetRecordID', 'Settings', 'SpaceID', 'SpaceTypeID'],
+            ResultType: 'simple',
+        }
+    );
+    if (res.Success && res.Results) rows.push(...res.Results);
+    return rows;
+}
+
 /**
- * Resolves all bound Content Source IDs for a space, combining:
- * 1. App and Type-level knowledge sources from CollaborationEngine
- * 2. Space-level knowledge sources along the hierarchy from root to target space
+ * Resolves all bound Content Source IDs for a space (stage 1: the KnowledgeSource grants in force), combining:
+ * 1. App and type-level grants from CollaborationEngine
+ * 2. Space-level grants along the hierarchy from root to target space
  */
 export async function resolveSpaceKnowledgeSources(
     provider: IMetadataProvider,
     spaceId: string
 ): Promise<string[]> {
-    const chain = await loadSpaceHierarchy(provider, spaceId);
-    const target = chain[chain.length - 1];
-    const spaceTypeId = target.SpaceTypeID;
-
-    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
-    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
     const sourceIds = new Set<string>();
-
-    for (const ks of CollaborationEngine.Instance.AppSpaceKnowledgeSources) {
-        if (ks.ContentSourceID) {
-            sourceIds.add(normalizeId(ks.ContentSourceID));
-        }
-    }
-
-    if (spaceTypeId) {
-        for (const ks of CollaborationEngine.Instance.SpaceKnowledgeSourcesForType(spaceTypeId)) {
-            if (ks.ContentSourceID) {
-                sourceIds.add(normalizeId(ks.ContentSourceID));
-            }
-        }
-    }
-
-    const chainIdsSql = chain.map((s) => `'${s.ID}'`).join(',');
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<mjBizAppsCollaborationSpaceKnowledgeSourceEntity>(
-        {
-            EntityName: 'MJ_BizApps_Collaboration: Space Knowledge Sources',
-            ExtraFilter: `SpaceID IN (${chainIdsSql})`,
-            ResultType: 'entity_object',
-        }
-    );
-
-    const rows = res.Success && res.Results ? res.Results : [];
-    for (const r of rows) {
-        if (r.ContentSourceID) {
-            sourceIds.add(normalizeId(r.ContentSourceID));
-        }
+    for (const grant of await grantsInForce(provider, spaceId, 'KnowledgeSource')) {
+        if (grant.TargetRecordID) sourceIds.add(normalizeId(grant.TargetRecordID));
     }
     return Array.from(sourceIds);
 }
 
 /**
- * Resolves all bound AI Skill IDs for a space, combining:
- * 1. App and Type-level skills from CollaborationEngine
- * 2. Space-level skills along the hierarchy from root to target space
+ * Resolves all AI Skill IDs the Agent grants in force name for a space (`Settings.Skills`, D31), combining:
+ * 1. App and type-level grants from CollaborationEngine
+ * 2. Space-level grants along the hierarchy from root to target space
+ * A grant whose settings say 'None', or name no skills, adds none.
  */
 export async function resolveSpaceAgentSkills(
     provider: IMetadataProvider,
     spaceId: string
 ): Promise<string[]> {
-    const chain = await loadSpaceHierarchy(provider, spaceId);
-    const target = chain[chain.length - 1];
-    const spaceTypeId = target.SpaceTypeID;
-
-    const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
-    await CollaborationEngine.Instance.EnsureLoaded(system ?? undefined, provider);
     const skillIds = new Set<string>();
-
-    for (const sk of CollaborationEngine.Instance.AppSpaceAgentSkills) {
-        if (sk.SkillID) {
-            skillIds.add(normalizeId(sk.SkillID));
+    for (const grant of await grantsInForce(provider, spaceId, 'Agent')) {
+        if (!grant.Settings) continue;
+        let settings: AgentGrantSettings;
+        try {
+            settings = JSON.parse(grant.Settings) as AgentGrantSettings;
+        } catch {
+            continue;
         }
-    }
-
-    if (spaceTypeId) {
-        for (const sk of CollaborationEngine.Instance.SpaceAgentSkillsForType(spaceTypeId)) {
-            if (sk.SkillID) {
-                skillIds.add(normalizeId(sk.SkillID));
-            }
-        }
-    }
-
-    const chainIdsSql = chain.map((s) => `'${s.ID}'`).join(',');
-    const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<mjBizAppsCollaborationSpaceAgentSkillEntity>(
-        {
-            EntityName: 'MJ_BizApps_Collaboration: Space Agent Skills',
-            ExtraFilter: `SpaceID IN (${chainIdsSql})`,
-            ResultType: 'entity_object',
-        }
-    );
-
-    const rows = res.Success && res.Results ? res.Results : [];
-    for (const r of rows) {
-        if (r.SkillID) {
-            skillIds.add(normalizeId(r.SkillID));
+        if (Array.isArray(settings.Skills)) {
+            for (const id of settings.Skills) if (typeof id === 'string' && id.trim()) skillIds.add(normalizeId(id));
         }
     }
     return Array.from(skillIds);

@@ -11,7 +11,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   imports: [CommonModule],
   template: `
     <span
-      class="av {{ computedColorClass }} {{ Size }} {{ isOutside ? 'ext' : '' }}"
+      class="av {{ computedColorClass }} {{ Size }} {{ isOutside ? 'ext' : '' }} {{ Stacked ? 'stacked' : '' }}"
       [attr.title]="name || null"
       [attr.aria-label]="name || initials">
       @if (avatarUrl) {
@@ -60,6 +60,14 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       box-shadow: 0 0 0 2px var(--mj-bg-surface), 0 0 0 3.5px var(--mjc-shared-strong);
     }
 
+    /* In a stack the avatars overlap: each wears a ring of the surface, and an outside person's cyan ring is drawn a little tighter */
+    .av.stacked {
+      box-shadow: 0 0 0 2px var(--mj-bg-surface);
+    }
+    .av.stacked.ext {
+      box-shadow: 0 0 0 1.5px var(--mj-bg-surface), 0 0 0 3px var(--mjc-shared-strong);
+    }
+
     /* 10-color avatar categorical palette */
     .av.c1 { background: #6366f1; } /* hex-ok: categorical palette */
     .av.c2 { background: #0ea5e9; } /* hex-ok: categorical palette */
@@ -101,6 +109,8 @@ export class CollabAvatarComponent {
   @Input() public Size: AvatarSize = 'md';
   @Input() public IsOutside = false;
   @Input() public IsOnline = false;
+  /** Drawn in an `mjc-avatar-stack`, overlapping its neighbours: the avatar wears a ring of the surface so each stays legible. */
+  @Input() public Stacked = false;
 
   public get initials(): string {
     return this.Avatar?.initials || this.Initials;

@@ -5,6 +5,14 @@ export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMem
 export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEntityServer.js';
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
 export { LoadShareNoticeEntityServer, ShareNoticeEntityServer } from './ShareNoticeEntityServer.js';
+export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, primaryAnchorCollision, recordKeyParses, releaseAnchorWrite, vouchAnchorWrite } from './SpaceAnchorEntityServer.js';
+export { spaceSeatsParticipants, spaceTypeAudience, type SeatsAudience } from './space-audience.js';
+export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } from './SpaceGrantEntityServer.js';
+export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
+export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';
+export { LoadSpaceTypeStatusEntityServer, SpaceTypeStatusEntityServer } from './SpaceTypeStatusEntityServer.js';
+export { notifySpaceStatusChange, SPACE_STATUS_NOTIFICATION_TYPE } from './space-status-notices.js';
+export type { SpaceStatusNoticeInput } from './space-status-notices.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
@@ -43,7 +51,8 @@ export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
 export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
-export { LoadTaskAttributionEntityServer } from './task-attribution.js';
+// The three gates are exported by name as well: a host's class-registration manifest imports every registered class
+export { LoadTaskAttributionEntityServer, TaskAssignmentEntityServer, TaskCommentEntityServer, TaskDecisionEntityServer } from './task-attribution.js';
 export { CollaborationTaskEntityServer, LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';

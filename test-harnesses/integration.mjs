@@ -28,6 +28,7 @@ const ALL_BUNDLES = [
     'library',
     'agent',
     'features',
+    'stage1',
 ];
 
 const args = process.argv.slice(2);

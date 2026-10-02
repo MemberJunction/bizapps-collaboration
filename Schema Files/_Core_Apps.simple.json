@@ -1,0 +1,377 @@
+[{
+        "schemaName": "\b__mj_BizAppsCollabExamples\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Collaboration_Examples\b: \bExample\b \bBoards\b",
+            "Description": "\bA\b \bboard\b: \ba\b \bspace\b \bof\b \bthe\b \bexample\b-\bboard\b \btype\b, \bwith\b \bthe\b \bterms\b \bits\b \bmembers\b \bsit\b \bunder\b. \bShares\b \bits\b \bprimary\b \bkey\b \bwith\b \bthe\b \bSpace\b \brow\b \bit\b \bspecialises\b.",
+            "BaseView": "\bvwExampleBoards\b", 
+            "Fields": ["\bID\b","\bTermName\b","\bMeetingCadence\b","\bNextMeetingDate\b","\bNextMeetingLocation\b","\bQuorumPercentage\b","\bBoardCharterUrl\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bConfiguration\b","\bStatusID\b"]
+        }
+        ]
+    },{
+        "schemaName": "\b__mj_BizAppsCollaboration\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bItem\b \bUses\b",
+            "Description": "\bA\b \brecord\b \bthat\b \ba\b \bmember\b \bopened\b, \buploaded\b, \bor\b \bpromoted\b \ban\b \bitem\b.",
+            "BaseView": "\bvwItemUses\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bUserID\b","\bUsedAt\b","\bKind\b","\bSpaceID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bUser\b","\bSpace\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bShare\b \bNotices\b",
+            "Description": "\bA\b \bnotice\b \bthat\b \ban\b \bitem\b \bin\b \bthis\b \bspace\b \bwas\b \bshared\b \bwith\b \ba\b \bmember\b.",
+            "BaseView": "\bvwShareNotices\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bItemID\b","\bRecipientUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bRecipientUser\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAnchors\b",
+            "Description": "\bA\b \brecord\b \ba\b \bspace\b \bis\b \babout\b (\bD26\b: \ba\b \bspace\b \bmay\b \bhave\b \bseveral\b). \bThe\b \bprimary\b \banchor\b \bis\b \bthe\b \bone\b \bEnsureSpaceForRecord\b \bfinds\b \ba\b \bspace\b \bby\b; \bone\b \bper\b \bspace\b, \band\b \bone\b \bspace\b \bper\b (\btype\b, \brecord\b) \bas\b \bprimary\b.",
+            "BaseView": "\bvwSpaceAnchors\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bSpaceTypeID\b","\bEntityID\b","\bRecordID\b","\bRole\b","\bIsPrimary\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bSpaceType\b","\bEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bChats\b",
+            "Description": "",
+            "BaseView": "\bvwSpaceChats\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bConversationID\b","\bName\b","\bSubject\b","\bKind\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bArchivedOnSpaceClose\b","\bSpace\b","\bConversation\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bGrants\b",
+            "Description": "\bSomething\b \bthe\b \bapp\b, \ba\b \bspace\b \btype\b \bor\b \ba\b \bspace\b \boffers\b \bin\b \bits\b \bspaces\b (\bD27\b'\bs\b \bseven\b \bkinds\b): \ban\b \bagent\b, \ban\b \baction\b, \ba\b \bquery\b, \ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b \bor\b \ba\b \bknowledge\b \bsource\b, \bwith\b \bthe\b \bband\b \bthat\b \bmay\b \buse\b \bit\b, \bbindings\b \bfrom\b \bthe\b \bspace\b \bto\b \bthe\b \btarget\b'\bs\b \bparameters\b, \band\b \ban\b \bagent\b'\bs\b \bnarrowed\b \bsettings\b. \bReplaces\b \bSpaceAgent\b, \bSpaceAgentSkill\b \band\b \bSpaceKnowledgeSource\b.",
+            "BaseView": "\bvwSpaceGrants\b", 
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bSpaceID\b","\bKind\b","\bTargetEntityID\b","\bTargetRecordID\b","\bLabel\b","\bBand\b","\bIsDefault\b","\bBindings\b","\bSettings\b","\bMode\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceType\b","\bSpace\b","\bTargetEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
+            "Description": "\bAn\b \bitem\b \bin\b \bexactly\b \bone\b \bspace\b: \bEntityID\b + \bRecordID\b, \bplus\b \bTeam\b \bor\b \bShared\b. \bUnique\b \bon\b (\bEntityID\b, \bRecordID\b) \bso\b \ban\b \bitem\b \bcannot\b \bhave\b \btwo\b \bparents\b.",
+            "BaseView": "\bvwSpaceItems\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bEntityID\b","\bRecordID\b","\bBand\b","\bPromotedAt\b","\bPromotedByUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bFolder\b","\bArtifactVersionID\b","\bSpace\b","\bEntity\b","\bPromotedByUser\b","\bArtifactVersion\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMember\b \bPins\b",
+            "Description": "\bSomething\b \ba\b \bmember\b \bkeeps\b \bat\b \bthe\b \btop\b \bof\b \ba\b \bspace\b (\bB22\b): \ba\b \brecord\b \bof\b \bthe\b \bspace\b (\ban\b \bitem\b, \ba\b \bnote\b, \ba\b \btask\b) \bor\b \bone\b \bof\b \bthe\b \bspace\b'\bs\b \bgrants\b (\ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b). \bThe\b \bmember\b'\bs\b \bown\b; \bHome\b \blists\b \bpins\b \bfrom\b \bthe\b \bspaces\b \bthey\b \bstill\b \breach\b.",
+            "BaseView": "\bvwSpaceMemberPins\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bUserID\b","\bKind\b","\bTargetEntityID\b","\bTargetRecordID\b","\bGrantID\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bUser\b","\bTargetEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMembers\b",
+            "Description": "\bOne\b \broster\b \brow\b \bper\b \buser\b \bper\b \bspace\b. \bStaff\b \band\b \boutsiders\b \bare\b \bboth\b \bMJ\b \busers\b. \bStatus\b \bActive\b \bis\b \bthe\b \brow\b \bthe\b \bmembership\b \bfilter\b \baccepts\b.",
+            "BaseView": "\bvwSpaceMembers\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bUserID\b","\bSpaceRoleTypeID\b","\bBand\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSyncSource\b","\bPersonID\b","\bSpace\b","\bUser\b","\bSpaceRoleType\b","\bPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bNotes\b",
+            "Description": "\bA\b \blight\b \bnote\b \bin\b \ba\b \bspace\b (\bB21\b): \bthe\b \bspace\b'\bs\b \bown\b \brow\b \bon\b \ba\b \bband\b, \bnot\b \ba\b \blibrary\b \bitem\b, \bso\b \bthe\b \bmove\b-\band\b-\bpromote\b \brules\b \bdo\b \bnot\b \bapply\b \band\b \bit\b \bneeds\b \bno\b \bItemUse\b. \bPrivate\b \bnotes\b \bare\b \bthe\b \bauthor\b'\bs\b \balone\b.",
+            "BaseView": "\bvwSpaceNotes\b", 
+            "Fields": ["\bID\b","\bSpaceID\b","\bTitle\b","\bBody\b","\bBand\b","\bVisibility\b","\bAuthorUserID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpace\b","\bAuthorUser\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
+            "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
+            "BaseView": "\bvwSpaceRoleTypes\b", 
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bLevel\b","\bMaxGrantableLevel\b","\bCanInvite\b","\bCanPromoteBand\b","\bCanSeeTeamBand\b","\bIsOwnerRole\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCanContribute\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bType\b \bStatus\b",
+            "Description": "\bA\b \bstatus\b \ba\b \bspace\b \btype\b \boffers\b \bits\b \bspaces\b: \bActive\b, \bPaused\b, \bClosed\b \band\b \bArchived\b \bship\b \bfor\b \bevery\b \btype\b; \ba\b \btype\b \bmay\b \badd\b \bits\b \bown\b. \bA\b \bspace\b \bis\b \bin\b \bexactly\b \bone\b \bof\b \bits\b \btype\b'\bs\b \bstatuses\b (\bSpace\b.\bStatusID\b) \band\b \bmay\b \bonly\b \bchoose\b \bamong\b \bthem\b. \bThe\b \battributes\b \bsay\b \bwhat\b \ba\b \bspace\b \bin\b \bthe\b \bstatus\b \ballows\b; \bthe\b \btype\b'\bs\b \bdriver\b \bmay\b \bstill\b \brefuse\b \ba\b \bchange\b.",
+            "BaseView": "\bvwSpaceTypeStatus\b", 
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bCode\b","\bName\b","\bSequence\b","\bIsDefault\b","\bReadOnly\b","\bVisible\b","\bAgentRetrieval\b","\bCanChangeAfter\b","\bNotifyMembersOnEnter\b","\bIsTerminal\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSpaceType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
+            "Description": "\bKind\b \bof\b \bspace\b: \bvocabulary\b, \bwhich\b \bpanels\b \bare\b \bon\b, \bretention\b \band\b \bagent\b \bdefaults\b, \band\b \bhow\b \boutsiders\b \bjoin\b. \bBehavior\b \blives\b \bin\b \bthese\b \bcolumns\b, \bnot\b \bin\b \bcode\b \bbranched\b \bon\b \bthe\b \bname\b.",
+            "BaseView": "\bvwSpaceTypes\b", 
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bVocabulary\b","\bDiscoverability\b","\bJoinMode\b","\bMessagingPanel\b","\bLibraryPanel\b","\bWorkPanel\b","\bDefaultAgentRetrieval\b","\bDefaultBand\b","\bInviteApproval\b","\bMemberCap\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bDefaultAllowParentAssignees\b","\bIconClass\b","\bColor\b","\bServerDriverClass\b","\bUIDriverClass\b","\bSpaceExtensionEntity\b","\bConfiguration\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+            "Description": "\bThe\b \bcontainer\b. \bPermission\b \bboundary\b \band\b \bagent\b \bretrieval\b \bboundary\b, \bas\b \ba\b \btree\b: \bone\b \broot\b \bper\b \brelationship\b, \bsub\b-\bspaces\b \bfor\b \bthe\b \bwork\b \binside\b \bit\b.",
+            "BaseView": "\bvwSpaces\b", 
+            "Fields": ["\bID\b","\bSpaceTypeID\b","\bParentID\b","\bName\b","\bDescription\b","\bOwnerID\b","\bInheritsMembership\b","\bAgentRetrieval\b","\bStartedAt\b","\bClosedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAllowParentAssignees\b","\bPlannedCloseAt\b","\bIconClass\b","\bColor\b","\bBackgroundImageURL\b","\bConfiguration\b","\bStatusID\b","\bSpaceType\b","\bParent\b","\bOwner\b","\bStatus\b"]
+        }
+        ]
+    },{
+        "schemaName": "\b__mj_BizAppsCommon\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivities\b",
+            "Description": "\bOne\b \binteraction\b \bthat\b \bhappened\b \bbetween\b \bpeople\b, \babout\b \brecords\b. \bTimeline\b \bcard\b — \bnot\b \ba\b \bblob\b \bstore\b, \bnot\b \ba\b \btask\b, \bnot\b \bfield\b-\blevel\b \baudit\b. \bDuration\b \bis\b \bderived\b \bfrom\b \bStartedAt\b/\bEndedAt\b.",
+            "BaseView": "\bvwActivities\b", 
+            "Fields": ["\bID\b","\bActivityTypeID\b","\bStartedAt\b","\bEndedAt\b","\bTitle\b","\bDescription\b","\bDirection\b","\bStatus\b","\bOutcome\b","\bVisibility\b","\bSource\b","\bSourceSystem\b","\bExternalID\b","\bExternalThreadID\b","\bParentActivityID\b","\bLoggedByUserID\b","\bLocation\b","\bAddressID\b","\bActivitySyncConnectionID\b","\bDetails\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bSentimentScore\b","\bActivityType\b","\bParentActivity\b","\bLoggedByUser\b","\bAddress\b","\bActivitySyncConnection\b","\b__mj_Latitude\b","\b__mj_Longitude\b","\bRootParentActivityID\b","\bParentActivityIDDepth\b","\bParentActivityIDPath\b","\bParentActivityIDIsLeaf\b","\bParentActivityIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bFiles\b",
+            "Description": "\bJoin\b \bfrom\b \ban\b \bActivity\b \bto\b \ban\b \bMJ\b \bFile\b. \bKind\b \bBody\b \bis\b \bthe\b \bfull\b \bMIME\b/\bHTML\b (\bat\b \bmost\b \bone\b \bper\b \bactivity\b); \bAttachment\b \band\b \bIcs\b \bare\b \bextras\b. \bDeleting\b \bthe\b \bactivity\b \bdrops\b \bthe\b \bjoin\b, \bnot\b \bthe\b \bFile\b.",
+            "BaseView": "\bvwActivityFiles\b", 
+            "Fields": ["\bID\b","\bActivityID\b","\bFileID\b","\bKind\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivity\b","\bFile\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bLinks\b",
+            "Description": "\bAttaches\b \ban\b \bActivity\b \bto\b \ba\b \bresolved\b \bMJ\b \brecord\b (\bEntityID\b + \bRecordID\b) \bor\b \ban\b \bunresolved\b \bidentity\b (\bemail\b/\bphone\b/\bexternal\b \buser\b) \bthe\b \bmatcher\b \bhas\b \bnot\b \bstamped\b \byet\b. \bRole\b \bsays\b \bwhether\b \bthe\b \blink\b \bis\b \bRegarding\b, \ba\b \bparticipant\b, \bor\b \ban\b \bemail\b/\bmeeting\b \bmailbox\b \brole\b.",
+            "BaseView": "\bvwActivityLinks\b", 
+            "Fields": ["\bID\b","\bActivityID\b","\bRole\b","\bEntityID\b","\bRecordID\b","\bIdentityKind\b","\bIdentityValue\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivity\b","\bEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bConnection\b \bRule\b \bSets\b",
+            "Description": "\bBinds\b \ba\b \brule\b \bset\b \bto\b \ba\b \bconnection\b, \bordered\b. \bMany\b-\bto\b-\bmany\b \bso\b \ba\b \bmailbox\b \bcomposes\b \ban\b \borg\b-\bwide\b \bbaseline\b, \ba\b \bteam\b \boverlay\b, \band\b \banything\b \bspecific\b \bto\b \bitself\b — \brather\b \bthan\b \bowning\b \bone\b \bprivate\b \bcopy\b \bof\b \beverything\b.",
+            "BaseView": "\bvwActivitySyncConnectionRuleSets\b", 
+            "Fields": ["\bID\b","\bActivitySyncConnectionID\b","\bActivitySyncRuleSetID\b","\bSequence\b","\bIsEnabled\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncConnection\b","\bActivitySyncRuleSet\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bConnections\b",
+            "Description": "\bA\b \bmailbox\b, \bcalendar\b, \bor\b \bother\b \bprovider\b \bconnection\b \bthat\b \bwrites\b \bActivities\b. \bCredentialsRef\b \bis\b \ban\b \bMJ\b \bCredentials\b \bengine\b \bkey\b — \bnever\b \ba\b \bsecret\b \bat\b \brest\b.",
+            "BaseView": "\bvwActivitySyncConnections\b", 
+            "Fields": ["\bID\b","\bName\b","\bProvider\b","\bStatus\b","\bDirection\b","\bOwnerUserID\b","\bCredentialsRef\b","\bMailbox\b","\bLastSyncAt\b","\bLastError\b","\bSettings\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncProviderTypeID\b","\bStartAt\b","\bEndAt\b","\bSkippedContentPolicy\b","\bEncryptionKeyID\b","\bStorageProviderID\b","\bMaxAttachmentBytes\b","\bOwnerUser\b","\bActivitySyncProviderType\b","\bEncryptionKey\b","\bStorageProvider\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bExclusions\b",
+            "Description": "\bNever\b-\bingest\b \blist\b, \bby\b \bidentity\b: \ban\b \bemail\b \baddress\b, \ba\b \bphone\b \bnumber\b, \ba\b \bsocial\b \bhandle\b, \bor\b \ba\b \bwhole\b \bdomain\b. \bRows\b \brather\b \bthan\b \ba\b \bdelimited\b \bstring\b \bbecause\b \ban\b \bexclusion\b \bthat\b \bcannot\b \bbe\b \bqueried\b \bcannot\b \bbe\b \baudited\b, \band\b \bthis\b \bis\b \bprecisely\b \bwhat\b \ba\b \blegal\b \bhold\b, \ban\b \bHR\b \bmatter\b \bor\b \ban\b \bopt\b-\bout\b \bhas\b \bto\b \bbe\b \bable\b \bto\b \bprove\b. \bScoped\b \bto\b \ba\b \brule\b \bset\b, \bor\b \bglobal\b \bwhen\b \bActivitySyncRuleSetID\b \bis\b \bnull\b.",
+            "BaseView": "\bvwActivitySyncExclusions\b", 
+            "Fields": ["\bID\b","\bActivitySyncRuleSetID\b","\bIdentityKind\b","\bIdentityValue\b","\bPersonID\b","\bReason\b","\bEffectiveFrom\b","\bEffectiveTo\b","\bIsEnabled\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncRuleSet\b","\bPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bExtensions\b",
+            "Description": "\bRegistration\b \bof\b \ban\b \bin\b-\bprocess\b \benrichment\b \bplugin\b \bthat\b \bruns\b \binside\b \bthe\b \bActivity\b \bwrite\b \btransaction\b. \bCommon\b \bships\b \bthis\b \btable\b; \beach\b \bconsumer\b \bapp\b \bships\b \bits\b \bown\b \brows\b, \bso\b \ba\b \bdownstream\b \bapp\b \badds\b \blinks\b (\ba\b \bdeal\b, \ba\b \bcampaign\b) \bwithout\b \bCommon\b \bknowing\b \bit\b \bexists\b. \bExtensions\b \bENRICH\b — \bthey\b \bnever\b \bveto\b \ban\b \bactivity\b, \bbecause\b \bqualification\b \bhas\b \balready\b \brun\b \band\b \bcapture\b \bmust\b \bnot\b \bdepend\b \bon\b \bwhich\b \bapps\b \bare\b \binstalled\b.",
+            "BaseView": "\bvwActivitySyncExtensions\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bDriverClass\b","\bActivitySyncConnectionID\b","\bActivitySyncProviderTypeID\b","\bSequence\b","\bFailurePolicy\b","\bTimeoutMS\b","\bIsEnabled\b","\bLastRunAt\b","\bLastError\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncConnection\b","\bActivitySyncProviderType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bProvider\b \bTypes\b",
+            "Description": "\bA\b \bkind\b \bof\b \bactivity\b \bsource\b (\bMicrosoft365\b, \bGmail\b, \bTwilio\b \bSMS\b, \bLinkedIn\b, …). \bProvider\b \bidentity\b \bis\b \bDATA\b, \bnot\b \ba\b \bCHECK\b \bconstraint\b, \bso\b \ba\b \bnew\b \bsource\b \bis\b \ba\b \bnew\b \bplugin\b \bpackage\b \bplus\b \ba\b \bmetadata\b \brow\b — \bnever\b \ba\b \bmigration\b \bto\b \bCommon\b. \bAlso\b \bcarries\b \bthe\b \bDEFAULTS\b \ban\b \boperator\b \bshould\b \bset\b \bonce\b \bper\b \bprovider\b \brather\b \bthan\b \bper\b \bmailbox\b: \bstorage\b, \bencryption\b \bkey\b, \battachment\b \bcap\b, \band\b \bwhat\b \ban\b \bundecided\b \bqualification\b \bverdict\b \bmeans\b.",
+            "BaseView": "\bvwActivitySyncProviderTypes\b", 
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bDriverClass\b","\bIconClass\b","\bSupportedKinds\b","\bDefaultQualificationPolicy\b","\bDefaultSkippedContentPolicy\b","\bDefaultEncryptionKeyID\b","\bDefaultStorageProviderID\b","\bDefaultMaxAttachmentBytes\b","\bSequence\b","\bIsSystem\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCalendarDriverClass\b","\bDefaultEncryptionKey\b","\bDefaultStorageProvider\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bRule\b \bSets\b",
+            "Description": "\bA\b \bNAMED\b, \bREUSABLE\b \bset\b \bof\b \brules\b \bbound\b \bto\b \bmany\b \bconnections\b. \bRules\b \bused\b \bto\b \bhang\b \boff\b \ba\b \bsingle\b \bconnection\b, \bso\b \ban\b \borg\b-\bwide\b \bprohibition\b \bhad\b \bto\b \bbe\b \bretyped\b \bfor\b \bevery\b \bmailbox\b \band\b \ba\b \bnew\b \bmailbox\b \bstarted\b \bwith\b \bnone\b — \bgovernance\b \bby\b \bcopy\b-\bpaste\b. \bA\b \brule\b \bset\b \bis\b \bauthored\b \bonce\b \band\b \bbound\b \bwherever\b \bit\b \bapplies\b.",
+            "BaseView": "\bvwActivitySyncRuleSets\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bActivitySyncProviderTypeID\b","\bInternalDomains\b","\bSequence\b","\bIsEnabled\b","\bIsSystem\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncProviderType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bRules\b",
+            "Description": "\bInclude\b/\bexclude\b \brule\b \bfor\b \ban\b \bActivitySyncConnection\b: \btype\b, \bdirection\b, \bdate\b \bwindow\b, \battachments\b, \bplus\b \ba\b \bJSON\b \bFilter\b (\bfolders\b, \bdomains\b, \bparticipant\b-\bmust\b-\bmatch\b-\bContactMethod\b).",
+            "BaseView": "\bvwActivitySyncRules\b", 
+            "Fields": ["\bID\b","\bActivitySyncConnectionID\b","\bName\b","\bIsEnabled\b","\bSequence\b","\bAction\b","\bActivityTypeID\b","\bDirection\b","\bDateFrom\b","\bDateTo\b","\bIncludeAttachments\b","\bFilter\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncRuleSetID\b","\bParticipantScope\b","\bMaxAttachmentBytes\b","\bActivitySyncConnection\b","\bActivityType\b","\bActivitySyncRuleSet\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bRun\b \bDetails\b",
+            "Description": "\bThe\b \bdecision\b \bmade\b \babout\b \bONE\b \bmessage\b, \bwritten\b \bfor\b \bevery\b \bitem\b \bconsidered\b \bINCLUDING\b \bevery\b \bskip\b — \bwhich\b \bis\b \bwhat\b \bmakes\b \"\bwhy\b \bdid\b \bmy\b \bemail\b \bnot\b \bappear\b\" \banswerable\b. \bExternalID\b \band\b \bthe\b \bdecision\b \bare\b \balways\b \bsafe\b \bto\b \bkeep\b: \ban\b \bopaque\b \bprovider\b \bid\b \band\b \bthe\b \bname\b \bof\b \ba\b \brule\b, \bnot\b \bcontent\b. \bCapturedContent\b \bis\b \bdifferent\b \bin\b \bkind\b \band\b \bis\b \bgoverned\b \bby\b \bthe\b \beffective\b \bSkippedContentPolicy\b. \bGive\b \bthis\b \bentity\b \bpermissions\b \bDISTINCT\b \bfrom\b \bActivity\b: \bit\b \bcan\b \bhold\b \bfragments\b \bof\b \bmessages\b \bthat\b \bwere\b \bdeliberately\b \bnot\b \bingested\b.",
+            "BaseView": "\bvwActivitySyncRunDetails\b", 
+            "Fields": ["\bID\b","\bActivitySyncRunID\b","\bExternalID\b","\bExternalThreadID\b","\bOccurredAt\b","\bDecision\b","\bDecidedByStage\b","\bActivitySyncRuleID\b","\bActivitySyncExclusionID\b","\bReason\b","\bConfidence\b","\bAIPromptRunID\b","\bActivityID\b","\bCapturedContent\b","\bEncryptionKeyID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncRule\b","\bActivitySyncExclusion\b","\bActivity\b","\bEncryptionKey\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bSync\b \bRuns\b",
+            "Description": "\bOne\b \bsync\b \bpass\b \bover\b \bone\b \bconnection\b: \bwhat\b \bit\b \bfetched\b, \bwhat\b \bit\b \bdecided\b, \band\b \bwhether\b \bit\b \bearned\b \bthe\b \bright\b \bto\b \bmove\b \bthe\b \bwatermark\b. \bA\b \bdry\b \brun\b \bis\b \ba\b \breal\b \brow\b \bwith\b \bIsDryRun\b \bset\b — \bit\b \bevaluates\b \band\b \breports\b \bwithout\b \bwriting\b \ban\b \bActivity\b \bor\b \badvancing\b \bthe\b \bconnection\b.",
+            "BaseView": "\bvwActivitySyncRuns\b", 
+            "Fields": ["\bID\b","\bActivitySyncConnectionID\b","\bStartedAt\b","\bEndedAt\b","\bStatus\b","\bTriggerType\b","\bIsDryRun\b","\bFetched\b","\bIncluded\b","\bExcluded\b","\bDuplicates\b","\bFailed\b","\bExtensionErrors\b","\bWatermarkBefore\b","\bWatermarkAfter\b","\bErrorMessage\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bActivitySyncConnection\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bActivity\b \bTypes\b",
+            "Description": "\bLookup\b \bof\b \binteraction\b \bchannels\b (\bEmail\b, \bCall\b, \bMeeting\b, \bNote\b, \bSMS\b, \bChat\b). \bHierarchy\b \bis\b \bpicker\b-\bonly\b; \bdirection\b \blives\b \bon\b \bActivity\b. \bCode\b \bis\b \bthe\b \bstable\b \bkey\b — \bsync\b \band\b \bcode\b \btarget\b \bCode\b, \bnever\b \bName\b.",
+            "BaseView": "\bvwActivityTypes\b", 
+            "Fields": ["\bID\b","\bCode\b","\bName\b","\bDescription\b","\bParentID\b","\bIconClass\b","\bColor\b","\bSequence\b","\bIsSystem\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bParent\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bAddress\b \bLinks\b",
+            "Description": "\bPolymorphic\b \blink\b \btable\b \bconnecting\b \bAddress\b \brecords\b \bto\b \bany\b \bentity\b \brecord\b \bin\b \bthe\b \bsystem\b \bvia\b \bEntityID\b \band\b \bRecordID\b",
+            "BaseView": "\bvwAddressLinks\b", 
+            "Fields": ["\bID\b","\bAddressID\b","\bEntityID\b","\bRecordID\b","\bAddressTypeID\b","\bIsPrimary\b","\bRank\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bAddress\b","\bEntity\b","\bAddressType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bAddress\b \bTypes\b",
+            "Description": "\bCategories\b \bof\b \baddresses\b \bsuch\b \bas\b \bHome\b, \bWork\b, \bMailing\b, \bBilling\b",
+            "BaseView": "\bvwAddressTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bIconClass\b","\bDefaultRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bAddresses\b",
+            "Description": "\bStandalone\b \bphysical\b \baddress\b \brecords\b \blinked\b \bto\b \bentities\b \bvia\b \bAddressLink\b \bfor\b \bsharing\b \bacross\b \bpeople\b \band\b \borganizations\b",
+            "BaseView": "\bvwAddresses\b", 
+            "Fields": ["\bID\b","\bLine1\b","\bLine2\b","\bLine3\b","\bCity\b","\bStateProvince\b","\bPostalCode\b","\bCountry\b","\bLatitude\b","\bLongitude\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\b__mj_Latitude\b","\b__mj_Longitude\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bContact\b \bMethods\b",
+            "Description": "\bAdditional\b \bcontact\b \bmethods\b \bfor\b \bpeople\b \band\b \borganizations\b \bbeyond\b \bthe\b \bprimary\b \bemail\b \band\b \bphone\b \bfields\b",
+            "BaseView": "\bvwContactMethods\b", 
+            "Fields": ["\bID\b","\bPersonID\b","\bOrganizationID\b","\bContactTypeID\b","\bValue\b","\bLabel\b","\bIsPrimary\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bPerson\b","\bOrganization\b","\bContactType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bContact\b \bTypes\b",
+            "Description": "\bCategories\b \bof\b \bcontact\b \bmethods\b \bsuch\b \bas\b \bPhone\b, \bMobile\b, \bEmail\b, \bLinkedIn\b, \bWebsite\b",
+            "BaseView": "\bvwContactTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bIconClass\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bJob\b \bFunctions\b",
+            "Description": "\bBusiness\b \bjob\b \bfunctions\b (\bEngineering\b, \bMarketing\b, \bSales\b, \betc\b.) \bfor\b \bcategorizing\b \broles\b \band\b \bcareer\b \bpaths\b.",
+            "BaseView": "\bvwJobFunctions\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bSequence\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bOrganization\b \bTypes\b",
+            "Description": "\bCategories\b \bof\b \borganizations\b \bsuch\b \bas\b \bCompany\b, \bNon\b-\bProfit\b, \bAssociation\b, \bGovernment\b",
+            "BaseView": "\bvwOrganizationTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bIconClass\b","\bDisplayRank\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bOrganizations\b",
+            "Description": "\bCompanies\b, \bassociations\b, \bgovernment\b \bbodies\b, \band\b \bother\b \borganizations\b \bwith\b \bhierarchy\b \bsupport\b",
+            "BaseView": "\bvwOrganizations\b", 
+            "Fields": ["\bID\b","\bName\b","\bLegalName\b","\bOrganizationTypeID\b","\bParentID\b","\bWebsite\b","\bLogoURL\b","\bDescription\b","\bEmail\b","\bPhone\b","\bFoundedDate\b","\bTaxID\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bOrganizationType\b","\bParent\b","\b__mj_Latitude\b","\b__mj_Longitude\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b","\bPrimaryAddressLine1\b","\bPrimaryAddressLine2\b","\bPrimaryAddressCity\b","\bPrimaryAddressState\b","\bPrimaryAddressPostalCode\b","\bPrimaryAddressCountry\b","\bPrimaryAddressLatitude\b","\bPrimaryAddressLongitude\b","\bPrimaryAddressType\b","\bPrimaryEmail\b","\bPrimaryPhone\b","\bActivePersonCount\b","\bChildOrgCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bPeople\b",
+            "Description": "\bIndividual\b \bpeople\b, \boptionally\b \blinked\b \bto\b \bMJ\b \bsystem\b \buser\b \baccounts\b",
+            "BaseView": "\bvwPeople\b", 
+            "Fields": ["\bID\b","\bFirstName\b","\bLastName\b","\bMiddleName\b","\bPrefix\b","\bSuffix\b","\bPreferredName\b","\bTitle\b","\bEmail\b","\bPhone\b","\bDateOfBirth\b","\bGender\b","\bPhotoURL\b","\bBio\b","\bLinkedUserID\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bDisplayName\b","\bSeniorityLevelID\b","\bLinkedUser\b","\b__mj_Latitude\b","\b__mj_Longitude\b","\bSeniorityLevel\b","\bPrimaryAddressLine1\b","\bPrimaryAddressLine2\b","\bPrimaryAddressCity\b","\bPrimaryAddressState\b","\bPrimaryAddressPostalCode\b","\bPrimaryAddressCountry\b","\bPrimaryAddressLatitude\b","\bPrimaryAddressLongitude\b","\bPrimaryAddressType\b","\bPrimaryEmail\b","\bPrimaryPhone\b","\bCurrentOrganizationID\b","\bCurrentOrganizationName\b","\bCurrentJobTitle\b","\bPrimaryJobFunctionID\b","\bPrimaryJobFunction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bPerson\b \bJob\b \bFunctions\b",
+            "Description": "\b1\b:\bM\b \bassignment\b \bof\b \bjob\b \bfunctions\b \bto\b \ba\b \bperson\b, \bsupporting\b \bplural\b \bfunctions\b \band\b \branking\b \border\b.",
+            "BaseView": "\bvwPersonJobFunctions\b", 
+            "Fields": ["\bID\b","\bPersonID\b","\bJobFunctionID\b","\bSequence\b","\bSource\b","\bConfidence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bPerson\b","\bJobFunction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bRelationship\b \bTypes\b",
+            "Description": "\bDefines\b \btypes\b \bof\b \brelationships\b \bbetween\b \bpeople\b \band\b \borganizations\b \bwith\b \bdirectionality\b \band\b \blabeling\b",
+            "BaseView": "\bvwRelationshipTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bCategory\b","\bIsDirectional\b","\bForwardLabel\b","\bReverseLabel\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bRelationships\b",
+            "Description": "\bTyped\b, \bdirectional\b \blinks\b \bbetween\b \bpeople\b \band\b \borganizations\b \bsupporting\b \bPerson\b-\bto\b-\bPerson\b, \bPerson\b-\bto\b-\bOrganization\b, \band\b \bOrganization\b-\bto\b-\bOrganization\b \brelationships\b",
+            "BaseView": "\bvwRelationships\b", 
+            "Fields": ["\bID\b","\bRelationshipTypeID\b","\bFromPersonID\b","\bFromOrganizationID\b","\bToPersonID\b","\bToOrganizationID\b","\bTitle\b","\bStartDate\b","\bEndDate\b","\bStatus\b","\bNotes\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bJobFunctionID\b","\bSeniorityLevelID\b","\bRelationshipType\b","\bFromPerson\b","\bFromOrganization\b","\bToPerson\b","\bToOrganization\b","\bJobFunction\b","\bSeniorityLevel\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Common\b: \bSeniority\b \bLevels\b",
+            "Description": "\bCareer\b \bseniority\b \blevels\b \bcarrying\b \brank\b \border\b (\bIC\b, \bManager\b, \bDirector\b, \bVP\b, \bC\b-\bLevel\b) \bfor\b \bskill\b \band\b \bscope\b \bclassification\b.",
+            "BaseView": "\bvwSeniorityLevels\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bSequence\b","\bStatus\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        }
+        ]
+    },{
+        "schemaName": "\b__mj_BizAppsTasks\b", 
+        "entities": [
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bActivities\b",
+            "Description": "",
+            "BaseView": "\bvwTaskActivities\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bPersonID\b","\bActivityType\b","\bPreviousValue\b","\bNewValue\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bAssignments\b",
+            "Description": "",
+            "BaseView": "\bvwTaskAssignments\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bAssigneeEntityID\b","\bAssigneeRecordID\b","\bRoleID\b","\bRoleNotes\b","\bStatus\b","\bAssignedByPersonID\b","\bAssignedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bAssigneeEntity\b","\bRole\b","\bAssignedByPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bCategories\b",
+            "Description": "",
+            "BaseView": "\bvwTaskCategories\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bParentID\b","\bColorCode\b","\bSequence\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bParent\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bComments\b",
+            "Description": "",
+            "BaseView": "\bvwTaskComments\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bParentID\b","\bPersonID\b","\bContent\b","\bIsEdited\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bPerson\b","\bRootParentID\b","\bParentIDDepth\b","\bParentIDPath\b","\bParentIDIsLeaf\b","\bParentIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDecision\b \bOutcomes\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDecisionOutcomes\b", 
+            "Fields": ["\bID\b","\bName\b","\bCode\b","\bDescription\b","\bSequence\b","\bIsTerminal\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDecisions\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDecisions\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bOutcomeID\b","\bDecidedByPersonID\b","\bDecidedAt\b","\bDecisionNotes\b","\bTaskAssignmentID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bOutcome\b","\bDecidedByPerson\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bDependencies\b",
+            "Description": "",
+            "BaseView": "\bvwTaskDependencies\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bDependsOnTaskID\b","\bDependencyType\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bDependsOnTask\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bLinks\b",
+            "Description": "",
+            "BaseView": "\bvwTaskLinks\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bEntityID\b","\bRecordID\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bEntity\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bNotification\b \bConfigs\b",
+            "Description": "",
+            "BaseView": "\bvwTaskNotificationConfigs\b", 
+            "Fields": ["\bID\b","\bTaskTypeID\b","\bOverdueNotificationsEnabled\b","\bOverdueGracePeriodHours\b","\bOverdueRepeatIntervalHours\b","\bNotifyAssignees\b","\bNotifyCreator\b","\bOverdueActionID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskType\b","\bOverdueAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bNotification\b \bLogs\b",
+            "Description": "",
+            "BaseView": "\bvwTaskNotificationLogs\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bNotificationType\b","\bNotifiedUserID\b","\bNotifiedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bNotifiedUser\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bRoles\b",
+            "Description": "",
+            "BaseView": "\bvwTaskRoles\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTag\b \bLinks\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTagLinks\b", 
+            "Fields": ["\bID\b","\bTaskID\b","\bTagID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTask\b","\bTag\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTags\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTags\b", 
+            "Fields": ["\bID\b","\bName\b","\bColorCode\b","\bDescription\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItem\b \bDependencies\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItemDependencies\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bDependsOnItemID\b","\bDependencyType\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bItem\b","\bDependsOnItem\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItem\b \bRoles\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItemRoles\b", 
+            "Fields": ["\bID\b","\bItemID\b","\bRoleID\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bItem\b","\bRole\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplate\b \bItems\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplateItems\b", 
+            "Fields": ["\bID\b","\bTemplateID\b","\bName\b","\bDescription\b","\bParentItemID\b","\bPriority\b","\bDaysFromStart\b","\bHoursEstimated\b","\bSequence\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTemplate\b","\bParentItem\b","\bRootParentItemID\b","\bParentItemIDDepth\b","\bParentItemIDPath\b","\bParentItemIDIsLeaf\b","\bParentItemIDChildCount\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTemplates\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTemplates\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bCategoryID\b","\bTypeID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bCategory\b","\bType\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bType\b \bStatus\b",
+            "Description": "\bDynamic\b \bdomain\b \bstatuses\b \band\b \blifecycle\b \bstages\b \bconfigured\b \bper\b \bTask\b \bType\b.",
+            "BaseView": "\bvwTaskTypeStatus\b", 
+            "Fields": ["\bID\b","\bTaskTypeID\b","\bName\b","\bCode\b","\bDescription\b","\bMacroStatus\b","\bSequence\b","\bIsDefault\b","\bIsTerminal\b","\bColor\b","\bIconClass\b","\bOnEnterActionID\b","\bOnExitActionID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskType\b","\bOnEnterAction\b","\bOnExitAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTask\b \bTypes\b",
+            "Description": "",
+            "BaseView": "\bvwTaskTypes\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bIconClass\b","\bDefaultPriority\b","\bOnAssignActionID\b","\bOnCompleteActionID\b","\bOnOverdueActionID\b","\bOnPercentChangeActionID\b","\bIsActive\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bOnRejectActionID\b","\bOnCancelActionID\b","\bCode\b","\bOnCreateActionID\b","\bOnStatusChangeActionID\b","\bOnAssignAction\b","\bOnCompleteAction\b","\bOnOverdueAction\b","\bOnPercentChangeAction\b","\bOnRejectAction\b","\bOnCancelAction\b","\bOnCreateAction\b","\bOnStatusChangeAction\b"]
+        },
+        { 
+            "Name": "\bMJ_BizApps_Tasks\b: \bTasks\b",
+            "Description": "",
+            "BaseView": "\bvwTasks\b", 
+            "Fields": ["\bID\b","\bName\b","\bDescription\b","\bTypeID\b","\bCategoryID\b","\bParentID\b","\bStatus\b","\bPriority\b","\bStartedAt\b","\bDueAt\b","\bCompletedAt\b","\bHoursEstimated\b","\bHoursActual\b","\bPercentComplete\b","\bSequence\b","\bBlockedReason\b","\bCompletionNotes\b","\bCreatedByPersonID\b","\bOverdueNotifiedAt\b","\b__mj_CreatedAt\b","\b__mj_UpdatedAt\b","\bTaskTypeStatusID\b","\bPredictedSLABreachProbability\b","\bPredictedSLARiskBand\b","\bPredictedSLAScoredAt\b","\bType\b","\bCategory\b","\bParent\b","\bCreatedByPerson\b","\bTaskTypeStatus\b","\bRootParentID\b","\bIsSLABreached\b","\bLeadDays\b","\bAssignmentsCount\b","\bCommentsCount\b"]
+        }
+        ]
+    }]

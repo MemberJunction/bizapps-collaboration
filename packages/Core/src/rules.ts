@@ -9,8 +9,9 @@
 
 export type Band = 'Team' | 'Shared';
 export type MemberStatus = 'Invited' | 'Active' | 'Removed';
+import { effectiveStatusReach, type SpaceStatusReach } from './statuses.ts';
+
 export type AgentRetrieval = 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
-export type Retention = 'Month' | 'Year' | 'Indefinite';
 export type InviteApproval = 'Approve' | 'AutoApprove';
 
 export interface RoleFlags {
@@ -39,11 +40,10 @@ export interface SpaceNode {
     ownerId: string;
     agentRetrieval: AgentRetrieval;
     allowParentAssignees?: boolean;
+    /** When the space entered a terminal status; null while it has not. */
     closedAt?: string | Date | null;
-    postCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-    postCloseAccessDays?: number | null;
-    spaceTypePostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None' | null;
-    spaceTypePostCloseAccessDays?: number | null;
+    /** The space's effective status (stage 1): the attributes its status row allows, or the ones the server derived for a space that names none. Absent means derived from `closedAt` alone, as `effectiveStatusReach` does. */
+    status?: SpaceStatusReach | null;
 }
 
 export interface InviteRefusal {
@@ -76,68 +76,24 @@ function byId(spaces: readonly SpaceNode[]): Map<string, SpaceNode> {
     return new Map(spaces.map((space) => [idKey(space.id), space]));
 }
 
-/**
- * Calculates calendar day difference in UTC between two dates, matching SQL Server DATEDIFF(day, ...).
- */
-export function utcCalendarDaysBetween(d1: Date, d2: Date): number {
-    const utc1 = Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth(), d1.getUTCDate());
-    const utc2 = Date.UTC(d2.getUTCFullYear(), d2.getUTCMonth(), d2.getUTCDate());
-    return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24));
+/** What a space's effective status allows: its status row when it names one, else what the server derives from `closedAt`. */
+export function spaceReach(space: Pick<SpaceNode, 'closedAt' | 'status'>): SpaceStatusReach {
+    return effectiveStatusReach(space.status, space.closedAt);
 }
 
-/** The fields of a space that decide its post-close access: all the check reads. */
-export type PostCloseFields = Pick<SpaceNode, 'closedAt' | 'postCloseAccess' | 'postCloseAccessDays' | 'spaceTypePostCloseAccess' | 'spaceTypePostCloseAccessDays'>;
-
-/**
- * Checks whether post-close access is permitted for a space based on its
- * PostCloseAccess mode and PostCloseAccessDays window (aligning with fnCollaborationAccess).
- */
-export function isPostCloseAccessPermitted(
-    space: PostCloseFields,
-    now: Date = new Date()
-): boolean {
-    if (!space.closedAt) {
-        return true;
-    }
-    const mode = space.postCloseAccess ?? space.spaceTypePostCloseAccess ?? 'None';
-    if (mode !== 'ReadOnly' && mode !== 'ReadOnlyWithAgent') {
-        return false;
-    }
-    const days = space.postCloseAccessDays !== undefined && space.postCloseAccessDays !== null
-        ? space.postCloseAccessDays
-        : (space.spaceTypePostCloseAccessDays ?? null);
-    if (days !== null && days !== undefined) {
-        const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
-        const diffDays = utcCalendarDaysBetween(closedDate, now);
-        if (diffDays > days) {
-            return false;
-        }
-    }
-    return true;
+/** Whether members reach the space at all: its effective status is Visible. Owners and staff read a hidden space through the row filter's own clause, not this. */
+export function spaceIsVisible(space: Pick<SpaceNode, 'closedAt' | 'status'>): boolean {
+    return spaceReach(space).Visible;
 }
 
-export function isAgentPostCloseAccessPermitted(
-    space: PostCloseFields,
-    now: Date = new Date()
-): boolean {
-    if (!space.closedAt) {
-        return true;
-    }
-    const mode = space.postCloseAccess ?? space.spaceTypePostCloseAccess ?? 'None';
-    if (mode !== 'ReadOnlyWithAgent') {
-        return false;
-    }
-    const days = space.postCloseAccessDays !== undefined && space.postCloseAccessDays !== null
-        ? space.postCloseAccessDays
-        : (space.spaceTypePostCloseAccessDays ?? null);
-    if (days !== null && days !== undefined) {
-        const closedDate = space.closedAt instanceof Date ? space.closedAt : new Date(space.closedAt);
-        const diffDays = utcCalendarDaysBetween(closedDate, now);
-        if (diffDays > days) {
-            return false;
-        }
-    }
-    return true;
+/** Whether the space takes no writes (posts, uploads, assignments, edits): its effective status is ReadOnly. */
+export function spaceIsReadOnly(space: Pick<SpaceNode, 'closedAt' | 'status'>): boolean {
+    return spaceReach(space).ReadOnly;
+}
+
+/** Whether an agent may quote the space's material: its effective status allows agent retrieval. */
+export function spaceAllowsAgentRetrieval(space: Pick<SpaceNode, 'closedAt' | 'status'>): boolean {
+    return spaceReach(space).AgentRetrieval;
 }
 
 /**
@@ -148,18 +104,18 @@ export function isAgentPostCloseAccessPermitted(
  * a parent member does not reach it. The first membership found on that walk
  * is the one whose role flags apply.
  *
- * Closed spaces:
- * - Checks isPostCloseAccessPermitted; if closed without post-close access, returns null.
- * - If closed but post-close access is permitted, strips canInvite and canContribute.
- * - If ignorePostCloseFilter is true (e.g. for space reopening), does not filter by closure.
+ * Statuses (stage 1):
+ * - A target, or an ancestor on the walk, whose effective status is not Visible reaches no one: null.
+ * - A target or an ancestor on the walk whose effective status is ReadOnly strips canInvite and canContribute from the seat.
+ * - `ignoreStatusFilter` (a status change by an owner) skips both, so an owner's seat is found on a hidden or read-only space.
  */
 export function membershipReaches(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     userId: string,
     targetId: string,
-    now: Date = new Date(),
-    ignorePostCloseFilter: boolean = false,
+    _now: Date = new Date(),
+    ignoreStatusFilter: boolean = false,
 ): MemberSnapshot | null {
     const index = byId(spaces);
     const active = memberships.filter((member) => idKey(member.userId) === idKey(userId) && member.status === ACTIVE);
@@ -167,24 +123,22 @@ export function membershipReaches(
     if (!target) {
         return null;
     }
-    if (!ignorePostCloseFilter && target.closedAt && !isPostCloseAccessPermitted(target, now)) {
-        return null;
-    }
 
     let current: SpaceNode | undefined = target;
     const seen = new Set<string>();
-    let anyClosedOnPath = !!target.closedAt;
+    let readOnlyOnPath = false;
     while (current && !seen.has(idKey(current.id))) {
         seen.add(idKey(current.id));
-        if (current.closedAt) {
-            anyClosedOnPath = true;
-            if (!ignorePostCloseFilter && !isPostCloseAccessPermitted(current, now)) {
-                return null;
-            }
+        const reach = spaceReach(current);
+        if (!ignoreStatusFilter && !reach.Visible) {
+            return null;
+        }
+        if (reach.ReadOnly) {
+            readOnlyOnPath = true;
         }
         const direct = active.find((member) => idKey(member.spaceId) === idKey(current!.id));
         if (direct) {
-            if (anyClosedOnPath && !ignorePostCloseFilter) {
+            if (readOnlyOnPath && !ignoreStatusFilter) {
                 return {
                     ...direct,
                     role: {
@@ -221,16 +175,15 @@ export interface RosterWalk {
 /**
  * Everyone who reaches `targetId`, grouped by the space they sit on.
  * Each person is listed once, under their nearest active seat. That is the
- * seat `membershipReaches` returns for a space that is open; for a closed target `membershipReaches` gives no one once its
- * post-close access has ended, while this still lists the target's own seats. The walk stops at a root, at a sealed
- * space, at a closed parent whose post-close access has ended (as `membershipReaches` stops there), or at a parent the caller
- * did not load.
+ * seat `membershipReaches` returns for a space that is open; for a hidden target `membershipReaches` gives no one, while this
+ * still lists the target's own seats. The walk stops at a root, at a sealed space, at a parent whose status hides it (as
+ * `membershipReaches` stops there; the stop is still called `closed`), or at a parent the caller did not load.
  */
 export function rosterBySeat(
     spaces: readonly SpaceNode[],
     memberships: readonly MemberSnapshot[],
     targetId: string,
-    now: Date = new Date(),
+    _now: Date = new Date(),
 ): RosterWalk {
     const index = byId(spaces);
     const groups: RosterGroup[] = [];
@@ -266,8 +219,8 @@ export function rosterBySeat(
             stop = 'unloaded-parent';
             break;
         }
-        // A closed parent that no longer lets anyone in doesn't reach this space, and neither does anything above it
-        if (parent.closedAt && !isPostCloseAccessPermitted(parent, now)) {
+        // A parent whose status hides it doesn't reach this space, and neither does anything above it
+        if (!spaceIsVisible(parent)) {
             stop = 'closed';
             break;
         }
@@ -818,7 +771,8 @@ export function promotionStamps(input: {
  * `askedFromSpaceId` is the space the question was asked in. An item is in
  * that subtree when the asked space is the item's space or an ancestor of it.
  * `ExcludedFromParentScope` drops the item when the question was asked above
- * that space. `ExcludedEntirely` drops it for every agent.
+ * that space. `ExcludedEntirely` drops it for every agent, and so does a status
+ * that allows no agent retrieval.
  */
 export function agentMayQuote(input: {
     callerCanRead: boolean;
@@ -840,7 +794,7 @@ export function agentMayQuote(input: {
     if (!itemSpace) {
         return false;
     }
-    if (itemSpace.closedAt && !isAgentPostCloseAccessPermitted(itemSpace, input.now ?? new Date())) {
+    if (!spaceAllowsAgentRetrieval(itemSpace)) {
         return false;
     }
     if (!isAncestorOrSelf(index, input.askedFromSpaceId, input.itemSpaceId)) {
@@ -878,33 +832,4 @@ function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nod
         current = current.parentId ? index.get(idKey(current.parentId)) : undefined;
     }
     return false;
-}
-
-/**
- * Calendar month or calendar year from `startedAt`, in UTC. The day is clamped
- * to the last day of the target month, so 31 January plus one month is 28
- * February (or 29 in a leap year), not a spill into March. Indefinite has no deadline.
- */
-export function retentionDeadline(startedAt: Date, retention: Retention): Date | null {
-    if (retention === 'Indefinite') {
-        return null;
-    }
-    return addUtcMonths(startedAt, retention === 'Month' ? 1 : 12);
-}
-
-function addUtcMonths(startedAt: Date, months: number): Date {
-    const monthIndex = startedAt.getUTCMonth() + months;
-    const year = startedAt.getUTCFullYear() + Math.floor(monthIndex / 12);
-    const month = ((monthIndex % 12) + 12) % 12;
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    const day = Math.min(startedAt.getUTCDate(), lastDay);
-    return new Date(Date.UTC(
-        year,
-        month,
-        day,
-        startedAt.getUTCHours(),
-        startedAt.getUTCMinutes(),
-        startedAt.getUTCSeconds(),
-        startedAt.getUTCMilliseconds(),
-    ));
 }

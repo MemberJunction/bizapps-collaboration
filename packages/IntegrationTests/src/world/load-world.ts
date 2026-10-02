@@ -19,6 +19,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SHIPPED_STATUSES } from '@mj-biz-apps/collaboration-core';
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
@@ -30,7 +31,7 @@ import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
-    mjBizAppsCollaborationSpaceAgentEntity,
+    mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceTypeStatusEntity,
     mjBizAppsCollaborationSpaceTypeEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -53,7 +54,8 @@ import { seedWorldPlan } from './seed-plan.js';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
-const SPACE_AGENTS = 'MJ_BizApps_Collaboration: Space Agents';
+const SPACE_GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
+const SPACE_TYPE_STATUSES = 'MJ_BizApps_Collaboration: Space Type Status';
 const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
@@ -217,9 +219,31 @@ export async function loadWorld(): Promise<void> {
         record.Vocabulary = type.Name;
         record.InviteApproval = type.InviteApproval as 'Approve' | 'AutoApprove';
         record.MemberCap = type.MemberCap ? Number(type.MemberCap) : null;
-        record.DefaultRetention = type.DefaultRetention as 'Month' | 'Year' | 'Indefinite';
         if (!(await record.Save())) throw new Error(`type ${type.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
         types.set(type.Key, record.ID);
+    }
+    // The world's types declare the shipped statuses (stage 1): Active, Paused, Closed, Archived, the same rows the shipped types
+    // get from metadata/space-type-statuses, so a world space closes to Closed and the checks move spaces between them.
+    await CollaborationEngine.Instance.Config(true, system, provider);
+    for (const type of typeRows) {
+        const typeId = types.get(type.Key)!;
+        for (const shipped of SHIPPED_STATUSES) {
+            if (await findId(provider, SPACE_TYPE_STATUSES, `SpaceTypeID = '${typeId}' AND Code = '${shipped.Code}'`, system)) continue;
+            const status = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceTypeStatusEntity>(SPACE_TYPE_STATUSES, system);
+            status.NewRecord();
+            status.SpaceTypeID = typeId;
+            status.Code = shipped.Code;
+            status.Name = shipped.Name;
+            status.Sequence = shipped.Sequence;
+            status.IsDefault = shipped.IsDefault;
+            status.ReadOnly = shipped.ReadOnly;
+            status.Visible = shipped.Visible;
+            status.AgentRetrieval = shipped.AgentRetrieval;
+            status.CanChangeAfter = shipped.CanChangeAfter;
+            status.NotifyMembersOnEnter = shipped.NotifyMembersOnEnter;
+            status.IsTerminal = shipped.IsTerminal;
+            if (!(await status.Save())) throw new Error(`status ${shipped.Code} of type ${type.Key}: ${status.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        }
     }
     await CollaborationEngine.Instance.Config(true, system, provider);
 
@@ -257,7 +281,6 @@ export async function loadWorld(): Promise<void> {
         record.InheritsMembership = space.InheritsMembership === '1';
         record.AgentRetrieval = space.AgentRetrieval as 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely';
         record.ClosedAt = null;
-        record.Retention = (space.Retention || null) as 'Month' | 'Year' | 'Indefinite' | null;
         record.IconClass = space.IconClass || null;
         record.Color = space.Color || null;
         record.BackgroundImageURL = space.BackgroundImageURL || null;
@@ -325,23 +348,29 @@ export async function loadWorld(): Promise<void> {
     // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
 
-    // The agents a space allows (`agents.csv`): a person can tag them in its chat. A row on a space reaches its sub-spaces. The agent is
-    // MemberJunction's own, found by name, so a database without it stops here with the name rather than loading a world nobody can ask.
+    // The agents a space allows (`agents.csv`), as Agent grants of the space (stage 1): a person can tag them in its chat. A row on a
+    // space reaches its sub-spaces. The agent is MemberJunction's own, found by name, so a database without it stops here with the
+    // name rather than loading a world nobody can ask. The grant's target entity is MJ: AI Agents; its gate stamps it.
     for (const row of agentRows) {
         const spaceId = requireMap(spaceIds, row.Space, 'space');
         const agentId = await findId(provider, AI_AGENTS, `Name = '${quote(row.Agent)}' AND Status = 'Active'`, system);
         if (!agentId) throw new Error(`agents.csv names the agent ${row.Agent}, and this database has no active agent of that name.`);
-        if (await findId(provider, SPACE_AGENTS, `SpaceID = '${spaceId}' AND AgentID = '${agentId}'`, system)) continue;
-        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceAgentEntity>(SPACE_AGENTS, system);
+        if (await findId(provider, SPACE_GRANTS, `SpaceID = '${spaceId}' AND Kind = 'Agent' AND TargetRecordID = '${agentId}'`, system)) continue;
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANTS, system);
         record.NewRecord();
         record.SpaceID = spaceId;
-        record.AgentID = agentId;
+        record.Kind = 'Agent';
+        record.TargetEntityID = provider.EntityByName(AI_AGENTS)!.ID;
+        record.TargetRecordID = agentId;
+        record.Band = 'Shared';
         record.IsDefault = row.IsDefault === '1';
+        record.Mode = 'Extend';
+        record.Sequence = 0;
         if (!(await record.Save())) throw new Error(`agent ${row.Agent} on ${row.Space}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
     }
 
     // One General conversation in Studio, Sealed child and Closed this month: the chat area draws its composer only for an open
-    // conversation (a closed space's banner shows without one, and its archived conversation is read-only). Closed this month's is made
+    // conversation (a closed space's lock shows without one, and its archived conversation is read-only). Closed this month's is made
     // before the close below, which archives it.
     await seedSpaceConversations('studio', 'ada', 'sam', true);
     await seedSpaceConversations('sealed-child', 'sam', 'ada', true);
@@ -564,12 +593,12 @@ async function assertCatalog(
         SpaceTypeID: string;
         InheritsMembership: boolean;
         AgentRetrieval: string;
-        Retention: string | null;
         ClosedAt: string | Date | null;
+        StatusID: string | null;
     }>({
         EntityName: SPACES,
         ExtraFilter: `ID IN (${spaceRows.map((row) => `'${row.ID}'`).join(',')})`,
-        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'Retention', 'ClosedAt'],
+        Fields: ['ID', 'Name', 'ParentID', 'OwnerID', 'SpaceTypeID', 'InheritsMembership', 'AgentRetrieval', 'ClosedAt', 'StatusID'],
         ResultType: 'simple',
     }, user);
     if (!spaces.Success || spaces.Results?.length !== spaceRows.length) {
@@ -586,7 +615,7 @@ async function assertCatalog(
         if (found.SpaceTypeID.toLowerCase() !== requireMap(types, row.Type, 'space type').toLowerCase()) throw new Error(`${row.Key} type does not match the catalog.`);
         if (asBool(found.InheritsMembership) !== (row.InheritsMembership === '1')) throw new Error(`${row.Key} inheritance does not match the catalog.`);
         if (String(found.AgentRetrieval).trim() !== row.AgentRetrieval) throw new Error(`${row.Key} agent retrieval is ${found.AgentRetrieval}.`);
-        if ((found.Retention?.trim() || null) !== (row.Retention || null)) throw new Error(`${row.Key} retention is ${found.Retention}.`);
+        if (row.ClosedAt && !found.StatusID) throw new Error(`${row.Key} is closed and carries no status; the close should have stamped the type's first terminal status.`);
         const age = closedAgeDays(found.ClosedAt);
         const expected = row.ClosedAt === 'recent' ? 7 : row.ClosedAt === 'past' ? 400 : null;
         if (expected === null) {
