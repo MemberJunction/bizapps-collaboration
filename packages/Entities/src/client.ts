@@ -149,6 +149,10 @@ export interface CreateSpaceGraphQLInput {
     TypeID: string;
     Name: string;
     Description?: string;
+    /** The parent, for a sub-space; absent for a top-level space. */
+    ParentID?: string;
+    /** D22: whether a sub-space's members come from its parent. Read only with a parent. */
+    InheritsMembership?: boolean;
     Details?: Record<string, unknown>;
 }
 

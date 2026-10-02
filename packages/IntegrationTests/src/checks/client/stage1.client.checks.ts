@@ -3,6 +3,7 @@
  */
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import {
+    CollaborationClient,
     mjBizAppsCollaborationSpaceAnchorEntity,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceGrantEntity,
@@ -20,9 +21,10 @@ import {
     SPACE_MEMBER_PIN_ENTITY,
     SPACE_NOTE_ENTITY,
     SPACE_ROLE_TYPE_ENTITY,
+    SPACE_TYPE_ENTITY,
     SPACE_TYPE_STATUS_ENTITY,
 } from '../../entity-names.js';
-import { FindRows, getPersonaContext } from '../../wire.js';
+import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { CHECK_SPACE_PREFIX } from '../../world/ids.js';
 import { cleanupSpace, cleanupStep, deleteWhere, registerChecks } from '../cleanup-helpers.js';
 
@@ -319,6 +321,41 @@ const checks: NamedCheck[] = [
                 Assert(harborSees.length === 0, `Harbor, who reaches no committee, does not read it over the wire (${harborSees.length})`);
             } finally {
                 await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_GRANT_ENTITY, `ID = '${grant.ID}'`, 'a stage 1 type grant'));
+            }
+        },
+    },
+    {
+        Id: 'stage1.SC8',
+        Name: 'SC8 — over the wire, CreateSpace makes a sub-space: it sits under the parent with the inheritance the creator chose (D22, sealed unless asked), its maker is seated as owner, and a kind the parent type does not allow is refused',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await getPersonaContext(ctx, 'ada');
+            const client = new CollaborationClient((await getPersonaClientContext(ctx, 'ada')).GraphQLProvider);
+            const [northwind] = await FindRows<{ SpaceTypeID: string }>(ctx, SPACE_ENTITY, `ID = '${NORTHWIND_SPACE_ID}'`, ['SpaceTypeID']);
+            const [vault] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'example-vault'", ['ID']);
+            const made: string[] = [];
+            try {
+                const sealed = await client.CreateSpace({ TypeID: northwind.SpaceTypeID, Name: `${CHECK_SPACE_PREFIX}SC8-sealed-${Date.now()}`, ParentID: NORTHWIND_SPACE_ID, InheritsMembership: false });
+                Assert(sealed.Success && !!sealed.SpaceID, `A sealed sub-space of Northwind is created over the wire: ${sealed.ErrorMessage ?? ''}`);
+                made.push(sealed.SpaceID!);
+                const open = await client.CreateSpace({ TypeID: northwind.SpaceTypeID, Name: `${CHECK_SPACE_PREFIX}SC8-open-${Date.now()}`, ParentID: NORTHWIND_SPACE_ID, InheritsMembership: true });
+                Assert(open.Success && !!open.SpaceID, `An inheriting sub-space of Northwind is created over the wire: ${open.ErrorMessage ?? ''}`);
+                made.push(open.SpaceID!);
+                const rows = await FindRows<{ ID: string; ParentID: string; InheritsMembership: boolean; OwnerID: string }>(ctx, SPACE_ENTITY, `ID IN ('${sealed.SpaceID}', '${open.SpaceID}')`, ['ID', 'ParentID', 'InheritsMembership', 'OwnerID'], undefined, { BypassCache: true });
+                const byId = new Map(rows.map((r) => [r.ID.toLowerCase(), r]));
+                const s = byId.get(sealed.SpaceID!.toLowerCase()), o = byId.get(open.SpaceID!.toLowerCase());
+                Assert(!!s && s.ParentID.toLowerCase() === NORTHWIND_SPACE_ID.toLowerCase() && s.InheritsMembership === false, `The sealed one sits under Northwind and does not inherit: ${JSON.stringify(s)}`);
+                Assert(!!o && o.ParentID.toLowerCase() === NORTHWIND_SPACE_ID.toLowerCase() && o.InheritsMembership === true, `The open one sits under Northwind and inherits: ${JSON.stringify(o)}`);
+                Assert(s!.OwnerID.toLowerCase() === ada.User.ID.toLowerCase(), 'Ada owns what she made');
+                const seats = await FindRows<{ UserID: string; Status: string }>(ctx, SPACE_MEMBER_ENTITY, `SpaceID = '${sealed.SpaceID}'`, ['UserID', 'Status'], undefined, { BypassCache: true });
+                Assert(seats.length === 1 && seats[0].UserID.toLowerCase() === ada.User.ID.toLowerCase() && seats[0].Status.trim() === 'Active', `The sealed sub-space seats its maker alone: ${JSON.stringify(seats)}`);
+                if (vault) {
+                    const refused = await client.CreateSpace({ TypeID: vault.ID, Name: `${CHECK_SPACE_PREFIX}SC8-vault-${Date.now()}`, ParentID: NORTHWIND_SPACE_ID, InheritsMembership: false });
+                    if (refused.Success && refused.SpaceID) made.push(refused.SpaceID);
+                    Assert(!refused.Success && /cannot sit under/.test(refused.ErrorMessage ?? ''), `A kind the parent type does not allow is refused, naming the rule: ${refused.Success ? 'allowed' : refused.ErrorMessage}`);
+                }
+            } finally {
+                for (const id of made.reverse()) await cleanupSpace(ctx.Provider, ctx.User, id);
             }
         },
     },

@@ -80,11 +80,16 @@ export class NewSpaceDraft {
     }
 
     /** Asks the server to make the space and seat the person as its owner, together. */
-    public async Create(creator: SpaceCreator, input: { name: string; description: string }): Promise<NewSpaceOutcome> {
+    public async Create(
+        creator: SpaceCreator,
+        input: { name: string; description: string; parentId?: string | null; inheritsMembership?: boolean },
+    ): Promise<NewSpaceOutcome> {
         const res = await creator.CreateSpace({
             TypeID: this.Space.SpaceTypeID,
             Name: input.name,
             Description: input.description || undefined,
+            // A sub-space names its parent and whether its members come from it (D22: the creator chooses; a top-level space has no parent)
+            ...(input.parentId ? { ParentID: input.parentId, InheritsMembership: input.inheritsMembership ?? false } : {}),
             ...(this.HasDetails ? { Details: this.Details() } : {}),
         });
         if (res.Success && res.SpaceID) return { status: 'created', spaceId: res.SpaceID };

@@ -27,7 +27,7 @@ import { NewSpaceDraft, SpaceDetails } from './logic/space-details.js';
 import { planDetailsView, type DetailsViewModel } from './logic/details-view.js';
 import { NewSpacePicks } from './logic/new-space-picks.js';
 import { SpaceDetailsViewComponent } from './space-details-view.component';
-import { newSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
+import { newSpaceKinds, subSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
@@ -924,6 +924,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [TeamTotalCount]="libraryTeamCount"
                                                     [RoomMessages]="overviewRoomMessages"
                                                     [SubSpaces]="overviewSubSpaces"
+                                                    [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
                                                     [CanSeeTeamSide]="canSeeTeamSide"
                                                     [AgentAvailable]="chatDefaultAgentId !== null"
@@ -936,6 +937,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (ItemSelectRequested)="onItemSelected($event)"
                                                     (ShareRequested)="onShareRequested($event)"
                                                     (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                                    (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
                                                     (AskRequested)="onOverviewAskRequested($event)"
                                                 >
                                                     <div mjcAbout style="display: contents">
@@ -1177,6 +1179,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [DetailsIncomplete]="newSpaceDetailsIncomplete"
                                 [IsSubmitting]="isCreatingSpace"
                                 [ErrorMessage]="newSpaceError"
+                                [ParentName]="newSpaceParentName"
                                 (TypeSelected)="onNewSpaceTypeSelected($event)"
                                 (CancelRequested)="closeNewSpaceDialog()"
                                 (SubmitRequested)="onSubmitNewSpace($event)"
@@ -3603,12 +3606,29 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public openNewSpaceDialog(): void {
+    /** The parent of the space the dialog is making, and its name; null and empty for a top-level space. */
+    public newSpaceParentId: string | null = null;
+    public newSpaceParentName = '';
+
+    /**
+     * Opens the dialog for a top-level space, or, with a parent, for a sub-space of it: the kinds offered are those the parent's
+     * type allows under it (Children.AllowedTypeCodes), and the creator chooses whether the sub-space inherits the parent's members (D22).
+     */
+    public openNewSpaceDialog(parentId: string | null = null): void {
         if (!this.canCreateSpace) {
             SharedService.Instance.CreateSimpleNotification('You do not have permission to create a space.', 'warning', 3000);
             return;
         }
-        this.newSpaceKinds = newSpaceKinds(CollaborationEngineBase.Instance.SpaceTypes);
+        const kinds = newSpaceKinds(CollaborationEngineBase.Instance.SpaceTypes);
+        const parent = parentId ? this.rawSpaces.find((sp) => UUIDsEqual(sp.ID, parentId)) : undefined;
+        if (parentId && !parent) {
+            SharedService.Instance.CreateSimpleNotification('The parent space could not be read.', 'warning', 3000);
+            return;
+        }
+        const parentType = parent ? CollaborationEngineBase.Instance.SpaceTypeById(parent.SpaceTypeID) : undefined;
+        this.newSpaceParentId = parent ? parent.ID : null;
+        this.newSpaceParentName = parent ? parent.Name : '';
+        this.newSpaceKinds = parent ? subSpaceKinds(kinds, parentType?.Configuration ?? null) : kinds;
         this.resetNewSpace();
         this.isNewSpaceDialogOpen = true;
         this.RefreshView();
@@ -3626,6 +3646,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public closeNewSpaceDialog(): void {
         this.isNewSpaceDialogOpen = false;
+        this.newSpaceParentId = null;
+        this.newSpaceParentName = '';
         this.resetNewSpace();
         this.RefreshView();
     }
@@ -3681,7 +3703,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             // The server writes the space, its subtype and the owner's seat in one transaction: a refusal leaves nothing behind
-            const outcome = await draft.Create(new CollaborationClient(this.graphQLExecutor), { name: payload.name, description: payload.description });
+            const outcome = await draft.Create(new CollaborationClient(this.graphQLExecutor), {
+                name: payload.name,
+                description: payload.description,
+                parentId: this.newSpaceParentId,
+                inheritsMembership: payload.inheritsMembership,
+            });
             if (outcome.status === 'refused') {
                 LogError(`Could not create the space: ${outcome.message}`);
                 this.newSpaceError = outcome.message;

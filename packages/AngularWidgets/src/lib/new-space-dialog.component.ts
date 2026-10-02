@@ -30,6 +30,8 @@ export interface NewSpaceSubmitPayload {
   typeId: string;
   name: string;
   description: string;
+  /** D22, for a sub-space: whether its members come from the parent. Absent for a top-level space. */
+  inheritsMembership?: boolean;
 }
 
 /**
@@ -46,9 +48,13 @@ export interface NewSpaceSubmitPayload {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule, CollabTypeTileComponent],
   template: `
-    <mj-dialog [Visible]="true" Title="New space" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+    <mj-dialog [Visible]="true" [Title]="ParentName ? 'New sub-space' : 'New space'" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
       <div class="space-modal">
-        <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+        @if (ParentName) {
+          <p class="d-sub">A sub-space of <strong>{{ ParentName }}</strong>. Pick the kind, then give it a name. You are seated as its owner.</p>
+        } @else {
+          <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+        }
 
         <div class="d-body">
           <div class="form-group">
@@ -108,6 +114,18 @@ export interface NewSpaceSubmitPayload {
               ></textarea>
             </div>
 
+            @if (ParentName) {
+              <div class="form-group">
+                <label class="f-check">
+                  <input type="checkbox" [(ngModel)]="inheritsMembership" [disabled]="IsSubmitting" />
+                  <span>
+                    <span class="fw6">Members of {{ ParentName }} receive access</span>
+                    <span class="cb-sub">Off, the sub-space starts with you alone and seats people on its own.</span>
+                  </span>
+                </label>
+              </div>
+            }
+
             <div class="details" [class.details-hidden]="!HasDetails">
               @if (HasDetails) {
                 <div class="details-title">{{ DetailsTitle || 'Details' }}</div>
@@ -149,6 +167,21 @@ export interface NewSpaceSubmitPayload {
     `
       :host {
         display: contents;
+      }
+
+      .f-check {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        cursor: pointer;
+      }
+      .f-check input {
+        margin-top: 3px;
+      }
+      .f-check .cb-sub {
+        display: block;
+        font-size: 12px;
+        color: var(--mj-text-secondary, #64748b);
       }
 
       .space-modal {
@@ -311,6 +344,8 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
   @Input() public DetailsIncomplete = false;
   @Input() public IsSubmitting = false;
   @Input() public ErrorMessage = '';
+  /** The parent's name when the dialog makes a sub-space; empty for a top-level space. */
+  @Input() public ParentName = '';
 
   @Output() public CancelRequested = new EventEmitter<void>();
   @Output() public TypeSelected = new EventEmitter<string>();
@@ -321,6 +356,8 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
 
   public name = '';
   public description = '';
+  /** D22: a sub-space is sealed unless its creator asks. */
+  public inheritsMembership = false;
 
   /**
    * `mj-dialog` focuses the first kind when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
@@ -364,6 +401,11 @@ export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
 
   public onSubmit(): void {
     if (!this.canSubmit) return;
-    this.SubmitRequested.emit({ typeId: this.SelectedTypeId, name: this.trimmedName, description: this.description.trim() });
+    this.SubmitRequested.emit({
+      typeId: this.SelectedTypeId,
+      name: this.trimmedName,
+      description: this.description.trim(),
+      ...(this.ParentName ? { inheritsMembership: this.inheritsMembership } : {}),
+    });
   }
 }

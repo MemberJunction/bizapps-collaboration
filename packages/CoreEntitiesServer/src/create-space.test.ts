@@ -89,6 +89,17 @@ describe('making a space and its owner seat', () => {
         assert.deepEqual([seat['SpaceID'], seat['UserID'], seat['SpaceRoleTypeID'], seat['Band'], seat['Status']], [SPACE_ID, USER.ID, OWNER_ROLE, 'Team', 'Active']);
     });
 
+    it('puts a sub-space under its parent with the inheritance the creator chose, and refuses a parent id that is not one', async () => {
+        usual();
+        const PARENT = 'C0000000-0000-4000-8000-00000000000A';
+        const { provider, space } = providerFor({ hasSubtype: false });
+        const result = await createSpace(provider, USER, { TypeID: TYPE_ID, Name: 'Discovery', ParentID: PARENT, InheritsMembership: true });
+        assert.deepEqual(result, { status: 'created', spaceId: SPACE_ID });
+        assert.deepEqual([space['ParentID'], space['InheritsMembership']], [PARENT, true]);
+        const bad = await createSpace(providerFor({ hasSubtype: false }).provider, USER, { TypeID: TYPE_ID, Name: 'Discovery', ParentID: 'not-an-id' });
+        assert.deepEqual(bad, { status: 'refused', message: 'The parent space id is not valid.' });
+    });
+
     it("sets the subtype's own columns, turning a date's text into a date", async () => {
         usual();
         const { provider, set } = providerFor({ hasSubtype: true });
