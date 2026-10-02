@@ -276,10 +276,10 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       }
 
       <ng-template #lifecycle>
-        @if (CanChangeLifecycle) {
             <div class="form-field full-width">
               <div class="cb-title">Status: {{ formData.status }}</div>
-              @if (confirmingLifecycle) {
+              @if (!CanChangeLifecycle) {
+              } @else if (confirmingLifecycle) {
                 <div class="cb-sub">{{ formData.status === 'Closed' ? 'Reopen this space? People can add and change things again.' : 'Close this space? ' + CloseConsequence }}</div>
                 <button type="button" mjButton [Variant]="formData.status === 'Closed' ? 'primary' : 'danger'" Size="sm" [disabled]="IsBusy" (click)="confirmLifecycle()">{{ formData.status === 'Closed' ? 'Reopen space' : 'Close space' }}</button>
                 <button type="button" mjButton Variant="flat" Size="sm" (click)="confirmingLifecycle = false">Cancel</button>
@@ -287,7 +287,6 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsBusy" (click)="confirmingLifecycle = true">{{ formData.status === 'Closed' ? 'Reopen…' : 'Close…' }}</button>
               }
             </div>
-        }
       </ng-template>
     </div>
   `,

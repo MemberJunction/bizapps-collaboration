@@ -1430,6 +1430,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public get settingsAccessNow(): SettingsAccess {
         return settingsAccess({
             isClosed: !!this.activeSpaceRecord?.ClosedAt,
+            isTerminal: !!CollaborationEngineBase.Instance.EffectiveStatusForSpace(this.activeSpaceRecord ?? {})?.IsTerminal,
             canConfigure: this.canConfigureCurrentSpace,
             canClose: this.canCloseCurrentSpace,
             canReopen: this.canReopenCurrentSpace,
