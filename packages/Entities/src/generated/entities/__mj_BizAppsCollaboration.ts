@@ -118,84 +118,54 @@ export const mjBizAppsCollaborationShareNoticeSchema = z.object({
 export type mjBizAppsCollaborationShareNoticeEntityType = z.infer<typeof mjBizAppsCollaborationShareNoticeSchema>;
 
 /**
- * zod schema definition for the entity MJ_BizApps_Collaboration: Space Agent Skills
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Anchors
  */
-export const mjBizAppsCollaborationSpaceAgentSkillSchema = z.object({
+export const mjBizAppsCollaborationSpaceAnchorSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()`),
-    SkillID: z.string().describe(`
-        * * Field Name: SkillID
-        * * Display Name: Skill ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)`),
-    SpaceTypeID: z.string().nullable().describe(`
-        * * Field Name: SpaceTypeID
-        * * Display Name: Space Type ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
-    SpaceID: z.string().nullable().describe(`
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
         * * Field Name: SpaceID
         * * Display Name: Space ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Skill: z.string().describe(`
-        * * Field Name: Skill
-        * * Display Name: Skill
-        * * SQL Data Type: nvarchar(255)`),
-    SpaceType: z.string().nullable().describe(`
-        * * Field Name: SpaceType
-        * * Display Name: Space Type
-        * * SQL Data Type: nvarchar(200)`),
-    Space: z.string().nullable().describe(`
-        * * Field Name: Space
-        * * Display Name: Space
-        * * SQL Data Type: nvarchar(200)`),
-});
-
-export type mjBizAppsCollaborationSpaceAgentSkillEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSkillSchema>;
-
-/**
- * zod schema definition for the entity MJ_BizApps_Collaboration: Space Agents
- */
-export const mjBizAppsCollaborationSpaceAgentSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()`),
-    AgentID: z.string().describe(`
-        * * Field Name: AgentID
-        * * Display Name: Agent ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
-    SpaceTypeID: z.string().nullable().describe(`
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space.`),
+    SpaceTypeID: z.string().describe(`
         * * Field Name: SpaceTypeID
         * * Display Name: Space Type ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
-    SpaceID: z.string().nullable().describe(`
-        * * Field Name: SpaceID
-        * * Display Name: Space ID
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+        * * Description: The space's type, denormalized so the primary-per-type index can hold; the server keeps it equal to the space's and rewrites it when the type changes.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
-    IsDefault: z.boolean().describe(`
-        * * Field Name: IsDefault
-        * * Display Name: Is Default
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the anchored record.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: The record's key, in the canonical shape SpaceItem.RecordID uses.`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(100)
+        * * Description: What the record is to the space, in the type's vocabulary: chapter, sponsor, event. Data reach (D28) names an anchor by this role.`),
+    IsPrimary: z.boolean().describe(`
+        * * Field Name: IsPrimary
+        * * Display Name: Is Primary
         * * SQL Data Type: bit
-        * * Default Value: 0`),
+        * * Default Value: 0
+        * * Description: The one anchor a space is found by. At most one per space.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order among the space's anchors.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -206,21 +176,21 @@ export const mjBizAppsCollaborationSpaceAgentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Agent: z.string().nullable().describe(`
-        * * Field Name: Agent
-        * * Display Name: Agent
-        * * SQL Data Type: nvarchar(255)`),
-    SpaceType: z.string().nullable().describe(`
-        * * Field Name: SpaceType
-        * * Display Name: Space Type
-        * * SQL Data Type: nvarchar(200)`),
-    Space: z.string().nullable().describe(`
+    Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
         * * SQL Data Type: nvarchar(200)`),
+    SpaceType: z.string().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
-export type mjBizAppsCollaborationSpaceAgentEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAgentSchema>;
+export type mjBizAppsCollaborationSpaceAnchorEntityType = z.infer<typeof mjBizAppsCollaborationSpaceAnchorSchema>;
 
 /**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Chats
@@ -297,6 +267,127 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
 export type mjBizAppsCollaborationSpaceChatEntityType = z.infer<typeof mjBizAppsCollaborationSpaceChatSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Grants
+ */
+export const mjBizAppsCollaborationSpaceGrantSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceTypeID: z.string().nullable().describe(`
+        * * Field Name: SpaceTypeID
+        * * Display Name: Space Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+        * * Description: The type the grant belongs to; null with SpaceID null is the app's own row.`),
+    SpaceID: z.string().nullable().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space the grant belongs to; never set together with SpaceTypeID.`),
+    Kind: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Component'), z.literal('Dashboard'), z.literal('KnowledgeSource'), z.literal('Query'), z.literal('View')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * Component
+    *   * Dashboard
+    *   * KnowledgeSource
+    *   * Query
+    *   * View
+        * * Description: Agent, Action, Query, View, Dashboard, Component or KnowledgeSource. TargetEntityID must be the kind's entity.`),
+    TargetEntityID: z.string().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The target's entity: MJ: AI Agents, MJ: Actions, MJ: Queries, MJ: User Views, MJ: Dashboards, MJ: Components or MJ: Content Sources, by Kind.`),
+    TargetRecordID: z.string().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: The target record's key.`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(200)
+        * * Description: What the space calls the target; null uses the target's own name.`),
+    Band: z.union([z.literal('Shared'), z.literal('Team')]).describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Shared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+        * * Description: The band that may use the grant (D31). A Team grant is not offered in a chat where anyone cannot see Team.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: For an Agent grant: the agent a chat at this level starts with. One per level.`),
+    Bindings: z.any().nullable().describe(`
+        * * Field Name: Bindings
+        * * Display Name: Bindings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings
+        * * Description: JSON (SpaceGrantBindings): the target's parameter or property names mapped to where each value comes from: an anchor by role, a column of the space, a configuration key, the user, or a literal (D27).`),
+    Settings: z.any().nullable().describe(`
+        * * Field Name: Settings
+        * * Display Name: Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings
+        * * Description: JSON (AgentGrantSettings) for an Agent grant: skills, plan mode, effort, memory writes and per-run limits, each only narrowing the agent's own definition (D31). Null for the other kinds.`),
+    Mode: z.union([z.literal('Extend'), z.literal('Remove')]).describe(`
+        * * Field Name: Mode
+        * * Display Name: Mode
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Extend
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Extend
+    *   * Remove
+        * * Description: Extend adds the target at this level; Remove takes a target granted above out of this level's list (D30).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order within the level.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SpaceType: z.string().nullable().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+    Space: z.string().nullable().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    TargetEntity: z.string().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type mjBizAppsCollaborationSpaceGrantEntityType = z.infer<typeof mjBizAppsCollaborationSpaceGrantSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Items
  */
 export const mjBizAppsCollaborationSpaceItemSchema = z.object({
@@ -356,6 +447,12 @@ export const mjBizAppsCollaborationSpaceItemSchema = z.object({
         * * Display Name: Folder
         * * SQL Data Type: nvarchar(200)
         * * Description: Folder label inside the space. Null means Unfiled. Collections cannot say everyone in the space, so the folder lives on the item.`),
+    ArtifactVersionID: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: For a document in the Library: the MJ Artifact Version (ContentMode File) wrapping the MJ: Files row the item points at, so the document has a type, a viewer and versions. NULL for items that are not files. Artifact Permissions are not used by the Library; the roster is the one sharing model.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -368,34 +465,67 @@ export const mjBizAppsCollaborationSpaceItemSchema = z.object({
         * * Field Name: PromotedByUser
         * * Display Name: Promoted By User
         * * SQL Data Type: nvarchar(100)`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type mjBizAppsCollaborationSpaceItemEntityType = z.infer<typeof mjBizAppsCollaborationSpaceItemSchema>;
 
 /**
- * zod schema definition for the entity MJ_BizApps_Collaboration: Space Knowledge Sources
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Member Pins
  */
-export const mjBizAppsCollaborationSpaceKnowledgeSourceSchema = z.object({
+export const mjBizAppsCollaborationSpaceMemberPinSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()`),
-    ContentSourceID: z.string().describe(`
-        * * Field Name: ContentSourceID
-        * * Display Name: Content Source ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
-    SpaceTypeID: z.string().nullable().describe(`
-        * * Field Name: SpaceTypeID
-        * * Display Name: Space Type ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)`),
-    SpaceID: z.string().nullable().describe(`
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
         * * Field Name: SpaceID
         * * Display Name: Space ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space the pin is in.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Whose pin it is: the caller.`),
+    Kind: z.union([z.literal('Grant'), z.literal('Record')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Grant
+    *   * Record
+        * * Description: Record: a record of the space by entity and key. Grant: one of the space's grants.`),
+    TargetEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: For a Record pin: the record's entity.`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: For a Record pin: the record's key.`),
+    GrantID: z.string().nullable().describe(`
+        * * Field Name: GrantID
+        * * Display Name: Grant ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Grants (vwSpaceGrants.ID)
+        * * Description: For a Grant pin: the grant in force for the member's space and band.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: The member's order of pins.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -406,21 +536,21 @@ export const mjBizAppsCollaborationSpaceKnowledgeSourceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentSource: z.string().nullable().describe(`
-        * * Field Name: ContentSource
-        * * Display Name: Content Source
-        * * SQL Data Type: nvarchar(255)`),
-    SpaceType: z.string().nullable().describe(`
-        * * Field Name: SpaceType
-        * * Display Name: Space Type
-        * * SQL Data Type: nvarchar(200)`),
-    Space: z.string().nullable().describe(`
+    Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
         * * SQL Data Type: nvarchar(200)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    TargetEntity: z.string().nullable().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
-export type mjBizAppsCollaborationSpaceKnowledgeSourceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceKnowledgeSourceSchema>;
+export type mjBizAppsCollaborationSpaceMemberPinEntityType = z.infer<typeof mjBizAppsCollaborationSpaceMemberPinSchema>;
 
 /**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Members
@@ -504,6 +634,79 @@ export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
 });
 
 export type mjBizAppsCollaborationSpaceMemberEntityType = z.infer<typeof mjBizAppsCollaborationSpaceMemberSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Notes
+ */
+export const mjBizAppsCollaborationSpaceNoteSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space the note belongs to.`),
+    Title: z.string().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(200)
+        * * Description: The note's title.`),
+    Body: z.string().nullable().describe(`
+        * * Field Name: Body
+        * * Display Name: Body
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The note's body, Markdown.`),
+    Band: z.union([z.literal('Shared'), z.literal('Team')]).describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Team
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+        * * Description: Team or Shared: who in the space may read it. A Team note moves to Shared only when the plan's call 15 allows it.`),
+    Visibility: z.union([z.literal('Private'), z.literal('Space')]).describe(`
+        * * Field Name: Visibility
+        * * Display Name: Visibility
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Space
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Private
+    *   * Space
+        * * Description: Space: the band reads it. Private: the author alone, and then the band is Team.`),
+    AuthorUserID: z.string().describe(`
+        * * Field Name: AuthorUserID
+        * * Display Name: Author User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Who wrote the note: the caller on create, and the only one who edits or deletes it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    AuthorUser: z.string().describe(`
+        * * Field Name: AuthorUser
+        * * Display Name: Author User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type mjBizAppsCollaborationSpaceNoteEntityType = z.infer<typeof mjBizAppsCollaborationSpaceNoteSchema>;
 
 /**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Role Types
@@ -591,6 +794,96 @@ export const mjBizAppsCollaborationSpaceRoleTypeSchema = z.object({
 export type mjBizAppsCollaborationSpaceRoleTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceRoleTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Type Status
+ */
+export const mjBizAppsCollaborationSpaceTypeStatusSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceTypeID: z.string().describe(`
+        * * Field Name: SpaceTypeID
+        * * Display Name: Space Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+        * * Description: The type this status belongs to.`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(40)
+        * * Description: The status's key within its type: active, paused, closed, archived, or a type's own.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: What the status is called on screen.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: The definitive order of the type's statuses, for display and for the rule that a terminal status may only move forward.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: The status a new space of the type starts in; one per type.`),
+    ReadOnly: z.boolean().describe(`
+        * * Field Name: ReadOnly
+        * * Display Name: Read Only
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Members may read but not post, upload, assign or edit while the space is in this status.`),
+    Visible: z.boolean().describe(`
+        * * Field Name: Visible
+        * * Display Name: Visible
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: The space is listed and reachable by its members; off hides it from everyone but its owner and staff.`),
+    AgentRetrieval: z.boolean().describe(`
+        * * Field Name: AgentRetrieval
+        * * Display Name: Agent Retrieval
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: An agent may quote the space's material while it is in this status.`),
+    CanChangeAfter: z.boolean().describe(`
+        * * Field Name: CanChangeAfter
+        * * Display Name: Can Change After
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Once a space reaches this status it may still move to another; off freezes it there. A frozen status must be terminal.`),
+    NotifyMembersOnEnter: z.boolean().describe(`
+        * * Field Name: NotifyMembersOnEnter
+        * * Display Name: Notify Members On Enter
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Entering this status sends the space's "status changed" notice, one per member, through MJ's notification chain.`),
+    IsTerminal: z.boolean().describe(`
+        * * Field Name: IsTerminal
+        * * Display Name: Is Terminal
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Entering this status stamps Space.ClosedAt; retention and the closed views count from it. From a terminal status a space may move only to a higher Sequence, never back to an open one.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SpaceType: z.string().describe(`
+        * * Field Name: SpaceType
+        * * Display Name: Space Type
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollaborationSpaceTypeStatusEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeStatusSchema>;
+
+/**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Types
  */
 export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
@@ -658,23 +951,6 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Task / work panel is on.`),
-    GovernancePanel: z.boolean().describe(`
-        * * Field Name: GovernancePanel
-        * * Display Name: Governance Panel
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Governance panel is on. Committees still owns motions and ballots; this only says the panel is part of the type.`),
-    DefaultRetention: z.union([z.literal('Indefinite'), z.literal('Month'), z.literal('Year')]).describe(`
-        * * Field Name: DefaultRetention
-        * * Display Name: Default Retention
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Indefinite
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Indefinite
-    *   * Month
-    *   * Year
-        * * Description: Month, Year, or Indefinite. Used when the space itself has no Retention.`),
     DefaultAgentRetrieval: z.union([z.literal('ExcludedEntirely'), z.literal('ExcludedFromParentScope'), z.literal('Included')]).describe(`
         * * Field Name: DefaultAgentRetrieval
         * * Display Name: Default Agent Retrieval
@@ -759,29 +1035,11 @@ export const mjBizAppsCollaborationSpaceTypeSchema = z.object({
         * * Field Name: SpaceExtensionEntity
         * * Display Name: Space Extension Entity
         * * SQL Data Type: nvarchar(255)`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)`),
-    DefaultInheritsMembership: z.boolean().describe(`
-        * * Field Name: DefaultInheritsMembership
-        * * Display Name: Default Inherits Membership
-        * * SQL Data Type: bit
-        * * Default Value: 1`),
-    PostCloseAccess: z.union([z.literal('None'), z.literal('ReadOnly'), z.literal('ReadOnlyWithAgent')]).describe(`
-        * * Field Name: PostCloseAccess
-        * * Display Name: Post Close Access
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: None
-    * * Value List Type: List
-    * * Possible Values 
-    *   * None
-    *   * ReadOnly
-    *   * ReadOnlyWithAgent`),
-    PostCloseAccessDays: z.number().nullable().describe(`
-        * * Field Name: PostCloseAccessDays
-        * * Display Name: Post Close Access Days
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings`),
 });
 
 export type mjBizAppsCollaborationSpaceTypeEntityType = z.infer<typeof mjBizAppsCollaborationSpaceTypeSchema>;
@@ -848,16 +1106,6 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset
         * * Description: When this space closed. Closure is a timestamp on the sub-space, not a delete of the root.`),
-    Retention: z.union([z.literal('Indefinite'), z.literal('Month'), z.literal('Year')]).nullable().describe(`
-        * * Field Name: Retention
-        * * Display Name: Retention
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Indefinite
-    *   * Month
-    *   * Year
-        * * Description: Month, Year, or Indefinite. Null uses SpaceType.DefaultRetention.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -894,32 +1142,17 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Display Name: Background Image URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: URL of an optional hero banner or background image displayed in the space header and overview.`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)`),
-    AnchorEntityID: z.string().nullable().describe(`
-        * * Field Name: AnchorEntityID
-        * * Display Name: Anchor Entity ID
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: mjBizAppsCollaborationSpaceEntity_CollaborationSettings`),
+    StatusID: z.string().nullable().describe(`
+        * * Field Name: StatusID
+        * * Display Name: Status ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
-    AnchorRecordID: z.string().nullable().describe(`
-        * * Field Name: AnchorRecordID
-        * * Display Name: Anchor Record ID
-        * * SQL Data Type: nvarchar(450)`),
-    PostCloseAccess: z.union([z.literal('None'), z.literal('ReadOnly'), z.literal('ReadOnlyWithAgent')]).nullable().describe(`
-        * * Field Name: PostCloseAccess
-        * * Display Name: Post Close Access
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * None
-    *   * ReadOnly
-    *   * ReadOnlyWithAgent`),
-    PostCloseAccessDays: z.number().nullable().describe(`
-        * * Field Name: PostCloseAccessDays
-        * * Display Name: Post Close Access Days
-        * * SQL Data Type: int`),
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Type Status (vwSpaceTypeStatus.ID)
+        * * Description: The status the space is in, one of its type's (SpaceTypeStatus). NULL until the server stamps it: then the type's default while ClosedAt is null, and the type's first terminal status once ClosedAt is set, as fnCollaborationSpaceStatuses derives it.`),
     SpaceType: z.string().describe(`
         * * Field Name: SpaceType
         * * Display Name: Space Type
@@ -932,10 +1165,10 @@ export const mjBizAppsCollaborationSpaceSchema = z.object({
         * * Field Name: Owner
         * * Display Name: Owner
         * * SQL Data Type: nvarchar(100)`),
-    AnchorEntity: z.string().nullable().describe(`
-        * * Field Name: AnchorEntity
-        * * Display Name: Anchor Entity
-        * * SQL Data Type: nvarchar(255)`),
+    Status: z.string().nullable().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type mjBizAppsCollaborationSpaceEntityType = z.infer<typeof mjBizAppsCollaborationSpaceSchema>;
@@ -1224,25 +1457,26 @@ export class mjBizAppsCollaborationShareNoticeEntity extends BaseEntity<mjBizApp
 
 
 /**
- * MJ_BizApps_Collaboration: Space Agent Skills - strongly typed entity sub-class
+ * MJ_BizApps_Collaboration: Space Anchors - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
- * * Base Table: SpaceAgentSkill
- * * Base View: vwSpaceAgentSkills
+ * * Base Table: SpaceAnchor
+ * * Base View: vwSpaceAnchors
+ * * @description A record a space is about (D26: a space may have several). The primary anchor is the one EnsureSpaceForRecord finds a space by; one per space, and one space per (type, record) as primary.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Agent Skills')
-export class mjBizAppsCollaborationSpaceAgentSkillEntity extends BaseEntity<mjBizAppsCollaborationSpaceAgentSkillEntityType> {
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Anchors')
+export class mjBizAppsCollaborationSpaceAnchorEntity extends BaseEntity<mjBizAppsCollaborationSpaceAnchorEntityType> {
     /**
-    * Loads the MJ_BizApps_Collaboration: Space Agent Skills record from the database
-    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Agent Skills record.
+    * Loads the MJ_BizApps_Collaboration: Space Anchors record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Anchors record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof mjBizAppsCollaborationSpaceAgentSkillEntity
+    * @memberof mjBizAppsCollaborationSpaceAnchorEntity
     * @method
     * @override
     */
@@ -1256,7 +1490,7 @@ export class mjBizAppsCollaborationSpaceAgentSkillEntity extends BaseEntity<mjBi
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
-    * * Default Value: newid()
+    * * Default Value: newsequentialid()
     */
     get ID(): string {
         return this.Get('ID');
@@ -1266,16 +1500,17 @@ export class mjBizAppsCollaborationSpaceAgentSkillEntity extends BaseEntity<mjBi
     }
 
     /**
-    * * Field Name: SkillID
-    * * Display Name: Skill ID
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space.
     */
-    get SkillID(): string {
-        return this.Get('SkillID');
+    get SpaceID(): string {
+        return this.Get('SpaceID');
     }
-    set SkillID(value: string) {
-        this.Set('SkillID', value);
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
     }
 
     /**
@@ -1283,168 +1518,81 @@ export class mjBizAppsCollaborationSpaceAgentSkillEntity extends BaseEntity<mjBi
     * * Display Name: Space Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    * * Description: The space's type, denormalized so the primary-per-type index can hold; the server keeps it equal to the space's and rewrites it when the type changes.
     */
-    get SpaceTypeID(): string | null {
+    get SpaceTypeID(): string {
         return this.Get('SpaceTypeID');
     }
-    set SpaceTypeID(value: string | null) {
+    set SpaceTypeID(value: string) {
         this.Set('SpaceTypeID', value);
     }
 
     /**
-    * * Field Name: SpaceID
-    * * Display Name: Space ID
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the anchored record.
     */
-    get SpaceID(): string | null {
-        return this.Get('SpaceID');
+    get EntityID(): string {
+        return this.Get('EntityID');
     }
-    set SpaceID(value: string | null) {
-        this.Set('SpaceID', value);
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
     }
 
     /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: The record's key, in the canonical shape SpaceItem.RecordID uses.
     */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
     }
 
     /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(100)
+    * * Description: What the record is to the space, in the type's vocabulary: chapter, sponsor, event. Data reach (D28) names an anchor by this role.
     */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
+    get Role(): string {
+        return this.Get('Role');
+    }
+    set Role(value: string) {
+        this.Set('Role', value);
     }
 
     /**
-    * * Field Name: Skill
-    * * Display Name: Skill
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Skill(): string {
-        return this.Get('Skill');
-    }
-
-    /**
-    * * Field Name: SpaceType
-    * * Display Name: Space Type
-    * * SQL Data Type: nvarchar(200)
-    */
-    get SpaceType(): string | null {
-        return this.Get('SpaceType');
-    }
-
-    /**
-    * * Field Name: Space
-    * * Display Name: Space
-    * * SQL Data Type: nvarchar(200)
-    */
-    get Space(): string | null {
-        return this.Get('Space');
-    }
-}
-
-
-/**
- * MJ_BizApps_Collaboration: Space Agents - strongly typed entity sub-class
- * * Schema: __mj_BizAppsCollaboration
- * * Base Table: SpaceAgent
- * * Base View: vwSpaceAgents
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Agents')
-export class mjBizAppsCollaborationSpaceAgentEntity extends BaseEntity<mjBizAppsCollaborationSpaceAgentEntityType> {
-    /**
-    * Loads the MJ_BizApps_Collaboration: Space Agents record from the database
-    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Agents record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof mjBizAppsCollaborationSpaceAgentEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: AgentID
-    * * Display Name: Agent ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
-    */
-    get AgentID(): string {
-        return this.Get('AgentID');
-    }
-    set AgentID(value: string) {
-        this.Set('AgentID', value);
-    }
-
-    /**
-    * * Field Name: SpaceTypeID
-    * * Display Name: Space Type ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
-    */
-    get SpaceTypeID(): string | null {
-        return this.Get('SpaceTypeID');
-    }
-    set SpaceTypeID(value: string | null) {
-        this.Set('SpaceTypeID', value);
-    }
-
-    /**
-    * * Field Name: SpaceID
-    * * Display Name: Space ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
-    */
-    get SpaceID(): string | null {
-        return this.Get('SpaceID');
-    }
-    set SpaceID(value: string | null) {
-        this.Set('SpaceID', value);
-    }
-
-    /**
-    * * Field Name: IsDefault
-    * * Display Name: Is Default
+    * * Field Name: IsPrimary
+    * * Display Name: Is Primary
     * * SQL Data Type: bit
     * * Default Value: 0
+    * * Description: The one anchor a space is found by. At most one per space.
     */
-    get IsDefault(): boolean {
-        return this.Get('IsDefault');
+    get IsPrimary(): boolean {
+        return this.Get('IsPrimary');
     }
-    set IsDefault(value: boolean) {
-        this.Set('IsDefault', value);
+    set IsPrimary(value: boolean) {
+        this.Set('IsPrimary', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order among the space's anchors.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
     }
 
     /**
@@ -1468,12 +1616,12 @@ export class mjBizAppsCollaborationSpaceAgentEntity extends BaseEntity<mjBizApps
     }
 
     /**
-    * * Field Name: Agent
-    * * Display Name: Agent
-    * * SQL Data Type: nvarchar(255)
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
     */
-    get Agent(): string | null {
-        return this.Get('Agent');
+    get Space(): string {
+        return this.Get('Space');
     }
 
     /**
@@ -1481,17 +1629,17 @@ export class mjBizAppsCollaborationSpaceAgentEntity extends BaseEntity<mjBizApps
     * * Display Name: Space Type
     * * SQL Data Type: nvarchar(200)
     */
-    get SpaceType(): string | null {
+    get SpaceType(): string {
         return this.Get('SpaceType');
     }
 
     /**
-    * * Field Name: Space
-    * * Display Name: Space
-    * * SQL Data Type: nvarchar(200)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
-    get Space(): string | null {
-        return this.Get('Space');
+    get Entity(): string {
+        return this.Get('Entity');
     }
 }
 
@@ -1678,6 +1826,356 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
 
 
 /**
+ * A space grant's bindings (MJ_BizApps_Collaboration: Space Grants.Bindings): the target's parameter or property names mapped
+ * to where each value comes from (D27). The source of truth is packages/Core/src/grants.ts; this copy is what CodeGen reads.
+ */
+
+/** Where a bound value comes from (D27). A literal is a `Value`; anything else is resolved on the server. */
+export type mjBizAppsCollaborationSpaceGrantEntity_BindingExpression =
+    | { From: `Anchor:${string}` | `Space.${string}` | `Config:${string}` | 'User.ID' | 'User.Email' | 'User.PersonID' }
+    | { Value: string | number | boolean };
+
+/** A grant's bindings: a parameter or property name of the target, mapped to where its value comes from. */
+export type mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings = Record<string, mjBizAppsCollaborationSpaceGrantEntity_BindingExpression>;
+
+/**
+ * An agent grant's settings (MJ_BizApps_Collaboration: Space Grants.Settings): each may only narrow the agent's own definition
+ * (D31, item 148). The source of truth is packages/Core/src/grants.ts; this copy is what CodeGen reads.
+ */
+
+/** An agent grant's settings (D31). Each can only narrow what the agent's own definition allows (item 148). */
+export interface mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings {
+    /** The skills this space's chats may use: none, or skills the agent accepts. Absent means the agent's own. */
+    Skills?: 'None' | string[];
+    /** Off, allowed or required; only where the agent sets SupportsPlanMode. */
+    PlanMode?: 'Off' | 'Allowed' | 'Required';
+    EffortLevel?: number;
+    /** Whether the agent may write memory notes in this space. */
+    MemoryWrites?: boolean;
+    /** Per-run limits, each at most the agent's own, named as MJ's agent columns are. */
+    Limits?: Partial<Record<mjBizAppsCollaborationSpaceGrantEntity_AgentLimitName, number>>;
+}
+
+export const AGENT_LIMIT_NAMES = ['MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun'] as const;
+export type mjBizAppsCollaborationSpaceGrantEntity_AgentLimitName = (typeof AGENT_LIMIT_NAMES)[number];
+
+/**
+ * MJ_BizApps_Collaboration: Space Grants - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceGrant
+ * * Base View: vwSpaceGrants
+ * * @description Something the app, a space type or a space offers in its spaces (D27's seven kinds): an agent, an action, a query, a view, a dashboard, a component or a knowledge source, with the band that may use it, bindings from the space to the target's parameters, and an agent's narrowed settings. Replaces SpaceAgent, SpaceAgentSkill and SpaceKnowledgeSource.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Grants')
+export class mjBizAppsCollaborationSpaceGrantEntity extends BaseEntity<mjBizAppsCollaborationSpaceGrantEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Grants record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Grants record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceGrantEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceTypeID
+    * * Display Name: Space Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    * * Description: The type the grant belongs to; null with SpaceID null is the app's own row.
+    */
+    get SpaceTypeID(): string | null {
+        return this.Get('SpaceTypeID');
+    }
+    set SpaceTypeID(value: string | null) {
+        this.Set('SpaceTypeID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space the grant belongs to; never set together with SpaceTypeID.
+    */
+    get SpaceID(): string | null {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string | null) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * Component
+    *   * Dashboard
+    *   * KnowledgeSource
+    *   * Query
+    *   * View
+    * * Description: Agent, Action, Query, View, Dashboard, Component or KnowledgeSource. TargetEntityID must be the kind's entity.
+    */
+    get Kind(): 'Action' | 'Agent' | 'Component' | 'Dashboard' | 'KnowledgeSource' | 'Query' | 'View' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'Action' | 'Agent' | 'Component' | 'Dashboard' | 'KnowledgeSource' | 'Query' | 'View') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The target's entity: MJ: AI Agents, MJ: Actions, MJ: Queries, MJ: User Views, MJ: Dashboards, MJ: Components or MJ: Content Sources, by Kind.
+    */
+    get TargetEntityID(): string {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: The target record's key.
+    */
+    get TargetRecordID(): string {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(200)
+    * * Description: What the space calls the target; null uses the target's own name.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Band
+    * * Display Name: Band
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Shared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+    * * Description: The band that may use the grant (D31). A Team grant is not offered in a chat where anyone cannot see Team.
+    */
+    get Band(): 'Shared' | 'Team' {
+        return this.Get('Band');
+    }
+    set Band(value: 'Shared' | 'Team') {
+        this.Set('Band', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: For an Agent grant: the agent a chat at this level starts with. One per level.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Bindings
+    * * Display Name: Bindings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings
+    * * Description: JSON (SpaceGrantBindings): the target's parameter or property names mapped to where each value comes from: an anchor by role, a column of the space, a configuration key, the user, or a literal (D27).
+    */
+    get Bindings(): string | null {
+        return this.Get('Bindings');
+    }
+    set Bindings(value: string | null) {
+        this.Set('Bindings', value);
+    }
+
+    private _BindingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null | undefined = undefined;
+    private _BindingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Bindings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get BindingsObject(): mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null {
+        const raw = this.Bindings;
+        if (raw !== this._BindingsObject_lastRaw) {
+            this._BindingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._BindingsObject_lastRaw = raw;
+        }
+        return this._BindingsObject_cached!;
+    }
+    set BindingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Bindings = raw;
+        this._BindingsObject_cached = value;
+        this._BindingsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Settings
+    * * Display Name: Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings
+    * * Description: JSON (AgentGrantSettings) for an Agent grant: skills, plan mode, effort, memory writes and per-run limits, each only narrowing the agent's own definition (D31). Null for the other kinds.
+    */
+    get Settings(): string | null {
+        return this.Get('Settings');
+    }
+    set Settings(value: string | null) {
+        this.Set('Settings', value);
+    }
+
+    private _SettingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null | undefined = undefined;
+    private _SettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Settings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SettingsObject(): mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null {
+        const raw = this.Settings;
+        if (raw !== this._SettingsObject_lastRaw) {
+            this._SettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._SettingsObject_lastRaw = raw;
+        }
+        return this._SettingsObject_cached!;
+    }
+    set SettingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Settings = raw;
+        this._SettingsObject_cached = value;
+        this._SettingsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Mode
+    * * Display Name: Mode
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Extend
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Extend
+    *   * Remove
+    * * Description: Extend adds the target at this level; Remove takes a target granted above out of this level's list (D30).
+    */
+    get Mode(): 'Extend' | 'Remove' {
+        return this.Get('Mode');
+    }
+    set Mode(value: 'Extend' | 'Remove') {
+        this.Set('Mode', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order within the level.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SpaceType
+    * * Display Name: Space Type
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SpaceType(): string | null {
+        return this.Get('SpaceType');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string | null {
+        return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string {
+        return this.Get('TargetEntity');
+    }
+}
+
+
+/**
  * MJ_BizApps_Collaboration: Space Items - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpaceItem
@@ -1838,6 +2336,20 @@ export class mjBizAppsCollaborationSpaceItemEntity extends BaseEntity<mjBizAppsC
     }
 
     /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: For a document in the Library: the MJ Artifact Version (ContentMode File) wrapping the MJ: Files row the item points at, so the document has a type, a viewer and versions. NULL for items that are not files. Artifact Permissions are not used by the Library; the roster is the one sharing model.
+    */
+    get ArtifactVersionID(): string | null {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string | null) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
     * * Field Name: Space
     * * Display Name: Space
     * * SQL Data Type: nvarchar(200)
@@ -1863,29 +2375,39 @@ export class mjBizAppsCollaborationSpaceItemEntity extends BaseEntity<mjBizAppsC
     get PromotedByUser(): string | null {
         return this.Get('PromotedByUser');
     }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
 }
 
 
 /**
- * MJ_BizApps_Collaboration: Space Knowledge Sources - strongly typed entity sub-class
+ * MJ_BizApps_Collaboration: Space Member Pins - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
- * * Base Table: SpaceKnowledgeSource
- * * Base View: vwSpaceKnowledgeSources
+ * * Base Table: SpaceMemberPin
+ * * Base View: vwSpaceMemberPins
+ * * @description Something a member keeps at the top of a space (B22): a record of the space (an item, a note, a task) or one of the space's grants (a view, a dashboard, a component). The member's own; Home lists pins from the spaces they still reach.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Knowledge Sources')
-export class mjBizAppsCollaborationSpaceKnowledgeSourceEntity extends BaseEntity<mjBizAppsCollaborationSpaceKnowledgeSourceEntityType> {
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Member Pins')
+export class mjBizAppsCollaborationSpaceMemberPinEntity extends BaseEntity<mjBizAppsCollaborationSpaceMemberPinEntityType> {
     /**
-    * Loads the MJ_BizApps_Collaboration: Space Knowledge Sources record from the database
-    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Knowledge Sources record.
+    * Loads the MJ_BizApps_Collaboration: Space Member Pins record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Member Pins record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof mjBizAppsCollaborationSpaceKnowledgeSourceEntity
+    * @memberof mjBizAppsCollaborationSpaceMemberPinEntity
     * @method
     * @override
     */
@@ -1899,7 +2421,7 @@ export class mjBizAppsCollaborationSpaceKnowledgeSourceEntity extends BaseEntity
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
-    * * Default Value: newid()
+    * * Default Value: newsequentialid()
     */
     get ID(): string {
         return this.Get('ID');
@@ -1909,42 +2431,103 @@ export class mjBizAppsCollaborationSpaceKnowledgeSourceEntity extends BaseEntity
     }
 
     /**
-    * * Field Name: ContentSourceID
-    * * Display Name: Content Source ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
-    */
-    get ContentSourceID(): string {
-        return this.Get('ContentSourceID');
-    }
-    set ContentSourceID(value: string) {
-        this.Set('ContentSourceID', value);
-    }
-
-    /**
-    * * Field Name: SpaceTypeID
-    * * Display Name: Space Type ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
-    */
-    get SpaceTypeID(): string | null {
-        return this.Get('SpaceTypeID');
-    }
-    set SpaceTypeID(value: string | null) {
-        this.Set('SpaceTypeID', value);
-    }
-
-    /**
     * * Field Name: SpaceID
     * * Display Name: Space ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space the pin is in.
     */
-    get SpaceID(): string | null {
+    get SpaceID(): string {
         return this.Get('SpaceID');
     }
-    set SpaceID(value: string | null) {
+    set SpaceID(value: string) {
         this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Whose pin it is: the caller.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Grant
+    *   * Record
+    * * Description: Record: a record of the space by entity and key. Grant: one of the space's grants.
+    */
+    get Kind(): 'Grant' | 'Record' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'Grant' | 'Record') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: For a Record pin: the record's entity.
+    */
+    get TargetEntityID(): string | null {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string | null) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: For a Record pin: the record's key.
+    */
+    get TargetRecordID(): string | null {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string | null) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: GrantID
+    * * Display Name: Grant ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Grants (vwSpaceGrants.ID)
+    * * Description: For a Grant pin: the grant in force for the member's space and band.
+    */
+    get GrantID(): string | null {
+        return this.Get('GrantID');
+    }
+    set GrantID(value: string | null) {
+        this.Set('GrantID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The member's order of pins.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
     }
 
     /**
@@ -1968,30 +2551,30 @@ export class mjBizAppsCollaborationSpaceKnowledgeSourceEntity extends BaseEntity
     }
 
     /**
-    * * Field Name: ContentSource
-    * * Display Name: Content Source
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ContentSource(): string | null {
-        return this.Get('ContentSource');
-    }
-
-    /**
-    * * Field Name: SpaceType
-    * * Display Name: Space Type
-    * * SQL Data Type: nvarchar(200)
-    */
-    get SpaceType(): string | null {
-        return this.Get('SpaceType');
-    }
-
-    /**
     * * Field Name: Space
     * * Display Name: Space
     * * SQL Data Type: nvarchar(200)
     */
-    get Space(): string | null {
+    get Space(): string {
         return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string | null {
+        return this.Get('TargetEntity');
     }
 }
 
@@ -2193,6 +2776,179 @@ export class mjBizAppsCollaborationSpaceMemberEntity extends BaseEntity<mjBizApp
     */
     get Person(): string | null {
         return this.Get('Person');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Space Notes - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceNote
+ * * Base View: vwSpaceNotes
+ * * @description A light note in a space (B21): the space's own row on a band, not a library item, so the move-and-promote rules do not apply and it needs no ItemUse. Private notes are the author's alone.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Notes')
+export class mjBizAppsCollaborationSpaceNoteEntity extends BaseEntity<mjBizAppsCollaborationSpaceNoteEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Notes record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Notes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceNoteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space the note belongs to.
+    */
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(200)
+    * * Description: The note's title.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Body
+    * * Display Name: Body
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The note's body, Markdown.
+    */
+    get Body(): string | null {
+        return this.Get('Body');
+    }
+    set Body(value: string | null) {
+        this.Set('Body', value);
+    }
+
+    /**
+    * * Field Name: Band
+    * * Display Name: Band
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Team
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+    * * Description: Team or Shared: who in the space may read it. A Team note moves to Shared only when the plan's call 15 allows it.
+    */
+    get Band(): 'Shared' | 'Team' {
+        return this.Get('Band');
+    }
+    set Band(value: 'Shared' | 'Team') {
+        this.Set('Band', value);
+    }
+
+    /**
+    * * Field Name: Visibility
+    * * Display Name: Visibility
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Space
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Private
+    *   * Space
+    * * Description: Space: the band reads it. Private: the author alone, and then the band is Team.
+    */
+    get Visibility(): 'Private' | 'Space' {
+        return this.Get('Visibility');
+    }
+    set Visibility(value: 'Private' | 'Space') {
+        this.Set('Visibility', value);
+    }
+
+    /**
+    * * Field Name: AuthorUserID
+    * * Display Name: Author User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Who wrote the note: the caller on create, and the only one who edits or deletes it.
+    */
+    get AuthorUserID(): string {
+        return this.Get('AuthorUserID');
+    }
+    set AuthorUserID(value: string) {
+        this.Set('AuthorUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string {
+        return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: AuthorUser
+    * * Display Name: Author User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AuthorUser(): string {
+        return this.Get('AuthorUser');
     }
 }
 
@@ -2421,6 +3177,320 @@ export class mjBizAppsCollaborationSpaceRoleTypeEntity extends BaseEntity<mjBizA
 
 
 /**
+ * MJ_BizApps_Collaboration: Space Type Status - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpaceTypeStatus
+ * * Base View: vwSpaceTypeStatus
+ * * @description A status a space type offers its spaces: Active, Paused, Closed and Archived ship for every type; a type may add its own. A space is in exactly one of its type's statuses (Space.StatusID) and may only choose among them. The attributes say what a space in the status allows; the type's driver may still refuse a change.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Type Status')
+export class mjBizAppsCollaborationSpaceTypeStatusEntity extends BaseEntity<mjBizAppsCollaborationSpaceTypeStatusEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Type Status record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Type Status record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpaceTypeStatusEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceTypeID
+    * * Display Name: Space Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Types (vwSpaceTypes.ID)
+    * * Description: The type this status belongs to.
+    */
+    get SpaceTypeID(): string {
+        return this.Get('SpaceTypeID');
+    }
+    set SpaceTypeID(value: string) {
+        this.Set('SpaceTypeID', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(40)
+    * * Description: The status's key within its type: active, paused, closed, archived, or a type's own.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: What the status is called on screen.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: The definitive order of the type's statuses, for display and for the rule that a terminal status may only move forward.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: The status a new space of the type starts in; one per type.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: ReadOnly
+    * * Display Name: Read Only
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Members may read but not post, upload, assign or edit while the space is in this status.
+    */
+    get ReadOnly(): boolean {
+        return this.Get('ReadOnly');
+    }
+    set ReadOnly(value: boolean) {
+        this.Set('ReadOnly', value);
+    }
+
+    /**
+    * * Field Name: Visible
+    * * Display Name: Visible
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: The space is listed and reachable by its members; off hides it from everyone but its owner and staff.
+    */
+    get Visible(): boolean {
+        return this.Get('Visible');
+    }
+    set Visible(value: boolean) {
+        this.Set('Visible', value);
+    }
+
+    /**
+    * * Field Name: AgentRetrieval
+    * * Display Name: Agent Retrieval
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: An agent may quote the space's material while it is in this status.
+    */
+    get AgentRetrieval(): boolean {
+        return this.Get('AgentRetrieval');
+    }
+    set AgentRetrieval(value: boolean) {
+        this.Set('AgentRetrieval', value);
+    }
+
+    /**
+    * * Field Name: CanChangeAfter
+    * * Display Name: Can Change After
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Once a space reaches this status it may still move to another; off freezes it there. A frozen status must be terminal.
+    */
+    get CanChangeAfter(): boolean {
+        return this.Get('CanChangeAfter');
+    }
+    set CanChangeAfter(value: boolean) {
+        this.Set('CanChangeAfter', value);
+    }
+
+    /**
+    * * Field Name: NotifyMembersOnEnter
+    * * Display Name: Notify Members On Enter
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Entering this status sends the space's "status changed" notice, one per member, through MJ's notification chain.
+    */
+    get NotifyMembersOnEnter(): boolean {
+        return this.Get('NotifyMembersOnEnter');
+    }
+    set NotifyMembersOnEnter(value: boolean) {
+        this.Set('NotifyMembersOnEnter', value);
+    }
+
+    /**
+    * * Field Name: IsTerminal
+    * * Display Name: Is Terminal
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Entering this status stamps Space.ClosedAt; retention and the closed views count from it. From a terminal status a space may move only to a higher Sequence, never back to an open one.
+    */
+    get IsTerminal(): boolean {
+        return this.Get('IsTerminal');
+    }
+    set IsTerminal(value: boolean) {
+        this.Set('IsTerminal', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SpaceType
+    * * Display Name: Space Type
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SpaceType(): string {
+        return this.Get('SpaceType');
+    }
+}
+
+
+/**
+ * Collaboration's settings shape (MJ_BizApps_Collaboration: Space Types.Configuration and Spaces.Configuration): one shape at
+ * every level, the app's, a type's and a space's, resolved most-specific-first within SpaceOverridable (D20). The source of truth
+ * is packages/Core/src/configuration.ts; this copy is what CodeGen reads.
+ */
+
+export type mjBizAppsCollaborationSpaceTypeEntity_ConfigurationValue =
+    | string
+    | number
+    | boolean
+    | null
+    | mjBizAppsCollaborationSpaceTypeEntity_ConfigurationValue[]
+    | { [key: string]: mjBizAppsCollaborationSpaceTypeEntity_ConfigurationValue };
+
+/**
+ * The single typed settings shape for BizApps Collaboration at every level
+ * (App, SpaceType, Space, SubSpace).
+ */
+export interface mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings {
+    /** Target storage account ID for file uploads. Resolves hierarchically. */
+    StorageAccountID?: string | null;
+    /** Access level permitted after a space closes. App default is 'ReadOnly'. */
+    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
+    /** Duration in days after closing before post-close access lapses. null = indefinite. */
+    PostCloseAccessDays?: number | null;
+    /** Chat behavior rules. */
+    Chats?: {
+        /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
+        WhoCanStart?: 'Anyone' | 'Owners';
+        /** When an agent replies. Default 'MentionOrOneToOne'. */
+        AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
+        /** The choice preselected when someone is added to an existing chat. Default 'None'. */
+        HistoryOnAdd?: 'None' | 'All' | 'Since';
+    };
+    /** Agent inheritance rules. */
+    Agents?: {
+        /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
+        ListMode?: 'Extend' | 'Replace';
+    };
+    /** Word overrides, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }. */
+    Labels?: {
+        Tabs?: Record<string, string>;
+    };
+    /** Types that may be created under a space of this type. */
+    Children?: {
+        AllowedTypeCodes?: string[];
+        MaxOpen?: number;
+    };
+    /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
+    SpaceOverridable?: string[];
+    /** How this level's grants of each kind combine with the level above (D30). Default 'Extend'. */
+    Grants?: Partial<Record<GrantKind, { ListMode?: 'Extend' | 'Replace' }>>;
+    /** The entities a type's participants may read through an anchor (D28). A type's declaration; a space has none. */
+    DataReach?: mjBizAppsCollaborationSpaceTypeEntity_DataReachDeclaration[];
+    /** Behavior switches that the type's own drivers read, keyed by app. */
+    Extensions?: Record<string, Record<string, mjBizAppsCollaborationSpaceTypeEntity_ConfigurationValue>>;
+}
+
+/** One entity a type's participants may read, by a path to an anchor role (D28). */
+export interface mjBizAppsCollaborationSpaceTypeEntity_DataReachDeclaration {
+    /** The MJ entity name. */
+    Entity: string;
+    /** A column of Entity, or one foreign-key hop: 'MemberID.ChapterID'. */
+    Path: string;
+    AnchorRole: string;
+    Band: 'Team' | 'Shared';
+    /** The allow-list of fields participants may read. */
+    Fields: string[];
+}
+
+/** Checks one DataReach declaration; the errors name the index so a list of them reads well. */
+export function validateDataReachDeclaration(declaration: unknown, index: number): string[] {
+    const at = `DataReach[${index}]`;
+    if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) return [`${at} must be an object.`];
+    const d = declaration as Partial<mjBizAppsCollaborationSpaceTypeEntity_DataReachDeclaration>;
+    const errors: string[] = [];
+    if (typeof d.Entity !== 'string' || d.Entity.trim() === '') errors.push(`${at}.Entity must name an entity.`);
+    if (typeof d.Path !== 'string' || d.Path.trim() === '') errors.push(`${at}.Path must name a column, or one hop: Column.Column.`);
+    else if (d.Path.split('.').length > 2 || d.Path.split('.').some((part) => part.trim() === '')) errors.push(`${at}.Path "${d.Path}" may have at most one hop.`);
+    if (typeof d.AnchorRole !== 'string' || d.AnchorRole.trim() === '') errors.push(`${at}.AnchorRole must name an anchor role.`);
+    if (d.Band !== 'Team' && d.Band !== 'Shared') errors.push(`${at}.Band must be Team or Shared.`);
+    if (!Array.isArray(d.Fields) || d.Fields.length === 0 || d.Fields.some((f) => typeof f !== 'string' || f.trim() === '')) errors.push(`${at}.Fields must list at least one field.`);
+    return errors;
+}
+
+export interface mjBizAppsCollaborationSpaceTypeEntity_ISpaceRules extends mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings {}
+export interface mjBizAppsCollaborationSpaceTypeEntity_ISpaceTypeConfiguration extends mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings {}
+export interface mjBizAppsCollaborationSpaceTypeEntity_ISpaceConfiguration extends mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings {}
+
+/**
  * MJ_BizApps_Collaboration: Space Types - strongly typed entity sub-class
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpaceType
@@ -2592,39 +3662,6 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     }
     set WorkPanel(value: boolean) {
         this.Set('WorkPanel', value);
-    }
-
-    /**
-    * * Field Name: GovernancePanel
-    * * Display Name: Governance Panel
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Governance panel is on. Committees still owns motions and ballots; this only says the panel is part of the type.
-    */
-    get GovernancePanel(): boolean {
-        return this.Get('GovernancePanel');
-    }
-    set GovernancePanel(value: boolean) {
-        this.Set('GovernancePanel', value);
-    }
-
-    /**
-    * * Field Name: DefaultRetention
-    * * Display Name: Default Retention
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Indefinite
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Indefinite
-    *   * Month
-    *   * Year
-    * * Description: Month, Year, or Indefinite. Used when the space itself has no Retention.
-    */
-    get DefaultRetention(): 'Indefinite' | 'Month' | 'Year' {
-        return this.Get('DefaultRetention');
-    }
-    set DefaultRetention(value: 'Indefinite' | 'Month' | 'Year') {
-        this.Set('DefaultRetention', value);
     }
 
     /**
@@ -2821,6 +3858,7 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -2829,50 +3867,117 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * * Field Name: DefaultInheritsMembership
-    * * Display Name: Default Inherits Membership
-    * * SQL Data Type: bit
-    * * Default Value: 1
+    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
-    get DefaultInheritsMembership(): boolean {
-        return this.Get('DefaultInheritsMembership');
+    get ConfigurationObject(): mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
-    set DefaultInheritsMembership(value: boolean) {
-        this.Set('DefaultInheritsMembership', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccess
-    * * Display Name: Post Close Access
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: None
-    * * Value List Type: List
-    * * Possible Values 
-    *   * None
-    *   * ReadOnly
-    *   * ReadOnlyWithAgent
-    */
-    get PostCloseAccess(): 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' {
-        return this.Get('PostCloseAccess');
-    }
-    set PostCloseAccess(value: 'None' | 'ReadOnly' | 'ReadOnlyWithAgent') {
-        this.Set('PostCloseAccess', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccessDays
-    * * Display Name: Post Close Access Days
-    * * SQL Data Type: int
-    */
-    get PostCloseAccessDays(): number | null {
-        return this.Get('PostCloseAccessDays');
-    }
-    set PostCloseAccessDays(value: number | null) {
-        this.Set('PostCloseAccessDays', value);
+    set ConfigurationObject(value: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 }
 
+
+/**
+ * Collaboration's settings shape (MJ_BizApps_Collaboration: Space Types.Configuration and Spaces.Configuration): one shape at
+ * every level, the app's, a type's and a space's, resolved most-specific-first within SpaceOverridable (D20). The source of truth
+ * is packages/Core/src/configuration.ts; this copy is what CodeGen reads.
+ */
+
+export type mjBizAppsCollaborationSpaceEntity_ConfigurationValue =
+    | string
+    | number
+    | boolean
+    | null
+    | mjBizAppsCollaborationSpaceEntity_ConfigurationValue[]
+    | { [key: string]: mjBizAppsCollaborationSpaceEntity_ConfigurationValue };
+
+/**
+ * The single typed settings shape for BizApps Collaboration at every level
+ * (App, SpaceType, Space, SubSpace).
+ */
+export interface mjBizAppsCollaborationSpaceEntity_CollaborationSettings {
+    /** Target storage account ID for file uploads. Resolves hierarchically. */
+    StorageAccountID?: string | null;
+    /** Access level permitted after a space closes. App default is 'ReadOnly'. */
+    PostCloseAccess?: 'ReadOnly' | 'ReadOnlyWithAgent' | 'None';
+    /** Duration in days after closing before post-close access lapses. null = indefinite. */
+    PostCloseAccessDays?: number | null;
+    /** Chat behavior rules. */
+    Chats?: {
+        /** Who may start a chat. Default 'Anyone': anyone whose seat can post (a guest who can't post can't start one either). 'Owners' narrows it to owners. */
+        WhoCanStart?: 'Anyone' | 'Owners';
+        /** When an agent replies. Default 'MentionOrOneToOne'. */
+        AgentReplyMode?: 'MentionOrOneToOne' | 'MentionOnly' | 'Always';
+        /** The choice preselected when someone is added to an existing chat. Default 'None'. */
+        HistoryOnAdd?: 'None' | 'All' | 'Since';
+    };
+    /** Agent inheritance rules. */
+    Agents?: {
+        /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
+        ListMode?: 'Extend' | 'Replace';
+    };
+    /** Word overrides, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }. */
+    Labels?: {
+        Tabs?: Record<string, string>;
+    };
+    /** Types that may be created under a space of this type. */
+    Children?: {
+        AllowedTypeCodes?: string[];
+        MaxOpen?: number;
+    };
+    /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
+    SpaceOverridable?: string[];
+    /** How this level's grants of each kind combine with the level above (D30). Default 'Extend'. */
+    Grants?: Partial<Record<GrantKind, { ListMode?: 'Extend' | 'Replace' }>>;
+    /** The entities a type's participants may read through an anchor (D28). A type's declaration; a space has none. */
+    DataReach?: mjBizAppsCollaborationSpaceEntity_DataReachDeclaration[];
+    /** Behavior switches that the type's own drivers read, keyed by app. */
+    Extensions?: Record<string, Record<string, mjBizAppsCollaborationSpaceEntity_ConfigurationValue>>;
+}
+
+/** One entity a type's participants may read, by a path to an anchor role (D28). */
+export interface mjBizAppsCollaborationSpaceEntity_DataReachDeclaration {
+    /** The MJ entity name. */
+    Entity: string;
+    /** A column of Entity, or one foreign-key hop: 'MemberID.ChapterID'. */
+    Path: string;
+    AnchorRole: string;
+    Band: 'Team' | 'Shared';
+    /** The allow-list of fields participants may read. */
+    Fields: string[];
+}
+
+/** Checks one DataReach declaration; the errors name the index so a list of them reads well. */
+export function validateDataReachDeclaration(declaration: unknown, index: number): string[] {
+    const at = `DataReach[${index}]`;
+    if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) return [`${at} must be an object.`];
+    const d = declaration as Partial<mjBizAppsCollaborationSpaceEntity_DataReachDeclaration>;
+    const errors: string[] = [];
+    if (typeof d.Entity !== 'string' || d.Entity.trim() === '') errors.push(`${at}.Entity must name an entity.`);
+    if (typeof d.Path !== 'string' || d.Path.trim() === '') errors.push(`${at}.Path must name a column, or one hop: Column.Column.`);
+    else if (d.Path.split('.').length > 2 || d.Path.split('.').some((part) => part.trim() === '')) errors.push(`${at}.Path "${d.Path}" may have at most one hop.`);
+    if (typeof d.AnchorRole !== 'string' || d.AnchorRole.trim() === '') errors.push(`${at}.AnchorRole must name an anchor role.`);
+    if (d.Band !== 'Team' && d.Band !== 'Shared') errors.push(`${at}.Band must be Team or Shared.`);
+    if (!Array.isArray(d.Fields) || d.Fields.length === 0 || d.Fields.some((f) => typeof f !== 'string' || f.trim() === '')) errors.push(`${at}.Fields must list at least one field.`);
+    return errors;
+}
+
+export interface mjBizAppsCollaborationSpaceEntity_ISpaceRules extends mjBizAppsCollaborationSpaceEntity_CollaborationSettings {}
+export interface mjBizAppsCollaborationSpaceEntity_ISpaceTypeConfiguration extends mjBizAppsCollaborationSpaceEntity_CollaborationSettings {}
+export interface mjBizAppsCollaborationSpaceEntity_ISpaceConfiguration extends mjBizAppsCollaborationSpaceEntity_CollaborationSettings {}
 
 /**
  * MJ_BizApps_Collaboration: Spaces - strongly typed entity sub-class
@@ -3043,24 +4148,6 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
 
     /**
-    * * Field Name: Retention
-    * * Display Name: Retention
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Indefinite
-    *   * Month
-    *   * Year
-    * * Description: Month, Year, or Indefinite. Null uses SpaceType.DefaultRetention.
-    */
-    get Retention(): 'Indefinite' | 'Month' | 'Year' | null {
-        return this.Get('Retention');
-    }
-    set Retention(value: 'Indefinite' | 'Month' | 'Year' | null) {
-        this.Set('Retention', value);
-    }
-
-    /**
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
@@ -3150,6 +4237,7 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: mjBizAppsCollaborationSpaceEntity_CollaborationSettings
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -3158,58 +4246,39 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * * Field Name: AnchorEntityID
-    * * Display Name: Anchor Entity ID
+    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceEntity_CollaborationSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: StatusID
+    * * Display Name: Status ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Space Type Status (vwSpaceTypeStatus.ID)
+    * * Description: The status the space is in, one of its type's (SpaceTypeStatus). NULL until the server stamps it: then the type's default while ClosedAt is null, and the type's first terminal status once ClosedAt is set, as fnCollaborationSpaceStatuses derives it.
     */
-    get AnchorEntityID(): string | null {
-        return this.Get('AnchorEntityID');
+    get StatusID(): string | null {
+        return this.Get('StatusID');
     }
-    set AnchorEntityID(value: string | null) {
-        this.Set('AnchorEntityID', value);
-    }
-
-    /**
-    * * Field Name: AnchorRecordID
-    * * Display Name: Anchor Record ID
-    * * SQL Data Type: nvarchar(450)
-    */
-    get AnchorRecordID(): string | null {
-        return this.Get('AnchorRecordID');
-    }
-    set AnchorRecordID(value: string | null) {
-        this.Set('AnchorRecordID', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccess
-    * * Display Name: Post Close Access
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * None
-    *   * ReadOnly
-    *   * ReadOnlyWithAgent
-    */
-    get PostCloseAccess(): 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' | null {
-        return this.Get('PostCloseAccess');
-    }
-    set PostCloseAccess(value: 'None' | 'ReadOnly' | 'ReadOnlyWithAgent' | null) {
-        this.Set('PostCloseAccess', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccessDays
-    * * Display Name: Post Close Access Days
-    * * SQL Data Type: int
-    */
-    get PostCloseAccessDays(): number | null {
-        return this.Get('PostCloseAccessDays');
-    }
-    set PostCloseAccessDays(value: number | null) {
-        this.Set('PostCloseAccessDays', value);
+    set StatusID(value: string | null) {
+        this.Set('StatusID', value);
     }
 
     /**
@@ -3240,11 +4309,11 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
     }
 
     /**
-    * * Field Name: AnchorEntity
-    * * Display Name: Anchor Entity
-    * * SQL Data Type: nvarchar(255)
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(100)
     */
-    get AnchorEntity(): string | null {
-        return this.Get('AnchorEntity');
+    get Status(): string | null {
+        return this.Get('Status');
     }
 }

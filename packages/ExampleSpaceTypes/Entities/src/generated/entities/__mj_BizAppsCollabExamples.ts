@@ -91,10 +91,6 @@ export const mjBizAppsCollabExamplesExampleBoardSchema = z.object({
         * * Field Name: ClosedAt
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset`),
-    Retention: z.string().nullable().describe(`
-        * * Field Name: Retention
-        * * Display Name: Retention
-        * * SQL Data Type: nvarchar(20)`),
     AllowParentAssignees: z.boolean().describe(`
         * * Field Name: AllowParentAssignees
         * * Display Name: Allow Parent Assignees
@@ -119,25 +115,15 @@ export const mjBizAppsCollabExamplesExampleBoardSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)`),
-    AnchorEntityID: z.string().nullable().describe(`
-        * * Field Name: AnchorEntityID
-        * * Display Name: Anchor Entity ID
+    StatusID: z.string().nullable().describe(`
+        * * Field Name: StatusID
+        * * Display Name: Status
         * * SQL Data Type: uniqueidentifier`),
-    AnchorRecordID: z.string().nullable().describe(`
-        * * Field Name: AnchorRecordID
-        * * Display Name: Anchor Record ID
-        * * SQL Data Type: nvarchar(450)`),
-    PostCloseAccess: z.string().nullable().describe(`
-        * * Field Name: PostCloseAccess
-        * * Display Name: Post Close Access
-        * * SQL Data Type: nvarchar(20)`),
-    PostCloseAccessDays: z.number().nullable().describe(`
-        * * Field Name: PostCloseAccessDays
-        * * Display Name: Post Close Access Days
-        * * SQL Data Type: int`),
 });
 
 export type mjBizAppsCollabExamplesExampleBoardEntityType = z.infer<typeof mjBizAppsCollabExamplesExampleBoardSchema>;
+ 
+ 
 
 /**
  * MJ_BizApps_Collaboration_Examples: Example Boards - strongly typed entity sub-class
@@ -400,19 +386,6 @@ export class mjBizAppsCollabExamplesExampleBoardEntity extends BaseEntity<mjBizA
     }
 
     /**
-    * * Field Name: Retention
-    * * Display Name: Retention
-    * * SQL Data Type: nvarchar(20)
-    * * IS-A Source: Inherited from MJ_BizApps_Collaboration: Spaces
-    */
-    get Retention(): string | null {
-        return this.Get('Retention');
-    }
-    set Retention(value: string | null) {
-        this.Set('Retention', value);
-    }
-
-    /**
     * * Field Name: AllowParentAssignees
     * * Display Name: Allow Parent Assignees
     * * SQL Data Type: bit
@@ -491,54 +464,15 @@ export class mjBizAppsCollabExamplesExampleBoardEntity extends BaseEntity<mjBizA
     }
 
     /**
-    * * Field Name: AnchorEntityID
-    * * Display Name: Anchor Entity ID
+    * * Field Name: StatusID
+    * * Display Name: Status
     * * SQL Data Type: uniqueidentifier
     * * IS-A Source: Inherited from MJ_BizApps_Collaboration: Spaces
     */
-    get AnchorEntityID(): string | null {
-        return this.Get('AnchorEntityID');
+    get StatusID(): string | null {
+        return this.Get('StatusID');
     }
-    set AnchorEntityID(value: string | null) {
-        this.Set('AnchorEntityID', value);
-    }
-
-    /**
-    * * Field Name: AnchorRecordID
-    * * Display Name: Anchor Record ID
-    * * SQL Data Type: nvarchar(450)
-    * * IS-A Source: Inherited from MJ_BizApps_Collaboration: Spaces
-    */
-    get AnchorRecordID(): string | null {
-        return this.Get('AnchorRecordID');
-    }
-    set AnchorRecordID(value: string | null) {
-        this.Set('AnchorRecordID', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccess
-    * * Display Name: Post Close Access
-    * * SQL Data Type: nvarchar(20)
-    * * IS-A Source: Inherited from MJ_BizApps_Collaboration: Spaces
-    */
-    get PostCloseAccess(): string | null {
-        return this.Get('PostCloseAccess');
-    }
-    set PostCloseAccess(value: string | null) {
-        this.Set('PostCloseAccess', value);
-    }
-
-    /**
-    * * Field Name: PostCloseAccessDays
-    * * Display Name: Post Close Access Days
-    * * SQL Data Type: int
-    * * IS-A Source: Inherited from MJ_BizApps_Collaboration: Spaces
-    */
-    get PostCloseAccessDays(): number | null {
-        return this.Get('PostCloseAccessDays');
-    }
-    set PostCloseAccessDays(value: number | null) {
-        this.Set('PostCloseAccessDays', value);
+    set StatusID(value: string | null) {
+        this.Set('StatusID', value);
     }
 }

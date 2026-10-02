@@ -89,10 +89,6 @@ export class mjBizAppsCollabExamplesExampleBoard_ {
     @Field({nullable: true}) 
     ClosedAt?: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(20)
-    Retention?: string;
-        
     @Field(() => Boolean, {nullable: true}) 
     AllowParentAssignees?: boolean;
         
@@ -116,18 +112,7 @@ export class mjBizAppsCollabExamplesExampleBoard_ {
         
     @Field({nullable: true}) 
     @MaxLength(36)
-    AnchorEntityID?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(450)
-    AnchorRecordID?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(20)
-    PostCloseAccess?: string;
-        
-    @Field(() => Int, {nullable: true}) 
-    PostCloseAccessDays?: number;
+    StatusID?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -187,9 +172,6 @@ export class CreatemjBizAppsCollabExamplesExampleBoardInput {
     @Field({ nullable: true })
     ClosedAt: Date | null;
 
-    @Field({ nullable: true })
-    Retention: string | null;
-
     @Field(() => Boolean, { nullable: true })
     AllowParentAssignees?: boolean;
 
@@ -209,16 +191,7 @@ export class CreatemjBizAppsCollabExamplesExampleBoardInput {
     Configuration: string | null;
 
     @Field({ nullable: true })
-    AnchorEntityID: string | null;
-
-    @Field({ nullable: true })
-    AnchorRecordID: string | null;
-
-    @Field({ nullable: true })
-    PostCloseAccess: string | null;
-
-    @Field(() => Int, { nullable: true })
-    PostCloseAccessDays: number | null;
+    StatusID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -278,9 +251,6 @@ export class UpdatemjBizAppsCollabExamplesExampleBoardInput {
     @Field({ nullable: true })
     ClosedAt?: Date | null;
 
-    @Field({ nullable: true })
-    Retention?: string | null;
-
     @Field(() => Boolean, { nullable: true })
     AllowParentAssignees?: boolean;
 
@@ -300,16 +270,7 @@ export class UpdatemjBizAppsCollabExamplesExampleBoardInput {
     Configuration?: string | null;
 
     @Field({ nullable: true })
-    AnchorEntityID?: string | null;
-
-    @Field({ nullable: true })
-    AnchorRecordID?: string | null;
-
-    @Field({ nullable: true })
-    PostCloseAccess?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    PostCloseAccessDays?: number | null;
+    StatusID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

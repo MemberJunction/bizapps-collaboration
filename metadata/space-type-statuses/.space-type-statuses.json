@@ -2,9 +2,7 @@
   {
     "_comments": [
       "The statuses every shipped type starts with (the design doc, Ian's call of Oct 1): Active (default; writes, visible), Paused (read-only, visible, may change), Closed (read-only, visible, terminal: moves forward only, to Archived), Archived (read-only, hidden, terminal, frozen). A space chooses among its type's statuses and cannot add one; staff holding Configure Space Types add a status to a type."
-    ]
-  },
-  {
+    ],
     "primaryKey": {
       "ID": "57B2ADB8-3EF7-42EB-992E-4327D188C6DF"
     },

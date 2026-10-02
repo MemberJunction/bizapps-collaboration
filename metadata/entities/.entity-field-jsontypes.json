@@ -1,7 +1,7 @@
 [
   {
     "_comments": [
-      "JSON types for the two Configuration columns (extension item 104) and the two grant columns (stage 1 \u00a7 3), so CodeGen emits typed accessors. Definitions under JSONType-interfaces/ mirror packages/Core/src."
+      "JSON types for the two Configuration columns (extension item 104) and the two grant columns (stage 1 § 3), so CodeGen emits typed accessors. Definitions under JSONType-interfaces/ mirror packages/Core/src."
     ],
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Types"
