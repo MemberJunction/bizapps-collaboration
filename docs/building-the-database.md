@@ -30,7 +30,10 @@ when `mj` is not on the path of the member you are in.
 3. **Common's People setting:** from bizapps-common, `mj sync push --dir=metadata --include=entities`. A full push of common
    failed on a record of its own ("Display Name cannot be null") until common fixed that record, and pushing only this directory
    works either way. The push writes `sync` blocks back into common's files; put them back as they were.
-4. **This app's migrations:** `pnpm run mj:migrate`.
+4. **This app's migrations:** `pnpm run mj:migrate`. `migrations/` holds one baseline, `B202610012101__v0.1.x__Baseline.sql`:
+   the schema's DDL and, under CodeGen's banner, CodeGen's capture as the rows it left in MJ's metadata tables. Skyway applies a
+   baseline only to a database with no history for the schema; a database that ran the earlier `V` files keeps them and takes
+   only the `V` files added after the baseline. See [regenerating the baseline](#regenerating-the-baseline) below.
 5. **This app's metadata, in one push:**
 
    ```bash
@@ -38,10 +41,14 @@ when `mj` is not on the path of the member you are in.
    node scripts/strip-sync-blocks.mjs
    ```
 
-   A second `mj sync push --dir=metadata` then reports nothing to do. `strip-sync-blocks.mjs` removes the `sync` blocks the push
+   If the push is refused `EXECUTE permission was denied on the object 'spCreateRowLevelSecurityFilter'`, the database's
+   MJ_Connect is not db_owner and MJ's Developer permission row on Row Level Security Filters has no EXECUTE grants on its create
+   and update procedures (an MJ gap, reported from PR 10): grant EXECUTE on the two procedures to `cdp_Developer` as CodeGen's
+   login and push again. A second `mj sync push --dir=metadata` then reports nothing to do. `strip-sync-blocks.mjs` removes the `sync` blocks the push
    writes back and restores each file's final newline; `--check` fails if either is wrong (CI runs it).
-6. **The example types' own tables,** for a test database only. The board and the room keep their details in tables of their
-   own, in a schema of their own, as IsA children of Space; the migration holds their CodeGen output too:
+6. **The example type's own table,** for a test database only. The board keeps its details in a table of its own, in a schema of
+   its own, as an IsA child of Space; its baseline, `packages/ExampleSpaceTypes/migrations/B202610012201__v0.1.x__Baseline.sql`,
+   holds CodeGen's output too:
 
    ```bash
    pnpm run mj:migrate:examples
@@ -87,3 +94,28 @@ DELETE FROM __mj.RowLevelSecurityFilter WHERE Name = 'Collaboration: Agent Catal
 
 Then restart the host so it reloads its metadata. The narrow grants that replace them ship in `metadata/` (Agents In Reach, Agent
 Scope Assignments, Scope Permissions For The Caller); push `row-level-security-filters` and then `entity-permissions`.
+
+## Regenerating the baseline
+
+A baseline is regenerated when a stage's schema is final and its `V` files are to be collapsed (PR 10's item 144). It needs two
+databases no other session uses, built from empty as above:
+
+1. **The stack:** steps 1, 2, 4 and 6 only, with the `V` files in place and no push of ours. Then, from the repo root, with the
+   environment naming that database and CodeGen's login (`CODEGEN_DB_USERNAME` / `CODEGEN_DB_PASSWORD`; a login without VIEW
+   DEFINITION sees no view, procedure, default or filtered-index definitions):
+
+   ```bash
+   node scripts/build-baseline.mjs --schema __mj_BizAppsCollaboration --out migrations --stamp <latest V stamp + 1 minute> --exclude-schemas __mj_BizAppsCollabExamples
+   node scripts/build-baseline.mjs --schema __mj_BizAppsCollabExamples --out packages/ExampleSpaceTypes/migrations --stamp <same rule>
+   ```
+
+   `--exclude-schemas` names the schemas built on top of the one being baselined: the relationship between Spaces and Example
+   Boards was written by the examples' migration and belongs in their baseline, which runs after ours. Two runs on the same
+   database are byte-identical. Delete the `V` files and the old `B` file the new one replaces.
+2. **The proof:** steps 1 and 2, then steps 4 and 6 with only the new `B` files, and
+   `mj baseline compare --left <stack> --right <proof> --row-compare full --ignore '^flyway_schema_history$'` from the repo root
+   with the environment naming either database. Timestamps, record changes and MJ's own run logs differ; our schema's objects and
+   our rows in MJ's metadata tables must not. The proof database then continues with steps 3, 5, 7 and 8 and both harnesses.
+
+Filters, permissions and JSONType settings are not in a baseline: they stay JSON under `metadata/` and come in with step 5.
+

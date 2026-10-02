@@ -63,7 +63,7 @@ The engine reads space-role flags. It never compares space-role names.
 ## Who can read
 
 **Built.**
-- **`fnCollaborationAccess(@UserID)`** is the reach walk in SQL. It returns each reachable space with `CanSeeTeam`, `CanInvite` and `CanContribute` from the nearest seat. Its current definition is in `migrations/V202609262200__v0.1.x__Extensibility_Schema_And_Tables.sql`.
+- **`fnCollaborationAccess(@UserID)`** is the reach walk in SQL. It returns each reachable space with `CanSeeTeam`, `CanInvite` and `CanContribute` from the nearest seat. Its current definition is in `migrations/B202610012101__v0.1.x__Baseline.sql`, the schema's baseline.
 - **Row-level security filters** are metadata: `metadata/row-level-security-filters/`, bound to the **Space Participant** role in `metadata/entity-permissions/`.
   - Every one of the role's 64 read grants carries a filter, and none is NULL. A NULL filter on a grant a person holds exempts them from row-level security for that operation.
   - A share notice is readable only by the member it's addressed to, inside a space they reach. An item use is the caller's own row, inside a space they reach. Creating either carries a create filter, and the server subclass is the rest of the gate.

@@ -80,9 +80,7 @@
       "IsActive": true,
       "IconClass": "fa-solid fa-vault",
       "Color": "#455a64",
-      "Configuration": {
-        "PostCloseAccess": "None"
-      }
+      "Configuration": {}
     }
   }
 ]

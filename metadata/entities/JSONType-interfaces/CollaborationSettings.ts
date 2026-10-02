@@ -46,7 +46,13 @@ export interface CollaborationSettings {
         AllowedTypeCodes?: string[];
         MaxOpen?: number;
     };
-        for (const typeOnly of ['Children', 'SpaceOverridable', 'Seats']) {    /** How this level's grants of each kind combine with the level above (D30). Default 'Extend'. */
+    /** Dotted keys a space may override, for example 'StorageAccountID', 'Chats.WhoCanStart'. */
+    SpaceOverridable?: string[];
+    /** Who a type seats (item 142). 'StaffOnly' lets the type carry grants of a view, query or component; absent means 'StaffAndParticipants', which fails closed. A type's key; a space may not set it. */
+    Seats?: {
+        Audience?: 'StaffOnly' | 'StaffAndParticipants';
+    };
+    /** How this level's grants of each kind combine with the level above (D30). Default 'Extend'. */
     Grants?: Partial<Record<GrantKind, { ListMode?: 'Extend' | 'Replace' }>>;
     /** The entities a type's participants may read through an anchor (D28). A type's declaration; a space has none. */
     DataReach?: DataReachDeclaration[];

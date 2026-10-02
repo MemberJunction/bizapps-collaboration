@@ -23,6 +23,9 @@
  *   node scripts/build-baseline.mjs --schema __mj_BizAppsCollaboration --out migrations
  *   node scripts/build-baseline.mjs --schema __mj_BizAppsCollabExamples --out packages/ExampleSpaceTypes/migrations
  *   --dry-run prints a summary and the first lines instead of writing; --stamp YYYYMMDDHHMM fixes the filename's time.
+ *   --exclude-schemas a,b names the schemas built ON TOP of this one (the example types' on the Collaboration schema): a
+ *   relationship between one of their entities and one of ours was written by their migration and belongs in their
+ *   baseline, so it is left out of this one.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,6 +46,7 @@ const description = args.description ?? `BizApps Collaboration baseline for ${sc
 const generatedAt = args.stamp ? parseStamp(args.stamp) : new Date();
 const dryRun = Boolean(args['dry-run']);
 const mjSchema = process.env.MJ_CORE_SCHEMA || '__mj';
+const excludedSchemas = String(args['exclude-schemas'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 
 // Definitions of views, procedures, defaults, checks and filtered indexes come from sys.sql_modules and friends, which show
 // nothing to a login without VIEW DEFINITION: connect as CodeGen's login (db_owner), the pair `mj migrate` requires.
@@ -103,6 +107,10 @@ try {
     const entityName = `(SELECT Name FROM ${QuoteIdent(mjSchema)}.Entity e WHERE e.ID = t.EntityID)`;
     const relatedName = `(SELECT Name FROM ${QuoteIdent(mjSchema)}.Entity e WHERE e.ID = t.RelatedEntityID)`;
 
+    // A relationship whose other side lives in a schema built on top of this one was written by that schema's migration
+    const dependents = excludedSchemas.length ? `SELECT ID FROM ${QuoteIdent(mjSchema)}.Entity WHERE SchemaName IN (${excludedSchemas.map(lit).join(', ')})` : null;
+    const dependentsClause = dependents ? ` AND EntityID NOT IN (${dependents}) AND RelatedEntityID NOT IN (${dependents})` : '';
+
     /** Each table CodeGen writes for an app, with the rows that are this app's and a deterministic order. */
     const captures = [
         { table: 'Application', where: `ID IN (${appIds})`, order: 'Name' },
@@ -111,7 +119,7 @@ try {
         { table: 'ApplicationEntity', where: `EntityID IN (${entityIds})`, order: `${entityName}, Sequence` },
         { table: 'EntityField', where: `EntityID IN (${entityIds})`, order: `${entityName}, Sequence, Name` },
         { table: 'EntityFieldValue', where: `EntityFieldID IN (${fieldIds})`, order: `(SELECT e.Name + N'.' + f.Name FROM ${QuoteIdent(mjSchema)}.EntityField f JOIN ${QuoteIdent(mjSchema)}.Entity e ON e.ID = f.EntityID WHERE f.ID = t.EntityFieldID), Sequence, Value` },
-        { table: 'EntityRelationship', where: `EntityID IN (${entityIds}) OR RelatedEntityID IN (${entityIds})`, order: `${entityName}, ${relatedName}, Sequence, ID` },
+        { table: 'EntityRelationship', where: `(EntityID IN (${entityIds}) OR RelatedEntityID IN (${entityIds}))${dependentsClause}`, order: `${entityName}, ${relatedName}, Sequence, ID` },
         { table: 'EntityPermission', where: `EntityID IN (${entityIds})`, order: `${entityName}, (SELECT Name FROM ${QuoteIdent(mjSchema)}.Role r WHERE r.ID = t.RoleID)` },
     ];
     const skipColumns = new Set(['__mj_createdat', '__mj_updatedat']);
