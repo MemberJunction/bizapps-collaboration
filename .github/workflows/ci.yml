@@ -131,6 +131,9 @@ jobs:
                 await new Promise((r) => setTimeout(r, 3000));
               }
             }"
+      - name: A throwaway encryption key for this database
+        # The sample world saves an MJ Credentials row, whose Values field MJ encrypts with this key.
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - name: MemberJunction core, migrations and metadata
         working-directory: .ci/MJ
         run: |
