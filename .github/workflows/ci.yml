@@ -83,9 +83,11 @@ jobs:
           repository: MemberJunction/MJ
           ref: 91c3c9115c54157665a4dd022e4271ac05d5ce8e
           path: .ci/MJ
+          # MJ's prompt templates @include files under packages/AI/CorePlus/generated-for-prompt, so the push needs them too.
           sparse-checkout: |
             migrations
             metadata
+            packages/AI/CorePlus/generated-for-prompt
       - uses: actions/checkout@v4
         with:
           repository: MemberJunction/bizapps-common
