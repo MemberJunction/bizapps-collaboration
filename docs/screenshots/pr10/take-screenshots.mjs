@@ -111,7 +111,9 @@ const SHOTS = [
         name: '04-client-people', who: 'guest', item: '25',
         run: async (page) => {
             await page.goto(spaceUrl(NORTHWIND, 'people'));
-            await assertScreen(page, '04', { present: ['Active', 'Outside member', 'Owner'] });
+            // The guest's own row reads Outside member or Outside admin, by the seat they were given
+            await page.getByText(/Outside (member|admin)/).first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => { throw new Error('04: no outside seat is listed'); });
+            await assertScreen(page, '04', { present: ['Active', 'Owner'] });
         },
     },
     {
