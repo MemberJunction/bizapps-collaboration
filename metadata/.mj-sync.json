@@ -12,6 +12,7 @@
     "authorizations",
     "authorization-roles",
     "user-notification-types",
+    "audit-log-types",
     "permission-domains",
     "resource-types",
     "space-types",

@@ -60,6 +60,10 @@ export { resolveAllowedAgents, agentsFromConfiguration, COLLABORATION_DEFAULT_AG
 export { loadSpaceConfiguration, typeSettingsOf } from './space-configuration.js';
 export { getSpaceConfigurationForUser } from './get-space-configuration.js';
 export { ensureSpaceForRecordForUser } from './ensure-space-for-record-operation.js';
+export { resolveBindings } from './resolve-bindings.js';
+export type { BoundValue, ResolveBindingsOutcome } from './resolve-bindings.js';
+export { runSpaceView, runSpaceQuery, getSpaceDashboard, GRANT_RUN_AUDIT_LOG_TYPE } from './grant-operations.js';
+export type { ClientValues, GrantRunRequest, RowsOutcome, DashboardOutcome } from './grant-operations.js';
 export type { EnsureSpaceForRecordInput, EnsureSpaceForRecordOutcome } from './ensure-space-for-record-operation.js';
 export type { GetSpaceConfigurationOutcome } from './get-space-configuration.js';
 export { loadReach } from './space-reach.js';

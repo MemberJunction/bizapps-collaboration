@@ -7,7 +7,7 @@
  * Rights: the app's and a type's rows need 'Configure Space Types'; a space's need 'Configure Spaces' and an owner seat on it, or
  * 'Administer Spaces' (the world loader and the harness write grants without a seat).
  */
-import { BaseEntity, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type IMetadataProvider, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
     type AgentDefinitionForGrant,
@@ -121,6 +121,25 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
             return fail(result, 'TargetRecordID', error instanceof Error ? error.message : 'Grant change refused: the system user is not available.');
         }
         const rv = new RunView(this.RunViewProviderToUse);
+
+        // The type the grant is judged under (its own, or its space's) and § 4's four rules come first: a kind the rule refuses is
+        // refused by the rule, whether or not its target exists
+        const judged = await this.judgedUnder(rv, system, spaceId, typeId, md as IMetadataProvider);
+        if ('refusal' in judged) return fail(result, judged.field, judged.refusal);
+        typeId = judged.typeId;
+        const typeConfig = judged.typeConfig;
+        let bindings: unknown = null;
+        if (this.Bindings) {
+            try {
+                bindings = JSON.parse(this.Bindings);
+            } catch {
+                return fail(result, 'Bindings', 'Grant change refused: Bindings must be valid JSON.');
+            }
+        }
+        const hasBindings = !!bindings && typeof bindings === 'object' && Object.keys(bindings as object).length > 0;
+        const rule = grantRuleRefusal({ kind, hasBindings, audience: typeSeatsAudience(typeConfig) });
+        if (rule) return fail(result, 'Kind', rule);
+
         const targetFields = kind === 'Agent' ? ['ID', 'Name', 'Status', 'AcceptsSkills', 'MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun'] : ['ID', 'Name'];
         const targets = await rv.RunView<Record<string, unknown>>({
             EntityName: kindEntity.Name,
@@ -133,39 +152,7 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
         const target = targets.Results?.[0];
         if (!target) return fail(result, 'TargetRecordID', `Grant change refused: no ${kindEntity.Name} row has id ${targetId}.`);
 
-        // The type the grant is judged under: its own, or its space's
-        if (spaceId) {
-            const spaces = await rv.RunView<{ SpaceTypeID: string }>({ EntityName: SPACES, ExtraFilter: `ID = '${spaceId}'`, Fields: ['SpaceTypeID'], ResultType: 'simple', MaxRows: 1 }, system);
-            if (!spaces.Success) return fail(result, 'SpaceID', `Grant change refused: the space could not be read: ${spaces.ErrorMessage ?? 'unknown error'}`);
-            if (!spaces.Results?.[0]) return fail(result, 'SpaceID', 'Grant change refused: that space does not exist.');
-            typeId = parseUuid(spaces.Results[0].SpaceTypeID);
-        }
-        let typeConfig: CollaborationSettings | null = null;
-        if (typeId) {
-            await CollaborationEngine.Instance.EnsureLoaded(system, md);
-            const type = CollaborationEngine.Instance.SpaceTypeById(typeId);
-            if (!type) return fail(result, 'SpaceTypeID', 'Grant change refused: the space type could not be read.');
-            if (type.Configuration) {
-                try {
-                    typeConfig = JSON.parse(type.Configuration) as CollaborationSettings;
-                } catch {
-                    return fail(result, 'SpaceTypeID', "Grant change refused: the type's configuration does not parse.");
-                }
-            }
-        }
-
         // Bindings: each name a real parameter of the target where the server knows them, each expression parses
-        let bindings: unknown = null;
-        if (this.Bindings) {
-            try {
-                bindings = JSON.parse(this.Bindings);
-            } catch {
-                return fail(result, 'Bindings', 'Grant change refused: Bindings must be valid JSON.');
-            }
-        }
-        const hasBindings = !!bindings && typeof bindings === 'object' && Object.keys(bindings as object).length > 0;
-        const rule = grantRuleRefusal({ kind, hasBindings, audience: typeSeatsAudience(typeConfig) });
-        if (rule) return fail(result, 'Kind', rule);
         if (bindings !== null) {
             const names = await this.targetNames(rv, system, kind, targetId);
             const errors = validateSpaceGrantBindings(bindings, names);
@@ -186,6 +173,30 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
             if (errors.length) return fail(result, 'Settings', `Grant change refused: ${errors.join(' ')}`);
         }
         return result;
+    }
+
+    /** The type a grant is judged under (its own, or its space's) and that type's configuration. */
+    private async judgedUnder(rv: RunView, system: Parameters<RunView['RunView']>[1], spaceId: string | null, typeId: string | null, md: IMetadataProvider | undefined): Promise<{ typeId: string | null; typeConfig: CollaborationSettings | null } | { field: string; refusal: string }> {
+        if (spaceId) {
+            const spaces = await rv.RunView<{ SpaceTypeID: string }>({ EntityName: SPACES, ExtraFilter: `ID = '${spaceId}'`, Fields: ['SpaceTypeID'], ResultType: 'simple', MaxRows: 1 }, system);
+            if (!spaces.Success) return { field: 'SpaceID', refusal: `Grant change refused: the space could not be read: ${spaces.ErrorMessage ?? 'unknown error'}` };
+            if (!spaces.Results?.[0]) return { field: 'SpaceID', refusal: 'Grant change refused: that space does not exist.' };
+            typeId = parseUuid(spaces.Results[0].SpaceTypeID);
+        }
+        let typeConfig: CollaborationSettings | null = null;
+        if (typeId) {
+            await CollaborationEngine.Instance.EnsureLoaded(system, md);
+            const type = CollaborationEngine.Instance.SpaceTypeById(typeId);
+            if (!type) return { field: 'SpaceTypeID', refusal: 'Grant change refused: the space type could not be read.' };
+            if (type.Configuration) {
+                try {
+                    typeConfig = JSON.parse(type.Configuration) as CollaborationSettings;
+                } catch {
+                    return { field: 'SpaceTypeID', refusal: "Grant change refused: the type's configuration does not parse." };
+                }
+            }
+        }
+        return { typeId, typeConfig };
     }
 
     /** The parameter names of an action or a query; null for a target whose names the server does not read. */

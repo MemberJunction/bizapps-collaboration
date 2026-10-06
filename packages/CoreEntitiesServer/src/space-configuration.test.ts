@@ -27,7 +27,12 @@ const state: MockState = { spaces: [] };
 const runView = async <T>(params: RunViewParams): Promise<RunViewResult<T>> => {
     const ok = (rows: object[]): RunViewResult<T> => ({ Success: true, Results: rows as unknown as T[], RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' });
     const filter = String(params.ExtraFilter ?? '');
-    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') return ok(state.types ?? TYPES);
+    if (params.EntityName === 'MJ_BizApps_Collaboration: Space Types') {
+        // The engine reads them all; the loader reads one by id when the engine does not hold it
+        const wanted = /'([0-9a-f-]{36})'/i.exec(filter)?.[1]?.toLowerCase();
+        const rows = state.types ?? TYPES;
+        return ok(wanted ? rows.filter((row) => row.ID.toLowerCase() === wanted) : rows);
+    }
     if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
         if (state.failRead) return { Success: false, ErrorMessage: 'the read failed', Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 };
         const wanted = /'([0-9a-f-]{36})'/i.exec(filter)?.[1]?.toLowerCase();
@@ -126,7 +131,7 @@ describe('loadSpaceConfiguration', () => {
         await assert.rejects(loadSpaceConfiguration(await world(goodChain), "x'; DROP TABLE Space; --", { reader: system }), /is not a valid space id/);
     });
 
-    it('refuses a type the engine does not hold', async () => {
+    it('refuses a type neither the engine nor the database holds', async () => {
         const rows = [{ ...goodChain[0], SpaceTypeID: '99999999-9999-4999-8999-999999999999' }, goodChain[1]];
         const provider = await world(rows);
         await assert.rejects(loadSpaceConfiguration(provider, CHILD_ID, { reader: system }), /Space settings refused: the space type 99999999-9999-4999-8999-999999999999 could not be read/);

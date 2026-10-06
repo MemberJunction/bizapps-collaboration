@@ -478,20 +478,6 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             }
         }
 
-        // The one configuration (B16): the app, the type, the same-type run and this space as the save holds it, before it is written
-        let configuration;
-        try {
-            configuration = await ServerDriverRegistry.Instance.ConfigurationFor({ ID: this.ID, ParentID: parseUuid(String(getFieldVal<string | null>(this, 'ParentID') ?? '')) ?? null, SpaceTypeID: typeId, Configuration: rawConfig ?? null }, this.ProviderToUse);
-        } catch (chainErr) {
-            return fail(result, 'Configuration', chainErr instanceof Error ? chainErr.message : "Space change refused: the space's configuration could not be resolved.");
-        }
-        const effectiveRules = RulesOf(configuration);
-        const adjustedRules = driver && spaceType
-            ? await driver.AdjustRules(
-                { actingUser: user, provider: this.ProviderToUse, space: this, spaceType, configuration, effectiveRules },
-                effectiveRules
-            )
-            : effectiveRules;
 
         if (!this.IsSaved) {
             if (spaceType) {
@@ -593,6 +579,21 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         const statusChange = change.statusChanged || change.justClosed || change.justReopened
             ? { fromCode: change.statusFrom?.Code ?? null, toCode: change.statusTo?.Code ?? null }
             : undefined;
+
+        // The one configuration (B16): the app, the type, the same-type run and this space as the save holds it, before it is written
+        let configuration;
+        try {
+            configuration = await ServerDriverRegistry.Instance.ConfigurationFor({ ID: this.ID, ParentID: parseUuid(String(getFieldVal<string | null>(this, 'ParentID') ?? '')) ?? null, SpaceTypeID: typeId, Configuration: rawConfig ?? null }, this.ProviderToUse);
+        } catch (chainErr) {
+            return fail(result, 'Configuration', chainErr instanceof Error ? chainErr.message : "Space change refused: the space's configuration could not be resolved.");
+        }
+        const effectiveRules = RulesOf(configuration);
+        const adjustedRules = driver && spaceType
+            ? await driver.AdjustRules(
+                { actingUser: user, provider: this.ProviderToUse, space: this, spaceType, configuration, effectiveRules },
+                effectiveRules
+            )
+            : effectiveRules;
 
         if (driver && spaceType) {
             const driverValidation = await driver.ValidateSpaceChange({

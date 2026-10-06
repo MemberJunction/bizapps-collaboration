@@ -37,6 +37,7 @@ export const RESOLVER_PATHS = [
     resolve(here, 'create-space.resolver.{js,ts}'),
     resolve(here, 'get-space-configuration.resolver.{js,ts}'),
     resolve(here, 'ensure-space-for-record.resolver.{js,ts}'),
+    resolve(here, 'grant-operations.resolver.{js,ts}'),
 ];
 
 export { mintSpaceLink } from './mint-space-link.js';

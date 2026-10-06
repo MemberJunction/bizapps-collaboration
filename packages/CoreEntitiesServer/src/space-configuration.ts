@@ -25,6 +25,7 @@ import { parseUuid } from './uuid.js';
 
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
+const TYPES = 'MJ_BizApps_Collaboration: Space Types';
 const GRANT_FIELDS = ['ID', 'SpaceID', 'SpaceTypeID', 'Kind', 'Mode', 'TargetEntityID', 'TargetRecordID', 'Label', 'Band', 'IsDefault', 'Bindings', 'Settings', 'Sequence'];
 
 /** One space on the chain, as the loader read it or as a save hands it in. */
@@ -194,18 +195,26 @@ export async function loadSpaceConfiguration(provider: IMetadataProvider, spaceI
     const chain = await readChain(rv, system, leaf ? leaf.ParentID : spaceId, leaf);
     if (!chain.length) refuse('there is no space to resolve.');
 
-    // Every type on the chain is read once; a type that cannot be read, or whose configuration does not parse, refuses
+    // Every type on the chain is read once: from the engine, or, for a type the engine does not hold yet (one saved since it loaded),
+    // from the database. A type that cannot be read, or whose configuration does not parse, refuses.
     const typeSettingsById = new Map<string, CollaborationSettings | null>();
-    const typeFor = (typeId: string | null | undefined): mjBizAppsCollaborationSpaceTypeEntity | null => {
+    const typesRead = new Map<string, mjBizAppsCollaborationSpaceTypeEntity>();
+    const typeFor = async (typeId: string | null | undefined): Promise<mjBizAppsCollaborationSpaceTypeEntity | null> => {
         const id = parseUuid(typeId ?? '');
         if (!id) return null;
-        const type = engine.SpaceTypeById(id);
-        if (!type) return refuse(`the space type ${id} could not be read.`);
+        let type: mjBizAppsCollaborationSpaceTypeEntity | undefined = engine.SpaceTypeById(id) ?? typesRead.get(id.toLowerCase());
+        if (!type) {
+            const read = await rv.RunView<mjBizAppsCollaborationSpaceTypeEntity>({ EntityName: TYPES, ExtraFilter: `ID = '${id}'`, ResultType: 'simple', MaxRows: 1 }, system);
+            if (!read.Success) return refuse(`the space type ${id} could not be read: ${read.ErrorMessage ?? 'unknown error'}`);
+            type = read.Results?.[0];
+            if (!type) return refuse(`the space type ${id} could not be read.`);
+            typesRead.set(id.toLowerCase(), type);
+        }
         if (!typeSettingsById.has(id.toLowerCase())) typeSettingsById.set(id.toLowerCase(), typeSettingsOf(type));
         return type;
     };
     const settingsOfType = (type: mjBizAppsCollaborationSpaceTypeEntity | null): CollaborationSettings | null => (type ? (typeSettingsById.get((parseUuid(type.ID) ?? type.ID).toLowerCase()) ?? null) : null);
-    const type = typeFor(chain[0].SpaceTypeID);
+    const type = await typeFor(chain[0].SpaceTypeID);
     const typeSettings = settingsOfType(type);
 
     // The chain's own grants, in one read; the leaf of a save that is not written yet has none
@@ -216,12 +225,15 @@ export async function loadSpaceConfiguration(provider: IMetadataProvider, spaceI
     const typeGrants = type ? engine.SpaceGrantsForType(type.ID).map(asInput) : [];
     await markTargets(rv, system, [...appGrants, ...typeGrants, ...spaceGrants.map((grant) => grant.input)]);
 
-    const spaces: SpaceLevelInput[] = chain.map((row) => ({
-        ID: row.ID,
-        TypeID: row.SpaceTypeID,
-        Settings: parseSpaceSettings(row, settingsOfType(typeFor(row.SpaceTypeID))),
-        Grants: spaceGrants.filter((grant) => sameId(grant.spaceId, row.ID)).map((grant) => grant.input),
-    }));
+    const spaces: SpaceLevelInput[] = [];
+    for (const row of chain) {
+        spaces.push({
+            ID: row.ID,
+            TypeID: row.SpaceTypeID,
+            Settings: parseSpaceSettings(row, settingsOfType(await typeFor(row.SpaceTypeID))),
+            Grants: spaceGrants.filter((grant) => sameId(grant.spaceId, row.ID)).map((grant) => grant.input),
+        });
+    }
 
     const configuration = ResolveSpaceConfiguration({
         App: { Settings: engine.CollaborationSettings, Grants: appGrants },
