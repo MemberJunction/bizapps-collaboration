@@ -38,6 +38,9 @@ export class ExecuteSpaceChatTurnPayload {
 
     @Field(() => [String], { nullable: true })
     AllowedItemNames?: string[];
+    /** What the turn gave the agent (B20): the audience, the action ids, the data grant names, the knowledge sources and what was withheld, as JSON. */
+    @Field({ nullable: true })
+    ToolsJSON?: string;
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -82,6 +85,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 AgentRunID: result.agentRunId,
                 QuotedCount: result.quotedCount,
                 AllowedItemNames: result.allowedItemNames,
+                ToolsJSON: result.tools ? JSON.stringify(result.tools) : undefined,
             };
         } catch (error) {
             LogError(`ExecuteSpaceChatTurn failed for space ${input.SpaceID} and message ${input.UserMessageID}: ${error instanceof Error ? error.message : String(error)}`);

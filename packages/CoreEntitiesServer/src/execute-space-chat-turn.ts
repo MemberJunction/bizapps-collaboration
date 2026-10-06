@@ -13,8 +13,10 @@ import {
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MentionParser } from '@memberjunction/conversations-runtime';
-import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { audienceOfConversationKind, spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
+import { loadSpaceConfiguration } from './space-configuration.js';
+import { resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
@@ -63,8 +65,22 @@ export interface ExecuteSpaceChatTurnInput {
     observer?: TurnObserver;
 }
 
+/** What the turn gave the agent (B20), for the harness and the log: never the values, only the names and ids. */
+export interface TurnToolsGiven {
+    /** The conversation's audience, which cut the grants. */
+    audience: 'Shared' | 'Team';
+    /** The action ids the agent holds this turn: the granted ones and Run space data when there is data to run. */
+    actionIds: string[];
+    /** The names of the queries and views Run space data may run. */
+    dataGrantNames: string[];
+    /** The Content Source ids in force. */
+    knowledgeSourceIds: string[];
+    /** What was in force but not given, and why (D36's closures, settings MJ's run cannot take). */
+    withheld: string[];
+}
+
 export type ExecuteSpaceChatTurnResult =
-    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[] }
+    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[]; tools?: TurnToolsGiven }
     | { ok: false; message: string };
 
 /** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
@@ -83,6 +99,8 @@ const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please tr
  * 6. Client's agentId is treated only as a consistency check.
  * 7. Runs agent with ConversationHistoryFrom set to room's history floor and audience bounded.
  * 8. Writes reply as system user and returns real AgentRunId.
+ * 9. B20: the one configuration is loaded once; the grants in force for the conversation's audience become the run's tools
+ *    (`actionChanges`, Run space data's context, the knowledge sources) and the agent grant's settings become the run's.
  */
 export async function executeSpaceChatTurn(
     provider: IMetadataProvider,
@@ -234,10 +252,16 @@ async function runClaimedTurn(
         return { ok: false, message: 'This message has already been processed by an agent turn.' };
     }
 
-    // 5. Unified settings resolution (Item 16)
+    // 5. The one configuration, loaded once for the settings, the agents and the tools (B16, B20)
+    let loaded: Awaited<ReturnType<typeof loadSpaceConfiguration>>;
+    try {
+        loaded = await loadSpaceConfiguration(provider, spaceId);
+    } catch (configurationError) {
+        return { ok: false, message: configurationError instanceof Error ? configurationError.message : 'The space\'s configuration could not be resolved.' };
+    }
     let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
     try {
-        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system);
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system, loaded);
     } catch (settingsError) {
         return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
     }
@@ -247,7 +271,7 @@ async function runClaimedTurn(
     // 6. Resolve allowed agents
     let allowed: Awaited<ReturnType<typeof resolveAllowedAgents>>;
     try {
-        allowed = await resolveAllowedAgents(provider, spaceId, system);
+        allowed = await resolveAllowedAgents(provider, spaceId, system, loaded.configuration);
     } catch (agentsError) {
         return { ok: false, message: agentsError instanceof Error ? agentsError.message : 'Allowed agents refused.' };
     }
@@ -304,6 +328,24 @@ async function runClaimedTurn(
     if (!isAgentAllowed) {
         return { ok: false, message: `The agent ${targetAgentId} is not allowed in this space.` };
     }
+
+    // 7b. The turn's tools (B20): the grants in force for the conversation's audience, and the agent grant's run settings
+    const audience = audienceOfConversationKind(foundChat.Kind);
+    let turnTools: Awaited<ReturnType<typeof resolveTurnTools>>;
+    try {
+        turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId);
+    } catch (toolsError) {
+        return { ok: false, message: `The turn's tools could not be resolved: ${toolsError instanceof Error ? toolsError.message : String(toolsError)}` };
+    }
+    const toolsGiven: TurnToolsGiven = {
+        audience,
+        actionIds: turnTools.actionIds,
+        dataGrantNames: turnTools.spaceData.map((grant) => grant.Name),
+        knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
+        withheld: turnTools.withheld,
+    };
+    // What Run space data reads when the agent calls it; the run's id is filled in once the run exists (A2)
+    const turnContext: SpaceTurnContext = { spaceId, conversationId, audience, spaceData: turnTools.spaceData, agentRunId: null };
 
     // 8. History floor from Chats.HistoryOnAdd (Item 16)
     let conversationHistoryFrom: Date | undefined;
@@ -399,14 +441,25 @@ async function runClaimedTurn(
                     data: {
                         spaceId,
                         conversationId,
-                        audience: foundChat.Kind === 'Private' ? 'Team' : 'Shared',
+                        audience,
                         allowedItems: audienceQuoted,
+                        // B20: what the model is told it may run, and the knowledge in force; the values stay the server's
+                        spaceData: turnTools.spaceData,
+                        knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
                     },
+                    context: turnContext,
+                    ...(turnTools.actionChanges.length ? { actionChanges: turnTools.actionChanges } : {}),
+                    ...(turnTools.runSettings.planMode !== undefined ? { planMode: turnTools.runSettings.planMode } : {}),
+                    ...(turnTools.runSettings.effortLevel !== undefined ? { effortLevel: turnTools.runSettings.effortLevel } : {}),
+                    ...(turnTools.runSettings.requestedSkillIDs.length ? { requestedSkillIDs: turnTools.runSettings.requestedSkillIDs } : {}),
+                    ...(turnTools.runSettings.absoluteMaxIterations !== undefined ? { absoluteMaxIterations: turnTools.runSettings.absoluteMaxIterations } : {}),
+                    ...(turnTools.runSettings.maxExecutionTimeMs !== undefined ? { maxExecutionTimeMs: turnTools.runSettings.maxExecutionTimeMs } : {}),
                     conversationMessages: assembledMessages,
                     onProgress: input.observer?.OnProgress,
                     onStreaming: input.observer?.OnStreaming,
                     onAgentRunCreated: async (createdRunId: string) => {
                         agentRunId = createdRunId;
+                        turnContext.agentRunId = createdRunId;
                         try {
                             const runObj = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', system);
                             if (runObj && (await runObj.Load(createdRunId))) {
@@ -485,6 +538,7 @@ async function runClaimedTurn(
             agentRunId,
             quotedCount: audienceQuoted.length,
             allowedItemNames: audienceQuoted.map((item) => item.Name),
+            tools: toolsGiven,
         };
     };
 
@@ -518,7 +572,7 @@ async function runClaimedTurn(
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
         void settleTurn().finally(handoff.release);
-        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name) };
+        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), tools: toolsGiven };
     }
     return settleTurn();
 }

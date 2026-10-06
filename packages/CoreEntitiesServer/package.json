@@ -16,6 +16,8 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "@memberjunction/actions": "6.2.0-edge.2",
+    "@memberjunction/actions-base": "6.2.0-edge.2",
     "@mj-biz-apps/collaboration-core": "0.1.0",
     "@mj-biz-apps/collaboration-engine-base": "0.1.0",
     "@mj-biz-apps/collaboration-entities": "0.1.0"

@@ -88,3 +88,7 @@ export { createSpaceConversation, evaluateCanStartSpaceConversation } from './cr
 export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
 
 
+export { resolveTurnTools, findSpaceDataGrant, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME } from './turn-tools.js';
+export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './turn-tools.js';
+export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
+export type { TurnToolsGiven } from './execute-space-chat-turn.js';
