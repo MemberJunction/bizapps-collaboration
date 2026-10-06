@@ -34,9 +34,10 @@ export interface CollaborationSettings {
         /** How this level's SpaceAgent rows combine with the list above. Default 'Extend'. */
         ListMode?: 'Extend' | 'Replace';
     };
-    /** Word overrides, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }. */
+    /** Word overrides: tab labels, e.g. { Tabs: { Library: 'Papers', People: 'Members' } }, and the two bands' names (item 53). */
     Labels?: {
         Tabs?: Record<string, string>;
+        Bands?: { Team?: string; Shared?: string };
     };
     /** Types that may be created under a space of this type. */
     Children?: {
@@ -113,66 +114,6 @@ export const DEFAULT_SPACE_RULES: EffectiveSpaceRules = {
     Labels: undefined,
     Extensions: {},
 };
-
-/**
- * Resolves effective rules for a space given its type configuration and space-level overrides.
- *
- * 1. Starts from Collaboration's defaults.
- * 2. Applies the type's values.
- * 3. Applies the space's values ONLY for the dotted keys listed in `type.SpaceOverridable`.
- */
-export function ResolveSpaceRules(
-    typeConfig: ISpaceTypeConfiguration | null | undefined,
-    spaceConfig: ISpaceConfiguration | null | undefined
-): EffectiveSpaceRules {
-    const rules: EffectiveSpaceRules = {
-        Chats: {
-            WhoCanStart: typeConfig?.Chats?.WhoCanStart ?? DEFAULT_SPACE_RULES.Chats.WhoCanStart,
-            AgentReplyMode: typeConfig?.Chats?.AgentReplyMode ?? DEFAULT_SPACE_RULES.Chats.AgentReplyMode,
-            HistoryOnAdd: typeConfig?.Chats?.HistoryOnAdd ?? DEFAULT_SPACE_RULES.Chats.HistoryOnAdd,
-        },
-        Agents: {
-            ListMode: typeConfig?.Agents?.ListMode ?? DEFAULT_SPACE_RULES.Agents.ListMode,
-        },
-        Labels: typeConfig?.Labels,
-        Extensions: {
-            ...(typeConfig?.Extensions ?? {}),
-        },
-    };
-
-    if (!spaceConfig || !typeConfig?.SpaceOverridable || typeConfig.SpaceOverridable.length === 0) {
-        return rules;
-    }
-
-    const overridable = new Set(typeConfig.SpaceOverridable);
-
-    if (overridable.has('Chats.WhoCanStart') && spaceConfig.Chats?.WhoCanStart) {
-        rules.Chats.WhoCanStart = spaceConfig.Chats.WhoCanStart;
-    }
-    if (overridable.has('Chats.AgentReplyMode') && spaceConfig.Chats?.AgentReplyMode) {
-        rules.Chats.AgentReplyMode = spaceConfig.Chats.AgentReplyMode;
-    }
-    if (overridable.has('Chats.HistoryOnAdd') && spaceConfig.Chats?.HistoryOnAdd) {
-        rules.Chats.HistoryOnAdd = spaceConfig.Chats.HistoryOnAdd;
-    }
-    if (overridable.has('Agents.ListMode') && spaceConfig.Agents?.ListMode) {
-        rules.Agents.ListMode = spaceConfig.Agents.ListMode;
-    }
-
-    // Check extensions overrides (e.g. 'Extensions.MyApp')
-    if (spaceConfig.Extensions) {
-        for (const [appName, appSettings] of Object.entries(spaceConfig.Extensions)) {
-            if (overridable.has(`Extensions.${appName}`) || overridable.has('Extensions')) {
-                rules.Extensions[appName] = {
-                    ...(rules.Extensions[appName] ?? {}),
-                    ...appSettings,
-                };
-            }
-        }
-    }
-
-    return rules;
-}
 
 /**
  * Validates a SpaceTypeConfiguration object structure.
@@ -316,6 +257,7 @@ export interface ResolvedCollaborationSettings {
     };
     Labels?: {
         Tabs?: Record<string, string>;
+        Bands?: { Team?: string; Shared?: string };
     };
     Children?: {
         AllowedTypeCodes?: string[];
@@ -423,6 +365,16 @@ export function ValidateCollaborationSettings(
                     errors.push('Labels.Tabs must be an object.');
                 }
             }
+            if (labels['Bands'] !== undefined) {
+                const bands = labels['Bands'] as Record<string, unknown> | null;
+                if (!bands || typeof bands !== 'object' || Array.isArray(bands)) errors.push('Labels.Bands must be an object.');
+                else {
+                    for (const [band, name] of Object.entries(bands)) {
+                        if (band !== 'Team' && band !== 'Shared') errors.push(`Labels.Bands.${band}: the bands are Team and Shared.`);
+                        else if (typeof name !== 'string' || !name.trim()) errors.push(`Labels.Bands.${band} must be a non-empty string.`);
+                    }
+                }
+            }
         }
     }
 
@@ -520,8 +472,8 @@ export function ValidateCollaborationSettings(
                 errors.push('Labels must be an object.');
             } else {
                 for (const key of Object.keys(labels)) {
-                    if (key !== 'Tabs') errors.push(`Unknown Labels key: ${key}`);
-                    else if (!isAllowed('Labels.Tabs')) errors.push("Labels.Tabs cannot be overridden by space: not in type's SpaceOverridable.");
+                    if (key !== 'Tabs' && key !== 'Bands') errors.push(`Unknown Labels key: ${key}`);
+                    else if (!isAllowed(`Labels.${key}`)) errors.push(`Labels.${key} cannot be overridden by space: not in type's SpaceOverridable.`);
                 }
             }
         }
@@ -627,6 +579,18 @@ export function ResolveCollaborationSettings(
     if (Object.keys(tabs).length === 0) {
         tabs = undefined;
     }
+    // The bands' names: the nearest value wins per band; a space's only where the type lets it (item 53)
+    const bandLevels: Array<CollaborationSettings | null | undefined> = [...(isOverridable('Labels.Bands') || isOverridable('Labels') ? spaces : []), typeConfig, appConfig];
+    const bandName = (band: 'Team' | 'Shared'): string | undefined => {
+        for (const level of bandLevels) {
+            const name = level?.Labels?.Bands?.[band];
+            if (typeof name === 'string' && name.trim()) return name;
+        }
+        return undefined;
+    };
+    const teamName = bandName('Team');
+    const sharedName = bandName('Shared');
+    const bands = teamName || sharedName ? { ...(teamName ? { Team: teamName } : {}), ...(sharedName ? { Shared: sharedName } : {}) } : undefined;
 
     const extensions: Record<string, Record<string, ConfigurationValue>> = {
         ...(appConfig.Extensions ?? {}),
@@ -655,7 +619,7 @@ export function ResolveCollaborationSettings(
         Agents: {
             ListMode: listMode,
         },
-        Labels: tabs ? { Tabs: tabs } : undefined,
+        Labels: tabs || bands ? { ...(tabs ? { Tabs: tabs } : {}), ...(bands ? { Bands: bands } : {}) } : undefined,
         Children: typeConfig?.Children,
         Extensions: extensions,
     };

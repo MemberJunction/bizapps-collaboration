@@ -79,8 +79,6 @@ export {
     DEFAULT_COLLABORATION_SETTINGS,
     MissingAppSettingsError,
     refuseChildType,
-    ResolveCollaborationSettings,
-    ResolveSpaceRules,
     ValidateCollaborationSettings,
     validateSpaceConfiguration,
     validateSpaceTypeConfiguration,
@@ -97,6 +95,38 @@ export type {
     ResolvedCollaborationSettings,
 } from './configuration.js';
 export { typeSeatsAudience, validateDataReachDeclaration } from './configuration.js';
+export {
+    ResolveSpaceConfiguration,
+    CutConfigurationForViewer,
+    GrantsForViewer,
+    RulesOf,
+    sameTypeRun,
+} from './effective-configuration.js';
+export {
+    SPACE_BINDING_FIELDS,
+    USER_BINDING_FIELDS,
+    anchorRolesNeeded,
+    bindingSource,
+    bindingSources,
+    boundNames,
+    needsCallerPerson,
+    readSettingsPath,
+    refuseClientValues,
+} from './bindings.js';
+export type { BindingSource, SpaceBindingField, UserBindingField } from './bindings.js';
+export type {
+    ConfigurationLevel,
+    ConfigurationLevelInput,
+    ConfigurationViewer,
+    EffectiveConfigurationLink,
+    EffectiveGrant,
+    EffectiveSpaceConfiguration,
+    GrantMode,
+    GrantRowInput,
+    ResolveSpaceConfigurationInput,
+    SeatsAudience,
+    SpaceLevelInput,
+} from './effective-configuration.js';
 export {
     GRANT_KINDS,
     GRANT_KIND_ENTITY,

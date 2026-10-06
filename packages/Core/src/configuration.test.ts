@@ -4,7 +4,6 @@ import {
     typeSeatsAudience,
     DEFAULT_SPACE_RULES,
     ResolveCollaborationSettings,
-    ResolveSpaceRules,
     ValidateCollaborationSettings,
     validateSpaceConfiguration,
     refuseChildType,
@@ -14,79 +13,7 @@ import {
     type ISpaceTypeConfiguration,
 } from './configuration.ts';
 
-describe('Configuration & ResolveSpaceRules', () => {
-    it('returns default rules when type and space configurations are empty', () => {
-        const rules = ResolveSpaceRules(null, null);
-        assert.deepEqual(rules, DEFAULT_SPACE_RULES);
-
-        const rulesUndefined = ResolveSpaceRules(undefined, undefined);
-        assert.deepEqual(rulesUndefined, DEFAULT_SPACE_RULES);
-    });
-
-    it('applies type configuration values', () => {
-        const typeConfig: ISpaceTypeConfiguration = {
-            Chats: {
-                WhoCanStart: 'Owners',
-                AgentReplyMode: 'Always',
-                HistoryOnAdd: 'Since',
-            },
-            Agents: {
-                ListMode: 'Replace',
-            },
-            Extensions: {
-                audit: {
-                    RetentionDays: 90,
-                },
-            },
-        };
-
-        const rules = ResolveSpaceRules(typeConfig, null);
-        assert.equal(rules.Chats.WhoCanStart, 'Owners');
-        assert.equal(rules.Chats.AgentReplyMode, 'Always');
-        assert.equal(rules.Chats.HistoryOnAdd, 'Since');
-        assert.equal(rules.Agents.ListMode, 'Replace');
-        assert.deepEqual(rules.Extensions.audit, { RetentionDays: 90 });
-    });
-
-    it('applies space overrides only for keys in SpaceOverridable', () => {
-        const typeConfig: ISpaceTypeConfiguration = {
-            Chats: {
-                WhoCanStart: 'Owners',
-                AgentReplyMode: 'MentionOrOneToOne',
-                HistoryOnAdd: 'None',
-            },
-            Agents: {
-                ListMode: 'Extend',
-            },
-            SpaceOverridable: ['Chats.WhoCanStart', 'Agents.ListMode', 'Extensions.audit'],
-        };
-
-        const spaceConfig: ISpaceConfiguration = {
-            Chats: {
-                WhoCanStart: 'Owners', // Allowed
-                AgentReplyMode: 'Always', // NOT in SpaceOverridable, must NOT override
-            },
-            Agents: {
-                ListMode: 'Replace', // Allowed
-            },
-            Extensions: {
-                audit: {
-                    CustomFlag: true,
-                },
-                unauthorizedApp: {
-                    Flag: 123,
-                },
-            },
-        };
-
-        const rules = ResolveSpaceRules(typeConfig, spaceConfig);
-        assert.equal(rules.Chats.WhoCanStart, 'Owners'); // Overridden
-        assert.equal(rules.Chats.AgentReplyMode, 'MentionOrOneToOne'); // Kept from type
-        assert.equal(rules.Agents.ListMode, 'Replace'); // Overridden
-        assert.deepEqual(rules.Extensions.audit, { CustomFlag: true }); // Overridden
-        assert.equal(rules.Extensions.unauthorizedApp, undefined); // Not allowed
-    });
-
+describe('Configuration validation', () => {
     it('validates space type configuration correctly', () => {
         const valid = validateSpaceTypeConfiguration({
             Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOnly', HistoryOnAdd: 'All' },
@@ -327,8 +254,8 @@ describe('a space may set the label keys its type lists', () => {
         assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels.Tabs'] }).valid, true);
         assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
         assert.equal(ValidateCollaborationSettings(tabs, 'space', { SpaceOverridable: ['Chats.WhoCanStart'] }).valid, false);
-        const bands = ValidateCollaborationSettings({ Labels: { Bands: {} } }, 'space', { SpaceOverridable: ['Labels'] });
-        assert.match(bands.errors.join(' '), /Unknown Labels key: Bands/);
+        const bands = ValidateCollaborationSettings({ Labels: { Colors: {} } }, 'space', { SpaceOverridable: ['Labels'] });
+        assert.match(bands.errors.join(' '), /Unknown Labels key: Colors/);
     });
 });
 
@@ -372,3 +299,22 @@ describe('stage 1 configuration: Grants and DataReach', () => {
     });
 });
 
+
+describe('band names come from the type (item 53)', () => {
+    const app: CollaborationSettings = { Chats: { WhoCanStart: 'Anyone', AgentReplyMode: 'MentionOrOneToOne', HistoryOnAdd: 'None' }, Agents: { ListMode: 'Extend' } };
+    it('a type names the bands; a space may rename them only where the type lists Labels.Bands or Labels; the nearest level wins per band', () => {
+        const type: CollaborationSettings = { Labels: { Bands: { Team: 'Staff', Shared: 'Members' } }, SpaceOverridable: ['Labels.Bands'] };
+        const resolved = ResolveCollaborationSettings({ app, type, spaces: [{ Labels: { Bands: { Shared: 'Chapter members' } } }] });
+        assert.deepEqual(resolved.Labels?.Bands, { Team: 'Staff', Shared: 'Chapter members' });
+        const closed = ResolveCollaborationSettings({ app, type: { Labels: { Bands: { Team: 'Staff' } } }, spaces: [{ Labels: { Bands: { Shared: 'Chapter members' } } }] });
+        assert.deepEqual(closed.Labels?.Bands, { Team: 'Staff' }, "a space's names are not read where the type does not allow them");
+        assert.equal(ResolveCollaborationSettings({ app, type: null, spaces: [] }).Labels, undefined, 'no names configured: the app\'s words stand');
+    });
+    it('validation accepts the two bands with non-empty names and refuses anything else, and a space needs the type\'s leave', () => {
+        assert.equal(ValidateCollaborationSettings({ Labels: { Bands: { Team: 'Staff' } } }, 'type').valid, true);
+        assert.match(ValidateCollaborationSettings({ Labels: { Bands: { Guests: 'x' } } }, 'type').errors.join(' '), /the bands are Team and Shared/);
+        assert.match(ValidateCollaborationSettings({ Labels: { Bands: { Team: '' } } }, 'type').errors.join(' '), /non-empty string/);
+        assert.match(ValidateCollaborationSettings({ Labels: { Bands: { Team: 'Staff' } } }, 'space', { SpaceOverridable: ['Labels.Tabs'] }).errors.join(' '), /Labels.Bands cannot be overridden/);
+        assert.equal(ValidateCollaborationSettings({ Labels: { Bands: { Team: 'Staff' } } }, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
+    });
+});
