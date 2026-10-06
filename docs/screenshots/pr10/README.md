@@ -34,6 +34,16 @@ node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs --who staff
 
 `staff-session.json` holds the sign-in and stays out of git.
 
+## The leader (stage 2)
+
+Stage 2's screens (`20` to `24`) are taken as a chapter leader from the sample world, `personas.csv`'s lena: a Space Participant
+seated on *Chapter 12* and nowhere else, who signs in by magic link like the guest. `SCREENSHOT_LEADER_EMAIL` names someone else
+in that seat. The staff screens `30` to `33` need the staff session, seated on *Chapter 12 staff* and holding Developer.
+
+```sh
+node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs --who leader
+```
+
 ## Options
 
 `--who guest|staff|all` (default `all`), `--theme light|dark|both` (default `both`), `--only <name>` for one screen. A screen whose assertion fails is reported and the run exits 1.

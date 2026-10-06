@@ -1,25 +1,41 @@
 // Takes PR 10's screenshots in Explorer with Playwright, as the people the plan names, in light and dark, and asserts what each
 // screen must show before it saves the shot. See README.md for the setup.
 //
-//   node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs [--who guest|staff|all] [--theme light|dark|both] [--only <name>]
+//   node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs [--who guest|leader|staff|all] [--theme light|dark|both] [--only <name>]
 //   node docs/screenshots/pr10/take-screenshots.mjs --save-staff-session     (opens a browser: sign in once as staff)
 //
 // The guest is a seated outside member who signs in by magic link; the script mints the session itself. Staff sign in with the
 // host's provider, so their session is saved once by hand (--save-staff-session) and reused; the file stays out of git.
+// Stage 2's screens (20 to 33) add the leader: a chapter leader from the sample world, who also signs in by magic link.
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { mintGuestSession } from '../../../packages/IntegrationTests/dist/screenshots/magic-link-session.js';
+import { latestAuditLogId } from '../../../packages/IntegrationTests/dist/screenshots/latest-audit-log.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const EXPLORER = (process.env.EXPLORER_URL ?? 'http://localhost:4217').replace(/\/$/, '');
 const MJAPI = (process.env.MJAPI_URL ?? 'http://localhost:4117').replace(/\/$/, '');
 const GUEST_EMAIL = process.env.SCREENSHOT_GUEST_EMAIL ?? '';
+/** The chapter leader of the sample world's chapter 12 (a Space Participant with no host account): `personas.csv`'s lena. */
+const LEADER_EMAIL = process.env.SCREENSHOT_LEADER_EMAIL ?? 'lena.leader@collab-world.example';
 const STAFF_SESSION = join(here, 'staff-session.json');
 const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
 const CLOSED_THIS_MONTH = 'C1000001-0000-4000-8000-000000000007';
 const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
+// Stage 2's chapter world (spaces.csv): two chapters of the example-chapter type, a same-type sub-space and a staff-only sub-space
+const CHAPTER_12 = 'C1000001-0000-4000-8000-000000000016';
+const CHAPTER_40 = 'C1000001-0000-4000-8000-000000000017';
+const CHAPTER_12_OUTREACH = 'C1000001-0000-4000-8000-000000000018';
+const CHAPTER_12_STAFF = 'C1000001-0000-4000-8000-000000000019';
+const EXAMPLE_CHAPTER_TYPE = 'C716F54B-23F7-4C6D-AD12-F7C95D33F0D0';
+const GRANT_RUN_LOG_TYPE = '67486965-904D-4C18-8F20-5EDA97BFD2B4';
+const SPACE_TYPES = 'MJ_BizApps_Collaboration: Space Types';
+const AUDIT_LOGS = 'MJ: Audit Logs';
+const CHAPTER_MEMBERS = 'MJ_BizApps_Collaboration_Examples: Example Chapter Members';
+const recordUrl = (entity, id) => `${EXPLORER}/resource/record/${encodeURIComponent(entity)}/${id}`;
+const listUrl = (entity) => `${EXPLORER}/resource/view/dynamic/${encodeURIComponent(entity)}`;
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
@@ -160,6 +176,86 @@ const SHOTS = [
             await assertScreen(page, '12', { present: ['Discovery'], absent: ["can't post", 'not on the roster'] });
         },
     },
+    // Stage 2, the server: what it changed on screen. The leader is seated on chapter 12 (Shared band) and nowhere else; the
+    // staff-only sub-space (D34, 157) and the other chapter stay out of her list, the same-type sub-space (D30, row 18) is in it,
+    // and the People tab reads with the type's label (53, 101). The data reach itself (B18) has no screen until B19 in stage 4:
+    // it is checked over the wire (SC1) and in the persona check. Band names from the type (Labels.Bands) reach the dialogs in
+    // stage 4 too; today the upload dialog keeps its default words.
+    {
+        name: '20-leader-chapter-overview', who: 'leader', item: 'B24, 157, 18',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'overview'));
+            await assertScreen(page, '20', { present: ['Chapter 12', 'Chapter 12 outreach'], absent: ['Chapter 12 staff', 'Chapter 40'] });
+        },
+    },
+    {
+        name: '21-leader-chapter-members-tab', who: 'leader', item: '53, 101',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'people'));
+            // The type's Labels.Tabs renames People to Members for every chapter; the label lands when the server's document does
+            await page.getByRole('tab', { name: /Members/ }).waitFor({ state: 'visible', timeout: 20000 }).catch(() => { throw new Error('21: the People tab does not read "Members"'); });
+            await assertScreen(page, '21', { present: ['Lena'], absent: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '22-leader-same-type-subspace', who: 'leader', item: '18, D30',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_OUTREACH, 'overview'));
+            await assertScreen(page, '22', { present: ['Chapter 12 outreach'], absent: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '23-leader-other-chapter-not-in-list', who: 'leader', item: '14, 17',
+        run: async (page) => {
+            // A link to a space she does not reach opens her own list instead: nothing of chapter 40 is shown
+            await page.goto(spaceUrl(CHAPTER_40, 'overview'));
+            await assertScreen(page, '23', { present: ['Chapter 12'], absent: ['Chapter 40'] });
+        },
+    },
+    {
+        name: '24-leader-upload-dialog', who: 'leader', item: '6, 38',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'library'));
+            await page.getByRole('button', { name: /Upload/ }).first().click();
+            await assertScreen(page, '24', { present: ['Add document to Chapter 12', 'Who can see this?'], absent: ['Only the team can see it'] });
+        },
+    },
+    // Staff, seated on the staff-only sub-space as its owner and holding Developer: the sub-space itself, the type's record with
+    // its grants, a grant run's log row, and the chapter members as a Developer reads them (unfiltered: the reach is the
+    // participant role's).
+    {
+        name: '30-staff-staff-only-subspace', who: 'staff', item: '157, D34',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'overview'));
+            await assertScreen(page, '30', { present: ['Chapter 12 staff'] });
+        },
+    },
+    {
+        name: '31-staff-chapter-type-record', who: 'staff', item: 'B24, 13',
+        run: async (page) => {
+            await page.goto(recordUrl(SPACE_TYPES, EXAMPLE_CHAPTER_TYPE));
+            await assertScreen(page, '31', { present: ['example-chapter'] });
+            // The grants hang off the type as a related list; open it when the form offers it
+            await page.getByText(/Space Grants/).first().click({ timeout: 5000 }).catch(() => undefined);
+            await page.waitForTimeout(1500);
+        },
+    },
+    {
+        name: '32-staff-grant-run-log', who: 'staff', item: 'A2 stand-in, 16',
+        run: async (page) => {
+            const id = await latestAuditLogId(GRANT_RUN_LOG_TYPE);
+            if (!id) throw new Error('32: no grant run is logged yet; run the stage2 harness bundle first');
+            await page.goto(recordUrl(AUDIT_LOGS, id));
+            await assertScreen(page, '32', { present: ['Collaboration: Grant Run'] });
+        },
+    },
+    {
+        name: '33-staff-chapter-members-entity', who: 'staff', item: 'B18, 14',
+        run: async (page) => {
+            await page.goto(listUrl(CHAPTER_MEMBERS));
+            await assertScreen(page, '33', { present: ['Ivy', 'Lou'] });
+        },
+    },
 ];
 
 async function saveStaffSession() {
@@ -180,12 +276,16 @@ async function main() {
     mkdirSync(here, { recursive: true });
     const wanted = SHOTS.filter((s) => (who === 'all' || s.who === who) && (!only || s.name === only));
     const needsGuest = wanted.some((s) => s.who === 'guest');
+    const needsLeader = wanted.some((s) => s.who === 'leader');
     const needsStaff = wanted.some((s) => s.who === 'staff');
     if (needsGuest && !GUEST_EMAIL) throw new Error('Set SCREENSHOT_GUEST_EMAIL to a seated outside member (an invite from an owner seats them).');
     if (needsStaff && !existsSync(STAFF_SESSION)) {
         console.log(`No ${STAFF_SESSION}: the staff screens are skipped. Run --save-staff-session first.`);
     }
-    const guest = needsGuest ? await mintGuestSession(GUEST_EMAIL, MJAPI) : null;
+    const sessions = {
+        guest: needsGuest ? await mintGuestSession(GUEST_EMAIL, MJAPI) : null,
+        leader: needsLeader ? await mintGuestSession(LEADER_EMAIL, MJAPI) : null,
+    };
 
     // The full Chromium build, not the headless shell: only it paints a PDF in the viewer's frame
     const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: 'chromium' });
@@ -204,9 +304,10 @@ async function main() {
                 const errors = [];
                 page.on('pageerror', (e) => errors.push(String(e)));
                 try {
-                    if (shot.who === 'guest') {
+                    if (shot.who === 'guest' || shot.who === 'leader') {
                         // The session token rides in the fragment, as the redeem's redirect sends it; Explorer reads it on load
-                        await page.goto(`${EXPLORER}/app/${guest.applicationPath}#token=${encodeURIComponent(guest.token)}`, { waitUntil: 'load' });
+                        const session = sessions[shot.who];
+                        await page.goto(`${EXPLORER}/app/${session.applicationPath}#token=${encodeURIComponent(session.token)}`, { waitUntil: 'load' });
                         await page.getByText('All Spaces').first().waitFor({ state: 'visible', timeout: 60000 });
                     }
                     await shot.run(page);
