@@ -17,6 +17,7 @@ import { audienceOfConversationKind, spaceIsReadOnly, membershipReaches } from '
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { loadSpaceConfiguration } from './space-configuration.js';
 import { resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
+import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
@@ -101,6 +102,9 @@ const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please tr
  * 8. Writes reply as system user and returns real AgentRunId.
  * 9. B20: the one configuration is loaded once; the grants in force for the conversation's audience become the run's tools
  *    (`actionChanges`, Run space data's context, the knowledge sources) and the agent grant's settings become the run's.
+ * 10. The type's word (the extension model's 83): its driver's `BuildAgentContext` adds instructions and data to the turn, given
+ *    the chat and the bands of the people in it, so a type can leave Team-only data out when an outside person is in the chat.
+ *    A driver that fails here is logged and the turn runs without its context; it never takes the turn down.
  */
 export async function executeSpaceChatTurn(
     provider: IMetadataProvider,
@@ -347,6 +351,25 @@ async function runClaimedTurn(
     // What Run space data reads when the agent calls it; the run's id is filled in once the run exists (A2)
     const turnContext: SpaceTurnContext = { spaceId, conversationId, audience, spaceData: turnTools.spaceData, agentRunId: null };
 
+    // 7c. The type's word on the turn (item 83): the people in the chat, by band, then the driver's instructions and data
+    let typeContext: AgentContextResult = { instructions: [], contextData: {} };
+    try {
+        const seats = await view.RunView<{ UserID: string; Band: string }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'${audience === 'Team' ? " AND Band = 'Team'" : ''}`,
+            Fields: ['UserID', 'Band'],
+            ResultType: 'simple',
+            MaxRows: 5000,
+        }, system);
+        if (!seats.Success) throw new Error(seats.ErrorMessage ?? 'the space\'s seats could not be read');
+        const viewerBands: Record<string, 'Team' | 'Shared'> = {};
+        for (const seat of seats.Results ?? []) viewerBands[(parseUuid(seat.UserID) ?? seat.UserID).toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
+        const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
+        typeContext = { instructions: [...(built?.instructions ?? [])], contextData: { ...(built?.contextData ?? {}) } };
+    } catch (contextError) {
+        LogError(`executeSpaceChatTurn: the type's driver failed building the agent context for space ${spaceId}; the turn runs without it: ${contextError instanceof Error ? contextError.message : String(contextError)}`);
+    }
+
     // 8. History floor from Chats.HistoryOnAdd (Item 16)
     let conversationHistoryFrom: Date | undefined;
     if (historyOnAdd !== 'All' && reach) {
@@ -446,6 +469,9 @@ async function runClaimedTurn(
                         // B20: what the model is told it may run, and the knowledge in force; the values stay the server's
                         spaceData: turnTools.spaceData,
                         knowledgeSourceIds: turnTools.tools.KnowledgeSourceIDs,
+                        // Item 83: what the space's type adds to the turn
+                        typeInstructions: typeContext.instructions ?? [],
+                        typeContextData: typeContext.contextData ?? {},
                     },
                     context: turnContext,
                     ...(turnTools.actionChanges.length ? { actionChanges: turnTools.actionChanges } : {}),

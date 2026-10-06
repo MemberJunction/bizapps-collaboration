@@ -447,3 +447,23 @@ describe('Audience-Bounded Retrieval & Verification Matrix (§ 10)', () => {
     });
 });
 
+describe('closure and cycles in the retrieval scope (item 28)', () => {
+    const open: SpaceNode = { id: 'open', parentId: null, inheritsMembership: false, ownerId: 'u', agentRetrieval: 'Included' };
+    const closedNoStatuses: SpaceNode = { ...open, id: 'closed-plain', closedAt: '2026-01-01T00:00:00Z' };
+    const archived: SpaceNode = { ...open, id: 'archived', closedAt: '2026-01-01T00:00:00Z', status: { ReadOnly: true, Visible: true, AgentRetrieval: false } };
+    const reach: PrincipalReach = { userId: 'u', reachableSpaceIds: ['open', 'closed-plain', 'archived'], canSeeTeamSpaceIds: ['open', 'closed-plain', 'archived'], isInternalOrg: true };
+
+    it('leaves out a space whose status allows no agent retrieval, and keeps a closed space of a type with no statuses', () => {
+        const result = effectiveRetrievalScope({ audience: { principals: ['u'], mode: 'Private' }, spaces: [open, closedNoStatuses, archived], principalReaches: [reach] });
+        assert.deepEqual([...result.allowedSpaceIds].sort(), ['closed-plain', 'open']);
+    });
+
+    it('ends the walk to the root at a space it has seen, so a cycle in the parent links cannot hang it', () => {
+        const a: SpaceNode = { ...open, id: 'a', parentId: 'b' };
+        const b: SpaceNode = { ...open, id: 'b', parentId: 'a' };
+        const cyclic: PrincipalReach = { userId: 'u', reachableSpaceIds: ['a', 'b'], canSeeTeamSpaceIds: [], isInternalOrg: true };
+        const result = effectiveRetrievalScope({ audience: { principals: ['u'], mode: 'Private' }, spaces: [a, b], principalReaches: [cyclic] });
+        assert.deepEqual([...result.allowedSpaceIds].sort(), ['a', 'b']);
+        assert.equal(result.allowedBand, 'Shared');
+    });
+});
