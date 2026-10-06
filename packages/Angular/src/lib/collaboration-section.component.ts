@@ -10,12 +10,12 @@ import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonD
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
-import { rulesForSpace } from './logic/space-rules';
+import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space-rules';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceRules, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -1531,21 +1531,63 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         );
     }
 
+    /** The rules per space as the server resolved them (`GetSpaceConfiguration`, cut to the viewer), keyed by lower-case id. */
+    private readonly serverRulesBySpace = new Map<string, EffectiveSpaceRules>();
+    private readonly serverRulesPending = new Set<string>();
+
+    /**
+     * Reads the space's configuration from the server and rebuilds the tabs and cards when its rules differ from what the screen
+     * shows. One read per space at a time; a failure keeps the browser's own answer and is logged once, with the browser's
+     * failure beside it when there was one.
+     */
+    private async loadServerRules(space: RawSpaceRecord, browserWalkError: string | null): Promise<void> {
+        const key = space.ID.toLowerCase();
+        if (this.serverRulesPending.has(key)) return;
+        this.serverRulesPending.add(key);
+        const beside = browserWalkError ? `; in the browser: ${browserWalkError}` : '';
+        try {
+            const res = await new CollaborationClient(this.graphQLExecutor).GetSpaceConfiguration(space.ID);
+            const rules = res.Success ? rulesFromServerDocument(res.ConfigurationJSON) : null;
+            if (!rules) {
+                this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${res.ErrorMessage ?? 'the server returned no configuration'}${beside}`);
+                return;
+            }
+            const before = this.serverRulesBySpace.get(key) ?? (browserWalkError ? null : this.uiContext?.rules);
+            this.serverRulesBySpace.set(key, rules);
+            if (this._loadedSpaceId && UUIDsEqual(this._loadedSpaceId, space.ID) && !sameRules(before, rules)) {
+                this.buildSpaceUi(space);
+                this.changeDetector.markForCheck();
+            }
+        } catch (err) {
+            this.logOnce(`rules:${space.ID}`, `Could not read the configuration of space ${space.ID} from the server: ${err instanceof Error ? err.message : String(err)}${beside}`);
+        } finally {
+            this.serverRulesPending.delete(key);
+        }
+    }
+
     /**
      * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
      * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
      */
-    private buildSpaceUi(space: RawSpaceRecord): void {
+    private buildSpaceUi(space: RawSpaceRecord, refreshRules = false): void {
         const engine = CollaborationEngineBase.Instance;
         const type = engine.SpaceTypeById(space.SpaceTypeID);
         const code = type?.Code ?? '';
         this.uiDriver = this.uiDriverFor(type?.UIDriverClass, code, `space ${space.ID}`, `driver:${space.ID}`);
-        let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: structuredClone(DEFAULT_SPACE_RULES) };
-        try {
-            ctx = { ...ctx, rules: rulesForSpace(space, this.rawSpaces, engine) };
-        } catch (err) {
-            this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
+        // The rules come from the server's one resolver (B16) once its document is here; until then, and when it never comes, from
+        // the chain the browser can see. A participant cannot read the app's settings row, so the browser's walk fails for them and
+        // only the server's document carries the type's labels; that failure is reported only if the server's document fails too.
+        const serverRules = this.serverRulesBySpace.get(space.ID.toLowerCase()) ?? null;
+        let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: serverRules ?? structuredClone(DEFAULT_SPACE_RULES) };
+        let browserWalkError: string | null = null;
+        if (!serverRules) {
+            try {
+                ctx = { ...ctx, rules: rulesForSpace(space, this.rawSpaces, engine) };
+            } catch (err) {
+                browserWalkError = err instanceof Error ? err.message : String(err);
+            }
         }
+        if (!serverRules || refreshRules) void this.loadServerRules(space, browserWalkError);
         const tabFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
             key: meta.contributionKey,
             label: meta.label ?? meta.contributionKey,
@@ -2361,8 +2403,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
         this.settingsSession.Open(this.spaceSettings);
         this.spaceSettings = this.settingsSession.Shown;
-        // What the type's UI driver and other apps contribute: the tabs and the Overview cards
-        this.buildSpaceUi(space);
+        // What the type's UI driver and other apps contribute: the tabs and the Overview cards; the server's rules are re-read here
+        this.buildSpaceUi(space, true);
         // The tabs the space has may differ from the ones the last space's URL asked for
         this.setTab(this.activeTab);
 
