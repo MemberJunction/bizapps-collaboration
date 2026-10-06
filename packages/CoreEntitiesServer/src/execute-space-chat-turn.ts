@@ -15,7 +15,7 @@ import type { AgentExecutionProgressCallback, AgentExecutionStreamingCallback, E
 import { MentionParser } from '@memberjunction/conversations-runtime';
 import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
-import { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';
+import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { filterRoomReplyItems } from './post-space-message.js';

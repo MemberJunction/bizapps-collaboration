@@ -4,7 +4,7 @@
  */
 
 import { type IEntityDataProvider, type IMetadataProvider, LogError, type UserInfo } from '@memberjunction/core';
-import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { type EffectiveSpaceConfiguration, type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
 import {
     type mjBizAppsCollaborationSpaceEntity,
     type mjBizAppsCollaborationSpaceItemEntity,
@@ -25,6 +25,9 @@ export interface DriverBaseContext {
     provider: IMetadataProvider | IEntityDataProvider;
     space: mjBizAppsCollaborationSpaceEntity;
     spaceType: mjBizAppsCollaborationSpaceTypeEntity;
+    /** The one configuration in force for the space (B16, D30): its settings, grants, audience and data reach. */
+    configuration: EffectiveSpaceConfiguration;
+    /** The settings as rules, read off `configuration`; `AdjustRules` may narrow them. */
     effectiveRules: EffectiveSpaceRules;
     subtypeEntityName?: string | null;
 }

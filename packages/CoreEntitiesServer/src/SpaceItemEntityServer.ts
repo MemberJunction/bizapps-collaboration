@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogEr
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { authorizeItemWrite, ResolveSpaceRules, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
@@ -11,7 +11,7 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
-import { refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
@@ -160,12 +160,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             const oldValues = reading.oldValues;
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
-                actingUser: user,
-                provider: this.ProviderToUse,
-                space: spaceInfo.space,
-                spaceType: spaceInfo.spaceType,
-                effectiveRules: ResolveSpaceRules(null, null),
-                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                 item: this,
                 kind: itemKind,
                 oldValues,
@@ -204,18 +199,15 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         }
 
         // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+        let spaceTypeCodeForSubscribers: string | null = null;
         if (decided.changed) {
             let typeCode: string | undefined;
             try {
                 const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
                 typeCode = spaceInfo.spaceType.Code;
+                spaceTypeCodeForSubscribers = typeCode ?? null;
                 await spaceInfo.driver.OnItemChanged({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: spaceInfo.space,
-                    spaceType: spaceInfo.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                    ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                     item: this,
                     kind: decided.kind,
                     oldValues: decided.oldValues,
@@ -228,6 +220,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (becameShared) {
             notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                 spaceId: this.SpaceID,
+                spaceTypeCode: spaceTypeCodeForSubscribers,
                 actingUserId: user.ID,
                 event: 'AfterItemPromoted',
                 timestamp: new Date(),

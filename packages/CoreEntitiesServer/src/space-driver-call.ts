@@ -1,5 +1,6 @@
 import { BaseEntityResult, LogError, type BaseEntity, type IEntityDataProvider, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ResolveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { type EffectiveSpaceConfiguration, RulesOf } from '@mj-biz-apps/collaboration-core';
+import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import type { BaseSpaceTypeServerDriver, DriverBaseContext, DriverValidationResult } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 
@@ -32,19 +33,31 @@ export async function resolveSpaceDriver(
     spaceId: string,
 ): Promise<SpaceDriverResolution> {
     try {
-        const { space, spaceType, driver } = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, contextEntity);
+        const { space, spaceType, driver, configuration } = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, contextEntity);
         return {
             ok: true,
-            call: {
-                driver,
-                base: { actingUser: user, provider, space, spaceType, effectiveRules: ResolveSpaceRules(null, null), subtypeEntityName: subtypeOf(spaceType) },
-            },
+            call: { driver, base: await driverBaseContext(provider, user, space, spaceType, configuration) },
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'The space type\'s driver could not be resolved.';
         LogError(`resolveSpaceDriver: ${message}`);
         return { ok: false, message };
     }
+}
+
+/**
+ * The context every hook takes, for a stored space: its one configuration, loaded here (as the system user), and the rules read off
+ * it. A chain that cannot be read throws, so the write it was judging is refused.
+ */
+export async function driverBaseContext(
+    provider: IMetadataProvider | IEntityDataProvider,
+    user: UserInfo,
+    space: mjBizAppsCollaborationSpaceEntity,
+    spaceType: mjBizAppsCollaborationSpaceTypeEntity,
+    loaded?: EffectiveSpaceConfiguration,
+): Promise<DriverBaseContext> {
+    const configuration = loaded ?? (await ServerDriverRegistry.Instance.ConfigurationFor(space, provider));
+    return { actingUser: user, provider, space, spaceType, configuration, effectiveRules: RulesOf(configuration), subtypeEntityName: subtypeOf(spaceType) };
 }
 
 /** A driver's verdict as a refusal message, or null when it accepts. */

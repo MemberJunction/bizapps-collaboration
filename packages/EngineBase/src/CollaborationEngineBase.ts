@@ -38,7 +38,6 @@ import {
     membershipReaches,
     MissingAppSettingsError,
     type ResolvedCollaborationSettings,
-    ResolveCollaborationSettings,
     type SpaceNode,
     type SpaceStatusReach,
     ValidateCollaborationSettings,
@@ -335,36 +334,6 @@ export class CollaborationEngineBase extends BaseEngine<CollaborationEngineBase>
         this._cachedParsedSettings = null;
         this._settingsError = error;
         throw error;
-    }
-
-    public ResolveSettingsForSpace(
-        spaceConfigs: Array<CollaborationSettings | null | undefined>,
-        spaceTypeId?: string | null
-    ): ResolvedCollaborationSettings {
-        const typeEntity = spaceTypeId ? this.SpaceTypeById(spaceTypeId) : undefined;
-        let typeConfig: CollaborationSettings | undefined;
-        if (typeEntity?.Configuration) {
-            try {
-                typeConfig =
-                    typeof typeEntity.Configuration === 'string'
-                        ? (JSON.parse(typeEntity.Configuration) as CollaborationSettings)
-                        : (typeEntity.Configuration as CollaborationSettings);
-            } catch (err) {
-                const detail = err instanceof Error ? err.message : String(err);
-                LogError(`ResolveSettingsForSpace: Failed to parse type configuration for space type ${spaceTypeId}: ${detail}`);
-                // Fails closed: resolving without the type's narrowing would loosen what it restricts
-                throw new Error(`Space settings refused: the space type ${spaceTypeId} has a configuration that does not parse: ${detail}`);
-            }
-        }
-
-        // A missing app settings row throws MissingAppSettingsError: the app's defaults are not a silent stand-in for it
-        const appConfig: CollaborationSettings = this.CollaborationSettings;
-
-        return ResolveCollaborationSettings({
-            spaces: spaceConfigs,
-            type: typeConfig,
-            app: appConfig,
-        });
     }
 
     // ─── Authorizations ────────────────────────────────────────────────────────

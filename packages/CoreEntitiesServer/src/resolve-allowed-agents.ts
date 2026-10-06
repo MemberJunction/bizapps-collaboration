@@ -1,11 +1,15 @@
-import { LogError, RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ResolveSpaceRules, type EffectiveSpaceRules, type ISpaceConfiguration, type ISpaceTypeConfiguration } from '@mj-biz-apps/collaboration-core';
-import { CollaborationEngine } from './CollaborationEngine.js';
+import { LogError, RunView, type IMetadataProvider, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import type { EffectiveGrant, EffectiveSpaceConfiguration } from '@mj-biz-apps/collaboration-core';
+import { loadSpaceConfiguration } from './space-configuration.js';
+import { parseUuid } from './uuid.js';
 
-export const COLLABORATION_DEFAULT_AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
+/** The shipped assistant's name, as `metadata/agents/` ships it. It is found by this name, never by a typed-in id (item 42). */
+export const COLLABORATION_DEFAULT_AGENT_NAME = 'Collaboration Space Agent';
 
 export interface SpaceAgentItem {
     agentId: string;
+    /** The grant the agent comes through; null for the shipped assistant standing in where nothing is configured. */
+    grantId: string | null;
     isDefault: boolean;
     source: 'App' | 'Type' | 'Space';
     spaceId?: string | null;
@@ -19,217 +23,96 @@ export interface ResolvedAllowedAgentsResult {
     agents: SpaceAgentItem[];
 }
 
-function normalizeId(id: string | null | undefined): string {
-    return (id ?? '').trim().toUpperCase();
+const normalizeId = (id: string | null | undefined): string => (parseUuid(id ?? '') ?? (id ?? '')).trim().toUpperCase();
+
+function itemOf(grant: EffectiveGrant): SpaceAgentItem {
+    return {
+        agentId: grant.TargetRecordID,
+        grantId: grant.GrantID,
+        isDefault: grant.IsDefault,
+        source: grant.Level,
+        spaceId: grant.Level === 'Space' ? grant.LevelID : null,
+        spaceTypeId: grant.Level === 'Type' ? grant.LevelID : null,
+    };
 }
 
 /**
- * Resolves the allowed agents for a space top-down, from the Agent grants (stage 1: `Space Grants` with Kind 'Agent';
- * `TargetRecordID` is the agent, `IsDefault` the one the ask box tags):
- * 1. Collaboration app-wide grants (SpaceTypeID IS NULL AND SpaceID IS NULL)
- * 2. the type's grants
- * 3. Root space down through the ancestor tree to the target space
- *
- * At each level, Agents.ListMode ('Extend' | 'Replace') controls inheritance:
- * - 'Extend' (default): adds that level's rows to the accumulated list
- * - 'Replace': replaces previous list with that level's rows
- * A level without rows passes the inherited list down unchanged.
+ * The agents people can talk to in a space, from the one configuration (B16, D31): the Agent grants in force, app to type to the
+ * same-type run to the space, with `Extend`, `Replace` and `Remove` applied per level. Then:
+ * - only Active agents run: a disabled or pending agent stays out, and when it was the default the next default takes over;
+ * - with nothing configured at the app, the shipped assistant stands in at the app level, found by its name;
+ * - when nothing configured is Active and no level replaced the list, the shipped assistant is the last resort, when Active itself.
  */
 export async function resolveAllowedAgents(
     provider: IMetadataProvider,
     spaceId: string,
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    loaded?: EffectiveSpaceConfiguration,
+): Promise<ResolvedAllowedAgentsResult> {
+    const configuration = loaded ?? (await loadSpaceConfiguration(provider, spaceId, { reader: contextUser })).configuration;
+    return agentsFromConfiguration(provider, spaceId, configuration, contextUser);
+}
+
+/** The agent list off a configuration already loaded, so a caller that holds one does not load the chain twice. */
+export async function agentsFromConfiguration(
+    provider: IMetadataProvider,
+    spaceId: string,
+    configuration: EffectiveSpaceConfiguration,
+    contextUser?: UserInfo,
 ): Promise<ResolvedAllowedAgentsResult> {
     const rv = RunView.FromMetadataProvider(provider);
     const system = await WellKnownUserSource.Instance.GetSystemUser(provider);
     const userToUse = contextUser ?? system ?? undefined;
 
-    interface SpaceChainNode {
-        ID: string;
-        ParentID: string | null;
-        SpaceTypeID: string | null;
-        Configuration: string | null;
+    let list: SpaceAgentItem[] = configuration.Grants.Agent.map(itemOf);
+    const replaced = configuration.ReplacedKinds.includes('Agent');
+    const appConfigured = configuration.Grants.Agent.some((grant) => grant.Level === 'App') || replaced;
+    let shipped: string | null = null;
+    if (!appConfigured) {
+        // Nothing at the app: the shipped assistant stands in there, below whatever the type and the spaces add
+        shipped = await shippedAgentId(rv, userToUse);
+        if (shipped) list = [{ agentId: shipped, grantId: null, isDefault: true, source: 'App' }, ...list.filter((item) => normalizeId(item.agentId) !== normalizeId(shipped))];
     }
 
-    // 1. Load the space and its ancestors
-    const spaceResult = await rv.RunView<SpaceChainNode>(
-        {
-            EntityName: 'MJ_BizApps_Collaboration: Spaces',
-            ExtraFilter: `ID = '${spaceId}'`,
-            Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
-            ResultType: 'simple',
-        },
-        userToUse
-    );
-
-    if (!spaceResult.Success || !spaceResult.Results || spaceResult.Results.length === 0) {
-        throw new Error(`Space not found: ${spaceId}`);
-    }
-
-    const targetSpace = spaceResult.Results[0];
-    const spaceTypeId = targetSpace.SpaceTypeID;
-
-    // Build ancestor chain from root to target space
-    const spaceChain: SpaceChainNode[] = [targetSpace];
-    let currentParentId = targetSpace.ParentID;
-    while (currentParentId) {
-        const parentRes = await rv.RunView<SpaceChainNode>(
-            {
-                EntityName: 'MJ_BizApps_Collaboration: Spaces',
-                ExtraFilter: `ID = '${currentParentId}'`,
-                Fields: ['ID', 'ParentID', 'SpaceTypeID', 'Configuration'],
-                ResultType: 'simple',
-            },
-            userToUse
-        );
-        // Fails closed: a parent that can't be read is not the top of the chain, and an agent list resolved without it could be wrong
-        if (!parentRes.Success) {
-            throw refuse(`the parent space ${currentParentId} could not be read: ${parentRes.ErrorMessage ?? 'unknown error'}`);
-        }
-        if (!parentRes.Results || parentRes.Results.length === 0) {
-            throw refuse(`the parent space ${currentParentId} was not found.`);
-        }
-        const parentSpace = parentRes.Results[0];
-        spaceChain.unshift(parentSpace); // Insert at beginning so root is first
-        currentParentId = parentSpace.ParentID;
-    }
-
-    // Load SpaceType configuration from CollaborationEngine once without per-request full reload
-    const systemUserForEngine = system ?? (await WellKnownUserSource.Instance.GetSystemUser(provider));
-    await CollaborationEngine.Instance.EnsureLoaded(systemUserForEngine ?? undefined, provider);
-    const spaceType = spaceTypeId ? CollaborationEngine.Instance.SpaceTypeById(spaceTypeId) : undefined;
-
-    let typeConfig: ISpaceTypeConfiguration | null = null;
-    if (spaceType?.Configuration) {
-        try {
-            typeConfig = JSON.parse(spaceType.Configuration) as ISpaceTypeConfiguration;
-        } catch (err) {
-            throw refuse(`the space type ${spaceTypeId} has a configuration that does not parse: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    }
-
-    // App-wide level from CollaborationEngine
-    const appRows = CollaborationEngine.Instance.AppGrantsOfKind('Agent');
-    let currentList: SpaceAgentItem[] = [];
-    // Set when a level's ListMode: 'Replace' chose the list: the shipped assistant must not stand in for it
-    let listWasReplaced = false;
-
-    if (appRows.length > 0) {
-        currentList = appRows.map((r) => ({
-            agentId: r.TargetRecordID,
-            isDefault: r.IsDefault ?? false,
-            source: 'App',
-        }));
-    } else {
-        // Built-in fallback default
-        currentList = [
-            {
-                agentId: COLLABORATION_DEFAULT_AGENT_ID,
-                isDefault: true,
-                source: 'App',
-            },
-        ];
-    }
-
-    // Type level from CollaborationEngine
-    if (spaceTypeId) {
-        const typeRows = CollaborationEngine.Instance.TypeGrantsOfKind(spaceTypeId, 'Agent');
-        if (typeRows.length > 0) {
-            const typeListMode = typeConfig?.Agents?.ListMode ?? 'Extend';
-            const mappedType: SpaceAgentItem[] = typeRows.map((r) => ({
-                agentId: r.TargetRecordID,
-                isDefault: r.IsDefault ?? false,
-                source: 'Type',
-                spaceTypeId,
-            }));
-
-            if (typeListMode === 'Replace') {
-                listWasReplaced = true;
-                currentList = mappedType;
-            } else {
-                // Extend: deduplicate by agentId, keeping type entry if collision
-                const existingIds = new Set(mappedType.map((m) => normalizeId(m.agentId)));
-                currentList = currentList.filter((c) => !existingIds.has(normalizeId(c.agentId))).concat(mappedType);
-            }
-        }
-    }
-
-    // 2. Query only space-level Agent grants for any space in chain
-    const chainIdsSql = spaceChain.map((s) => `'${s.ID}'`).join(',');
-    const agentsRes = await rv.RunView<{ ID: string; TargetRecordID: string; SpaceID: string | null; IsDefault?: boolean }>(
-        {
-            EntityName: 'MJ_BizApps_Collaboration: Space Grants',
-            ExtraFilter: `Kind = 'Agent' AND SpaceID IN (${chainIdsSql})`,
-            Fields: ['ID', 'TargetRecordID', 'SpaceID', 'IsDefault'],
-            ResultType: 'simple',
-        },
-        userToUse
-    );
-
-    if (!agentsRes.Success) {
-        throw refuse(`the space's agent grants could not be read: ${agentsRes.ErrorMessage ?? 'unknown error'}`);
-    }
-    const spaceAgentRows = agentsRes.Results ?? [];
-
-    // Space levels (top-down from root to target space)
-    for (const sp of spaceChain) {
-        const normSpId = normalizeId(sp.ID);
-        const spRows = spaceAgentRows.filter((r) => r.SpaceID && normalizeId(r.SpaceID) === normSpId);
-        if (spRows.length > 0) {
-            let spaceConfig: ISpaceConfiguration | null = null;
-            if (sp.Configuration) {
-                try {
-                    spaceConfig = JSON.parse(sp.Configuration) as ISpaceConfiguration;
-                } catch (err) {
-                    throw refuse(`space ${sp.ID} has a configuration that does not parse: ${err instanceof Error ? err.message : String(err)}`);
-                }
-            }
-            const rules: EffectiveSpaceRules = ResolveSpaceRules(typeConfig, spaceConfig);
-            const spaceListMode = rules.Agents.ListMode;
-
-            const mappedSpace: SpaceAgentItem[] = spRows.map((r) => ({
-                agentId: r.TargetRecordID,
-                isDefault: r.IsDefault ?? false,
-                source: 'Space',
-                spaceId: sp.ID,
-            }));
-
-            if (spaceListMode === 'Replace') {
-                listWasReplaced = true;
-                currentList = mappedSpace;
-            } else {
-                const existingIds = new Set(mappedSpace.map((m) => normalizeId(m.agentId)));
-                currentList = currentList.filter((c) => !existingIds.has(normalizeId(c.agentId))).concat(mappedSpace);
-            }
-        }
-    }
-
-    // Only Active agents run. A disabled or pending agent stays out of the list, and when it was the default the next default takes
-    // over, so the ask box never tags an agent that won't run.
-    const activeIds = await loadActiveAgentIds(rv, userToUse, currentList.map((a) => a.agentId));
-    for (const item of currentList) {
+    // Only Active agents run
+    const activeIds = await loadActiveAgentIds(rv, userToUse, list.map((item) => item.agentId));
+    for (const item of list) {
         if (!activeIds.has(normalizeId(item.agentId))) {
             LogError(`resolveAllowedAgents: agent ${item.agentId} is configured for space ${spaceId}${item.isDefault ? ' as its default' : ''} but is not Active; it is left out.`);
         }
     }
-    currentList = currentList.filter((item) => activeIds.has(normalizeId(item.agentId)));
-    if (currentList.length === 0 && !listWasReplaced) {
+    list = list.filter((item) => activeIds.has(normalizeId(item.agentId)));
+    if (list.length === 0 && !replaced) {
         // Nothing configured is Active and no level replaced the list: the shipped agent is the last resort, when it is Active itself
-        const shipped = await loadActiveAgentIds(rv, userToUse, [COLLABORATION_DEFAULT_AGENT_ID]);
-        if (shipped.has(normalizeId(COLLABORATION_DEFAULT_AGENT_ID))) {
-            currentList = [{ agentId: COLLABORATION_DEFAULT_AGENT_ID, isDefault: true, source: 'App' }];
+        shipped = shipped ?? (await shippedAgentId(rv, userToUse));
+        if (shipped && (await loadActiveAgentIds(rv, userToUse, [shipped])).has(normalizeId(shipped))) {
+            list = [{ agentId: shipped, grantId: null, isDefault: true, source: 'App' }];
         }
     }
 
-    const allowedAgentIds = currentList.map((a) => a.agentId);
-    const defaultItem = currentList.find((a) => a.isDefault) ?? currentList[0];
-    const defaultAgentId = defaultItem?.agentId ?? null;
-
+    // The default: the configuration's choice when it is still in the list, else the nearest flagged, else the first
+    const configuredDefault = list.find((item) => item.grantId && item.grantId === configuration.DefaultAgentGrantID);
+    const defaultItem = configuredDefault ?? [...list].reverse().find((item) => item.isDefault) ?? list[0];
     return {
-        allowedAgentIds,
-        defaultAgentId,
-        agents: currentList,
+        allowedAgentIds: list.map((item) => item.agentId),
+        defaultAgentId: defaultItem?.agentId ?? null,
+        agents: list,
     };
+}
+
+/** The shipped assistant's id, by its name. Null, with a log, when the agent is not in this database. */
+async function shippedAgentId(rv: RunView, user: UserInfo | undefined): Promise<string | null> {
+    const res = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: AI Agents',
+        ExtraFilter: `Name = '${COLLABORATION_DEFAULT_AGENT_NAME.replace(/'/g, "''")}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        MaxRows: 1,
+    }, user);
+    if (!res.Success) throw refuse(`the shipped assistant could not be read: ${res.ErrorMessage ?? 'unknown error'}`);
+    const id = res.Results?.[0]?.ID ?? null;
+    if (!id) LogError(`resolveAllowedAgents: no agent named "${COLLABORATION_DEFAULT_AGENT_NAME}" is in this database, so nothing stands in where no agent is configured.`);
+    return id;
 }
 
 /** The IDs among `agentIds` whose agent is Active. A read that fails refuses, as a list that can't be checked is not one to run. */

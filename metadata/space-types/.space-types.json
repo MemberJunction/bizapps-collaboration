@@ -37,11 +37,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode",
@@ -84,11 +79,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode"
@@ -129,11 +119,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode"
@@ -170,11 +155,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -214,11 +194,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
@@ -260,11 +235,6 @@
             "work": "Work"
           }
         },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
-        },
         "SpaceOverridable": [
           "Chats.WhoCanStart",
           "Chats.AgentReplyMode"
@@ -301,11 +271,6 @@
             "library": "Documents",
             "work": "Work"
           }
-        },
-        "Chats": {
-          "WhoCanStart": "Anyone",
-          "AgentReplyMode": "MentionOrOneToOne",
-          "HistoryOnAdd": "None"
         },
         "SpaceOverridable": [
           "Chats.WhoCanStart",

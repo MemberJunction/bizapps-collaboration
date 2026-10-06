@@ -7,7 +7,7 @@ import {
     parentCreatesCycle,
     refuseChildType,
     planSpaceWrite,
-    ResolveSpaceRules,
+    RulesOf,
     statusChangeRefusal,
     ValidateCollaborationSettings,
     type CollaborationSettings,
@@ -29,7 +29,7 @@ import { callerUuid, loadAncestorChain, mayAdminister, loadWriteContext, require
 import { primaryAnchorCollision } from './SpaceAnchorEntityServer.js';
 import { spaceSeatsParticipants } from './space-audience.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
-import { failDelete, failSave, refusalOf, resolveSpaceDriver, sameSubtype, subtypeOf } from './space-driver-call.js';
+import { failDelete, failSave, refusalOf, resolveSpaceDriver, sameSubtype, subtypeOf, driverBaseContext } from './space-driver-call.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
 import { notifySpaceStatusChange } from './space-status-notices.js';
@@ -442,10 +442,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (!sameSubtype(previousType, spaceType)) {
                 return fail(result, 'SpaceTypeID', 'Space change refused: the two types do not share a subtype table, so the space cannot move between them.');
             }
-            let previousConfig: ISpaceTypeConfiguration | null = null;
             if (previousType.Configuration) {
                 try {
-                    previousConfig = JSON.parse(previousType.Configuration) as ISpaceTypeConfiguration;
+                    JSON.parse(previousType.Configuration) as ISpaceTypeConfiguration;
                 } catch (parseErr) {
                     LogError(`Space change refused: type ${previousType.ID} has a configuration that does not parse: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
                     return fail(result, 'SpaceTypeID', "Space change refused: the previous type's configuration does not parse.");
@@ -457,12 +456,19 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             } catch (driverErr) {
                 return fail(result, 'SpaceTypeID', driverErr instanceof Error ? driverErr.message : "Space change refused: the previous type's driver could not be resolved.");
             }
+            let previousConfiguration;
+            try {
+                previousConfiguration = await ServerDriverRegistry.Instance.ConfigurationFor({ ID: this.ID, ParentID: parseUuid(String(getFieldVal<string | null>(this, 'ParentID') ?? '')) ?? null, SpaceTypeID: previousTypeId, Configuration: rawConfig ?? null }, this.ProviderToUse);
+            } catch (chainErr) {
+                return fail(result, 'SpaceTypeID', chainErr instanceof Error ? chainErr.message : "Space change refused: the space's configuration under its previous type could not be resolved.");
+            }
             const previousJudgement = await previousDriver.ValidateSpaceChange({
                 actingUser: user,
                 provider: this.ProviderToUse,
                 space: this,
                 spaceType: previousType,
-                effectiveRules: ResolveSpaceRules(previousConfig, parsedSpaceConfig as ISpaceConfiguration),
+                configuration: previousConfiguration,
+                effectiveRules: RulesOf(previousConfiguration),
                 subtypeEntityName: subtypeOf(previousType),
                 kind: 'Update',
                 oldValues: { SpaceTypeID: previousTypeId },
@@ -472,10 +478,17 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             }
         }
 
-        const effectiveRules = ResolveSpaceRules(typeConfig, parsedSpaceConfig as ISpaceConfiguration);
+        // The one configuration (B16): the app, the type, the same-type run and this space as the save holds it, before it is written
+        let configuration;
+        try {
+            configuration = await ServerDriverRegistry.Instance.ConfigurationFor({ ID: this.ID, ParentID: parseUuid(String(getFieldVal<string | null>(this, 'ParentID') ?? '')) ?? null, SpaceTypeID: typeId, Configuration: rawConfig ?? null }, this.ProviderToUse);
+        } catch (chainErr) {
+            return fail(result, 'Configuration', chainErr instanceof Error ? chainErr.message : "Space change refused: the space's configuration could not be resolved.");
+        }
+        const effectiveRules = RulesOf(configuration);
         const adjustedRules = driver && spaceType
             ? await driver.AdjustRules(
-                { actingUser: user, provider: this.ProviderToUse, space: this, spaceType, effectiveRules },
+                { actingUser: user, provider: this.ProviderToUse, space: this, spaceType, configuration, effectiveRules },
                 effectiveRules
             )
             : effectiveRules;
@@ -587,6 +600,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
                 provider: this.ProviderToUse,
                 space: this,
                 spaceType: spaceType as mjBizAppsCollaborationSpaceTypeEntity,
+                configuration,
                 effectiveRules: adjustedRules,
                 subtypeEntityName: subtypeOf(spaceType),
                 kind: changeKind,
@@ -602,12 +616,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             try {
                 const parentInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(parentId, this);
                 const childValidation = await parentInfo.driver.ValidateChildSpaceChange({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: parentInfo.space,
-                    spaceType: parentInfo.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    subtypeEntityName: subtypeOf(parentInfo.spaceType),
+                    ...(await driverBaseContext(this.ProviderToUse, user, parentInfo.space, parentInfo.spaceType, parentInfo.configuration)),
                     childSpace: this,
                     kind: childKind,
                     oldValues,
@@ -631,12 +640,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             try {
                 const oldParent = await ServerDriverRegistry.Instance.ResolveSpaceAndType(oldParentId, this);
                 const outValidation = await oldParent.driver.ValidateChildSpaceChange({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: oldParent.space,
-                    spaceType: oldParent.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    subtypeEntityName: subtypeOf(oldParent.spaceType),
+                    ...(await driverBaseContext(this.ProviderToUse, user, oldParent.space, oldParent.spaceType, oldParent.configuration)),
                     childSpace: this,
                     kind: 'MoveChildOut',
                     oldValues,
@@ -704,9 +708,13 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         return result;
     }
 
-    /** Tells the drivers what happened. Each reaction has its own `try`, so a failing driver doesn't silence the next. */
-    private async react(user: UserInfo, decided: SpaceChangeReading, tell: 'all' | 'own' = 'all'): Promise<void> {
-        const base = { actingUser: user, provider: this.ProviderToUse, effectiveRules: ResolveSpaceRules(null, null) };
+    /**
+     * Tells the drivers what happened. Each reaction has its own `try`, so a failing driver doesn't silence the next; what failed is
+     * logged and returned, so a scoped save can take itself back (item 35).
+     */
+    private async react(user: UserInfo, decided: SpaceChangeReading, tell: 'all' | 'own' = 'all'): Promise<string[]> {
+        const base = { actingUser: user, provider: this.ProviderToUse };
+        const failures: string[] = [];
         // The type code is set once a reaction has resolved its type, so a failure after that names it; before that it says so
         let typeCode: string | undefined;
         const attempt = async (hook: string, run: () => Promise<void> | void): Promise<void> => {
@@ -714,7 +722,9 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             try {
                 await run();
             } catch (error) {
-                LogError(`${hook} of space type '${typeCode ?? 'not resolved'}' failed for space ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+                const message = `${hook} of space type '${typeCode ?? 'not resolved'}' failed for space ${this.ID}: ${error instanceof Error ? error.message : String(error)}`;
+                LogError(message);
+                failures.push(message);
             }
         };
         await attempt('OnSpaceChanged', async () => {
@@ -724,23 +734,33 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             const statusChange = decided.statusChanged || decided.justClosed || decided.justReopened
                 ? { fromCode: decided.statusFrom?.Code ?? null, toCode: decided.statusTo?.Code ?? null }
                 : undefined;
-            await driver.OnSpaceChanged({ ...base, space: this, spaceType, subtypeEntityName: subtypeOf(spaceType), kind: decided.spaceKind, oldValues: decided.oldValues, statusChange });
+            await driver.OnSpaceChanged({ ...base, ...(await driverBaseContext(this.ProviderToUse, user, this, spaceType)), kind: decided.spaceKind, oldValues: decided.oldValues, statusChange });
         });
-        if (tell === 'own') return;
+        if (tell === 'own') return failures;
         const parentId = getFieldVal<string | null>(this, 'ParentID');
         if (parentId) {
             await attempt('OnChildSpaceChanged', async () => {
                 const parent = await ServerDriverRegistry.Instance.ResolveSpaceAndType(parentId, this);
                 typeCode = parent.spaceType.Code;
-                await parent.driver.OnChildSpaceChanged({ ...base, space: parent.space, spaceType: parent.spaceType, subtypeEntityName: subtypeOf(parent.spaceType), childSpace: this, kind: decided.childKind, oldValues: decided.oldValues });
+                await parent.driver.OnChildSpaceChanged({ ...base, ...(await driverBaseContext(this.ProviderToUse, user, parent.space, parent.spaceType, parent.configuration)), childSpace: this, kind: decided.childKind, oldValues: decided.oldValues });
             });
         }
         if (decided.oldParentId) {
             await attempt('OnChildSpaceChanged (MoveChildOut)', async () => {
                 const left = await ServerDriverRegistry.Instance.ResolveSpaceAndType(decided.oldParentId!, this);
                 typeCode = left.spaceType.Code;
-                await left.driver.OnChildSpaceChanged({ ...base, space: left.space, spaceType: left.spaceType, subtypeEntityName: subtypeOf(left.spaceType), childSpace: this, kind: 'MoveChildOut', oldValues: decided.oldValues });
+                await left.driver.OnChildSpaceChanged({ ...base, ...(await driverBaseContext(this.ProviderToUse, user, left.space, left.spaceType, left.configuration)), childSpace: this, kind: 'MoveChildOut', oldValues: decided.oldValues });
             });
+        }
+        return failures;
+    }
+
+    /** The code of this space's type, for the lifecycle subscribers that listen to some types only (item 86). Null when it cannot be read. */
+    private async typeCodeForSubscribers(): Promise<string | null> {
+        try {
+            return (await ServerDriverRegistry.Instance.ResolveType(this.SpaceTypeID, this)).Code ?? null;
+        } catch {
+            return null;
         }
     }
 
@@ -945,6 +965,30 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         // A retype carries the space's anchors (item 149): their SpaceTypeID follows the space once it is saved
         const retypedTo = this.IsSaved && this.Fields.some((f) => f.Name === 'SpaceTypeID' && f.Dirty) ? parseUuid(String(getFieldVal<string>(this, 'SpaceTypeID') ?? '')) : null;
 
+        // The save, what follows it and the drivers' reactions are one transaction (item 35): a reaction that throws rolls the whole
+        // save back, and the lifecycle subscribers, queued for the commit, never hear of it. A provider without entity transactions
+        // (a test's stand-in) runs the same steps unscoped, where a failing reaction is logged and the save stands, as before.
+        const scope = await beginScope(this.ProviderToUse);
+        try {
+            const outcome = await this.saveInScope(options, own, structureChanged, subtypeOnlyChange, subtypeOldValues, retypedTo, scope !== null);
+            if (scope) await (outcome ? scope.Commit() : scope.Rollback());
+            return outcome;
+        } catch (error) {
+            if (scope) await scope.Rollback();
+            throw error;
+        }
+    }
+
+    /** The save and everything it entails, inside the scope `Save` opened. Returns what the save returns, or false when a reaction refused it. */
+    private async saveInScope(
+        options: Parameters<BaseEntity['Save']>[0] | undefined,
+        own: SpaceChangeReading,
+        structureChanged: boolean,
+        subtypeOnlyChange: boolean,
+        subtypeOldValues: Record<string, unknown> | null,
+        retypedTo: string | null,
+        scoped: boolean,
+    ): Promise<boolean> {
         let ok = false;
         try {
             ok = await super.Save(options);
@@ -1034,12 +1078,18 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
 
             // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it. A change to only the
             // subtype's columns is told to the space's own driver as an Update, as it was asked: it is no child's change to the parent's.
-            if (decided.changed) await this.react(user, decided);
-            else if (subtypeOnlyChange) await this.react(user, { ...decided, changed: true, spaceKind: 'Update', childKind: 'UpdateChild', oldValues: subtypeOldValues }, 'own');
+            let reactionFailures: string[] = [];
+            if (decided.changed) reactionFailures = await this.react(user, decided);
+            else if (subtypeOnlyChange) reactionFailures = await this.react(user, { ...decided, changed: true, spaceKind: 'Update', childKind: 'UpdateChild', oldValues: subtypeOldValues ?? {} }, 'own');
+            // Inside a transaction a failed reaction takes the save back with it (item 35); every driver was still told
+            if (reactionFailures.length && scoped) return failSave(this, `Space change refused: ${reactionFailures[0]}`);
+
+            const spaceTypeCode = await this.typeCodeForSubscribers();
 
             if (justClosed) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                     spaceId: this.ID,
+                    spaceTypeCode,
                     actingUserId: user.ID,
                     event: 'AfterSpaceClosed',
                     timestamp: new Date(),
@@ -1048,6 +1098,7 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
             if (decided.statusChanged && decided.statusTo) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                     spaceId: this.ID,
+                    spaceTypeCode,
                     actingUserId: user.ID,
                     event: 'AfterSpaceStatusChanged',
                     timestamp: new Date(),
@@ -1067,6 +1118,13 @@ export class SpaceEntityServer extends mjBizAppsCollaborationSpaceEntity {
         }
         return ok;
     }
+}
+
+/** MJ's entity transaction scope, where the provider has one (`SupportsEntityTransactions`); null where it has not. */
+async function beginScope(provider: unknown): Promise<{ Commit(): Promise<void>; Rollback(): Promise<void> } | null> {
+    const candidate = provider as { SupportsEntityTransactions?: boolean; BeginEntityTransaction?: () => Promise<{ Commit(): Promise<void>; Rollback(): Promise<void> }> } | null;
+    if (!candidate?.SupportsEntityTransactions || typeof candidate.BeginEntityTransaction !== 'function') return null;
+    return candidate.BeginEntityTransaction();
 }
 
 function fail(result: ValidationResult, field: string, message: string): ValidationResult {

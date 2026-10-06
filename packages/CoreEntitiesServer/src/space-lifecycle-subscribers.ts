@@ -16,14 +16,31 @@ export type SpaceLifecycleEvent =
 
 export interface SpaceLifecyclePayload {
     spaceId: string;
+    /** The code of the space's type, so a subscriber hears only the types it names (item 86). Null when the type could not be read. */
+    spaceTypeCode: string | null;
     actingUserId: string;
     event: SpaceLifecycleEvent;
     timestamp: Date;
     data?: Record<string, string | number | boolean | null | undefined | object>;
 }
 
+/**
+ * A contribution any app registers (`@RegisterClass(BaseSpaceLifecycleSubscriber, 'its key')`) to hear a space's lifecycle events
+ * after they commit. Found through the class factory's registrations (item 37), so no type has to name it; one that listens to some
+ * types only lists their codes in `ForTypeCodes` (item 86), and hears nothing from the others.
+ */
 export abstract class BaseSpaceLifecycleSubscriber {
+    /** The space type codes this subscriber hears; undefined means every type. */
+    public readonly ForTypeCodes?: readonly string[];
     public abstract OnEvent(payload: SpaceLifecyclePayload): Promise<void> | void;
+}
+
+/** Whether a subscriber hears an event of a space of this type: it names no types, or names this one (without regard to case). */
+export function subscriberHears(subscriber: Pick<BaseSpaceLifecycleSubscriber, 'ForTypeCodes'>, spaceTypeCode: string | null): boolean {
+    const codes = subscriber.ForTypeCodes;
+    if (!codes) return true;
+    if (!spaceTypeCode) return false;
+    return codes.some((code) => code.trim().toLowerCase() === spaceTypeCode.trim().toLowerCase());
 }
 
 interface ProviderWithRunAfterCommit {
@@ -35,8 +52,9 @@ function hasRunAfterCommit(provider: object | null | undefined): provider is Pro
 }
 
 /**
- * Dispatches a space lifecycle event to all registered BaseSpaceLifecycleSubscriber instances
- * after the saving transaction commits via provider.RunAfterCommit.
+ * Dispatches a space lifecycle event to every registered BaseSpaceLifecycleSubscriber that hears the space's type, after the saving
+ * transaction commits (provider.RunAfterCommit), so a subscriber never sees a change that was rolled back. A subscriber that throws is
+ * logged and does not silence the next.
  */
 export function notifySpaceLifecycleSubscribers(
     provider: IMetadataProvider | IEntityDataProvider | null | undefined,
@@ -51,7 +69,7 @@ export function notifySpaceLifecycleSubscribers(
                         BaseSpaceLifecycleSubscriber,
                         reg.Key
                     );
-                    if (subscriber && typeof subscriber.OnEvent === 'function') {
+                    if (subscriber && typeof subscriber.OnEvent === 'function' && subscriberHears(subscriber, payload.spaceTypeCode)) {
                         await subscriber.OnEvent(payload);
                     }
                 } catch (subErr) {

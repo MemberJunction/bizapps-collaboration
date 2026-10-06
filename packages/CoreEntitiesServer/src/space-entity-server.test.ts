@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { seedAppSettings } from './app-settings.test-support.ts';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import { grantAdministerTo, grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
@@ -8,6 +10,12 @@ import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChang
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { membershipReaches, type SpaceNode, type MemberSnapshot } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+let restoreConfigurationLoader: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => { restoreAppSettingsRow(); restoreConfigurationLoader(); });
 
 // Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
 let restoreAdminister: () => void;
@@ -859,9 +867,9 @@ describe('SpaceEntityServer type change', () => {
         });
 
         it('refuses a Labels key nothing reads, even when the type lists Labels', async () => {
-            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels'] }, { Labels: { Bands: {} } });
+            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels'] }, { Labels: { Colors: {} } });
             assert.equal(res.Success, false);
-            assert.match(configurationMessage(res), /Unknown Labels key: Bands/);
+            assert.match(configurationMessage(res), /Unknown Labels key: Colors/);
         });
 
         it('accepts Labels.Tabs when the type lists it', async () => {

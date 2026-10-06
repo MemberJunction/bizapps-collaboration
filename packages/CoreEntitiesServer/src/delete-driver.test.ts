@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import {
@@ -12,6 +13,11 @@ import {
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { decideSpaceKinds, SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { decideItemKind, SpaceItemEntityServer } from '../dist/SpaceItemEntityServer.js';
+
+// The one configuration (B16) comes through the registry: stood in for here, as these tests are about who is asked
+let restoreConfigurationLoader: () => void;
+before(() => { restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => restoreConfigurationLoader());
 
 const SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
 const PARENT = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
@@ -57,7 +63,7 @@ describe('deleting a space or an item asks the type first', () => {
         ServerDriverRegistry.Instance.ResolveSpaceAndType = (async (spaceId: string) => {
             const driver = drivers.get(spaceId.toLowerCase());
             if (!driver) throw new Error(`No driver for ${spaceId}.`);
-            return { driver, space: stubOf<mjBizAppsCollaborationSpaceEntity>({}), spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}) };
+            return { driver, space: stubOf<mjBizAppsCollaborationSpaceEntity>({}), spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}), configuration: defaultConfiguration({ ID: spaceId }) };
         }) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     });
     after(() => {

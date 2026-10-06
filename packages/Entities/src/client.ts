@@ -94,6 +94,31 @@ export interface CreateSpaceConversationGraphQLPayload {
     ErrorMessage?: string;
 }
 
+/** `EnsureSpaceForRecord` (item 85): the space of a type anchored to a record, created the first time. Needs update rights on the record. */
+export interface EnsureSpaceForRecordGraphQLInput {
+    TypeCode: string;
+    EntityName: string;
+    RecordID: string;
+    SpaceName?: string | null;
+    AnchorRole?: string | null;
+    InheritsMembership?: boolean | null;
+}
+
+export interface EnsureSpaceForRecordGraphQLPayload {
+    Success: boolean;
+    SpaceID?: string;
+    ErrorMessage?: string;
+}
+
+/** `GetSpaceConfiguration`: the space's effective configuration (B16), cut to the caller. `ConfigurationJSON` parses to Core's `EffectiveSpaceConfiguration`. */
+export interface SpaceConfigurationGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    ConfigurationJSON?: string;
+    CanSeeTeam: boolean;
+    Full: boolean;
+}
+
 export interface SpaceChatHostRulesGraphQLPayload {
     Success: boolean;
     ErrorMessage?: string;
@@ -272,6 +297,28 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
 }
 `;
 
+const ENSURE_SPACE_FOR_RECORD_MUTATION = `
+mutation EnsureSpaceForRecord($input: EnsureSpaceForRecordInput!) {
+    EnsureSpaceForRecord(input: $input) {
+        Success
+        SpaceID
+        ErrorMessage
+    }
+}
+`;
+
+const GET_SPACE_CONFIGURATION_QUERY = `
+query GetSpaceConfiguration($spaceId: String!) {
+    GetSpaceConfiguration(spaceId: $spaceId) {
+        Success
+        ErrorMessage
+        ConfigurationJSON
+        CanSeeTeam
+        Full
+    }
+}
+`;
+
 const MINT_SPACE_LINK_MUTATION = `
 mutation MintSpaceLink($input: MintSpaceLinkInput!) {
     MintSpaceLink(input: $input) {
@@ -403,6 +450,16 @@ export class CollaborationClient {
     async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_CLOSE_CONSEQUENCE_QUERY, { spaceId });
         return (res?.GetCloseConsequence as CloseConsequenceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async EnsureSpaceForRecord(input: EnsureSpaceForRecordGraphQLInput): Promise<EnsureSpaceForRecordGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(ENSURE_SPACE_FOR_RECORD_MUTATION, { input });
+        return (res?.EnsureSpaceForRecord as EnsureSpaceForRecordGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetSpaceConfiguration(spaceId: string): Promise<SpaceConfigurationGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_CONFIGURATION_QUERY, { spaceId });
+        return (res?.GetSpaceConfiguration as SpaceConfigurationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned', CanSeeTeam: false, Full: false };
     }
 
     async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {

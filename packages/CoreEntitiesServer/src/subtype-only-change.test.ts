@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { seedAppSettings } from './app-settings.test-support.ts';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
 import { BaseEntity, EntitySaveOptions, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChangeContext } from '../dist/base-space-type-server-driver.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+let restoreConfigurationLoader: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => { restoreAppSettingsRow(); restoreConfigurationLoader(); });
 
 /** Save options as MJ hands a parent's save: naming the subtype that started it. */
 function asSubtype(name: string | null): EntitySaveOptions {
@@ -78,6 +86,7 @@ describe("a change to only a subtype's own columns", () => {
                 driver,
                 space: {} as mjBizAppsCollaborationSpaceEntity,
                 spaceType: { SpaceExtensionEntity: BOARDS } as mjBizAppsCollaborationSpaceTypeEntity,
+                configuration: defaultConfiguration({ ID: spaceId }),
             };
         }) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
         // MJ's own save, which the space's `Save` ends in: it succeeds, and the driver is looked up as a reaction does

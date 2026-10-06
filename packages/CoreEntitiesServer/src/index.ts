@@ -56,7 +56,16 @@ export { LoadTaskAttributionEntityServer, TaskAssignmentEntityServer, TaskCommen
 export { CollaborationTaskEntityServer, LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
-export { resolveAllowedAgents, COLLABORATION_DEFAULT_AGENT_ID } from './resolve-allowed-agents.js';
+export { resolveAllowedAgents, agentsFromConfiguration, COLLABORATION_DEFAULT_AGENT_NAME } from './resolve-allowed-agents.js';
+export { loadSpaceConfiguration, typeSettingsOf } from './space-configuration.js';
+export { getSpaceConfigurationForUser } from './get-space-configuration.js';
+export { ensureSpaceForRecordForUser } from './ensure-space-for-record-operation.js';
+export type { EnsureSpaceForRecordInput, EnsureSpaceForRecordOutcome } from './ensure-space-for-record-operation.js';
+export type { GetSpaceConfigurationOutcome } from './get-space-configuration.js';
+export { loadReach } from './space-reach.js';
+export type { SpaceReach } from './space-reach.js';
+export { driverBaseContext } from './space-driver-call.js';
+export type { LoadedSpaceConfiguration, LoadSpaceConfigurationOptions, SpaceChainRow } from './space-configuration.js';
 export type { ResolvedAllowedAgentsResult, SpaceAgentItem } from './resolve-allowed-agents.js';
 export { resolveSpaceKnowledgeSources, resolveSpaceAgentSkills } from './resolve-space-agent-context.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';

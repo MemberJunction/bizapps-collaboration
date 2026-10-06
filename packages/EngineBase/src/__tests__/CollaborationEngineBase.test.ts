@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, expect } from 'vitest';
+import { ResolveSpaceConfiguration, type CollaborationSettings } from '@mj-biz-apps/collaboration-core';
 import { CollaborationEngineBase, COLLABORATION_APP_ID, MissingAppSettingsError } from '../CollaborationEngineBase.js';
 import type {
     mjBizAppsCollaborationSpaceTypeEntity,
@@ -131,23 +132,19 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
         expect(settings.StorageAccountID).toBe('DEFAULT-APP-STORAGE');
         expect(settings.Chats?.WhoCanStart).toBe('Anyone');
 
-        // Space override with type config
-        const resolved = engine.ResolveSettingsForSpace(
-            [{ StorageAccountID: 'SPACE-OVERRIDE-STORAGE' }],
-            'TYPE-111' // type has SpaceOverridable: ['StorageAccountID']
-        );
-        expect(resolved.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
-        expect(resolved.Chats.WhoCanStart).toBe('Anyone'); // from app default
+        // The engine's row is the app level of the one resolver (B16); the type has SpaceOverridable: ['StorageAccountID']
+        const type = engine.SpaceTypeById('TYPE-111');
+        const resolved = ResolveSpaceConfiguration({
+            App: { Settings: settings, Grants: [] },
+            Type: { ID: 'TYPE-111', Settings: type?.Configuration ? (JSON.parse(type.Configuration) as CollaborationSettings) : null, Grants: [] },
+            Spaces: [{ ID: 'SPACE-1', TypeID: 'TYPE-111', Settings: { StorageAccountID: 'SPACE-OVERRIDE-STORAGE' }, Grants: [] }],
+        });
+        expect(resolved.Settings.StorageAccountID).toBe('SPACE-OVERRIDE-STORAGE');
+        expect(resolved.Settings.Chats.WhoCanStart).toBe('Anyone'); // from app default
     });
 
     describe('settings fail closed', () => {
         type Internals = { _spaceTypes: Array<Partial<mjBizAppsCollaborationSpaceTypeEntity>>; _applicationSettings: unknown[] };
-
-        it('refuses to resolve when a space type configuration does not parse', () => {
-            const internals = engine as unknown as Internals;
-            internals._spaceTypes.push({ ID: 'TYPE-BAD', Code: 'bad', Name: 'Bad', Configuration: '{ not json' });
-            expect(() => engine.ResolveSettingsForSpace([], 'TYPE-BAD')).toThrow(/has a configuration that does not parse/);
-        });
 
         it('refuses to resolve when the app settings row does not validate, instead of using it anyway', () => {
             const internals = engine as unknown as Internals;
@@ -158,7 +155,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             }];
             (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
             try {
-                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow(/CollaborationSettings are invalid/);
+                expect(() => engine.CollaborationSettings).toThrow(/CollaborationSettings are invalid/);
             } finally {
                 internals._applicationSettings = held;
                 (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
@@ -171,7 +168,7 @@ describe('CollaborationEngineBase (Punch list 2 item 54)', () => {
             internals._applicationSettings = [];
             (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;
             try {
-                expect(() => engine.ResolveSettingsForSpace([], 'TYPE-111')).toThrow();
+                expect(() => engine.CollaborationSettings).toThrow();
             } finally {
                 internals._applicationSettings = held;
                 (engine as unknown as { _cachedParsedSettings: undefined })._cachedParsedSettings = undefined;

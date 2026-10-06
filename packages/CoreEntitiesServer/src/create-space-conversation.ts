@@ -12,8 +12,8 @@ import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { COLLABORATION_APP_ID } from '@mj-biz-apps/collaboration-engine-base';
 
-const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 export interface CreateSpaceConversationInput {
     SpaceID: string;

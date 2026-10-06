@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import type { IMetadataProvider } from '@memberjunction/core';
-import {
-    resolveAllowedAgents,
-    COLLABORATION_DEFAULT_AGENT_ID,
-} from '../dist/resolve-allowed-agents.js';
+import { readFileSync } from 'node:fs';
+import { resolveAllowedAgents } from '../dist/resolve-allowed-agents.js';
 import {
     resolveSpaceKnowledgeSources,
     resolveSpaceAgentSkills,
 } from '../dist/resolve-space-agent-context.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
+import { seedAppSettings } from './app-settings.test-support.ts';
+
+/** The shipped agent, read from the metadata that ships it: the resolver finds it by this name (item 42). */
+const SHIPPED = (JSON.parse(readFileSync(new URL('../../../metadata/agents/.collaboration-agent.json', import.meta.url), 'utf8')) as Array<{ primaryKey: { ID: string }; fields: { Name: string } }>)[0];
+const COLLABORATION_DEFAULT_AGENT_ID = SHIPPED.primaryKey.ID;
 
 describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hierarchy', () => {
+    // The one resolver starts from the app's row, as every configuration does
+    let restoreAppSettings: () => void;
+    before(() => { restoreAppSettings = seedAppSettings(); });
+    after(() => restoreAppSettings());
+
     const APP_AGENT_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
     const TYPE_AGENT_ID = 'bbbbbbbb-2222-4222-8222-222222222222';
     const CHILD_AGENT_ID = 'cccccccc-3333-4333-8333-333333333333';
@@ -42,13 +50,22 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
             const { EntityName, ExtraFilter = '' } = params;
             const typeConfig = currentOptions.typeConfig ?? null;
             const spaceConfig = currentOptions.spaceConfig ?? null;
-            const agentRows = (currentOptions.agentRows ?? []).map((row, index) => ({ ID: `agent-grant-${index}`, Kind: 'Agent', Settings: null, ...row }));
-            const knowledgeRows = (currentOptions.knowledgeRows ?? []).map((row, index) => ({ ID: `knowledge-grant-${index}`, Kind: 'KnowledgeSource', Settings: null, ...row }));
+            const agentRows = (currentOptions.agentRows ?? []).map((row, index) => ({ ID: `agent-grant-${index}`, Kind: 'Agent', Mode: 'Extend', Band: 'Shared', TargetEntityID: 'E-AGENTS', Sequence: index, Settings: null, ...row }));
+            const knowledgeRows = (currentOptions.knowledgeRows ?? []).map((row, index) => ({ ID: `knowledge-grant-${index}`, Kind: 'KnowledgeSource', Mode: 'Extend', Band: 'Shared', TargetEntityID: 'E-SOURCES', Sequence: index, Settings: null, ...row }));
 
             if (EntityName === 'MJ: AI Agents') {
+                // The shipped assistant, by its name; every other read is by id, and an inactive agent is left out of an Active read
+                if (ExtraFilter.includes('Name =')) return { Success: true, Results: ExtraFilter.includes(SHIPPED.fields.Name) ? [{ ID: COLLABORATION_DEFAULT_AGENT_ID }] : [] };
                 const wanted = [...ExtraFilter.matchAll(/'([0-9a-f-]{36})'/gi)].map((m) => m[1].toLowerCase());
                 const inactive = new Set((currentOptions.inactiveAgentIds ?? []).map((id) => id.toLowerCase()));
-                return { Success: true, Results: wanted.filter((id) => !inactive.has(id)).map((id) => ({ ID: id })) };
+                const statusRead = ExtraFilter.includes("Status = 'Active'");
+                return { Success: true, Results: wanted.filter((id) => !statusRead || !inactive.has(id)).map((id) => ({ ID: id })) };
+            }
+
+            if (EntityName === 'MJ: Content Sources') {
+                // Every granted source exists
+                const wanted = [...ExtraFilter.matchAll(/'([0-9a-f-]{36})'/gi)].map((m) => m[1]);
+                return { Success: true, Results: wanted.map((id) => ({ ID: id })) };
             }
 
             if (EntityName === 'MJ_BizApps_Collaboration: Spaces') {
@@ -250,7 +267,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
     it('refuses, rather than skipping a link, when a type configuration does not parse', async () => {
         currentOptions = { typeConfig: '{ not json' };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
-        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /refused.*does not parse/);
     });
 
     it('refuses when a space that holds agent rows has a configuration that does not parse', async () => {
@@ -259,7 +276,7 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
             agentRows: [{ TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true }],
         };
         await CollaborationEngine.Instance.Config(true, undefined, provider);
-        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /Agent list refused.*does not parse/);
+        await assert.rejects(() => resolveAllowedAgents(provider, CHILD_SPACE_ID), /refused.*does not parse/);
     });
 
     it('gives no agents and no default when a level replaced the list and none of its agents is Active, and the shipped one is Active', async () => {

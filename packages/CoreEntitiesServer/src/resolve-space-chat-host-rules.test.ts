@@ -220,11 +220,14 @@ describe('resolveSpaceChatHostRules', () => {
 
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Grants') {
                     return mockResult<T>(
-                        spaceAgents.map((row, index) => ({ ID: `space-agent-${index}`, Kind: 'Agent', TargetRecordID: row.AgentID, SpaceID: SPACE_ID, IsDefault: row.IsDefault })),
+                        spaceAgents.map((row, index) => ({ ID: `space-agent-${index}`, Kind: 'Agent', Mode: 'Extend', Band: 'Shared', TargetEntityID: 'E-AGENTS', Sequence: index, TargetRecordID: row.AgentID, SpaceID: SPACE_ID, IsDefault: row.IsDefault })),
                     );
                 }
 
                 if (EntityName === 'MJ: AI Agents') {
+                    // The shipped assistant is found by its name (item 42); every other read is by id
+                    const byName = /Name = '([^']+)'/.exec(String(ExtraFilter ?? ''))?.[1];
+                    if (byName) return mockResult<T>(AGENT_ROWS.filter((row) => row.Name === byName));
                     return mockResult<T>(agentsMatching(typeof ExtraFilter === 'string' ? ExtraFilter : undefined));
                 }
 

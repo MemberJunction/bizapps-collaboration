@@ -6,7 +6,6 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
-import { COLLABORATION_DEFAULT_AGENT_ID } from '../dist/resolve-allowed-agents.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
@@ -40,7 +39,7 @@ describe('executeSpaceChatTurn', () => {
     const ROLE_CONTRIB_ID = '66666666-6666-4666-8666-666666666666';
     const ROLE_NON_CONTRIB_ID = '77777777-7777-4777-8777-777777777777';
     const TYPE_ID = '88888888-8888-4888-8888-888888888888';
-    const ALLOWED_AGENT_ID = COLLABORATION_DEFAULT_AGENT_ID;
+    const ALLOWED_AGENT_ID = '9e6d761a-197a-40af-995b-3d3dd9bd7b9e';
     const DISALLOWED_AGENT_ID = '99999999-9999-4999-8999-999999999999';
 
     const callerUser = { ID: CALLER_ID, Name: 'Caller' } as UserInfo;
@@ -368,9 +367,14 @@ describe('executeSpaceChatTurn', () => {
                     const agentIds = options.allowedAgents ?? [ALLOWED_AGENT_ID];
                     return mockResult<T>(
                         agentIds.map(
-                            (id) =>
+                            (id, index) =>
                                 ({
+                                    ID: `space-agent-${index}`,
                                     Kind: 'Agent',
+                                    Mode: 'Extend',
+                                    Band: 'Shared',
+                                    TargetEntityID: 'E-AGENTS',
+                                    Sequence: index,
                                     TargetRecordID: id,
                                     SpaceTypeID: null,
                                     SpaceID: SPACE_ID,
@@ -381,7 +385,9 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ: AI Agents') {
-                    if (options.noActiveAgents) return mockResult<T>([]);
+                    // The shipped assistant is not in this world; the allowed agent answers every read by id
+                    if (String(ExtraFilter).includes('Name =')) return mockResult<T>([]);
+                    if (options.noActiveAgents && String(ExtraFilter).includes("Status = 'Active'")) return mockResult<T>([]);
                     return mockResult<T>([
                         {
                             ID: ALLOWED_AGENT_ID,

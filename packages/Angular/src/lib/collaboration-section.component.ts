@@ -10,11 +10,12 @@ import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonD
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
+import { rulesForSpace } from './logic/space-rules';
 import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { type CollaborationSettings, DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -1541,9 +1542,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.uiDriver = this.uiDriverFor(type?.UIDriverClass, code, `space ${space.ID}`, `driver:${space.ID}`);
         let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: structuredClone(DEFAULT_SPACE_RULES) };
         try {
-            const spaceConfig = space.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
-            const resolved = engine.ResolveSettingsForSpace([spaceConfig], space.SpaceTypeID);
-            ctx = { ...ctx, rules: { Chats: resolved.Chats, Agents: resolved.Agents, Labels: resolved.Labels, Extensions: resolved.Extensions ?? {} } };
+            ctx = { ...ctx, rules: rulesForSpace(space, this.rawSpaces, engine) };
         } catch (err) {
             this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
         }
