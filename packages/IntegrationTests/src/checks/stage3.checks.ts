@@ -6,15 +6,18 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import type { UserInfo } from '@memberjunction/core';
-import type { mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
-import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME } from '@mj-biz-apps/collaboration-core-entities-server';
+import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
+import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
+import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME } from '@mj-biz-apps/collaboration-core-entities-server';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
-import { CONVERSATION_DETAIL_ENTITY, SPACE_GRANT_ENTITY } from '../entity-names.js';
+import { CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_GRANT_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
-import { cleanupConversation, cleanupStep, registerChecks } from './cleanup-helpers.js';
+import { cleanupConversation, cleanupSpace, cleanupStep, registerChecks } from './cleanup-helpers.js';
 import { attachAgentToSpace, detachTestAgent } from './test-agent-attachment.js';
 
+const DISCOVERY = 'C1000001-0000-4000-8000-000000000002';
 const CHAPTER_12 = 'C1000001-0000-4000-8000-000000000016';
+const COLLAB_SCHEMA = '__mj_BizAppsCollaboration';
 const CHAPTER_12_STAFF = 'C1000001-0000-4000-8000-000000000019';
 const CHAPTER_40_RECORD = 'F1000001-0000-4000-8000-000000000040';
 const QUERIES = 'MJ: Queries';
@@ -218,6 +221,120 @@ const checks: NamedCheck[] = [
             const context = { spaceId: CHAPTER_12_STAFF, conversationId: 'none', audience: 'Team', spaceData: [{ GrantID: 'G', Kind: 'Query', Name: 'Renewals by month', Description: null, Parameters: [] }] };
             const stranger = await engine.RunAction({ Action: action!, ContextUser: ctx.User, Params: [{ Name: 'Name', Type: 'Input', Value: 'Collaboration Home Counts' }], Filters: [], Context: context, Provider: ctx.Provider, SkipActionLog: true });
             Assert(stranger.Success === false && /not granted in this conversation/.test(stranger.Message ?? ''), `A name outside the turn's list is refused: ${stranger.Message ?? ''}`);
+        },
+    },
+    {
+        Id: 'stage3.T5',
+        Name: 'T5 — fnCollaborationCommonAccess (item 28): the spaces every listed user reaches, Team only when every one can; an empty, malformed or unknown list gives nothing (fail closed)',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const pool = ctx.Pool;
+            Assert(!!pool, 'The server harness has a SQL connection for the function');
+            if (!pool) return;
+            const common = async (list: string): Promise<Array<{ SpaceID: string; CanSeeTeam: boolean }>> =>
+                (await pool.request().input('list', list).query(`SELECT SpaceID, CanSeeTeam FROM [${COLLAB_SCHEMA}].[fnCollaborationCommonAccess](@list)`)).recordset;
+            const access = async (userId: string): Promise<Array<{ SpaceID: string; CanSeeTeam: boolean }>> =>
+                (await pool.request().input('id', userId).query(`SELECT SpaceID, CanSeeTeam FROM [${COLLAB_SCHEMA}].[fnCollaborationAccess](TRY_CAST(@id AS UNIQUEIDENTIFIER))`)).recordset;
+            Assert((await common('')).length === 0, 'An empty list reaches nothing');
+            Assert((await common('not-a-uuid')).length === 0, 'A malformed token reaches nothing');
+            Assert((await common(`${ada.ID},not-a-uuid`)).length === 0, 'One malformed token fails the whole list closed');
+            Assert((await common('00000000-0000-4000-8000-000000000000')).length === 0, 'An unknown principal reaches nothing');
+            const adaAlone = await common(ada.ID);
+            const adaAccess = await access(ada.ID);
+            const key = (rows: Array<{ SpaceID: string; CanSeeTeam: boolean }>) => rows.map((r) => `${r.SpaceID.toUpperCase()}:${r.CanSeeTeam ? 1 : 0}`).sort().join(',');
+            Assert(adaAlone.length > 0 && key(adaAlone) === key(adaAccess), `One user alone gets exactly their own reach (${adaAlone.length} spaces)`);
+            const both = await common(`${ada.ID}, ${bea.ID}`);
+            const beaAccess = await access(bea.ID);
+            const beaById = new Map(beaAccess.map((r) => [r.SpaceID.toUpperCase(), r.CanSeeTeam]));
+            const expected = adaAccess.filter((r) => beaById.has(r.SpaceID.toUpperCase())).map((r) => ({ SpaceID: r.SpaceID, CanSeeTeam: r.CanSeeTeam && !!beaById.get(r.SpaceID.toUpperCase()) }));
+            Assert(key(both) === key(expected), `Two users get the intersection, Team only where both see it (${both.length} spaces)`);
+            const discovery = both.find((r) => r.SpaceID.toUpperCase() === DISCOVERY);
+            Assert(!!discovery && discovery.CanSeeTeam === false, 'Discovery is common to Ada and Bea, and Bea\'s Shared seat keeps it Shared');
+        },
+    },
+    {
+        Id: 'stage3.T6',
+        Name: 'T6 — the retrieval half of the Owner user\'s check (item 3): an Owner-type account with no seat retrieves nothing from a space, the way its post is refused',
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const remy = await GetPersonaUser(ctx, 'remy');
+            const origType = remy.Type;
+            try {
+                remy.Type = 'Owner';
+                const result = await resolveSpaceAgentRetrieval(ctx.Provider, remy, DISCOVERY);
+                Assert(result.quotedItems.length === 0, `Nothing is quoted for an Owner-type user with no seat (${result.quotedItems.length})`);
+                Assert(result.searchedSpaceIds.length === 0, `No space is searched for them (${result.searchedSpaceIds.length})`);
+                Assert(result.callerCanSeeTeam === false, 'The type of the account gives no Team sight');
+            } finally {
+                remy.Type = origType;
+            }
+        },
+    },
+    {
+        Id: 'stage3.T7',
+        Name: 'T7 — the type\'s word reaches the turn (the extension model\'s 83): the example board\'s driver adds its instructions to a turn in a board space, and a type with nothing to add adds nothing',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const [board] = await FindRows<{ ID: string }>(ctx, SPACE_TYPE_ENTITY, "Code = 'example-board'", ['ID']);
+            Assert(!!board, 'The example board type exists');
+            const space = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+            space.NewRecord();
+            space.Name = `COLLAB-CHECK T7-Board-${Date.now()}`;
+            space.SpaceTypeID = board.ID;
+            space.OwnerID = ada.ID;
+            space.InheritsMembership = false;
+            const leaf = await space.EnsureISAChild();
+            if (leaf instanceof mjBizAppsCollabExamplesExampleBoardEntity) leaf.TermName = '2026 to 2027';
+            Assert(await space.Save(), `Ada creates an example board: ${space.LatestResult?.CompleteMessage ?? ''}`);
+            let attachment: string | null = null;
+            let conversation: { id: string; chat: string } | null = null;
+            try {
+                const [ownerRole] = await FindRows<{ ID: string }>(ctx, SPACE_ROLE_TYPE_ENTITY, "Code = 'owner'", ['ID']);
+                const seat = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberEntity>(SPACE_MEMBER_ENTITY, ada);
+                seat.NewRecord();
+                seat.SpaceID = space.ID;
+                seat.UserID = ada.ID;
+                seat.SpaceRoleTypeID = ownerRole.ID;
+                seat.Band = 'Team';
+                seat.Status = 'Active';
+                Assert(await seat.Save(), `Ada seats herself as owner: ${seat.LatestResult?.CompleteMessage ?? ''}`);
+                attachment = await attachAgentToSpace(ctx, COLLABORATION_TEST_AGENT_ID, space.ID);
+                const started = await createSpaceConversation(ctx.Provider, ada, { SpaceID: space.ID, Name: `board-t7-${Date.now()}`, Kind: 'General' });
+                Assert(started.ok === true && !!started.conversationId, `Ada starts a conversation in the board: ${started.ok ? '' : started.message}`);
+                if (!started.ok) throw new Error(started.message);
+                conversation = { id: started.conversationId!, chat: started.spaceChatId! };
+                const turn = await turnAs(ctx, ada, space.ID, conversation.id, `@${COLLABORATION_TEST_AGENT_NAME} what are the rules here?`);
+                Assert(/Type: .*rules of order/.test(turn.reply), `The board driver's instructions reached the turn: ${turn.reply.split('\n').find((l) => l.startsWith('Type:')) ?? '(no Type line)'}`);
+                Assert(/Quorum requirement: 50%/.test(turn.reply), 'All of the driver\'s instructions are there');
+            } finally {
+                if (conversation) await cleanupConversation(ctx.Provider, ctx.User, conversation.id, conversation.chat);
+                if (attachment) await detachTestAgent(ctx, attachment);
+                await cleanupStep(async () => {
+                    const closing = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                    Assert(await closing.Load(space.ID), 'The board loads to close');
+                    closing.ClosedAt = new Date(Date.now() - 60_000);
+                    Assert(await closing.Save(), `The board closes before it is removed: ${closing.LatestResult?.CompleteMessage ?? ''}`);
+                });
+                await cleanupSpace(ctx.Provider, ctx.User, space.ID);
+            }
+            // The chapter type has no driver of its own: the default one adds nothing
+            let chapterAttachment: string | null = null;
+            let chapterConversation: { id: string; chat: string } | null = null;
+            const nico = await GetPersonaUser(ctx, 'nico');
+            try {
+                chapterAttachment = await attachAgentToSpace(ctx, COLLABORATION_TEST_AGENT_ID, CHAPTER_12);
+                const started = await createSpaceConversation(ctx.Provider, nico, { SpaceID: CHAPTER_12, Name: `chapter-t7-${Date.now()}`, Kind: 'General' });
+                if (!started.ok) throw new Error(started.message);
+                chapterConversation = { id: started.conversationId!, chat: started.spaceChatId! };
+                const turn = await turnAs(ctx, nico, CHAPTER_12, chapterConversation.id, `@${COLLABORATION_TEST_AGENT_NAME} anything to add?`);
+                Assert(/Type: none/.test(turn.reply), 'A type with no driver adds nothing');
+            } finally {
+                if (chapterConversation) await cleanupConversation(ctx.Provider, ctx.User, chapterConversation.id, chapterConversation.chat);
+                if (chapterAttachment) await detachTestAgent(ctx, chapterAttachment);
+            }
         },
     },
 ];

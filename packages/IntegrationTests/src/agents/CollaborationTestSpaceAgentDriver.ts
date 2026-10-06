@@ -40,7 +40,7 @@ export class CollaborationTestSpaceAgentDriver extends BaseAgent {
     ): Promise<ExecuteAgentResult<R>> {
         const provider = params.provider ?? this.ProviderToUse;
         const system = params.contextUser;
-        const data = (params.data ?? {}) as { allowedItems?: readonly AllowedItem[]; spaceData?: readonly SpaceDataGrant[]; knowledgeSourceIds?: readonly string[] };
+        const data = (params.data ?? {}) as { allowedItems?: readonly AllowedItem[]; spaceData?: readonly SpaceDataGrant[]; knowledgeSourceIds?: readonly string[]; typeInstructions?: readonly string[] };
         const allowedItems = data.allowedItems ?? [];
 
         let replyText: string;
@@ -56,6 +56,7 @@ export class CollaborationTestSpaceAgentDriver extends BaseAgent {
         replyText += `\nTools: ${added.length ? added.join(', ') : 'none'}`;
         replyText += `\nData: ${spaceData.length ? spaceData.map((g) => g.Name).join(', ') : 'none'}`;
         replyText += `\nKnowledge: ${data.knowledgeSourceIds?.length ? data.knowledgeSourceIds.join(', ') : 'none'}`;
+        replyText += `\nType: ${data.typeInstructions?.length ? data.typeInstructions.join(' | ') : 'none'}`;
 
         const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', system);
         run.NewRecord();
