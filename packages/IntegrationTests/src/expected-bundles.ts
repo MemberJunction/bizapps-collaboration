@@ -12,6 +12,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'features': 5,
     'stage1': 11,
     'stage2': 5,
+    'stage3': 4,
 };
 
 export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
@@ -28,4 +29,5 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'subtypes': 4,
     'stage1': 8,
     'stage2': 4,
+    'stage3': 2,
 };

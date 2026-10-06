@@ -30,6 +30,7 @@ const ALL_BUNDLES = [
     'features',
     'stage1',
     'stage2',
+    'stage3',
 ];
 
 const args = process.argv.slice(2);
