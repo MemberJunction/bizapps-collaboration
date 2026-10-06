@@ -260,8 +260,12 @@ function finish(files) {
         const syncPath = resolve(dir, '.mj-sync.json');
         if (dryRun) { console.log(`--- ${file.path}\n${text}`); continue; }
         if (check) {
-            if (current !== text) { console.error(`✖ ${file.path} is ${current === null ? 'missing' : 'stale'}: run node scripts/generate-data-reach-filters.mjs`); stale += 1; }
-            else console.log(`✓ ${file.path}`);
+            // `mj sync push` appends a `sync` block to each row it pushes (CI checks after the push), so the comparison ignores those blocks
+            if (withoutSyncBlocks(current) !== text) {
+                console.error(`✖ ${file.path} is ${current === null ? 'missing' : 'stale'}: run node scripts/generate-data-reach-filters.mjs`);
+                if (current !== null) console.error(firstDifference(withoutSyncBlocks(current), text));
+                stale += 1;
+            } else console.log(`✓ ${file.path}`);
             continue;
         }
         mkdirSync(dir, { recursive: true });
@@ -270,6 +274,28 @@ function finish(files) {
         else console.log(`unchanged ${file.path}`);
     }
     if (check && stale) process.exit(1);
+}
+
+/** The file's rows as the generator writes them: without the `sync` block the push adds. Unparseable text is compared as it is. */
+function withoutSyncBlocks(text) {
+    if (text === null) return null;
+    try {
+        const rows = JSON.parse(text);
+        if (!Array.isArray(rows)) return text;
+        return JSON.stringify(rows.map(({ sync, ...row }) => row), null, 2) + '\n';
+    } catch {
+        return text;
+    }
+}
+
+/** The first line where two texts differ, for the CI log. */
+function firstDifference(current, expected) {
+    const a = current.split('\n');
+    const b = expected.split('\n');
+    for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+        if (a[i] !== b[i]) return `  line ${i + 1}:\n    on disk:  ${a[i] ?? '(end of file)'}\n    expected: ${b[i] ?? '(end of file)'}`;
+    }
+    return '  (the texts differ only in length)';
 }
 
 main().catch((error) => {
