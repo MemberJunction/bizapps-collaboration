@@ -369,5 +369,54 @@ BEGIN
         THROW 50000, 'Space Participant is missing required Allow on allowed People fields.', 1;
 END
 
-ROLLBACK TRAN;
+-- Stage 2 (B18, D28): a type's data reach. A participant seated on a chapter space reads that chapter's members through the
+-- generated filter, and no other chapter's; the allow-list leaves DuesBalance out. Runs only where the example schema and the
+-- generated filter are present (a test database after pnpm run mj:migrate:examples and mj:push:tests).
+IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleChapterMember') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM __mj.RowLevelSecurityFilter WHERE Name = N'Collaboration: Data Reach - MJ_BizApps_Collaboration_Examples: Example Chapter Members')
+BEGIN
+    DECLARE @ChapterType uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'example-chapter');
+    DECLARE @ChaptersEntity uniqueidentifier = (SELECT TOP 1 ID FROM __mj.Entity WHERE Name = N'MJ_BizApps_Collaboration_Examples: Example Chapters');
+    IF @ChapterType IS NULL OR @ChaptersEntity IS NULL THROW 50000, 'The example-chapter type or the chapters entity is missing (pnpm run mj:push:tests).', 1;
+    DECLARE @ChapterA uniqueidentifier = NEWID();
+    DECLARE @ChapterB uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollabExamples.ExampleChapter (ID, Name, Status) VALUES (@ChapterA, N'Persona chapter A', N'Active'), (@ChapterB, N'Persona chapter B', N'Active');
+    DECLARE @MemberA uniqueidentifier = NEWID();
+    DECLARE @MemberB uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollabExamples.ExampleChapterMember (ID, ChapterID, FirstName, LastName, DuesBalance, Status)
+    VALUES (@MemberA, @ChapterA, N'Ann', N'A', 10, N'Active'), (@MemberB, @ChapterB, N'Bob', N'B', 20, N'Active');
+    DECLARE @ChapterSpace uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollaboration.Space (ID, SpaceTypeID, Name, OwnerID, InheritsMembership, AgentRetrieval)
+    VALUES (@ChapterSpace, @ChapterType, N'Persona chapter space', @Other, 1, N'Included');
+    INSERT INTO __mj_BizAppsCollaboration.SpaceMember (SpaceID, UserID, SpaceRoleTypeID, Band, Status) VALUES (@ChapterSpace, @User, @Guest, N'Shared', N'Active');
+    INSERT INTO __mj_BizAppsCollaboration.SpaceAnchor (ID, SpaceID, SpaceTypeID, EntityID, RecordID, Role, IsPrimary, Sequence)
+    VALUES (NEWID(), @ChapterSpace, @ChapterType, @ChaptersEntity, N'ID|' + CONVERT(nvarchar(36), @ChapterA), N'chapter', 1, 0);
 
+    SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+    FROM __mj.RowLevelSecurityFilter f
+    INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+    INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members';
+    IF @pred IS NULL THROW 50000, 'Space Participant has no filtered read on the chapter members (the generated permission is missing).', 1;
+    SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollabExamples.vwExampleChapterMembers WHERE ID = @id AND ' + @pred;
+    EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @MemberA, @n OUTPUT;
+    IF @n <> 1 THROW 50000, 'Data reach filter did not return the member of the anchored chapter.', 1;
+    EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @MemberB, @n OUTPUT;
+    IF @n <> 0 THROW 50000, 'Data reach filter returned a member of another chapter.', 1;
+
+    -- The allow-list: FirstName has an Allow row, DuesBalance has none, and the entity's field-level flag is on so the gap denies
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj.vwEntityFields ef JOIN __mj.Entity e ON ef.EntityID = e.ID
+        JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant AND efp.ReadAccess = N'Allow'
+        WHERE e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND ef.Name = N'FirstName')
+        THROW 50000, 'Space Participant has no Allow on the chapter members'' FirstName.', 1;
+    IF EXISTS (
+        SELECT 1 FROM __mj.vwEntityFields ef JOIN __mj.Entity e ON ef.EntityID = e.ID
+        JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant AND efp.ReadAccess = N'Allow'
+        WHERE e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND ef.Name = N'DuesBalance')
+        THROW 50000, 'Space Participant has an Allow on DuesBalance, which the type leaves out.', 1;
+    IF NOT EXISTS (SELECT 1 FROM __mj.Entity WHERE Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND EnableFieldLevelSecurity = 1)
+        THROW 50000, 'Field-level security is off on the chapter members, so the allow-list denies nothing.', 1;
+END
+
+ROLLBACK TRAN;

@@ -54,11 +54,19 @@ when `mj` is not on the path of the member you are in.
    pnpm run mj:migrate:examples
    ```
 
-7. **The test metadata:** `pnpm run mj:push:tests` pushes the two example entities' permissions and the categories of their own columns first
-   (`metadata-tests/entity-permissions` and `metadata-tests/entity-fields`; the categories give each subtype's columns a section of their own in its form), then the harness's stub agent and three example space types
-   (`metadata-tests/agents` and `metadata-tests/space-types`; see [reviewing the data](reviewing-the-data.md#the-test-agent)). The
-   `extensions`, `subtypes` and `lifecycle` checks need the types. Then run `node scripts/strip-sync-blocks.mjs` again: it cleans
-   `metadata-tests/` too.
+7. **The test metadata:** `pnpm run mj:push:tests` pushes, in this order, the example entities' field-level flag (`metadata-tests/entities`), the
+   generated data-reach filter (`row-level-security-filters`), the example entities' permissions (`entity-permissions`, the generated
+   participant read among them), the categories of the subtype's columns (`entity-fields`), the generated field allow-list
+   (`entity-field-permissions`), the renewals query and the reminder action (`queries`, `actions`); then the harness's stub agent, the
+   example space types, their statuses and their grants (`agents`, `space-types`, `space-type-statuses`, `space-grants`; see
+   [reviewing the data](reviewing-the-data.md#the-test-agent)). The `extensions`, `subtypes`, `lifecycle` and `stage2` checks need them.
+   Then run `node scripts/strip-sync-blocks.mjs` again: it cleans `metadata-tests/` too.
+
+   The data-reach files are generated, never edited: `node scripts/generate-data-reach-filters.mjs` reads every type's `DataReach`
+   from `metadata/space-types/` and `metadata-tests/space-types/`, checks each declaration against the database (the entity, the path's
+   column and hop, the fields), and writes one Space Participant filter per declared entity, the read grant carrying it and an Allow
+   row per listed field, under the metadata root the type lives in. Run it with the database's `DB_*` variables after the types are
+   pushed and before the second push; `--check` fails when the committed files are stale, and CI runs it.
 8. **The sample world:** build the integration package, then purge and load, as
    [reviewing the data](reviewing-the-data.md#loading-it) says.
 

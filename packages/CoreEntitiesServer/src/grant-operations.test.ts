@@ -65,7 +65,7 @@ function world(options: { auditFails?: boolean } = {}) {
         async RunViews(list: RunViewParams[], user?: UserInfo) { return Promise.all(list.map((p) => provider.RunView(p, user))); },
         async RunQuery(params: { QueryID?: string; Parameters?: Record<string, unknown> }) { queryRuns.push(params); return { Success: true, Results: [{ Month: 1, Renewals: 3 }], RowCount: 1 }; },
         EntityByName(name: string): EntityInfo | null { return { ID: 'E-GRANTS', Name: name } as unknown as EntityInfo; },
-        EntityByID(): EntityInfo | null { return null; },
+        EntityByID(id: string): EntityInfo | null { return id === 'E-CH' ? ({ ID: 'E-CH', Name: 'Example Chapters', PrimaryKeys: [{ Name: 'ID' }], Fields: [{ Name: 'ID' }, { Name: 'Name' }] } as unknown as EntityInfo) : null; },
         async CreateAuditLogRecord(user: UserInfo, _auth: string | null, type: string, status: string, details: string) {
             if (options.auditFails) return null;
             audits.push({ user: user.ID, type, status, details: JSON.parse(details) as Record<string, unknown> });
@@ -113,6 +113,9 @@ describe('the grant operations (B17, D29)', () => {
         assert.equal(unknown.ok, false);
         if (!unknown.ok) assert.match(unknown.message, /no parameter or property named "Year"/);
         assert.equal(w.queryRuns.length, 0, 'nothing ran');
+        assert.deepEqual(w.audits.map((a) => a.status), ['Failed', 'Failed'], 'both attempts are logged as failed runs (row 16): the bound name and the unknown name');
+        assert.match(String(w.audits[0].details.error), /bound by the grant/);
+        assert.match(String(w.audits[1].details.error), /no parameter or property named "Year"/);
     });
 
     it('refuses someone who does not reach the space, and a grant outside the caller\'s band', async () => {

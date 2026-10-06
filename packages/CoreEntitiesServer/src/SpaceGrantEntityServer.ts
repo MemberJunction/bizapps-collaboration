@@ -7,7 +7,7 @@
  * Rights: the app's and a type's rows need 'Configure Space Types'; a space's need 'Configure Spaces' and an owner seat on it, or
  * 'Administer Spaces' (the world loader and the harness write grants without a seat).
  */
-import { BaseEntity, type IMetadataProvider, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type IMetadataProvider, LogError, Metadata, RunView, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
     type AgentDefinitionForGrant,
@@ -82,7 +82,19 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
 
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         this.stampTargetEntity();
-        return super.Save(options);
+        const ok = await super.Save(options);
+        if (ok && !this.SpaceID) await this.reloadEngineGrants();
+        return ok;
+    }
+
+    /** The engine caches the app's and the types' grants; a change to one is read by the resolver only once the engine reloads. */
+    private async reloadEngineGrants(): Promise<void> {
+        try {
+            const system = await requireSystemUser(this);
+            await CollaborationEngine.Instance.Config(true, system, asMetadata(this.ProviderToUse) ?? Metadata.Provider);
+        } catch (error) {
+            LogError(`SpaceGrantEntityServer: the engine could not reload after a grant change: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {
@@ -239,7 +251,10 @@ export class SpaceGrantEntityServer extends mjBizAppsCollaborationSpaceGrantEnti
     public override async Delete(options?: Parameters<BaseEntity['Delete']>[0]): Promise<boolean> {
         const refused = await this.rightRefusal(this.SpaceID ? parseUuid(this.SpaceID) : null);
         if (refused) return failDelete(this, refused.replace('Grant change refused', 'Grant delete refused'));
-        return super.Delete(options);
+        const typeLevel = !this.SpaceID;
+        const ok = await super.Delete(options);
+        if (ok && typeLevel) await this.reloadEngineGrants();
+        return ok;
     }
 }
 

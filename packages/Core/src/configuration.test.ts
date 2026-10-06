@@ -318,3 +318,15 @@ describe('band names come from the type (item 53)', () => {
         assert.equal(ValidateCollaborationSettings({ Labels: { Bands: { Team: 'Staff' } } }, 'space', { SpaceOverridable: ['Labels'] }).valid, true);
     });
 });
+
+describe("ValidateCollaborationSettings knows stage 1's keys", () => {
+    it('accepts Grants and DataReach on a type, refuses DataReach on a space, and a space\'s Grants list mode without the type\'s leave', () => {
+        const reach = [{ Entity: 'X: Members', Path: 'ChapterID', AnchorRole: 'chapter', Band: 'Shared', Fields: ['Name'] }];
+        assert.equal(ValidateCollaborationSettings({ Grants: { Action: { ListMode: 'Replace' } }, DataReach: reach }, 'type').valid, true);
+        assert.match(ValidateCollaborationSettings({ Grants: { Widget: { ListMode: 'Replace' } } }, 'type').errors.join(' '), /not a grant kind/);
+        assert.match(ValidateCollaborationSettings({ DataReach: [{ Entity: 'X', Path: 'A.B.C', AnchorRole: 'r', Band: 'Shared', Fields: ['F'] }] }, 'type').errors.join(' '), /DataReach\[0\]/);
+        assert.match(ValidateCollaborationSettings({ DataReach: reach }, 'space', { SpaceOverridable: ['DataReach'] }).errors.join(' '), /DataReach cannot be set on a space/);
+        assert.match(ValidateCollaborationSettings({ Grants: { Action: { ListMode: 'Replace' } } }, 'space', {}).errors.join(' '), /Grants.Action cannot be overridden/);
+        assert.equal(ValidateCollaborationSettings({ Grants: { Action: { ListMode: 'Replace' } } }, 'space', { SpaceOverridable: ['Grants.Action'] }).valid, true);
+    });
+});

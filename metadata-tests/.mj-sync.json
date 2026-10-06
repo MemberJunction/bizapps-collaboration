@@ -4,11 +4,17 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "row-level-security-filters",
     "entity-permissions",
     "entity-fields",
+    "entity-field-permissions",
+    "entities",
+    "queries",
+    "actions",
     "agents",
     "space-types",
     "space-type-statuses",
+    "space-grants",
     "tests",
     "test-suites"
   ],

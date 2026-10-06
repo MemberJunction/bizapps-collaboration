@@ -25,5 +25,27 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Spaces"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Chapters&RoleID=@lookup:MJ: Roles.Name=UI"
+    },
+    "fields": {
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Chapter Members&RoleID=@lookup:MJ: Roles.Name=UI"
+    },
+    "fields": {
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 0
+    }
   }
 ]

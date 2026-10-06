@@ -1,0 +1,17 @@
+[
+  {
+    "primaryKey": {
+      "ID": "1E5DB817-98A4-4CAB-8056-92B86BFF6703"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Data Reach - MJ_BizApps_Collaboration_Examples: Example Chapter Members"
+    }
+  }
+]

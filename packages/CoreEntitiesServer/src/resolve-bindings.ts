@@ -125,15 +125,16 @@ async function valueOf(provider: IMetadataProvider, system: UserInfo, source: Bi
         case 'anchor': {
             const anchor = materials.anchors.get(source.role.toLowerCase());
             if (!anchor) return { ok: false, message: `no anchor with the role "${source.role}".` };
-            if (!source.field) return { ok: true, value: anchor.RecordID };
             const entity = provider.EntityByID(anchor.EntityID);
             if (!entity) return { ok: false, message: `the anchored record's entity ${anchor.EntityID} is not in this provider's metadata.` };
+            // An anchor spells its record `<PK>|<value>` (MJ's composite form); the bound value is the record's key, as a parameter takes it
+            if (!source.field) return { ok: true, value: keyValueOf(entity, anchor.RecordID) };
             const field = entity.Fields.find((f) => f.Name.toLowerCase() === source.field!.toLowerCase());
             if (!field) return { ok: false, message: `${entity.Name} has no field named ${source.field}.` };
             if (entity.PrimaryKeys.length !== 1) return { ok: false, message: `${entity.Name} has a composite key, which an anchor binding does not read yet.` };
             const rows = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>({
                 EntityName: entity.Name,
-                ExtraFilter: `[${entity.PrimaryKeys[0].Name}] = '${anchor.RecordID.replace(/'/g, "''")}'`,
+                ExtraFilter: `[${entity.PrimaryKeys[0].Name}] = '${keyValueOf(entity, anchor.RecordID).replace(/'/g, "''")}'`,
                 Fields: [field.Name],
                 ResultType: 'simple',
                 MaxRows: 1,
@@ -144,6 +145,16 @@ async function valueOf(provider: IMetadataProvider, system: UserInfo, source: Bi
             return { ok: true, value: scalar(row[field.Name]) };
         }
     }
+}
+
+/** The key value an anchor's RecordID spells: `ID|<value>` for a single-key entity gives `<value>`; anything else is taken as it is. */
+function keyValueOf(entity: { PrimaryKeys: Array<{ Name: string }> }, recordId: string): string {
+    const raw = recordId.trim();
+    if (entity.PrimaryKeys.length === 1) {
+        const prefix = `${entity.PrimaryKeys[0].Name}|`;
+        if (raw.toLowerCase().startsWith(prefix.toLowerCase())) return raw.slice(prefix.length);
+    }
+    return raw;
 }
 
 function scalar(raw: unknown): BoundValue {

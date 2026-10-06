@@ -43,10 +43,10 @@ const configuration = ResolveSpaceConfiguration({
 });
 
 const grant = (bindings: EffectiveGrant['Bindings']): Pick<EffectiveGrant, 'GrantID' | 'Bindings'> => ({ GrantID: 'G1', Bindings: bindings });
-const anchored: World = { anchors: [{ ID: 'A1', EntityID: CHAPTER_ENTITY, RecordID: CHAPTER_12, Role: 'chapter' }] };
+const anchored: World = { anchors: [{ ID: 'A1', EntityID: CHAPTER_ENTITY, RecordID: `ID|${CHAPTER_12}`, Role: 'chapter' }] };
 
 describe('resolveBindings', () => {
-    it('resolves every source: the anchor, a field of the anchored record, the space, the settings, the caller and a literal; the log names sources, never values', async () => {
+    it('resolves every source: the anchor (its key value, not the ID| spelling), a field of the anchored record, the space, the settings, the caller and a literal; the log names sources, never values', async () => {
         const outcome = await resolveBindings(providerOver(anchored), CALLER, SPACE, grant({
             ChapterID: { From: 'Anchor:chapter' },
             Region: { From: 'Anchor:Chapter.Region' },

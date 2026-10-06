@@ -155,6 +155,8 @@ jobs:
         run: |
           pnpm run mj:migrate:examples
           pnpm run mj:push:tests
+      - name: The data-reach metadata is what the types declare (B18)
+        run: node scripts/generate-data-reach-filters.mjs --check
       - name: The sample world
         run: node packages/IntegrationTests/dist/world/load-world.js
       - name: Server harness, every declared check

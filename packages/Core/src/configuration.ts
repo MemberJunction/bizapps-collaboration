@@ -288,6 +288,8 @@ const KNOWN_SETTINGS_KEYS = new Set([
     'Children',
     'SpaceOverridable',
     'Seats',
+    'Grants',
+    'DataReach',
     'Extensions',
 ]);
 
@@ -411,6 +413,22 @@ export function ValidateCollaborationSettings(
         }
     }
 
+    // Stage 1's keys: how grants combine per kind (D30), and what a type's participants reach (D28)
+    if (c['Grants'] !== undefined) {
+        const grants = c['Grants'];
+        if (!grants || typeof grants !== 'object' || Array.isArray(grants)) errors.push('Grants must be an object keyed by grant kind.');
+        else {
+            for (const [kind, rule] of Object.entries(grants as Record<string, { ListMode?: unknown } | null>)) {
+                if (!isGrantKind(kind)) errors.push(`Grants.${kind}: not a grant kind (${GRANT_KINDS.join(', ')}).`);
+                else if (rule?.ListMode !== undefined && !['Extend', 'Replace'].includes(rule.ListMode as string)) errors.push(`Invalid Grants.${kind}.ListMode: ${String(rule.ListMode)}`);
+            }
+        }
+    }
+    if (c['DataReach'] !== undefined) {
+        if (!Array.isArray(c['DataReach'])) errors.push('DataReach must be an array of declarations.');
+        else c['DataReach'].forEach((declaration, index) => errors.push(...validateDataReachDeclaration(declaration, index)));
+    }
+
     if (level === 'app') {
         // The app's row sets every key: a key left out would silently fall back to the code's default, and then a typo or a
         // half-written row would look like a working configuration (extensibility plan § 4)
@@ -428,7 +446,7 @@ export function ValidateCollaborationSettings(
     if (level === 'space') {
         const overridable = new Set(typeConfig?.SpaceOverridable ?? []);
         // Keys that only a type or the app can hold: on a space they would do nothing, so they are refused instead
-        for (const typeOnly of ['Children', 'SpaceOverridable', 'Seats']) {
+        for (const typeOnly of ['Children', 'SpaceOverridable', 'Seats', 'DataReach']) {
             if (c[typeOnly] !== undefined) errors.push(`${typeOnly} cannot be set on a space: it belongs to the space type.`);
         }
         const isAllowed = (dottedKey: string): boolean => {
@@ -456,6 +474,11 @@ export function ValidateCollaborationSettings(
             const agents = c['Agents'] as Record<string, unknown>;
             if (agents['ListMode'] !== undefined && !isAllowed('Agents.ListMode')) {
                 errors.push("Agents.ListMode cannot be overridden by space: not in type's SpaceOverridable.");
+            }
+        }
+        if (c['Grants'] && typeof c['Grants'] === 'object') {
+            for (const kind of Object.keys(c['Grants'] as object)) {
+                if (!isAllowed(`Grants.${kind}`)) errors.push(`Grants.${kind} cannot be overridden by space: not in type's SpaceOverridable.`);
             }
         }
         if (c['Extensions'] && typeof c['Extensions'] === 'object') {

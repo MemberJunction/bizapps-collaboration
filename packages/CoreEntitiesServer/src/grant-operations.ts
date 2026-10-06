@@ -116,7 +116,10 @@ export async function runSpaceView(request: GrantRunRequest): Promise<RowsOutcom
     const prepared = await prepare(request, 'View');
     if ('ok' in prepared) return prepared;
     const clientRefusal = refuseClientValues(request.clientValues, prepared.grant.Bindings, null);
-    if (clientRefusal) return refuse(clientRefusal);
+    if (clientRefusal) {
+        const logged = await logRun(request, prepared, 'Failed', { clientNames: Object.keys(request.clientValues ?? {}), error: clientRefusal });
+        return refuse(logged ?? clientRefusal);
+    }
     if (Object.keys(prepared.grant.Bindings).length) {
         // Not reachable through a saved grant before MJ#4789 (the grant server refuses a bound view), and refused again here in case it is
         return refuse('a view cannot be bound to the space until MJ#4789 (A14); this grant carries bindings, so it does not run.');
@@ -153,7 +156,11 @@ export async function runSpaceQuery(request: GrantRunRequest): Promise<RowsOutco
     if (!parameters.Success) return refuse(`the query's parameters could not be read: ${parameters.ErrorMessage ?? 'unknown error'}`);
     const names = (parameters.Results ?? []).map((row) => row.Name);
     const clientRefusal = refuseClientValues(request.clientValues, prepared.grant.Bindings, names);
-    if (clientRefusal) return refuse(clientRefusal);
+    if (clientRefusal) {
+        // A value sent for a bound name is a refusal worth recording (row 16): the run never happens, the attempt is logged
+        const logged = await logRun(request, prepared, 'Failed', { clientNames: Object.keys(request.clientValues ?? {}), error: clientRefusal });
+        return refuse(logged ?? clientRefusal);
+    }
 
     const bound = await resolveBindings(request.provider, request.user, prepared.space, prepared.grant, prepared.configuration);
     if (!bound.ok) {
