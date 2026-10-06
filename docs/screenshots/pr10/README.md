@@ -44,6 +44,16 @@ in that seat. The staff screens `30` to `33` need the staff session, seated on *
 node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs --who leader
 ```
 
+## Stage 3
+
+Screens `40` and `41` make an agent turn as the staff account (`SCREENSHOT_STAFF_EMAIL`, the person whose session is saved) in
+*Chapter 12 staff*, with the harness's stub agent seated for the shot, and show the reply: a General conversation gives the agent
+nothing, an Internal Only one gives it the staff type's query through *Run space data*.
+
+```sh
+SCREENSHOT_STAFF_EMAIL=someone@example.com node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs --who staff
+```
+
 ## Options
 
 `--who guest|staff|all` (default `all`), `--theme light|dark|both` (default `both`), `--only <name>` for one screen. A screen whose assertion fails is reported and the run exits 1.

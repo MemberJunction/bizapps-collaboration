@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { mintGuestSession } from '../../../packages/IntegrationTests/dist/screenshots/magic-link-session.js';
 import { latestAuditLogId } from '../../../packages/IntegrationTests/dist/screenshots/latest-audit-log.js';
+import { attachStubAgent, detachStubAgent } from '../../../packages/IntegrationTests/dist/screenshots/stub-agent-attachment.js';
+import { askAs, removeConversation } from '../../../packages/IntegrationTests/dist/screenshots/turn-as.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const EXPLORER = (process.env.EXPLORER_URL ?? 'http://localhost:4217').replace(/\/$/, '');
@@ -20,6 +22,10 @@ const MJAPI = (process.env.MJAPI_URL ?? 'http://localhost:4117').replace(/\/$/, 
 const GUEST_EMAIL = process.env.SCREENSHOT_GUEST_EMAIL ?? '';
 /** The chapter leader of the sample world's chapter 12 (a Space Participant with no host account): `personas.csv`'s lena. */
 const LEADER_EMAIL = process.env.SCREENSHOT_LEADER_EMAIL ?? 'lena.leader@collab-world.example';
+/** The staff account whose session `staff-session.json` holds; stage 3's staff turn is made as this person. */
+const STAFF_EMAIL = process.env.SCREENSHOT_STAFF_EMAIL ?? '';
+/** The harness's stub agent, by the name a message mentions it with (`packages/IntegrationTests/src/agents/test-agent.ts`). */
+const STUB_AGENT = 'Space Chat Test Stub';
 const STAFF_SESSION = join(here, 'staff-session.json');
 const NORTHWIND = 'C1000001-0000-4000-8000-000000000001';
 const CLOSED_THIS_MONTH = 'C1000001-0000-4000-8000-000000000007';
@@ -256,6 +262,46 @@ const SHOTS = [
             await assertScreen(page, '33', { present: ['Ivy', 'Lou'] });
         },
     },
+    // Stage 3, agents (B20): what a turn gives the agent, read off the harness's stub agent's reply, since it says what it was given.
+    // The stub is seated as the space's agent for the shot and removed after it. The turn is made the way the server makes one, as
+    // the person named, and the browser shows the reply. Both screens are staff's: MJ's chat area shows a magic-link participant
+    // no messages at all (its mention autocomplete fails without read on MJ: AI Agents and the area stops there), which stage 0's
+    // screen 05 already shows and the stage 3 note reports. The two conversations differ in kind: General seats everyone, so the
+    // Team-band query grant is not in force; Internal Only seats Team, so it is, and Run space data runs it.
+    {
+        name: '40-staff-general-chat-no-tools', who: 'staff', item: 'B20, § 8.1',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12_STAFF);
+            let made = null;
+            try {
+                made = await askAs(STAFF_EMAIL, CHAPTER_12_STAFF, 'General', `@${STUB_AGENT} What can you run here?`);
+                await page.goto(`${spaceUrl(CHAPTER_12_STAFF, 'chat')}&conv=${made.conversationId}`);
+                // General: everyone who reaches the space, so the staff type's Team-band query is not in force and nothing is given
+                await assertScreen(page, '40', { present: ['Tools: none', 'Data: none'] });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
+    {
+        name: '41-staff-internal-chat-run-space-data', who: 'staff', item: 'B20, 17, 24',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12_STAFF);
+            let made = null;
+            try {
+                // Internal Only: the staff type's query grant sits on the Team band, so only a Team audience has it in force
+                made = await askAs(STAFF_EMAIL, CHAPTER_12_STAFF, 'Private', `@${STUB_AGENT} run "Renewals by month"`);
+                await page.goto(`${spaceUrl(CHAPTER_12_STAFF, 'chat')}&conv=${made.conversationId}`);
+                await assertScreen(page, '41', { present: ['Run space data: ok', '2 rows'] });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
 ];
 
 async function saveStaffSession() {
@@ -279,6 +325,7 @@ async function main() {
     const needsLeader = wanted.some((s) => s.who === 'leader');
     const needsStaff = wanted.some((s) => s.who === 'staff');
     if (needsGuest && !GUEST_EMAIL) throw new Error('Set SCREENSHOT_GUEST_EMAIL to a seated outside member (an invite from an owner seats them).');
+    if (wanted.some((s) => s.name.startsWith('40-') || s.name.startsWith('41-')) && !STAFF_EMAIL) throw new Error('Set SCREENSHOT_STAFF_EMAIL to the staff account whose session is saved (screens 40 and 41 make a turn as them).');
     if (needsStaff && !existsSync(STAFF_SESSION)) {
         console.log(`No ${STAFF_SESSION}: the staff screens are skipped. Run --save-staff-session first.`);
     }
