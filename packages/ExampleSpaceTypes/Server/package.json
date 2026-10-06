@@ -12,10 +12,14 @@
     "test": "tsc -p tsconfig.test.json && vitest run"
   },
   "dependencies": {
+    "@memberjunction/actions": "6.2.0-edge.2",
+    "@memberjunction/actions-base": "6.2.0-edge.2",
     "@mj-biz-apps/collaboration-example-space-types-entities": "0.1.0",
     "class-validator": "^0.14.3"
   },
   "peerDependencies": {
+    "@memberjunction/actions": "6.2.0-edge.2",
+    "@memberjunction/actions-base": "6.2.0-edge.2",
     "@memberjunction/core": "6.2.0-edge.2",
     "@memberjunction/global": "6.2.0-edge.2",
     "@memberjunction/server": "6.2.0-edge.2",

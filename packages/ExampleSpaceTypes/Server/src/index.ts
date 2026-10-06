@@ -18,3 +18,4 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 export const RESOLVER_PATHS: string[] = [resolve(here, 'generated/generated.{js,ts}')];
 
 export * from './board/ExampleBoardServerDriver.js';
+export * from './chapter/ExampleChapterRenewalReminderAction.js';

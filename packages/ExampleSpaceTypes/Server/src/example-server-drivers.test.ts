@@ -8,7 +8,7 @@ import {
     type MemberChangeContext,
     type AgentContextParams,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import { type EffectiveSpaceRules } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_COLLABORATION_SETTINGS, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, ResolveSpaceConfiguration } from '@mj-biz-apps/collaboration-core';
 import {
     type mjBizAppsCollaborationSpaceEntity,
     type mjBizAppsCollaborationSpaceTypeEntity,
@@ -45,6 +45,11 @@ function createMockSpaceType(code: string = 'example-board', extensions: Record<
     } as unknown as mjBizAppsCollaborationSpaceTypeEntity;
 }
 
+/** The one configuration (B16) with the app's defaults and no grants, as a board with nothing configured resolves to. */
+function createMockConfiguration(): EffectiveSpaceConfiguration {
+    return ResolveSpaceConfiguration({ App: { Settings: DEFAULT_COLLABORATION_SETTINGS, Grants: [] }, Type: null, Spaces: [{ ID: 'space-1', TypeID: null, Settings: null, Grants: [] }] });
+}
+
 function createMockRules(): EffectiveSpaceRules {
     return {
         Chats: {
@@ -79,6 +84,7 @@ describe('ExampleBoardServerDriver', () => {
             space: createMockSpace(),
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         };
         const anyone = createMockRules();
         expect(anyone.Chats.WhoCanStart).toBe('Anyone');
@@ -101,6 +107,7 @@ describe('ExampleBoardServerDriver', () => {
             space: createMockSpace('b-1', 'Audit Committee', null, JSON.stringify({ Extensions: { 'example-board': { OpenMotions: openMotions } } })),
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         });
         const refused = driver.ValidateSpaceChange(closeCtx(2));
         expect(refused.ok).toBe(false);
@@ -119,6 +126,7 @@ describe('ExampleBoardServerDriver', () => {
                 space,
                 spaceType: createMockSpaceType(),
                 effectiveRules: createMockRules(),
+                configuration: createMockConfiguration(),
                 subtypeEntityName: 'MJ_BizApps_Collaboration_Examples: Example Boards',
                 oldValues: { QuorumPercentage: before },
             };
@@ -150,6 +158,7 @@ describe('ExampleBoardServerDriver', () => {
             space,
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         };
         const res = driver.ValidateSpaceChange(ctx);
         expect(res.ok).toBe(false);
@@ -165,6 +174,7 @@ describe('ExampleBoardServerDriver', () => {
             space,
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         };
         const res = driver.ValidateSpaceChange(ctx);
         expect(res.ok).toBe(true);
@@ -181,6 +191,7 @@ describe('ExampleBoardServerDriver', () => {
             childSpace,
             spaceType: type,
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         });
         const refused = driver.ValidateChildSpaceChange(ctxFor(child('Compensation Committee', true)));
         expect(refused.ok).toBe(false);
@@ -210,6 +221,7 @@ describe('ExampleBoardServerDriver', () => {
             member: { ID: 'seat-1', Band: band, SpaceRoleTypeID: 'role-1' } as unknown as mjBizAppsCollaborationSpaceMemberEntity,
             spaceType: { ...createMockSpaceType(), Configuration: config ? JSON.stringify({ Extensions: { 'example-board': config } }) : null } as mjBizAppsCollaborationSpaceTypeEntity,
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         });
 
         it('refuses an outside director beyond the type\'s MaxOutsideDirectors, naming the cap', async () => {
@@ -261,6 +273,7 @@ describe('ExampleBoardServerDriver', () => {
             space: createMockSpace(),
             spaceType: createMockSpaceType(),
             effectiveRules: createMockRules(),
+            configuration: createMockConfiguration(),
         };
         const result = driver.BuildAgentContext(ctx);
         expect(result.instructions?.some((i) => i.includes('Audit Committee'))).toBe(true);

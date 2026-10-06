@@ -16,7 +16,27 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
 import { mjBizAppsCollabExamplesExampleBoardFormComponent } from "./Entities/mjBizAppsCollabExamplesExampleBoard/mjbizappscollabexamplesexampleboard.form.component";
+import { mjBizAppsCollabExamplesExampleChapterFormComponent } from "./Entities/mjBizAppsCollabExamplesExampleChapter/mjbizappscollabexamplesexamplechapter.form.component";
+import { mjBizAppsCollabExamplesExampleChapterMemberFormComponent } from "./Entities/mjBizAppsCollabExamplesExampleChapterMember/mjbizappscollabexamplesexamplechaptermember.form.component";
    
+
+@NgModule({
+declarations: [
+    mjBizAppsCollabExamplesExampleChapterFormComponent
+],
+imports: [
+    CommonModule,
+    FormsModule,
+    BaseFormsModule,
+    EntityViewerModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_15 { }
+    
+
 
 @NgModule({
 declarations: [
@@ -38,9 +58,29 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
+    mjBizAppsCollabExamplesExampleChapterMemberFormComponent
 ],
 imports: [
-    GeneratedForms_SubModule_16
+    CommonModule,
+    FormsModule,
+    BaseFormsModule,
+    EntityViewerModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_21 { }
+    
+
+
+@NgModule({
+declarations: [
+],
+imports: [
+    GeneratedForms_SubModule_15,
+    GeneratedForms_SubModule_16,
+    GeneratedForms_SubModule_21
 ]
 })
 export class GeneratedFormsModule { }

@@ -122,6 +122,122 @@ export const mjBizAppsCollabExamplesExampleBoardSchema = z.object({
 });
 
 export type mjBizAppsCollabExamplesExampleBoardEntityType = z.infer<typeof mjBizAppsCollabExamplesExampleBoardSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration_Examples: Example Chapter Members
+ */
+export const mjBizAppsCollabExamplesExampleChapterMemberSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ChapterID: z.string().describe(`
+        * * Field Name: ChapterID
+        * * Display Name: Chapter ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration_Examples: Example Chapters (vwExampleChapters.ID)`),
+    FirstName: z.string().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(100)`),
+    LastName: z.string().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(100)`),
+    Email: z.string().nullable().describe(`
+        * * Field Name: Email
+        * * Display Name: Email
+        * * SQL Data Type: nvarchar(255)`),
+    JoinedAt: z.date().nullable().describe(`
+        * * Field Name: JoinedAt
+        * * Display Name: Joined At
+        * * SQL Data Type: date`),
+    RenewalDate: z.date().nullable().describe(`
+        * * Field Name: RenewalDate
+        * * Display Name: Renewal Date
+        * * SQL Data Type: date`),
+    DuesBalance: z.number().describe(`
+        * * Field Name: DuesBalance
+        * * Display Name: Dues Balance
+        * * SQL Data Type: decimal(10, 2)
+        * * Default Value: 0
+        * * Description: The member's dues balance. Outside the type's allow-list, so a participant never reads it.`),
+    Status: z.union([z.literal('Active'), z.literal('Former'), z.literal('Lapsed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Former
+    *   * Lapsed
+        * * Description: Active, Lapsed or Former.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Chapter: z.string().describe(`
+        * * Field Name: Chapter
+        * * Display Name: Chapter
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type mjBizAppsCollabExamplesExampleChapterMemberEntityType = z.infer<typeof mjBizAppsCollabExamplesExampleChapterMemberSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration_Examples: Example Chapters
+ */
+export const mjBizAppsCollabExamplesExampleChapterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+    Region: z.string().nullable().describe(`
+        * * Field Name: Region
+        * * Display Name: Region
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The region the chapter serves.`),
+    CharterDate: z.date().nullable().describe(`
+        * * Field Name: CharterDate
+        * * Display Name: Charter Date
+        * * SQL Data Type: date`),
+    Status: z.union([z.literal('Active'), z.literal('Closed'), z.literal('Dormant')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Closed
+    *   * Dormant
+        * * Description: Active, Dormant or Closed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type mjBizAppsCollabExamplesExampleChapterEntityType = z.infer<typeof mjBizAppsCollabExamplesExampleChapterSchema>;
  
  
 
@@ -474,5 +590,306 @@ export class mjBizAppsCollabExamplesExampleBoardEntity extends BaseEntity<mjBizA
     }
     set StatusID(value: string | null) {
         this.Set('StatusID', value);
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration_Examples: Example Chapter Members - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollabExamples
+ * * Base Table: ExampleChapterMember
+ * * Base View: vwExampleChapterMembers
+ * * @description A member of a chapter: the rows a chapter space's participants reach through the type's data reach on ChapterID (D28). Test-only.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration_Examples: Example Chapter Members')
+export class mjBizAppsCollabExamplesExampleChapterMemberEntity extends BaseEntity<mjBizAppsCollabExamplesExampleChapterMemberEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration_Examples: Example Chapter Members record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration_Examples: Example Chapter Members record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollabExamplesExampleChapterMemberEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ChapterID
+    * * Display Name: Chapter ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration_Examples: Example Chapters (vwExampleChapters.ID)
+    */
+    get ChapterID(): string {
+        return this.Get('ChapterID');
+    }
+    set ChapterID(value: string) {
+        this.Set('ChapterID', value);
+    }
+
+    /**
+    * * Field Name: FirstName
+    * * Display Name: First Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get FirstName(): string {
+        return this.Get('FirstName');
+    }
+    set FirstName(value: string) {
+        this.Set('FirstName', value);
+    }
+
+    /**
+    * * Field Name: LastName
+    * * Display Name: Last Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastName(): string {
+        return this.Get('LastName');
+    }
+    set LastName(value: string) {
+        this.Set('LastName', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Email(): string | null {
+        return this.Get('Email');
+    }
+    set Email(value: string | null) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: JoinedAt
+    * * Display Name: Joined At
+    * * SQL Data Type: date
+    */
+    get JoinedAt(): Date | null {
+        return this.Get('JoinedAt');
+    }
+    set JoinedAt(value: Date | null) {
+        this.Set('JoinedAt', value);
+    }
+
+    /**
+    * * Field Name: RenewalDate
+    * * Display Name: Renewal Date
+    * * SQL Data Type: date
+    */
+    get RenewalDate(): Date | null {
+        return this.Get('RenewalDate');
+    }
+    set RenewalDate(value: Date | null) {
+        this.Set('RenewalDate', value);
+    }
+
+    /**
+    * * Field Name: DuesBalance
+    * * Display Name: Dues Balance
+    * * SQL Data Type: decimal(10, 2)
+    * * Default Value: 0
+    * * Description: The member's dues balance. Outside the type's allow-list, so a participant never reads it.
+    */
+    get DuesBalance(): number {
+        return this.Get('DuesBalance');
+    }
+    set DuesBalance(value: number) {
+        this.Set('DuesBalance', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Former
+    *   * Lapsed
+    * * Description: Active, Lapsed or Former.
+    */
+    get Status(): 'Active' | 'Former' | 'Lapsed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Former' | 'Lapsed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Chapter
+    * * Display Name: Chapter
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Chapter(): string {
+        return this.Get('Chapter');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration_Examples: Example Chapters - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollabExamples
+ * * Base Table: ExampleChapter
+ * * Base View: vwExampleChapters
+ * * @description A chapter of the example association: the record a chapter space is anchored to (D26). Test-only, for the example-chapter type.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration_Examples: Example Chapters')
+export class mjBizAppsCollabExamplesExampleChapterEntity extends BaseEntity<mjBizAppsCollabExamplesExampleChapterEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration_Examples: Example Chapters record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration_Examples: Example Chapters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollabExamplesExampleChapterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Region
+    * * Display Name: Region
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The region the chapter serves.
+    */
+    get Region(): string | null {
+        return this.Get('Region');
+    }
+    set Region(value: string | null) {
+        this.Set('Region', value);
+    }
+
+    /**
+    * * Field Name: CharterDate
+    * * Display Name: Charter Date
+    * * SQL Data Type: date
+    */
+    get CharterDate(): Date | null {
+        return this.Get('CharterDate');
+    }
+    set CharterDate(value: Date | null) {
+        this.Set('CharterDate', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Closed
+    *   * Dormant
+    * * Description: Active, Dormant or Closed.
+    */
+    get Status(): 'Active' | 'Closed' | 'Dormant' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Closed' | 'Dormant') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }

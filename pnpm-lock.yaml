@@ -425,6 +425,12 @@ importers:
 
   packages/ExampleSpaceTypes/Server:
     dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.2
+        version: 6.2.0-edge.2(supports-color@8.1.1)
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.2
+        version: 6.2.0-edge.2(supports-color@8.1.1)
       '@mj-biz-apps/collaboration-example-space-types-entities':
         specifier: 0.1.0
         version: link:../Entities
