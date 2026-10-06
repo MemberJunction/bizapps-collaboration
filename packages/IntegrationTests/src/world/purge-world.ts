@@ -67,6 +67,7 @@ export async function purgeWorld(): Promise<void> {
     const userIds = idList(readCsv(join(dir, 'personas.csv')), 'persona');
     const worldSpaceIds = idList(readCsv(join(dir, 'spaces.csv')), 'space');
     const typeIds = idList(readCsv(join(dir, 'types.csv')), 'space type');
+    const chapterIds = idList(readCsv(join(dir, 'chapters.csv')), 'chapter');
     const core = coreSchema();
     const pool = await sql.connect({
         server: DB_HOST,
@@ -183,6 +184,10 @@ export async function purgeWorld(): Promise<void> {
             -- The example subtype's rows go before the spaces they specialise: their keys are foreign keys to Space, with no cascade
             IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleBoard') IS NOT NULL
                 DELETE FROM __mj_BizAppsCollabExamples.ExampleBoard WHERE ID IN (${spaceIds});
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleChapterMember') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleChapterMember WHERE ChapterID IN (${chapterIds});
+            IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleChapter') IS NOT NULL
+                DELETE FROM __mj_BizAppsCollabExamples.ExampleChapter WHERE ID IN (${chapterIds});
             UPDATE __mj_BizAppsCollaboration.Space SET ParentID = NULL WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.Space WHERE ID IN (${spaceIds});
             DELETE FROM __mj_BizAppsCollaboration.SpaceType WHERE ID IN (${typeIds});

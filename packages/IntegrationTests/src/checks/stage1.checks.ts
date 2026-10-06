@@ -393,8 +393,12 @@ const checks: NamedCheck[] = [
             const ada = await GetPersonaUser(ctx, 'ada');
             const bea = await GetPersonaUser(ctx, 'bea');
             const [filesEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', "Name = 'MJ: Files'", ['ID']);
-            const [item] = await FindRows<{ RecordID: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${filesEntity.ID}'`, ['RecordID']);
-            Assert(!!item, 'Discovery holds a file item');
+            const items = await FindRows<{ RecordID: string; Band: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${filesEntity.ID}' AND Band = 'Shared'`, ['RecordID', 'Band']);
+            // The world's Shared photo: a file row Bea can read, not whichever item row comes first (a check's leftover may point at nothing)
+            const [photo] = await FindRows<{ ID: string }>(ctx, 'MJ: Files', "Name = 'site-photo.png'", ['ID']);
+            Assert(!!photo, "The world's site-photo.png is in MJ: Files");
+            const item = items.find((row) => row.RecordID.toLowerCase() === `id|${photo.ID}`.toLowerCase());
+            Assert(!!item, 'Discovery holds the photo as a Shared file item');
             // A run that died before its cleanup leaves Bea's pins behind: clear them before pinning again
             await deleteWhere(ctx.Provider, ctx.User, SPACE_MEMBER_PIN_ENTITY, `UserID = '${bea.ID}' AND SpaceID = '${DISCOVERY_SPACE_ID}'`, 'a leftover pin');
             const pins: string[] = [];
@@ -404,7 +408,7 @@ const checks: NamedCheck[] = [
                 pin.SpaceID = DISCOVERY_SPACE_ID;
                 pin.Kind = 'Record';
                 pin.TargetEntityID = filesEntity.ID;
-                pin.TargetRecordID = item.RecordID;
+                pin.TargetRecordID = item!.RecordID;
                 pin.Sequence = 0;
                 Assert(await pin.Save(), `Bea pins a file of Discovery: ${pin.LatestResult?.CompleteMessage ?? ''}`);
                 pins.push(pin.ID);
@@ -425,7 +429,7 @@ const checks: NamedCheck[] = [
                 forAda.UserID = ada.ID;
                 forAda.Kind = 'Record';
                 forAda.TargetEntityID = filesEntity.ID;
-                forAda.TargetRecordID = item.RecordID;
+                forAda.TargetRecordID = item!.RecordID;
                 forAda.Sequence = 0;
                 Assert(!(await forAda.Save()), 'Bea cannot pin for Ada');
 

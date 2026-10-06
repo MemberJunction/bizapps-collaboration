@@ -22,6 +22,9 @@ The sample world is `COLLAB-WORLD`. The catalog is the CSV under `packages/Integ
 | harper | Harbor client | Harbor only |
 | pat | Invited guest | Committee, status Invited. Approve has a row |
 | remy | Removed guest | Discovery, status Removed. Grants nothing |
+| lena | Chapter 12's leader (L) | Chapter 12, as a client admin on the Shared band. Reaches chapter 12's members through the type's data reach, and nothing of chapter 40 |
+| marco | Chapter 40's leader (M) | Chapter 40, the same way |
+| nico | National staff (N) | Owns Chapter 12, Chapter 40 and Chapter 12 staff, on the Team band; runs the staff space's renewals query |
 
 ## Spaces
 
@@ -38,6 +41,8 @@ The committee's type is the world's own `world-committee` (`Approve`, retention 
 Field notes sits under Discovery, so seeing it walks two steps. Delivery room sits under sealed Delivery: Sam reaches it, and Casey, who only sits on Northwind, does not. Sealed branch sits under Northwind and Sealed child under it. Both are sealed and owned by Sam, and Ada has a member seat on Sealed child.
 
 The flag-ceiling role is not in this world. Core's unit tests cover the flag ceiling (`rules.test.ts`, "flag ceiling").
+
+**The chapters** (stage 2, the plan's B24) are the example-chapter type's spaces, anchored to records that have their own life in the data (D26): `chapters.csv` holds two `ExampleChapter` rows (chapter 12 in the West, chapter 40 in the East) and `chapter-members.csv` their members, three and two, with `DuesBalance` outside the type's allow-list. `anchors.csv` anchors Chapter 12 and Chapter 40 to their chapters as the primary anchor (role `chapter`), Chapter 12 outreach, a same-type sub-space that inherits Chapter 12's roster and overrides, to the same chapter without being primary, and Chapter 12 staff, a sub-space of the staff-only type `example-chapter-staff` that stands on its own roster, to chapter 12 as its primary. The chapter type grants the *Example: Chapter Renewal Reminder* action with `ChapterID` bound to the anchor; the staff type grants the *Example: Renewals by month* query the same way (`metadata-tests/space-grants/`). Lena reads chapter 12's members through the generated filter (`metadata-tests/row-level-security-filters/`), Marco chapter 40's, and the system user writes the chapters and members as an owning app's import would.
 
 ## Loading it
 

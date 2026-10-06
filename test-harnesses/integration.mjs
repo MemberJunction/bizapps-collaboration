@@ -29,6 +29,7 @@ const ALL_BUNDLES = [
     'agent',
     'features',
     'stage1',
+    'stage2',
 ];
 
 const args = process.argv.slice(2);

@@ -223,7 +223,12 @@ const checks: NamedCheck[] = [
             const bea = await getPersonaContext(ctx, 'bea');
             const sam = await getPersonaContext(ctx, 'sam');
             const [filesEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', "Name = 'MJ: Files'", ['ID']);
-            const [item] = await FindRows<{ RecordID: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${filesEntity.ID}'`, ['RecordID']);
+            const items = await FindRows<{ RecordID: string; Band: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${filesEntity.ID}' AND Band = 'Shared'`, ['RecordID', 'Band']);
+            // The world's Shared photo: a file row Bea can read, not whichever item row comes first
+            const [photo] = await FindRows<{ ID: string }>(ctx, 'MJ: Files', "Name = 'site-photo.png'", ['ID']);
+            Assert(!!photo, "The world's site-photo.png is in MJ: Files");
+            const item = items.find((row) => row.RecordID.toLowerCase() === `id|${photo.ID}`.toLowerCase());
+            Assert(!!item, 'Discovery holds the photo as a Shared file item');
             let pinId: string | null = null;
             await deleteWhere(ctx.Provider, ctx.User, SPACE_MEMBER_PIN_ENTITY, `UserID = '${bea.User.ID}' AND SpaceID = '${DISCOVERY_SPACE_ID}'`, 'a leftover pin');
             try {
@@ -233,7 +238,7 @@ const checks: NamedCheck[] = [
                 pin.UserID = bea.User.ID; // the client's required-field check runs before the server stamps the caller
                 pin.Kind = 'Record';
                 pin.TargetEntityID = filesEntity.ID;
-                pin.TargetRecordID = item.RecordID;
+                pin.TargetRecordID = item!.RecordID;
                 pin.Sequence = 0;
                 Assert(await pin.Save(), `Bea pins over the wire: ${pin.LatestResult?.CompleteMessage ?? ''}`);
                 pinId = pin.ID;

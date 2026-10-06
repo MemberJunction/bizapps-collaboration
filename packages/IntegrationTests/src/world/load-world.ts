@@ -20,7 +20,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHIPPED_STATUSES } from '@mj-biz-apps/collaboration-core';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { type BaseEntity, CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -29,6 +29,7 @@ import '@mj-biz-apps/common-entities';
 import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
 import '@mj-biz-apps/collaboration-entities';
 import {
+    mjBizAppsCollaborationSpaceAnchorEntity,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceTypeStatusEntity,
@@ -55,6 +56,7 @@ const SPACES = 'MJ_BizApps_Collaboration: Spaces';
 const MEMBERS = 'MJ_BizApps_Collaboration: Space Members';
 const TYPES = 'MJ_BizApps_Collaboration: Space Types';
 const SPACE_GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
+const SPACE_ANCHORS = 'MJ_BizApps_Collaboration: Space Anchors';
 const SPACE_TYPE_STATUSES = 'MJ_BizApps_Collaboration: Space Type Status';
 const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
@@ -140,6 +142,9 @@ export async function loadWorld(): Promise<void> {
     const spaceRows = readCsv(join(dir, 'spaces.csv'));
     const memberRows = readCsv(join(dir, 'members.csv'));
     const agentRows = readCsv(join(dir, 'agents.csv'));
+    const chapterRows = readCsv(join(dir, 'chapters.csv'));
+    const chapterMemberRows = readCsv(join(dir, 'chapter-members.csv'));
+    const anchorRows = readCsv(join(dir, 'anchors.csv'));
 
     const people = new Map<string, Persona>();
     for (const persona of personas) {
@@ -203,6 +208,12 @@ export async function loadWorld(): Promise<void> {
     for (const code of ['workspace', 'cohort']) {
         const id = await findId(provider, TYPES, `Code = '${code}'`, system);
         if (!id) throw new Error(`Seeded type ${code} is missing. Run the Collaboration migrations first.`);
+        types.set(code, id);
+    }
+    // The example-chapter pair (B24) comes from metadata-tests/space-types, pushed before the world (pnpm run mj:push:tests)
+    for (const code of ['example-chapter', 'example-chapter-staff']) {
+        const id = await findId(provider, TYPES, `Code = '${code}'`, system);
+        if (!id) throw new Error(`Test type ${code} is missing. Run pnpm run mj:push:tests first.`);
         types.set(code, id);
     }
     for (const type of typeRows) {
@@ -347,6 +358,68 @@ export async function loadWorld(): Promise<void> {
     }
     // Every owner seat is in before any other seat, whatever the CSV's order: Studio's member cap of 3 is met by its owners first
     for (const row of memberRows.filter((member) => member.Role !== 'owner')) await saveMember(row);
+
+    // The example chapters (B24): the records chapter spaces are anchored to, and their members, written by the system user as an
+    // owning app's import would; then each space's anchor on its chapter, written by the space's owner (the anchor's own gate)
+    const CHAPTERS = 'MJ_BizApps_Collaboration_Examples: Example Chapters';
+    const CHAPTER_MEMBERS = 'MJ_BizApps_Collaboration_Examples: Example Chapter Members';
+    const chapterIds = new Map<string, string>();
+    for (const chapter of chapterRows) {
+        const record = await new Metadata().GetEntityObject<BaseEntity>(CHAPTERS, system);
+        const existing = await findId(provider, CHAPTERS, `ID = '${chapter.ID}'`, system);
+        if (existing) {
+            if (!(await record.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: existing }])))) throw new Error(`Could not load chapter ${chapter.Key}.`);
+        } else {
+            record.NewRecord();
+            record.Set('ID', chapter.ID);
+        }
+        record.Set('Name', chapter.Name);
+        record.Set('Region', chapter.Region || null);
+        record.Set('CharterDate', chapter.CharterDate ? new Date(chapter.CharterDate) : null);
+        record.Set('Status', chapter.Status || 'Active');
+        if (!(await record.Save())) throw new Error(`chapter ${chapter.Key}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        chapterIds.set(chapter.Key, chapter.ID);
+    }
+    for (const member of chapterMemberRows) {
+        const chapterId = requireMap(chapterIds, member.Chapter, 'chapter');
+        const record = await new Metadata().GetEntityObject<BaseEntity>(CHAPTER_MEMBERS, system);
+        const existing = await findId(provider, CHAPTER_MEMBERS, `ID = '${member.ID}'`, system);
+        if (existing) {
+            if (!(await record.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: existing }])))) throw new Error(`Could not load chapter member ${member.Email}.`);
+        } else {
+            record.NewRecord();
+            record.Set('ID', member.ID);
+        }
+        record.Set('ChapterID', chapterId);
+        record.Set('FirstName', member.FirstName);
+        record.Set('LastName', member.LastName);
+        record.Set('Email', member.Email || null);
+        record.Set('JoinedAt', member.JoinedAt ? new Date(member.JoinedAt) : null);
+        record.Set('RenewalDate', member.RenewalDate ? new Date(member.RenewalDate) : null);
+        record.Set('DuesBalance', Number(member.DuesBalance || 0));
+        record.Set('Status', member.Status || 'Active');
+        if (!(await record.Save())) throw new Error(`chapter member ${member.Email}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    }
+    const chaptersEntityId = await findId(provider, 'MJ: Entities', `Name = '${CHAPTERS}'`, system);
+    if (!chaptersEntityId) throw new Error(`The ${CHAPTERS} entity is missing. Run pnpm run mj:migrate:examples first.`);
+    for (const anchor of anchorRows) {
+        const spaceId = requireMap(spaceIds, anchor.Space, 'space');
+        const chapterId = requireMap(chapterIds, anchor.Chapter, 'chapter');
+        const recordId = `ID|${chapterId}`;
+        if (await findId(provider, SPACE_ANCHORS, `SpaceID = '${spaceId}' AND EntityID = '${chaptersEntityId}' AND RecordID = '${recordId}' AND Role = '${quote(anchor.Role)}'`, system)) continue;
+        const space = spaceRows.find((row) => row.Key === anchor.Space);
+        if (!space) throw new Error(`Anchor row names unknown space ${anchor.Space}.`);
+        const record = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceAnchorEntity>(SPACE_ANCHORS, actor(space.Owner));
+        record.NewRecord();
+        record.SpaceID = spaceId;
+        record.SpaceTypeID = requireMap(types, space.Type, 'space type');
+        record.EntityID = chaptersEntityId;
+        record.RecordID = recordId;
+        record.Role = anchor.Role;
+        record.IsPrimary = anchor.IsPrimary === '1';
+        record.Sequence = 0;
+        if (!(await record.Save())) throw new Error(`anchor of ${anchor.Space} on ${anchor.Chapter}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    }
 
     // The agents a space allows (`agents.csv`), as Agent grants of the space (stage 1): a person can tag them in its chat. A row on a
     // space reaches its sub-spaces. The agent is MemberJunction's own, found by name, so a database without it stops here with the

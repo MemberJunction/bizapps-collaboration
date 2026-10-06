@@ -34,6 +34,7 @@ import './checks/library.checks.js';
 import './checks/agent.checks.js';
 import './checks/features.checks.js';
 import './checks/stage1.checks.js';
+import './checks/stage2.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

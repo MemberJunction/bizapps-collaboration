@@ -28,6 +28,7 @@ const ALL_BUNDLES = [
     'lifecycle',
     'subtypes',
     'stage1',
+    'stage2',
 ];
 
 const args = process.argv.slice(2);

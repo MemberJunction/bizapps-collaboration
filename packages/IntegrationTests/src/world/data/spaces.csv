@@ -14,3 +14,7 @@ closed-open,C1000001-0000-4000-8000-000000000009,Closed indefinite,workspace,nor
 studio,C1000001-0000-4000-8000-000000000010,Studio,workshop,,ada,1,Included,,fa-solid fa-palette,#ad1457,https://images.unsplash.com/photo-studio
 sealed-branch,C1000001-0000-4000-8000-000000000014,Sealed branch,workspace,northwind,sam,0,Included,,fa-solid fa-lock,#37474f,https://images.unsplash.com/photo-sealed-branch
 sealed-child,C1000001-0000-4000-8000-000000000015,Sealed child,workspace,sealed-branch,sam,0,Included,,fa-solid fa-shield-halved,#263238,https://images.unsplash.com/photo-sealed-child
+chapter-12,C1000001-0000-4000-8000-000000000016,Chapter 12,example-chapter,,nico,1,Included,,fa-solid fa-people-group,#00695c,https://images.unsplash.com/photo-chapter-12
+chapter-40,C1000001-0000-4000-8000-000000000017,Chapter 40,example-chapter,,nico,1,Included,,fa-solid fa-users-rectangle,#00897b,https://images.unsplash.com/photo-chapter-40
+chapter-12-outreach,C1000001-0000-4000-8000-000000000018,Chapter 12 outreach,example-chapter,chapter-12,nico,1,Included,,fa-solid fa-bullhorn,#26a69a,https://images.unsplash.com/photo-chapter-12-outreach
+chapter-12-staff,C1000001-0000-4000-8000-000000000019,Chapter 12 staff,example-chapter-staff,chapter-12,nico,0,Included,,fa-solid fa-user-tie,#4e342e,https://images.unsplash.com/photo-chapter-12-staff
