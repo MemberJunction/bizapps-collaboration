@@ -54,6 +54,9 @@ nothing, an Internal Only one gives it the staff type's query through *Run space
 SCREENSHOT_STAFF_EMAIL=someone@example.com node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs --who staff
 ```
 
+Screen `42` is the leader's own chat: it passes on an MJ that carries MJ#5243 (the plan's A12.17); before that fix MJ's chat area
+showed a magic-link participant no messages and no composer.
+
 ## Options
 
 `--who guest|staff|all` (default `all`), `--theme light|dark|both` (default `both`), `--only <name>` for one screen. A screen whose assertion fails is reported and the run exits 1.

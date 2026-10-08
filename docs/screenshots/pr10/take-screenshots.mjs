@@ -304,6 +304,26 @@ const SHOTS = [
             }
         },
     },
+    // The leader's own chat, once MJ#5243 is in the MJ the host runs (the plan's A12.17): a magic-link participant sees the
+    // conversation's messages and the composer. Before it, the chat area stopped on its mention engine and showed "No messages yet".
+    {
+        name: '42-leader-chat-messages-and-composer', who: 'leader', item: 'A12.17, MJ#5243',
+        run: async (page) => {
+            const grantId = await attachStubAgent(CHAPTER_12);
+            let made = null;
+            try {
+                made = await askAs(LEADER_EMAIL, CHAPTER_12, 'General', `@${STUB_AGENT} What can you run here?`);
+                await page.goto(`${spaceUrl(CHAPTER_12, 'chat')}&conv=${made.conversationId}`);
+                await assertScreen(page, '42', { present: ['Tools: none'], absent: ['No messages yet'] });
+                // MJ's composer carries its placeholder on the element itself or as data-placeholder, depending on the build
+                await page.locator('[placeholder*="Type a message"], [data-placeholder*="Type a message"]').first().waitFor({ state: 'attached', timeout: 20000 }).catch(() => { throw new Error('42: the leader has no composer'); });
+                await page.waitForTimeout(800);
+            } finally {
+                if (made) await removeConversation(made.conversationId);
+                await detachStubAgent(grantId);
+            }
+        },
+    },
 ];
 
 async function saveStaffSession() {
