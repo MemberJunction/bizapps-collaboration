@@ -29,5 +29,5 @@ export const EXPECTED_CLIENT_BUNDLES: Record<string, number> = {
     'subtypes': 4,
     'stage1': 8,
     'stage2': 4,
-    'stage3': 2,
+    'stage3': 3,
 };
