@@ -104,6 +104,25 @@ describe("a subtype's generated form", () => {
         assert.deepEqual(subtypeFormSections([col('TermName', { GeneratedFormSection: 'Top' }), col('Name')], own), ['top-area']);
     });
 
+    it("leaves out a section that holds only the columns the driver hides, and can't be shown when hidden and shown columns share one", () => {
+        const fields = [
+            col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' }),
+            col('QuorumPercentage', { Category: 'Board Details', GeneratedFormSection: 'Category' }),
+            col('NextMeetingDate', { Category: 'Next Meeting', GeneratedFormSection: 'Category' }),
+            col('NextMeetingLocation', { Category: 'Next Meeting', GeneratedFormSection: 'Category' }),
+            col('Name'),
+        ];
+        const board = new Set(['TermName', 'QuorumPercentage', 'NextMeetingDate', 'NextMeetingLocation']);
+        // The driver hides the next meeting: its section goes, and Board Details shows alone
+        assert.deepEqual(subtypeFormSections(fields, board, new Set(['nextmeetingdate', 'nextmeetinglocation'])), ['boardDetails']);
+        // Hiding one column of a section the others still show: the form can't show it without the hidden one, so no sections
+        assert.equal(subtypeFormSections(fields, board, new Set(['quorumpercentage'])), null);
+        // Hiding everything: nothing to show as a form
+        assert.equal(subtypeFormSections(fields, board, new Set(['termname', 'quorumpercentage', 'nextmeetingdate', 'nextmeetinglocation'])), null);
+        // Nothing hidden: both sections, as before
+        assert.deepEqual(subtypeFormSections(fields, board), ['boardDetails', 'nextMeeting']);
+    });
+
     it('ignores the key: it is on no section of the form', () => {
         assert.deepEqual(subtypeFormSections([col('ID', { IsPrimaryKey: true }), col('TermName', { Category: 'Board Details', GeneratedFormSection: 'Category' })], new Set(['TermName'])), ['boardDetails']);
     });

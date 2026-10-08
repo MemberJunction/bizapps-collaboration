@@ -6,14 +6,14 @@ import {
 } from '@memberjunction/core';
 import type { MJConversationEntity, MJResourcePermissionEntity } from '@memberjunction/core-entities';
 import type { mjBizAppsCollaborationSpaceChatEntity } from '@mj-biz-apps/collaboration-entities';
-import { membershipReaches } from '@mj-biz-apps/collaboration-core';
+import { spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { COLLABORATION_APP_ID } from '@mj-biz-apps/collaboration-engine-base';
 
-const COLLABORATION_APP_ID = '94F5906B-38AB-4A9F-BFCA-3D395BBBC198';
 
 export interface CreateSpaceConversationInput {
     SpaceID: string;
@@ -87,8 +87,8 @@ export async function createSpaceConversation(
     if (!targetSpace) {
         return { ok: false, message: 'Space not found or caller cannot access this space.' };
     }
-    if (targetSpace.closedAt) {
-        return { ok: false, message: 'Cannot create conversation in a closed space.' };
+    if (spaceIsReadOnly(targetSpace)) {
+        return { ok: false, message: targetSpace.closedAt ? 'Cannot create conversation in a closed space.' : 'Cannot create conversation in a read-only space.' };
     }
 
     const reach = membershipReaches(context.spaces, context.memberships, user.ID, spaceId);

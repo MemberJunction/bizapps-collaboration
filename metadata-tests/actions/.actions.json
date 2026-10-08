@@ -1,0 +1,62 @@
+[
+  {
+    "primaryKey": {
+      "ID": "22374B4B-0B9C-4FDB-8700-2BC3CC24AD0E"
+    },
+    "fields": {
+      "Name": "Example: Chapter Renewal Reminder",
+      "Description": "An action for the example-chapter type (B24): drafts a renewal reminder for a chapter's lapsing members. Granted to the chapter type with ChapterID bound to the space's chapter anchor, so an agent never chooses the chapter (D27, A16 for the agent's use). Test-only; it writes nothing and returns what it would send.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Example: Chapter Renewal Reminder",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": {
+            "ID": "EB7EE98F-92A0-471B-9FB2-F5A9B16C5FD4"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChapterID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The chapter whose lapsing members are reminded. Bound by the grant to the space's chapter anchor."
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "1F9496F7-3362-469A-9C73-8ACB455D9B2F"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DaysAhead",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "30",
+            "Description": "How far ahead a renewal counts as lapsing. The caller's own."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "primaryKey": {
+            "ID": "2F6DC607-C63F-4DDD-95C1-921F17AE61A9"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The reminder was drafted."
+          }
+        }
+      ]
+    }
+  }
+]

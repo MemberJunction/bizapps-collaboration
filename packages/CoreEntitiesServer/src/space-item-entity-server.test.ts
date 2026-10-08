@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { seedAppSettings } from './app-settings.test-support.ts';
 import {
     BaseEntity,
     EntityPermissionType,
@@ -13,6 +14,11 @@ import {
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { SpaceItemEntityServer, vouchStoredFile, releaseStoredFile } from '../dist/SpaceItemEntityServer.js';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); });
+after(() => restoreAppSettingsRow());
 
 describe('SpaceItemEntityServer file ownership and validation', () => {
     let origGetSystemUser: typeof WellKnownUserSource.Instance.GetSystemUser;

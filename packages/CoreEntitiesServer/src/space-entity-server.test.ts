@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { seedAppSettings } from './app-settings.test-support.ts';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo, type UserRoleInfo } from '@memberjunction/core';
 import { grantAdministerTo, grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
@@ -8,6 +10,12 @@ import { BaseSpaceTypeServerDriver, type DriverValidationResult, type SpaceChang
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { membershipReaches, type SpaceNode, type MemberSnapshot } from '@mj-biz-apps/collaboration-core';
 import type { mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+let restoreConfigurationLoader: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => { restoreAppSettingsRow(); restoreConfigurationLoader(); });
 
 // Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
 let restoreAdminister: () => void;
@@ -395,12 +403,17 @@ describe('SpaceEntityServer closure and reopening validation', () => {
 
     let holdsLifecycle = true;
     let heldLifecycle: typeof CollaborationEngine.Instance.UserHoldsLifecycleAuthorization;
+    let heldChange: typeof CollaborationEngine.Instance.UserCanChangeSpaceStatus;
     before(() => {
         heldLifecycle = CollaborationEngine.Instance.UserHoldsLifecycleAuthorization.bind(CollaborationEngine.Instance);
         CollaborationEngine.Instance.UserHoldsLifecycleAuthorization = () => holdsLifecycle;
+        // The right a status change (a close, a reopen) asks for: the authorization and an owner seat, found with the filter off
+        heldChange = CollaborationEngine.Instance.UserCanChangeSpaceStatus.bind(CollaborationEngine.Instance);
+        CollaborationEngine.Instance.UserCanChangeSpaceStatus = async () => holdsLifecycle;
     });
     after(() => {
         CollaborationEngine.Instance.UserHoldsLifecycleAuthorization = heldLifecycle;
+        CollaborationEngine.Instance.UserCanChangeSpaceStatus = heldChange;
     });
 
     function closingSpace(fields: Array<{ Name: string; Dirty: boolean; OldValue?: unknown; Value?: unknown }>, closedAt: string | null, user: UserInfo) {
@@ -425,7 +438,7 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         ], past, staffUser);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Success, false);
-        assert.match(res.Errors.find((e) => e.Source === 'ParentID')?.Message ?? '', /close a space and move it in separate saves/);
+        assert.match(res.Errors.find((e) => e.Source === 'ParentID')?.Message ?? '', /change a space's status and move it in separate saves/);
     });
 
     it("refuses anyone but staff a new date on a space that is already closed", async () => {
@@ -472,11 +485,11 @@ describe('SpaceEntityServer closure and reopening validation', () => {
             const closing = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: null, Value: past }], past, staffUser);
             const closeRes = await SpaceEntityServer.prototype.ValidateAsync.call(closing);
             assert.equal(closeRes.Success, false);
-            assert.match(closeRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: closing a space needs the 'Close and Reopen Spaces' authorization/);
+            assert.match(closeRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: changing a space's status needs the 'Close and Reopen Spaces' authorization/);
             const reopening = closingSpace([{ Name: 'ClosedAt', Dirty: true, OldValue: past, Value: null }], null, staffUser);
             const reopenRes = await SpaceEntityServer.prototype.ValidateAsync.call(reopening);
             assert.equal(reopenRes.Success, false);
-            assert.match(reopenRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: reopening a space needs the 'Close and Reopen Spaces' authorization/);
+            assert.match(reopenRes.Errors.find((e) => e.Source === 'ClosedAt')?.Message ?? '', /^Space change refused: changing a space's status needs the 'Close and Reopen Spaces' authorization/);
         } finally {
             holdsLifecycle = true;
         }
@@ -512,10 +525,10 @@ describe('SpaceEntityServer closure and reopening validation', () => {
         assert.equal(res.Success, false);
         const err = res.Errors.find((e) => e.Source === 'Name');
         assert.ok(err, 'Expected error on Name');
-        assert.equal(err?.Message, 'Space change refused: reopening a space cannot modify other fields simultaneously.');
+        assert.equal(err?.Message, 'Space change refused: a status change is a save of its own; change the other fields separately.');
     });
 
-    it('allows co-owner to reach closed space with no post-close access when ignorePostCloseFilter is true', () => {
+    it('allows co-owner to reach a hidden (Archived) space when the status filter is off', () => {
         const spaceId = '55555555-5555-4555-8555-555555555555';
         const coOwnerUserId = '66666666-6666-4666-8666-666666666666';
         const spaces: SpaceNode[] = [
@@ -526,7 +539,7 @@ describe('SpaceEntityServer closure and reopening validation', () => {
                 ownerId: '77777777-7777-4777-8777-777777777777',
                 agentRetrieval: 'Included',
                 closedAt: '2026-01-01T00:00:00Z',
-                postCloseAccess: 'None',
+                status: { ReadOnly: true, Visible: false, AgentRetrieval: false },
             },
         ];
         const memberships: MemberSnapshot[] = [
@@ -547,11 +560,11 @@ describe('SpaceEntityServer closure and reopening validation', () => {
             },
         ];
 
-        // Without bypass, membership reaches returns null because space is closed with postCloseAccess: 'None'
+        // With the filter on, membership reaches returns null because the space's status hides it
         const normalReach = membershipReaches(spaces, memberships, coOwnerUserId, spaceId);
         assert.equal(normalReach, null);
 
-        // With ignorePostCloseFilter = true (reopen bypass), co-owner reaches the closed space
+        // With the status filter off (a status change by an owner), the co-owner reaches the hidden space
         const reopenReach = membershipReaches(spaces, memberships, coOwnerUserId, spaceId, new Date(), true);
         assert.ok(reopenReach);
         assert.equal(reopenReach?.role.isOwnerRole, true);
@@ -854,9 +867,9 @@ describe('SpaceEntityServer type change', () => {
         });
 
         it('refuses a Labels key nothing reads, even when the type lists Labels', async () => {
-            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels'] }, { Labels: { Bands: {} } });
+            const res = await saveWithConfiguration({ SpaceOverridable: ['Labels'] }, { Labels: { Colors: {} } });
             assert.equal(res.Success, false);
-            assert.match(configurationMessage(res), /Unknown Labels key: Bands/);
+            assert.match(configurationMessage(res), /Unknown Labels key: Colors/);
         });
 
         it('accepts Labels.Tabs when the type lists it', async () => {
@@ -1046,14 +1059,21 @@ describe('SpaceEntityServer type change', () => {
         const registry = ServerDriverRegistry.Instance;
         const held = {
             system: WellKnownUserSource.Instance.GetSystemUser, type: engine.SpaceTypeById, lifecycle: engine.UserHoldsLifecycleAuthorization,
-            postClose: engine.ResolvePostCloseAccessForSpace, driver: registry.GetDriverForType, space: registry.ResolveSpaceAndType,
+            changeStatus: engine.UserCanChangeSpaceStatus, effective: engine.EffectiveStatusForSpace, byId: engine.StatusById, byCode: engine.StatusByCode,
+            defaultFor: engine.DefaultStatusForType, terminalFor: engine.FirstTerminalStatusForType, driver: registry.GetDriverForType, space: registry.ResolveSpaceAndType,
             resolveType: registry.ResolveType, save: BaseEntity.prototype.Save,
         };
         before(() => {
             WellKnownUserSource.Instance.GetSystemUser = async () => ({ ID: '00000000-0000-0000-0000-000000000000', Name: 'System' }) as UserInfo;
             engine.SpaceTypeById = (() => ({ ID: STAFF_TYPE, Configuration: null, SpaceExtensionEntity: null })) as unknown as typeof engine.SpaceTypeById;
             engine.UserHoldsLifecycleAuthorization = () => true;
-            engine.ResolvePostCloseAccessForSpace = async () => ({ access: 'ReadOnly', days: null });
+            engine.UserCanChangeSpaceStatus = async () => true;
+            // A type with no statuses yet: the close and the re-stamp go the old way, by ClosedAt alone
+            engine.EffectiveStatusForSpace = () => undefined;
+            engine.StatusById = () => undefined;
+            engine.StatusByCode = () => undefined;
+            engine.DefaultStatusForType = () => undefined;
+            engine.FirstTerminalStatusForType = () => undefined;
             registry.GetDriverForType = () => spy;
             registry.ResolveSpaceAndType = (async () => ({ driver: spy, space: {}, spaceType: {} })) as unknown as typeof registry.ResolveSpaceAndType;
             registry.ResolveType = (async () => ({ Code: 'test-type' })) as unknown as typeof registry.ResolveType;
@@ -1066,13 +1086,16 @@ describe('SpaceEntityServer type change', () => {
         });
         after(() => {
             WellKnownUserSource.Instance.GetSystemUser = held.system;
-            Object.assign(engine, { SpaceTypeById: held.type, UserHoldsLifecycleAuthorization: held.lifecycle, ResolvePostCloseAccessForSpace: held.postClose });
+            Object.assign(engine, {
+                SpaceTypeById: held.type, UserHoldsLifecycleAuthorization: held.lifecycle, UserCanChangeSpaceStatus: held.changeStatus, EffectiveStatusForSpace: held.effective,
+                StatusById: held.byId, StatusByCode: held.byCode, DefaultStatusForType: held.defaultFor, FirstTerminalStatusForType: held.terminalFor,
+            });
             Object.assign(registry, { GetDriverForType: held.driver, ResolveSpaceAndType: held.space, ResolveType: held.resolveType });
             BaseEntity.prototype.Save = held.save;
         });
 
         function staffSpace(rows: Record<string, unknown[]>, closedAt: string, oldClosedAt: string | null) {
-            const values: Record<string, unknown> = { ID: STAFF_SPACE, OwnerID: STAFF, SpaceTypeID: STAFF_TYPE, ParentID: null, ClosedAt: closedAt, PostCloseAccess: null, PostCloseAccessDays: null };
+            const values: Record<string, unknown> = { ID: STAFF_SPACE, OwnerID: STAFF, SpaceTypeID: STAFF_TYPE, ParentID: null, ClosedAt: closedAt, StatusID: null };
             const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
             Object.defineProperties(space, {
                 ...Object.fromEntries(Object.entries(values).map(([k, v]) => [k, { value: v, writable: true }])),

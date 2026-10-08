@@ -3,7 +3,7 @@ import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type Na
 import { collaborationFileStore, createSpaceConversation, decideUploadBand, executeSpaceChatTurn, postSpaceMessage, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
-import { CONVERSATION_DETAIL_ENTITY, CONVERSATION_ENTITY, SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
+import { SPACE_TYPE_STATUS_ENTITY, CONVERSATION_DETAIL_ENTITY, CONVERSATION_ENTITY, SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
@@ -931,7 +931,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'room.RM11',
-        Name: 'RM11 — space closure revokes edit grants and refuses posts; space reopen restores conversation and edit grants',
+        Name: 'RM11 — a close archives the conversation, refuses posts and leaves the edit grants alone (finding 2); a Closed space is not reopened; a Paused space refuses posts and takes them again once Active',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -990,14 +990,14 @@ const checks: NamedCheck[] = [
                 Assert(archivedChats[0].Status === 'Archived', `Conversation status must be Archived after close, saw ${archivedChats[0].Status}`);
                 Assert(archivedChats[0].ArchivedOnSpaceClose === true, `Conversation ArchivedOnSpaceClose must be true, saw: ${archivedChats[0].ArchivedOnSpaceClose}`);
 
-                // 5. Verify Sam's Resource Permission Edit grant is revoked
+                // 5. Sam's Resource Permission Edit grant stays: the status refuses posts, and taking grants away and back sent a share notice per member (finding 2)
                 const grantsAfterClose = await FindRows<{ ID: string }>(
                     ctx,
                     'MJ: Resource Permissions',
                     `ResourceRecordID = '${convId}' AND UserID = '${sam.ID}' AND PermissionLevel = 'Edit'`,
                     ['ID'],
                 );
-                Assert(grantsAfterClose.length === 0, `Sam must have NO Edit grant on archived conversation after close (found ${grantsAfterClose.length})`);
+                Assert(grantsAfterClose.length === 1, `Sam keeps his Edit grant on the archived conversation after the close (found ${grantsAfterClose.length})`);
 
                 // 6. Sam post in closed space is refused
                 const samPostClosed = await postSpaceMessage(ctx.Provider, sam, {
@@ -1007,39 +1007,45 @@ const checks: NamedCheck[] = [
                 });
                 Assert(!samPostClosed.ok && samPostClosed.message === 'A closed space does not take a new message.', `Sam post in closed space refused with correct message, saw: ${!samPostClosed.ok ? samPostClosed.message : ''}`);
 
-                // 7. Ada reopens the space
+                // 7. A Closed space is in a terminal status: it is not reopened
+                const stamped = await FindRows<{ StatusID: string | null }>(ctx, SPACE_ENTITY, `ID = '${testSpace.ID}'`, ['StatusID']);
+                Assert(!!stamped[0]?.StatusID, 'The close stamped the type\'s first terminal status (Closed) on the space');
                 testSpace.ClosedAt = null;
                 const reopenedSaved = await testSpace.Save();
-                Assert(reopenedSaved, 'Ada reopens test space');
+                Assert(!reopenedSaved, 'Ada cannot reopen a Closed space: a terminal status moves forward only');
+                Assert(/can only move forward/.test(testSpace.LatestResult?.CompleteMessage ?? ''), `The refusal names the rule: ${testSpace.LatestResult?.CompleteMessage ?? ''}`);
 
-                // 8. Verify conversation is restored to Active and ArchivedOnSpaceClose is false
-                const restoredChats = await FindRows<{ ID: string; Status: string; ArchivedOnSpaceClose: boolean }>(
-                    ctx,
-                    SPACE_CHAT_ENTITY,
-                    `SpaceID = '${testSpace.ID}'`,
-                    ['ID', 'Status', 'ArchivedOnSpaceClose'],
-                );
-                Assert(restoredChats.length === 1, 'Found conversation for test space after reopen');
-                Assert(restoredChats[0].Status === 'Active', `Conversation status must be Active after reopen, saw ${restoredChats[0].Status}`);
-                Assert(restoredChats[0].ArchivedOnSpaceClose === false, `Conversation ArchivedOnSpaceClose must be false after reopen, saw: ${restoredChats[0].ArchivedOnSpaceClose}`);
-
-                // 9. Verify Sam's Resource Permission Edit grant is restored
-                const grantsAfterReopen = await FindRows<{ ID: string }>(
-                    ctx,
-                    'MJ: Resource Permissions',
-                    `ResourceRecordID = '${convId}' AND UserID = '${sam.ID}' AND PermissionLevel = 'Edit'`,
-                    ['ID'],
-                );
-                Assert(grantsAfterReopen.length === 1, `Sam must have Edit grant restored on conversation after reopen (found ${grantsAfterReopen.length})`);
-
-                // 10. Sam posts in reopened space — succeeds
-                const samPostReopen = await postSpaceMessage(ctx.Provider, sam, {
-                    spaceId: testSpace.ID,
-                    conversationId: convId,
-                    text: 'Sam post after reopen',
-                });
-                Assert(samPostReopen.ok === true && !!samPostReopen.detailId, `Sam post after reopen must succeed: ${samPostReopen.ok ? '' : samPostReopen.message}`);
-                if (samPostReopen.ok && samPostReopen.detailId) createdDetailIds.push(samPostReopen.detailId);
+                // 8. Paused is the read-only status a space comes back from: a second space, paused, refuses posts, then takes them again once Active
+                const paused = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada);
+                paused.NewRecord();
+                paused.Name = `${CHECK_SPACE_PREFIX}RM11-Pause-${Date.now()}`;
+                paused.SpaceTypeID = typeId;
+                paused.ParentID = NORTHWIND_SPACE_ID;
+                paused.InheritsMembership = true;
+                paused.OwnerID = ada.ID;
+                Assert(await paused.Save() && !!paused.ID, `Created the second RM11 space: ${paused.LatestResult?.CompleteMessage ?? ''}`);
+                try {
+                    const pausedStart = await createSpaceConversation(ctx.Provider, ada, { SpaceID: paused.ID, Name: 'General', Kind: 'General' });
+                    Assert(pausedStart.ok === true && !!pausedStart.conversationId, `Ada starts the second space's conversation: ${pausedStart.message ?? ''}`);
+                    const pausedConv = pausedStart.conversationId!;
+                    const statuses = await FindRows<{ ID: string; Code: string }>(ctx, SPACE_TYPE_STATUS_ENTITY, `SpaceTypeID = '${typeId}' AND Code IN ('active', 'paused')`, ['ID', 'Code']);
+                    const pausedId = statuses.find((row) => row.Code === 'paused')?.ID;
+                    const activeId = statuses.find((row) => row.Code === 'active')?.ID;
+                    Assert(!!pausedId && !!activeId, "The workspace type declares Active and Paused (metadata/space-type-statuses)");
+                    paused.StatusID = pausedId!;
+                    Assert(await paused.Save(), `Ada pauses the space: ${paused.LatestResult?.CompleteMessage ?? ''}`);
+                    const stillActive = await FindRows<{ Status: string }>(ctx, SPACE_CHAT_ENTITY, `SpaceID = '${paused.ID}'`, ['Status']);
+                    Assert(stillActive[0]?.Status === 'Active', 'A pause archives nothing: the conversation stays Active');
+                    const samPostPaused = await postSpaceMessage(ctx.Provider, sam, { spaceId: paused.ID, conversationId: pausedConv, text: 'Sam post while paused' });
+                    Assert(!samPostPaused.ok && /Paused/.test(samPostPaused.message ?? ''), `A post in a Paused space is refused, naming the status: ${!samPostPaused.ok ? samPostPaused.message : 'allowed'}`);
+                    paused.StatusID = activeId!;
+                    Assert(await paused.Save(), `Ada makes the space Active again: ${paused.LatestResult?.CompleteMessage ?? ''}`);
+                    const samPostAgain = await postSpaceMessage(ctx.Provider, sam, { spaceId: paused.ID, conversationId: pausedConv, text: 'Sam post once active again' });
+                    Assert(samPostAgain.ok === true && !!samPostAgain.detailId, `Sam posts again once the space is Active: ${samPostAgain.ok ? '' : samPostAgain.message}`);
+                    if (samPostAgain.ok && samPostAgain.detailId) createdDetailIds.push(samPostAgain.detailId);
+                } finally {
+                    await cleanupSpace(ctx.Provider, ctx.User, paused.ID);
+                }
             } finally {
                 await cleanupSpace(ctx.Provider, ctx.User, testSpace.ID);
             }

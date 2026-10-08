@@ -15,3 +15,6 @@ e2e/ui-pass/auth/
 e2e/ui-pass-out/
 .cache/
 Schema Files/
+
+# PR 10 screenshot script: a staff sign-in saved by hand
+docs/screenshots/pr10/staff-session.json

@@ -5,6 +5,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   Output,
   SimpleChanges,
   ViewChild,
@@ -13,7 +14,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogActionsComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CollabDialogBase } from './dialog-base';
 import { COLLAB_TOKENS_CSS } from './tokens';
 import { CollabTypeTileComponent } from './type-tile.component';
 
@@ -30,6 +30,8 @@ export interface NewSpaceSubmitPayload {
   typeId: string;
   name: string;
   description: string;
+  /** D22, for a sub-space: whether its members come from the parent. Absent for a top-level space. */
+  inheritsMembership?: boolean;
 }
 
 /**
@@ -46,9 +48,13 @@ export interface NewSpaceSubmitPayload {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, SharedGenericModule, CollabTypeTileComponent],
   template: `
-    <mj-dialog [Visible]="true" Title="New space" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
+    <mj-dialog [Visible]="true" [Title]="ParentName ? 'New sub-space' : 'New space'" [Width]="600" [Closeable]="!IsSubmitting" (Close)="onCancel()">
       <div class="space-modal">
-        <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+        @if (ParentName) {
+          <p class="d-sub">A sub-space of <strong>{{ ParentName }}</strong>. Pick the kind, then give it a name. You are seated as its owner.</p>
+        } @else {
+          <p class="d-sub">Pick the kind of space, then give it a name. You are seated as its owner.</p>
+        }
 
         <div class="d-body">
           <div class="form-group">
@@ -108,6 +114,18 @@ export interface NewSpaceSubmitPayload {
               ></textarea>
             </div>
 
+            @if (ParentName) {
+              <div class="form-group">
+                <label class="f-check">
+                  <input type="checkbox" [(ngModel)]="inheritsMembership" [disabled]="IsSubmitting" />
+                  <span>
+                    <span class="fw6">Members of {{ ParentName }} receive access</span>
+                    <span class="cb-sub">Off, the sub-space starts with you alone and seats people on its own.</span>
+                  </span>
+                </label>
+              </div>
+            }
+
             <div class="details" [class.details-hidden]="!HasDetails">
               @if (HasDetails) {
                 <div class="details-title">{{ DetailsTitle || 'Details' }}</div>
@@ -129,18 +147,18 @@ export interface NewSpaceSubmitPayload {
         <button
           type="button"
           mjButton
-          variant="primary"
-          size="md"
+          Variant="primary"
+          Size="md"
           [disabled]="!canSubmit"
           (click)="onSubmit()"
         >
           @if (IsSubmitting) {
-            <mj-loading Size="small" [showText]="false"></mj-loading> Creating...
+            <mj-loading Size="small" [ShowText]="false"></mj-loading> Creating...
           } @else {
             <i class="fa-solid fa-plus" aria-hidden="true"></i> Create space
           }
         </button>
-        <button type="button" mjButton variant="secondary" size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
+        <button type="button" mjButton Variant="secondary" Size="md" [disabled]="IsSubmitting" (click)="onCancel()">Cancel</button>
       </mj-dialog-actions>
     </mj-dialog>
   `,
@@ -149,6 +167,21 @@ export interface NewSpaceSubmitPayload {
     `
       :host {
         display: contents;
+      }
+
+      .f-check {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        cursor: pointer;
+      }
+      .f-check input {
+        margin-top: 3px;
+      }
+      .f-check .cb-sub {
+        display: block;
+        font-size: 12px;
+        color: var(--mj-text-secondary, #64748b);
       }
 
       .space-modal {
@@ -300,7 +333,7 @@ export interface NewSpaceSubmitPayload {
     `,
   ],
 })
-export class CollabNewSpaceDialogComponent extends CollabDialogBase implements OnChanges {
+export class CollabNewSpaceDialogComponent implements OnChanges, OnDestroy {
   /** The kinds this person may start, in the order to show. */
   @Input() public Types: readonly NewSpaceTypeOption[] = [];
   @Input() public SelectedTypeId = '';
@@ -311,28 +344,42 @@ export class CollabNewSpaceDialogComponent extends CollabDialogBase implements O
   @Input() public DetailsIncomplete = false;
   @Input() public IsSubmitting = false;
   @Input() public ErrorMessage = '';
+  /** The parent's name when the dialog makes a sub-space; empty for a top-level space. */
+  @Input() public ParentName = '';
 
   @Output() public CancelRequested = new EventEmitter<void>();
   @Output() public TypeSelected = new EventEmitter<string>();
   @Output() public SubmitRequested = new EventEmitter<NewSpaceSubmitPayload>();
 
   @ViewChild('nameInput') private nameInputElement?: ElementRef<HTMLInputElement>;
-  @ViewChild(MJDialogComponent, { read: ElementRef }) private dialogHost?: ElementRef<HTMLElement>;
+  private refocusTimer: ReturnType<typeof setTimeout> | undefined;
 
   public name = '';
   public description = '';
+  /** D22: a sub-space is sealed unless its creator asks. */
+  public inheritsMembership = false;
 
-  protected override DialogBox(): ElementRef<HTMLElement> | undefined { return this.dialogHost; }
-  /** The name once a kind is chosen, else the first kind: a dialog that opens or finishes a submit is ready to use. */
-  protected override FirstFocus(): HTMLElement | null {
-    return this.nameInputElement?.nativeElement ?? super.FirstFocus();
-  }
-
+  /**
+   * `mj-dialog` focuses the first kind when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
+   * that a submit ended: the controls come back on, and the name field takes the focus again on the next turn, so a refusal is ready to fix.
+   */
   public ngOnChanges(changes: SimpleChanges): void {
     const submitting = changes['IsSubmitting'];
     if (submitting && submitting.previousValue === true && submitting.currentValue === false) {
-      this.ScheduleFirstFocus();
+      this.scheduleRefocus();
     }
+  }
+
+  public ngOnDestroy(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+  }
+
+  private scheduleRefocus(): void {
+    if (this.refocusTimer !== undefined) clearTimeout(this.refocusTimer);
+    this.refocusTimer = setTimeout(() => {
+      this.refocusTimer = undefined;
+      this.nameInputElement?.nativeElement.focus();
+    }, 0);
   }
 
   public get trimmedName(): string {
@@ -354,6 +401,11 @@ export class CollabNewSpaceDialogComponent extends CollabDialogBase implements O
 
   public onSubmit(): void {
     if (!this.canSubmit) return;
-    this.SubmitRequested.emit({ typeId: this.SelectedTypeId, name: this.trimmedName, description: this.description.trim() });
+    this.SubmitRequested.emit({
+      typeId: this.SelectedTypeId,
+      name: this.trimmedName,
+      description: this.description.trim(),
+      ...(this.ParentName ? { inheritsMembership: this.inheritsMembership } : {}),
+    });
   }
 }

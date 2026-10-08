@@ -26,6 +26,8 @@ jobs:
       - run: node scripts/strip-sync-blocks.mjs --check
       - run: node scripts/check-mj-tokens.mjs --self-test && node scripts/check-mj-tokens.mjs
       - run: node scripts/check-downstream-names.mjs
+      - run: node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs
+      - run: node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs
       - name: Check adopted MJ standards
         run: pnpm exec mj standards check
       - run: pnpm run build
@@ -43,3 +45,128 @@ jobs:
           path: e2e/test-results/
           retention-days: 14
 
+
+  database:
+    name: Build the database from empty, run the server harness and the persona check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    # The same procedure as docs/building-the-database.md, against a throwaway SQL Server: MemberJunction core at the commit
+    # the pinned 6.2.0-edge.1 packages were published from, bizapps-common and bizapps-tasks at the commits the workspace
+    # builds against, then this app's baseline, metadata, test metadata and world. The client harness needs an MJAPI with
+    # this app's packages loaded and is not run here.
+    env:
+      DB_HOST: localhost
+      DB_PORT: '1433'
+      DB_DATABASE: collab_ci
+      DB_USERNAME: sa
+      DB_PASSWORD: 'VeryStr0ngP@ssw0rd'
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: 'VeryStr0ngP@ssw0rd'
+      DB_TRUST_SERVER_CERTIFICATE: '1'
+      MJ_CORE_SCHEMA: __mj
+      MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+      MJ_CLI: ${{ github.workspace }}/node_modules/@memberjunction/cli/bin/run.js
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'VeryStr0ngP@ssw0rd'
+        ports:
+          - 1433:1433
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: MemberJunction/MJ
+          ref: 91c3c9115c54157665a4dd022e4271ac05d5ce8e
+          path: .ci/MJ
+          # MJ's prompt templates @include files under packages/AI/CorePlus/generated-for-prompt, so the push needs them too.
+          sparse-checkout: |
+            migrations
+            metadata
+            packages/AI/CorePlus/generated-for-prompt
+      - uses: actions/checkout@v4
+        with:
+          repository: MemberJunction/bizapps-common
+          ref: 1bde3444b0060ba8eeeb6ee3680862ed4ae60d36
+          path: .ci/bizapps-common
+          sparse-checkout: |
+            migrations
+            metadata
+      - uses: actions/checkout@v4
+        with:
+          repository: MemberJunction/bizapps-tasks
+          ref: add3fdb244a981b54d63f9bd725d09c911cff14e
+          path: .ci/bizapps-tasks
+          sparse-checkout: |
+            migrations
+            metadata
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Wait for SQL Server and create the database
+        run: |
+          node --input-type=module -e "
+            import sql from 'mssql';
+            const cfg = { server: 'localhost', port: 1433, user: 'sa', password: process.env.DB_PASSWORD, options: { encrypt: true, trustServerCertificate: true }, connectionTimeout: 5000 };
+            for (let attempt = 1; ; attempt += 1) {
+              try {
+                const pool = await new sql.ConnectionPool({ ...cfg, database: 'master' }).connect();
+                await pool.request().query('SELECT 1');
+                await pool.request().query('CREATE DATABASE [collab_ci]');
+                await pool.close();
+                console.log('SQL Server ready, database created (attempt ' + attempt + ')');
+                break;
+              } catch (error) {
+                if (attempt >= 40) throw error;
+                await new Promise((r) => setTimeout(r, 3000));
+              }
+            }"
+      - name: A throwaway encryption key for this database
+        # The sample world saves an MJ Credentials row, whose Values field MJ encrypts with this key.
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: MemberJunction core, migrations and metadata
+        working-directory: .ci/MJ
+        run: |
+          node "$MJ_CLI" migrate
+          node "$MJ_CLI" sync push --dir=metadata --ci
+      - name: bizapps-common, with People field-level security
+        working-directory: .ci/bizapps-common
+        run: |
+          node "$MJ_CLI" migrate --schema __mj_BizAppsCommon --dir ./migrations
+          node "$MJ_CLI" sync push --dir=metadata --include=entities --ci
+      - name: bizapps-tasks
+        working-directory: .ci/bizapps-tasks
+        run: node "$MJ_CLI" migrate --schema __mj_BizAppsTasks --dir ./migrations
+      - name: This app's baseline and metadata
+        run: |
+          pnpm run mj:migrate
+          pnpm exec mj sync push --dir=metadata --ci
+      - name: The example type and the test metadata
+        run: |
+          pnpm run mj:migrate:examples
+          pnpm run mj:push:tests
+      - name: The data-reach metadata is what the types declare (B18)
+        run: node scripts/generate-data-reach-filters.mjs --check
+      - name: The sample world
+        run: node packages/IntegrationTests/dist/world/load-world.js
+      - name: Server harness, every declared check
+        run: pnpm run test:integration:server
+      - name: Persona check
+        run: node scripts/run-sql-file.mjs scripts/persona-check.sql
+      - name: Upload the harness log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-server-log
+          path: integration-server.log
+          retention-days: 14

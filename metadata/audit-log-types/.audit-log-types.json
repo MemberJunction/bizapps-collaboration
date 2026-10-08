@@ -1,0 +1,13 @@
+[
+  {
+    "primaryKey": {
+      "ID": "67486965-904D-4C18-8F20-5EDA97BFD2B4"
+    },
+    "fields": {
+      "Name": "Collaboration: Grant Run",
+      "Description": "A granted view, query or dashboard was run (or refused) through Collaboration's grant operations (B17, D29): one row per run, with the grant, the space, the caller, the bound names (never their values) and the agent run when an agent made it. Stands in for MJ's resource access log (A2) until it ships.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
+  }
+]

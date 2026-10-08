@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -6,13 +6,16 @@ import { type BaseEntity, CompositeKey, LogError, RunView, type UserInfo } from 
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
+import { rulesForSpace, rulesFromServerDocument, sameRules } from './logic/space-rules';
+import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent-turn.js';
+import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { type CollaborationSettings, DEFAULT_SPACE_RULES, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceRules, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -25,7 +28,7 @@ import { NewSpaceDraft, SpaceDetails } from './logic/space-details.js';
 import { planDetailsView, type DetailsViewModel } from './logic/details-view.js';
 import { NewSpacePicks } from './logic/new-space-picks.js';
 import { SpaceDetailsViewComponent } from './space-details-view.component';
-import { newSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
+import { newSpaceKinds, subSpaceKinds, type NewSpaceKind } from './logic/new-space-types.js';
 import { closeConsequence, readFromPayload, type CloseConsequenceState } from './logic/close-consequence.js';
 import { buildSpaceTabs, buildSpaceTabsSafely, resolveTabId, tabIdFromUrl, type SpaceTabModel } from './logic/space-tabs.js';
 import { railFlags, railModeFor } from './logic/rail-flags.js';
@@ -129,10 +132,8 @@ interface RawSpaceRecord {
     SpaceTypeID: mjBizAppsCollaborationSpaceEntity['SpaceTypeID'];
     InheritsMembership?: mjBizAppsCollaborationSpaceEntity['InheritsMembership'];
     AgentRetrieval?: mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-    Retention?: mjBizAppsCollaborationSpaceEntity['Retention'];
     ClosedAt?: mjBizAppsCollaborationSpaceEntity['ClosedAt'];
-    PostCloseAccess?: mjBizAppsCollaborationSpaceEntity['PostCloseAccess'];
-    PostCloseAccessDays?: mjBizAppsCollaborationSpaceEntity['PostCloseAccessDays'];
+    StatusID?: mjBizAppsCollaborationSpaceEntity['StatusID'];
     OwnerID?: mjBizAppsCollaborationSpaceEntity['OwnerID'];
     Configuration?: mjBizAppsCollaborationSpaceEntity['Configuration'];
 }
@@ -162,6 +163,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJPageLayoutComponent,
         MJPageBodyComponent,
         MJButtonDirective,
+        MJAlertComponent,
         MJClickableDirective,
         MJEmptyStateComponent,
         MJViewToggleComponent,
@@ -594,14 +596,14 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             <mj-page-body [Padding]="false">
                 @if (isLoading) {
                     <div class="collab-loading-state">
-                        <mj-loading text="Loading workspace..."></mj-loading>
+                        <mj-loading Text="Loading workspace..."></mj-loading>
                     </div>
                 } @else if (loadErrorMessage) {
                     <div class="collab-error-state">
                         <i class="fa-solid fa-triangle-exclamation"></i>
                         <h3>Error Loading Workspace</h3>
                         <p>{{ loadErrorMessage }}</p>
-                        <button mjButton variant="primary" size="md" (click)="onRetryLoad()">Try again</button>
+                        <button mjButton Variant="primary" Size="md" (click)="onRetryLoad()">Try again</button>
                     </div>
                 } @else if (!hasAccess) {
                     <mjc-no-access [Seats]="seats" />
@@ -848,6 +850,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 }
 
                                 @default {
+                                    @if (seatLookup === 'failed') {
+                                        <mj-alert
+                                            class="seat-lookup-failed"
+                                            Variant="warning"
+                                            Role="alert"
+                                            Title="We couldn't check what you can do in this space"
+                                            Message="Until that's known, posting, uploading, inviting and sharing are hidden. Nothing about your seat has changed.">
+                                            <button actions type="button" mjButton Variant="secondary" Size="sm" (click)="onRetrySeatLookup()">Try again</button>
+                                        </mj-alert>
+                                    }
                                     <mjc-space-header
                                         [Breadcrumbs]="breadcrumbs"
                                         [TypeColor]="headerTypeColor"
@@ -868,17 +880,17 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             />
                                             @if (activeTab === 'Overview') {
                                                 @if (canInviteHere) {
-                                                    <button mjButton variant="secondary" size="md" (click)="onInviteClicked()">
+                                                    <button mjButton Variant="secondary" Size="md" (click)="onInviteClicked()">
                                                         <i class="fa-solid fa-user-plus"></i>Invite
                                                     </button>
                                                 }
                                                 @if (canAddHere && hasTab('Work')) {
-                                                    <button mjButton variant="primary" size="md" (click)="onNewClicked()">
+                                                    <button mjButton Variant="primary" Size="md" (click)="onNewClicked()">
                                                         <i class="fa-solid fa-plus"></i>New
                                                     </button>
                                                 }
                                             } @else if (canAddHere && hasTab('Library') && !contributedTabComponent) {
-                                                <button mjButton variant="primary" size="md" (click)="onUploadClicked()">
+                                                <button mjButton Variant="primary" Size="md" (click)="onUploadClicked()">
                                                     <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
                                                 </button>
                                             }
@@ -892,7 +904,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
 
                                     <div class="content-area">
                                         @if (isLoadingSpace) {
-                                            <mj-loading text="Loading space..."></mj-loading>
+                                            <mj-loading Text="Loading space..."></mj-loading>
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
@@ -913,6 +925,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [TeamTotalCount]="libraryTeamCount"
                                                     [RoomMessages]="overviewRoomMessages"
                                                     [SubSpaces]="overviewSubSpaces"
+                                                    [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
                                                     [CanSeeTeamSide]="canSeeTeamSide"
                                                     [AgentAvailable]="chatDefaultAgentId !== null"
@@ -925,6 +938,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (ItemSelectRequested)="onItemSelected($event)"
                                                     (ShareRequested)="onShareRequested($event)"
                                                     (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                                    (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
                                                     (AskRequested)="onOverviewAskRequested($event)"
                                                 >
                                                     <div mjcAbout style="display: contents">
@@ -1017,7 +1031,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
-                                                    [IsReadOnly]="isSpaceClosed || !canContribute"
+                                                    [IsReadOnly]="chatStateNow.kind === 'closed' || chatStateNow.kind === 'noSeat' || chatStateNow.kind === 'seatUnknown'"
+                                                    [IsPending]="chatStateNow.kind === 'pending'"
                                                     [ReadOnlyNote]="chatReadOnlyNote"
                                                     [OutsideParticipantCount]="outsideParticipantCount"
                                                     [ConversationId]="activeConversationId"
@@ -1165,6 +1180,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [DetailsIncomplete]="newSpaceDetailsIncomplete"
                                 [IsSubmitting]="isCreatingSpace"
                                 [ErrorMessage]="newSpaceError"
+                                [ParentName]="newSpaceParentName"
                                 (TypeSelected)="onNewSpaceTypeSelected($event)"
                                 (CancelRequested)="closeNewSpaceDialog()"
                                 (SubmitRequested)="onSubmitNewSpace($event)"
@@ -1236,6 +1252,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public bandChoice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
     /** The seat the caller reaches the current space through, once resolved; null until then or when they have none. */
     private callerSeat: Awaited<ReturnType<CollaborationEngineBase['ReachedSeat']>> = null;
+    /**
+     * Whether the caller's seat on the current space has been looked up, kept apart from what it is: pending until the lookup
+     * returns, known when it did (with a seat or without one), failed when it threw. A failed lookup is not "no seat".
+     */
+    public seatLookup: SeatLookup = 'pending';
     /** The current space type's default band for new material and tasks: the Work tab's default while the seat is unresolved. */
     public typeDefaultBand: SpaceBand | null = null;
     /** The roles the caller's seat may hand out: the invite form and the role picker offer these, highest first. */
@@ -1246,6 +1267,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async updateBandChoice(space: RawSpaceRecord, isCurrent: () => boolean): Promise<void> {
         let choice: { allowed: readonly SpaceBand[]; start: SpaceBand } | null = null;
         let resolved: typeof this.callerSeat = null;
+        let lookup: SeatLookup = 'known';
         const type = CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID);
         try {
             const user = this.currentUser;
@@ -1254,11 +1276,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 choice = uploadBandChoice(type?.DefaultBand ?? null, resolved.role.canSeeTeamBand, resolved.role.canPromoteBand);
             }
         } catch (error) {
+            // The page couldn't check: that is said as such, with a way to try again, and not as a person who has no seat
+            lookup = 'failed';
             LogError(`Failed to resolve the caller's seat on space ${space.ID}: ${error instanceof Error ? error.message : String(error)}`);
         }
         if (!isCurrent()) return;
         this.bandChoice = choice;
         this.callerSeat = resolved;
+        this.seatLookup = lookup;
         this.typeDefaultBand = type?.DefaultBand ?? null;
         this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
     }
@@ -1406,6 +1431,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public get settingsAccessNow(): SettingsAccess {
         return settingsAccess({
             isClosed: !!this.activeSpaceRecord?.ClosedAt,
+            isTerminal: !!CollaborationEngineBase.Instance.EffectiveStatusForSpace(this.activeSpaceRecord ?? {})?.IsTerminal,
             canConfigure: this.canConfigureCurrentSpace,
             canClose: this.canCloseCurrentSpace,
             canReopen: this.canReopenCurrentSpace,
@@ -1505,23 +1531,63 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         );
     }
 
+    /** The rules per space as the server resolved them (`GetSpaceConfiguration`, cut to the viewer), keyed by lower-case id. */
+    private readonly serverRulesBySpace = new Map<string, EffectiveSpaceRules>();
+    private readonly serverRulesPending = new Set<string>();
+
+    /**
+     * Reads the space's configuration from the server and rebuilds the tabs and cards when its rules differ from what the screen
+     * shows. One read per space at a time; a failure keeps the browser's own answer and is logged once, with the browser's
+     * failure beside it when there was one.
+     */
+    private async loadServerRules(space: RawSpaceRecord, browserWalkError: string | null): Promise<void> {
+        const key = space.ID.toLowerCase();
+        if (this.serverRulesPending.has(key)) return;
+        this.serverRulesPending.add(key);
+        const beside = browserWalkError ? `; in the browser: ${browserWalkError}` : '';
+        try {
+            const res = await new CollaborationClient(this.graphQLExecutor).GetSpaceConfiguration(space.ID);
+            const rules = res.Success ? rulesFromServerDocument(res.ConfigurationJSON) : null;
+            if (!rules) {
+                this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${res.ErrorMessage ?? 'the server returned no configuration'}${beside}`);
+                return;
+            }
+            const before = this.serverRulesBySpace.get(key) ?? (browserWalkError ? null : this.uiContext?.rules);
+            this.serverRulesBySpace.set(key, rules);
+            if (this._loadedSpaceId && UUIDsEqual(this._loadedSpaceId, space.ID) && !sameRules(before, rules)) {
+                this.buildSpaceUi(space);
+                this.changeDetector.markForCheck();
+            }
+        } catch (err) {
+            this.logOnce(`rules:${space.ID}`, `Could not read the configuration of space ${space.ID} from the server: ${err instanceof Error ? err.message : String(err)}${beside}`);
+        } finally {
+            this.serverRulesPending.delete(key);
+        }
+    }
+
     /**
      * Resolves the space's type's UI driver and builds what it and other apps contribute: the tabs (each labelled from the
      * type's and the space's Labels.Tabs) and the Overview cards. A type whose driver isn't registered gets the default one.
      */
-    private buildSpaceUi(space: RawSpaceRecord): void {
+    private buildSpaceUi(space: RawSpaceRecord, refreshRules = false): void {
         const engine = CollaborationEngineBase.Instance;
         const type = engine.SpaceTypeById(space.SpaceTypeID);
         const code = type?.Code ?? '';
         this.uiDriver = this.uiDriverFor(type?.UIDriverClass, code, `space ${space.ID}`, `driver:${space.ID}`);
-        let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: structuredClone(DEFAULT_SPACE_RULES) };
-        try {
-            const spaceConfig = space.Configuration ? JSON.parse(space.Configuration) as CollaborationSettings : null;
-            const resolved = engine.ResolveSettingsForSpace([spaceConfig], space.SpaceTypeID);
-            ctx = { ...ctx, rules: { Chats: resolved.Chats, Agents: resolved.Agents, Labels: resolved.Labels, Extensions: resolved.Extensions ?? {} } };
-        } catch (err) {
-            this.logOnce(`rules:${space.ID}`, `Could not resolve the rules for the tabs of space ${space.ID}: ${err instanceof Error ? err.message : String(err)}`);
+        // The rules come from the server's one resolver (B16) once its document is here; until then, and when it never comes, from
+        // the chain the browser can see. A participant cannot read the app's settings row, so the browser's walk fails for them and
+        // only the server's document carries the type's labels; that failure is reported only if the server's document fails too.
+        const serverRules = this.serverRulesBySpace.get(space.ID.toLowerCase()) ?? null;
+        let ctx: SpaceUIContext = { space: null, type: type ?? null, spaceTypeCode: code, viewer: this.currentUser, rules: serverRules ?? structuredClone(DEFAULT_SPACE_RULES) };
+        let browserWalkError: string | null = null;
+        if (!serverRules) {
+            try {
+                ctx = { ...ctx, rules: rulesForSpace(space, this.rawSpaces, engine) };
+            } catch (err) {
+                browserWalkError = err instanceof Error ? err.message : String(err);
+            }
         }
+        if (!serverRules || refreshRules) void this.loadServerRules(space, browserWalkError);
         const tabFactory = (reg: { SubClass: unknown }, meta: { contributionKey: string; label?: string; icon?: string; sortKey?: number }): SpaceTabDescriptor => ({
             key: meta.contributionKey,
             label: meta.label ?? meta.contributionKey,
@@ -1831,11 +1897,32 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return roleType ? roleType.CanContribute : false;
     }
 
-    /** Why the conversation can't be posted in: a closed space, or a person with no seat that lets them post. */
+    /**
+     * The Chat tab's state, decided in one place (`logic/chat-state.ts`): closed, pending until the seat is known, no seat that
+     * lets them post, or open. The chat's `ReadOnly`, its note and its lock all follow it.
+     */
+    public get chatStateNow(): ChatState {
+        return chatState({ isClosed: this.isSpaceClosed, seat: this.seatLookup, canContribute: this.canContribute, overList: !this.activeConversationId });
+    }
+
+    /** Why the conversation can't be posted in, or empty while it can or while the seat is not yet known. */
     public get chatReadOnlyNote(): string {
-        return this.isSpaceClosed
-            ? 'This space is closed. Conversations are read-only.'
-            : "You can read this conversation but can't post in it: you have no seat in this space that lets you post.";
+        const state = this.chatStateNow;
+        return state.kind === 'closed' || state.kind === 'noSeat' || state.kind === 'seatUnknown' ? state.note : '';
+    }
+
+    private readonly changeDetector = inject(ChangeDetectorRef);
+
+    /** The seat lookup failed and is tried again, for the space still shown. */
+    public async onRetrySeatLookup(): Promise<void> {
+        const space = this.activeSpaceRecord;
+        if (!space) return;
+        const spaceId = space.ID;
+        this.seatLookup = 'pending';
+        await this.updateBandChoice(space, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        await this.updateCanConfigureCurrentSpace();
+        // The section is OnPush: what the lookup set after its awaits is drawn now, not at the next click
+        this.changeDetector.markForCheck();
     }
 
     public get discussionAudienceCount(): number {
@@ -1971,8 +2058,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         backgroundImageUrl: '',
         inheritsMembership: true,
         agentRetrieval: 'Included',
-        retention: '',
-        typeDefaultRetention: 'Indefinite',
         status: 'Active',
     };
     /** What the Settings screen shows and what a save is measured against: a save writes only what differs from it. */
@@ -2189,6 +2274,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceConversations = [];
         this.bandChoice = null;
         this.callerSeat = null;
+        this.seatLookup = 'pending';
         this.typeDefaultBand = null;
         this.inviteOutcome = null;
 
@@ -2310,16 +2396,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         });
 
         // Initialize space settings model
-        this.spaceSettings = buildSettingsModel(space, {
+        this.spaceSettings = buildSettingsModel({ ...space, StatusName: CollaborationEngineBase.Instance.EffectiveStatusForSpace(space)?.Name ?? null }, {
             name: resolvedType || '',
             icon: typeDef?.icon ?? null,
             color: typeDef?.color ?? null,
-            defaultRetention: CollaborationEngineBase.Instance.SpaceTypeById(space.SpaceTypeID)?.DefaultRetention ?? null,
         });
         this.settingsSession.Open(this.spaceSettings);
         this.spaceSettings = this.settingsSession.Shown;
-        // What the type's UI driver and other apps contribute: the tabs and the Overview cards
-        this.buildSpaceUi(space);
+        // What the type's UI driver and other apps contribute: the tabs and the Overview cards; the server's rules are re-read here
+        this.buildSpaceUi(space, true);
         // The tabs the space has may differ from the ones the last space's URL asked for
         this.setTab(this.activeTab);
 
@@ -2373,11 +2458,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             const details = await SpaceDetails.Load(this.ProviderToUse, user, space.ID);
             if (!isCurrent()) return;
-            const view = details && this.uiContext
+            const uiContext = this.uiContext;
+            // The driver's hidden columns decide which of the form's sections can be shown alone
+            const descriptor = details && uiContext ? this.detailsDescriptor(this.uiDriver, uiContext, details.Leaf.EntityInfo.Name) : undefined;
+            const view = details && uiContext
                 ? await planDetailsView({
                     fields: details.Fields,
-                    formSections: details.FormSections,
-                    descriptor: this.detailsDescriptor(this.uiDriver, this.uiContext, details.Leaf.EntityInfo.Name),
+                    formSections: details.FormSectionsHiding(descriptor?.hiddenFieldNames),
+                    descriptor,
                     hasForm: () => this.hasFormFor(details.Leaf),
                 })
                 : null;
@@ -2902,10 +2990,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ParentID: sp.ParentID ?? null,
                 InheritsMembership: !!sp.InheritsMembership,
                 ClosedAt: sp.ClosedAt,
-                PostCloseAccess: sp.PostCloseAccess,
-                PostCloseAccessDays: sp.PostCloseAccessDays,
-                TypePostCloseAccess: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccess ?? null,
-                TypePostCloseAccessDays: CollaborationEngineBase.Instance.SpaceTypeById(sp.SpaceTypeID)?.PostCloseAccessDays ?? null,
+                Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
             })));
             if (chain.length === 0) chain.push({ id: spaceId, name: '' });
             const membersRes = await rv.RunView<{
@@ -3429,7 +3514,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }));
         this.shareRecipientCount = this.shareRecipients.length;
         this.shareAuthorName = this.currentUser?.FirstLast || this.currentUser?.Name || 'Current User';
-        this.shareTimestamp = new Date().toISOString();
+        this.shareTimestamp = formatDateTime(new Date());
         this.shareReviewHeader = 'Policy review';
         this.shareReviewSub = 'A check on what is being shared';
         this.shareFindings = [];
@@ -3563,12 +3648,29 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
-    public openNewSpaceDialog(): void {
+    /** The parent of the space the dialog is making, and its name; null and empty for a top-level space. */
+    public newSpaceParentId: string | null = null;
+    public newSpaceParentName = '';
+
+    /**
+     * Opens the dialog for a top-level space, or, with a parent, for a sub-space of it: the kinds offered are those the parent's
+     * type allows under it (Children.AllowedTypeCodes), and the creator chooses whether the sub-space inherits the parent's members (D22).
+     */
+    public openNewSpaceDialog(parentId: string | null = null): void {
         if (!this.canCreateSpace) {
             SharedService.Instance.CreateSimpleNotification('You do not have permission to create a space.', 'warning', 3000);
             return;
         }
-        this.newSpaceKinds = newSpaceKinds(CollaborationEngineBase.Instance.SpaceTypes);
+        const kinds = newSpaceKinds(CollaborationEngineBase.Instance.SpaceTypes);
+        const parent = parentId ? this.rawSpaces.find((sp) => UUIDsEqual(sp.ID, parentId)) : undefined;
+        if (parentId && !parent) {
+            SharedService.Instance.CreateSimpleNotification('The parent space could not be read.', 'warning', 3000);
+            return;
+        }
+        const parentType = parent ? CollaborationEngineBase.Instance.SpaceTypeById(parent.SpaceTypeID) : undefined;
+        this.newSpaceParentId = parent ? parent.ID : null;
+        this.newSpaceParentName = parent ? parent.Name : '';
+        this.newSpaceKinds = parent ? subSpaceKinds(kinds, parentType?.Configuration ?? null) : kinds;
         this.resetNewSpace();
         this.isNewSpaceDialogOpen = true;
         this.RefreshView();
@@ -3586,6 +3688,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public closeNewSpaceDialog(): void {
         this.isNewSpaceDialogOpen = false;
+        this.newSpaceParentId = null;
+        this.newSpaceParentName = '';
         this.resetNewSpace();
         this.RefreshView();
     }
@@ -3603,10 +3707,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const draft = await NewSpaceDraft.Start(this.ProviderToUse, user, type);
             const driver = this.uiDriverFor(type.UIDriverClass, type.Code, `a new ${type.Name} space`, `driver:new:${type.ID}`);
             const ctx: SpaceUIContext = { space: null, type, spaceTypeCode: type.Code, viewer: user, rules: structuredClone(DEFAULT_SPACE_RULES) };
+            const descriptor = draft.HasDetails ? this.detailsDescriptor(driver, ctx, draft.Leaf.EntityInfo.Name) : undefined;
             const view = await planDetailsView({
                 fields: draft.DetailFields,
-                formSections: draft.FormSections,
-                descriptor: draft.HasDetails ? this.detailsDescriptor(driver, ctx, draft.Leaf.EntityInfo.Name) : undefined,
+                // The driver's hidden columns decide which of the form's sections can be shown alone
+                formSections: draft.FormSectionsHiding(descriptor?.hiddenFieldNames),
+                descriptor,
                 hasForm: () => this.hasFormFor(draft.Leaf),
             });
             return { draft, view };
@@ -3639,7 +3745,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             // The server writes the space, its subtype and the owner's seat in one transaction: a refusal leaves nothing behind
-            const outcome = await draft.Create(new CollaborationClient(this.graphQLExecutor), { name: payload.name, description: payload.description });
+            const outcome = await draft.Create(new CollaborationClient(this.graphQLExecutor), {
+                name: payload.name,
+                description: payload.description,
+                parentId: this.newSpaceParentId,
+                inheritsMembership: payload.inheritsMembership,
+            });
             if (outcome.status === 'refused') {
                 LogError(`Could not create the space: ${outcome.message}`);
                 this.newSpaceError = outcome.message;
@@ -3811,26 +3922,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
-            const res = await client.ExecuteSpaceChatTurn({
-                SpaceID: this.activeSpaceId,
-                ConversationID: request.ConversationId,
-                UserMessageID: request.UserMessageId,
-                AgentID: request.AgentId,
-                // The chat follows the run's live status from the reply row, as it does for any conversation's agent
-                Background: true,
-            });
-            return {
-                Success: res.Success,
-                ErrorMessage: res.ErrorMessage,
-                ReplyDetailIds: res.ReplyDetailIDs,
-                AgentRunId: res.AgentRunID,
-            };
+            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request)));
         } catch (error) {
             LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
-            return {
-                Success: false,
-                ErrorMessage: error instanceof Error ? error.message : 'The chat turn failed.',
-            };
+            return spaceTurnFailure(error);
         }
     };
 
@@ -4232,7 +4327,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     raw.BackgroundImageURL = savedCopy.backgroundImageUrl || null;
                     raw.InheritsMembership = savedCopy.inheritsMembership;
                     raw.AgentRetrieval = savedCopy.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-                    raw.Retention = (savedCopy.retention || null) as mjBizAppsCollaborationSpaceEntity['Retention'];
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                 }
 

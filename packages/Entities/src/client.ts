@@ -76,6 +76,8 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     AgentRunID?: string;
     QuotedCount?: number;
     AllowedItemNames?: string[];
+    /** The turn's tools (B20) as JSON: audience, actionIds, dataGrantNames, knowledgeSourceIds, withheld. */
+    ToolsJSON?: string;
     ErrorMessage?: string;
 }
 
@@ -92,6 +94,53 @@ export interface CreateSpaceConversationGraphQLPayload {
     Name?: string;
     Kind?: string;
     ErrorMessage?: string;
+}
+
+/** The grant operations (B17, D29). `ValuesJSON` is a JSON object of the target's own parameters or properties; a value for a bound name is refused. */
+export interface GrantRunGraphQLInput {
+    SpaceID: string;
+    GrantID: string;
+    ValuesJSON?: string | null;
+}
+
+export interface GrantRunRowsGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    /** The rows, as a JSON array. */
+    RowsJSON?: string;
+    RowCount?: number;
+}
+
+export interface SpaceDashboardGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    DashboardID?: string;
+    PropertiesJSON?: string;
+}
+
+/** `EnsureSpaceForRecord` (item 85): the space of a type anchored to a record, created the first time. Needs update rights on the record. */
+export interface EnsureSpaceForRecordGraphQLInput {
+    TypeCode: string;
+    EntityName: string;
+    RecordID: string;
+    SpaceName?: string | null;
+    AnchorRole?: string | null;
+    InheritsMembership?: boolean | null;
+}
+
+export interface EnsureSpaceForRecordGraphQLPayload {
+    Success: boolean;
+    SpaceID?: string;
+    ErrorMessage?: string;
+}
+
+/** `GetSpaceConfiguration`: the space's effective configuration (B16), cut to the caller. `ConfigurationJSON` parses to Core's `EffectiveSpaceConfiguration`. */
+export interface SpaceConfigurationGraphQLPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    ConfigurationJSON?: string;
+    CanSeeTeam: boolean;
+    Full: boolean;
 }
 
 export interface SpaceChatHostRulesGraphQLPayload {
@@ -132,8 +181,13 @@ export interface CloseConsequenceGraphQLPayload {
     Success: boolean;
     ErrorMessage?: string;
     /** ReadOnly, ReadOnlyWithAgent or None. */
-    Access?: string;
-    Days?: number;
+    /** The status the close moves the space to (its type's first terminal status), by code and name; absent for a type with no statuses. */
+    StatusCode?: string;
+    StatusName?: string;
+    /** What that status allows. */
+    ReadOnly?: boolean;
+    Visible?: boolean;
+    AgentRetrieval?: boolean;
     KeeperUserID?: string;
     KeeperName?: string;
     KeeperCanReopen?: boolean;
@@ -144,6 +198,10 @@ export interface CreateSpaceGraphQLInput {
     TypeID: string;
     Name: string;
     Description?: string;
+    /** The parent, for a sub-space; absent for a top-level space. */
+    ParentID?: string;
+    /** D22: whether a sub-space's members come from its parent. Read only with a parent. */
+    InheritsMembership?: boolean;
     Details?: Record<string, unknown>;
 }
 
@@ -229,8 +287,11 @@ query GetCloseConsequence($spaceId: String!) {
     GetCloseConsequence(spaceId: $spaceId) {
         Success
         ErrorMessage
-        Access
-        Days
+        StatusCode
+        StatusName
+        ReadOnly
+        Visible
+        AgentRetrieval
         KeeperUserID
         KeeperName
         KeeperCanReopen
@@ -256,6 +317,61 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
             Name
             Email
         }
+    }
+}
+`;
+
+const RUN_SPACE_VIEW_MUTATION = `
+mutation RunSpaceView($input: GrantRunInput!) {
+    RunSpaceView(input: $input) {
+        Success
+        ErrorMessage
+        RowsJSON
+        RowCount
+    }
+}
+`;
+
+const RUN_SPACE_QUERY_MUTATION = `
+mutation RunSpaceQuery($input: GrantRunInput!) {
+    RunSpaceQuery(input: $input) {
+        Success
+        ErrorMessage
+        RowsJSON
+        RowCount
+    }
+}
+`;
+
+const GET_SPACE_DASHBOARD_QUERY = `
+query GetSpaceDashboard($spaceId: String!, $grantId: String!) {
+    GetSpaceDashboard(spaceId: $spaceId, grantId: $grantId) {
+        Success
+        ErrorMessage
+        DashboardID
+        PropertiesJSON
+    }
+}
+`;
+
+const ENSURE_SPACE_FOR_RECORD_MUTATION = `
+mutation EnsureSpaceForRecord($input: EnsureSpaceForRecordInput!) {
+    EnsureSpaceForRecord(input: $input) {
+        Success
+        SpaceID
+        ErrorMessage
+    }
+}
+`;
+
+const GET_SPACE_CONFIGURATION_QUERY = `
+query GetSpaceConfiguration($spaceId: String!) {
+    GetSpaceConfiguration(spaceId: $spaceId) {
+        Success
+        ErrorMessage
+        ConfigurationJSON
+        CanSeeTeam
+        Full
     }
 }
 `;
@@ -311,6 +427,7 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
         AgentRunID
         QuotedCount
         AllowedItemNames
+            ToolsJSON
         ErrorMessage
     }
 }
@@ -391,6 +508,31 @@ export class CollaborationClient {
     async GetCloseConsequence(spaceId: string): Promise<CloseConsequenceGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(GET_CLOSE_CONSEQUENCE_QUERY, { spaceId });
         return (res?.GetCloseConsequence as CloseConsequenceGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async RunSpaceView(input: GrantRunGraphQLInput): Promise<GrantRunRowsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(RUN_SPACE_VIEW_MUTATION, { input });
+        return (res?.RunSpaceView as GrantRunRowsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async RunSpaceQuery(input: GrantRunGraphQLInput): Promise<GrantRunRowsGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(RUN_SPACE_QUERY_MUTATION, { input });
+        return (res?.RunSpaceQuery as GrantRunRowsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetSpaceDashboard(spaceId: string, grantId: string): Promise<SpaceDashboardGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_DASHBOARD_QUERY, { spaceId, grantId });
+        return (res?.GetSpaceDashboard as SpaceDashboardGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async EnsureSpaceForRecord(input: EnsureSpaceForRecordGraphQLInput): Promise<EnsureSpaceForRecordGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(ENSURE_SPACE_FOR_RECORD_MUTATION, { input });
+        return (res?.EnsureSpaceForRecord as EnsureSpaceForRecordGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetSpaceConfiguration(spaceId: string): Promise<SpaceConfigurationGraphQLPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_CONFIGURATION_QUERY, { spaceId });
+        return (res?.GetSpaceConfiguration as SpaceConfigurationGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned', CanSeeTeam: false, Full: false };
     }
 
     async GetSpaceChatHostRules(spaceId: string, conversationId?: string): Promise<SpaceChatHostRulesGraphQLPayload> {

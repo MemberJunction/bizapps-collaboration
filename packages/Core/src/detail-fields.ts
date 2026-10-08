@@ -83,24 +83,33 @@ export function sectionKeyOf(field: FieldSectionShape): string | null {
     return null;
 }
 
+const NO_NAMES: ReadonlySet<string> = new Set();
+
 /**
- * The sections of a subtype's generated form that hold only the columns the subtype adds, or null when the form can't be shown on
- * its own. The form of an IsA child lays out every column of its view, the space's own included; the details screens show the
- * subtype's part only, by naming its sections. That works only when those sections hold none of the space's columns: a column of the
- * subtype in the same section as the space's (both in `details`, when nobody gave it a category) can't be shown without them.
+ * The sections of a subtype's generated form that hold only the columns the subtype adds and shows, or null when the form can't be
+ * shown on its own. The form of an IsA child lays out every column of its view, the space's own included; the details screens show
+ * the subtype's part only, by naming its sections. That works only when those sections hold none of the space's columns: a column of
+ * the subtype in the same section as the space's (both in `details`, when nobody gave it a category) can't be shown without them.
+ *
+ * A column the type's UI driver hides (`hiddenNames`, compared without regard to case) is treated the same way as one of the space's:
+ * a section that holds only hidden columns is left out, and a section that mixes hidden and shown columns can't be shown, so the
+ * field list is drawn instead. The caller leaves a required column out of `hiddenNames`: it is never hidden.
  */
-export function subtypeFormSections(fields: readonly FieldSectionShape[], ownNames: ReadonlySet<string>): string[] | null {
+export function subtypeFormSections(fields: readonly FieldSectionShape[], ownNames: ReadonlySet<string>, hiddenNames: ReadonlySet<string> = NO_NAMES): string[] | null {
     const own = new Set<string>();
+    const hidden = new Set<string>();
     const others = new Set<string>();
     for (const field of fields) {
         if (field.IsPrimaryKey) continue;
         const key = sectionKeyOf(field);
         if (!key) continue;
-        (ownNames.has(field.Name) ? own : others).add(key);
+        if (!ownNames.has(field.Name)) others.add(key);
+        else if (hiddenNames.has(field.Name.toLowerCase())) hidden.add(key);
+        else own.add(key);
     }
     if (own.size === 0) return null;
     // The top area is shown whichever sections are asked for: a column of the space in it would show beside the subtype's
     if (others.has(TOP_AREA)) return null;
-    for (const key of own) if (others.has(key)) return null;
+    for (const key of own) if (others.has(key) || hidden.has(key)) return null;
     return [...own].sort();
 }

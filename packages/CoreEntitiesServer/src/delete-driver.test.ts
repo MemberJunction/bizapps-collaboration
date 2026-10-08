@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { WellKnownUserSource, type UserInfo } from '@memberjunction/core';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
+import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import {
     BaseSpaceTypeServerDriver,
@@ -12,6 +13,11 @@ import {
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { decideSpaceKinds, SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { decideItemKind, SpaceItemEntityServer } from '../dist/SpaceItemEntityServer.js';
+
+// The one configuration (B16) comes through the registry: stood in for here, as these tests are about who is asked
+let restoreConfigurationLoader: () => void;
+before(() => { restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => restoreConfigurationLoader());
 
 const SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
 const PARENT = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE3';
@@ -57,7 +63,7 @@ describe('deleting a space or an item asks the type first', () => {
         ServerDriverRegistry.Instance.ResolveSpaceAndType = (async (spaceId: string) => {
             const driver = drivers.get(spaceId.toLowerCase());
             if (!driver) throw new Error(`No driver for ${spaceId}.`);
-            return { driver, space: stubOf<mjBizAppsCollaborationSpaceEntity>({}), spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}) };
+            return { driver, space: stubOf<mjBizAppsCollaborationSpaceEntity>({}), spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}), configuration: defaultConfiguration({ ID: spaceId }) };
         }) as unknown as typeof ServerDriverRegistry.Instance.ResolveSpaceAndType;
     });
     after(() => {
@@ -100,19 +106,25 @@ describe('deleting a space or an item asks the type first', () => {
         assert.match(JSON.stringify(history), /closed, not deleted/);
     });
 
-    it('deletes a space that has its subtype attached through the subtype, without asking the driver first', async () => {
+    it("hands the delete of a space with its subtype attached to core's own Delete, which routes it through the subtype, without asking the driver on the way in", async () => {
         const own = new SpyDriver({ space: { ok: false, message: 'Not asked here.' } });
         drivers.set(SPACE.toLowerCase(), own);
+        const coreDelete = BaseEntity.prototype.Delete;
         const calls: unknown[] = [];
-        const leaf = { Delete: async (options?: unknown) => { calls.push(options); return true; } };
-        const { entity: space } = entity(SpaceEntityServer.prototype, { ID: SPACE, ParentID: null, LeafEntity: leaf });
-        const options = { SkipEntityActions: true };
-        assert.equal(await SpaceEntityServer.prototype.Delete.call(space, options), true);
-        assert.deepEqual(calls, [options]);
-        assert.deepEqual(own.spaceKinds, []);
+        BaseEntity.prototype.Delete = async function (options?: unknown) { calls.push(options); return true; };
+        try {
+            const leaf = { Delete: async () => { throw new Error('The space does not delegate to the subtype itself; core does.'); } };
+            const { entity: space } = entity(SpaceEntityServer.prototype, { ID: SPACE, ParentID: null, LeafEntity: leaf });
+            const options = { SkipEntityActions: true };
+            assert.equal(await SpaceEntityServer.prototype.Delete.call(space, options), true);
+            assert.deepEqual(calls, [options]);
+            assert.deepEqual(own.spaceKinds, []);
+        } finally {
+            BaseEntity.prototype.Delete = coreDelete;
+        }
     });
 
-    it('asks the driver once the subtype delete reaches the space row', async () => {
+    it('asks the driver once the subtype delete comes back for the space row, and refuses there', async () => {
         const own = new SpyDriver({ space: { ok: false, message: 'Close it first.' } });
         drivers.set(SPACE.toLowerCase(), own);
         const leaf = { Delete: async () => { throw new Error('The chain must not go back to the subtype.'); } };

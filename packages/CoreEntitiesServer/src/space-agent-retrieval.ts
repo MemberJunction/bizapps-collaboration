@@ -1,8 +1,8 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import {
     agentMayQuote,
-    isAgentPostCloseAccessPermitted,
     membershipReaches,
+    spaceAllowsAgentRetrieval,
     type Band,
     type MemberSnapshot,
     type RoleFlags,
@@ -92,7 +92,6 @@ function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nod
 function getReachableSubtreeSpaceIds(
     spaces: readonly SpaceNode[],
     askedFromSpaceId: string,
-    now: Date = new Date(),
 ): string[] {
     const index = new Map<string, SpaceNode>();
     for (const s of spaces) {
@@ -107,8 +106,8 @@ function getReachableSubtreeSpaceIds(
         if (!isAncestorOrSelf(index, cleanAsked, sid)) {
             continue;
         }
-        // Filter closed spaces unless ReadOnlyWithAgent within days
-        if (s.closedAt && !isAgentPostCloseAccessPermitted(s, now)) {
+        // A status that allows no agent retrieval (Archived) keeps the space out
+        if (!spaceAllowsAgentRetrieval(s)) {
             continue;
         }
         // Check ExcludedEntirely up to root
@@ -188,7 +187,7 @@ export async function resolveSpaceAgentRetrieval(
     const batchRes = await rvSystem.RunViews([
         {
             EntityName: SPACES_ENTITY,
-            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays', 'SpaceTypeID'],
+            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID'],
             MaxRows: 2000,
             ResultType: 'simple',
         },

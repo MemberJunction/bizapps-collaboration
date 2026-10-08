@@ -36,7 +36,7 @@
   <a href="#documentation">Docs</a>
 </p>
 
-<!-- Screenshots: add real Explorer captures once the walkthrough lands (PR 9's plan, stage 4). -->
+<!-- Screenshots: add real Explorer captures once the walkthrough lands (PR 10's plan, stage 4). -->
 
 ---
 
@@ -194,7 +194,7 @@ Never give an outside participant MemberJunction's `UI` role: one unfiltered gra
 
 ### Develop it
 
-This is a pnpm workspace; CI uses Node 22. For now it builds against MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 9's plan § 3.1](plans/pr9-plan.md#31-working-on-mj-next)). Install from that parent folder, not here. CI installs published packages, so it fails on the `next`-only types until a release is pinned.
+This is a pnpm workspace; CI uses Node 22. For now it builds against MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 10's plan § 2.1](plans/pr10-plan.md#21-work-on-mj-next)). Install from that parent folder, not here. CI installs published packages, so it fails on the `next`-only types until a release is pinned.
 
 ```bash
 pnpm run build             # every package
@@ -212,7 +212,7 @@ Collaboration is a base other apps build on. To add a kind of space:
 
 1. **Ship a space type** as metadata, with its vocabulary, bands, settings and allowed children.
 2. **Add behavior,** if it needs any, with a server driver (rules checked before a save, and reactions after it) and a UI driver (its tabs and Overview cards, and checks before an invite or a new conversation; header chips and more are coming). A type's message hooks take effect once MemberJunction records who wrote a message ([MJ#4789](https://github.com/MemberJunction/MJ/pull/4789)).
-3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`. This path is being finished in [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9).
+3. **Add data,** if it has its own, as a table that extends Space through IsA, filtered with Collaboration's published `fnCollaborationAccess`. [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9) built it end to end, screens included, with two example types.
 4. **Offer your data** through anchors and grants, bounded by the space.
 
 The rules, the hooks and three worked examples (a committee, a deal room, and Collaboration's own private example plug-ins) are in the [extensibility plan](docs/EXTENSIBILITY_PLAN.md). BizApps Committees will be rebuilt this way.
@@ -238,8 +238,8 @@ The [UX gallery](packages/UXGallery/README.md), the [example plug-ins](packages/
 |---|---|
 | **Done: [#7](https://github.com/MemberJunction/bizapps-collaboration/pull/7)** | The engine's next phase: the metadata engine, one settings model, settings rights, generic space types, plug-in drivers, a room in every space, retrieval bounded by a room's audience, and the screens |
 | **Done: [#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)** | The chat on MemberJunction's chat area: conversations started when someone asks for one, and agent turns run on the server, bounded by the conversation's audience |
-| **Now: [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9)** | Finishing the chat, on MemberJunction's latest `next`; testing the extension model end to end, with subtypes and their screens; closing and reopening as a right of their own, and no right decided by a role's name; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host ([its plan](plans/pr9-plan.md)) |
-| **Then** | MemberJunction's view and dashboard properties, bound agent parameters and locked query parameters, which open the closed grants; meetings and agendas in BizApps Tasks, with calendar sync; Committees rebuilt on Collaboration; provenance and sealing; the assistant over MCP, Slack and Teams; PostgreSQL |
+| **Done: [#9](https://github.com/MemberJunction/bizapps-collaboration/pull/9)** | The chat finished on MemberJunction's latest `next`; the extension model tested end to end, with subtypes and their screens; closing and reopening as a right of their own, and no right decided by a role's name |
+| **Now: [#10](https://github.com/MemberJunction/bizapps-collaboration/pull/10)** | Everything left in the plan, until it's done ([its plan](plans/pr10-plan.md)): first, the core fixes in MemberJunction with no workarounds here; then anchors, grants, data reach, notes and pins, the screens walked end to end, and a first host; meetings as a first-class app in BizApps Tasks ([the meetings plan](plans/meetings-plan.md)); MemberJunction's view and dashboard properties, which open the closed grants; provenance and sealing; the assistant over MCP, Slack and Teams; Committees rebuilt on Collaboration; PostgreSQL |
 
 The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/plan.md).
 
@@ -248,7 +248,9 @@ The whole plan, with every decision and its reason, is [`plans/plan.md`](plans/p
 | Document | What it covers |
 |---|---|
 | [The plan](plans/plan.md) | What's being built and why: the model, the security doctrine, every decision, the roadmap and the open questions |
-| [PR 9's plan](plans/pr9-plan.md) | Finishing the chat, then #8's stages and the rest of the plan, in order |
+| [PR 10's plan](plans/pr10-plan.md) | Everything left in the plan, in order, until it's done |
+| [The meetings plan](plans/meetings-plan.md) | Meetings and agendas as a first-class app in BizApps Tasks |
+| [PR 9's plan](plans/pr9-plan.md) | Finishing the chat (merged) |
 | [PR #8's plan](plans/pr8-plan.md) | The build plan for anchors, grants, data reach, notes and pins |
 | [How Collaboration works](docs/HOW_THE_SYSTEM_WORKS.md) | The rules the rules module, the server and the database share, each marked built or planned |
 | [The extensibility plan](docs/EXTENSIBILITY_PLAN.md) | Space types as plug-ins, with chats, history and agents |

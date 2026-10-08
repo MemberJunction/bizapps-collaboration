@@ -1,6 +1,6 @@
 # Collaboration: the plan
 
-**Version:** v0.6 · 2026-09-29. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19. On 2026-09-29, #8 merged after the chat, and PR 9 takes the rest, on MJ `next` with no version pin for now ([§ 3.6](#36-decided-on-2026-09-29-8-merges-after-the-chat)). Later that day Amith settled PR 9's open questions on rights, subtypes and Home ([§ 3.7](#37-decided-on-2026-09-29-rights-subtypes-and-home), D40 to D47), and had PR 9's builder fix the core defects it found in one MemberJunction pull request (D48).
+**Version:** v0.6 · 2026-09-29. This is the one plan. v0.4 merged this file's v0.2 with Amith's build plan v0.3 (2026-09-26) and the decisions Amith made on the same day; where v0.2 and v0.3 disagreed, v0.3 stands. v0.5 adds Amith's increment of 2026-09-27 on anchors, grants, data, notes and meetings ([§ 3.5](#35-decided-on-2026-09-27-anchors-grants-data-notes-and-meetings)), renumbered to fit this plan. D36, the same day, moves MJ's part after #7 and PR #8, and D37 builds #7's chat on MJ `next`. D35 also records that Committees carries no data over. On 2026-09-28, #7 merged as complete enough (Amith), and § 2.1, D25, D37 and § 9 are updated to it. Later that day Amith decided that a space has no conversation until someone starts one, and no room (D25), and MJ#4789 gained events and wires (A15) and A19. On 2026-09-29, #8 merged after the chat, and PR 9 takes the rest, on MJ `next` with no version pin for now ([§ 3.6](#36-decided-on-2026-09-29-8-merges-after-the-chat)). Later that day Amith settled PR 9's open questions on rights, subtypes and Home ([§ 3.7](#37-decided-on-2026-09-29-rights-subtypes-and-home), D40 to D47), and had PR 9's builder fix the core defects it found in one MemberJunction pull request (D48). When PR 9 merged, Amith put everything left in PR 10, which Ian runs until all of it is done (D51), and made meetings a first-class app in bizapps-tasks (D52) ([§ 3.8](#38-decided-on-2026-09-29-pr-10-carries-the-rest)).
 
 **Repos:** `MemberJunction/MJ` (branch `next`), `MemberJunction/bizapps-collaboration` (this repo), `MemberJunction/bizapps-tasks`, `MemberJunction/bizapps-committees`.
 
@@ -12,7 +12,9 @@
 - [Committees' rebuild plan](https://github.com/MemberJunction/bizapps-committees/blob/next/plans/COLLABORATION_REBUILD_PLAN.md);
 - [How Collaboration works](../docs/HOW_THE_SYSTEM_WORKS.md): the rules, each marked built or planned;
 - [PR 8's plan](pr8-plan.md): the build plan for D26 to D35's Collaboration work, from where PR #7 leaves the app;
-- [PR 9's plan](pr9-plan.md): finishing the chat, then #8's stages and the rest of this plan, from where #8 leaves the app.
+- [PR 9's plan](pr9-plan.md): finishing the chat, from where #8 left the app (merged);
+- [PR 10's plan](pr10-plan.md): everything left in this plan, from where PR 9 leaves the app, until it's done (D51);
+- [the meetings plan](meetings-plan.md): meetings and agendas as a first-class app in bizapps-tasks (D52).
 
 ## Contents
 
@@ -85,9 +87,12 @@ The client portal is the same mechanism with a narrow aperture: a client sees a 
   - It was opened as a draft stacked on #7, with this plan's v0.5, its own plan and a new README. When #7 merged, it was retargeted to `next` and handed to the builder, as #7 was when PR #3 merged.
   - It merges once, when it's 100% done (D12), and each push gets a numbered punch list, as #7's do.
   - **It merged into `next` on 2026-09-29,** at `ad5ffef` (merge commit `bdecddc`), after the chat (Amith, D38), with CI red only for D37. The chat's remaining defects and its stages 1 to 4 moved to PR 9.
-- **PR 9,** on `claude/hopeful-bell-6ldk4v`, finishes the chat, on MJ `next` in a local workspace with no version pin for now (D39), then carries #8's stages and the rest of this plan, from [its own plan](pr9-plan.md). Ian runs it with the builder. It merges as its builder left it at `67acf8f`, with the docs brought to it, and PR 10 finishes stage 0 (D50); each later stage is its own pull request.
-  - **Where it stands** on 2026-09-29, at `67acf8f`: #8's final-review items are closed but the screenshots; the pass through the UI and the extension-model test have run, and most of what they found is fixed; closing and reopening have their own authorization (D40); a close's confirmation reads from the server what the close will do; the dialogs draw through MJ's `mj-dialog`; and after Amith's smoke test in the browser, the chat names a reply for its agent and shows its live status. [PR 9's plan § 3.6](pr9-plan.md#36-where-stage-0-stands) has the detail and what PR 10 takes.
+- **PR 9,** on `claude/hopeful-bell-6ldk4v`, finishes the chat, on MJ `next` in a local workspace with no version pin for now (D39), then carries #8's stages and the rest of this plan, from [its own plan](pr9-plan.md). Ian runs it with the builder. **It merged into `next` on 2026-09-29** at `a8304e8` (merge commit `96a19b6`), as its builder left it at `67acf8f` with the docs brought to it (D50).
+  - **Where it stopped,** at `67acf8f`: #8's final-review items are closed but the screenshots; the pass through the UI and the extension-model test have run, and most of what they found is fixed; closing and reopening have their own authorization (D40); a close's confirmation reads from the server what the close will do; the dialogs draw through MJ's `mj-dialog`; and after Amith's smoke test in the browser, the chat names a reply for its agent and shows its live status. [PR 9's plan § 3.6](pr9-plan.md#36-where-stage-0-stands) has the detail and what PR 10 takes.
   - **Amith's calls of 2026-09-29** ([§ 3.7](#37-decided-on-2026-09-29-rights-subtypes-and-home)) settle the rest of its scope: rights by authorization, never by a role's name (D40, D41); subtypes end to end, screens included (D42); Home's counts from one MJ query (D45); and the core defects it found fixed in one MemberJunction pull request (D47, D48), never worked around (D49).
+- **PR 10,** on `claude/hopeful-bell-6ldk4v`, carries everything left in this plan, from the rest of stage 0 to its last item, and Ian runs it until all of it is done (D51), from [its own plan](pr10-plan.md).
+  - **Its first task is MJ `next` with no workarounds** (D49): PR 9's own handling of the MemberJunction defects comes out against [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891), D48's pull request, which fixes them. **It merged into MJ `next` on 2026-09-30** (merge commit `d174331`), so the workspace is on `next`.
+  - **Work in other repos goes in their own pull requests,** tracked from its plan: MemberJunction's, bizapps-common#186, meetings in bizapps-tasks (D52), and Committees' C0 and C4.
 - **The MJ pull request, [MemberJunction/MJ#4789](https://github.com/MemberJunction/MJ/pull/4789),** carries A14 to A17's plan, A18's and A19's. Colin builds it (Amith, 2026-09-28), after #7 and #8 (D36). Until a release carries it, Collaboration builds on MemberJunction as released, and a follow-up pins that release.
 - **Workstream T** is its own pull request in bizapps-tasks, and **C4** its own in bizapps-committees ([§ 9](#9-sequencing)).
 
@@ -492,8 +497,8 @@ It's a deliberate door, like a stored procedure. Collaboration grants a query to
 - **D36's rules hold for those stages:** the grants that need A14 to A17 stay closed until MJ#4789, which Colin builds (Amith, 09-28), is there to build on (D39). Where this plan names PR #8 for D26 to D35's work, read PR 9's stages.
 
 **D39. For now, the work runs on MJ `next`, with no version pin.** Amith, 09-29: PR 9 and the work after it run in a local pnpm workspace where MemberJunction and the app repos (bizapps-collaboration, bizapps-common, bizapps-tasks and any other being changed) sit side by side, so everything builds against MJ's latest `next`.
-- **It extends D37 from the chat to all of the work.** No `@memberjunction/*` version is pinned or moved, and nothing waits for an MJ release. [PR 9's plan § 3.1](pr9-plan.md#31-working-on-mj-next) says how to set the workspace up.
-- **CI installs published packages,** so it stays red on the types that exist only on `next` until a release carrying them is pinned, which is [PR 9's plan's stage 5](pr9-plan.md#5-stage-5-ready-for-a-first-host). Each push is judged by the workspace's build, the unit tests and both harnesses.
+- **It extends D37 from the chat to all of the work.** No `@memberjunction/*` version is pinned or moved, and nothing waits for an MJ release. [PR 10's plan § 2.1](pr10-plan.md#21-work-on-mj-next) says how to set the workspace up.
+- **CI installs published packages,** so it stays red on the types that exist only on `next` until a release carrying them is pinned, which is [PR 10's stage 5](pr10-plan.md#7-stage-5-ready-for-a-first-host). Each push is judged by the workspace's build, the unit tests and both harnesses.
 - **Work that needs MJ#4789 can start once it merges into MJ `next`,** rather than once a release carries it, as D36 said (Amith to confirm).
 - **Each agent uses a database of its own.**
 
@@ -524,6 +529,16 @@ Amith, on PR 9's open questions.
 **D49. No workarounds.** The apps are built on MemberJunction's `next`, so a MemberJunction defect is fixed in MemberJunction and never worked around in an app, not even while the fix is on its way: no stopgap code, no hand-run step in a doc, no reaching into MJ's markup or styles, no copy of an MJ component or of MJ's private code, and no parallel path beside MJ's own. A review treats a workaround as blocking. The fix is the MJ change, with the app's workaround deleted in the same pull request and tested against the MJ branch in the workspace (Amith, 2026-09-29).
 
 **D50. PR 9 merges now, and PR 10 finishes stage 0.** PR 9 merges as its builder left it at `67acf8f`, with the docs brought to it. PR 10 takes the rest: the review's open items, the browser pass and its screenshots, § 3.5's findings in PR 9's plan, and PR 9's own handling of the MemberJunction issues, which comes out against the MemberJunction pull request under D49 (Amith, 2026-09-29).
+
+
+### 3.8 Decided on 2026-09-29: PR 10 carries the rest
+
+**D51. PR 10 carries the rest of the plan, until it's done.** Amith, when PR 9 merged: PR 10 covers everything left in this plan, from the rest of stage 0 to its last item, and the work doesn't stop until every item is done. Ian takes over bizapps-collaboration and runs it.
+- **It replaces "each stage is its own pull request"** (D38, D50 and [PR 9's plan](pr9-plan.md)): the stages keep their order and their checks inside PR 10, and it merges when every item is done.
+- **Work that belongs in another repo goes in that repo's own pull request,** tracked from [PR 10's plan](pr10-plan.md): MemberJunction's workstream A (A14 to A19 stay Colin's, in MJ#4789), bizapps-tasks' workstream T, and Committees' C0 and C4.
+- **Its first task is MJ `next` with no workarounds** (D49): PR 9's own handling of the MemberJunction defects comes out against [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891), D48's pull request, which Amith reviews and merges (merged on 2026-09-30).
+
+**D52. Meetings are a first-class app in bizapps-tasks.** Amith, the same day: bizapps-tasks gets a proper meeting model and a meeting app of its own, not only the tables Committees gives up. [The meetings plan](meetings-plan.md) designs it: the entities to their columns, the *Meetings* application, calendar sync, the AI and the screens. It's built in bizapps-tasks' own pull request as part of PR 10's work (D51), and it details [§ 8a](#8a-workstream-t-meetings-and-agendas-in-bizapps-tasks).
 
 ## 4. The model
 
@@ -919,7 +934,7 @@ A8 in the space: a staff member sees *Proposed by the Assistant* items in *Needs
 
 The contract for Committees and for private extensions. The design is the [extensibility plan](../docs/EXTENSIBILITY_PLAN.md).
 
-**Today** (PR 9): space types name server and UI drivers, and the server and the section load them. Every save of a space, a sub-space, a seat or an item runs its type's Validate hook on the server, and a named driver that isn't registered refuses the write; reactions and lifecycle subscribers run after the commit. The section draws the type's tabs and Overview cards and other apps' contributions, which only add: only a type's own UI driver replaces a built-in part. Each Overview card declares its side, Shared or Team, and a card that doesn't say is a Team card. The example types, `example-board` and `example-room`, exercise both halves. What's left is [PR 9's plan § 3.4](pr9-plan.md#34-the-extension-model-end-to-end)'s.
+**Today** (PR 9): space types name server and UI drivers, and the server and the section load them. Every save of a space, a sub-space, a seat or an item runs its type's Validate hook on the server, and a named driver that isn't registered refuses the write; reactions and lifecycle subscribers run after the commit. The section draws the type's tabs and Overview cards and other apps' contributions, which only add: only a type's own UI driver replaces a built-in part. Each Overview card declares its side, Shared or Team, and a card that doesn't say is a Team card. The example types, `example-board` and `example-room`, exercise both halves. What's left is in [PR 10's plan § 5](pr10-plan.md#5-stages-1-to-4-anchors-grants-data-reach-notes-and-pins).
 
 1. **Wire them.** Space types name server and UI driver classes. Contributions register with `RegisterClassEx` metadata and are found with `GetAllRegistrationsByMetadata` (the extensibility plan's § 6), not v0.3's `GetAllRegistrations` filtered by type code and ordered by `Sequence`. Every provider receives the space and the viewer.
 2. **Add:**
@@ -1052,7 +1067,7 @@ The server operation for an agent turn (the extensibility plan's § 8) gains fou
 
 ### B23. Meetings in spaces (D33)
 
-After workstream T ships, in a later pull request:
+After T1, in PR 10 (D51):
 - a meeting belongs to a space through `MeetingLink`;
 - a **Meetings** tab shows the space's meetings, and Collaboration's `AgendaProvider` feeds *Coming up*;
 - a meeting's chat is a `SpaceChat` whose subject is the meeting;
@@ -1137,7 +1152,7 @@ It replaces C1 to C3. Committees is rebuilt as the extensibility plan's § 10.1 
 
 ## 8a. Workstream T: meetings and agendas in bizapps-tasks
 
-Meetings and agendas are work, so they move out of Committees into bizapps-tasks, where every app gets them (D33). bizapps-tasks 1.6.0 has nothing meeting-like. Committees 1.4.0 has the model, and apart from its link to a committee it's generic:
+Meetings and agendas are work, so they move out of Committees into bizapps-tasks, where every app gets them (D33), and they're a first-class app there (D52). **[The meetings plan](meetings-plan.md) is the full design:** the entities to their columns, the *Meetings* application, and what's done when. This section is its summary. bizapps-tasks 1.6.0 has nothing meeting-like. Committees 1.4.0 has the model, and apart from its link to a committee it's generic:
 - `Meeting`: times, time zone, location type, video fields, status and a transcript URL, with an unused `CalendarEventID`;
 - `AgendaItem`: nested, with a sequence, presenter, duration, type and status;
 - `Attendance`;
@@ -1204,21 +1219,21 @@ This is the next pull request's order. Stage 1's B0 was PR #3's; its open items 
 - **Dogfooding starts after stage 3,** when a real client space can hold both bands and a shared conversation is provably bounded by its audience. Don't put a real client in a shared conversation before A6 and B2 pass [§ 10](#10-verification).
 - **Within a stage,** core and app items can run in parallel. App items that depend on a core item ship behind a feature check until the core version is pinned.
 
-**After #8: PR 9, the MJ pull request, Tasks and Committees.** D26 to D35's work runs in this order (D38). [PR 9's plan](pr9-plan.md) orders it, and [#8's plan](pr8-plan.md) details its stages.
+**After #8: PR 9, PR 10, the MJ pull requests, Tasks and Committees.** D26 to D35's work runs in this order (D38), inside PR 10 from its row down (D51). [PR 10's plan](pr10-plan.md) orders it, and [#8's plan](pr8-plan.md) details its stages.
 
 | When | MJ core (A) | Collaboration (B) | bizapps-tasks (T) | Committees (C) |
 |---|---|---|---|---|
 | **PR 9, stage 0: finish the chat** | MJ `next`, in a local workspace, with no pin (D39); the MJ pull request, built by Colin (D36); the core fixes PR 9 found, in one pull request of their own (D47, D48) | #8's final review, a pass through the UI, and the extension model tested end to end, with subtypes and their screens (D42), rights by authorization (D40, D41) and Home's query (D45) | | C0 |
-| **PR 10: the rest of stage 0 (D50)** | The core fixes' pull request, merged into MJ `next` | PR 9's open items, its own handling of the core issues taken out (D49), the browser pass and the findings | T1's schema, proposed for review | |
+| **PR 10: the rest of stage 0 (D50, D51)** | The core fixes' pull request, [MJ#4891](https://github.com/MemberJunction/MJ/pull/4891), merged into MJ `next` (done on 2026-09-30) | PR 9's open items, its own handling of the core issues taken out (D49), the browser pass and the findings | The meetings plan (D52), for review | C0 |
 | **Stage 1: the schema** | | B14, B15, B21's and B22's tables, and `DataReach` in the configuration | | |
 | **Stage 2: the server** | | B16, B17, B18, and B24's example type, with #8's plan's § 4 grants closed | T1 | |
 | **Stage 3: agents** | | B20 | T3 | |
 | **Stage 4: the screens (D16)** | | B19, B21's and B22's screens, and the walkthrough | T4 | |
 | **Stage 5: a first host** | A published release, pinned | The adversarial test and a clean install | | |
 | **After the MJ release** | A16, A14, A15, A17, then A18, released | A follow-up that pins the release and opens § 4's grants | T2, on A18 | |
-| **After T ships** | | B23, in a later pull request | | C4, in a major version |
+| **After T1** | | B23, in PR 10 | | C4, in a major version |
 
-- **PR #8 started when #7 merged,** on 2026-09-28, and merged on 2026-09-29 after the chat (D38). PR 9 started then, from the app as #8 left it, and merges as its builder left it (D50). PR 10 finishes stage 0, and each stage after it is its own pull request.
+- **PR #8 started when #7 merged,** on 2026-09-28, and merged on 2026-09-29 after the chat (D38). PR 9 started then, from the app as #8 left it, and merges as its builder left it (D50). PR 10 carries everything after it, from the rest of stage 0 down this table and on through the rest of the plan, until all of it is done (D51).
 - **The MJ pull request is Colin's** (Amith, 09-28), after #7 and #8 (D36). The stages merge with the grants that need A14 to A17 closed, and the follow-up opens them once an MJ release carries them.
 - **No outsider sees another app's data** until [§ 10](#10-verification)'s rows 13 to 24 pass. Under D36, rows 13, 15, 16 and 19 pass closed in PR 9's stages.
 

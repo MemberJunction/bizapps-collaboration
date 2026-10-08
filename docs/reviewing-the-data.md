@@ -22,6 +22,9 @@ The sample world is `COLLAB-WORLD`. The catalog is the CSV under `packages/Integ
 | harper | Harbor client | Harbor only |
 | pat | Invited guest | Committee, status Invited. Approve has a row |
 | remy | Removed guest | Discovery, status Removed. Grants nothing |
+| lena | Chapter 12's leader (L) | Chapter 12, as a client admin on the Shared band. Reaches chapter 12's members through the type's data reach, and nothing of chapter 40 |
+| marco | Chapter 40's leader (M) | Chapter 40, the same way |
+| nico | National staff (N) | Owns Chapter 12, Chapter 40 and Chapter 12 staff, on the Team band; runs the staff space's renewals query |
 
 ## Spaces
 
@@ -38,6 +41,8 @@ The committee's type is the world's own `world-committee` (`Approve`, retention 
 Field notes sits under Discovery, so seeing it walks two steps. Delivery room sits under sealed Delivery: Sam reaches it, and Casey, who only sits on Northwind, does not. Sealed branch sits under Northwind and Sealed child under it. Both are sealed and owned by Sam, and Ada has a member seat on Sealed child.
 
 The flag-ceiling role is not in this world. Core's unit tests cover the flag ceiling (`rules.test.ts`, "flag ceiling").
+
+**The chapters** (stage 2, the plan's B24) are the example-chapter type's spaces, anchored to records that have their own life in the data (D26): `chapters.csv` holds two `ExampleChapter` rows (chapter 12 in the West, chapter 40 in the East) and `chapter-members.csv` their members, three and two, with `DuesBalance` outside the type's allow-list. `anchors.csv` anchors Chapter 12 and Chapter 40 to their chapters as the primary anchor (role `chapter`), Chapter 12 outreach, a same-type sub-space that inherits Chapter 12's roster and overrides, to the same chapter without being primary, and Chapter 12 staff, a sub-space of the staff-only type `example-chapter-staff` that stands on its own roster, to chapter 12 as its primary. The chapter type grants the *Example: Chapter Renewal Reminder* action with `ChapterID` bound to the anchor; the staff type grants the *Example: Renewals by month* query the same way (`metadata-tests/space-grants/`). Lena reads chapter 12's members through the generated filter (`metadata-tests/row-level-security-filters/`), Marco chapter 40's, and the system user writes the chapters and members as an owning app's import would.
 
 ## Loading it
 
@@ -91,12 +96,13 @@ Three pieces of that host live outside this repository. None of the values below
 
 Staff accounts hold `UI` or `Developer`, so a magic link is not issued for them. They use the host's Auth0 sign-in. That callback has to include port `4217`, or the staff half of a signed-in run uses an Explorer whose callback is already registered and whose API is this one.
 
-**The example types on that host.** A host that shows the example board and room has to load their package on both sides, or the page can read a board's columns but not save them (Settings → Details, over GraphQL) and shows no form for them. The example package is built by the ordinary `pnpm run build`, which makes `dist/resolvers.js` too. Then, in that host's `mj.config.cjs`:
+**The example types on that host.** A host that shows the example board and room has to load their packages on both sides, or the page can read a board's columns but not save them (Settings → Details, over GraphQL) and shows no form for them. The three example packages are built by the ordinary `pnpm run build`, the server package's resolvers included. The host's MJAPI depends on the server package and the entities package, and its Explorer on the client package and the entities package. Then, in that host's `mj.config.cjs`:
 
-- `dynamicPackages.server` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types/server', AppName: 'mj-bizapps-collaboration' }`. The package's `/server` entry exports `RESOLVER_PATHS`, which MJAPI reads off every server package it loads, so the generated resolvers of the two subtype entities join the schema. The same entry registers the two types' server drivers, which every write to a board or a room needs, `CreateSpace` included: a type whose driver isn't registered has every write to its spaces refused.
-- `dynamicPackages.client` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types', AppName: 'mj-bizapps-collaboration' }`, so the Explorer's class manifest imports the package and registers the two forms and the UI drivers.
+- `dynamicPackages.server` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types-server', AppName: 'mj-bizapps-collaboration' }`. The package exports `RESOLVER_PATHS`, which MJAPI reads off every server package it loads, so the generated resolvers of the two subtype entities join the schema. The same package registers the two types' server drivers, which every write to a board or a room needs, `CreateSpace` included: a type whose driver isn't registered has every write to its spaces refused.
+- `dynamicPackages.client` lists `{ PackageName: '@mj-biz-apps/collaboration-example-space-types-ng', AppName: 'mj-bizapps-collaboration' }` and the same for `@mj-biz-apps/collaboration-example-space-types-entities`, so the Explorer's class manifest imports both and registers the two forms, the UI drivers and the entity classes.
+- Neither manifest leaves a package out: each example package has one entry, which holds one tier.
 
-The database needs the example schema (`pnpm run mj:migrate:examples`) and the test metadata (`pnpm run mj:push:tests`). Without the client entry the details screens fall back to a field for each column, which is the default for a subtype that has no form.
+The database needs the example schema (`pnpm run mj:migrate:examples`) and the test metadata (`pnpm run mj:push:tests`). Without the client package the details screens fall back to a field for each column, which is the default for a subtype that has no form.
 
 These are the four files the checks lean on. `files.csv` holds eleven more: Ada's Team files in the committee, Northwind, Delivery, Studio and Sealed child, and Casey's Shared `executive-roadmap.pdf` on Northwind.
 

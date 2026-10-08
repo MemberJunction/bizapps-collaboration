@@ -12,3 +12,6 @@ harper,D2000001-0000-4000-8000-000000000010,harper.member@collab-world.example,H
 pat,D2000001-0000-4000-8000-000000000011,pat.invited@collab-world.example,Pat,Invited,director,Space Participant
 remy,D2000001-0000-4000-8000-000000000012,remy.removed@collab-world.example,Remy,Removed,client,Space Participant
 dev,D2000001-0000-4000-8000-000000000013,dev.admin@collab-world.example,Dev,Admin,staff,Developer
+lena,D2000001-0000-4000-8000-000000000014,lena.leader@collab-world.example,Lena,Leader,client,Space Participant
+marco,D2000001-0000-4000-8000-000000000015,marco.leader@collab-world.example,Marco,Leader,client,Space Participant
+nico,D2000001-0000-4000-8000-000000000016,nico.national@collab-world.example,Nico,National,staff,UI

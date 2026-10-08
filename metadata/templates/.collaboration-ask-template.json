@@ -18,7 +18,7 @@
           "fields": {
             "TemplateID": "@parent:ID",
             "TypeID": "@lookup:MJ: Template Content Types.Name=Text",
-            "TemplateText": "Answer user questions using knowledge, items, and files available in the space. Never disclose or quote items from the Team band to participants who do not have access to Team items. Maintain all space boundary restrictions.",
+            "TemplateText": "Answer user questions using knowledge, items, and files available in the space. Never disclose or quote items from the Team band to participants who do not have access to Team items. Maintain all space boundary restrictions.\n\n{% if spaceData and spaceData.length %}\nYou may run these queries and views with the \"Collaboration: Run Space Data\" action, by Name:\n{% for g in spaceData %}- \"{{ g.Name }}\"{% if g.Description %}: {{ g.Description }}{% endif %}{% if g.Parameters and g.Parameters.length %} (parameters you may set in Values: {{ g.Parameters | join(', ') }}){% else %} (no parameters){% endif %}\n{% endfor %}Set only those parameters in Values. Anything else the server fixes for this space, and a value you send for it is refused.\n{% else %}\nNo queries or views are granted in this conversation, so do not call \"Collaboration: Run Space Data\".\n{% endif %}\n\n{% if typeInstructions and typeInstructions.length %}\nThis space's type adds:\n{% for line in typeInstructions %}- {{ line }}\n{% endfor %}{% endif %}",
             "Priority": 1,
             "IsActive": true
           }

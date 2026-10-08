@@ -81,7 +81,7 @@ test.describe('Frame 03 — Space Library', () => {
         await expect(drawer).toBeVisible();
         await expect(drawer.locator('.doc-prev')).toBeVisible();
         await expect(drawer.locator('.flag-box')).toContainText('2 people could be identified');
-        await expect(drawer.locator('button.btn.primary').filter({ hasText: 'Share with Northwind' })).toBeVisible();
+        await expect(drawer.locator('button.mj-btn.mj-btn--primary').filter({ hasText: 'Share with Northwind' })).toBeVisible();
 
         const screenshot = await page.screenshot({ fullPage: false, animations: 'disabled' });
         saveTestResultScreenshot('03-light.png', screenshot);

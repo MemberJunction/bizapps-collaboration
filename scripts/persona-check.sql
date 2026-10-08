@@ -34,6 +34,35 @@ INSERT INTO __mj_BizAppsCollaboration.SpaceItem (SpaceID, EntityID, RecordID, Ba
 SELECT @Ours, e.ID, N'ID|' + CONVERT(nvarchar(36), NEWID()), N'Team'
 FROM __mj.Entity e WHERE e.Name = N'MJ: Files';
 
+-- Stage 1 rows: an anchor on each space, three notes on ours (a Shared one for the space, a Team one, a Private one of the other
+-- person's), a pin of each person on ours, and a grant of the space's and of the app's
+DECLARE @FilesEntity uniqueidentifier = (SELECT TOP 1 ID FROM __mj.Entity WHERE Name = N'MJ: Files');
+DECLARE @AgentsEntity uniqueidentifier = (SELECT TOP 1 ID FROM __mj.Entity WHERE Name = N'MJ: AI Agents');
+DECLARE @OurAnchor uniqueidentifier = NEWID();
+DECLARE @SiblingAnchor uniqueidentifier = NEWID();
+INSERT INTO __mj_BizAppsCollaboration.SpaceAnchor (ID, SpaceID, SpaceTypeID, EntityID, RecordID, Role, IsPrimary, Sequence)
+VALUES
+    (@OurAnchor, @Ours, @Type, @FilesEntity, N'ID|' + CONVERT(nvarchar(36), @File), N'primary', 1, 0),
+    (@SiblingAnchor, @Sibling, @Type, @FilesEntity, N'ID|' + CONVERT(nvarchar(36), NEWID()), N'primary', 1, 0);
+DECLARE @SharedNote uniqueidentifier = NEWID();
+DECLARE @TeamNote uniqueidentifier = NEWID();
+DECLARE @PrivateNote uniqueidentifier = NEWID();
+INSERT INTO __mj_BizAppsCollaboration.SpaceNote (ID, SpaceID, Title, Body, Band, Visibility, AuthorUserID)
+VALUES
+    (@SharedNote, @Ours, N'Shared note', NULL, N'Shared', N'Space', @Other),
+    (@TeamNote, @Ours, N'Team note', NULL, N'Team', N'Space', @Other),
+    (@PrivateNote, @Ours, N'Private note', NULL, N'Team', N'Private', @Other);
+DECLARE @OurPin uniqueidentifier = NEWID();
+DECLARE @OtherPin uniqueidentifier = NEWID();
+INSERT INTO __mj_BizAppsCollaboration.SpaceMemberPin (ID, SpaceID, UserID, Kind, TargetEntityID, TargetRecordID, GrantID, Sequence)
+VALUES
+    (@OurPin, @Ours, @User, N'Record', @FilesEntity, N'ID|' + CONVERT(nvarchar(36), @File), NULL, 0),
+    (@OtherPin, @Ours, @Other, N'Record', @FilesEntity, N'ID|' + CONVERT(nvarchar(36), @File), NULL, 0);
+DECLARE @AnyAgent uniqueidentifier = (SELECT TOP 1 ID FROM __mj.AIAgent);
+IF @AnyAgent IS NOT NULL
+    INSERT INTO __mj_BizAppsCollaboration.SpaceGrant (SpaceTypeID, SpaceID, Kind, TargetEntityID, TargetRecordID, Band, IsDefault, Mode, Sequence)
+    VALUES (NULL, @Sibling, N'Agent', @AgentsEntity, CONVERT(nvarchar(450), @AnyAgent), N'Shared', 0, N'Extend', 0);
+
 DECLARE @Convo uniqueidentifier = NEWID();
 DECLARE @OtherConvo uniqueidentifier = NEWID();
 DECLARE @Detail uniqueidentifier = NEWID();
@@ -43,6 +72,11 @@ VALUES
     (@OtherConvo, N'Sibling', @Other, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Sibling));
 INSERT INTO __mj.ConversationDetail (ID, ConversationID, Role, Message, HiddenToUser, IsPinned, Status, OriginalMessageChanged, Sequence)
 VALUES (@Detail, @Convo, N'User', N'Hello', 0, 0, N'Complete', 0, 1);
+-- The conversations filter reads a conversation through the space chat that binds it to a space
+INSERT INTO __mj_BizAppsCollaboration.SpaceChat (SpaceID, ConversationID, Name, Kind, Status, ArchivedOnSpaceClose)
+VALUES
+    (@Ours, @Convo, N'General', N'General', N'Active', 0),
+    (@Sibling, @OtherConvo, N'General', N'General', N'Active', 0);
 
 DECLARE @Seen int = (
     SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) a
@@ -84,7 +118,13 @@ IF EXISTS (
         (p.RoleID = @Participant AND e.Name NOT IN (
             N'MJ_BizApps_Collaboration: Spaces',
             N'MJ_BizApps_Collaboration: Space Members',
-            N'MJ_BizApps_Collaboration: Space Items'
+            N'MJ_BizApps_Collaboration: Space Items',
+            -- the chat turn writes a participant's agent runs, steps and prompt runs as the person; the turn's own gate judges them
+            N'MJ: AI Agent Runs',
+            N'MJ: AI Agent Run Steps',
+            N'MJ: AI Prompt Runs',
+            -- the example subtype's row is the space's own: the space gate judges it (metadata-tests)
+            N'MJ_BizApps_Collaboration_Examples: Example Boards'
         ) AND (
             (p.CanCreate = 1 AND p.CreateRLSFilterID IS NULL)
             OR (p.CanUpdate = 1 AND p.UpdateRLSFilterID IS NULL)
@@ -156,6 +196,65 @@ WHERE p.RoleID = @Participant AND e.Name = N'MJ: Conversation Details';
 SET @countSql = N'SELECT @out = COUNT(*) FROM __mj.vwConversationDetails WHERE ID = @id AND ' + @pred;
 EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @Detail, @n OUTPUT;
 IF @n <> 1 THROW 50000, 'Conversation details filter missed the bound detail.', 1;
+
+-- Anchors: a participant reads the anchors of the spaces they reach, and no other space's
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Anchors';
+IF @pred IS NULL THROW 50000, 'Participant has no read filter on Space Anchors.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwSpaceAnchors WHERE ID IN (@a, @b) AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@a uniqueidentifier, @b uniqueidentifier, @out int OUTPUT', @OurAnchor, @SiblingAnchor, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Anchors filter did not return exactly the anchor of the reached space.', 1;
+
+-- Notes: the Shared note of the space, not the Team note (the guest cannot see Team), not the other person's Private note
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Notes';
+IF @pred IS NULL THROW 50000, 'Participant has no read filter on Space Notes.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwSpaceNotes WHERE ID = @id AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @SharedNote, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Notes filter missed the Shared note of the reached space.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @TeamNote, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notes filter returned a Team note to a guest.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @PrivateNote, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Notes filter returned another person''s private note.', 1;
+
+-- Pins: one's own, in spaces one reaches
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Member Pins';
+IF @pred IS NULL THROW 50000, 'Participant has no read filter on Space Member Pins.', 1;
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwSpaceMemberPins WHERE ID IN (@a, @b) AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@a uniqueidentifier, @b uniqueidentifier, @out int OUTPUT', @OurPin, @OtherPin, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Pins filter did not return exactly one''s own pin.', 1;
+
+-- Grants: a participant reads none (the server cuts a space''s configuration to what they may see)
+IF EXISTS (
+    SELECT 1 FROM __mj.EntityPermission p INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Grants' AND p.CanRead = 1
+)
+    THROW 50000, 'Participant can read Space Grants.', 1;
+
+-- Statuses: a participant reads the statuses of active types, and an archived space is out of their reach
+IF NOT EXISTS (
+    SELECT 1 FROM __mj.EntityPermission p INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Type Status' AND p.CanRead = 1
+)
+    THROW 50000, 'Participant cannot read Space Type Status.', 1;
+DECLARE @Archived uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceTypeStatus WHERE SpaceTypeID = @Type AND Visible = 0);
+IF @Archived IS NOT NULL
+BEGIN
+    UPDATE __mj_BizAppsCollaboration.Space SET StatusID = @Archived WHERE ID = @Ours;
+    IF EXISTS (SELECT 1 FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) WHERE SpaceID = @Ours)
+        THROW 50000, 'Participant reached a hidden (Archived) space.', 1;
+    UPDATE __mj_BizAppsCollaboration.Space SET StatusID = NULL WHERE ID = @Ours;
+END
 
 DECLARE @Item uniqueidentifier = (
     SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceItem WHERE SpaceID = @Ours AND Band = N'Shared'
@@ -270,5 +369,54 @@ BEGIN
         THROW 50000, 'Space Participant is missing required Allow on allowed People fields.', 1;
 END
 
-ROLLBACK TRAN;
+-- Stage 2 (B18, D28): a type's data reach. A participant seated on a chapter space reads that chapter's members through the
+-- generated filter, and no other chapter's; the allow-list leaves DuesBalance out. Runs only where the example schema and the
+-- generated filter are present (a test database after pnpm run mj:migrate:examples and mj:push:tests).
+IF OBJECT_ID('__mj_BizAppsCollabExamples.ExampleChapterMember') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM __mj.RowLevelSecurityFilter WHERE Name = N'Collaboration: Data Reach - MJ_BizApps_Collaboration_Examples: Example Chapter Members')
+BEGIN
+    DECLARE @ChapterType uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code = 'example-chapter');
+    DECLARE @ChaptersEntity uniqueidentifier = (SELECT TOP 1 ID FROM __mj.Entity WHERE Name = N'MJ_BizApps_Collaboration_Examples: Example Chapters');
+    IF @ChapterType IS NULL OR @ChaptersEntity IS NULL THROW 50000, 'The example-chapter type or the chapters entity is missing (pnpm run mj:push:tests).', 1;
+    DECLARE @ChapterA uniqueidentifier = NEWID();
+    DECLARE @ChapterB uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollabExamples.ExampleChapter (ID, Name, Status) VALUES (@ChapterA, N'Persona chapter A', N'Active'), (@ChapterB, N'Persona chapter B', N'Active');
+    DECLARE @MemberA uniqueidentifier = NEWID();
+    DECLARE @MemberB uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollabExamples.ExampleChapterMember (ID, ChapterID, FirstName, LastName, DuesBalance, Status)
+    VALUES (@MemberA, @ChapterA, N'Ann', N'A', 10, N'Active'), (@MemberB, @ChapterB, N'Bob', N'B', 20, N'Active');
+    DECLARE @ChapterSpace uniqueidentifier = NEWID();
+    INSERT INTO __mj_BizAppsCollaboration.Space (ID, SpaceTypeID, Name, OwnerID, InheritsMembership, AgentRetrieval)
+    VALUES (@ChapterSpace, @ChapterType, N'Persona chapter space', @Other, 1, N'Included');
+    INSERT INTO __mj_BizAppsCollaboration.SpaceMember (SpaceID, UserID, SpaceRoleTypeID, Band, Status) VALUES (@ChapterSpace, @User, @Guest, N'Shared', N'Active');
+    INSERT INTO __mj_BizAppsCollaboration.SpaceAnchor (ID, SpaceID, SpaceTypeID, EntityID, RecordID, Role, IsPrimary, Sequence)
+    VALUES (NEWID(), @ChapterSpace, @ChapterType, @ChaptersEntity, N'ID|' + CONVERT(nvarchar(36), @ChapterA), N'chapter', 1, 0);
 
+    SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+    FROM __mj.RowLevelSecurityFilter f
+    INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+    INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+    WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members';
+    IF @pred IS NULL THROW 50000, 'Space Participant has no filtered read on the chapter members (the generated permission is missing).', 1;
+    SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollabExamples.vwExampleChapterMembers WHERE ID = @id AND ' + @pred;
+    EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @MemberA, @n OUTPUT;
+    IF @n <> 1 THROW 50000, 'Data reach filter did not return the member of the anchored chapter.', 1;
+    EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @MemberB, @n OUTPUT;
+    IF @n <> 0 THROW 50000, 'Data reach filter returned a member of another chapter.', 1;
+
+    -- The allow-list: FirstName has an Allow row, DuesBalance has none, and the entity's field-level flag is on so the gap denies
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj.vwEntityFields ef JOIN __mj.Entity e ON ef.EntityID = e.ID
+        JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant AND efp.ReadAccess = N'Allow'
+        WHERE e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND ef.Name = N'FirstName')
+        THROW 50000, 'Space Participant has no Allow on the chapter members'' FirstName.', 1;
+    IF EXISTS (
+        SELECT 1 FROM __mj.vwEntityFields ef JOIN __mj.Entity e ON ef.EntityID = e.ID
+        JOIN __mj.EntityFieldPermission efp ON efp.EntityFieldID = ef.ID AND efp.RoleID = @Participant AND efp.ReadAccess = N'Allow'
+        WHERE e.Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND ef.Name = N'DuesBalance')
+        THROW 50000, 'Space Participant has an Allow on DuesBalance, which the type leaves out.', 1;
+    IF NOT EXISTS (SELECT 1 FROM __mj.Entity WHERE Name = N'MJ_BizApps_Collaboration_Examples: Example Chapter Members' AND EnableFieldLevelSecurity = 1)
+        THROW 50000, 'Field-level security is off on the chapter members, so the allow-list denies nothing.', 1;
+END
+
+ROLLBACK TRAN;

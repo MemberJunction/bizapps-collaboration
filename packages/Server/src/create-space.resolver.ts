@@ -13,6 +13,14 @@ export class CreateSpaceInput {
     @Field({ nullable: true })
     Description?: string;
 
+    /** The parent, for a sub-space. Absent for a top-level space. */
+    @Field({ nullable: true })
+    ParentID?: string;
+
+    /** D22: whether the sub-space's members come from its parent. Read only with a parent; default true. */
+    @Field({ nullable: true })
+    InheritsMembership?: boolean;
+
     /** The subtype's own columns, as JSON text: an object of field name to value. */
     @Field({ nullable: true })
     Details?: string;
@@ -30,7 +38,7 @@ export class CreateSpacePayload {
     ErrorMessage?: string;
 }
 
-/** Makes a top-level space of a type and seats the signed-in person as its owner, in one transaction. */
+/** Makes a space of a type, top-level or under a parent, and seats the signed-in person as its owner, in one transaction. */
 @Resolver()
 export class CreateSpaceResolver extends ResolverBase {
     @Mutation(() => CreateSpacePayload)
@@ -49,7 +57,7 @@ export class CreateSpaceResolver extends ResolverBase {
             }
         }
         try {
-            const result = await createSpace(provider, user, { TypeID: input.TypeID, Name: input.Name, Description: input.Description, Details: details });
+            const result = await createSpace(provider, user, { TypeID: input.TypeID, Name: input.Name, Description: input.Description, ParentID: input.ParentID ?? null, InheritsMembership: input.InheritsMembership ?? undefined, Details: details });
             return result.status === 'created' ? { Success: true, SpaceID: result.spaceId } : { Success: false, ErrorMessage: result.message };
         } catch (error) {
             // What went wrong is for the log: an unexpected error's own text is not for the browser

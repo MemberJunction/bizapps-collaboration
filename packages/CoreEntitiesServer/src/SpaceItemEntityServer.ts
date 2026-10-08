@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityResult, CompositeKey, EntityPermissionType, LogEr
 import { RegisterClass } from '@memberjunction/global';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { authorizeItemWrite, ResolveSpaceRules, type Band } from '@mj-biz-apps/collaboration-core';
+import { authorizeItemWrite, type Band } from '@mj-biz-apps/collaboration-core';
 import { recordItemUse, recordShare } from './library-events.js';
 import { mjBizAppsTasksTaskEntity } from '@mj-biz-apps/tasks-entities';
 import {
@@ -11,7 +11,7 @@ import {
     mjBizAppsCollaborationSpaceItemEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext, requireSystemUser } from './load-graph.js';
-import { refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import type { ItemChangeKind } from './base-space-type-server-driver.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
@@ -160,12 +160,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
             const oldValues = reading.oldValues;
 
             const driverValidation = await spaceInfo.driver.ValidateItemChange({
-                actingUser: user,
-                provider: this.ProviderToUse,
-                space: spaceInfo.space,
-                spaceType: spaceInfo.spaceType,
-                effectiveRules: ResolveSpaceRules(null, null),
-                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                 item: this,
                 kind: itemKind,
                 oldValues,
@@ -204,18 +199,15 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         }
 
         // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+        let spaceTypeCodeForSubscribers: string | null = null;
         if (decided.changed) {
             let typeCode: string | undefined;
             try {
                 const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
                 typeCode = spaceInfo.spaceType.Code;
+                spaceTypeCodeForSubscribers = typeCode ?? null;
                 await spaceInfo.driver.OnItemChanged({
-                    actingUser: user,
-                    provider: this.ProviderToUse,
-                    space: spaceInfo.space,
-                    spaceType: spaceInfo.spaceType,
-                    effectiveRules: ResolveSpaceRules(null, null),
-                    subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                    ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                     item: this,
                     kind: decided.kind,
                     oldValues: decided.oldValues,
@@ -228,6 +220,7 @@ export class SpaceItemEntityServer extends mjBizAppsCollaborationSpaceItemEntity
         if (becameShared) {
             notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                 spaceId: this.SpaceID,
+                spaceTypeCode: spaceTypeCodeForSubscribers,
                 actingUserId: user.ID,
                 event: 'AfterItemPromoted',
                 timestamp: new Date(),
@@ -476,6 +469,32 @@ async function cleanupStoredItemFile(provider: IMetadataProvider, user: UserInfo
         } catch (error) {
             LogError(`Space item storage cleanup: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    // The Library's artifact over this file (stage 1): its versions name the file row, so they and their artifact go first
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const versions = await rv.RunView<{ ID: string; ArtifactID: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `FileID = '${fileId}'`,
+            Fields: ['ID', 'ArtifactID'],
+            ResultType: 'simple',
+            MaxRows: 100,
+        }, user);
+        const artifactIds = new Set<string>();
+        for (const row of versions.Success ? versions.Results ?? [] : []) {
+            const version = await provider.GetEntityObject<BaseEntity>('MJ: Artifact Versions', user);
+            if (await version.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }])) && (await version.Delete())) artifactIds.add(row.ArtifactID);
+        }
+        for (const artifactId of artifactIds) {
+            const left = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Artifact Versions', ExtraFilter: `ArtifactID = '${artifactId}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, user);
+            if (left.Success && (left.Results?.length ?? 0) === 0) {
+                const artifact = await provider.GetEntityObject<BaseEntity>('MJ: Artifacts', user);
+                if (await artifact.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: artifactId }]))) await artifact.Delete();
+            }
+        }
+    } catch (error) {
+        LogError(`Space item artifact cleanup: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     let rowGone = false;

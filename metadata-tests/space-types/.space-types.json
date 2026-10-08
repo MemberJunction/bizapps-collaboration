@@ -12,7 +12,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -54,44 +53,11 @@
     },
     "fields": {
       "Code": "example-room",
-      "Name": "Example room",
-      "Vocabulary": "room",
-      "Discoverability": "Hidden",
-      "JoinMode": "InviteOnly",
-      "MessagingPanel": true,
-      "LibraryPanel": true,
-      "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
-      "DefaultAgentRetrieval": "Included",
-      "DefaultAllowParentAssignees": true,
-      "DefaultBand": "Team",
-      "InviteApproval": "Approve",
-      "IsActive": true,
-      "IconClass": "fa-solid fa-handshake",
-      "Color": "#6d4c41",
-      "ServerDriverClass": "example-room",
-      "UIDriverClass": "example-room",
-      "Configuration": {
-        "Children": {
-          "AllowedTypeCodes": []
-        },
-        "SpaceOverridable": [
-          "Extensions.example-room"
-        ],
-        "Extensions": {
-          "example-room": {
-            "AnchorEntities": [
-              "deals",
-              "opportunities"
-            ],
-            "BlockedPhrases": [
-              "internal margin target",
-              "confidential deal floor"
-            ]
-          }
-        }
-      },
-      "SpaceExtensionEntity": "MJ_BizApps_Collaboration_Examples: Example Rooms"
+      "Name": "Example room"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-10-01T16:27:04.187Z"
     }
   },
   {
@@ -107,7 +73,6 @@
       "MessagingPanel": true,
       "LibraryPanel": true,
       "WorkPanel": true,
-      "DefaultRetention": "Indefinite",
       "DefaultAgentRetrieval": "Included",
       "DefaultAllowParentAssignees": true,
       "DefaultBand": "Team",
@@ -116,7 +81,98 @@
       "IconClass": "fa-solid fa-vault",
       "Color": "#455a64",
       "Configuration": {
-        "PostCloseAccess": "None"
+        "Seats": {
+          "Audience": "StaffOnly"
+        }
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "C716F54B-23F7-4C6D-AD12-F7C95D33F0D0"
+    },
+    "fields": {
+      "Code": "example-chapter",
+      "Name": "Example chapter",
+      "Vocabulary": "chapter",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Shared",
+      "InviteApproval": "Approve",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-people-group",
+      "Color": "#00695c",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": [
+            "example-chapter",
+            "example-chapter-staff"
+          ]
+        },
+        "SpaceOverridable": [
+          "Chats.WhoCanStart",
+          "Labels.Bands"
+        ],
+        "Labels": {
+          "Tabs": {
+            "people": "Members"
+          },
+          "Bands": {
+            "Team": "National staff",
+            "Shared": "Chapter members"
+          }
+        },
+        "DataReach": [
+          {
+            "Entity": "MJ_BizApps_Collaboration_Examples: Example Chapter Members",
+            "Path": "ChapterID",
+            "AnchorRole": "chapter",
+            "Band": "Shared",
+            "Fields": [
+              "FirstName",
+              "LastName",
+              "Email",
+              "JoinedAt",
+              "RenewalDate",
+              "Status"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D693DEC0-A61B-45A3-9337-90D5F5CA98AC"
+    },
+    "fields": {
+      "Code": "example-chapter-staff",
+      "Name": "Example chapter staff",
+      "Vocabulary": "chapter",
+      "Discoverability": "Hidden",
+      "JoinMode": "InviteOnly",
+      "MessagingPanel": true,
+      "LibraryPanel": true,
+      "WorkPanel": true,
+      "DefaultAgentRetrieval": "Included",
+      "DefaultAllowParentAssignees": true,
+      "DefaultBand": "Team",
+      "InviteApproval": "AutoApprove",
+      "IsActive": true,
+      "IconClass": "fa-solid fa-user-tie",
+      "Color": "#37474f",
+      "Configuration": {
+        "Children": {
+          "AllowedTypeCodes": []
+        },
+        "Seats": {
+          "Audience": "StaffOnly"
+        }
       }
     }
   }

@@ -2,43 +2,29 @@
   "name": "bizapps-collaboration",
   "private": true,
   "version": "0.1.0",
-  "description": "BizApps Collaboration — shared spaces for collaborative team and outside work.",
+  "description": "BizApps Collaboration \u2014 shared spaces for collaborative team and outside work.",
   "license": "UNLICENSED",
   "devDependencies": {
-    "@memberjunction/cli": "6.1.3",
-    "@memberjunction/core": "6.1.3",
-    "@memberjunction/generic-database-provider": "6.1.3",
-    "@memberjunction/ng-shared-generic": "6.1.3",
-    "@memberjunction/sqlserver-dataprovider": "6.1.3",
-    "@memberjunction/testing-integration": "6.1.3",
+    "@memberjunction/cli": "6.2.0-edge.2",
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/generic-database-provider": "6.2.0-edge.2",
+    "@memberjunction/ng-shared-generic": "6.2.0-edge.2",
+    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.2",
+    "@memberjunction/testing-integration": "6.2.0-edge.2",
     "dotenv": "^16.4.7",
     "mssql": "12.7.0"
   },
   "scripts": {
-    "test": "node scripts/check-mj-tokens.mjs --self-test && node scripts/check-downstream-names.mjs && node --test scripts/check-downstream-names.test.mjs && node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts packages/Core/src/view-models.test.ts packages/Core/src/configuration.test.ts packages/Core/src/detail-fields.test.ts packages/Core/src/retrieval.test.ts && pnpm --filter @mj-biz-apps/collaboration-engine-base test && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec tsc -p tsconfig.test.json && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/CoreEntitiesServer/src/task-space.test.ts packages/CoreEntitiesServer/src/space-entity-server.test.ts packages/CoreEntitiesServer/src/space-agent-retrieval.test.ts packages/CoreEntitiesServer/src/space-item-entity-server.test.ts packages/CoreEntitiesServer/src/resolve-allowed-agents.test.ts packages/CoreEntitiesServer/src/resolve-space-chat-host-rules.test.ts packages/CoreEntitiesServer/src/authorizations.test.ts packages/CoreEntitiesServer/src/room-edit-grants.test.ts packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts packages/CoreEntitiesServer/src/settings-chain.test.ts packages/CoreEntitiesServer/src/resolve-space-chat-settings.test.ts packages/CoreEntitiesServer/src/space-member-entity-server.test.ts packages/CoreEntitiesServer/src/delete-driver.test.ts packages/CoreEntitiesServer/src/server-driver-registry.test.ts packages/CoreEntitiesServer/src/reactions.test.ts packages/CoreEntitiesServer/src/resolve-close-consequence.test.ts packages/CoreEntitiesServer/src/resolve-home-counts.test.ts packages/CoreEntitiesServer/src/resolve-home-lists.test.ts packages/CoreEntitiesServer/src/subtype.test.ts packages/CoreEntitiesServer/src/subtype-only-change.test.ts packages/CoreEntitiesServer/src/space-subtype-resolver.test.ts packages/CoreEntitiesServer/src/create-space.test.ts && pnpm --filter @mj-biz-apps/collaboration-integration-tests test && pnpm --filter @mj-biz-apps/collaboration-server test && pnpm --filter @mj-biz-apps/collaboration-ng-widgets test && pnpm --filter @mj-biz-apps/collaboration-ng test && pnpm --filter @mj-biz-apps/collaboration-example-space-types test",
+    "test": "node scripts/check-mj-tokens.mjs --self-test && node scripts/check-mj-inputs.mjs --self-test && node scripts/check-mj-inputs.mjs && node scripts/check-registered-exports.mjs --self-test && node scripts/check-registered-exports.mjs && node scripts/check-downstream-names.mjs && node --test scripts/check-downstream-names.test.mjs && node --experimental-strip-types --test packages/Core/src/rules.test.ts packages/Core/src/phase0.test.ts packages/Core/src/view-models.test.ts packages/Core/src/configuration.test.ts packages/Core/src/detail-fields.test.ts packages/Core/src/retrieval.test.ts packages/Core/src/file-types.test.ts packages/Core/src/grants.test.ts packages/Core/src/statuses.test.ts packages/Core/src/effective-configuration.test.ts packages/Core/src/bindings.test.ts packages/Core/src/turn-tools.test.ts && pnpm --filter @mj-biz-apps/collaboration-engine-base test && pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec tsc -p tsconfig.test.json && pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node --test packages/CoreEntitiesServer/src/load-graph.test.ts packages/CoreEntitiesServer/src/upload-space-file.test.ts packages/CoreEntitiesServer/src/stage1-gates.test.ts packages/CoreEntitiesServer/src/stage1-servers.test.ts packages/CoreEntitiesServer/src/collaboration-file-store.test.ts packages/CoreEntitiesServer/src/file-root-task.test.ts packages/CoreEntitiesServer/src/task-space.test.ts packages/CoreEntitiesServer/src/space-entity-server.test.ts packages/CoreEntitiesServer/src/space-agent-retrieval.test.ts packages/CoreEntitiesServer/src/space-item-entity-server.test.ts packages/CoreEntitiesServer/src/resolve-allowed-agents.test.ts packages/CoreEntitiesServer/src/resolve-space-chat-host-rules.test.ts packages/CoreEntitiesServer/src/authorizations.test.ts packages/CoreEntitiesServer/src/room-edit-grants.test.ts packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts packages/CoreEntitiesServer/src/space-configuration.test.ts packages/CoreEntitiesServer/src/space-lifecycle-subscribers.test.ts packages/CoreEntitiesServer/src/resolve-bindings.test.ts packages/CoreEntitiesServer/src/grant-operations.test.ts packages/CoreEntitiesServer/src/resolve-space-chat-settings.test.ts packages/CoreEntitiesServer/src/space-member-entity-server.test.ts packages/CoreEntitiesServer/src/delete-driver.test.ts packages/CoreEntitiesServer/src/server-driver-registry.test.ts packages/CoreEntitiesServer/src/reactions.test.ts packages/CoreEntitiesServer/src/resolve-close-consequence.test.ts packages/CoreEntitiesServer/src/resolve-home-counts.test.ts packages/CoreEntitiesServer/src/resolve-home-lists.test.ts packages/CoreEntitiesServer/src/subtype.test.ts packages/CoreEntitiesServer/src/subtype-only-change.test.ts packages/CoreEntitiesServer/src/space-subtype-resolver.test.ts packages/CoreEntitiesServer/src/create-space.test.ts && pnpm --filter @mj-biz-apps/collaboration-integration-tests test && pnpm --filter @mj-biz-apps/collaboration-server test && pnpm --filter @mj-biz-apps/collaboration-ng-widgets test && pnpm --filter @mj-biz-apps/collaboration-ng test && pnpm --filter @mj-biz-apps/collaboration-example-space-types-server test && pnpm --filter @mj-biz-apps/collaboration-example-space-types-ng test",
     "test:integration": "pnpm run test:integration:server && pnpm run test:integration:client",
     "test:integration:server": "node test-harnesses/integration.mjs 2>&1 | tee integration-server.log && node scripts/assert-check-count.mjs integration-server.log server",
     "test:integration:client": "node test-harnesses/integration-client.mjs 2>&1 | tee integration-client.log && node scripts/assert-check-count.mjs integration-client.log client",
-    "build": "pnpm --filter \"./packages/*\" run build",
+    "build": "pnpm --filter \"./packages/*\" --filter \"./packages/ExampleSpaceTypes/*\" run build",
     "mj:migrate": "mj migrate --schema __mj_BizAppsCollaboration",
     "mj:migrate:examples": "mj migrate --schema __mj_BizAppsCollabExamples --dir packages/ExampleSpaceTypes/migrations",
     "mj:push": "mj sync push --dir=metadata",
-    "mj:push:tests": "mj sync push --dir=metadata-tests --include=entity-permissions,entity-fields && mj sync push --dir=metadata-tests --include=agents,space-types",
+    "mj:push:tests": "mj sync push --dir=metadata-tests --include=row-level-security-filters,entity-permissions,entity-fields,entity-field-permissions,entities,queries,actions && mj sync push --dir=metadata-tests --include=agents,space-types,space-type-statuses,space-grants",
     "mj:standards": "mj standards check",
     "test:e2e": "pnpm --filter @mj-biz-apps/collaboration-e2e test"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/node": "24.10.11",
-      "@angular/animations": "21.2.22",
-      "@angular/common": "21.2.22",
-      "@angular/compiler": "21.2.22",
-      "@angular/compiler-cli": "21.2.22",
-      "@angular/core": "21.2.22",
-      "@angular/forms": "21.2.22",
-      "@angular/platform-browser": "21.2.22",
-      "@angular/router": "21.2.22",
-      "@angular/cdk": "21.2.14"
-    }
   }
 }

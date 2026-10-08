@@ -15,8 +15,9 @@ export interface SettingsSpaceRow {
     BackgroundImageURL?: string | null;
     InheritsMembership?: boolean;
     AgentRetrieval?: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | null;
-    Retention?: 'Month' | 'Year' | 'Indefinite' | null;
     ClosedAt?: Date | string | null;
+    /** The name of the space's effective status (stage 1), when the caller knows it; else Closed or Active is read from ClosedAt. */
+    StatusName?: string | null;
 }
 
 /** What the screen shows about the space's type. */
@@ -24,8 +25,6 @@ export interface SettingsTypeInfo {
     name: string;
     icon: string | null;
     color: string | null;
-    /** The type's own default retention, used when the space has none. */
-    defaultRetention: 'Month' | 'Year' | 'Indefinite' | null;
 }
 
 
@@ -41,17 +40,14 @@ export function buildSettingsModel(space: SettingsSpaceRow, type: SettingsTypeIn
         backgroundImageUrl: space.BackgroundImageURL || '',
         inheritsMembership: space.InheritsMembership === true,
         agentRetrieval: space.AgentRetrieval || 'Included',
-        // A space with no retention of its own uses its type's default. Show that, and never write it back as a choice.
-        retention: space.Retention ?? '',
-        typeDefaultRetention: type.defaultRetention ?? 'Indefinite',
-        status: space.ClosedAt ? 'Closed' : 'Active',
+        status: space.StatusName || (space.ClosedAt ? 'Closed' : 'Active'),
     };
 }
 
 /** The columns a save writes: only those whose value the person changed from what the screen showed them. Keys are the entity's own. */
 export type SettingsChanges = Partial<Pick<
     mjBizAppsCollaborationSpaceEntity,
-    'Name' | 'Description' | 'IconClass' | 'Color' | 'BackgroundImageURL' | 'InheritsMembership' | 'AgentRetrieval' | 'Retention'
+    'Name' | 'Description' | 'IconClass' | 'Color' | 'BackgroundImageURL' | 'InheritsMembership' | 'AgentRetrieval'
 >>;
 
 export function changedSettings(baseline: SpaceSettingsModel, edited: SpaceSettingsModel): SettingsChanges {
@@ -63,7 +59,6 @@ export function changedSettings(baseline: SpaceSettingsModel, edited: SpaceSetti
     if (edited.backgroundImageUrl !== baseline.backgroundImageUrl) changes.BackgroundImageURL = edited.backgroundImageUrl || null;
     if (edited.inheritsMembership !== baseline.inheritsMembership) changes.InheritsMembership = edited.inheritsMembership;
     if (edited.agentRetrieval !== baseline.agentRetrieval) changes.AgentRetrieval = edited.agentRetrieval as mjBizAppsCollaborationSpaceEntity['AgentRetrieval'];
-    if (edited.retention !== baseline.retention) changes.Retention = edited.retention === '' ? null : (edited.retention as mjBizAppsCollaborationSpaceEntity['Retention']);
     return changes;
 }
 
@@ -76,7 +71,6 @@ export function applySettingsChanges(target: Required<SettingsChanges>, changes:
     if (changes.BackgroundImageURL !== undefined) target.BackgroundImageURL = changes.BackgroundImageURL;
     if (changes.InheritsMembership !== undefined) target.InheritsMembership = changes.InheritsMembership;
     if (changes.AgentRetrieval !== undefined) target.AgentRetrieval = changes.AgentRetrieval;
-    if (changes.Retention !== undefined) target.Retention = changes.Retention;
 }
 
 /**

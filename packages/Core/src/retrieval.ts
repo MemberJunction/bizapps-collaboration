@@ -1,10 +1,12 @@
 /**
- * Retrieval rules by audience for Collaboration agents and chats.
- * Pure TypeScript — no Angular, no SQL, importable from any environment.
- * Follows plans/plan.md B2 and EXTENSIBILITY_PLAN.md § 8.
+ * Retrieval rules by audience for Collaboration agents and chats (the plan's B2, the extensibility plan's § 8).
+ * Pure TypeScript: no Angular, no SQL, importable from any environment. The server's `resolveSpaceAgentRetrieval` applies the
+ * same rules over the rows it reads, and `fnCollaborationCommonAccess` is the SQL half of the intersection: the spaces every
+ * listed user reaches, with CanSeeTeam only when every one of them can. Keep the three in step; the rules are listed once, on
+ * `effectiveRetrievalScope`.
  */
 
-import type { Band, SpaceNode } from './rules.js';
+import { type Band, type SpaceNode, spaceAllowsAgentRetrieval } from './rules.ts';
 
 export type RetrievalMode = 'Private' | 'Shared' | 'Caller' | 'Intersection';
 
@@ -97,8 +99,12 @@ function buildDescendantSet(spaces: readonly SpaceNode[], anchorSpaceId: string)
  *    For each allowed space, if EVERY principal in the audience can see Team band in that space,
  *    its effective band is 'Team'. If ANY principal cannot see Team, the band is 'Shared'.
  * 6. Space AgentRetrieval settings:
- *    - 'ExcludedEntirely': omitted from allowed spaces.
+ *    - 'ExcludedEntirely': omitted from allowed spaces, and so is everything under it.
  *    - 'ExcludedFromParentScope': omitted if queried from an ancestor space (not the space itself).
+ *    The walk to the root that applies these stops at a space it has seen, so a cycle in the parent links cannot hang it.
+ * 7. Closure (stage 1's statuses): a space whose effective status allows no agent retrieval is omitted. A space closed under a
+ *    type with no statuses still allows it, as `effectiveStatusReach` says; a status such as Archived that says otherwise keeps
+ *    the space out, exactly as the server's walk does.
  */
 export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): EffectiveRetrievalScopeResult {
     const { audience, spaces, principalReaches } = input;
@@ -206,12 +212,18 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
         if (spaceNode.agentRetrieval === 'ExcludedEntirely') {
             continue;
         }
+        // Rule 7: a status that allows no agent retrieval keeps the space out
+        if (!spaceAllowsAgentRetrieval(spaceNode)) {
+            continue;
+        }
 
-        // Walk ancestors to check ExcludedFromParentScope or ExcludedEntirely
+        // Walk ancestors to check ExcludedFromParentScope or ExcludedEntirely; a space seen twice ends the walk (a cycle)
         let excludedOnPath = false;
         let curr: SpaceNode | undefined = spaceNode;
-        while (curr) {
+        const walked = new Set<string>();
+        while (curr && !walked.has(normalizeId(curr.id))) {
             const currId = normalizeId(curr.id);
+            walked.add(currId);
             if (curr.agentRetrieval === 'ExcludedEntirely') {
                 excludedOnPath = true;
                 break;

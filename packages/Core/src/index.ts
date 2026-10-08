@@ -1,6 +1,5 @@
 export {
     agentMayQuote,
-    isAgentPostCloseAccessPermitted,
     authorizeItemWrite,
     authorizeTaskAssignment,
     mayFileRootTask,
@@ -17,8 +16,11 @@ export {
     lockoutMessage,
     magicLinkBlocksAccount,
     resourcesFromRoster,
-    isPostCloseAccessPermitted,
     membershipReaches,
+    spaceAllowsAgentRetrieval,
+    spaceIsReadOnly,
+    spaceIsVisible,
+    spaceReach,
     rosterActions,
     rosterBySeat,
     parentCreatesCycle,
@@ -26,7 +28,6 @@ export {
     promotionStamps,
     strandFromSavedRow,
     refuseInvite,
-    retentionDeadline,
     visibleSpaces,
     wouldStrandLastOwner,
 } from './rules.js';
@@ -41,7 +42,6 @@ export type {
     MemberSnapshot,
     PromotionDecision,
     RosterAction,
-    Retention,
     RoleFlags,
     RosterGroup,
     RosterStop,
@@ -79,8 +79,6 @@ export {
     DEFAULT_COLLABORATION_SETTINGS,
     MissingAppSettingsError,
     refuseChildType,
-    ResolveCollaborationSettings,
-    ResolveSpaceRules,
     ValidateCollaborationSettings,
     validateSpaceConfiguration,
     validateSpaceTypeConfiguration,
@@ -92,9 +90,71 @@ export type {
     ISpaceConfiguration,
     ISpaceRules,
     ISpaceTypeConfiguration,
+    DataReachDeclaration,
     ResolveCollaborationSettingsParams,
     ResolvedCollaborationSettings,
 } from './configuration.js';
+export { typeSeatsAudience, validateDataReachDeclaration } from './configuration.js';
+export {
+    ResolveSpaceConfiguration,
+    CutConfigurationForViewer,
+    GrantsForViewer,
+    RulesOf,
+    sameTypeRun,
+} from './effective-configuration.js';
+export {
+    SPACE_BINDING_FIELDS,
+    USER_BINDING_FIELDS,
+    anchorRolesNeeded,
+    bindingSource,
+    bindingSources,
+    boundNames,
+    needsCallerPerson,
+    readSettingsPath,
+    refuseClientValues,
+} from './bindings.js';
+export type { BindingSource, SpaceBindingField, UserBindingField } from './bindings.js';
+export type {
+    ConfigurationLevel,
+    ConfigurationLevelInput,
+    ConfigurationViewer,
+    EffectiveConfigurationLink,
+    EffectiveGrant,
+    EffectiveSpaceConfiguration,
+    GrantMode,
+    GrantRowInput,
+    ResolveSpaceConfigurationInput,
+    SeatsAudience,
+    SpaceLevelInput,
+} from './effective-configuration.js';
+export {
+    GRANT_KINDS,
+    GRANT_KIND_ENTITY,
+    AGENT_LIMIT_NAMES,
+    isGrantKind,
+    parseBindingExpression,
+    validateSpaceGrantBindings,
+    validateAgentGrantSettings,
+    type GrantKind,
+    type BindingExpression,
+    type SpaceGrantBindings,
+    type AgentGrantSettings,
+    type AgentLimitName,
+    type AgentDefinitionForGrant,
+} from './grants.js';
+export {
+    SHIPPED_STATUSES,
+    defaultStatus,
+    effectiveStatusReach,
+    statusChangeRefusal,
+    reachableStatuses,
+    statusAllowsWrites,
+    validateStatusList,
+    type SpaceStatusReach,
+    type SpaceTypeStatusAttributes,
+    type StatusChangeRefusal,
+    type StatusChangeRefusalCode,
+} from './statuses.js';
 export {
     effectiveRetrievalScope,
     agentMayQuoteCandidate,
@@ -119,3 +179,6 @@ export {
     type DetailFieldShape,
     type FieldSectionShape,
 } from './detail-fields.js';
+export { mimeTypeForFileName } from './file-types.js';
+export { agentGrantFor, agentRunSettingsFor, audienceOfConversationKind, turnToolsFor } from './turn-tools.js';
+export type { AgentRunSettings, ChatAudience, TurnTools, WithheldAction } from './turn-tools.js';
