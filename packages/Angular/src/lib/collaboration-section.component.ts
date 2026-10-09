@@ -47,7 +47,7 @@ import {
     mjBizAppsCollaborationItemUseEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
-import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
+import { CollaborationEngineBase, PEOPLE_ENTITY, ResolvePersonIDForUser } from '@mj-biz-apps/collaboration-engine-base';
 import {
     TaskKanbanComponent,
     TaskGanttComponent,
@@ -2022,20 +2022,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         try {
             const md = this.ProviderToUse;
             const rv = new RunView(this.RunViewToUse);
-            const peopleEntity = md.EntityByName('MJ_BizApps_Common: People');
+            const peopleEntity = md.EntityByName(PEOPLE_ENTITY);
             if (peopleEntity && md.CurrentUser?.ID) {
                 try {
-                    const personRes = await rv.RunView<{ ID: string }>({
-                        EntityName: 'MJ_BizApps_Common: People',
-                        ExtraFilter: `LinkedUserID = '${md.CurrentUser.ID}'`,
-                        ResultType: 'simple',
-                        MaxRows: 1,
-                    });
-                    if (personRes?.Success && personRes.Results?.[0]) {
-                        this.currentPersonId = personRes.Results[0].ID;
-                    } else {
-                        this.currentPersonId = '';
-                    }
+                    this.currentPersonId = (await ResolvePersonIDForUser(md.CurrentUser, md)) ?? '';
                 } catch (err) {
                     LogError('Failed to load Person for CurrentUser: ' + (err instanceof Error ? err.message : String(err)));
                     this.currentPersonId = '';

@@ -66,3 +66,4 @@ export { createSpaceConversation, evaluateCanStartSpaceConversation } from './cr
 export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
 
 
+export { IsPeopleEntity, PEOPLE_ENTITY, ResolvePersonIDForUser, ResolveUserIDForPerson, ResolveUserIDsForPeople } from '@mj-biz-apps/collaboration-engine-base';

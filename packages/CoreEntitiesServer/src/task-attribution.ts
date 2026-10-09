@@ -1,11 +1,11 @@
-import { BaseEntity, BaseEntityEvent, BaseEntityResult, LogError, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, BaseEntityResult, LogError, LogStatus, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { MJEventType, MJGlobal, RegisterClass, type MJEvent } from '@memberjunction/global';
+import { ResolvePersonIDForUser } from '@mj-biz-apps/collaboration-engine-base';
 import { mjBizAppsTasksTaskAssignmentEntity, mjBizAppsTasksTaskCommentEntity, mjBizAppsTasksTaskDecisionEntity } from '@mj-biz-apps/tasks-entities';
 import { requireSystemUser } from './load-graph.js';
 import { assigneeSeatMessage, filedTask } from './task-space.js';
 import { asMetadata } from './uuid.js';
 
-const PEOPLE = 'MJ_BizApps_Common: People';
 const PARTICIPANT_ROLE_ID = 'AAF434FD-EF58-4857-854E-2607ACAF763B';
 
 /**
@@ -103,15 +103,7 @@ export async function callerPersonId(entity: BaseEntity, user: UserInfo): Promis
         const system = await requireSystemUser(entity);
         const provider = asMetadata(entity.ProviderToUse);
         if (!provider) return null;
-        const view = RunView.FromMetadataProvider(provider);
-        const rows = await view.RunView<{ ID: string }>({
-            EntityName: PEOPLE,
-            ExtraFilter: `LinkedUserID = '${user.ID}'`,
-            Fields: ['ID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        return rows.Success ? rows.Results?.[0]?.ID ?? null : null;
+        return await ResolvePersonIDForUser(user, provider, system);
     } catch (error) {
         LogError(`Task person lookup: ${error instanceof Error ? error.message : String(error)}`);
         return null;
