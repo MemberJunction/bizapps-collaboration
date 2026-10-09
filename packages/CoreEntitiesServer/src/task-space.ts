@@ -1,12 +1,12 @@
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { authorizeTaskAssignment, type Band } from '@mj-biz-apps/collaboration-core';
+import { IsPeopleEntity, ResolveUserIDForPerson } from '@mj-biz-apps/collaboration-engine-base';
 import { mjBizAppsTasksTaskAssignmentEntity } from '@mj-biz-apps/tasks-entities';
 import { loadMemberReach, mayAdminister, requireSystemUser } from './load-graph.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const TASKS = 'MJ_BizApps_Tasks: Tasks';
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
-const PEOPLE = 'MJ_BizApps_Common: People';
 const USERS = 'MJ: Users';
 const SEAT_FIELDS = ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID'] as const;
 
@@ -111,22 +111,12 @@ async function spaceItemFor(provider: IMetadataProvider, reader: UserInfo, taskI
 }
 
 async function assigneeUser(provider: IMetadataProvider, reader: UserInfo, entityId: string, recordId: string): Promise<string | null> {
-    const people = provider.EntityByName(PEOPLE);
     const users = provider.EntityByName(USERS);
     const raw = recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId;
     const record = parseUuid(raw);
     const entity = parseUuid(entityId);
     if (!record || !entity) return null;
     if (users && entity === parseUuid(users.ID)) return record;
-    if (!people || entity !== parseUuid(people.ID)) return null;
-    const view = RunView.FromMetadataProvider(provider);
-    const rows = await view.RunView<{ LinkedUserID: string | null }>({
-        EntityName: PEOPLE,
-        ExtraFilter: `ID = '${record}'`,
-        Fields: ['LinkedUserID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    }, reader);
-    if (!rows.Success) throw new Error(rows.ErrorMessage ?? 'the person could not be read');
-    return parseUuid(rows.Results?.[0]?.LinkedUserID);
+    if (!IsPeopleEntity(provider.EntityByID(entity))) return null;
+    return parseUuid(await ResolveUserIDForPerson(record, provider, reader));
 }
