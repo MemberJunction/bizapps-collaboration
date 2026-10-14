@@ -79,6 +79,7 @@ what it wrote (a pin, a note, a star), so the dark pass starts from the world as
 
 - `SHOT_DEBUG=1` prints the GraphQL calls a shot makes and the page's distinct console errors (on a failure, its URL too), so a step that changed nothing visible can be read in the run's output. A UI-only user always shows MJ's `[Cache] … lacks read permission` warnings; they are counted, not failures.
 - `STAFF_SIGNIN_MINUTES` (default 10) is how long `--save-staff-session` keeps its window open for the sign-in.
+- A screen that makes something and removes it again (54's pin, 58's note, 59's star) captures itself with `captureNow` before its cleanup; the runner takes its own picture only for a step that did not.
 
 
 `--who guest|staff|all` (default `all`), `--theme light|dark|both` (default `both`), `--only <name>` for one screen. A screen whose assertion fails is reported and the run exits 1.

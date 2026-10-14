@@ -77,6 +77,17 @@ async function ensureSamplePdf(page) {
     await page.getByText(SAMPLE_NAME).first().waitFor({ state: 'visible', timeout: 30000 });
 }
 
+/**
+ * A step that must clean up after itself (a pin, a note, a star it made) captures its screen here, before the cleanup; the
+ * runner then leaves that capture alone instead of taking its own at the end of the step.
+ */
+async function captureNow(page, name) {
+    await page.waitForTimeout(400);
+    const theme = await page.evaluate(() => localStorage.getItem('mj-theme'));
+    await page.screenshot({ path: join(here, `${name}-${theme}.png`) });
+    page.__captured = true;
+}
+
 /** The screens, in the plan's order (pr10-plan § 4's table). Each step drives the page and says what the shot must show. */
 const SHOTS = [
     {
@@ -369,9 +380,11 @@ const SHOTS = [
             await page.goto(`${EXPLORER}/app/collaboration/Spaces?view=home`);
             await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
             await page.getByText('My Pins').first().click();
+            // The row itself, inside the list: the last space's view stays in the page and carries the note's title too
+            await page.locator('.home-list-wrap .hl-row', { hasText: 'Kickoff recap' }).first().waitFor({ state: 'visible', timeout: 20000 });
             await assertScreen(page, '54', { present: ['Your pins, across your spaces', 'Kickoff recap', 'Northwind relationship'] });
             await page.waitForTimeout(400);
-            await page.screenshot({ path: join(here, '54-staff-home-my-pins-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            await captureNow(page, '54-staff-home-my-pins');
             // The pin 53 made is removed here, so the next pass starts from the world as loaded
             await page.goto(spaceUrl(NORTHWIND, 'notes'));
             const note = page.locator('article.note', { hasText: 'Kickoff recap' }).first();
@@ -382,6 +395,7 @@ const SHOTS = [
             await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
             await page.getByText('My Pins').first().click();
             await page.getByText('Your pins, across your spaces').first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.locator('.home-list-wrap .hl-row', { hasText: 'Kickoff recap' }).waitFor({ state: 'hidden', timeout: 20000 });
         },
     },
     {
@@ -427,7 +441,7 @@ const SHOTS = [
             await note.waitFor({ state: 'visible', timeout: 20000 });
             await assertScreen(page, '58', { present: ['Leader quick note', 'Welcome chapter leaders'], absent: ['Share with'] });
             await page.waitForTimeout(400);
-            await page.screenshot({ path: join(here, '58-leader-note-quick-add-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            await captureNow(page, '58-leader-note-quick-add');
             // Every note of that title goes (a run that failed earlier may have left one), so the next pass starts clean
             for (let left = await page.locator('article.note', { hasText: 'Leader quick note' }).count(); left > 0; left--) {
                 const target = page.locator('article.note', { hasText: 'Leader quick note' }).first();
@@ -446,7 +460,7 @@ const SHOTS = [
             await page.locator('button[aria-label="Unstar this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
             await assertScreen(page, '59', { present: ['Northwind relationship'] });
             await page.waitForTimeout(400);
-            await page.screenshot({ path: join(here, '59-guest-space-star-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            await captureNow(page, '59-guest-space-star');
             await page.locator('button[aria-label="Unstar this space"]').first().click();
             await page.locator('button[aria-label="Star this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
         },
@@ -511,9 +525,10 @@ async function main() {
                         await page.getByText('All Spaces').first().waitFor({ state: 'visible', timeout: 60000 });
                     }
                     await shot.run(page);
-                    await page.waitForTimeout(400);
-                    const file = join(here, `${shot.name}-${theme}.png`);
-                    await page.screenshot({ path: file });
+                    if (!page.__captured) {
+                        await page.waitForTimeout(400);
+                        await page.screenshot({ path: join(here, `${shot.name}-${theme}.png`) });
+                    }
                     console.log(`ok   ${shot.name}-${theme}.png (item ${shot.item})${errors.length ? `  page errors: ${errors.length}` : ''}`);
                     if (process.env.SHOT_DEBUG && errors.length) console.log(`     page errors (${errors.length}):\n       ${[...new Set(errors.map((e) => e.split('\n')[0].slice(0, 200)))].slice(0, 40).join('\n       ')}`);
                 } catch (error) {

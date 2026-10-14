@@ -1822,6 +1822,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public homeInvitations: HomeInvitationGraphQL[] = [];
     public homeOpenTaskList: HomeOpenTaskGraphQL[] = [];
     public isLoadingHomeList = false;
+    /** The latest Home list read; a read that was superseded (the other list, or a reload) does not clear the flag or set the rows. */
+    private homeListLoadToken = 0;
     public homeListError = '';
 
     private homeCountOf(which: 'tasks' | 'approvals' | 'files' | 'spaces'): { count: number; singular: string; plural: string } {
@@ -1894,11 +1896,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** Reads the rows behind the counts. A failed read says so in the list, with a way to try again. */
     public async loadHomeLists(): Promise<void> {
+        const token = ++this.homeListLoadToken;
         this.isLoadingHomeList = true;
         this.homeListError = '';
         this.RefreshView();
         try {
             const res = await new CollaborationClient(this.graphQLExecutor).GetHomeLists();
+            if (token !== this.homeListLoadToken) return;
             if (!res.Success || !res.Invitations || !res.OpenTasks) {
                 this.homeListError = `The list could not be read: ${res.ErrorMessage ?? 'the answer was incomplete'}`;
                 this.logOnce('home-lists', this.homeListError);
@@ -1908,11 +1912,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.refreshHomeListRows();
             }
         } catch (err) {
+            if (token !== this.homeListLoadToken) return;
             this.homeListError = `The list could not be read: ${err instanceof Error ? err.message : String(err)}`;
             this.logOnce('home-lists', this.homeListError);
         } finally {
-            this.isLoadingHomeList = false;
-            this.RefreshView();
+            if (token === this.homeListLoadToken) {
+                this.isLoadingHomeList = false;
+                this.RefreshView();
+            }
         }
     }
 
@@ -2336,6 +2343,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.rawSpaces = spacesRes.Results;
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                     void this.loadHomeCounts();
+                    // The pins count is the viewer's own list, read here so Home shows it before the list is opened
+                    void this.loadHomePins();
 
                     const params = this._pendingQueryParams ?? this.GetQueryParams();
                     this._pendingQueryParams = null;
@@ -2868,6 +2877,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** *My pins* on Home: the viewer's pins across the spaces they reach, each named by its space. */
     public async loadHomePins(): Promise<void> {
         if (!this.currentUser) return;
+        const token = ++this.homeListLoadToken;
         this.isLoadingHomeList = true;
         this.homeListError = '';
         this.RefreshView();
@@ -2880,6 +2890,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ResultType: 'simple',
                 MaxRows: 200,
             });
+            if (token !== this.homeListLoadToken) return;
             if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
             const noteIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
             const noteTitles = new Map<string, string>();
@@ -2917,6 +2928,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     itemNames.set(fileId, { title: names.get(fileId) ?? 'A file', itemId: item.ID });
                 }
             }
+            if (token !== this.homeListLoadToken) return;
             this.homePins = (res.Results ?? []).map((pin): PinModel => {
                 const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, pin.SpaceID));
                 const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
@@ -2928,11 +2940,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
             this.refreshHomeListRows();
         } catch (err) {
+            if (token !== this.homeListLoadToken) return;
             this.homeListError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
             this.logOnce('home-pins', this.homeListError);
         } finally {
-            this.isLoadingHomeList = false;
-            this.RefreshView();
+            if (token === this.homeListLoadToken) {
+                this.isLoadingHomeList = false;
+                this.RefreshView();
+            }
         }
     }
 
