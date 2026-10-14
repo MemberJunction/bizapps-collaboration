@@ -1,7 +1,7 @@
 // Takes PR 10's screenshots in Explorer with Playwright, as the people the plan names, in light and dark, and asserts what each
 // screen must show before it saves the shot. See README.md for the setup.
 //
-//   node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs [--who guest|leader|staff|all] [--theme light|dark|both] [--only <name>]
+//   node --env-file=.env docs/screenshots/pr10/take-screenshots.mjs [--who guest|leader|staff|all] [--theme light|dark|both] [--only <name>[,<name>…]]
 //   node docs/screenshots/pr10/take-screenshots.mjs --save-staff-session     (opens a browser: sign in once as staff)
 //
 // The guest is a seated outside member who signs in by magic link; the script mints the session itself. Staff sign in with the
@@ -272,6 +272,11 @@ const SHOTS = [
         name: '33-staff-chapter-members-entity', who: 'staff', item: 'B18, 14',
         run: async (page) => {
             await page.goto(listUrl(CHAPTER_MEMBERS));
+            // MJ Explorer: a dynamic entity list opened by URL while the workspace restores a record tab (31's) shows "0 records"
+            // and makes no read for the entity; a reload reads it. Seen 2026-10-14 in the whole set, never when 33 runs alone.
+            const grid = page.getByText('Ivy').first();
+            const shown = await grid.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+            if (!shown) { await page.reload(); }
             await assertScreen(page, '33', { present: ['Ivy', 'Lou'] });
         },
     },
@@ -483,7 +488,8 @@ async function saveStaffSession() {
 async function main() {
     if (args.includes('--save-staff-session')) return saveStaffSession();
     mkdirSync(here, { recursive: true });
-    const wanted = SHOTS.filter((s) => (who === 'all' || s.who === who) && (!only || s.name === only));
+    const onlyNames = only ? only.split(',').map((n) => n.trim()).filter(Boolean) : [];
+    const wanted = SHOTS.filter((s) => (who === 'all' || s.who === who) && (!onlyNames.length || onlyNames.includes(s.name)));
     const needsGuest = wanted.some((s) => s.who === 'guest');
     const needsLeader = wanted.some((s) => s.who === 'leader');
     const needsStaff = wanted.some((s) => s.who === 'staff');
@@ -514,7 +520,7 @@ async function main() {
                 const errors = [];
                 page.on('pageerror', (e) => errors.push(String(e)));
                 // SHOT_DEBUG=1 prints the GraphQL calls a shot makes, for a step that does nothing visible
-                if (process.env.SHOT_DEBUG) page.on('request', (request) => { const body = request.postData() ?? ''; if (/graphql|4119/.test(request.url()) && body) console.log(`     gql ${body.replace(/\s+/g, ' ').slice(0, 160)}`); });
+                if (process.env.SHOT_DEBUG) page.on('request', (request) => { const body = request.postData() ?? ''; if (/graphql|4119/.test(request.url()) && body) console.log(`     gql ${body.replace(/\s+/g, ' ').slice(0, 400)}`); });
                 // A failed shot prints what the page logged as errors, so the cause is in the run's output and not only in the picture
                 page.on('console', (message) => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
                 try {
