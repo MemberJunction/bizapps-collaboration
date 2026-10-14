@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { applySettingsChanges, buildSettingsModel, changedSettings, SettingsSession, type SettingsSpaceRow, type SettingsTypeInfo } from './settings-model.ts';
 
-const yearType: SettingsTypeInfo = { name: 'Project', icon: 'fa-solid fa-diagram-project', color: '#123456', defaultRetention: 'Year' };
+const yearType: SettingsTypeInfo = { name: 'Project', icon: 'fa-solid fa-diagram-project', color: '#123456' };
 
 function space(overrides: Partial<SettingsSpaceRow> = {}): SettingsSpaceRow {
     return {
@@ -15,21 +15,15 @@ function space(overrides: Partial<SettingsSpaceRow> = {}): SettingsSpaceRow {
         BackgroundImageURL: null,
         InheritsMembership: true,
         AgentRetrieval: 'Included',
-        Retention: null,
         ClosedAt: null,
         ...overrides,
     };
 }
 
 describe('the Settings model', () => {
-    it("shows a space with no retention of its own as its type's default, not as Indefinite", () => {
-        const model = buildSettingsModel(space(), yearType);
-        assert.equal(model.retention, '');
-        assert.equal(model.typeDefaultRetention, 'Year');
-    });
-
-    it('shows a retention the space chose', () => {
-        assert.equal(buildSettingsModel(space({ Retention: 'Month' }), yearType).retention, 'Month');
+    it("shows the space's status by name when the caller knows it, else Active or Closed from ClosedAt", () => {
+        assert.equal(buildSettingsModel(space({ StatusName: 'Paused' }), yearType).status, 'Paused');
+        assert.equal(buildSettingsModel(space(), yearType).status, 'Active');
     });
 
     it('takes the icon and color from the type when the space has none', () => {
@@ -50,19 +44,11 @@ describe('what a Settings save writes', () => {
         assert.deepEqual(changedSettings(shown, { ...shown }), {});
     });
 
-    it('keeps Retention null when only the name changes (a rename must not turn the type default into Indefinite)', () => {
+    it('writes only the name when only the name changes', () => {
         const loaded = space();
         const shown = buildSettingsModel(loaded, yearType);
         const changes = changedSettings(shown, { ...shown, name: 'Discovery, renamed' });
         assert.deepEqual(changes, { Name: 'Discovery, renamed' });
-        assert.equal('Retention' in changes, false);
-    });
-
-    it('writes a retention the person picked, and null when they go back to the type default', () => {
-        const loaded = space({ Retention: 'Month' });
-        const shown = buildSettingsModel(loaded, yearType);
-        assert.deepEqual(changedSettings(shown, { ...shown, retention: 'Indefinite' }), { Retention: 'Indefinite' });
-        assert.deepEqual(changedSettings(shown, { ...shown, retention: '' }), { Retention: null });
     });
 
     it('clears a background the person emptied', () => {
@@ -111,18 +97,18 @@ describe('the Settings session across two saves', () => {
 
 describe('writing the changes onto a space', () => {
     it('sets exactly the fields that changed', () => {
-        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: null, InheritsMembership: true, AgentRetrieval: 'Included', Retention: null } as Required<Parameters<typeof applySettingsChanges>[0]>;
-        applySettingsChanges(target, { Name: 'renamed', Retention: 'Year' });
+        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: null, InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
+        applySettingsChanges(target, { Name: 'renamed', AgentRetrieval: 'ExcludedEntirely' });
         assert.equal(target.Name, 'renamed');
-        assert.equal(target.Retention, 'Year');
+        assert.equal(target.AgentRetrieval, 'ExcludedEntirely');
         assert.equal(target.Description, 'b');
         assert.equal(target.Color, 'd');
     });
 
     it('can set a field to null', () => {
-        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: 'x', InheritsMembership: true, AgentRetrieval: 'Included', Retention: 'Year' } as Required<Parameters<typeof applySettingsChanges>[0]>;
-        applySettingsChanges(target, { BackgroundImageURL: null, Retention: null });
+        const target = { Name: 'a', Description: 'b', IconClass: 'c', Color: 'd', BackgroundImageURL: 'x', InheritsMembership: true, AgentRetrieval: 'Included' } as Required<Parameters<typeof applySettingsChanges>[0]>;
+        applySettingsChanges(target, { BackgroundImageURL: null, Description: null });
         assert.equal(target.BackgroundImageURL, null);
-        assert.equal(target.Retention, null);
+        assert.equal(target.Description, null);
     });
 });

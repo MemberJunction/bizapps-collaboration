@@ -1,0 +1,44 @@
+[
+  {
+    "primaryKey": {
+      "ID": "70F3A758-2A84-4253-BF4D-67C14114190A"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-chapter",
+      "Kind": "Action",
+      "Mode": "Extend",
+      "TargetEntityID": "@lookup:MJ: Entities.Name=MJ: Actions",
+      "TargetRecordID": "@lookup:MJ: Actions.Name=Example: Chapter Renewal Reminder",
+      "Label": "Renewal reminder",
+      "Band": "Shared",
+      "IsDefault": false,
+      "Sequence": 1,
+      "Bindings": {
+        "ChapterID": {
+          "From": "Anchor:chapter"
+        }
+      }
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "4025BC35-D4FB-4F81-AA11-365AE9B13314"
+    },
+    "fields": {
+      "SpaceTypeID": "@lookup:MJ_BizApps_Collaboration: Space Types.Code=example-chapter-staff",
+      "Kind": "Query",
+      "Mode": "Extend",
+      "TargetEntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+      "TargetRecordID": "@lookup:MJ: Queries.Name=Example: Renewals by month",
+      "Label": "Renewals by month",
+      "Band": "Team",
+      "IsDefault": false,
+      "Sequence": 1,
+      "Bindings": {
+        "ChapterID": {
+          "From": "Anchor:chapter"
+        }
+      }
+    }
+  }
+]

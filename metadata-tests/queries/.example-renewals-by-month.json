@@ -1,0 +1,33 @@
+[
+  {
+    "primaryKey": {
+      "ID": "B316C57B-E7C8-48C5-8D4A-3DA23284BBC4"
+    },
+    "fields": {
+      "Name": "Example: Renewals by month",
+      "Description": "An aggregate for the example-chapter type (B24, D29): a chapter's member renewals by month, for one chapter. Granted to the staff type's spaces with ChapterID bound to the space's chapter anchor, so the server fills the chapter in and a caller never chooses it. An MJ query is not bound by row filters, so only the Integration role may run it directly; participants reach it through RunSpaceQuery alone. Its ChapterID parameter is extracted from the template by MJ's query save.",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Collaboration",
+      "Status": "Approved",
+      "SQLDialectID": "@lookup:MJ: SQL Dialects.Name=T-SQL",
+      "UsesTemplate": true,
+      "Reusable": false,
+      "AuditQueryRuns": false,
+      "CacheEnabled": false,
+      "IsMaterialized": false,
+      "SQL": "SELECT DATEFROMPARTS(YEAR(m.RenewalDate), MONTH(m.RenewalDate), 1) AS Month, COUNT(*) AS Renewals\nFROM [__mj_BizAppsCollabExamples].[ExampleChapterMember] m\nWHERE m.ChapterID = {{ ChapterID | sqlString }} AND m.RenewalDate IS NOT NULL\nGROUP BY DATEFROMPARTS(YEAR(m.RenewalDate), MONTH(m.RenewalDate), 1)\nORDER BY Month"
+    },
+    "relatedEntities": {
+      "MJ: Query Permissions": [
+        {
+          "primaryKey": {
+            "ID": "CACA94CA-24F3-4D37-87C0-B5818204F4BD"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          }
+        }
+      ]
+    }
+  }
+]

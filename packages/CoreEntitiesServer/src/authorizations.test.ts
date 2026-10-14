@@ -20,6 +20,16 @@ const TYPE_ID = '55555555-5555-4555-8555-555555555555';
 const USER_ID = '66666666-6666-4666-8666-666666666666';
 const OWNER_ROLE_ID = '77777777-7777-4777-8777-777777777777';
 const MEMBER_ROLE_ID = '88888888-8888-4888-8888-888888888888';
+const ACTIVE_STATUS_ID = 'E0000000-0000-4000-8000-000000000001';
+const PAUSED_STATUS_ID = 'E0000000-0000-4000-8000-000000000002';
+const ARCHIVED_STATUS_ID = 'E0000000-0000-4000-8000-000000000004';
+
+/** The type's statuses, in the shipped shape: Active (default), Paused (read-only, visible) and Archived (hidden, frozen). */
+const TYPE_STATUSES = [
+    { ID: ACTIVE_STATUS_ID, SpaceTypeID: TYPE_ID, Code: 'active', Name: 'Active', Sequence: 1, IsDefault: true, ReadOnly: false, Visible: true, AgentRetrieval: true, CanChangeAfter: true, NotifyMembersOnEnter: false, IsTerminal: false },
+    { ID: PAUSED_STATUS_ID, SpaceTypeID: TYPE_ID, Code: 'paused', Name: 'Paused', Sequence: 2, IsDefault: false, ReadOnly: true, Visible: true, AgentRetrieval: true, CanChangeAfter: true, NotifyMembersOnEnter: true, IsTerminal: false },
+    { ID: ARCHIVED_STATUS_ID, SpaceTypeID: TYPE_ID, Code: 'archived', Name: 'Archived', Sequence: 4, IsDefault: false, ReadOnly: true, Visible: false, AgentRetrieval: false, CanChangeAfter: false, NotifyMembersOnEnter: false, IsTerminal: true },
+];
 
 function createMockAuthorizations(grants: {
     typesAllowedRoles: string[];
@@ -124,16 +134,19 @@ function createMockProvider(options: {
                         AgentRetrieval: 'Included',
                         AllowParentAssignees: true,
                         ClosedAt: null,
-                        PostCloseAccess: null,
-                        PostCloseAccessDays: null,
+                        SpaceTypeID: TYPE_ID,
+                        StatusID: null,
                     }],
                 };
             }
             if (EntityName === 'MJ_BizApps_Collaboration: Space Types') {
                 return {
                     Success: true,
-                    Results: [{ ID: TYPE_ID, DriverKey: null, PostCloseAccess: 'ReadOnly', PostCloseAccessDays: 30 }],
+                    Results: [{ ID: TYPE_ID, DriverKey: null }],
                 };
+            }
+            if (EntityName === 'MJ_BizApps_Collaboration: Space Type Status') {
+                return { Success: true, Results: TYPE_STATUSES };
             }
             if (EntityName === 'MJ_BizApps_Collaboration: Space Role Types') {
                 return {
@@ -275,7 +288,7 @@ describe("the close and reopen rights of a space's owner", () => {
         assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, unauthorized, roleTypeOf), false);
     });
 
-    it("keeps the post-close filter on configuring but not on reopening: an owner of a space closed with no access reopens, and does not configure", async () => {
+    it("keeps the status filter on configuring but not on a status change: an owner of a hidden (Archived) space may change its status, and does not configure", async () => {
         // 'Configure Spaces' is granted too, so the only difference between the two rights is the filter
         const spaces = createMockAuthorizations({ typesAllowedRoles: [], spacesAllowedRoles: ['Space Participant'], lifecycleAllowedRoles: ['Space Participant'] });
         const base = createMockProvider({ authorizations: spaces, isOwnerMember: true });
@@ -283,11 +296,12 @@ describe("the close and reopen rights of a space's owner", () => {
         (closed as unknown as { RunView: unknown }).RunView = async (params: { EntityName: string; ExtraFilter?: string }) => {
             const result = await (base as unknown as { RunView: (p: unknown) => Promise<{ Results: Array<Record<string, unknown>> }> }).RunView(params);
             if (params.EntityName === 'MJ_BizApps_Collaboration: Spaces') {
-                return { ...result, Results: result.Results.map((row) => ({ ...row, ClosedAt: '2026-01-01T00:00:00Z', PostCloseAccess: 'None' })) };
+                return { ...result, Results: result.Results.map((row) => ({ ...row, ClosedAt: '2026-01-01T00:00:00Z', StatusID: ARCHIVED_STATUS_ID })) };
             }
             return result;
         };
         const engine = CollaborationEngineBase.Instance;
+        assert.equal(await engine.UserCanChangeSpaceStatus(participant, SPACE_ID, closed, roleTypeOf), true);
         assert.equal(await engine.UserCanReopenSpace(participant, SPACE_ID, closed, roleTypeOf), true);
         assert.equal(await engine.UserCanConfigureSpaces(participant, SPACE_ID, closed, roleTypeOf), false);
         // The same owner of a space that is still open configures it
@@ -358,10 +372,11 @@ describe('SpaceTypeEntityServer Configure Space Types enforcement', () => {
     });
 });
 
-describe('SpaceEntityServer PostCloseAccess direct write guardrails', () => {
+describe('SpaceEntityServer status change guardrails (stage 1)', () => {
     const auths = createMockAuthorizations({
         typesAllowedRoles: ['Developer'],
         spacesAllowedRoles: ['Developer'],
+        lifecycleAllowedRoles: ['Developer'],
     });
 
     const adminUser = {
@@ -374,23 +389,24 @@ describe('SpaceEntityServer PostCloseAccess direct write guardrails', () => {
         UserRoles: [{ Role: 'UI' } as Partial<UserRoleInfo> as UserRoleInfo],
     } as Partial<UserInfo> as UserInfo;
 
-    function mockSpaceWithCloseWrite(user: UserInfo, isClosing: boolean, isOwnerMember: boolean) {
+    /** A saved, Active space whose save changes its status (to Paused), and perhaps another field with it. */
+    function mockSpaceWithStatusChange(user: UserInfo, isOwnerMember: boolean, alsoRename = false) {
         const provider = createMockProvider({ authorizations: auths, isOwnerMember });
         const space = Object.create(SpaceEntityServer.prototype) as SpaceEntityServer;
-        const fields = [
-            { Name: 'PostCloseAccess', Dirty: true, Value: 'ReadOnly' },
+        const fields: Array<{ Name: string; Dirty: boolean; Value?: unknown; OldValue?: unknown }> = [
+            { Name: 'StatusID', Dirty: true, Value: PAUSED_STATUS_ID, OldValue: ACTIVE_STATUS_ID },
             { Name: 'OwnerID', Dirty: false },
         ];
-        if (isClosing) {
-            fields.push({ Name: 'ClosedAt', Dirty: true, Value: new Date().toISOString() });
-        }
+        if (alsoRename) fields.push({ Name: 'Name', Dirty: true, Value: 'Renamed', OldValue: 'Named' });
         Object.defineProperties(space, {
             ContextCurrentUser: { value: user, writable: true },
             IsSaved: { value: true, writable: true },
             ID: { value: SPACE_ID, writable: true },
             OwnerID: { value: USER_ID, writable: true },
             SpaceTypeID: { value: TYPE_ID, writable: true },
-            ClosedAt: { value: isClosing ? new Date() : null, writable: true },
+            StatusID: { value: PAUSED_STATUS_ID, writable: true },
+            ClosedAt: { value: null, writable: true },
+            Name: { value: alsoRename ? 'Renamed' : 'Named', writable: true },
             Fields: { value: fields, writable: true },
             ProviderToUse: { value: provider, writable: true },
             RunViewProviderToUse: { value: provider, writable: true },
@@ -399,27 +415,36 @@ describe('SpaceEntityServer PostCloseAccess direct write guardrails', () => {
         return space;
     }
 
-    it('refuses direct write to PostCloseAccess when user lacks Configure Spaces', async () => {
-        const space = mockSpaceWithCloseWrite(staffUser, false, true);
+    before(async () => {
+        const setupProvider = createMockProvider({ authorizations: auths, isOwnerMember: true });
+        await CollaborationEngine.Instance.Config(true, adminUser, setupProvider);
+        await CollaborationEngineBase.Instance.Config(true, adminUser, setupProvider);
+    });
+
+    it("refuses a status change to someone without 'Close and Reopen Spaces'", async () => {
+        const space = mockSpaceWithStatusChange(staffUser, true);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
         assert.equal(res.Success, false);
-        const err = res.Errors.find((e) => e.Source === 'PostCloseAccess');
-        assert.ok(err, 'Expected refusal on PostCloseAccess');
-        assert.equal(err?.Message, "Space change refused: user lacks 'Configure Spaces' authorization or does not hold an owner role on this space.");
+        const err = res.Errors.find((e) => e.Source === 'StatusID');
+        assert.ok(err, 'Expected refusal on StatusID');
+        assert.equal(err?.Message, "Space change refused: changing a space's status needs the 'Close and Reopen Spaces' authorization and an owner seat on the space.");
     });
 
-    it('allows direct write to PostCloseAccess when user has Configure Spaces and is owner', async () => {
-        const space = mockSpaceWithCloseWrite(adminUser, false, true);
+    it('refuses a status change to someone with the authorization but no owner seat', async () => {
+        const space = mockSpaceWithStatusChange(adminUser, false);
         const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
-        const err = res.Errors.find((e) => e.Source === 'PostCloseAccess');
-        assert.equal(err, undefined, 'Admin space owner should not be refused on PostCloseAccess');
+        const err = res.Errors.find((e) => e.Source === 'StatusID');
+        assert.ok(err, 'Expected refusal on StatusID');
     });
 
-    it('allows PostCloseAccess write during space close even without Configure Spaces', async () => {
-        const space = mockSpaceWithCloseWrite(staffUser, true, true);
-        const res = await SpaceEntityServer.prototype.ValidateAsync.call(space);
-        const err = res.Errors.find((e) => e.Source === 'PostCloseAccess');
-        assert.equal(err, undefined, 'PostCloseAccess write during space close should be allowed');
+    it('lets an owner with the authorization change the status, and refuses another field changed in the same save', async () => {
+        const alone = mockSpaceWithStatusChange(adminUser, true);
+        const ok = await SpaceEntityServer.prototype.ValidateAsync.call(alone);
+        assert.equal(ok.Errors.find((e) => e.Source === 'StatusID'), undefined, `No refusal on StatusID: ${ok.Errors.map((e) => e.Message).join('; ')}`);
+        const withRename = mockSpaceWithStatusChange(adminUser, true, true);
+        const res = await SpaceEntityServer.prototype.ValidateAsync.call(withRename);
+        assert.equal(res.Success, false);
+        assert.equal(res.Errors.find((e) => e.Source === 'Name')?.Message, 'Space change refused: a status change is a save of its own; change the other fields separately.');
     });
 });
 
@@ -478,9 +503,9 @@ describe('Metadata Role Lookups Static Check', () => {
     });
 });
 
-describe('toNode post-close mapping', () => {
-    it('maps post-close values from row and space type', () => {
-        const rowWithClose: SpaceRow = {
+describe('toNode status mapping (stage 1)', () => {
+    it("maps the space's effective status from its StatusID, or from ClosedAt and the type's statuses when it names none", () => {
+        const archived: SpaceRow = {
             ID: '11111111-2222-3333-4444-555555555555',
             ParentID: null,
             InheritsMembership: false,
@@ -488,16 +513,12 @@ describe('toNode post-close mapping', () => {
             SpaceTypeID: TYPE_ID,
             AgentRetrieval: 'Included',
             ClosedAt: '2026-01-01T00:00:00Z',
-            PostCloseAccess: 'ReadOnlyWithAgent',
-            PostCloseAccessDays: 14,
+            StatusID: ARCHIVED_STATUS_ID,
         };
-        const node1 = toNode(rowWithClose);
-        assert.equal(node1.postCloseAccess, 'ReadOnlyWithAgent');
-        assert.equal(node1.postCloseAccessDays, 14);
-        assert.equal(node1.spaceTypePostCloseAccess, 'ReadOnly');
-        assert.equal(node1.spaceTypePostCloseAccessDays, 30);
+        const node1 = toNode(archived);
+        assert.deepEqual(node1.status, { ReadOnly: true, Visible: false, AgentRetrieval: false });
 
-        const rowWithoutClose: SpaceRow = {
+        const unstampedOpen: SpaceRow = {
             ID: '22222222-3333-4444-5555-666666666666',
             ParentID: null,
             InheritsMembership: false,
@@ -505,11 +526,11 @@ describe('toNode post-close mapping', () => {
             SpaceTypeID: TYPE_ID,
             AgentRetrieval: 'Included',
         };
-        const node2 = toNode(rowWithoutClose);
-        assert.equal(node2.postCloseAccess, null);
-        assert.equal(node2.postCloseAccessDays, null);
-        assert.equal(node2.spaceTypePostCloseAccess, 'ReadOnly');
-        assert.equal(node2.spaceTypePostCloseAccessDays, 30);
+        // The type's default while open
+        assert.deepEqual(toNode(unstampedOpen).status, { ReadOnly: false, Visible: true, AgentRetrieval: true });
+        // The type's first terminal status once closed
+        assert.deepEqual(toNode({ ...unstampedOpen, ClosedAt: '2026-01-01T00:00:00Z' }).status, { ReadOnly: true, Visible: false, AgentRetrieval: false });
+        // A type with no statuses: null, and the rules read ClosedAt alone
+        assert.equal(toNode({ ...unstampedOpen, SpaceTypeID: '99999999-9999-4999-8999-999999999999' }).status, null);
     });
 });
-

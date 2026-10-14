@@ -61,7 +61,7 @@ import { FRAME_04_FIXTURE } from '../fixtures/frame-04.fixture';
                 [TotalPeople]="f.header.totalPeople"
                 [Summary]="f.header.audienceSummary"
               ></mjc-audience-pill>
-              <button mjButton variant="primary" size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
+              <button mjButton Variant="primary" Size="md"><i class="fa-solid fa-arrow-up-from-bracket"></i>Upload</button>
             </div>
             <mjc-space-tabs
               [Tabs]="f.header.tabs"

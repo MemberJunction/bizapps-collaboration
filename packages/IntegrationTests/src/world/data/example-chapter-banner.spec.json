@@ -1,0 +1,19 @@
+{
+  "name": "ExampleChapterBanner",
+  "title": "Chapter banner",
+  "description": "A banner that names the chapter a space is anchored to, with its region. The props come from the space's anchor, bound on the server.",
+  "type": "component",
+  "location": "embedded",
+  "namespace": "Collaboration/Examples",
+  "functionalRequirements": "Show the chapter's name and region as a banner. Say so when no chapter was bound.",
+  "technicalDesign": "A single React function with no data access: everything it shows arrives as props.",
+  "dataRequirements": { "mode": "none" },
+  "properties": [
+    { "name": "chapterName", "type": "string", "required": true, "description": "The chapter the space is anchored to" },
+    { "name": "region", "type": "string", "required": false, "description": "The chapter's region" }
+  ],
+  "libraries": [],
+  "dependencies": [],
+  "exampleUsage": "<ExampleChapterBanner chapterName=\"Chapter 12\" region=\"Northeast\" />",
+  "code": "function ExampleChapterBanner({ chapterName, region }) {\n  const bound = typeof chapterName === 'string' && chapterName.length > 0;\n  return React.createElement(\n    'div',\n    { className: 'example-chapter-banner', style: { padding: '12px 16px', borderRadius: 10, border: '1px solid #e5e7eb', display: 'flex', gap: 8, alignItems: 'baseline' } },\n    React.createElement('span', { style: { fontSize: 12, color: '#6b7280' } }, 'Chapter'),\n    React.createElement('strong', { style: { fontSize: 16 } }, bound ? chapterName : 'No chapter is bound to this space'),\n    bound && region ? React.createElement('span', { style: { color: '#6b7280' } }, '\\u00b7 ' + region) : null\n  );\n}"
+}

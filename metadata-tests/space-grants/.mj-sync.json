@@ -1,0 +1,22 @@
+{
+  "entity": "MJ_BizApps_Collaboration: Space Grants",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".space-grants.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "SpaceID IS NULL AND SpaceTypeID IN (SELECT ID FROM __mj_BizAppsCollaboration.SpaceType WHERE Code LIKE 'example-%')",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {},
+    "relatedEntities": {}
+  }
+}

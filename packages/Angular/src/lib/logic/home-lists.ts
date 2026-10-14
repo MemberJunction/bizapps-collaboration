@@ -11,7 +11,7 @@ export interface HomeRowModel {
 }
 
 /** Which list Home has open. */
-export type HomeListKind = 'approvals' | 'tasks';
+export type HomeListKind = 'approvals' | 'tasks' | 'pins';
 
 /** Reads a date for a row's second line. Returns an empty string for none or for one that isn't a date. */
 export type DateFormatter = (iso: string | null | undefined) => string;
@@ -59,4 +59,16 @@ export function countText(count: number, failed: boolean): string {
 export function countLabel(count: number, failed: boolean, singular: string, plural: string): string {
     if (failed) return `${plural}: could not be read`;
     return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/** *My pins* on Home (B22): each pin as a row, its space named, opening where the pin lives. */
+export function pinRows(pins: ReadonlyArray<{ id: string; title: string; subtitle: string; spaceName: string; iconClass: string }>): HomeRowModel[] {
+    return pins.map((pin) => ({
+        key: pin.id,
+        title: pin.title,
+        detail: pin.subtitle,
+        spaceName: pin.spaceName,
+        iconClass: pin.iconClass,
+        actionLabel: 'Open',
+    }));
 }

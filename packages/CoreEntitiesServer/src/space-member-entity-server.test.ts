@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
+import { defaultConfiguration } from './configuration.test-support.ts';
+import { seedAppSettings } from './app-settings.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import type { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
 import { BaseSpaceTypeServerDriver, type DriverValidationResult, type MemberChangeContext } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { decideMemberKind, SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); });
+after(() => restoreAppSettingsRow());
 
 const LEAVER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE1';
 const OWNER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9';
@@ -85,6 +92,7 @@ describe('a member leaving a space', () => {
             driver,
             space: stubOf<mjBizAppsCollaborationSpaceEntity>({}),
             spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}),
+            configuration: defaultConfiguration(),
         });
     });
     after(() => {
@@ -162,6 +170,7 @@ describe('a seat being deleted', () => {
             driver,
             space: stubOf<mjBizAppsCollaborationSpaceEntity>({}),
             spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({}),
+            configuration: defaultConfiguration(),
         });
     });
     after(() => {
@@ -242,6 +251,7 @@ describe('a seat saved through its own validation', () => {
             driver,
             space: stubOf<mjBizAppsCollaborationSpaceEntity>({}),
             spaceType: stubOf<mjBizAppsCollaborationSpaceTypeEntity>({ Code: 'example' }),
+            configuration: defaultConfiguration(),
         });
         // MJ's Save runs the class's own validation and, when it passes, writes; here the write is a return
         baseSave = BaseEntity.prototype.Save;

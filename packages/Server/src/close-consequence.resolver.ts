@@ -1,5 +1,5 @@
 import { LogError } from '@memberjunction/core';
-import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
+import { Arg, Ctx, Field, ObjectType, Query, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
 import { resolveCloseConsequence } from '@mj-biz-apps/collaboration-core-entities-server';
 
 @ObjectType()
@@ -10,12 +10,22 @@ export class CloseConsequencePayload {
     @Field({ nullable: true })
     ErrorMessage?: string;
 
-    /** ReadOnly, ReadOnlyWithAgent or None: what the close would stamp on the space. */
+    /** The status the close moves the space to (its type's first terminal status), by code and name; null for a type with no statuses. */
     @Field({ nullable: true })
-    Access?: string;
+    StatusCode?: string;
 
-    @Field(() => Int, { nullable: true })
-    Days?: number;
+    @Field({ nullable: true })
+    StatusName?: string;
+
+    /** What that status allows: members read but don't write; the space stays listed; an agent may quote it. */
+    @Field({ nullable: true })
+    ReadOnly?: boolean;
+
+    @Field({ nullable: true })
+    Visible?: boolean;
+
+    @Field({ nullable: true })
+    AgentRetrieval?: boolean;
 
     @Field({ nullable: true })
     KeeperUserID?: string;
@@ -27,7 +37,7 @@ export class CloseConsequencePayload {
     KeeperCanReopen?: boolean;
 }
 
-/** What closing a space would do: the post-close access it stamps, who keeps the space once its access ends, and whether they can reopen it. */
+/** What closing a space would do: the status it moves to and what that allows, who keeps the space once it is hidden, and whether they can reopen it. */
 @Resolver()
 export class CloseConsequenceResolver extends ResolverBase {
     @Query(() => CloseConsequencePayload)
@@ -42,8 +52,11 @@ export class CloseConsequenceResolver extends ResolverBase {
             const result = await resolveCloseConsequence(provider, user, spaceId);
             return {
                 Success: true,
-                Access: result.access,
-                Days: result.days ?? undefined,
+                StatusCode: result.status?.Code,
+                StatusName: result.status?.Name,
+                ReadOnly: result.readOnly,
+                Visible: result.visible,
+                AgentRetrieval: result.agentRetrieval,
                 KeeperUserID: result.keeperUserId,
                 KeeperName: result.keeperName,
                 KeeperCanReopen: result.keeperCanReopen ?? undefined,

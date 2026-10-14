@@ -5,6 +5,7 @@ import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
+import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
 const SPACES_ENTITY_ID = '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB';
 const DETAILS = 'MJ: Conversation Details';
@@ -46,16 +47,18 @@ export async function postSpaceMessage(
     const system = await requireSystemUser(probe);
     const view = RunView.FromMetadataProvider(provider);
 
-    const space = await view.RunView<{ ClosedAt: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
+    const space = await view.RunView<{ ClosedAt: string | null; StatusID: string | null; SpaceTypeID: string | null; Configuration: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Spaces',
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ClosedAt', 'SpaceTypeID', 'Configuration'],
+        Fields: ['ClosedAt', 'StatusID', 'SpaceTypeID', 'Configuration'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
     if (!space.Success) return { ok: false, message: space.ErrorMessage || 'The space could not be read.' };
     const targetSpace = space.Results?.[0];
-    if (targetSpace?.ClosedAt) return { ok: false, message: 'A closed space does not take a new message.' };
+    // A read-only status (Paused, Closed) takes no new message; the sentence names the status
+    const refusal = targetSpace ? spaceWriteRefusal(targetSpace) : null;
+    if (refusal?.readOnly) return { ok: false, message: spaceWriteRefusalMessage(refusal, 'message') };
 
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };

@@ -695,5 +695,71 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Scope Permissions For The Caller"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "356DD019-475A-42C0-8709-77300F2195F7"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Anchors",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Anchors"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "5A1920B7-8F3F-41C8-B71E-9CC3289734D5"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Notes",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 1,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Notes",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes",
+      "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "6C93B2F4-0206-4900-A10A-82E86E63AD61"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Member Pins",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 1,
+      "CanRead": 1,
+      "CanUpdate": 1,
+      "CanDelete": 1,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Pins",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Pins",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Pins",
+      "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Pins"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "B96911A1-852D-4A37-9515-4CFDB03C4825"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Type Status",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Active Space Type Statuses"
+    }
   }
 ]

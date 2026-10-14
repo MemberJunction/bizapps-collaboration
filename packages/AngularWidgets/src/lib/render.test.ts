@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, EventEmitter, type Type } from '@angular/core';
+import { Component, ContentChildren, EventEmitter, QueryList, type TemplateRef, type Type } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import { ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ChatSlotDirective, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
 import { CollabSpaceChatComponent } from './space-chat.component.ts';
@@ -22,7 +24,7 @@ import type { SpaceSettingsModel } from './types';
 
 const settings: SpaceSettingsModel = {
   id: 's1', name: 'Northwind', description: '', spaceType: 'Workspace', spaceTypeId: 't1', iconClass: 'fa-solid fa-briefcase', color: '#0076b6',
-  backgroundImageUrl: '', inheritsMembership: true, agentRetrieval: 'Included', retention: 'Indefinite', status: 'Active',
+  backgroundImageUrl: '', inheritsMembership: true, agentRetrieval: 'Included', status: 'Active',
 };
 
 beforeAll(() => {
@@ -229,6 +231,17 @@ describe('the dialogs, rendered', () => {
     expect(host.querySelector('.mj-dialog-body')?.textContent).not.toContain('Cancel');
   });
 
+  it('shows the moment a share was recorded as the host formatted it, not as "today at" an ISO string', async () => {
+    const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
+    fixture.componentRef.setInput('AuthorName', 'Ada Owner');
+    fixture.componentRef.setInput('Timestamp', 'Oct 1, 2026, 1:19 AM');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Recorded as shared by Ada Owner on Oct 1, 2026, 1:19 AM');
+    expect(text).not.toContain('today at');
+  });
+
   it('holds the upload and new-conversation footers in the dialog actions, not in the scrolling body', async () => {
     const upload = TestBed.createComponent(CollabUploadDialogComponent);
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);
@@ -241,30 +254,50 @@ describe('the dialogs, rendered', () => {
     }
   });
 
-  it('focuses the first field when it opens, the marked control when there is one, and the container, not a button, when there is neither', () => {
-    vi.useFakeTimers();
+  it("leaves focus to mj-dialog: none of the dialogs turns its autofocus, Tab trap or focus return off, or handles Tab itself", () => {
+    for (const Dialog of [CollabNewConversationDialogComponent, CollabUploadDialogComponent, CollabShareCheckDialogComponent, CollabNewSpaceDialogComponent]) {
+      const fixture = TestBed.createComponent(Dialog as Type<unknown>);
+      fixture.detectChanges();
+      const dialog = fixture.debugElement.query((node) => node.name === 'mj-dialog').injector.get(MJDialogComponent);
+      expect([dialog.AutoFocus, dialog.TrapFocus, dialog.RestoreFocus]).toEqual([true, true, true]);
+      // No listener of the dialog's own on the document: MJ's handler sits on its container
+      const def = (Dialog as unknown as { ɵcmp: { hostBindings: unknown } }).ɵcmp;
+      expect(def.hostBindings).toBeNull();
+      fixture.destroy();
+    }
+  });
+
+  it('opens on the first field, on the marked control when there is one, and, in the share dialog, on its content, so that Enter right after it opens shares nothing', async () => {
+    // mj-dialog moves the focus on the microtask after its container is drawn
+    const settle = () => Promise.resolve();
     const convo = TestBed.createComponent(CollabNewConversationDialogComponent);
     convo.detectChanges();
-    vi.runAllTimers();
+    await settle();
     expect((document.activeElement as HTMLElement).id).toBe('convo-name');
     convo.destroy();
 
     const upload = TestBed.createComponent(CollabUploadDialogComponent);
     upload.detectChanges();
-    vi.runAllTimers();
+    await settle();
     expect((document.activeElement as HTMLElement).hasAttribute('data-autofocus')).toBe(true);
     upload.destroy();
 
     const share = TestBed.createComponent(CollabShareCheckDialogComponent);
     share.detectChanges();
-    vi.runAllTimers();
-    expect(document.activeElement?.classList.contains('mj-dialog-container')).toBe(true);
-    expect(document.activeElement?.tagName).not.toBe('BUTTON');
+    await settle();
+    const active = document.activeElement as HTMLElement;
+    // No field in this dialog: left to itself mj-dialog would focus the first button, which is Share when there are no findings
+    expect(active.classList.contains('share-modal')).toBe(true);
+    expect(active.tagName).not.toBe('BUTTON');
+    expect(active.getAttribute('tabindex')).toBe('-1');
+    const shared = vi.fn();
+    share.componentInstance.ShareRequested.subscribe(shared);
+    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    active.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    expect(shared).not.toHaveBeenCalled();
   });
 
-  it('gives focus back to what opened the dialog when it closes, and to the main area when that is gone', () => {
-    const main = document.createElement('main');
-    document.body.appendChild(main);
+  it('gives focus back to what opened the dialog when it closes, and leaves it on the page when that is gone', () => {
     const opener = document.createElement('button');
     document.body.appendChild(opener);
     opener.focus();
@@ -280,9 +313,11 @@ describe('the dialogs, rendered', () => {
     second.focus();
     const again = TestBed.createComponent(CollabNewConversationDialogComponent);
     again.detectChanges();
+    document.body.querySelector<HTMLElement>('input')?.focus();
     second.remove();
     again.destroy();
-    expect(document.activeElement).toBe(main);
+    // mj-dialog blurs to the body rather than picking a landing place of its own
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('asks for the share when Share is clicked, and not when Cancel is', async () => {
@@ -302,10 +337,11 @@ describe('the dialogs, rendered', () => {
     expect(shared).toHaveBeenCalledTimes(1);
   });
 
+  /** Tab from an element inside the dialog: the key bubbles to mj-dialog's container, where its trap listens. */
   const tabFrom = (element: HTMLElement, shiftKey = false): KeyboardEvent => {
     element.focus();
     const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
-    document.dispatchEvent(tab);
+    element.dispatchEvent(tab);
     return tab;
   };
 
@@ -322,18 +358,18 @@ describe('the dialogs, rendered', () => {
     expect(document.activeElement).toBe(last);
   });
 
-  it('holds the trap from the container, where the focus starts: Tab goes to the first control, Shift+Tab to the last', async () => {
+  it('holds the trap from the container, where the focus starts: Shift+Tab wraps to the last control, and a plain Tab is left to the browser, which goes to the first', async () => {
     const fixture = TestBed.createComponent(CollabShareCheckDialogComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
     const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
-    container.setAttribute('tabindex', '-1');
+    expect(container.getAttribute('tabindex')).toBe('-1');
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('button'));
     expect(tabFrom(container, true).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(buttons[buttons.length - 1]);
-    expect(tabFrom(container).defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(buttons[0]);
+    // mj-dialog wraps only at the ends: from the container, the browser's own Tab already lands on the first control
+    expect(tabFrom(container).defaultPrevented).toBe(false);
   });
 
   it('keeps the focus on the dialog while a save has every control off, in the dialogs that open on a field', async () => {
@@ -343,13 +379,12 @@ describe('the dialogs, rendered', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       const host = fixture.nativeElement as HTMLElement;
-      // Every control is off, as it is while the save runs: the container is what is left, and it was never made focusable by an open on a field
+      // Every control is off, as it is while the save runs: the container, which mj-dialog keeps focusable and out of the tab order, is what is left
       host.querySelectorAll<HTMLElement>('input, select, textarea, button').forEach((el) => el.setAttribute('disabled', ''));
       host.querySelectorAll<HTMLElement>('[tabindex]').forEach((el) => {
         if (!el.classList.contains('mj-dialog-container')) el.setAttribute('tabindex', '-1');
       });
       const container = host.querySelector<HTMLElement>('.mj-dialog-container')!;
-      container.removeAttribute('tabindex');
       const tab = tabFrom(container, true);
       expect(tab.defaultPrevented).toBe(true);
       expect(document.activeElement).toBe(container);
@@ -369,7 +404,15 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
+  /** The slots the space projects, by MJ's own directive: only one marked `mjChatSlot="header"` is drawn, as MJ's chat area draws it. */
+  @ContentChildren(ChatSlotDirective) public slots?: QueryList<ChatSlotDirective>;
+  public get header(): TemplateRef<unknown> | null {
+    return this.slots?.find((slot) => slot.SlotName === 'header')?.Template ?? null;
+  }
   public AllowRealtime = true;
+  /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
+  public ReadOnly = false;
+  public ReadOnlyMessage: string | null = null;
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
   public ComposerDraftConsumed = new EventEmitter<void>();
@@ -377,11 +420,12 @@ class ChatAreaStub {
 }
 declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
-  template: '<ng-content></ng-content>',
+  imports: [NgTemplateOutlet],
+  template: '<ng-content></ng-content><ng-container *ngTemplateOutlet="header"></ng-container>',
   inputs: [
-    'environmentId', 'currentUser', 'conversationId', 'applicationScope', 'applicationId', 'linkedEntityId', 'linkedRecordId', 'defaultAgentId',
-    'assistantDisplayName', 'allowMentions', 'allowAgentMentions', 'allowEntityMentions', 'allowSkillCommands', 'allowAttachments', 'AllowRealtime',
-    'AllowPinning', 'AllowMessageEdit', 'AllowMessageDelete', 'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
+    'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
+    'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
+    'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
   outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
@@ -394,7 +438,7 @@ const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamin
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -571,7 +615,7 @@ describe('A space\'s own details, rendered', () => {
     buttonNamed(host, 'Discard changes')!.click();
     expect(fixture.componentInstance.saved).toHaveBeenCalledTimes(1);
     expect(fixture.componentInstance.discarded).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('.alert-success')?.textContent).toContain('Details saved.');
+    expect(host.querySelector('mj-alert.details-outcome')?.textContent).toContain('Details saved.');
     const failed = await renderSettings({ error: 'Quorum must be between 1 and 100.' });
     expect((failed.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain('Quorum must be between 1 and 100.');
   });
@@ -696,7 +740,7 @@ describe('the conversation of a space, read-only', () => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -706,7 +750,7 @@ describe('the conversation of a space, read-only', () => {
     return fixture.nativeElement as HTMLElement;
   };
 
-  it('says why it can be read and not posted in, as a lock with the reason on hover, not a banner', async () => {
+  it('says why it can be read and not posted in, as a lock with the reason on hover, not a banner of its own', async () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     const host = await render({ IsReadOnly: true, ConversationId: null, ReadOnlyNote: note });
     const lock = host.querySelector('.read-only-lock');
@@ -714,7 +758,170 @@ describe('the conversation of a space, read-only', () => {
     expect(lock?.getAttribute('aria-label')).toBe(note);
     expect(host.querySelector('.space-closed-banner')).toBeNull();
     expect(host.textContent).not.toContain(note);
-    expect(host.querySelector('.chat-container')?.classList.contains('read-only-chat')).toBe(true);
+  });
+
+  it("hands MJ's chat area ReadOnly and the reason, instead of hiding its composer from outside", async () => {
+    const note = 'This space is closed. Conversations are read-only.';
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('IsReadOnly', true);
+    fixture.componentRef.setInput('ReadOnlyNote', note);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    expect(area.ReadOnly).toBe(true);
+    expect(area.ReadOnlyMessage).toBe(note);
+    // No style reaches into MJ's markup through the piercing combinator: the composer is MJ's to hide
+    const styles = (CollabSpaceChatComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('\n');
+    expect(styles).not.toMatch(/::\S*deep\b/);
+    expect(styles).not.toContain('message-input-container');
+  });
+
+  it('shows neither composer, note nor lock while the seat is not yet known: a quiet wait, and no chat area', async () => {
+    const host = await render({ IsPending: true, IsReadOnly: false, ConversationId: 'c1' });
+    expect(host.querySelector('mj-conversation-chat-area')).toBeNull();
+    expect(host.querySelector('.read-only-lock')).toBeNull();
+    expect(host.querySelector('.read-only-reason')).toBeNull();
+    expect(host.querySelector('.chat-pending')).not.toBeNull();
+  });
+
+  it("shows the header's lock over an open conversation too, with the reason as its label", async () => {
+    const note = 'You can read this conversation, but you have no seat that lets you post.';
+    const host = await render({ IsReadOnly: true, ReadOnlyNote: note });
+    const lock = host.querySelector<HTMLButtonElement>('.space-chat-header-slot .read-only-lock');
+    expect(lock?.tagName).toBe('BUTTON');
+    expect(lock?.getAttribute('title')).toBe(note);
+    expect(lock?.getAttribute('aria-label')).toBe(note);
+    expect(lock?.getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('.read-only-reason')).toBeNull();
+  });
+
+  it('shows the reason on focus, for a keyboard, and toggles it on a tap or click, for a touch screen, without a click after focus closing it', async () => {
+    const note = 'You can read this conversation, but you have no seat that lets you post.';
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', null);
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('IsReadOnly', true);
+    fixture.componentRef.setInput('ReadOnlyNote', note);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const lock = host.querySelector<HTMLButtonElement>('.read-only-lock')!;
+    /** A pointer's click: `detail` is 1, where Enter's and Space's is 0. */
+    const tap = () => lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    const reason = () => host.querySelector('.read-only-reason')?.textContent?.trim() ?? null;
+    lock.dispatchEvent(new FocusEvent('focus'));
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    expect(lock.getAttribute('aria-expanded')).toBe('true');
+    // The click that follows the mouse-down that focused the lock keeps the reason open
+    tap();
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    // A second tap closes it, a third opens it again
+    tap();
+    fixture.detectChanges();
+    expect(reason()).toBeNull();
+    tap();
+    fixture.detectChanges();
+    expect(reason()).toBe(note);
+    // Leaving the lock closes it
+    lock.dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+    expect(reason()).toBeNull();
+    expect(lock.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('toggles the reason on the first Enter after tabbing to the lock, closes it on Escape without moving focus, and on a tap outside', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', null);
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('IsReadOnly', true);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const lock = host.querySelector<HTMLButtonElement>('.read-only-lock')!;
+    const shown = () => host.querySelector('.read-only-reason') !== null;
+    /** A click as Enter or Space makes it: `detail` is 0. A pointer's is 1. */
+    const press = (detail: number) => { lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail })); fixture.detectChanges(); };
+
+    // Tab to the lock: the reason shows. The first Enter closes it, the second opens it again.
+    lock.focus();
+    lock.dispatchEvent(new FocusEvent('focus'));
+    fixture.detectChanges();
+    expect(shown()).toBe(true);
+    press(0);
+    expect(shown()).toBe(false);
+    press(0);
+    expect(shown()).toBe(true);
+
+    // Escape closes it, and the focus stays on the lock
+    lock.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(shown()).toBe(false);
+    expect(document.activeElement).toBe(lock);
+
+    // Open again with a pointer, then tap somewhere else
+    press(1);
+    expect(shown()).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    fixture.detectChanges();
+    expect(shown()).toBe(false);
+
+    // The reason is the button's label, so it is not a live region, and its id is this instance's own
+    press(1);
+    const reason = host.querySelector('.read-only-reason')!;
+    expect(reason.getAttribute('role')).toBeNull();
+    expect(reason.id).toMatch(/^mjc-read-only-reason-\d+$/);
+    expect(lock.getAttribute('aria-controls')).toBe(reason.id);
+    host.remove();
+  });
+
+  it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const chats = [1, 2].map(() => {
+      const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+      fixture.componentRef.setInput('ConversationId', null);
+      fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+      fixture.componentRef.setInput('IsReadOnly', true);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(host);
+      return { fixture, host, lock: host.querySelector<HTMLButtonElement>('.read-only-lock')!, wrap: host.querySelector<HTMLElement>('.read-only-lock-wrap')! };
+    });
+    const shown = (chat: (typeof chats)[number]) => chat.host.querySelector('.read-only-reason') !== null;
+    const draw = () => chats.forEach((chat) => chat.fixture.detectChanges());
+
+    // The first chat's reason opens by a pointer's click on its lock
+    chats[0].lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[0])).toBe(true);
+
+    // A tap inside the second chat's lock, beside its button, is outside the first chat: the first's reason closes
+    chats[1].wrap.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[0])).toBe(false);
+
+    // The same tap beside the second chat's own lock leaves its reason open
+    chats[1].lock.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[1])).toBe(true);
+    chats[1].wrap.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    draw();
+    expect(shown(chats[1])).toBe(true);
+    expect(shown(chats[0])).toBe(false);
+    chats.forEach((chat) => chat.host.remove());
   });
 
   it('shows no lock while it can be posted in, and says the space is closed unless told otherwise', async () => {
@@ -725,7 +932,7 @@ describe('the conversation of a space, read-only', () => {
   it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);

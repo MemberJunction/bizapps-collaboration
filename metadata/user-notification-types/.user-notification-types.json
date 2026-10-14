@@ -14,5 +14,21 @@
       "DefaultSMS": 0,
       "AllowUserPreference": 1
     }
+  },
+  {
+    "_comments": [
+      "Sent once per member when a space enters a status whose NotifyMembersOnEnter is on (Paused, Closed by default): 'X paused Northwind relationship'. In-app by default; email off until a template exists. A person's act, so its origin is Person and MJ: Scoped Notification Configs may still quiet it per application or role."
+    ],
+    "primaryKey": {
+      "ID": "E43EEBA0-BB53-413F-A159-D05A30A86D81"
+    },
+    "fields": {
+      "Name": "Collaboration: Space Status Changed",
+      "Description": "A space a member belongs to changed status.",
+      "DefaultInApp": 1,
+      "DefaultEmail": 0,
+      "DefaultSMS": 0,
+      "AllowUserPreference": 1
+    }
   }
 ]

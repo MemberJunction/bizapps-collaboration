@@ -1,0 +1,76 @@
+[
+  {
+    "primaryKey": {
+      "ID": "EAE6CFED-E2EB-4B6E-816D-6CFE5156A5F5"
+    },
+    "fields": {
+      "Name": "Collaboration: Run Space Data",
+      "Description": "Runs one of the queries or views granted in the space the conversation belongs to (the plan's B20). Name is the granted query or view, as the turn lists them; Values holds the target's own parameters, by name. Anything the grant binds is fixed by the server and never taken from here. Rows come back as JSON.",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "Collaboration: Run Space Data",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-table-list"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "primaryKey": {
+            "ID": "032AAD87-C535-406E-87E7-E76F4040144A"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The granted query or view to run, by the name the turn lists."
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "B6167586-8939-47EF-A44F-50CBF42CFDC8"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Values",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The target's own parameters, by name. A parameter the grant binds is refused here: the server fixes it."
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "37A2F8FF-6837-4934-913A-7804892DAE68"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Rows",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "The rows the query or view returned."
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "08E6B97F-1AC8-4308-BC74-4746B3604175"
+          },
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many rows came back."
+          }
+        }
+      ]
+    }
+  }
+]

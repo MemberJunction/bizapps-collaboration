@@ -8,4 +8,4 @@ That covers roles, applications, authorizations and their role grants, applicati
 
 ## MemberJunction version
 
-Work runs on MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 9's plan § 3.1](plans/pr9-plan.md#31-working-on-mj-next)). Install and build from that parent folder, never in this repo. CI installs published packages, so it fails on the `next`-only types until a release is pinned. Judge a change by the workspace build, `pnpm test` and both integration harnesses.
+Work runs on MemberJunction's `next`, in a workspace made by `mj dev workspace` beside MemberJunction, BizApps Common and BizApps Tasks ([PR 10's plan § 2.1](plans/pr10-plan.md#21-work-on-mj-next)). Install and build from that parent folder, never in this repo. CI installs published packages, so it fails on the `next`-only types until a release is pinned. Judge a change by the workspace build, `pnpm test` and both integration harnesses.

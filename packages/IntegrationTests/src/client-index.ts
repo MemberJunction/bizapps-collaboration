@@ -21,6 +21,10 @@ import './checks/client/agent.client.checks.js';
 import './checks/client/features.client.checks.js';
 import './checks/client/lifecycle.client.checks.js';
 import './checks/client/subtypes.client.checks.js';
+import './checks/client/stage1.client.checks.js';
+import './checks/client/stage2.client.checks.js';
+import './checks/client/stage3.client.checks.js';
+import './checks/client/stage4.client.checks.js';
 
 export * from './entity-names.js';
 export * from './wire.js';

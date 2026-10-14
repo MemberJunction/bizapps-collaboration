@@ -8,6 +8,8 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { evaluateCanStartSpaceConversation } from './create-space-conversation.js';
 import { asMetadata, parseUuid } from './uuid.js';
+import { CollaborationEngine } from './CollaborationEngine.js';
+import { spaceWriteRefusal } from './space-status-gate.js';
 
 const SPACES_ENTITY = 'MJ_BizApps_Collaboration: Spaces';
 const SPACE_MEMBERS_ENTITY = 'MJ_BizApps_Collaboration: Space Members';
@@ -39,6 +41,7 @@ interface SpaceRow {
     InheritsMembership?: boolean | null;
     OwnerID?: string | null;
     ClosedAt?: string | Date | null;
+    StatusID?: string | null;
     Configuration?: string | null;
     SpaceTypeID: string;
 }
@@ -118,7 +121,7 @@ export async function resolveSpaceChatHostRules(
     const spaceRes = await rv.RunView<SpaceRow>({
         EntityName: SPACES_ENTITY,
         ExtraFilter: `ID = '${spaceId}'`,
-        Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'OwnerID', 'ClosedAt', 'Configuration', 'SpaceTypeID'],
+        Fields: ['ID', 'Name', 'ParentID', 'InheritsMembership', 'OwnerID', 'ClosedAt', 'StatusID', 'Configuration', 'SpaceTypeID'],
         MaxRows: 1,
     }, systemUser);
 
@@ -213,6 +216,7 @@ export async function resolveSpaceChatHostRules(
         agentRetrieval: 'Included',
         allowParentAssignees: true,
         closedAt: targetSpace.ClosedAt ? String(targetSpace.ClosedAt) : null,
+        status: CollaborationEngine.Instance.StatusReachForSpace(targetSpace),
     });
 
     while (currentSpace.InheritsMembership && currentSpace.ParentID) {
@@ -480,8 +484,9 @@ export async function resolveSpaceChatHostRules(
     }
 
     const whoCanStart = chatSettings.resolvedSettings.Chats?.WhoCanStart ?? 'Anyone';
+    // A read-only status (Paused, Closed) locks the composer as a close did
     const startPerms = evaluateCanStartSpaceConversation(
-        !!targetSpace.ClosedAt,
+        spaceWriteRefusal(targetSpace).readOnly,
         whoCanStart,
         callerReach?.role
     );
