@@ -40,3 +40,10 @@ The build is `ngc`, into `dist/`. Its `test` script typechecks, runs every `node
 
 - A sub-space made through the New space dialog.
 - Header chips, needs-you items and agenda items from contributions.
+
+## Stage 4
+
+- **Notes** tab and the *Note* quick add in the header; a Team note promotes to Shared through an entity save the server judges and logs (call 15); *Turn into document* files the note through `UploadSpaceFile`.
+- **Data** tab, offered when the space has a granted view, query, dashboard or component for the viewer (or a declared reach): views and queries run through the grant operations, a component through `GetSpaceComponent` into `mj-react-component`, a dashboard waits on MJ#4789 (A15).
+- **Pins** on the Overview and *My Pins* on Home; the **star** in the header through `Metadata.Provider`'s favorites.
+- **Settings** shows the grants, anchors and data reach to a viewer with the settings authorizations.

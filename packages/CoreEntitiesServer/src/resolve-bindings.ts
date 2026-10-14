@@ -5,7 +5,7 @@
  * settings; `User.ID`, `User.Email` and `User.PersonID` describe the caller (no linked Person refuses); a `Value` is used as it is.
  * A binding that does not resolve refuses the run: nothing runs unbound.
  */
-import { type IMetadataProvider, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { type EntityInfo, type IMetadataProvider, RunView, type UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import {
     anchorRolesNeeded,
     type BindingSource,
@@ -71,13 +71,18 @@ export async function resolveBindings(provider: IMetadataProvider, user: UserInf
         spaceRow = rows.Results[0];
     }
 
-    // The caller's Person, when a binding names it
+    // The caller's Person, when a binding names it: the user's own People link first (the user record names People, or an IS-A
+    // subtype of it, as its linked entity and the Person as its linked record: how a platform binds an account since bizapps-common
+    // deprecated People.LinkedUserID), then that deprecated column as the fallback for a host that still links the old way
     let personId: string | null = null;
     if (needsCallerPerson(read.sources)) {
-        const rows = await rv.RunView<{ ID: string }>({ EntityName: PEOPLE, ExtraFilter: `LinkedUserID = '${parseUuid(user.ID)}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 2 }, system);
-        if (!rows.Success) return refuse(`the caller's Person could not be read: ${rows.ErrorMessage ?? 'unknown error'}`);
-        if ((rows.Results?.length ?? 0) !== 1) return refuse('the caller has no linked Person, which the grant binds to.');
-        personId = rows.Results![0].ID;
+        personId = personFromUserLink(provider, user);
+        if (!personId) {
+            const rows = await rv.RunView<{ ID: string }>({ EntityName: PEOPLE, ExtraFilter: `LinkedUserID = '${parseUuid(user.ID)}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 2 }, system);
+            if (!rows.Success) return refuse(`the caller's Person could not be read: ${rows.ErrorMessage ?? 'unknown error'}`);
+            if ((rows.Results?.length ?? 0) !== 1) return refuse('the caller has no linked Person, which the grant binds to.');
+            personId = rows.Results![0].ID;
+        }
     }
 
     const values: Record<string, BoundValue> = {};
@@ -162,4 +167,23 @@ function scalar(raw: unknown): BoundValue {
     if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw;
     if (raw instanceof Date) return raw.toISOString();
     return String(raw);
+}
+
+/**
+ * The Person the user's own record links to: `LinkedEntityRecordID` when `LinkedEntityID` is People or an IS-A subtype of it
+ * (the chain of ParentID reaches People). Null when the user links nothing, or something else.
+ */
+export function personFromUserLink(provider: IMetadataProvider, user: UserInfo): string | null {
+    const linked = user as unknown as { LinkedEntityID?: unknown; LinkedEntityRecordID?: unknown };
+    const entityId = parseUuid(linked.LinkedEntityID == null ? '' : String(linked.LinkedEntityID));
+    const recordId = parseUuid(linked.LinkedEntityRecordID == null ? '' : String(linked.LinkedEntityRecordID));
+    if (!entityId || !recordId) return null;
+    const seen = new Set<string>();
+    let entity: EntityInfo | null | undefined = provider.EntityByID(entityId);
+    while (entity && !seen.has(entity.ID.toLowerCase())) {
+        if (entity.Name === PEOPLE) return recordId;
+        seen.add(entity.ID.toLowerCase());
+        entity = entity.ParentID ? provider.EntityByID(entity.ParentID) : null;
+    }
+    return null;
 }

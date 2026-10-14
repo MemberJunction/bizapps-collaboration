@@ -8,6 +8,11 @@ const SPACE = 'AAAAAAAA-0000-4000-8000-000000000001';
 const CHAPTER_ENTITY = 'EEEEEEEE-0000-4000-8000-000000000001';
 const CHAPTER_12 = 'CCCCCCCC-0000-4000-8000-000000000012';
 const CALLER = { ID: 'DDDDDDDD-0000-4000-8000-000000000001', Email: 'lena@example.test' } as UserInfo;
+const PEOPLE_ENTITY = 'EEEEEEEE-0000-4000-8000-000000000010';
+const PLATFORM_PEOPLE_ENTITY = 'EEEEEEEE-0000-4000-8000-000000000011';
+const PERSON_VIA_LINK = 'BBBBBBBB-0000-4000-8000-000000000007';
+/** A caller whose user record links the Person from the user's side (a platform's People subtype), with no People.LinkedUserID anywhere. */
+const LINKED_CALLER = { ID: 'DDDDDDDD-0000-4000-8000-000000000002', Email: 'nico@example.test', LinkedEntityID: PLATFORM_PEOPLE_ENTITY, LinkedEntityRecordID: PERSON_VIA_LINK } as unknown as UserInfo;
 
 interface World {
     anchors?: Array<{ ID: string; EntityID: string; RecordID: string; Role: string }>;
@@ -28,7 +33,11 @@ function providerOver(world: World): IMetadataProvider {
                 default: return ok([]);
             }
         },
-        EntityByID(id: string): EntityInfo | null {
+        EntityByID(raw: string): EntityInfo | null {
+            const id = raw.toUpperCase(); // MJ's lookup ignores case; the resolver hands over normalised ids
+            // People and a platform's IS-A subtype of it, for a user record that links its Person from the user's side
+            if (id === PEOPLE_ENTITY) return { ID: PEOPLE_ENTITY, Name: 'MJ_BizApps_Common: People', ParentID: null, PrimaryKeys: [{ Name: 'ID' }], Fields: [{ Name: 'ID' }] } as unknown as EntityInfo;
+            if (id === PLATFORM_PEOPLE_ENTITY) return { ID: PLATFORM_PEOPLE_ENTITY, Name: 'BC: People', ParentID: PEOPLE_ENTITY, PrimaryKeys: [{ Name: 'ID' }], Fields: [{ Name: 'ID' }] } as unknown as EntityInfo;
             if (id !== CHAPTER_ENTITY) return null;
             return { ID: CHAPTER_ENTITY, Name: 'Example Chapters', PrimaryKeys: [{ Name: 'ID' }], Fields: [{ Name: 'ID' }, { Name: 'Name' }, { Name: 'Region' }] } as unknown as EntityInfo;
         },
@@ -91,6 +100,18 @@ describe('resolveBindings', () => {
         const noPerson = await resolveBindings(providerOver({ person: null }), CALLER, SPACE, grant({ X: { From: 'User.PersonID' } }), configuration);
         assert.equal(noPerson.ok, false);
         if (!noPerson.ok) assert.match(noPerson.message, /no linked Person/);
+    });
+
+    it("finds the caller's Person through the user's own People link first, and only then through People.LinkedUserID", async () => {
+        // No People row names this user, yet the user names its Person: the link wins, and nothing is read from People
+        const linked = await resolveBindings(providerOver({ person: null }), LINKED_CALLER, SPACE, grant({ Person: { From: 'User.PersonID' } }), configuration);
+        assert.equal(linked.ok, true, linked.ok ? '' : linked.message);
+        if (linked.ok) assert.equal(linked.values.Person, PERSON_VIA_LINK.toLowerCase());
+        // A link to some other entity is not a Person: the deprecated column is read, and here finds Lena's row
+        const elsewhere = { ...CALLER, LinkedEntityID: CHAPTER_ENTITY, LinkedEntityRecordID: PERSON_VIA_LINK } as unknown as UserInfo;
+        const fallback = await resolveBindings(providerOver({}), elsewhere, SPACE, grant({ Person: { From: 'User.PersonID' } }), configuration);
+        assert.equal(fallback.ok, true, fallback.ok ? '' : fallback.message);
+        if (fallback.ok) assert.equal(fallback.values.Person, 'P-LENA');
     });
 
     it('refuses an expression it cannot read, before reading anything', async () => {
