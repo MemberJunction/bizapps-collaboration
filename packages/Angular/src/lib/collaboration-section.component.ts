@@ -2,7 +2,7 @@ import { Component, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, OnIn
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { type BaseEntity, CompositeKey, LogError, RunView, type UserInfo } from '@memberjunction/core';
+import { type BaseEntity, CompositeKey, LogError, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
@@ -15,7 +15,7 @@ import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, type EffectiveSpaceRules, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -48,6 +48,8 @@ import {
     mjBizAppsCollaborationSpaceMemberEntity,
     type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
+    mjBizAppsCollaborationSpaceNoteEntity,
+    mjBizAppsCollaborationSpaceMemberPinEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
 import { CollaborationEngineBase } from '@mj-biz-apps/collaboration-engine-base';
@@ -116,7 +118,26 @@ import {
     type SpaceSettingsModel,
     type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
+    CollabSpaceNotesComponent,
+    CollabPinnedStripComponent,
+    CollabSpaceDataComponent,
+    type NoteModel,
+    type NoteDraft,
+    type PinModel,
+    type DataEntryModel,
+    type DataRunModel,
 } from '@mj-biz-apps/collaboration-ng-widgets';
+import { MJReactModule } from '@memberjunction/ng-react';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { pinRows } from './logic/home-lists.js';
+
+/** The Space Notes entity's id on this host, which a pin names as its target entity. */
+const notesEntityId = (): string => Metadata.Provider.EntityByName('MJ_BizApps_Collaboration: Space Notes')?.ID ?? '';
+/** A pin's record key, bare: `ID|<uuid>` and `<uuid>` name the same record. */
+const bareRecordId = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId);
+interface NoteRow { ID: string; SpaceID: string; Title: string; Body: string | null; Band: SpaceBand; Visibility: 'Space' | 'Private'; AuthorUserID: string; AuthorUser?: string | null; __mj_UpdatedAt: string }
+interface PinRow { ID: string; SpaceID: string; UserID: string; Kind: 'Record' | 'Grant'; TargetEntityID: string | null; TargetRecordID: string | null; GrantID: string | null; Sequence: number }
+interface AnchorRow { ID: string; Role: string; Entity: string; EntityID: string; RecordID: string; IsPrimary: boolean }
 import { MentionParser, type MentionPerson } from '@memberjunction/conversations-runtime';
 import { CollaborationNoAccessComponent } from './no-access.component';
 
@@ -182,6 +203,10 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabNewConversationDialogComponent,
         CollabNewSpaceDialogComponent,
         CollabHomeListComponent,
+        CollabSpaceNotesComponent,
+        CollabPinnedStripComponent,
+        CollabSpaceDataComponent,
+        MJReactModule,
         CollaborationNoAccessComponent,
         TaskKanbanComponent,
         TaskGanttComponent,
@@ -472,6 +497,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             box-shadow: var(--mj-shadow-sm);
             flex: 1;
         }
+        .pinned-wrap { padding: 12px 16px 0; }
+        .config-card { margin: 16px; padding: 14px 16px; border: 1px solid var(--mj-border-default, #e5e7eb); border-radius: 10px; background: var(--mj-bg-surface-card, #fff); }
+        .config-title { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .config-sub { margin: 4px 0 12px; font-size: 12px; color: var(--mj-text-muted, #6b7280); }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        .config-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted, #6b7280); margin-bottom: 6px; }
+        .config-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+        .config-row.static { cursor: default; }
+        .config-row:not(.static):hover { background: var(--mj-bg-surface-sunken, #f3f4f6); }
+        .config-kind { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary, #2563eb); align-self: center; }
+        .config-main { font-weight: 600; overflow-wrap: anywhere; }
+        .config-meta { grid-column: 2; font-size: 11px; color: var(--mj-text-muted, #6b7280); overflow-wrap: anywhere; }
+        .config-empty { font-size: 12px; color: var(--mj-text-muted, #6b7280); }
         .work-tab-container {
             display: flex;
             flex-direction: column;
@@ -668,6 +706,10 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 <div class="stat-pill" [mjClickable]="homeCountLabel('files')" (click)="onNavSelectRequested('files')">
                                                     <span class="stat-val">{{ homeCountValue('files') }}</span>
                                                     <span class="stat-lbl">Shared Files</span>
+                                                </div>
+                                                <div class="stat-pill" [class.active]="homeList === 'pins'" [mjClickable]="homePinsLabel" (click)="onHomeListRequested('pins')">
+                                                    <span class="stat-val">{{ homePins.length }}</span>
+                                                    <span class="stat-lbl">My Pins</span>
                                                 </div>
                                             </div>
                                         </header>
@@ -869,7 +911,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         [Status]="spaceStatus"
                                         [Subtitle]="spaceSubtitle"
                                         [BackgroundImageUrl]="headerBackgroundImageUrl"
+                                        [ShowStar]="!!currentUser"
+                                        [IsStarred]="isSpaceStarred"
+                                        [StarBusy]="isTogglingStar"
                                         (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
+                                        (StarToggleRequested)="onStarToggle()"
                                     >
                                         <div actions class="row gap8">
                                             <mjc-audience-pill
@@ -878,6 +924,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 [TotalPeople]="headerTotalPeople"
                                                 [Summary]="headerAudienceSummary"
                                             />
+                                            @if (canAddHere && hasTab('Notes') && activeTab !== 'Notes') {
+                                                <button mjButton Variant="secondary" Size="md" (click)="onQuickNoteClicked()" title="Write a note in this space">
+                                                    <i class="fa-solid fa-note-sticky"></i>Note
+                                                </button>
+                                            }
                                             @if (activeTab === 'Overview') {
                                                 @if (canInviteHere) {
                                                     <button mjButton Variant="secondary" Size="md" (click)="onInviteClicked()">
@@ -908,6 +959,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
+                                                @if (spacePins.length > 0) {
+                                                    <div class="pinned-wrap">
+                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
+                                                    </div>
+                                                }
                                                 <mjc-space-overview
                                                     #spaceOverview
                                                     [SpaceId]="activeSpaceId"
@@ -1060,6 +1116,50 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
+                                            @case ('Data') {
+                                                <mjc-space-data
+                                                    [Entries]="dataEntries"
+                                                    [SelectedGrantId]="selectedDataGrantId"
+                                                    [SelectedLabel]="selectedDataLabel"
+                                                    [Run]="dataRun"
+                                                    [CanPin]="!!currentUser"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [EmptyMessage]="dataEmptyMessage"
+                                                    (EntrySelectRequested)="onDataEntrySelected($event)"
+                                                    (PinToggleRequested)="onDataPinToggle($event)"
+                                                    (RerunRequested)="rerunDataEntry()"
+                                                >
+                                                    @if (dataEmbedded; as embedded) {
+                                                        <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
+                                                    }
+                                                </mjc-space-data>
+                                            }
+                                            @case ('Notes') {
+                                                <mjc-space-notes
+                                                    #notesPanel
+                                                    [Title]="notesLabel"
+                                                    [Notes]="spaceNotes"
+                                                    [IsLoading]="isLoadingNotes"
+                                                    [ErrorMessage]="notesError"
+                                                    [IsSaving]="isSavingNote"
+                                                    [SaveError]="noteSaveError"
+                                                    [CanWrite]="canContribute"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [PromotionConsequence]="notePromotionConsequence"
+                                                    [AutoOpen]="notesAutoOpen"
+                                                    (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
+                                                    (SaveRequested)="onNoteSave($event)"
+                                                    (DeleteRequested)="onNoteDelete($event)"
+                                                    (PromoteRequested)="onNotePromote($event)"
+                                                    (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
+                                                    (PinToggleRequested)="onNotePinToggle($event)"
+                                                />
+                                            }
                                             @case ('People') {
                                                 <mjc-space-people
                                                     [Members]="spaceMembers"
@@ -1122,6 +1222,47 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         }
                                                     </div>
                                                 </mjc-space-settings>
+                                                @if (settingsAccessNow.canEdit && spaceConfigurationFull; as configuration) {
+                                                    <section class="config-card" aria-label="Grants, anchors and data reach">
+                                                        <div class="config-title"><i class="fa-solid fa-diagram-project"></i> What this space is given</div>
+                                                        <p class="config-sub">The grants, anchors and data reach in force here, resolved from the app, the type and the chain of spaces. A grant or anchor opens its record to edit it.</p>
+                                                        <div class="config-grid">
+                                                            <div class="config-col">
+                                                                <div class="config-h">Grants</div>
+                                                                @if (configurationGrants.length === 0) { <div class="config-empty">None.</div> }
+                                                                @for (grant of configurationGrants; track grant.GrantID) {
+                                                                    <div class="config-row" [mjClickable]="'Open grant ' + (grant.Label || grant.Kind)" (click)="openConfigurationRecord('MJ_BizApps_Collaboration: Space Grants', grant.GrantID)">
+                                                                        <span class="config-kind">{{ grant.Kind }}</span>
+                                                                        <span class="config-main">{{ grant.Label || grant.TargetRecordID }}</span>
+                                                                        <span class="config-meta">{{ grant.Band }} · from the {{ grant.Level | lowercase }}</span>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                            <div class="config-col">
+                                                                <div class="config-h">Anchors</div>
+                                                                @if (spaceAnchors.length === 0) { <div class="config-empty">None.</div> }
+                                                                @for (anchor of spaceAnchors; track anchor.ID) {
+                                                                    <div class="config-row" [mjClickable]="'Open anchor ' + anchor.Role" (click)="openConfigurationRecord('MJ_BizApps_Collaboration: Space Anchors', anchor.ID)">
+                                                                        <span class="config-kind">{{ anchor.Role }}</span>
+                                                                        <span class="config-main">{{ anchor.Entity }}</span>
+                                                                        <span class="config-meta">{{ anchor.RecordID }}{{ anchor.IsPrimary ? ' · primary' : '' }}</span>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                            <div class="config-col">
+                                                                <div class="config-h">Data reach</div>
+                                                                @if (configuration.DataReach.length === 0) { <div class="config-empty">None declared by the type.</div> }
+                                                                @for (reach of configuration.DataReach; track $index) {
+                                                                    <div class="config-row static">
+                                                                        <span class="config-kind">{{ reach.Band }}</span>
+                                                                        <span class="config-main">{{ reach.Entity }}</span>
+                                                                        <span class="config-meta">{{ reach.Fields?.length ? reach.Fields.length + ' field' + (reach.Fields.length === 1 ? '' : 's') : 'every field' }}</span>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </section>
+                                                }
                                             }
                                             @default {
                                                 @if (contributedTabComponent; as tabComponent) {
@@ -1553,11 +1694,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 return;
             }
             const before = this.serverRulesBySpace.get(key) ?? (browserWalkError ? null : this.uiContext?.rules);
+            const offeredBefore = this.spaceOffersData(space.ID);
             this.serverRulesBySpace.set(key, rules);
-            if (this._loadedSpaceId && UUIDsEqual(this._loadedSpaceId, space.ID) && !sameRules(before, rules)) {
+            this.rememberConfiguration(key, res.ConfigurationJSON ?? null, res.Full === true);
+            const shown = !!this._loadedSpaceId && UUIDsEqual(this._loadedSpaceId, space.ID);
+            if (shown) this.refreshDataEntries(space.ID);
+            if (shown && (!sameRules(before, rules) || offeredBefore !== this.spaceOffersData(space.ID))) {
                 this.buildSpaceUi(space);
-                this.changeDetector.markForCheck();
             }
+            if (shown) this.changeDetector.markForCheck();
         } catch (err) {
             this.logOnce(`rules:${space.ID}`, `Could not read the configuration of space ${space.ID} from the server: ${err instanceof Error ? err.message : String(err)}${beside}`);
         } finally {
@@ -1599,6 +1744,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // A driver or a contribution that throws must not take the space down: log it, and fall back to the built-in parts
         this.spaceTabModel = buildSpaceTabsSafely({
             panels,
+            offersData: this.spaceOffersData(space.ID),
             finalize: (defaults) => this.uiDriver.GetTabs(ctx, assembleSpaceContributions(BaseSpaceTab, code, defaults, tabFactory)),
             labelFor: (key, label) => this.uiDriver.GetTabLabel(ctx, key, label),
             onDropped: (key) => this.logOnce(`dropped:${code}:${key}`, `A tab keyed '${key}' in space type '${code}' names no built-in tab and has no component, so it is dropped (first seen in space ${space.ID}).`),
@@ -1690,15 +1836,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public get homeListTitle(): string {
+        if (this.homeList === 'pins') return 'Your pins, across your spaces';
         return this.homeList === 'approvals' ? 'Invitations waiting on an owner' : 'Open tasks in your spaces';
     }
 
     public get homeListEmpty(): string {
+        if (this.homeList === 'pins') return 'Nothing pinned yet. Pin a note, a file or a report in a space to keep it here.';
         return this.homeList === 'approvals' ? 'No invitations are waiting for you to approve.' : 'No open tasks in your spaces.';
     }
 
     public get homeListTotal(): number {
+        if (this.homeList === 'pins') return this.homePins.length;
         return this.homeList === 'approvals' ? this.homeAwaitingApproval : this.homeOpenTasks;
+    }
+
+    /** What the pins pill says to a screen reader. */
+    public get homePinsLabel(): string {
+        return `${this.homePins.length} ${this.homePins.length === 1 ? 'pin' : 'pins'}`;
     }
 
     /** The rows of the list that is open, worked out when the list is opened or read and not on every change-detection pass. */
@@ -1706,7 +1860,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
-        const rows: HomeRowModel[] = this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : taskRows(this.homeOpenTaskList, date);
+        const rows: HomeRowModel[] = this.homeList === 'pins'
+            ? pinRows(this.homePins)
+            : this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : taskRows(this.homeOpenTaskList, date);
         this.homeListRows = rows;
     }
 
@@ -1718,7 +1874,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         this.homeList = kind;
         this.refreshHomeListRows();
-        void this.loadHomeLists();
+        if (kind === 'pins') void this.loadHomePins();
+        else void this.loadHomeLists();
     }
 
     public closeHomeList(): void {
@@ -1752,6 +1909,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task. */
     public onHomeRowSelected(key: string): void {
+        if (this.homeList === 'pins') {
+            const pin = this.homePins.find((p) => UUIDsEqual(p.id, key));
+            if (pin) this.openPin(pin);
+            return;
+        }
         if (this.homeList === 'approvals') {
             const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, key));
             if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
@@ -1762,7 +1924,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Opens a space on one of its tabs. A space that is not in the person's list says so, rather than doing nothing. */
-    private openSpaceOnTab(spaceId: string, tab: 'People' | 'Work'): void {
+    private openSpaceOnTab(spaceId: string, tab: string): void {
         if (!this.rawSpaces.some((s) => UUIDsEqual(s.ID, spaceId))) {
             SharedService.Instance.CreateSimpleNotification("That space isn't in your list, so it can't be opened here.", 'warning', 5000);
             return;
@@ -2268,7 +2430,632 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
+    // ── Stage 4 (B19, B21, B22): the data surface, notes, pins and the star ─────────────────────────────────────────────
+    /** The server's whole configuration document per space, cut to the viewer, kept beside its rules for the data surface and Settings. */
+    private readonly serverConfigurationBySpace = new Map<string, { configuration: EffectiveSpaceConfiguration; full: boolean }>();
+    public spaceNotes: NoteModel[] = [];
+    public isLoadingNotes = false;
+    public notesError = '';
+    public isSavingNote = false;
+    public noteSaveError = '';
+    private rawPins: PinRow[] = [];
+    public spacePins: PinModel[] = [];
+    public homePins: PinModel[] = [];
+    public dataEntries: DataEntryModel[] = [];
+    public selectedDataGrantId: string | null = null;
+    public dataRun: DataRunModel | null = null;
+    public dataEmbedded: { spec: ComponentSpec; props: Record<string, unknown> } | null = null;
+    private dataRunRequestId = 0;
+    public isSpaceStarred = false;
+    public isTogglingStar = false;
+    public spaceAnchors: AnchorRow[] = [];
+    @ViewChild('notesPanel') private notesPanel?: CollabSpaceNotesComponent;
+
+    private resetStage4(_spaceId: string): void {
+        this.spaceNotes = [];
+        this.isLoadingNotes = false;
+        this.notesError = '';
+        this.isSavingNote = false;
+        this.noteSaveError = '';
+        this.rawPins = [];
+        this.spacePins = [];
+        this.dataEntries = [];
+        this.selectedDataGrantId = null;
+        this.dataRun = null;
+        this.dataEmbedded = null;
+        this.dataRunRequestId++;
+        this.isSpaceStarred = false;
+        this.isTogglingStar = false;
+        this.spaceAnchors = [];
+    }
+
+    /** The stage 4 reads for the space shown: notes, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
+    private async loadStage4(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        await Promise.all([
+            this.loadSpaceNotes(spaceId, isCurrent),
+            this.loadSpacePins(spaceId, isCurrent),
+            this.loadStar(spaceId, isCurrent),
+            this.loadSpaceAnchors(spaceId, isCurrent),
+        ]);
+        if (!isCurrent()) return;
+        this.refreshDataEntries(spaceId);
+        this.RefreshView();
+    }
+
+    private rememberConfiguration(key: string, json: string | null, full: boolean): void {
+        if (!json) return;
+        try {
+            this.serverConfigurationBySpace.set(key, { configuration: JSON.parse(json) as EffectiveSpaceConfiguration, full });
+        } catch (error) {
+            this.logOnce(`configuration:${key}`, `The configuration of space ${key} does not parse: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    private configurationOf(spaceId: string): EffectiveSpaceConfiguration | null {
+        return this.serverConfigurationBySpace.get(spaceId.toLowerCase())?.configuration ?? null;
+    }
+
+    /** The whole document, for Settings: only a viewer the server gave it to in full (the settings authorizations) sees it there. */
+    public get spaceConfigurationFull(): EffectiveSpaceConfiguration | null {
+        const entry = this.serverConfigurationBySpace.get(this.activeSpaceId.toLowerCase());
+        return entry?.full ? entry.configuration : null;
+    }
+
+    public get configurationGrants(): Array<{ GrantID: string; Kind: string; Label: string | null; TargetRecordID: string; Band: string; Level: string }> {
+        const configuration = this.spaceConfigurationFull;
+        if (!configuration) return [];
+        return Object.values(configuration.Grants).flat().map((grant) => ({ GrantID: grant.GrantID, Kind: grant.Kind, Label: grant.Label, TargetRecordID: grant.TargetRecordID, Band: grant.Band, Level: grant.Level }));
+    }
+
+    public openConfigurationRecord(entityName: string, id: string): void {
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id));
+    }
+
+    /** Whether the space offers data to this viewer (B19): a view, query, dashboard or component grant on a band they see, or a declared reach. */
+    private spaceOffersData(spaceId: string): boolean {
+        const configuration = this.configurationOf(spaceId);
+        if (!configuration) return false;
+        const kinds = ['View', 'Query', 'Dashboard', 'Component'] as const;
+        return kinds.some((kind) => GrantsForViewer(configuration, kind, this.canSeeTeamSide).length > 0) || configuration.DataReach.length > 0;
+    }
+
+    private bandLabel(band: SpaceBand): string {
+        const configuration = this.configurationOf(this.activeSpaceId);
+        const labels = (configuration?.Settings as { Labels?: { Bands?: Record<string, string> } } | undefined)?.Labels?.Bands;
+        return labels?.[band] ?? (band === 'Team' ? 'Team' : 'Shared');
+    }
+
+    public get sharedBandLabel(): string { return this.bandLabel('Shared'); }
+    public get teamBandLabel(): string { return this.bandLabel('Team'); }
+    public get notesLabel(): string { return this.tabs.find((tab) => tab.id === 'Notes')?.label ?? 'Notes'; }
+    public get pinnedLabel(): string { return 'Pinned'; }
+
+    /** What the type offers, for the Data tab's empty state. */
+    public get dataEmptyMessage(): string {
+        const configuration = this.configurationOf(this.activeSpaceId);
+        if (!configuration) return 'This space offers no views, queries, dashboards or components.';
+        const reach = configuration.DataReach.map((r) => `${r.Entity} (${this.bandLabel(r.Band)})`);
+        return reach.length
+            ? `Nothing granted here yet. This space's type reaches ${reach.join(', ')}; a view or query over them appears here once it is granted.`
+            : `This space's type offers no views, queries, dashboards or components.`;
+    }
+
+    // ── notes (B21) ──────────────────────────────────────────────────────────────
+
+    private noteModel(row: NoteRow): NoteModel {
+        const me = this.currentUser?.ID ?? '';
+        const author = this.spaceMembers.find((m) => UUIDsEqual(m.userId, row.AuthorUserID));
+        const verdict = notePromotionVerdict(
+            { userId: me, isSpaceOwner: !!this.activeSpaceRecord && UUIDsEqual(this.activeSpaceRecord.OwnerID, me), role: this.callerSeat?.role ?? null, administers: this.mayAdministerSpaces },
+            { Band: row.Band, Visibility: row.Visibility, AuthorUserID: row.AuthorUserID },
+        );
+        return {
+            id: row.ID,
+            title: row.Title,
+            body: row.Body ?? '',
+            band: row.Band,
+            visibility: row.Visibility,
+            authorUserId: row.AuthorUserID,
+            authorName: row.AuthorUser || author?.name || (UUIDsEqual(row.AuthorUserID, me) ? 'You' : 'A member'),
+            updatedLabel: formatDateLocale(row.__mj_UpdatedAt),
+            isMine: UUIDsEqual(row.AuthorUserID, me),
+            canPromote: verdict.ok,
+            isPinned: this.rawPins.some((pin) => pin.Kind === 'Record' && UUIDsEqual(pin.TargetEntityID, notesEntityId()) && bareRecordId(pin.TargetRecordID ?? '').toLowerCase() === row.ID.toLowerCase()),
+        };
+    }
+
+    private async loadSpaceNotes(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
+        this.isLoadingNotes = true;
+        this.notesError = '';
+        try {
+            const res = await new RunView(this.RunViewToUse).RunView<NoteRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Notes',
+                BypassCache: true, // a note or pin just written or removed must show at once
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 200,
+            });
+            if (!isCurrent()) return;
+            if (!res?.Success) {
+                this.notesError = `The notes could not be read: ${res?.ErrorMessage ?? 'unknown error'}`;
+                this.spaceNotes = [];
+                return;
+            }
+            this.spaceNotes = (res.Results ?? []).map((row) => this.noteModel(row));
+        } catch (err) {
+            if (!isCurrent()) return;
+            this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
+        } finally {
+            if (isCurrent()) {
+                this.isLoadingNotes = false;
+                this.RefreshView();
+            }
+        }
+    }
+
+    /** The band a new note starts on: the upload choice the seat was given, else what the seat may see. */
+    public get noteDefaultBand(): SpaceBand {
+        return this.bandChoice?.start ?? (this.canSeeTeamSide ? (this.typeDefaultBand ?? 'Shared') : 'Shared');
+    }
+
+    public notePromotionConsequence = (note: NoteModel): string => promotionConsequence({ Title: note.title }, this.sharedBandLabel);
+
+    /** Set by the quick add: the Notes tab opens with its composer, and the flag drops once the composer closes. */
+    public notesAutoOpen = false;
+
+    public onNotesComposerOpenChanged(open: boolean): void {
+        if (!open) this.notesAutoOpen = false;
+    }
+
+    /** The quick add (B21): from any tab, the Notes tab opens with the composer. */
+    public onQuickNoteClicked(): void {
+        this.notesAutoOpen = true;
+        if (this.activeTab === 'Notes') this.notesPanel?.openComposer(null);
+        else {
+            this.setTab('Notes');
+            this.UpdateQueryParams({ tab: 'notes' });
+        }
+        this.RefreshView();
+    }
+
+    public async onNoteSave(draft: NoteDraft): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const note = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            if (draft.id) {
+                if (!(await note.Load(draft.id))) throw new Error('The note could not be loaded.');
+            } else {
+                note.NewRecord();
+                note.SpaceID = spaceId;
+                // The author is the signed-in person; the server stamps and checks it too, but MJ's required-field check runs here first
+                note.AuthorUserID = this.currentUser?.ID ?? '';
+            }
+            note.Title = draft.title;
+            note.Body = draft.body || null;
+            note.Band = draft.band;
+            note.Visibility = draft.visibility;
+            if (!(await note.Save())) throw new Error(note.LatestResult?.CompleteMessage || 'The note was not saved.');
+            this.notesPanel?.closeComposer();
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note action failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onNoteDelete(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.noteSaveError = '';
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
+            if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not deleted.');
+            const pin = this.rawPins.find((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId()) && bareRecordId(p.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase());
+            if (pin) await this.removePin(pin.ID);
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            await this.loadSpacePins(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note action failed: ${this.noteSaveError}`);
+        } finally {
+            this.RefreshView();
+        }
+    }
+
+    /** Call 15: the note moves to Shared, the same record, the server judging and logging it. */
+    public async onNotePromote(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            if (!(await entity.Load(note.id))) throw new Error('The note could not be loaded.');
+            entity.Band = 'Shared';
+            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The note was not shared.');
+            SharedService.Instance.CreateSimpleNotification(`"${note.title}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note action failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    /** *Turn into document* (B21): the note as a Markdown file through the upload path, on the note's band; the note stays. */
+    public async onNoteTurnIntoDocument(note: NoteModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.isSavingNote = true;
+        this.noteSaveError = '';
+        this.RefreshView();
+        try {
+            const doc = noteDocument({ Title: note.title, Body: note.body });
+            const base64 = btoa(unescape(encodeURIComponent(doc.content)));
+            const res = await new CollaborationClient(this.graphQLExecutor).UploadSpaceFile({ SpaceID: spaceId, FileName: doc.fileName, MimeType: doc.mimeType, Base64Data: base64, Folder: 'Notes', Band: note.band });
+            if (!res.Success) throw new Error(res.ErrorMessage || 'The document was not created.');
+            SharedService.Instance.CreateSimpleNotification(`${doc.fileName} is in the library.`, 'success', 4000);
+            if (UUIDsEqual(this.activeSpaceId, spaceId)) await this.loadSpaceItems(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.noteSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Note action failed: ${this.noteSaveError}`);
+        } finally {
+            this.isSavingNote = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onNotePinToggle(note: NoteModel): Promise<void> {
+        const existing = this.rawPins.find((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId()) && bareRecordId(p.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase());
+        if (existing) await this.removePin(existing.ID);
+        else await this.addPin({ Kind: 'Record', TargetEntityID: notesEntityId(), TargetRecordID: `ID|${note.id}`, GrantID: null });
+    }
+
+    // ── pins (B22) ───────────────────────────────────────────────────────────────
+
+    private async loadSpacePins(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId) || !this.currentUser) return;
+        try {
+            const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Member Pins',
+                BypassCache: true, // a note or pin just written or removed must show at once
+                ExtraFilter: `SpaceID = '${spaceId}' AND UserID = '${this.currentUser.ID}'`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+            if (!isCurrent()) return;
+            if (!res?.Success) {
+                this.logOnce(`pins:${spaceId}`, `The pins could not be read: ${res?.ErrorMessage ?? 'unknown error'}`);
+                this.rawPins = [];
+            } else {
+                this.rawPins = res.Results ?? [];
+            }
+            this.refreshPinModels();
+        } catch (err) {
+            if (!isCurrent()) return;
+            this.logOnce(`pins:${spaceId}`, `The pins could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** A pin as the strip shows it: what it points at, found among the space's items, notes and data entries. */
+    private pinModel(pin: PinRow, spaceName: string): PinModel | null {
+        const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName };
+        if (pin.Kind === 'Grant') {
+            const entry = this.dataEntries.find((e) => UUIDsEqual(e.grantId, pin.GrantID ?? ''));
+            const configuration = this.configurationOf(pin.SpaceID);
+            const grant = entry ?? (configuration ? Object.values(configuration.Grants).flat().find((g) => UUIDsEqual(g.GrantID, pin.GrantID ?? '')) : undefined);
+            const label = entry?.label ?? (grant && 'Label' in grant ? (grant.Label ?? grant.Kind) : 'A granted report');
+            const kind = entry?.kind ?? (grant && 'Kind' in grant ? grant.Kind : 'Query');
+            return { ...base, kind: 'Grant', title: label, subtitle: kind, iconClass: 'fa-solid fa-table-cells', target: `grant:${pin.GrantID}` };
+        }
+        const recordId = bareRecordId(pin.TargetRecordID ?? '');
+        if (UUIDsEqual(pin.TargetEntityID, notesEntityId())) {
+            const note = this.spaceNotes.find((n) => UUIDsEqual(n.id, recordId));
+            return { ...base, kind: 'Record', title: note?.title ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
+        }
+        const item = this.libraryRows.find((row) => UUIDsEqual(row.fileId ?? '', recordId) || UUIDsEqual(row.id, recordId));
+        if (!item) return null;
+        return { ...base, kind: 'Record', title: item.name, subtitle: item.folder || 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${item.id}` };
+    }
+
+    private refreshPinModels(): void {
+        const spaceName = this.spaceTitle;
+        this.spacePins = this.rawPins.map((pin) => this.pinModel(pin, spaceName)).filter((pin): pin is PinModel => pin !== null);
+        this.spaceNotes = this.spaceNotes.map((note) => ({ ...note, isPinned: this.rawPins.some((pin) => pin.Kind === 'Record' && UUIDsEqual(pin.TargetEntityID, notesEntityId()) && bareRecordId(pin.TargetRecordID ?? '').toLowerCase() === note.id.toLowerCase()) }));
+        this.dataEntries = this.dataEntries.map((entry) => ({ ...entry, isPinned: this.rawPins.some((pin) => pin.Kind === 'Grant' && UUIDsEqual(pin.GrantID ?? '', entry.grantId)) }));
+    }
+
+    private async addPin(target: { Kind: 'Record' | 'Grant'; TargetEntityID: string | null; TargetRecordID: string | null; GrantID: string | null }): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        try {
+            const md = new Metadata();
+            const pin = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberPinEntity>('MJ_BizApps_Collaboration: Space Member Pins');
+            pin.NewRecord();
+            pin.SpaceID = spaceId;
+            pin.Kind = target.Kind;
+            pin.TargetEntityID = target.TargetEntityID;
+            pin.TargetRecordID = target.TargetRecordID;
+            pin.GrantID = target.GrantID;
+            pin.Sequence = this.rawPins.length;
+            if (!(await pin.Save())) throw new Error(pin.LatestResult?.CompleteMessage || 'The pin was not saved.');
+            await this.loadSpacePins(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            SharedService.Instance.CreateSimpleNotification(err instanceof Error ? err.message : String(err), 'error', 6000);
+        } finally {
+            this.RefreshView();
+        }
+    }
+
+    private async removePin(pinId: string): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        try {
+            const md = new Metadata();
+            const pin = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberPinEntity>('MJ_BizApps_Collaboration: Space Member Pins');
+            if (!(await pin.Load(pinId))) throw new Error('The pin could not be loaded.');
+            if (!(await pin.Delete())) throw new Error(pin.LatestResult?.CompleteMessage || 'The pin was not removed.');
+            this.homePins = this.homePins.filter((p) => !UUIDsEqual(p.id, pinId));
+            if (UUIDsEqual(this.activeSpaceId, spaceId)) await this.loadSpacePins(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            SharedService.Instance.CreateSimpleNotification(err instanceof Error ? err.message : String(err), 'error', 6000);
+        } finally {
+            this.RefreshView();
+        }
+    }
+
+    public onUnpin(pin: PinModel): void {
+        void this.removePin(pin.id);
+    }
+
+    /** A pin opens where the thing lives: the note on Notes, the file in the library's drawer, the report on Data. */
+    public onPinOpen(pin: PinModel): void {
+        this.openPin(pin);
+    }
+
+    private openPin(pin: PinModel): void {
+        const [kind, id] = pin.target.split(':');
+        const here = UUIDsEqual(pin.spaceId, this.activeSpaceId) && this.activeView === 'space';
+        if (!here) {
+            this.pendingPinTarget = pin.target;
+            this.openSpaceOnTab(pin.spaceId, kind === 'note' ? 'Notes' : kind === 'grant' ? 'Data' : 'Library');
+            return;
+        }
+        this.showPinTarget(kind, id);
+    }
+
+    private pendingPinTarget: string | null = null;
+
+    private showPinTarget(kind: string, id: string): void {
+        if (kind === 'note') {
+            this.setTab('Notes');
+            this.UpdateQueryParams({ tab: 'notes' });
+        } else if (kind === 'grant') {
+            this.setTab('Data');
+            this.UpdateQueryParams({ tab: 'data' });
+            const entry = this.dataEntries.find((e) => UUIDsEqual(e.grantId, id));
+            if (entry) void this.onDataEntrySelected(entry);
+        } else {
+            const row = this.libraryRows.find((r) => UUIDsEqual(r.id, id));
+            if (row) this.onItemSelected({ id: row.id, kind: row.kind, title: row.name, meta: '', stamp: '' });
+        }
+        this.RefreshView();
+    }
+
+    /** *My pins* on Home: the viewer's pins across the spaces they reach, each named by its space. */
+    public async loadHomePins(): Promise<void> {
+        if (!this.currentUser) return;
+        this.isLoadingHomeList = true;
+        this.homeListError = '';
+        this.RefreshView();
+        try {
+            const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Member Pins',
+                BypassCache: true, // a note or pin just written or removed must show at once
+                ExtraFilter: `UserID = '${this.currentUser.ID}'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 200,
+            });
+            if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
+            const noteIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
+            const noteTitles = new Map<string, string>();
+            if (noteIds.length) {
+                const notes = await new RunView(this.RunViewToUse).RunView<{ ID: string; Title: string }>({
+                    EntityName: 'MJ_BizApps_Collaboration: Space Notes',
+                    BypassCache: true, // a note or pin just written or removed must show at once
+                    ExtraFilter: `ID IN (${noteIds.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID', 'Title'],
+                    ResultType: 'simple',
+                });
+                for (const note of notes?.Results ?? []) noteTitles.set(note.ID.toLowerCase(), note.Title);
+            }
+            const itemIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && !UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
+            const itemNames = new Map<string, { title: string; itemId: string }>();
+            if (itemIds.length) {
+                // The item points at the file; the file's name is on the MJ Files row
+                const [items, files] = await Promise.all([
+                    new RunView(this.RunViewToUse).RunView<{ ID: string; RecordID: string }>({
+                        EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                        ExtraFilter: `RecordID IN (${itemIds.map((id) => `'ID|${id}'`).join(',')})`,
+                        Fields: ['ID', 'RecordID'],
+                        ResultType: 'simple',
+                    }),
+                    new RunView(this.RunViewToUse).RunView<{ ID: string; Name: string | null }>({
+                        EntityName: 'MJ: Files',
+                        ExtraFilter: `ID IN (${itemIds.map((id) => `'${id}'`).join(',')})`,
+                        Fields: ['ID', 'Name'],
+                        ResultType: 'simple',
+                    }),
+                ]);
+                const names = new Map((files?.Results ?? []).map((file) => [file.ID.toLowerCase(), file.Name || 'A file']));
+                for (const item of items?.Results ?? []) {
+                    const fileId = bareRecordId(item.RecordID).toLowerCase();
+                    itemNames.set(fileId, { title: names.get(fileId) ?? 'A file', itemId: item.ID });
+                }
+            }
+            this.homePins = (res.Results ?? []).map((pin): PinModel => {
+                const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, pin.SpaceID));
+                const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
+                if (pin.Kind === 'Grant') return { ...base, kind: 'Grant', title: 'A granted report', subtitle: 'Report', iconClass: 'fa-solid fa-table-cells', target: `grant:${pin.GrantID}` };
+                const recordId = bareRecordId(pin.TargetRecordID ?? '');
+                if (UUIDsEqual(pin.TargetEntityID, notesEntityId())) return { ...base, kind: 'Record', title: noteTitles.get(recordId.toLowerCase()) ?? 'A note', subtitle: 'Note', iconClass: 'fa-solid fa-note-sticky', target: `note:${recordId}` };
+                const item = itemNames.get(recordId.toLowerCase());
+                return { ...base, kind: 'Record', title: item?.title ?? 'A file', subtitle: 'File', iconClass: 'fa-solid fa-file-lines', target: `item:${item?.itemId ?? recordId}` };
+            });
+            this.refreshHomeListRows();
+        } catch (err) {
+            this.homeListError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
+            this.logOnce('home-pins', this.homeListError);
+        } finally {
+            this.isLoadingHomeList = false;
+            this.RefreshView();
+        }
+    }
+
+    // ── the star (B22): MJ's User Favorites ───────────────────────────────────────
+
+    private async loadStar(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        if (!this.currentUser) return;
+        try {
+            const starred = await Metadata.Provider.GetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId));
+            if (!isCurrent()) return;
+            this.isSpaceStarred = starred;
+        } catch (err) {
+            this.logOnce(`star:${spaceId}`, `The star could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    public async onStarToggle(): Promise<void> {
+        if (!this.currentUser || this.isTogglingStar) return;
+        const spaceId = this.activeSpaceId;
+        const wanted = !this.isSpaceStarred;
+        this.isTogglingStar = true;
+        this.RefreshView();
+        try {
+            await Metadata.Provider.SetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId), wanted, this.currentUser);
+            if (UUIDsEqual(this.activeSpaceId, spaceId)) this.isSpaceStarred = wanted;
+        } catch (err) {
+            SharedService.Instance.CreateSimpleNotification(`The star could not be saved: ${err instanceof Error ? err.message : String(err)}`, 'error', 6000);
+        } finally {
+            this.isTogglingStar = false;
+            this.RefreshView();
+        }
+    }
+
+    // ── the data surface (B19) ────────────────────────────────────────────────────
+
+    private refreshDataEntries(spaceId: string): void {
+        const configuration = this.configurationOf(spaceId);
+        if (!configuration) { this.dataEntries = []; return; }
+        const kinds = ['View', 'Query', 'Dashboard', 'Component'] as const;
+        const entries: DataEntryModel[] = [];
+        for (const kind of kinds) {
+            for (const grant of GrantsForViewer(configuration, kind, this.canSeeTeamSide)) {
+                entries.push({ grantId: grant.GrantID, kind, label: grant.Label ?? `${kind} ${grant.TargetRecordID}`, band: grant.Band, isDefault: grant.IsDefault, isPinned: this.rawPins.some((pin) => pin.Kind === 'Grant' && UUIDsEqual(pin.GrantID ?? '', grant.GrantID)) });
+            }
+        }
+        entries.sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.label.localeCompare(b.label));
+        this.dataEntries = entries;
+        this.refreshPinModels();
+        if (this.pendingPinTarget?.startsWith('grant:')) {
+            const target = this.pendingPinTarget;
+            this.pendingPinTarget = null;
+            this.showPinTarget('grant', target.slice('grant:'.length));
+        }
+    }
+
+    public get selectedDataLabel(): string {
+        return this.dataEntries.find((e) => UUIDsEqual(e.grantId, this.selectedDataGrantId ?? ''))?.label ?? '';
+    }
+
+    public rerunDataEntry(): void {
+        const entry = this.dataEntries.find((e) => UUIDsEqual(e.grantId, this.selectedDataGrantId ?? ''));
+        if (entry) void this.onDataEntrySelected(entry);
+    }
+
+    /** Runs the entry on the server, scoped by its bindings; the browser only shows what came back. */
+    public async onDataEntrySelected(entry: DataEntryModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        const requestId = ++this.dataRunRequestId;
+        const current = (): boolean => requestId === this.dataRunRequestId && UUIDsEqual(this.activeSpaceId, spaceId);
+        this.selectedDataGrantId = entry.grantId;
+        this.dataEmbedded = null;
+        this.dataRun = { grantId: entry.grantId, status: 'running', columns: [], rows: [], rowCount: 0, message: '' };
+        this.RefreshView();
+        const client = new CollaborationClient(this.graphQLExecutor);
+        try {
+            if (entry.kind === 'View' || entry.kind === 'Query') {
+                const res = entry.kind === 'View'
+                    ? await client.RunSpaceView({ SpaceID: spaceId, GrantID: entry.grantId })
+                    : await client.RunSpaceQuery({ SpaceID: spaceId, GrantID: entry.grantId });
+                if (!current()) return;
+                if (!res.Success) { this.dataRun = { grantId: entry.grantId, status: 'error', columns: [], rows: [], rowCount: 0, message: res.ErrorMessage ?? 'The run was refused.' }; return; }
+                const rows = (JSON.parse(res.RowsJSON ?? '[]') as Record<string, unknown>[]).slice(0, 200);
+                const columns = rows.length ? Object.keys(rows[0]).filter((key) => !key.startsWith('__mj_')) : [];
+                this.dataRun = { grantId: entry.grantId, status: 'rows', columns, rows, rowCount: res.RowCount ?? rows.length, message: '' };
+            } else if (entry.kind === 'Dashboard') {
+                const res = await client.GetSpaceDashboard(spaceId, entry.grantId);
+                if (!current()) return;
+                // Until MJ#4789 (A15) the server returns no dashboard: the tab says so, and lights up when the server does
+                this.dataRun = { grantId: entry.grantId, status: res.Success ? 'unavailable' : 'unavailable', columns: [], rows: [], rowCount: 0, message: res.Success ? 'Dashboards embed here once MemberJunction gives them properties (A15).' : (res.ErrorMessage ?? 'The dashboard is not available yet.') };
+            } else {
+                const res = await client.GetSpaceComponent(spaceId, entry.grantId);
+                if (!current()) return;
+                if (!res.Success || !res.SpecificationJSON) { this.dataRun = { grantId: entry.grantId, status: 'error', columns: [], rows: [], rowCount: 0, message: res.ErrorMessage ?? 'The component was refused.' }; return; }
+                const spec = JSON.parse(res.SpecificationJSON) as ComponentSpec;
+                const props = JSON.parse(res.PropsJSON ?? '{}') as Record<string, unknown>;
+                this.dataEmbedded = { spec, props };
+                this.dataRun = { grantId: entry.grantId, status: 'embedded', columns: [], rows: [], rowCount: 0, message: '' };
+            }
+        } catch (err) {
+            if (!current()) return;
+            this.dataRun = { grantId: entry.grantId, status: 'error', columns: [], rows: [], rowCount: 0, message: err instanceof Error ? err.message : String(err) };
+        } finally {
+            if (current()) this.RefreshView();
+        }
+    }
+
+    public async onDataPinToggle(entry: DataEntryModel): Promise<void> {
+        const existing = this.rawPins.find((p) => p.Kind === 'Grant' && UUIDsEqual(p.GrantID ?? '', entry.grantId));
+        if (existing) await this.removePin(existing.ID);
+        else await this.addPin({ Kind: 'Grant', TargetEntityID: null, TargetRecordID: null, GrantID: entry.grantId });
+    }
+
+    // ── anchors, for Settings ─────────────────────────────────────────────────────
+
+    private async loadSpaceAnchors(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
+        try {
+            const res = await new RunView(this.RunViewToUse).RunView<AnchorRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Anchors',
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                OrderBy: 'Sequence ASC',
+                ResultType: 'simple',
+                MaxRows: 50,
+            });
+            if (!isCurrent()) return;
+            this.spaceAnchors = res?.Success ? (res.Results ?? []) : [];
+        } catch (err) {
+            if (!isCurrent()) return;
+            this.logOnce(`anchors:${spaceId}`, `The anchors could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+
     private resetForSelection(spaceId: string): void {
+        this.resetStage4(spaceId);
         this.activeConversationId = '';
         this.overviewRoomMessages = [];
         this.spaceConversations = [];
@@ -2428,6 +3215,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         await this.loadSpaceTasks(spaceId, isCurrent);
         if (!isCurrent()) return;
         await this.loadSpaceMembers(spaceId, isCurrent);
+        if (!isCurrent()) return;
+        await this.loadStage4(spaceId, isCurrent);
         if (!isCurrent()) return;
         await this.loadSpaceChatHostRules(spaceId, this.activeConversationId || undefined);
         if (!isCurrent()) return;

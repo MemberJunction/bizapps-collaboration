@@ -128,6 +128,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: 6.2.0-edge.2
+      '@memberjunction/interactive-component-types':
+        specifier: 6.2.0-edge.2
+        version: 6.2.0-edge.2
       '@memberjunction/ng-base-application':
         specifier: 6.2.0-edge.2
         version: 6.2.0-edge.2(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
@@ -143,6 +146,9 @@ importers:
       '@memberjunction/ng-link-directives':
         specifier: 6.2.0-edge.2
         version: 6.2.0-edge.2(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2))(rxjs@7.8.2)(ws@8.21.3)
+      '@memberjunction/ng-react':
+        specifier: 6.2.0-edge.2
+        version: 6.2.0-edge.2(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(ws@8.21.3)
       '@memberjunction/ng-shared':
         specifier: 6.2.0-edge.2
         version: 6.2.0-edge.2(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2))(rxjs@7.8.2)(ws@8.21.3)

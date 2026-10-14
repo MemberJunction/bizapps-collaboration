@@ -1568,3 +1568,89 @@ describe('CollabSpaceSettingsComponent', () => {
     expect([comp.CanEdit, comp.CanChangeLifecycle]).toEqual([true, true]);
   });
 });
+
+describe('CollabSpaceNotesComponent (B21)', async () => {
+  const { CollabSpaceNotesComponent } = await import('./space-notes.component.ts');
+  const note = (over: Partial<import('./types.ts').NoteModel> = {}): import('./types.ts').NoteModel => ({
+    id: 'n1', title: 'Q3 plan', body: 'Call the lapsed members.', band: 'Team', visibility: 'Space', authorUserId: 'u1', authorName: 'Sam',
+    updatedLabel: 'today', isMine: true, canPromote: true, isPinned: false, ...over,
+  });
+  it('opens the composer on the default band for a seat that sees Team, and Shared for one that does not', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.CanSeeTeam = true; comp.DefaultBand = 'Team';
+    comp.openComposer(null);
+    expect(comp.draft).toEqual({ id: null, title: '', body: '', band: 'Team', visibility: 'Space' });
+    const outside = new CollabSpaceNotesComponent();
+    outside.CanSeeTeam = false; outside.DefaultBand = 'Team';
+    outside.openComposer(null);
+    expect(outside.draft?.band).toBe('Shared');
+  });
+  it('a private note sits on Team; choosing Shared makes it a space note again', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.CanSeeTeam = true;
+    comp.openComposer(null);
+    comp.setBand(comp.draft!, 'Team');
+    comp.togglePrivate(comp.draft!);
+    expect(comp.draft).toMatchObject({ band: 'Team', visibility: 'Private' });
+    comp.setBand(comp.draft!, 'Shared');
+    expect(comp.draft).toMatchObject({ band: 'Shared', visibility: 'Space' });
+  });
+  it('submits a trimmed draft and ignores an empty title', () => {
+    const comp = new CollabSpaceNotesComponent();
+    const saved: unknown[] = [];
+    comp.SaveRequested.subscribe((d) => saved.push(d));
+    comp.openComposer(null);
+    comp.submit();
+    expect(saved).toHaveLength(0);
+    comp.draft!.title = '  Agenda  ';
+    comp.submit();
+    expect(saved).toEqual([{ id: null, title: 'Agenda', body: '', band: 'Shared', visibility: 'Space' }]);
+  });
+  it('promotion asks first and emits only on confirmation', () => {
+    const comp = new CollabSpaceNotesComponent();
+    const promoted: string[] = [];
+    comp.PromoteRequested.subscribe((n) => promoted.push(n.id));
+    const n = note();
+    comp.askPromote(n);
+    expect(comp.promoting?.id).toBe('n1');
+    expect(promoted).toEqual([]);
+    comp.confirmPromote(n);
+    expect(comp.promoting).toBeNull();
+    expect(promoted).toEqual(['n1']);
+  });
+  it('editing fills the composer from the note', () => {
+    const comp = new CollabSpaceNotesComponent();
+    comp.openComposer(note({ band: 'Shared' }));
+    expect(comp.draft).toEqual({ id: 'n1', title: 'Q3 plan', body: 'Call the lapsed members.', band: 'Shared', visibility: 'Space' });
+  });
+});
+
+describe('CollabSpaceDataComponent (B19)', async () => {
+  const { CollabSpaceDataComponent } = await import('./space-data.component.ts');
+  it('names each kind and its icon', () => {
+    const comp = new CollabSpaceDataComponent();
+    expect(comp.kindLabel('Query')).toBe('Query');
+    expect(comp.iconFor('Dashboard')).toContain('chart');
+    expect(comp.iconFor('Component')).toContain('cubes');
+  });
+  it('renders cells readably', () => {
+    const comp = new CollabSpaceDataComponent();
+    expect(comp.cell(null)).toBe('');
+    expect(comp.cell(12)).toBe('12');
+    expect(comp.cell({ a: 1 })).toBe('{"a":1}');
+  });
+});
+
+describe('CollabPinnedStripComponent (B22)', async () => {
+  const { CollabPinnedStripComponent } = await import('./pinned-strip.component.ts');
+  it('emits open and unpin for the pin', () => {
+    const comp = new CollabPinnedStripComponent();
+    const opened: string[] = []; const unpinned: string[] = [];
+    comp.OpenRequested.subscribe((p) => opened.push(p.target));
+    comp.UnpinRequested.subscribe((p) => unpinned.push(p.id));
+    const pin = { id: 'p1', kind: 'Record' as const, title: 'Roadmap', subtitle: 'file', iconClass: 'fa-solid fa-file', target: 'item:i1', spaceId: 's', spaceName: 'Northwind' };
+    comp.OpenRequested.emit(pin); comp.UnpinRequested.emit(pin);
+    expect(opened).toEqual(['item:i1']);
+    expect(unpinned).toEqual(['p1']);
+  });
+});

@@ -35,3 +35,11 @@ describe("Home's lists", () => {
         assert.equal(countLabel(3, true, 'open task', 'open tasks'), 'open tasks: could not be read');
     });
 });
+
+describe('pinRows (B22)', () => {
+    it('names each pin by its space and opens it', async () => {
+        const { pinRows } = await import('./home-lists.ts');
+        const rows = pinRows([{ id: 'p1', title: 'Kickoff recap', subtitle: 'Note', spaceName: 'Northwind relationship', iconClass: 'fa-solid fa-note-sticky' }]);
+        assert.deepEqual(rows, [{ key: 'p1', title: 'Kickoff recap', detail: 'Note', spaceName: 'Northwind relationship', iconClass: 'fa-solid fa-note-sticky', actionLabel: 'Open' }]);
+    });
+});

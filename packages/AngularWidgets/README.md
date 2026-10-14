@@ -55,3 +55,9 @@ pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
 
 The build is `ngc`, into `dist/`. The tests use Vitest, 161 in all: `widgets.test.ts` and `ui-driver.test.ts` exercise the classes, and `render.test.ts` renders the dialogs, the rail, Settings with its Details card, the Overview's About card and contributed cards, Home's lists and a space's conversation, read-only with its note too (with a stand-in for MJ's chat area), in jsdom. The root `pnpm test` runs them too. They build against MemberJunction's `next`. The UX gallery renders the widgets for its own specs.
 
+## Stage 4 widgets
+
+- `mjc-space-notes` (B21): the Notes list and composer; promotion asks first (call 15), *Turn into document*, pin, edit and delete are events the section answers.
+- `mjc-pinned-strip` (B22): the viewer's pins, on a space's Overview and on Home across spaces.
+- `mjc-space-data` (B19): what the space's grants offer, the chosen one's rows, or the projected host for a component; the empty state says what the type reaches.
+- `mjc-space-header` gains the star (MJ's User Favorites).

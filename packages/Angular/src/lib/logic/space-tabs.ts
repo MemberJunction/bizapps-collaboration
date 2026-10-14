@@ -9,13 +9,17 @@ export interface BuiltInTab {
     iconClass: string;
     /** The type's panel flag this tab needs; undefined means always offered. */
     panel?: 'MessagingPanel' | 'LibraryPanel' | 'WorkPanel';
+    /** Offered only when the space has something for it: the Data tab needs a granted view, query, dashboard or component, or a declared data reach. */
+    needsData?: boolean;
     sortKey: number;
 }
 
 export const BUILT_IN_TABS: readonly BuiltInTab[] = [
     { id: 'Overview', label: 'Overview', iconClass: 'fa-solid fa-gauge-high', sortKey: 10 },
     { id: 'Library', label: 'Library', iconClass: 'fa-solid fa-folder-open', panel: 'LibraryPanel', sortKey: 20 },
+    { id: 'Data', label: 'Data', iconClass: 'fa-solid fa-table-cells', needsData: true, sortKey: 25 },
     { id: 'Work', label: 'Work', iconClass: 'fa-solid fa-list-check', panel: 'WorkPanel', sortKey: 30 },
+    { id: 'Notes', label: 'Notes', iconClass: 'fa-solid fa-note-sticky', sortKey: 35 },
     { id: 'Chat', label: 'Chat', iconClass: 'fa-solid fa-comments', panel: 'MessagingPanel', sortKey: 40 },
     { id: 'People', label: 'People', iconClass: 'fa-solid fa-user-group', sortKey: 50 },
     { id: 'Settings', label: 'Settings', iconClass: 'fa-solid fa-sliders', sortKey: 100 },
@@ -42,6 +46,8 @@ export interface SpaceTabModel {
 export interface SpaceTabInputs {
     /** Which panels the space type switches on. */
     panels: { MessagingPanel: boolean; LibraryPanel: boolean; WorkPanel: boolean };
+    /** Whether the space offers data (B19): a view, query, dashboard or component grant for the viewer, or a declared data reach. Left out, it does not. */
+    offersData?: boolean;
     /** The type's UI driver's word on the tabs, given the built-in ones plus what other apps contributed. */
     finalize: (defaults: SpaceTabDescriptor[]) => SpaceTabDescriptor[];
     /** The label a tab reads with, from the type's and the space's Labels.Tabs. */
@@ -55,7 +61,7 @@ export interface SpaceTabInputs {
  * A tab keeps the built-in tab's id when its key names one ('overview' is 'Overview'), so the screen's comparisons still hold.
  */
 export function buildSpaceTabs(input: SpaceTabInputs): SpaceTabModel {
-    const builtIns = BUILT_IN_TABS.filter((tab) => !tab.panel || input.panels[tab.panel]);
+    const builtIns = BUILT_IN_TABS.filter((tab) => (!tab.panel || input.panels[tab.panel]) && (!tab.needsData || input.offersData === true));
     const defaults: SpaceTabDescriptor[] = builtIns.map((tab) => ({ key: tab.id, label: tab.label, icon: tab.iconClass, sortKey: tab.sortKey }));
     // Whatever order the driver returned, the tabs read by sortKey (the sort is stable)
     const finalDescriptors = [...input.finalize(defaults)].sort((a, b) => (a.sortKey ?? 100) - (b.sortKey ?? 100));
@@ -67,8 +73,9 @@ export function buildSpaceTabs(input: SpaceTabInputs): SpaceTabModel {
         const key = tabKey(descriptor.key);
         if (seen.has(key)) continue;
         const builtIn = BUILT_IN_TABS.find((tab) => tabKey(tab.id) === key);
-        // A panel the type turns off stays off, whichever driver names the tab
+        // A panel the type turns off stays off, whichever driver names the tab; a Data tab with nothing to show stays off too
         if (builtIn?.panel && !input.panels[builtIn.panel]) continue;
+        if (builtIn?.needsData && input.offersData !== true) continue;
         seen.add(key);
         const id = builtIn?.id ?? descriptor.key;
         if (!builtIn && descriptor.component) contributed.set(id, descriptor.component);

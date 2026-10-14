@@ -12,7 +12,7 @@ class MeetingsTab {}
 describe("a space's tabs", () => {
     it('offers the built-in tabs, in order, when the type has every panel', () => {
         const model = buildSpaceTabs({ panels: allPanels, finalize: identity, labelFor: keepLabel });
-        assert.deepEqual(model.tabs.map((t) => t.id), ['Overview', 'Library', 'Work', 'Chat', 'People', 'Settings']);
+        assert.deepEqual(model.tabs.map((t) => t.id), ['Overview', 'Library', 'Work', 'Notes', 'Chat', 'People', 'Settings']);
         assert.equal(model.contributed.size, 0);
     });
 
@@ -22,7 +22,7 @@ describe("a space's tabs", () => {
         const model = buildSpaceTabs({ panels: allPanels, finalize: stray, labelFor: keepLabel, onDropped: (key) => dropped.push(key) });
         assert.deepEqual(dropped, ['ghost']);
         assert.equal(model.tabs.some((t) => t.id === 'ghost'), false);
-        assert.equal(model.tabs.length, 6);
+        assert.equal(model.tabs.length, 7);
     });
 
     it('shows no Library for a type with LibraryPanel off, even when the driver names it', () => {
@@ -79,7 +79,7 @@ describe('a UI driver that throws', () => {
             labelFor: keepLabel,
         }, (e) => errors.push(e));
         assert.equal(errors.length, 1);
-        assert.deepEqual(model.tabs.map((tab) => tab.id), ['Overview', 'Library', 'Chat', 'People', 'Settings']);
+        assert.deepEqual(model.tabs.map((tab) => tab.id), ['Overview', 'Library', 'Notes', 'Chat', 'People', 'Settings']);
     });
 
     it('gives the driver its tabs when it does not throw', () => {
@@ -92,5 +92,22 @@ describe('a UI driver that throws', () => {
         assert.equal(tabIdFromUrl(' PEOPLE '), 'People');
         assert.equal(tabIdFromUrl('discussions'), 'Chat');
         assert.equal(tabIdFromUrl('papers'), 'papers');
+    });
+});
+
+describe('the Data tab (B19)', () => {
+    it('is offered only when the space offers data, between Library and Work', () => {
+        const without = buildSpaceTabs({ panels: allPanels, finalize: identity, labelFor: keepLabel });
+        assert.ok(!without.tabs.some((tab) => tab.id === 'Data'));
+        const withData = buildSpaceTabs({ panels: allPanels, offersData: true, finalize: identity, labelFor: keepLabel });
+        assert.deepEqual(withData.tabs.map((tab) => tab.id), ['Overview', 'Library', 'Data', 'Work', 'Notes', 'Chat', 'People', 'Settings']);
+    });
+    it('a driver naming Data cannot switch it on for a space with nothing to show', () => {
+        const model = buildSpaceTabs({ panels: allPanels, finalize: (d) => [...d, { key: 'data', label: 'Reports' }], labelFor: keepLabel });
+        assert.ok(!model.tabs.some((tab) => tab.id === 'Data'));
+    });
+    it("reads with the type's label", () => {
+        const model = buildSpaceTabs({ panels: allPanels, offersData: true, finalize: identity, labelFor: (key, label) => (key === 'Data' ? 'Reports' : label) });
+        assert.equal(model.tabs.find((tab) => tab.id === 'Data')?.label, 'Reports');
     });
 });
