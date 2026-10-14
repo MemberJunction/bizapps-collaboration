@@ -64,3 +64,9 @@ pnpm run test:integration          # both
 
 - A check for every gate's accepting side, for tasks, invitations, share notices, item uses and band promotion. Some exist (WG6, WG8); the plan lists the rest.
 - The agent turns run on the stub agent, not a model.
+
+## Stage 4 bundles
+
+- `stage4` (server, 5): call 15's promotion and its log, the author-only rule beside it, `GetSpaceComponent` with bound props, the star through MJ's favorites, the world's notes and pins as each persona reads them.
+- `stage4` (client, 3): the promotion over the wire, *Turn into document* through the upload path, the component over the wire.
+- The world seeds `notes.csv`, `pins.csv`, and the example chapter banner (`example-chapter-banner.spec.json`) with its grant on the staff type.

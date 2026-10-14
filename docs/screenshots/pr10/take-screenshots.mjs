@@ -324,6 +324,133 @@ const SHOTS = [
             }
         },
     },
+
+    // Stage 4 (B19, B21, B22): notes with call 15's promotion, pins and the star, the data surface, and Settings' configuration.
+    // Each shot that writes (a pin, a note, a star) removes what it wrote, so the dark pass sees the same world.
+    {
+        name: '50-staff-notes-tab', who: 'staff', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await assertScreen(page, '50', { present: ['Kickoff recap', 'Pricing thoughts (internal)', 'Share with'], absent: ['My follow-ups'] });
+        },
+    },
+    {
+        name: '51-staff-note-promote-confirm', who: 'staff', item: 'B21, call 15',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await page.getByText('Pricing thoughts (internal)').first().waitFor({ state: 'visible', timeout: 20000 });
+            const note = page.locator('article.note', { hasText: 'Pricing thoughts (internal)' }).first();
+            await note.locator('button', { hasText: /Share with/ }).click();
+            await assertScreen(page, '51', { present: ['Share this note with', 'will be visible to', 'not undone', 'Keep it with the team'] });
+        },
+    },
+    {
+        name: '52-guest-notes-shared-only', who: 'guest', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            await assertScreen(page, '52', { present: ['Kickoff recap'], absent: ['Pricing thoughts', 'My follow-ups', 'Share with'] });
+        },
+    },
+    {
+        name: '53-staff-pinned-strip', who: 'staff', item: 'B22',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            const note = page.locator('article.note', { hasText: 'Kickoff recap' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await note.locator('button', { hasText: /^\s*Pin\s*$/ }).click();
+            await note.locator('button', { hasText: /^\s*Unpin\s*$/ }).waitFor({ state: 'visible', timeout: 20000 });
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            await assertScreen(page, '53', { present: ['Pinned', 'Kickoff recap'] });
+        },
+    },
+    {
+        name: '54-staff-home-my-pins', who: 'staff', item: 'B22',
+        run: async (page) => {
+            await page.goto(`${EXPLORER}/app/collaboration/Spaces?view=home`);
+            await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('My Pins').first().click();
+            await assertScreen(page, '54', { present: ['Your pins, across your spaces', 'Kickoff recap', 'Northwind relationship'] });
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: join(here, '54-staff-home-my-pins-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            // The pin 53 made is removed here, so the next pass starts from the world as loaded
+            await page.goto(spaceUrl(NORTHWIND, 'notes'));
+            const note = page.locator('article.note', { hasText: 'Kickoff recap' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await note.locator('button', { hasText: /^\s*Unpin\s*$/ }).click();
+            await note.locator('button', { hasText: /^\s*Pin\s*$/ }).waitFor({ state: 'visible', timeout: 20000 });
+            await page.goto(`${EXPLORER}/app/collaboration/Spaces?view=home`);
+            await page.getByText('My Pins').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('My Pins').first().click();
+            await page.getByText('Your pins, across your spaces').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
+    {
+        name: '55-staff-data-tab-query', who: 'staff', item: 'B19',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'data'));
+            await page.getByText('Renewals by month').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('Renewals by month').first().click();
+            await assertScreen(page, '55', { present: ['Renewals by month', 'Chapter banner', 'Run again', 'rows'] });
+            await page.locator('table.grid').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
+    {
+        name: '56-staff-data-component', who: 'staff', item: 'B19',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'data'));
+            await page.getByText('Chapter banner').first().waitFor({ state: 'visible', timeout: 30000 });
+            await page.getByText('Chapter banner').first().click();
+            // The React host renders the component with the props the server bound from the space's anchor
+            await page.locator('.example-chapter-banner').first().waitFor({ state: 'visible', timeout: 60000 });
+            await assertScreen(page, '56', { present: ['Chapter 12', 'West'] });
+        },
+    },
+    {
+        name: '57-staff-settings-configuration', who: 'staff', item: 'D23',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12_STAFF, 'settings'));
+            await assertScreen(page, '57', { present: ['What this space is given', 'Grants', 'Anchors', 'Data reach', 'Renewals by month', 'Chapter banner'] });
+        },
+    },
+    {
+        name: '58-leader-note-quick-add', who: 'leader', item: 'B21',
+        run: async (page) => {
+            await page.goto(spaceUrl(CHAPTER_12, 'overview'));
+            const noteButton = page.locator('button', { hasText: /^\s*Note\s*$/ }).first();
+            await noteButton.waitFor({ state: 'visible', timeout: 30000 });
+            await noteButton.click();
+            await page.getByPlaceholder('Title').waitFor({ state: 'visible', timeout: 20000 });
+            await page.getByPlaceholder('Title').fill('Leader quick note');
+            await page.locator('textarea.body-input').fill('Written from the Overview with the Note button.');
+            await page.locator('button', { hasText: /^\s*Add note\s*$/ }).click();
+            const note = page.locator('article.note', { hasText: 'Leader quick note' }).first();
+            await note.waitFor({ state: 'visible', timeout: 20000 });
+            await assertScreen(page, '58', { present: ['Leader quick note', 'Welcome chapter leaders'], absent: ['Share with'] });
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: join(here, '58-leader-note-quick-add-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            // Every note of that title goes (a run that failed earlier may have left one), so the next pass starts clean
+            for (let left = await page.locator('article.note', { hasText: 'Leader quick note' }).count(); left > 0; left--) {
+                const target = page.locator('article.note', { hasText: 'Leader quick note' }).first();
+                await target.locator('button', { hasText: /^\s*Delete\s*$/ }).click();
+                await page.locator('article.note', { hasText: 'Leader quick note' }).nth(left - 1).waitFor({ state: 'detached', timeout: 20000 });
+            }
+        },
+    },
+    {
+        name: '59-guest-space-star', who: 'guest', item: 'B22',
+        run: async (page) => {
+            await page.goto(spaceUrl(NORTHWIND, 'overview'));
+            const star = page.locator('button[aria-label="Star this space"]').first();
+            await star.waitFor({ state: 'visible', timeout: 30000 });
+            await star.click();
+            await page.locator('button[aria-label="Unstar this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
+            await assertScreen(page, '59', { present: ['Northwind relationship'] });
+            await page.waitForTimeout(400);
+            await page.screenshot({ path: join(here, '59-guest-space-star-' + (await page.evaluate(() => localStorage.getItem('mj-theme'))) + '.png') });
+            await page.locator('button[aria-label="Unstar this space"]').first().click();
+            await page.locator('button[aria-label="Star this space"]').first().waitFor({ state: 'visible', timeout: 20000 });
+        },
+    },
 ];
 
 async function saveStaffSession() {
@@ -372,6 +499,10 @@ async function main() {
                 const page = await context.newPage();
                 const errors = [];
                 page.on('pageerror', (e) => errors.push(String(e)));
+                // SHOT_DEBUG=1 prints the GraphQL calls a shot makes, for a step that does nothing visible
+                if (process.env.SHOT_DEBUG) page.on('request', (request) => { const body = request.postData() ?? ''; if (/graphql|4119/.test(request.url()) && body) console.log(`     gql ${body.replace(/\s+/g, ' ').slice(0, 160)}`); });
+                // A failed shot prints what the page logged as errors, so the cause is in the run's output and not only in the picture
+                page.on('console', (message) => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
                 try {
                     if (shot.who === 'guest' || shot.who === 'leader') {
                         // The session token rides in the fragment, as the redeem's redirect sends it; Explorer reads it on load
@@ -388,6 +519,8 @@ async function main() {
                     // The failed screen is kept beside the others, so the assertion can be read against what was shown
                     await page.screenshot({ path: join(here, `${shot.name}-${theme}-FAILED.png`) }).catch(() => undefined);
                     failures.push(`${shot.name}-${theme}: ${error instanceof Error ? error.message : String(error)}`);
+                    if (errors.length) console.log(`     page errors (${errors.length}):\n       ${errors.slice(0, 8).map((e) => e.split('\n')[0].slice(0, 300)).join('\n       ')}`);
+                    console.log(`     at ${page.url()}`);
                     console.log(`FAIL ${shot.name}-${theme}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
                 } finally {
                     await context.close();

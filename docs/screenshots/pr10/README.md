@@ -57,6 +57,27 @@ SCREENSHOT_STAFF_EMAIL=someone@example.com node --env-file=.env docs/screenshots
 Screen `42` is the leader's own chat: it passes on an MJ that carries MJ#5243 (the plan's A12.17); before that fix MJ's chat area
 showed a magic-link participant no messages and no composer.
 
+## Stage 4
+
+The screens of B19, B21 and B22, taken as the staff account, the guest (Casey) and the leader (Lena). Each one that writes removes
+what it wrote (a pin, a note, a star), so the dark pass starts from the world as loaded.
+
+| Screen | Who | Shows |
+|---|---|---|
+| `50-staff-notes-tab` | staff | Northwind's Notes tab: the Shared and the Team note, not Ada's private one; *Share with* on the Team note (the owner may promote). |
+| `51-staff-note-promote-confirm` | staff | The confirmation before a promotion (call 15): what becomes visible, and that it is not undone. |
+| `52-guest-notes-shared-only` | guest | Casey's Notes tab: the Shared note only, and no *Share with*. |
+| `53-staff-pinned-strip` | staff | A note pinned from the Notes tab shows in the Overview's *Pinned* strip. |
+| `54-staff-home-my-pins` | staff | Home's *My Pins*: the pin, named by its space. The pin is removed afterwards. |
+| `55-staff-data-tab-query` | staff | *Chapter 12 staff*'s Data tab: the renewals query run on the server, its rows in the tab. |
+| `56-staff-data-component` | staff | The chapter banner, an MJ component in the React host, its props bound on the server from the chapter anchor. |
+| `57-staff-settings-configuration` | staff | Settings: the grants, anchors and data reach in force (D23). |
+| `58-leader-note-quick-add` | leader | The *Note* button on the Overview opens the composer; the note lands on the Shared band. Deleted afterwards. |
+| `59-guest-space-star` | guest | The star in the header (MJ's User Favorites), toggled on and back off. |
+
 ## Options
+
+- `SHOT_DEBUG=1` prints the GraphQL calls a shot makes and, on a failure, the page's errors and its URL, so a step that changed nothing visible can be read in the run's output.
+
 
 `--who guest|staff|all` (default `all`), `--theme light|dark|both` (default `both`), `--only <name>` for one screen. A screen whose assertion fails is reported and the run exits 1.

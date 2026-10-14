@@ -16,7 +16,7 @@
  * read-back instead of being repaired, so a suite reloads by purging first.
  * The purge keeps the user accounts.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SHIPPED_STATUSES } from '@mj-biz-apps/collaboration-core';
@@ -30,6 +30,8 @@ import { mjBizAppsCommonPersonEntity } from '@mj-biz-apps/common-entities';
 import '@mj-biz-apps/collaboration-entities';
 import {
     mjBizAppsCollaborationSpaceAnchorEntity,
+    mjBizAppsCollaborationSpaceNoteEntity,
+    mjBizAppsCollaborationSpaceMemberPinEntity,
     mjBizAppsCollaborationSpaceEntity,
     mjBizAppsCollaborationSpaceMemberEntity,
     mjBizAppsCollaborationSpaceGrantEntity, mjBizAppsCollaborationSpaceTypeStatusEntity,
@@ -39,6 +41,8 @@ import {
     CollaborationEngine,
     LoadItemUseEntityServer,
     LoadShareNoticeEntityServer,
+    LoadSpaceNoteEntityServer,
+    LoadSpaceMemberPinEntityServer,
     LoadSpaceEntityServer,
     LoadSpaceItemEntityServer,
     LoadSpaceMemberEntityServer,
@@ -58,6 +62,13 @@ const TYPES = 'MJ_BizApps_Collaboration: Space Types';
 const SPACE_GRANTS = 'MJ_BizApps_Collaboration: Space Grants';
 const SPACE_ANCHORS = 'MJ_BizApps_Collaboration: Space Anchors';
 const SPACE_TYPE_STATUSES = 'MJ_BizApps_Collaboration: Space Type Status';
+const SPACE_NOTES = 'MJ_BizApps_Collaboration: Space Notes';
+const SPACE_PINS = 'MJ_BizApps_Collaboration: Space Member Pins';
+const SPACE_ITEMS = 'MJ_BizApps_Collaboration: Space Items';
+const COMPONENTS = 'MJ: Components';
+/** The example type's component (B19) and the grant that offers it to the staff type, seeded with fixed ids so a reload finds them. */
+const EXAMPLE_COMPONENT_ID = 'C7B2A1E4-5D3F-4A6B-9C8D-1E2F3A4B5C6D';
+const EXAMPLE_COMPONENT_GRANT_ID = '5B7D9E2A-3C4F-4E6A-8B1D-7F2E9C4A6D18';
 const AI_AGENTS = 'MJ: AI Agents';
 const ROLES = 'MJ_BizApps_Collaboration: Space Role Types';
 const USERS = 'MJ: Users';
@@ -98,6 +109,12 @@ async function memberStatus(provider: SQLServerDataProvider, id: string | null, 
     return result.Success ? result.Results?.[0]?.Status?.trim() ?? null : null;
 }
 
+async function findRow<T extends object>(provider: SQLServerDataProvider, entityName: string, filter: string, fields: string[], user: UserInfo): Promise<T | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<T>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: 1 }, user);
+    if (!result.Success) throw new Error(`${entityName}: ${result.ErrorMessage ?? 'read failed'}`);
+    return result.Results?.[0] ?? null;
+}
+
 async function findId(provider: SQLServerDataProvider, entityName: string, filter: string, user: UserInfo): Promise<string | null> {
     const view = RunView.FromMetadataProvider(provider);
     const result = await view.RunView<{ ID: string }>({ EntityName: entityName, ExtraFilter: filter, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, user);
@@ -136,6 +153,8 @@ export async function loadWorld(): Promise<void> {
     LoadSpaceItemEntityServer();
     LoadItemUseEntityServer();
     LoadShareNoticeEntityServer();
+    LoadSpaceNoteEntityServer();
+    LoadSpaceMemberPinEntityServer();
     const dir = dataDir();
     const personas = readCsv(join(dir, 'personas.csv'));
     const typeRows = readCsv(join(dir, 'types.csv'));
@@ -145,6 +164,8 @@ export async function loadWorld(): Promise<void> {
     const chapterRows = readCsv(join(dir, 'chapters.csv'));
     const chapterMemberRows = readCsv(join(dir, 'chapter-members.csv'));
     const anchorRows = readCsv(join(dir, 'anchors.csv'));
+    const noteRows = readCsv(join(dir, 'notes.csv'));
+    const pinRows = readCsv(join(dir, 'pins.csv'));
 
     const people = new Map<string, Persona>();
     for (const persona of personas) {
@@ -421,6 +442,49 @@ export async function loadWorld(): Promise<void> {
         if (!(await record.Save())) throw new Error(`anchor of ${anchor.Space} on ${anchor.Chapter}: ${record.LatestResult?.CompleteMessage ?? 'save failed'}`);
     }
 
+    // The example chapter banner (B19): an MJ component the staff type grants, with its props bound from the chapter anchor.
+    // Seeded here, as the owning app would ship it, through the generated entity: MJ's server subclass would also try to
+    // embed the component's requirements, which needs columns a host may not have yet. The grant is the system user's.
+    const componentsEntityId = await findId(provider, 'MJ: Entities', `Name = '${COMPONENTS}'`, system);
+    if (!componentsEntityId) throw new Error(`The ${COMPONENTS} entity is missing.`);
+    const spec = readFileSync(join(dir, 'example-chapter-banner.spec.json'), 'utf8');
+    const component = await new Metadata().GetEntityObject<BaseEntity>(COMPONENTS, system);
+    if (await findId(provider, COMPONENTS, `ID = '${EXAMPLE_COMPONENT_ID}'`, system)) {
+        if (!(await component.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: EXAMPLE_COMPONENT_ID }])))) throw new Error('Could not load the example component.');
+    } else {
+        component.NewRecord();
+        component.Set('ID', EXAMPLE_COMPONENT_ID);
+    }
+    component.Set('Name', 'Example: Chapter Banner');
+    component.Set('Namespace', 'Collaboration/Examples');
+    component.Set('Title', 'Chapter banner');
+    component.Set('Description', "The example type's component (B19): a banner that names the chapter a space is anchored to. Its props are bound on the server from the space's anchor.");
+    component.Set('Type', 'Other');
+    component.Set('Version', '1.0.0');
+    component.Set('VersionSequence', 1);
+    component.Set('Status', 'Published');
+    component.Set('Specification', spec);
+    if (!(await component.Save())) throw new Error(`example component: ${component.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    const staffTypeId = requireMap(types, 'example-chapter-staff', 'space type');
+    const grant = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceGrantEntity>(SPACE_GRANTS, system);
+    if (await findId(provider, SPACE_GRANTS, `ID = '${EXAMPLE_COMPONENT_GRANT_ID}'`, system)) {
+        if (!(await grant.Load(EXAMPLE_COMPONENT_GRANT_ID))) throw new Error('Could not load the example component grant.');
+    } else {
+        grant.NewRecord();
+        grant.ID = EXAMPLE_COMPONENT_GRANT_ID;
+        grant.SpaceTypeID = staffTypeId;
+    }
+    grant.Kind = 'Component';
+    grant.Mode = 'Extend';
+    grant.TargetEntityID = componentsEntityId;
+    grant.TargetRecordID = EXAMPLE_COMPONENT_ID;
+    grant.Label = 'Chapter banner';
+    grant.Band = 'Team';
+    grant.IsDefault = false;
+    grant.Sequence = 2;
+    grant.Bindings = JSON.stringify({ chapterName: { From: 'Anchor:chapter.Name' }, region: { From: 'Anchor:chapter.Region' } });
+    if (!(await grant.Save())) throw new Error(`example component grant: ${grant.LatestResult?.CompleteMessage ?? 'save failed'}`);
+
     // The agents a space allows (`agents.csv`), as Agent grants of the space (stage 1): a person can tag them in its chat. A row on a
     // space reaches its sub-spaces. The agent is MemberJunction's own, found by name, so a database without it stops here with the
     // name rather than loading a world nobody can ask. The grant's target entity is MJ: AI Agents; its gate stamps it.
@@ -482,6 +546,61 @@ export async function loadWorld(): Promise<void> {
         dataDir: dir,
         rootDir: worldStorageRoot(),
     });
+
+    // Notes (B21): each written by its author, on its band; a private one is the author's alone. Found again by title in its space.
+    const noteIds = new Map<string, string>();
+    for (const row of noteRows) {
+        const spaceId = requireMap(spaceIds, row.Space, 'space');
+        const author = actor(row.Author);
+        const existing = await findId(provider, SPACE_NOTES, `SpaceID = '${spaceId}' AND Title = '${quote(row.Title)}'`, system);
+        const note = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>(SPACE_NOTES, author);
+        if (existing) {
+            if (!(await note.Load(existing))) throw new Error(`Could not load note ${row.Key}.`);
+        } else {
+            note.NewRecord();
+            note.SpaceID = spaceId;
+        }
+        note.Title = row.Title;
+        note.Body = row.Body || null;
+        note.Band = row.Band as 'Team' | 'Shared';
+        note.Visibility = row.Visibility as 'Space' | 'Private';
+        if (!(await note.Save())) throw new Error(`note ${row.Key}: ${note.LatestResult?.CompleteMessage ?? 'save failed'}`);
+        noteIds.set(row.Key, note.ID);
+    }
+
+    // Pins (B22): each the user's own, on a file of the space (by the files catalogue's key) or a note of it (by the notes catalogue's key)
+    const notesEntityId = await findId(provider, 'MJ: Entities', `Name = '${SPACE_NOTES}'`, system);
+    const filesEntityId = await findId(provider, 'MJ: Entities', "Name = 'MJ: Files'", system);
+    if (!notesEntityId || !filesEntityId) throw new Error('The Space Notes or MJ: Files entity is missing.');
+    const fileRows = readCsv(join(dir, 'files.csv'));
+    for (const row of pinRows) {
+        const spaceId = requireMap(spaceIds, row.Space, 'space');
+        const owner = actor(row.User);
+        let targetEntityId: string;
+        let targetRecordId: string;
+        if (row.Kind === 'Note') {
+            targetEntityId = notesEntityId;
+            targetRecordId = `ID|${requireMap(noteIds, row.Target, 'note')}`;
+        } else {
+            const file = fileRows.find((f) => f.Key === row.Target);
+            if (!file) throw new Error(`Pin ${row.Key} names unknown file ${row.Target}.`);
+            // The file's name lives on the MJ Files row; the item points at it as `ID|<file id>`
+            const stored = await findRow<{ ID: string }>(provider, 'MJ: Files', `Name = '${quote(file.FileName)}'`, ['ID'], system);
+            const item = stored ? await findRow<{ RecordID: string }>(provider, SPACE_ITEMS, `SpaceID = '${spaceId}' AND RecordID = 'ID|${stored.ID}'`, ['RecordID'], system) : null;
+            if (!item) throw new Error(`Pin ${row.Key}: file ${file.FileName} is not an item of ${row.Space}.`);
+            targetEntityId = filesEntityId;
+            targetRecordId = item.RecordID;
+        }
+        if (await findId(provider, SPACE_PINS, `SpaceID = '${spaceId}' AND UserID = '${owner.ID}' AND TargetEntityID = '${targetEntityId}' AND TargetRecordID = '${quote(targetRecordId)}'`, system)) continue;
+        const pin = await new Metadata().GetEntityObject<mjBizAppsCollaborationSpaceMemberPinEntity>(SPACE_PINS, owner);
+        pin.NewRecord();
+        pin.SpaceID = spaceId;
+        pin.Kind = 'Record';
+        pin.TargetEntityID = targetEntityId;
+        pin.TargetRecordID = targetRecordId;
+        pin.Sequence = 0;
+        if (!(await pin.Save())) throw new Error(`pin ${row.Key}: ${pin.LatestResult?.CompleteMessage ?? 'save failed'}`);
+    }
 
 
     async function seedSpaceConversations(

@@ -109,6 +109,17 @@ The engine reads space-role flags. It never compares space-role names.
 - **Identity (D6; A9, B5):** a space's agent over MCP, Slack or Teams must resolve the person to an MJ user and apply D2 for the channel's audience, or refuse. Today the messaging adapters fall back to a service account, and MCP's `mode=none` and its system API key run as the system user.
 - **Proposed posts (D7; A8, B7):** an unsolicited agent message to outside participants is a draft until a named staff member approves or edits it. A digest a member subscribed to needs no approval.
 
+## Notes and pins
+
+- **Notes (B21). Built.** A note lives in one space, on a band, written by the signed-in person; only its author edits or deletes it (someone who administers spaces may delete one). A private note is its author's alone and sits on Team. A seat that cannot see Team cannot write a Team note. A read-only status takes the notes' writes away with every other write. The Notes tab lists them; *Note* in the space's header is the quick add from any tab; *Turn into document* files the note as a Markdown file through the upload path, on the note's band, and the note stays.
+- **A Team note is promoted to Shared (the plan's call 15, made 2026-10-13). Built.** The note itself moves: one record, its band changes, logged as *Collaboration: Note Promoted* with who and when. The space's owner, a seat whose role may promote the band (owner, admin) or someone who administers spaces does it, after a confirmation that says what becomes visible. A promotion changes nothing else about the note. A private note is not promoted (make it a space note first). A Shared note is never taken back to Team: members may already have read it. Comments and a note's conversation, when they exist, stay with the team.
+- **Pins (B22). Built.** A pin is its owner's own: a note or an item of the space (a Record pin), or a granted view, query, dashboard or component in force there (a Grant pin). Only the owner reads or removes a pin (someone who administers spaces may remove one). The Overview shows the viewer's pins in a strip; Home's *My pins* lists them across spaces; the star in the header keeps the space in MJ's User Favorites, which a participant reads and writes for their own user only.
+
+## The data surface
+
+- **The Data tab (B19). Built.** It lists the granted views, queries, dashboards and components in force for the viewer's band, labelled from the type. A view or query runs on the server through the grant operations, bound there, and its rows show in the tab; a component is given to MJ's React host with its props bound on the server from the space (`GetSpaceComponent`); a dashboard says it embeds once MemberJunction gives dashboards properties (MJ#4789, A15), since the server returns none before that. The tab is offered only when the space has something to show; its empty state says what the type reaches.
+- **Settings shows what a space is given (D23). Built.** A viewer with the settings authorizations sees the grants, anchors and data reach in force, and opens a grant's or anchor's record to edit it.
+
 ## Data a space doesn't own, and what it grants
 
 **Planned: the stages after the chat** ([PR 10's plan](../plans/pr10-plan.md); the plan's D26 to D34, B14 to B20). The parts that need MJ's A14 to A17 wait for [MJ#4789](https://github.com/MemberJunction/MJ/pull/4789) (D36, D39). Until then a type that seats participants is granted no query, view, dashboard or component, and its participants read other apps' data only through data reach.
@@ -132,6 +143,7 @@ Each of these is an item in the plan.
 - **The one-off reviewer's link (A12.7).** MJ's `CreateInvite` doesn't accept a resource ID, so this app writes no resource share. An email invitation saves a seat through the seat gate, and the sign-in link is an app session for Space Participant.
   - It's emailed when the host sets `magicLink.communicationProvider`. Otherwise the raw URL is returned only to a user whose MJ user type is `Owner`, or who holds a role in `magicLink.inviteIssuerRoleNames`. A space owner who is neither gets the seat and no URL.
   - The host must set `magicLink.enabled` and list `Space Participant` in `grantableRoleNames`. Don't change `restrictedRoleName`: it's the host's default for every app.
+- **Dashboards in a space (B19).** The Data tab lists a dashboard grant and the server returns none until MemberJunction gives dashboards properties (MJ#4789, A15); the tab says so. Views, queries and components run today.
 - **Committees on Collaboration (workstream C).** Committees extends `Space` through MJ's IsA, in stages.
 - **Platform work in MemberJunction (workstream A):** presence, @mention notifications, read state per person, live message fan-out, conversation participants, and the search fixes.
 - **A license.** Distribution is free; the license is still an open decision.
