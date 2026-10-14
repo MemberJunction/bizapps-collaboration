@@ -6,6 +6,7 @@ node_modules/
 dist/
 .local-storage/
 integration-*.log
+gate-*.log
 e2e/test-results/
 playwright-report/
 scratch/

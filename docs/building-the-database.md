@@ -69,6 +69,9 @@ when `mj` is not on the path of the member you are in.
    pushed and before the second push; `--check` fails when the committed files are stale, and CI runs it.
 8. **The sample world:** build the integration package, then purge and load, as
    [reviewing the data](reviewing-the-data.md#loading-it) says.
+   The loader also seeds the example chapter banner (an `MJ: Components` row from `world/data/example-chapter-banner.spec.json`) and its
+   component grant on the staff type, through the generated entity: MJ's server subclass for components embeds the requirements on save
+   and needs vector columns a host may not have yet, so the component is world data rather than pushed metadata.
 
 ## Running the harnesses
 
