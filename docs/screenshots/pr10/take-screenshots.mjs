@@ -459,7 +459,7 @@ async function saveStaffSession() {
     const page = await context.newPage();
     await page.goto(`${EXPLORER}/`);
     console.log('Sign in as staff in the browser window. The session is saved when the Spaces page is shown.');
-    await page.waitForURL(/\/app\//, { timeout: 10 * 60 * 1000 });
+    await page.waitForURL(/\/app\//, { timeout: Number(process.env.STAFF_SIGNIN_MINUTES || 10) * 60 * 1000 });
     await page.waitForTimeout(3000);
     await context.storageState({ path: STAFF_SESSION });
     console.log(`Saved ${STAFF_SESSION}. Keep it out of git.`);
@@ -515,6 +515,7 @@ async function main() {
                     const file = join(here, `${shot.name}-${theme}.png`);
                     await page.screenshot({ path: file });
                     console.log(`ok   ${shot.name}-${theme}.png (item ${shot.item})${errors.length ? `  page errors: ${errors.length}` : ''}`);
+                    if (process.env.SHOT_DEBUG && errors.length) console.log(`     page errors (${errors.length}):\n       ${[...new Set(errors.map((e) => e.split('\n')[0].slice(0, 200)))].slice(0, 40).join('\n       ')}`);
                 } catch (error) {
                     // The failed screen is kept beside the others, so the assertion can be read against what was shown
                     await page.screenshot({ path: join(here, `${shot.name}-${theme}-FAILED.png`) }).catch(() => undefined);
