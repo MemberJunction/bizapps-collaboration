@@ -142,6 +142,7 @@ export {
     type AgentLimitName,
     type AgentDefinitionForGrant,
 } from './grants.js';
+export * from './notes.js';
 export {
     SHIPPED_STATUSES,
     defaultStatus,

@@ -1,5 +1,5 @@
 /**
- * The grant operations (B17, D29): `RunSpaceView`, `RunSpaceQuery` and `GetSpaceDashboard`. Every one parses its ids before they
+ * The grant operations (B17, D29): `RunSpaceView`, `RunSpaceQuery`, `GetSpaceDashboard` and `GetSpaceComponent` (B19). Every one parses its ids before they
  * reach a filter, checks that the caller reaches the space and that the grant is in force there for their band, refuses a client
  * value for a bound name and for a name the target does not have, and logs the run (A2's stand-in: an `MJ: Audit Logs` row under
  * *Collaboration: Grant Run*, naming the grant, the space, the caller, the bound names and the agent run when an agent made it).
@@ -190,4 +190,46 @@ export async function getSpaceDashboard(request: GrantRunRequest): Promise<Dashb
     if ('ok' in prepared) return prepared;
     LogError(`GetSpaceDashboard: a dashboard grant ${prepared.grant.GrantID} is in force before MJ#4789, which the grant server should have refused.`);
     return refuse('a dashboard has no properties to scope it to the space until MJ#4789 (A15), so none is returned.');
+}
+
+export type ComponentOutcome =
+    | { ok: true; componentId: string; name: string; title: string; specification: string; props: Record<string, unknown> }
+    | { ok: false; message: string };
+
+/**
+ * `GetSpaceComponent(spaceId, grantId)` (B19): the component a grant offers, with its props bound on the server, for MJ's React host
+ * in the browser. The specification is read as the system user (a participant reads no component rows); the bindings resolve the
+ * way a query's do, and a value sent for a bound name is refused. The run is logged like every other.
+ */
+export async function getSpaceComponent(request: GrantRunRequest): Promise<ComponentOutcome> {
+    const prepared = await prepare(request, 'Component');
+    if ('ok' in prepared) return prepared;
+    const system = await WellKnownUserSource.Instance.GetSystemUser(request.provider);
+    if (!system) return refuse('the system user is not available, so the component cannot be read.');
+    const clientRefusal = refuseClientValues(request.clientValues, prepared.grant.Bindings, null);
+    if (clientRefusal) {
+        const logged = await logRun(request, prepared, 'Failed', { clientNames: Object.keys(request.clientValues ?? {}), error: clientRefusal });
+        return refuse(logged ?? clientRefusal);
+    }
+    const bound = await resolveBindings(request.provider, request.user, prepared.space, prepared.grant, prepared.configuration);
+    if (!bound.ok) {
+        const logged = await logRun(request, prepared, 'Failed', { error: bound.message });
+        return refuse(logged ?? bound.message);
+    }
+    const rows = await RunView.FromMetadataProvider(request.provider).RunView<{ ID: string; Name: string; Title: string | null; Specification: string | null; Status: string }>({
+        EntityName: 'MJ: Components',
+        ExtraFilter: `ID = '${parseUuid(prepared.grant.TargetRecordID)}'`,
+        Fields: ['ID', 'Name', 'Title', 'Specification', 'Status'],
+        ResultType: 'simple',
+        MaxRows: 1,
+    }, system);
+    const component = rows.Success ? rows.Results?.[0] : undefined;
+    if (!component || !component.Specification) {
+        const logged = await logRun(request, prepared, 'Failed', { error: rows.Success ? 'the component has no specification' : rows.ErrorMessage ?? 'unknown error' });
+        return refuse(logged ?? (rows.Success ? 'the granted component has no specification.' : `the component could not be read: ${rows.ErrorMessage ?? 'unknown error'}`));
+    }
+    const props: Record<string, unknown> = { ...(request.clientValues ?? {}), ...bound.values };
+    const logged = await logRun(request, prepared, 'Success', { boundSources: bound.sources, clientNames: Object.keys(request.clientValues ?? {}) });
+    if (logged) return refuse(logged);
+    return { ok: true, componentId: component.ID, name: component.Name, title: component.Title ?? component.Name, specification: component.Specification, props };
 }

@@ -1,6 +1,6 @@
 import { LogError } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
-import { getSpaceDashboard, runSpaceQuery, runSpaceView, type ClientValues } from '@mj-biz-apps/collaboration-core-entities-server';
+import { getSpaceComponent, getSpaceDashboard, runSpaceQuery, runSpaceView, type ClientValues } from '@mj-biz-apps/collaboration-core-entities-server';
 
 @InputType()
 export class GrantRunInput {
@@ -47,6 +47,32 @@ export class SpaceDashboardPayload {
     PropertiesJSON?: string;
 }
 
+@ObjectType()
+export class SpaceComponentPayload {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    ComponentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    /** The component's specification, as MJ's React host takes it (a JSON object). */
+    @Field({ nullable: true })
+    SpecificationJSON?: string;
+
+    /** The bound props, as a JSON object. */
+    @Field({ nullable: true })
+    PropsJSON?: string;
+}
+
 function parseValues(raw: string | undefined): { ok: true; values: ClientValues | null } | { ok: false; message: string } {
     if (!raw) return { ok: true, values: null };
     try {
@@ -86,6 +112,22 @@ export class GrantOperationsResolver extends ResolverBase {
             return { Success: true, DashboardID: outcome.dashboardId, PropertiesJSON: JSON.stringify(outcome.properties ?? {}) };
         } catch (error) {
             LogError(`GetSpaceDashboard failed: ${error instanceof Error ? error.message : String(error)}`);
+            return { Success: false, ErrorMessage: 'Run refused.' };
+        }
+    }
+
+    /** `GetSpaceComponent` (B19): the granted component's specification and its props, bound on the server. */
+    @Query(() => SpaceComponentPayload)
+    async GetSpaceComponent(@Arg('spaceId', () => String) spaceId: string, @Arg('grantId', () => String) grantId: string, @Ctx() context: AppContext): Promise<SpaceComponentPayload> {
+        const provider = GetReadWriteProvider(context.providers);
+        const user = this.GetUserFromPayload(context.userPayload);
+        if (!user) return { Success: false, ErrorMessage: 'Running a grant requires a signed-in person.' };
+        try {
+            const outcome = (await getSpaceComponent({ provider, user, spaceId, grantId })) as { ok: boolean; message?: string; componentId?: string; name?: string; title?: string; specification?: string; props?: Record<string, unknown> };
+            if (!outcome.ok) return { Success: false, ErrorMessage: outcome.message ?? 'Run refused.' };
+            return { Success: true, ComponentID: outcome.componentId, Name: outcome.name, Title: outcome.title, SpecificationJSON: outcome.specification, PropsJSON: JSON.stringify(outcome.props ?? {}) };
+        } catch (error) {
+            LogError(`GetSpaceComponent failed: ${error instanceof Error ? error.message : String(error)}`);
             return { Success: false, ErrorMessage: 'Run refused.' };
         }
     }

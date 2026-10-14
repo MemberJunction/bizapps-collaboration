@@ -408,5 +408,15 @@
       "Description": "The statuses of active space types: what a participant needs to read a space's status and the moves its type allows (stage 1).",
       "FilterText": "(SpaceTypeID IN (SELECT ID FROM [__mj_BizAppsCollaboration].[SpaceType] WHERE IsActive = 1))"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "4A1F6C2D-8E3B-4D5A-9F7C-2B6E1D4A8C93"
+    },
+    "fields": {
+      "Name": "Collaboration: Notes The Caller May Change",
+      "Description": "The caller's own notes, and every note of a space where the caller's seat sees the Team band: the coarse gate for an update. The entity server keeps the fine rule: only the author edits, and a Team note moves to Shared only by the space's owner, a promoting seat or an administrator (the plan's call 15).",
+      "FilterText": "(AuthorUserID = TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER) OR SpaceID IN (SELECT SpaceID FROM [__mj_BizAppsCollaboration].[fnCollaborationAccess](TRY_CAST('{{UserID}}' AS UNIQUEIDENTIFIER)) WHERE CanSeeTeam = 1))"
+    }
   }
 ]

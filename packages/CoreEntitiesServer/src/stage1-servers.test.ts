@@ -348,14 +348,21 @@ describe('Space Notes: light notes in the space', () => {
         assert.match(errorOn(await validate(note(ada, { SpaceID: CLOSED_SPACE })), 'SpaceID'), /read-only in its current status/);
     });
 
-    it("lets only the author edit: a Team note doesn't move to Shared (call 15), Shared narrows to Team, and the space stays", async () => {
+    it('lets only the author edit; a Team note moves to Shared by the owner (call 15), with nothing else changed, never back, and never a private one; the space stays', async () => {
         const mine = (over: Row, old: Row, dirty: string[]) => note(ada, { ID: NOTE_1, AuthorUserID: ADA, ...over }, { saved: true, old, dirty });
         assert.equal((await validate(mine({ Title: 'Agenda, revised' }, { Title: 'Agenda' }, ['Title']))).Success, true);
-        assert.match(errorOn(await validate(mine({ Band: 'Shared' }, { Band: 'Team' }, ['Band'])), 'Band'), /doesn't move to Shared/);
-        assert.equal((await validate(mine({ Band: 'Team' }, { Band: 'Shared' }, ['Band']))).Success, true);
+        // Ada owns Northwind: her Team note moves to Shared (call 15, made 2026-10-13)
+        const promoted = await validate(mine({ Band: 'Shared' }, { Band: 'Team' }, ['Band']));
+        assert.equal(promoted.Success, true, errorOn(promoted));
+        assert.match(errorOn(await validate(mine({ Band: 'Shared', Title: 'Agenda, shared' }, { Band: 'Team', Title: 'Agenda' }, ['Band', 'Title'])), 'Band'), /changes nothing else/);
+        assert.match(errorOn(await validate(mine({ Band: 'Team' }, { Band: 'Shared' }, ['Band'])), 'Band'), /not taken back/);
+        assert.match(errorOn(await validate(mine({ Band: 'Shared', Visibility: 'Private' }, { Band: 'Team', Visibility: 'Private' }, ['Band'])), 'Band'), /private note is not promoted/);
         assert.match(errorOn(await validate(mine({ SpaceID: OTHER_SPACE }, { SpaceID: SPACE }, ['SpaceID'])), 'SpaceID'), /stays in its space/);
         const someoneElse = note(bea, { ID: NOTE_1, AuthorUserID: ADA, Title: 'Theirs' }, { saved: true, old: { Title: 'Agenda' }, dirty: ['Title'] });
         assert.match(errorOn(await validate(someoneElse), 'AuthorUserID'), /only the author edits/);
+        // A promotion by someone who does not reach the space is refused for the reach, like any write of theirs there
+        const beaPromotes = note(bea, { ID: NOTE_1, AuthorUserID: ADA, Band: 'Shared' }, { saved: true, old: { Band: 'Team' }, dirty: ['Band'] });
+        assert.match(errorOn(await validate(beaPromotes), 'SpaceID'), /does not reach/);
         const notMine = note(bea, { ID: NOTE_1, AuthorUserID: ADA });
         assert.equal(await SpaceNoteEntityServer.prototype.Delete.call(notMine), false);
     });

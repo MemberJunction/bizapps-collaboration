@@ -9,5 +9,16 @@
       "ParentID": null,
       "AuthorizationID": null
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "6EEEFFBB-40E4-452D-BA58-88566C1A4597"
+    },
+    "fields": {
+      "Name": "Collaboration: Note Promoted",
+      "Description": "A Team note was promoted to Shared (B21, the plan's call 15): one row per promotion, with the note, the space and who promoted it. The note's text moves; its comments and conversation stay with the team.",
+      "ParentID": null,
+      "AuthorizationID": null
+    }
   }
 ]

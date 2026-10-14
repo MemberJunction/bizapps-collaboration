@@ -354,6 +354,20 @@ query GetSpaceDashboard($spaceId: String!, $grantId: String!) {
 }
 `;
 
+const GET_SPACE_COMPONENT_QUERY = `
+query GetSpaceComponent($spaceId: String!, $grantId: String!) {
+    GetSpaceComponent(spaceId: $spaceId, grantId: $grantId) {
+        Success
+        ErrorMessage
+        ComponentID
+        Name
+        Title
+        SpecificationJSON
+        PropsJSON
+    }
+}
+`;
+
 const ENSURE_SPACE_FOR_RECORD_MUTATION = `
 mutation EnsureSpaceForRecord($input: EnsureSpaceForRecordInput!) {
     EnsureSpaceForRecord(input: $input) {
@@ -442,6 +456,19 @@ export function hasExecuteGQL(target: object | null | undefined): target is Grap
  * Typed client for Collaboration GraphQL mutations:
  * MintSpaceLink, UploadSpaceFile, CreateSpaceTask, PostSpaceMessage.
  */
+/** `GetSpaceComponent` (B19): the granted component's specification and its props, bound on the server. */
+export interface SpaceComponentPayload {
+    Success: boolean;
+    ErrorMessage?: string;
+    ComponentID?: string;
+    Name?: string;
+    Title?: string;
+    /** The component's specification, a JSON object for MJ's React host. */
+    SpecificationJSON?: string;
+    /** The bound props, a JSON object. */
+    PropsJSON?: string;
+}
+
 export class CollaborationClient {
     constructor(private readonly executor: GraphQLExecutor) {
         if (!hasExecuteGQL(executor)) {
@@ -518,6 +545,11 @@ export class CollaborationClient {
     async RunSpaceQuery(input: GrantRunGraphQLInput): Promise<GrantRunRowsGraphQLPayload> {
         const res = await this.activeExecutor.ExecuteGQL(RUN_SPACE_QUERY_MUTATION, { input });
         return (res?.RunSpaceQuery as GrantRunRowsGraphQLPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
+    }
+
+    async GetSpaceComponent(spaceId: string, grantId: string): Promise<SpaceComponentPayload> {
+        const res = await this.activeExecutor.ExecuteGQL(GET_SPACE_COMPONENT_QUERY, { spaceId, grantId });
+        return (res?.GetSpaceComponent as SpaceComponentPayload) ?? { Success: false, ErrorMessage: 'No payload returned' };
     }
 
     async GetSpaceDashboard(spaceId: string, grantId: string): Promise<SpaceDashboardGraphQLPayload> {

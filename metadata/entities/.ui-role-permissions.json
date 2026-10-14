@@ -217,7 +217,7 @@
             "CanDelete": 1,
             "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Notes",
             "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes",
-            "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes",
+            "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Notes The Caller May Change",
             "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Own Notes"
           }
         }
