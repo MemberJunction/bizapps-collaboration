@@ -1,11 +1,12 @@
 /**
  * Stage 4 over the wire: a note's promotion as the browser saves it (an entity save through MJAPI), *Turn into document*
- * through the upload path, and the component grant through `GetSpaceComponent`, as the Data tab calls it.
+ * through the upload path, the component grant through `GetSpaceComponent`, as the Data tab calls it, and a pin saved as the
+ * browser saves one.
  */
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient, type mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, type mjBizAppsCollaborationSpaceMemberPinEntity, type mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
 import { noteDocument } from '@mj-biz-apps/collaboration-core';
-import { FILE_ENTITY, SPACE_GRANT_ENTITY, SPACE_ITEM_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
+import { FILE_ENTITY, SPACE_GRANT_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_PIN_ENTITY, SPACE_TYPE_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext } from '../../wire.js';
 import { cleanupStep, deleteWhere, registerChecks } from '../cleanup-helpers.js';
 
@@ -103,6 +104,38 @@ const checks: NamedCheck[] = [
                 Assert(refused.Success === false && /do not reach/.test(refused.ErrorMessage ?? ''), `Marco is refused: ${refused.ErrorMessage ?? ''}`);
             } finally {
                 await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, AUDIT_LOGS, `RecordID = '${grant.ID}'`, 'the component run log rows'));
+            }
+        },
+    },
+    {
+        Id: 'stage4.SC4',
+        Name: 'SC4 — over the wire: Sam pins a note with an entity save as the browser does; the pin is his own, Casey does not read it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const sam = await getPersonaClientContext(ctx, 'sam');
+            const casey = await getPersonaClientContext(ctx, 'casey');
+            const [note] = await FindRows<{ ID: string }>(ctx, SPACE_NOTES, `SpaceID = '${NORTHWIND}' AND Title = 'Kickoff recap'`, ['ID']);
+            Assert(!!note, "The world's Kickoff recap note is there");
+            const [notesEntity] = await FindRows<{ ID: string }>(ctx, 'MJ: Entities', `Name = '${SPACE_NOTES}'`, ['ID']);
+            let id: string | null = null;
+            try {
+                const pin = await sam.Provider.GetEntityObject<mjBizAppsCollaborationSpaceMemberPinEntity>(SPACE_MEMBER_PIN_ENTITY, sam.User);
+                pin.NewRecord();
+                pin.SpaceID = NORTHWIND;
+                // The browser stamps the owner too: MJ's required-field check runs on the client before the server's stamp
+                pin.UserID = sam.User.ID;
+                pin.Kind = 'Record';
+                pin.TargetEntityID = notesEntity.ID;
+                pin.TargetRecordID = note.ID;
+                pin.Sequence = 0;
+                Assert(await pin.Save(), `Sam pins the note over the wire: ${pin.LatestResult?.CompleteMessage ?? ''}`);
+                id = pin.ID;
+                const his = await FindRows<{ ID: string; UserID: string }>(asPersona(ctx, sam), SPACE_MEMBER_PIN_ENTITY, `ID = '${id}'`, ['ID', 'UserID'], sam.User, { BypassCache: true });
+                Assert(his.length === 1 && his[0].UserID.toLowerCase() === sam.User.ID.toLowerCase(), 'Sam reads his pin, and it is his');
+                const hers = await FindRows<{ ID: string }>(asPersona(ctx, casey), SPACE_MEMBER_PIN_ENTITY, `ID = '${id}'`, ['ID'], casey.User, { BypassCache: true });
+                Assert(hers.length === 0, "Casey does not read Sam's pin");
+            } finally {
+                if (id) await cleanupStep(() => deleteWhere(ctx.Provider, ctx.User, SPACE_MEMBER_PIN_ENTITY, `ID = '${id}'`, 'the stage 4 pin'));
             }
         },
     },

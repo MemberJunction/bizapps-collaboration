@@ -129,6 +129,7 @@ import {
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { notesVisibleTo } from './logic/visible-notes.js';
 import { pinRows } from './logic/home-lists.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
@@ -1422,11 +1423,19 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             LogError(`Failed to resolve the caller's seat on space ${space.ID}: ${error instanceof Error ? error.message : String(error)}`);
         }
         if (!isCurrent()) return;
+        const offeredBefore = this.spaceOffersData(space.ID);
         this.bandChoice = choice;
         this.callerSeat = resolved;
         this.seatLookup = lookup;
         this.typeDefaultBand = type?.DefaultBand ?? null;
         this.grantableRoleOptions = resolved ? grantableRoles(CollaborationEngineBase.Instance.SpaceRoleTypes, resolved.role) : [];
+        // The Data tab and its entries depend on the seat's band as much as on the configuration: whichever arrives second rebuilds
+        const shown = !!this._loadedSpaceId && UUIDsEqual(this._loadedSpaceId, space.ID);
+        if (shown) {
+            this.refreshDataEntries(space.ID);
+            if (offeredBefore !== this.spaceOffersData(space.ID)) this.buildSpaceUi(space);
+            this.changeDetector.markForCheck();
+        }
     }
 
     /** The spaces an upload is in flight for, one entry per upload: two uploads to one space count twice. */
@@ -2583,7 +2592,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.spaceNotes = [];
                 return;
             }
-            this.spaceNotes = (res.Results ?? []).map((row) => this.noteModel(row));
+            // Another person's private note is never shown, whatever the viewer's roles read on the server
+            this.spaceNotes = notesVisibleTo(res.Results ?? [], this.currentUser?.ID).map((row) => this.noteModel(row));
         } catch (err) {
             if (!isCurrent()) return;
             this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
@@ -2785,6 +2795,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const pin = await md.GetEntityObject<mjBizAppsCollaborationSpaceMemberPinEntity>('MJ_BizApps_Collaboration: Space Member Pins');
             pin.NewRecord();
             pin.SpaceID = spaceId;
+            // The browser stamps the owner too: MJ's required-field check runs on the client before the server's stamp
+            if (this.currentUser?.ID) pin.UserID = this.currentUser.ID;
             pin.Kind = target.Kind;
             pin.TargetEntityID = target.TargetEntityID;
             pin.TargetRecordID = target.TargetRecordID;
