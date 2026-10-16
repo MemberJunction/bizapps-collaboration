@@ -5,16 +5,16 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@types/node': 24.10.11
-  '@angular/animations': 21.2.22
-  '@angular/common': 21.2.22
-  '@angular/compiler': 21.2.22
-  '@angular/compiler-cli': 21.2.22
-  '@angular/core': 21.2.22
-  '@angular/forms': 21.2.22
-  '@angular/platform-browser': 21.2.22
-  '@angular/router': 21.2.22
-  '@angular/cdk': 21.2.14
+  '@types/node': ^24.10.11
+  '@angular/animations': ^21.2.22
+  '@angular/common': ^21.2.22
+  '@angular/compiler': ^21.2.22
+  '@angular/compiler-cli': ^21.2.22
+  '@angular/core': ^21.2.22
+  '@angular/forms': ^21.2.22
+  '@angular/platform-browser': ^21.2.22
+  '@angular/router': ^21.2.22
+  '@angular/cdk': ^21.2.14
 
 importers:
 
@@ -94,22 +94,22 @@ importers:
         version: link:../AngularWidgets
     devDependencies:
       '@angular/common':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/compiler':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22
       '@angular/compiler-cli':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
       '@angular/core':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)
       '@angular/forms':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@angular/platform-browser':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@memberjunction/conversations-runtime':
         specifier: 6.1.3
@@ -154,7 +154,7 @@ importers:
         specifier: 1.5.0
         version: 1.5.0(20e69947eba73378ffa7384f38fdf86d)
       '@types/node':
-        specifier: 24.10.11
+        specifier: ^24.10.11
         version: 24.10.11
       jsdom:
         specifier: 26.1.0
@@ -176,25 +176,25 @@ importers:
         version: link:../Entities
     devDependencies:
       '@angular/animations':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@angular/common':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/compiler':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22
       '@angular/compiler-cli':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
       '@angular/core':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)
       '@angular/forms':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@angular/platform-browser':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@memberjunction/conversations-runtime':
         specifier: 6.1.3
@@ -285,7 +285,7 @@ importers:
         specifier: 1.5.0
         version: 1.5.0(@memberjunction/actions@6.1.3)(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       '@types/node':
-        specifier: 24.10.11
+        specifier: ^24.10.11
         version: 24.10.11
       typescript:
         specifier: 5.9.3
@@ -322,7 +322,7 @@ importers:
         specifier: 0.1.0
         version: link:../Core
       zod:
-        specifier: 3.25.76
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@memberjunction/core':
@@ -338,37 +338,37 @@ importers:
   packages/ExampleSpaceTypes:
     dependencies:
       '@angular/common':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/core':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)
       '@angular/forms':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/core':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/core-entities':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/global':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/ng-base-forms':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(dde02ba3642bac54f2fc5e07be67eba7)
       '@memberjunction/ng-base-types':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@memberjunction/ng-entity-viewer':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(3f24f567b9198ae0f17e33ac85b44a1b)
       '@memberjunction/ng-link-directives':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/router@21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2))(rxjs@7.8.2)(ws@8.21.3)
       '@memberjunction/ng-ui-components':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
@@ -386,20 +386,20 @@ importers:
         specifier: ^0.14.3
         version: 0.14.4
       zod:
-        specifier: 3.25.76
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@angular/compiler':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22
       '@angular/compiler-cli':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
       '@memberjunction/server':
         specifier: 6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@aws-sdk/credential-providers@3.1138.0)(@azure/identity@4.13.3)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(encoding@0.1.13)(playwright@1.58.1)(socks@2.8.10)(typescript@5.9.3)
       '@types/node':
-        specifier: 24.10.11
+        specifier: ^24.10.11
         version: 24.10.11
       typescript:
         specifier: 5.9.3
@@ -411,43 +411,43 @@ importers:
   packages/IntegrationTests:
     dependencies:
       '@memberjunction/ai-agents':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@memberjunction/ai-core-plus':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/ai-engine-base':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/api-keys':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(typescript@5.9.3)
       '@memberjunction/core':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/core-entities':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/generic-database-provider':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@memberjunction/global':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3
       '@memberjunction/graphql-dataprovider':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(ws@8.21.3)
       '@memberjunction/search-engine':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/sqlserver-dataprovider':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(chokidar@5.0.0)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@memberjunction/storage':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(encoding@0.1.13)(typescript@5.9.3)
       '@memberjunction/testing-integration':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.3)(axios@1.20.0)(debug@4.4.3)(encoding@0.1.13)(typescript@5.9.3)(ws@8.21.3)(zod@3.25.76)
       '@mj-biz-apps/collaboration-core':
         specifier: workspace:*
@@ -462,20 +462,20 @@ importers:
         specifier: workspace:*
         version: link:../ExampleSpaceTypes
       '@mj-biz-apps/common-entities':
-        specifier: 5.46.0
+        specifier: ^5.46.0
         version: 5.46.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       '@mj-biz-apps/tasks-entities':
-        specifier: 1.5.0
+        specifier: ^1.5.0
         version: 1.5.0(@memberjunction/core@6.1.3)(@memberjunction/global@6.1.3)
       mssql:
-        specifier: 12.7.0
+        specifier: ^12.7.0
         version: 12.7.0
     devDependencies:
       '@types/mssql':
         specifier: 12.3.0
         version: 12.3.0
       '@types/node':
-        specifier: 24.10.11
+        specifier: ^24.10.11
         version: 24.10.11
       typescript:
         specifier: 5.9.3
@@ -536,25 +536,25 @@ importers:
   packages/UXGallery:
     dependencies:
       '@angular/common':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2)
       '@angular/core':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)
       '@angular/forms':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@angular/platform-browser':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))
       '@angular/router':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-shared-generic':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)))(rxjs@7.8.2)
       '@memberjunction/ng-ui-components':
-        specifier: 6.1.3
+        specifier: ^6.1.3
         version: 6.1.3(f5517fe63f1c615d5901e88463cf954b)
       '@mj-biz-apps/collaboration-core':
         specifier: 0.1.0
@@ -567,10 +567,10 @@ importers:
         version: link:../AngularWidgets
     devDependencies:
       '@angular/compiler':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22
       '@angular/compiler-cli':
-        specifier: 21.2.22
+        specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
       esbuild:
         specifier: ^0.25.12
@@ -586,21 +586,21 @@ packages:
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     deprecated: '@angular/animations is deprecated. Use `animate.enter` and `animate.leave` instead. For more information see: https://v22.angular.dev/guide/animations.'
     peerDependencies:
-      '@angular/core': 21.2.22
+      '@angular/core': ^21.2.22
 
   '@angular/cdk@21.2.14':
     resolution: {integrity: sha512-806REq/CLf37nEhmmd8Q+ILN8z/RVG2vk2n8YZ/4TdHpcBCi5ux4AxLbpMmduLwGPOzPagJ6ggRzE5fnX0rmcQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       rxjs: ^6.5.3 || ^7.4.0
 
   '@angular/common@21.2.22':
     resolution: {integrity: sha512-VWvtZL4xfYmXC56q/1BmtW0San8POAuHOADePJV1Hrjt430QTW5xaXuONZA7ujMs/B3u3PBZEWueKl2JH4LznQ==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
-      '@angular/core': 21.2.22
+      '@angular/core': ^21.2.22
       rxjs: ^6.5.3 || ^7.4.0
 
   '@angular/compiler-cli@21.2.22':
@@ -608,7 +608,7 @@ packages:
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     hasBin: true
     peerDependencies:
-      '@angular/compiler': 21.2.22
+      '@angular/compiler': ^21.2.22
       typescript: '>=5.9 <6.1'
     peerDependenciesMeta:
       typescript:
@@ -622,7 +622,7 @@ packages:
     resolution: {integrity: sha512-2pqDzm3T7/h7QF8XfDziVieEOZqNBM95qNgStM8vmJpFzhJEyLtD89xMQ0e365XcgaTOBEaMCWPswq6OuCIEUQ==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
-      '@angular/compiler': 21.2.22
+      '@angular/compiler': ^21.2.22
       rxjs: ^6.5.3 || ^7.4.0
       zone.js: ~0.15.0 || ~0.16.0
     peerDependenciesMeta:
@@ -635,18 +635,18 @@ packages:
     resolution: {integrity: sha512-ogO+VbzAPyjgb0sIXgSET8c9x8ml623kDqUMxXE+W/oCFdDMPx4gom5K6gXtLzd1lVhtHlXBCsFf3UUD734Qvg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       rxjs: ^6.5.3 || ^7.4.0
 
   '@angular/platform-browser@21.2.22':
     resolution: {integrity: sha512-+SNwcb/Xg4VjSmlaJ4/RyJLTtRKVMF4VBo5H0WD+ICugSMYiyuiP7AHB9nzuQt0TeLcrv4KY364z43LueA/iwA==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
     peerDependenciesMeta:
       '@angular/animations':
         optional: true
@@ -655,9 +655,9 @@ packages:
     resolution: {integrity: sha512-S3Fl6jWjm4DfkaY6ikDDcd7d8J0BiDNjB3+rFarqD0t58UP/ER6Jv4kamPIAKAV2DfQvCnYE8ks1dY1xFlf7Hg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       rxjs: ^6.5.3 || ^7.4.0
 
   '@antfu/install-pkg@2.1.0':
@@ -1607,15 +1607,15 @@ packages:
   '@foblex/2d@1.2.2':
     resolution: {integrity: sha512-nVl2iw6hF0RDE2+E4U1tSRX5lOI2toG9nY1VaMlQ0RdIB+0mEK1+lhjJDn/qDrBsMYpNCaTZ2CC3Jy54ItOnsQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
       rxjs: '>=6.6.0'
 
   '@foblex/flow@18.6.1':
     resolution: {integrity: sha512-A51s0UVVAPAbfh4n0LDIOiLx8L9RvM1PMmwwwDTCJXgAvD+nal8SqCKJB827J/r+UtTLVZmrde2Wrxtol2gPwQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
       '@foblex/2d': ^1.2.2
       '@foblex/mediator': ^1.1.3
       '@foblex/platform': ^1.0.4
@@ -1624,15 +1624,15 @@ packages:
   '@foblex/mediator@1.1.3':
     resolution: {integrity: sha512-Yuvu4lpefFo0N1oo1xDBL7UItUe5KuasPniurcQITY3wvBRITSHZCPIEpB/FEWuaoknyC8t1blxDyOh11U+daA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
       rxjs: '>=6.6.0'
 
   '@foblex/platform@1.0.4':
     resolution: {integrity: sha512-GLbqPX9xL/w2pRX51J8RSjMrZcTKb8rmi9+EcrPtpRXCa4KETY4mpIzfKlaOthZusFY++UUFecM07aXRnp+sMw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@foblex/utils@1.1.1':
     resolution: {integrity: sha512-w4g49vLAIogIXNYHWQzcv2p5jJKi/XAoTw7LvuEzKvEXDJ8ezL0BZJfbeg43q2+PyKvlUfu+6ySvNxnXYrb/Bg==}
@@ -1715,7 +1715,7 @@ packages:
     resolution: {integrity: sha512-bRt8J8m+Fot9CXv+zNQGXUq2ET0MggR1fPz7v6edN6MFYmsbfGnMmkmWZJEegMKqrAC8ej/o1sqisHZXZJMAfQ==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1724,7 +1724,7 @@ packages:
     resolution: {integrity: sha512-Xvr/0HggjddPtGppuqVmxhTw+Hr8PvsZ/k0HmOEaAqQEt80OITNkFWnsdNmyT0/eM4Ab+iJLx2R8rctlEyfSVg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1733,7 +1733,7 @@ packages:
     resolution: {integrity: sha512-wsSy0sznmXwkty+2PzZwx00Cazc/E0r0B7mAzdGROz2Ct+DFZXaK7WDjGZvgjRldxH5ZhFVfF2lgkYrqgOw2KA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1742,7 +1742,7 @@ packages:
     resolution: {integrity: sha512-YsKkS2q63IiLtaDK/9nqzdComN97SDQrmKiyNggN+ceP4ty+Z6VwyTz3FpjeUWeW1Efss2xHFKCC9sx7hnrsxg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1751,7 +1751,7 @@ packages:
     resolution: {integrity: sha512-uHuXLmXW+TtIfT/9vSBotypAkqn1n34Ul+CLGPos/xANyO4Ff5xZzkYhbKR4NEcfVK4a9mHQOpwVZzluSHFRGw==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1760,7 +1760,7 @@ packages:
     resolution: {integrity: sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1769,7 +1769,7 @@ packages:
     resolution: {integrity: sha512-f3QQJRIX5ZEneBHNUIuPjmbdzHnmRFJA8r2dkcb8q+OM5Uv5KtnuAttQumnrjcBVBM3mcTX1CkmtAkU58VRZxg==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1782,7 +1782,7 @@ packages:
     resolution: {integrity: sha512-HtcJhB2QFVXbLuJ5S3syhNbTUVxYvwqV4VRBDkQceBloC9bmTViUoRFP5PbSaDZb3HzfPmpuU/gG4ybVBz4FHA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1791,7 +1791,7 @@ packages:
     resolution: {integrity: sha512-6Yuwh1NGSbu1Lo4N1EWjXs1jKRntLg/ZCwhmeorEHde90v1XxAozdbd4Iu30eOQLW+6h1hp2O9ujNfLSbTPJnA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1800,7 +1800,7 @@ packages:
     resolution: {integrity: sha512-W9zYdyzogK+6110mqwaSJWCBu2yA5Q/OfnGSjjZB1bNpHlmUozXxTl0+QOZBNeVd6Qo81/qT75gW05gLAtITxw==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1809,7 +1809,7 @@ packages:
     resolution: {integrity: sha512-QoRB4wFIjgH5iOhSjoIKMkTvSHDuV+O3OITlIqAYO0oK5x364GJILXiMBvlPiE+klg7Xx9tq5XVqQHcGUDYYPA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1818,7 +1818,7 @@ packages:
     resolution: {integrity: sha512-1oHky1ONfCOwNrnkQGDE1oaSij/3fI6HFMSf2H/WsGO2lEyDX9My82iggITSy9ddSZ8yk8j9v41OI0fVoSIoaA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1827,7 +1827,7 @@ packages:
     resolution: {integrity: sha512-fyuIU1Nbpvwlikjg3gXwJFDI11+EFjqQ7P+iByfmivIKQ1vmaykNrD/vy5unHuUqUpsOsnvJ25//tPF7E/RBRA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1836,7 +1836,7 @@ packages:
     resolution: {integrity: sha512-9kc15hr8r/kI+3DO/xLog5nOzTz1jqsHXa6JBFzmQKhkoJ8Slda1I1L/uD8ZSZ9tF1yp79wwXe7mclvX1rqR2Q==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -1845,7 +1845,7 @@ packages:
     resolution: {integrity: sha512-yJoHYrMnxIsJZCY+0Vb66Dy3he3kL3e2wOBKhoSwWWAzZAY82emlxwgprCtp6yRixvNRNq9ztfRWQYPNr3Go7A==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -2404,335 +2404,335 @@ packages:
   '@memberjunction/ng-agent-client@6.1.3':
     resolution: {integrity: sha512-nG4KTEDGlTug/c9OFcgWSrcxsvxbw/9gzTT87w3kfNyNXzbFnRaOLIckVLSOOFvkiLkOMdG/FtgiGXLS1qX2wA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-artifacts@6.1.3':
     resolution: {integrity: sha512-0kBp38nhRbiqCz3y1x5/SNYQxk8D1cPFKFuj1agGxesOrW+uDF76CWck06vhIkctuUM4CiLk04RjSWQZUlVXdA==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/cdk': 21.2.14
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/cdk': ^21.2.14
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       ag-grid-angular: ^35.0.1
       ag-grid-community: ^35.0.1
 
   '@memberjunction/ng-base-application@6.1.3':
     resolution: {integrity: sha512-TUh/zsbB8yw5bl1ZRwhdvB7/GSMqu0GF1g1UWMtrr8hR/+asxVCDsZ7DO6yG7NuOnBAVUXmOpKoV9cQRPKUu/Q==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-base-forms@6.1.3':
     resolution: {integrity: sha512-zQ8fPGhD85Q+TP3PyZuDQPZH1b1Au5FhbZKt/7iclN6ThJukTNpqY9JfBa3GbJpeWiTVm2xlZrfCOpyK69Ming==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-base-types@6.1.3':
     resolution: {integrity: sha512-ZVZH/zVX6FQwdj+f1S4K3+tr0rej35lWnhqQjVCm4Yga99L1OdsZNsiecaK81SznzDbVCEo+TPV8fbBNVpZOig==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-code-editor@6.1.3':
     resolution: {integrity: sha512-VowSz7cGcqQ2GcnhOJ8+rr2f8ZrtUfMRWuFDtruwkTFGwalMUd5w1w9cXv2YaGPGNg5CiGL3lxSv16MBibOM2Q==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-composer@6.1.3':
     resolution: {integrity: sha512-D2EOBd3wZewrYTKcvF/9h/m7DOT07TPPdpSkXH+4MMI4+YS0LFghEjNo4RkdoxagNy41OuawBh8uSxycXPWPQA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-container-directives@6.1.3':
     resolution: {integrity: sha512-bcHMOKL/XL3uFrryHC5+dMY7d5wN299eWjhewOm1niul/uRgA4OzHNvRtk+wLnguJRGpn83039gU0DJ5bgw5Tw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-conversations@6.1.3':
     resolution: {integrity: sha512-Vz/XvR9ruqGWjdq9hD+5OVw5XYppH0CAHdwMLBzCWqdJVTnlYBs0taMGDrPUL2F2ozSbxaqtvLDCwUeVIxHduQ==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/cdk': 21.2.14
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/cdk': ^21.2.14
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-credentials@6.1.3':
     resolution: {integrity: sha512-K4CQANgY7nxxShcc8f7gfXXZpJEQfQ0tPtnwQ5koYr53Atr/nw5fwctswb2yk06zNL5bJSTJt1kyjMeeohuspQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-entity-action-ux@6.1.3':
     resolution: {integrity: sha512-1nkKeMFBfx/gGtOE5xepbHq+NYqRDB25f8IQAlrCPm4CjFjZl4/5yJRpd4do5hBTsW9pAjRb9bfTjiUmiKM2Ew==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-entity-viewer@6.1.3':
     resolution: {integrity: sha512-GLj3GF6AVMOV4taCP2w+L0lELj8lT22NjNNRk2Wd1fIx5xdGeGqCQDVjbqOclf19/93vBiWQDhZ0bcGdSeyBtg==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       ag-grid-angular: ^35.0.1
       ag-grid-community: ^35.0.1
 
   '@memberjunction/ng-export-service@6.1.3':
     resolution: {integrity: sha512-/E+GrL37vSYRFU5Gpn1SbF0TTYeOIpn1YdcH4yJctkICvTuQvwycZNoF5ogvUOxybsYP/GAJYJbHU6brNynK9Q==}
     peerDependencies:
-      '@angular/cdk': 21.2.14
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/cdk': ^21.2.14
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-file-storage@6.1.3':
     resolution: {integrity: sha512-B6qk+j+wIQrVZFBocYNgTRrid9L8LtjKd4ESHTj9fXLI3BSYHeOfsnMQ2QiMEFPfKmhUJqt/w+I8/K4GFOqT4w==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-filter-builder@6.1.3':
     resolution: {integrity: sha512-k3N8jozwQNK43RDLeHZ/9COP+BJ95Iym1LWxVM2GR5jgi3zg8LJ7mbu+4/hTo4RB78CPj1QzjMQMfq5enSQqOQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-flow-editor@6.1.3':
     resolution: {integrity: sha512-medWZQ6cmpJts0s6ouSZeB3PbcxN/ggVtS8tUvaesntQKDdd7KcbUDRd9OXuer2RC7UeRL3x7lBgW9kFVGNFhA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-forms@6.1.3':
     resolution: {integrity: sha512-69zQtMDFtZv5r1OTwBbOOEqmW39IpJertIXk1gv0BSs1cs2s2OoDiHuBt2GLY9ia3KANt60lLHp0IvRFUna7XA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-gantt@6.1.3':
     resolution: {integrity: sha512-vlyWQ3hvFSENYKneTTYgZqNQk2TXnVRy6BVanVeHNIA5hCC683dcPKaGcL2fA3lLbiUsoCKyc0paRw+9+XLfmg==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-generic-dialog@6.1.3':
     resolution: {integrity: sha512-lTbVBj1KgOfAmfem6TT9ArGVakv+tss8yQz+CwnSJjhDXLiX1Kc3t1JiitG2EncOAPm40E3+YmD55WWRtFpkxw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-hierarchy-tree@6.1.3':
     resolution: {integrity: sha512-aM0mJJDkYLCRDh/uGsREaS/0G+ZAO4KtXdbbUSE4OwA+RzJv3tc7CVzVCQLRhC4kBciE9x05Kxm9544CQfy6Gw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-kanban@6.1.3':
     resolution: {integrity: sha512-crpTajFkVWxAl7+p5eAIcXN1r7tZcVmF9+DjIeMj3gu0jw5Niq8Q3N32TEhPOES7yMYGU/JnKsYybinOokdwgQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-link-directives@6.1.3':
     resolution: {integrity: sha512-2sB8GksvDjLiN6POGPRSHTHjSeaszhWwhj2lEFSBkiA/LfS/jDK+EqPH4xSNHZYTxYe918S1wrKIhkNtffYx8w==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-list-management@6.1.3':
     resolution: {integrity: sha512-64WFerwaTSF5hD6KOS+mMmMadkgd26pKdL2aC6kqKUbGDbcySQtVEOHxgjJg+xbG1yP8yts3YuW+yU7xNeazGA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-map-view@6.1.3':
     resolution: {integrity: sha512-hdC98XWUKBLDhkYLty42f+w4SrnSOnKq2/SxVqR1+13dMNrrqOXsE572dTgC5fJ4swiryyBpoAeebwdQZUoDfw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-markdown@6.1.3':
     resolution: {integrity: sha512-OsJOxkoeuqr3JEBksJlwXhvueuN3sB0DI/kQl98uHZdnzz5kuz/QqQivK2gSR+Rv0KON9FXWPBTrG/gCulfNIw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-media-player@6.1.3':
     resolution: {integrity: sha512-cPNq8hnCyA/WXtcKDIsbQPTv9Csi6c6/eeC9GZQk17HgopJi6GEbLVc6ZXPlDtWmy/TbqCLb3sbssOG/bq2cLg==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-notifications@6.1.3':
     resolution: {integrity: sha512-SttDWaKhcp9On0VMLdES1xgfpC/n8UbfI91BDTES9xYyJK7+d2VjxyGEZLB8Pukll6qbfFmvY0Lnyhsw7XAFgg==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-pagination@6.1.3':
     resolution: {integrity: sha512-9Bx/EJveoED79fkTc+EOrzWnJ174qXnQ/zPBg/4yHgZ3Xe2WpyFPtRIuu5xsVZH03INEA0a5qMuAYtYlyew3qA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-query-viewer@6.1.3':
     resolution: {integrity: sha512-bQCHUE20FMgrQgx1AA5v/2t9tYsf5EjTso8BF49oIvIXcrKzkmu+0KfZuruIp6ZBdhijaUI0ZaWv616nKSHhng==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       ag-grid-angular: ^35.0.1
       ag-grid-community: ^35.0.1
 
   '@memberjunction/ng-react@6.1.3':
     resolution: {integrity: sha512-xSj5ZJBoG11pCG/WEMjEE9vLiALxXFTNMzEWKlxQElsVyN4F/Gw8nW+zrA3e4D2lTiyWnGd8ce2Lo8vgUKo15w==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-record-changes@6.1.3':
     resolution: {integrity: sha512-fjXMwD1sdT9MMO7wrsj3qqsUo0/JQ+Gu059Tbi2Lc9PDwcBgsa30o7YJb0wjkGgdOckoPdIeYbFg7bhDQeGOig==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-record-tags@6.1.3':
     resolution: {integrity: sha512-dkrtw0fmsaMq23+b7dv89JMxTJskL0wTnjfxZ0ZKB/Sia+OFpNPgqwoX5sGRaka4tJY8/DT684nE6J+8rUBX2A==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-resource-permissions@6.1.3':
     resolution: {integrity: sha512-hgx2pSs4qdBdE9JeEcZqGzMw6ItACMG+aNgn0AcWSiDfgNNQdA2m5HmdPuU7HcxAEJRhlxenW8Rgfnxwqt33kQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-shared-generic@6.1.3':
     resolution: {integrity: sha512-CYQSouUWtelBsRtS6MX9MqLwcDrwYCQ1+vxb20G9y6sifCGOtiGA2k+pGCOH0y6mHuGNrYVc7K0dZB4FQ61dAQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-shared@6.1.3':
     resolution: {integrity: sha512-zw3R53ntI4NvlprGsm1Om4cGDz2w7aqAxbjLpHffZ4BCdzInnHimg4JfWGPljqJEWcMzTrcmjSE9X+zgiytJ0w==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
-      '@angular/router': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
+      '@angular/router': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-task-graph-editor@6.1.3':
     resolution: {integrity: sha512-4oLVB8jtw83HLmzV/ptqHmkpObRLjFqI9oFiiRsxmLhQ0k7wTue5yIJOquCYrObcDKde2ngE3Ic53trQXPlXHQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-tasks@6.1.3':
     resolution: {integrity: sha512-LiENNmEl/ecRD98AluGZhrXUJ7c4iRJvxAYWiKiW0gDRz40lAZxRagTrxWUgV9P+42jV8EHgN1SJlh9Qbztjig==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-testing@6.1.3':
     resolution: {integrity: sha512-8BlUqji6e7uwg/wg11O0y3tplnXQuBQwljcY0Z/asDTECtIT4rM9yWTtUZva7X5Dx4+l0WDunSOxqx2TARA0cw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-timeline@6.1.3':
     resolution: {integrity: sha512-J7yUDYKykr0eIheHShQQgh1V6isPQkCKD5q+fUlLESbKcPt9W2TFd32Ld6n6lXp0KfTxeCCOfdnHRmUVZrDXTA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/ng-trees@6.1.3':
     resolution: {integrity: sha512-2IFmExu2PziqVdTYtEs6gDygx/8/vjSgUcCvz9ZAlxH5GNTpJgIp6OjEH5RaxQNibeMFs4udKjtaKsfaBxbUFw==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-ui-components@6.1.3':
     resolution: {integrity: sha512-QXNjtYaywnEcOh4DN8Os8Bm/I4lIboAIRaAqRrjDOloldb2Z7UuHjjNhYmbTHLekvoXL/Eu0Ptwf76lpcmJ8MA==}
     peerDependencies:
-      '@angular/cdk': 21.2.14
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/cdk': ^21.2.14
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       rxjs: ^7.8.2
 
   '@memberjunction/ng-user-routines@6.1.3':
     resolution: {integrity: sha512-Rt3S/JocEd3t96FE7iGyiKL18COwBqcrgfoewck9icXu8P02ImZeka9iSz0hAWx20t99VhgMDgsGlDQThYsVrA==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-versions@6.1.3':
     resolution: {integrity: sha512-xMxuwtaECltl2bVtIOt3nFqlVWO8GF/v2GswsiXD3KYJRtm8dyyuVDJAVzsRe0xq907+AYelcvQ2yiQpf7aIpA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
 
   '@memberjunction/ng-whiteboard@6.1.3':
     resolution: {integrity: sha512-QEanDvs70xHoxBbSsREgVtdM7/3JW1PfNwYfwC9IwPsSqOrm+byWcKZisHIFR39tAzmQbo+JzyKpjPWuov3j3w==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/platform-browser': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/platform-browser': ^21.2.22
 
   '@memberjunction/ng-word-cloud@6.1.3':
     resolution: {integrity: sha512-Wa9jzrckhUlw8eruOql4+SNrdg63stPT83p17ZgJ+vOuQ9CdTEuvKfD9ciOBowHugY1OeZPq45jekCRcjwxFPQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   '@memberjunction/notifications@6.1.3':
     resolution: {integrity: sha512-7Mp9SeFYMKdgYT8vdYyY+o/n8uu2nsN3zZJH7WMWOKR/vPAymCieevSqUgNT0DkuenZhdJEP59FLQQZVs5zzPA==}
@@ -2979,10 +2979,10 @@ packages:
   '@mj-biz-apps/tasks-ng@1.5.0':
     resolution: {integrity: sha512-Nbmwa+fuOLZpyvgxeDZ2zYKBYuOCGXOEsMfMDIICMZSYAT5Nc0nDpHcDvQ7kFMpHpgGes2zz8xCC+SJ/AC2/yQ==}
     peerDependencies:
-      '@angular/animations': 21.2.22
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
-      '@angular/forms': 21.2.22
+      '@angular/animations': ^21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
+      '@angular/forms': ^21.2.22
       '@memberjunction/core': ^6.1.0-edge.5
       '@memberjunction/core-entities': ^6.1.0-edge.5
       '@memberjunction/global': ^6.1.0-edge.5
@@ -3863,8 +3863,8 @@ packages:
   ag-grid-angular@35.3.1:
     resolution: {integrity: sha512-oTM1Na5jI16nOyVfuFBiN/xDDoYRpjKTHxqgP4TGfFBM34Z8en/ZS9liE9AEg8LnfaXGXvYDkPXPnBYoWtX3wA==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
 
   ag-grid-community@35.3.1:
     resolution: {integrity: sha512-Wmkd/xYTCbAApcZZO74nBggZCnd/oX753NY3MJ4zYARVpfBHRWWhIBJ2sFTFKbDWwHZOWsx3YT9+kkyeuyLKlw==}
@@ -3903,8 +3903,8 @@ packages:
   angular-split@20.0.0:
     resolution: {integrity: sha512-MtoR8NeFgzBDqiXaSbXPGFqpYsNsaI5W8w2mM/JpYyyU9hkrQ8b3GVhxraR/kGFGEDVmfEUGaqmy2yG0hraOHQ==}
     peerDependencies:
-      '@angular/common': 21.2.22
-      '@angular/core': 21.2.22
+      '@angular/common': ^21.2.22
+      '@angular/core': ^21.2.22
       rxjs: '>=7.0.0'
 
   ansi-escapes@4.3.2:
@@ -6321,7 +6321,7 @@ packages:
     resolution: {integrity: sha512-A2olluVlj0mvgyIRRISMEzXc51m+21mRtcMVjJyIpt2GG98+XrC9m9HzsqcMsX2LcnfccJvY5NB22g8fENBnOA==}
     engines: {node: '>= 8.0'}
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
 
   named-placeholders@1.1.6:
     resolution: {integrity: sha512-Tz09sEL2EEuv5fFowm419c1+a/jSMiBjI9gHxVLrVdbUkkNUUfjsVYs9pVZu5oCon/kmRh9TfLEObFtkVxmY0w==}
@@ -7580,7 +7580,7 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
       '@vitejs/devtools': ^0.7.1
       esbuild: ^0.27.0 || ^0.28.0
       jiti: '>=1.21.0'
@@ -7625,7 +7625,7 @@ packages:
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
-      '@types/node': 24.10.11
+      '@types/node': ^24.10.11
       '@vitest/browser-playwright': 4.1.11
       '@vitest/browser-preview': 4.1.11
       '@vitest/browser-webdriverio': 4.1.11
