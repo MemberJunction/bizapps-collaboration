@@ -43,7 +43,12 @@ export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
 export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
-export { LoadTaskAttributionEntityServer } from './task-attribution.js';
+export {
+    LoadTaskAttributionEntityServer,
+    TaskAssignmentEntityServer,
+    TaskCommentEntityServer,
+    TaskDecisionEntityServer,
+} from './task-attribution.js';
 export { CollaborationTaskEntityServer, LoadCollaborationTaskEntityServer } from './task-entity-server.js';
 export { decideUploadBand } from './decide-upload.js';
 export { recordItemUse, recordShare } from './library-events.js';
