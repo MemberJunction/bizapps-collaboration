@@ -45,10 +45,13 @@ const MAX_DEPTH = 4;
 const SINGLE_CARET = '\\^\\d+(\\.\\d+){0,2}(-[0-9A-Za-z.-]+)?';
 const CARET = new RegExp(`^${SINGLE_CARET}(\\s*\\|\\|\\s*${SINGLE_CARET})*$`);
 const LOWER_BOUND = /^>=\s*\d+(\.\d+){0,2}(-[0-9A-Za-z.-]+)?(\s+<\s*\d+(\.\d+){0,2}(-[0-9A-Za-z.-]+)?)?$/;
-const PROTOCOL = /^(workspace:|file:|link:|catalog:|portal:|patch:|git\+|git:|github:|https?:|[\w.-]+\/[\w.-]+(#.*)?$)/;
+const PROTOCOL = /^(workspace:|file:|link:|catalog:|portal:|patch:|git\+|git:|github:|https?:|(?!\d+\/)[A-Za-z0-9-]+\/[\w.-]+(#.*)?$)/;
 
 /** Why `spec` is not accepted, or null when it is. */
 function problem(spec) {
+  if (typeof spec !== 'string') {
+    return 'not a caret range';
+  }
   const s = spec.trim();
   if (s.startsWith('npm:')) {
     const rest = s.slice(4);
@@ -72,7 +75,8 @@ function problem(spec) {
 
 /** Suggested replacement suffix for a violation, or '' when no automatic rewrite applies. */
 function suggest(spec, why) {
-  if (why === 'not a caret range') {
+  // A union needs each member rewritten by hand; rewriting only the first leaves it unaccepted.
+  if (why === 'not a caret range' || spec.includes('||')) {
     return '';
   }
   const s = spec.trim();
@@ -122,7 +126,12 @@ function check(root) {
   const manifests = findManifests(root)
     .map((path) => {
       const file = relative(root, path).split('\\').join('/');
-      return { file, json: readJson(path, file, parseErrors) };
+      const json = readJson(path, file, parseErrors);
+      if (json !== undefined && (json === null || typeof json !== 'object' || Array.isArray(json))) {
+        parseErrors.push({ file, msg: `${file}: root value must be a JSON object` });
+        return { file, json: undefined };
+      }
+      return { file, json };
     })
     .filter((m) => m.json !== undefined);
   const local = new Set(manifests.map((m) => m.json.name).filter(Boolean));
@@ -130,7 +139,12 @@ function check(root) {
   const entries = [];
   for (const { file, json } of manifests) {
     for (const section of SECTIONS) {
-      for (const [name, spec] of Object.entries(json[section] ?? {})) {
+      const deps = json[section] ?? {};
+      if (deps === null || typeof deps !== 'object' || Array.isArray(deps)) {
+        parseErrors.push({ file, msg: `${file}: "${section}" must be an object of name/range pairs` });
+        continue;
+      }
+      for (const [name, spec] of Object.entries(deps)) {
         entries.push({ file, section, name, spec });
       }
     }
@@ -182,7 +196,7 @@ function report(root) {
     console.log(`::error file=${v.file}::${v.section} ${v.name}: "${v.spec}" is ${v.why}${suggest(v.spec, v.why)}`);
   }
   if (parseErrors.length && !violations.length && !allowErrors.length) {
-    console.log(`\n${parseErrors.length} file(s) could not be parsed; fix the JSON and re-run.`);
+    console.log(`\n${parseErrors.length} file(s) could not be read; fix the JSON and re-run.`);
     return 1;
   }
   if (violations.length || allowErrors.length) {
@@ -206,6 +220,8 @@ function selfTest() {
     ['^21.0.0 || 22.0.0', 'not a caret range'], ['^21.0.0 || ~22.0.0', 'not a caret range'],
     ['github:org/repo#main', null], ['~3.24.4', 'tilde'], ['6.1.5', 'exact'], ['2.0.0-beta.3', 'exact'],
     ['*', 'not a caret range'], ['latest', 'not a caret range'], ['1.x', 'not a caret range'],
+    ['org/repo', null], ['1.2.3/4', 'not a caret range'], ['6.1.3/', 'not a caret range'], ['123/repo', 'not a caret range'],
+    [null, 'not a caret range'], [42, 'not a caret range'],
   ];
   let failed = 0;
   for (const [spec, want] of cases) {
@@ -224,6 +240,7 @@ function selfTest() {
     ['npm:@scope/pkg@~1.2.0', 'tilde', ' — use npm:@scope/pkg@^1.2.0'],
     ['npm:pkg@0.8.0', 'exact', ' — use npm:pkg@>=0.8.0 <1.0.0'],
     ['*', 'not a caret range', ''],
+    ['~1.0.0 || 2.0.0', 'tilde', ''],
   ];
   for (const [spec, why, want] of suggestCases) {
     const got = suggest(spec, why);
@@ -315,6 +332,30 @@ function selfTest() {
     ) {
       failed++;
       console.error(`malformed JSON not reported cleanly: ${JSON.stringify(malformedRes)}`);
+    }
+
+    // A non-object manifest root, a non-object section and a non-string spec are reported against
+    // their file, and the other entries are still checked.
+    rmSync(join(dir, 'packages/c'), { recursive: true });
+    write('.github/caret-pins-allow.json', []);
+    write('packages/d/package.json', 'null');
+    write('packages/e/package.json', '[]');
+    write('packages/f/package.json', { name: '@x/f', dependencies: '^1.0.0', peerDependencies: { foo: null, bar: '^1.0.0', baz: '1.0.0' } });
+    let shapeRes;
+    try {
+      shapeRes = check(dir);
+    } catch (err) {
+      shapeRes = { threw: String(err) };
+    }
+    const shapeFiles = (shapeRes.parseErrors ?? []).map((e) => e.file).sort();
+    const fViolations = (shapeRes.violations ?? []).filter((v) => v.file === 'packages/f/package.json').map((v) => `${v.name}|${v.why}`).sort();
+    if (
+      JSON.stringify(shapeFiles) !== JSON.stringify(['packages/d/package.json', 'packages/e/package.json', 'packages/f/package.json']) ||
+      JSON.stringify(fViolations) !== JSON.stringify(['baz|exact', 'foo|not a caret range']) ||
+      !shapeRes.violations?.some((v) => v.name === 'lodash')
+    ) {
+      failed++;
+      console.error(`malformed shapes not reported cleanly: ${JSON.stringify(shapeRes)}`);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });

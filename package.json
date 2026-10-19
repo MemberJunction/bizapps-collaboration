@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "BizApps Collaboration — shared spaces for collaborative team and outside work.",
   "license": "UNLICENSED",
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@memberjunction/cli": "6.1.3",
     "@memberjunction/core": "6.1.3",
@@ -26,19 +27,5 @@
     "mj:push:tests": "mj sync push --dir=metadata-tests --include=entity-permissions,entity-fields && mj sync push --dir=metadata-tests --include=agents,space-types",
     "mj:standards": "mj standards check",
     "test:e2e": "pnpm --filter @mj-biz-apps/collaboration-e2e test"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/node": "24.10.11",
-      "@angular/animations": "21.2.22",
-      "@angular/common": "21.2.22",
-      "@angular/compiler": "21.2.22",
-      "@angular/compiler-cli": "21.2.22",
-      "@angular/core": "21.2.22",
-      "@angular/forms": "21.2.22",
-      "@angular/platform-browser": "21.2.22",
-      "@angular/router": "21.2.22",
-      "@angular/cdk": "21.2.14"
-    }
   }
 }
