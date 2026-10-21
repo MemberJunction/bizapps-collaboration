@@ -350,6 +350,108 @@ describe('resolveSpaceAgentRetrieval', () => {
             mockItemsOverride = null;
         }
     });
+
+    it('B2.3: staff Ada in General room of Discovery is bounded to Shared band (excludes discovery-brief.pdf)', async () => {
+        const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const res = await resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID, {
+            conversationKind: 'General',
+        });
+
+        assert.equal(res.callerCanSeeTeam, true, 'Caller Ada still has a Team seat');
+        assert.ok(res.audienceUserIds.some((id) => id.toLowerCase() === ADA_ID.toLowerCase()), 'Ada is in room audience');
+        assert.ok(res.audienceUserIds.some((id) => id.toLowerCase() === BEA_ID.toLowerCase()), 'Client Bea is in General room audience');
+
+        const quotedNames = res.quotedItems.map((q) => q.Name);
+        assert.ok(quotedNames.includes('site-photo.png'), 'Quotes Shared site-photo.png');
+        assert.ok(!quotedNames.includes('discovery-brief.pdf'), 'Excludes Team discovery-brief.pdf in General room');
+    });
+
+    it('B2.3: staff Ada in Private room of Discovery quotes both Shared and Team items', async () => {
+        const user = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const res = await resolveSpaceAgentRetrieval(provider, user, CHILD_SPACE_ID, {
+            conversationKind: 'Private',
+        });
+
+        assert.equal(res.callerCanSeeTeam, true, 'Private room allows Team band for staff');
+        assert.ok(res.audienceUserIds.some((id) => id.toLowerCase() === ADA_ID.toLowerCase()), 'Ada is in Private room audience');
+        assert.ok(!res.audienceUserIds.some((id) => id.toLowerCase() === BEA_ID.toLowerCase()), 'Client Bea is excluded from Private room audience');
+
+        const quotedNames = res.quotedItems.map((q) => q.Name);
+        assert.ok(quotedNames.includes('site-photo.png'), 'Quotes Shared site-photo.png');
+        assert.ok(quotedNames.includes('discovery-brief.pdf'), 'Quotes Team discovery-brief.pdf in Private room');
+    });
+
+    it('B2.3: audience intersection excludes sealed sub-space that another room participant cannot reach', async () => {
+        const SEALED_SPACE_ID = 'AAAAAAAA-1111-4000-8000-000000000005';
+        const SEALED_RECORD_ID = '11111111-5555-4000-8000-000000000006';
+        const CASEY_ID = 'CCCCCCCC-3333-4000-8000-000000000004';
+        targetRecords[SEALED_RECORD_ID] = { Name: 'sealed-secret.pdf', Description: 'Sealed branch item' };
+        mockSpacesOverride = [
+            ...spacesData,
+            {
+                ID: SEALED_SPACE_ID,
+                ParentID: ROOT_SPACE_ID,
+                InheritsMembership: false,
+                OwnerID: ADA_ID,
+                AgentRetrieval: 'Included',
+                AllowParentAssignees: false,
+            },
+        ];
+        mockItemsOverride = [
+            ...itemsData,
+            {
+                ID: 'EEEEEEEE-5555-4000-8000-000000000006',
+                SpaceID: SEALED_SPACE_ID,
+                EntityID: FILES_ENTITY_ID,
+                RecordID: SEALED_RECORD_ID,
+                Band: 'Shared' as const,
+            },
+        ];
+        membersData.push(
+            {
+                SpaceID: SEALED_SPACE_ID,
+                UserID: ADA_ID,
+                Status: 'Active',
+                Band: 'Team',
+                SpaceRoleTypeID: OWNER_ROLE_ID,
+            },
+            {
+                SpaceID: ROOT_SPACE_ID,
+                UserID: CASEY_ID,
+                Status: 'Active',
+                Band: 'Team',
+                SpaceRoleTypeID: OWNER_ROLE_ID,
+            },
+        );
+        try {
+            const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+            // Without room audience, Ada has a direct seat on SEALED_SPACE_ID so she reaches it from ROOT_SPACE_ID
+            const soloRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID);
+            assert.ok(
+                soloRes.quotedItems.some((q) => q.Name === 'sealed-secret.pdf'),
+                'Ada alone reaches sealed child from root',
+            );
+
+            // In Root General room, Casey is also in the audience and cannot reach SEALED_SPACE_ID
+            const roomRes = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+                conversationKind: 'General',
+            });
+            assert.ok(
+                !roomRes.searchedSpaceIds.some((id) => id.toLowerCase() === SEALED_SPACE_ID.toLowerCase()),
+                'Sealed child space is excluded from searchedSpaceIds when another room participant cannot reach it',
+            );
+            assert.ok(
+                !roomRes.quotedItems.some((q) => q.Name === 'sealed-secret.pdf'),
+                'Sealed child item is never quoted in parent room where Casey is present',
+            );
+        } finally {
+            mockSpacesOverride = null;
+            mockItemsOverride = null;
+            membersData.pop();
+            membersData.pop();
+            delete targetRecords[SEALED_RECORD_ID];
+        }
+    });
 });
 
 

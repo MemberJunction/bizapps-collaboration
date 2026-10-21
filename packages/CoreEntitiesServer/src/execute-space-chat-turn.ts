@@ -21,7 +21,6 @@ import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
-import { filterRoomReplyItems } from './post-space-message.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
@@ -385,16 +384,17 @@ async function runClaimedTurn(
         }
     }
 
-    // 9. Bound agent to conversation audience (Item 23)
-    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId);
-    const normSpaceId = spaceId.trim().toUpperCase();
-    const audienceQuoted = foundChat.Kind === 'Private'
-        ? retrieval.quotedItems.filter((item) => (item.Band === 'Shared' || item.Band === 'Team') && item.SpaceID.trim().toUpperCase() === normSpaceId)
-        : filterRoomReplyItems(retrieval.quotedItems, spaceId);
+    // 9. Bound agent to conversation audience (Item 23 / B2.3: what the room can reach)
+    const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
+        conversationKind: foundChat.Kind,
+    });
+    const audienceQuoted = retrieval.quotedItems;
+    const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
 
-    // 10. Write reply as system user (Item 5)
+    // 10. Write reply as system user (Item 5 / A19 Part 2)
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
+    (assistantDetail as MJConversationDetailEntity & { MarkServerAuthoredReply?: () => void }).MarkServerAuthoredReply?.();
     assistantDetail.ConversationID = conversationId;
     assistantDetail.UserID = system.ID;
     assistantDetail.AgentID = targetAgentId;
@@ -452,7 +452,7 @@ async function runClaimedTurn(
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
                 const runner = new AgentRunner(provider);
-                const runnerParams: ExecuteAgentParams = {
+                const runnerParams: ExecuteAgentParams & { Audience?: { Mode: 'Intersection'; UserIDs: string[] } } = {
                     agent: agentEntity,
                     contextUser: user,
                     userId: user.ID,
@@ -461,6 +461,10 @@ async function runClaimedTurn(
                     ConversationHistoryFrom: conversationHistoryFrom,
                     PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
                     PrimaryScopeRecordID: foundChat.ID,
+                    Audience: {
+                        Mode: 'Intersection',
+                        UserIDs: participantUserIds,
+                    },
                     data: {
                         spaceId,
                         conversationId,

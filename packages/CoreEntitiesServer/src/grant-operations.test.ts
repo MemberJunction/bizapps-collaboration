@@ -163,4 +163,39 @@ describe('the grant operations (B17, D29)', () => {
         assert.equal(bad.ok, false);
         if (!bad.ok) assert.match(bad.message, /not valid/);
     });
+
+    it('B2.3: RunSpaceDataAction declares SupportsAudience = true and runSpaceView intersects rows across audienceReaders', async () => {
+        const { RunSpaceDataAction } = await import('../dist/RunSpaceDataAction.js');
+        const action = new RunSpaceDataAction();
+        assert.equal(action.SupportsAudience, true, 'RunSpaceDataAction must declare SupportsAudience = true');
+
+        const w = world();
+        const rvProvider = w.provider as unknown as { RunView: <T>(params: RunViewParams, user?: UserInfo) => Promise<RunViewResult<T>> };
+        const origRunView = rvProvider.RunView.bind(rvProvider);
+        rvProvider.RunView = async <T>(params: RunViewParams, user?: UserInfo): Promise<RunViewResult<T>> => {
+            if (params.ViewID) {
+                const rows = user?.ID === NICO.ID
+                    ? [{ ID: 'row-shared' }, { ID: 'row-team-only' }]
+                    : [{ ID: 'row-shared' }];
+                return { Success: true, Results: rows as unknown as T[], RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
+            }
+            return origRunView(params, user);
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, w.provider);
+        const solo = await runSpaceView({ provider: w.provider, user: NICO, spaceId: SPACE, grantId: VIEW_GRANT });
+        assert.equal(solo.ok, true);
+        if (solo.ok) assert.equal(solo.rows.length, 2, 'Nico alone sees both rows');
+
+        const intersected = await runSpaceView({
+            provider: w.provider,
+            user: NICO,
+            spaceId: SPACE,
+            grantId: VIEW_GRANT,
+            audienceReaders: [NICO, LENA],
+        });
+        assert.equal(intersected.ok, true);
+        if (intersected.ok) {
+            assert.deepEqual(intersected.rows, [{ ID: 'row-shared' }], 'Audience intersection drops row-team-only that Lena cannot read');
+        }
+    });
 });

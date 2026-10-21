@@ -116,6 +116,7 @@ describe('executeSpaceChatTurn', () => {
         AgentID?: string | null;
         Status?: string;
         Message?: string;
+        serverAuthoredReplyMarked?: boolean;
     }
 
     interface SavedRun {
@@ -173,8 +174,13 @@ describe('executeSpaceChatTurn', () => {
                         IsPinned: false,
                         OriginalMessageChanged: false,
                         LatestResult: { CompleteMessage: '' },
+                        serverAuthoredReplyMarked: false,
                         NewRecord() {
                             this.ID = 'reply-detail-' + Math.random().toString(36).slice(2);
+                            this.serverAuthoredReplyMarked = false;
+                        },
+                        MarkServerAuthoredReply() {
+                            this.serverAuthoredReplyMarked = true;
                         },
                         async Load(id: string) {
                             return id.toLowerCase() === USER_MESSAGE_ID.toLowerCase();
@@ -570,29 +576,53 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
-    it('succeeds when message mentions allowed agent', async () => {
+    it('succeeds when message mentions allowed agent, marks server-authored reply, and passes room Audience to AgentRunner', async () => {
         const provider = createMockProvider({
             messageText: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} summarize this space`,
         });
-        const result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        let capturedRunParams: Record<string, unknown> | undefined;
+        const heldRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            capturedRunParams = params as unknown as Record<string, unknown>;
+            return heldRunAgent.call(AgentRunner.prototype, params) as never;
+        };
+        let result: Awaited<ReturnType<typeof executeSpaceChatTurn>>;
+        try {
+            result = await executeSpaceChatTurn(provider, callerUser, defaultInput);
+        } finally {
+            AgentRunner.prototype.RunAgent = heldRunAgent;
+        }
         assert.equal(result.ok, true);
         if (result.ok) {
             assert.ok(result.replyDetailIds.length > 0);
             assert.ok(result.agentRunId);
         }
 
-        // Assert saved reply
+        // Assert saved reply and A19 Part 2 MarkServerAuthoredReply()
         assert.ok(provider.savedDetails.length >= 2, 'Should save In-Progress and Complete reply details');
         const initialReply = provider.savedDetails[0];
         assert.equal(initialReply.ParentID, USER_MESSAGE_ID);
         assert.equal(initialReply.Role, 'AI');
         assert.equal(initialReply.Status, 'In-Progress');
+        assert.equal(initialReply.serverAuthoredReplyMarked, true, 'Assistant reply must call MarkServerAuthoredReply() before Save()');
         const finalReply = provider.savedDetails[provider.savedDetails.length - 1];
         assert.equal(finalReply.ParentID, USER_MESSAGE_ID);
         assert.equal(finalReply.Role, 'AI');
         assert.equal(finalReply.Status, 'Complete');
         assert.equal(finalReply.Message, 'Mocked agent response');
         assert.equal(finalReply.AgentID?.toLowerCase(), ALLOWED_AGENT_ID.toLowerCase());
+        assert.equal(finalReply.serverAuthoredReplyMarked, true);
+
+        // Assert B2.3 Audience passed to AgentRunner.RunAgent
+        assert.ok(capturedRunParams, 'AgentRunner.RunAgent was called');
+        const audience = capturedRunParams.Audience as { Mode: string; UserIDs: string[] } | undefined;
+        assert.ok(audience, 'Audience was passed to AgentRunner.RunAgent');
+        assert.equal(audience.Mode, 'Intersection');
+        assert.deepEqual(
+            audience.UserIDs.map((id) => id.toLowerCase()),
+            [CALLER_ID.toLowerCase()],
+            'Audience.UserIDs carries the room participants',
+        );
 
         // Assert ExternalReferenceID stamp
         assert.ok(provider.savedRuns.length >= 1, 'Should save stamped agent run');

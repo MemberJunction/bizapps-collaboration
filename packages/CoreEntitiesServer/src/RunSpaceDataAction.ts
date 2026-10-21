@@ -16,6 +16,10 @@ const MAX_ROWS_RETURNED = 200;
 
 @RegisterClass(BaseAction, RUN_SPACE_DATA_ACTION_NAME)
 export class RunSpaceDataAction extends BaseAction {
+    public get SupportsAudience(): boolean {
+        return true;
+    }
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const context = (params.Context ?? {}) as Partial<SpaceTurnContext>;
         if (!context.spaceId || !Array.isArray(context.spaceData)) {
@@ -34,7 +38,16 @@ export class RunSpaceDataAction extends BaseAction {
         }
 
         const provider: IMetadataProvider = params.Provider ?? Metadata.Provider;
-        const request = { provider, user: params.ContextUser, spaceId: context.spaceId, grantId: grant.GrantID, clientValues: values, agentRunId: context.agentRunId ?? null };
+        const audienceReaders = (params as RunActionParams & { Audience?: { Readers?: readonly import('@memberjunction/core').UserInfo[] } }).Audience?.Readers;
+        const request = {
+            provider,
+            user: params.ContextUser,
+            spaceId: context.spaceId,
+            grantId: grant.GrantID,
+            clientValues: values,
+            agentRunId: context.agentRunId ?? null,
+            audienceReaders,
+        };
         const outcome = grant.Kind === 'Query' ? await runSpaceQuery(request) : await runSpaceView(request);
         if (!outcome.ok) return { Success: false, ResultCode: 'FAILED', Message: outcome.message };
 

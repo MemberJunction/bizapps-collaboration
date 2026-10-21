@@ -761,5 +761,50 @@
       "CanDelete": 0,
       "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Active Space Type Statuses"
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "C85022B2-963E-4B48-A626-5D0EC14D5936"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Record Documents",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Entity Record Documents In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "D96133C3-A74F-4C59-B737-6E1FD25E6A47"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Content Items In Reach"
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "EA7244D4-B850-4D6A-8848-7F20E36F7B58"
+    },
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks",
+      "RoleID": "@lookup:MJ: Roles.Name=Space Participant",
+      "Type": "Allow",
+      "CanCreate": 0,
+      "CanRead": 1,
+      "CanUpdate": 0,
+      "CanDelete": 0,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Content Item Chunks In Reach"
+    }
   }
 ]

@@ -30,6 +30,8 @@ export interface GrantRunRequest {
     clientValues?: ClientValues | null;
     /** The agent run this run belongs to, when an agent made it (A2). */
     agentRunId?: string | null;
+    /** Additional audience members who must also be able to read any rows returned by a view grant. */
+    audienceReaders?: readonly UserInfo[];
 }
 
 export type RowsOutcome =
@@ -127,11 +129,27 @@ export async function runSpaceView(request: GrantRunRequest): Promise<RowsOutcom
     if (request.clientValues && Object.keys(request.clientValues).length) {
         return refuse("a view takes no properties until MJ#4789 (A14).");
     }
-    const run = await RunView.FromMetadataProvider(request.provider).RunView<Record<string, unknown>>({ ViewID: prepared.grant.TargetRecordID, ResultType: 'simple' }, request.user);
-    const logged = await logRun(request, prepared, run.Success ? 'Success' : 'Failed', { rowCount: run.Success ? run.Results?.length ?? 0 : 0, error: run.Success ? null : run.ErrorMessage ?? 'unknown error' });
+    const rv = RunView.FromMetadataProvider(request.provider);
+    const run = await rv.RunView<Record<string, unknown>>({ ViewID: prepared.grant.TargetRecordID, ResultType: 'simple' }, request.user);
+    let results = run.Results ?? [];
+    if (run.Success && request.audienceReaders?.length) {
+        const rowKey = (r: Record<string, unknown>): string =>
+            typeof r.ID === 'string' && r.ID ? r.ID.toLowerCase() : JSON.stringify(r);
+        for (const reader of request.audienceReaders) {
+            const readerRun = await rv.RunView<Record<string, unknown>>({ ViewID: prepared.grant.TargetRecordID, ResultType: 'simple' }, reader);
+            if (!readerRun.Success) {
+                const errMsg = `the view did not run for an audience member: ${readerRun.ErrorMessage ?? 'unknown error'}`;
+                const logged = await logRun(request, prepared, 'Failed', { rowCount: 0, error: errMsg });
+                return refuse(logged ?? errMsg);
+            }
+            const allowedKeys = new Set((readerRun.Results ?? []).map(rowKey));
+            results = results.filter((r) => allowedKeys.has(rowKey(r)));
+        }
+    }
+    const logged = await logRun(request, prepared, run.Success ? 'Success' : 'Failed', { rowCount: run.Success ? results.length : 0, error: run.Success ? null : run.ErrorMessage ?? 'unknown error' });
     if (logged) return refuse(logged);
     if (!run.Success) return refuse(`the view did not run: ${run.ErrorMessage ?? 'unknown error'}`);
-    return { ok: true, rows: run.Results ?? [], rowCount: run.Results?.length ?? 0 };
+    return { ok: true, rows: results, rowCount: results.length };
 }
 
 /**

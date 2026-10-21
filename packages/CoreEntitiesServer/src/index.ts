@@ -48,7 +48,7 @@ export { BaseSpaceSignalProvider } from './space-signal-provider.js';
 export type { SpaceSignalObservation } from './space-signal-provider.js';
 export { EnsureSpaceForRecord } from './ensure-space-for-record.js';
 export type { EnsureSpaceForRecordParams } from './ensure-space-for-record.js';
-export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
+export type { SpaceAgentCandidateItem, SpaceAgentRetrievalDecision, SpaceAgentRetrievalOptions, SpaceAgentRetrievalResult } from './space-agent-retrieval.js';
 export type { PostSpaceMessageInput, PostSpaceMessageResult } from './post-space-message.js';
 export { fileRootTask } from './file-root-task.js';
 // The three gates are exported by name as well: a host's class-registration manifest imports every registered class
