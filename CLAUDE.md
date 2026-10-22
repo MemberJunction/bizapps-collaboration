@@ -2,7 +2,7 @@
 
 ## Metadata
 
-A migration carries DDL: tables, columns, views, functions, constraints, and extended properties, plus the CodeGen output appended under its banner. Metadata rows are JSON under `metadata/`. Push them with `mj sync push` while developing. The build engineer generates the release `*__Metadata_Sync.sql` from a clean database. A feature pull request never writes that file.
+A migration carries DDL: tables, columns, views, functions, constraints, and extended properties, plus the CodeGen output appended under its banner. Metadata rows are JSON under `metadata/`. Push them with `mj sync push` while developing. The build engineer generates the release `*__Metadata_Sync.sql` from a clean database. A feature pull request never writes that file. The model, and the Open App steps that differ from core (`--schema`, the `${mjSchema}` substitution): [Release Metadata Migrations Guide](https://github.com/MemberJunction/MJ/blob/next/guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
 
 That covers roles, applications, authorizations and their role grants, application settings, entity permissions, row filters, field settings, navigation, notification types, permission domains, queries, and seed rows such as space types and role types. Fixed IDs stay as primary keys. A row CodeGen created with a per-host ID is matched by `@lookup` on its natural key. Do not author `sync` blocks. Filter text that names a schema follows the substitutions in bizapps-forms' `migrations/README.md`.
 
