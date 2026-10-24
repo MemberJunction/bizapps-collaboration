@@ -13,6 +13,9 @@
             "EntityID": "@parent:ID",
             "Name": "RecordID",
             "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Anchors&Name=RecordID"
           }
         }
       ]
@@ -35,6 +38,9 @@
             "EntityID": "@parent:ID",
             "Name": "TargetRecordID",
             "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Grants&Name=TargetRecordID"
           }
         }
       ]
@@ -57,6 +63,9 @@
             "EntityID": "@parent:ID",
             "Name": "RecordID",
             "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items&Name=RecordID"
           }
         }
       ]
@@ -79,6 +88,9 @@
             "EntityID": "@parent:ID",
             "Name": "TargetRecordID",
             "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Member Pins&Name=TargetRecordID"
           }
         }
       ]
