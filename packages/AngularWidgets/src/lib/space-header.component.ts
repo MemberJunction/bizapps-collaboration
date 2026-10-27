@@ -31,7 +31,13 @@ import { BreadcrumbItem } from './types';
         </mjc-type-tile>
         <div class="grow">
           <div class="title-row">
-            <h1 class="h1">{{ Title }}</h1>
+            <h1 class="h1">{{ Title }}
+              @if (ShowStar) {
+                <button type="button" class="star" [class.on]="IsStarred" [disabled]="StarBusy" [attr.aria-pressed]="IsStarred" [attr.aria-label]="IsStarred ? 'Unstar this space' : 'Star this space'" [title]="IsStarred ? 'Starred: in your favorites' : 'Star this space'" (click)="StarToggleRequested.emit()">
+                  <i [class]="IsStarred ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                </button>
+              }
+            </h1>
             @if (TypeName) {
               <span class="chip plain">{{ TypeName }}</span>
             }
@@ -120,6 +126,9 @@ import { BreadcrumbItem } from './types';
       margin: 0;
       color: var(--mj-text-primary);
     }
+    .star { border: 0; background: transparent; cursor: pointer; margin-left: 8px; font-size: 18px; color: var(--mj-text-muted, #6b7280); vertical-align: middle; padding: 0 4px; }
+    .star.on { color: var(--mj-status-warning, #f59e0b); }
+    .star:disabled { opacity: .6; cursor: default; }
     .sub {
       color: var(--mj-text-secondary);
       font-size: 13px;
@@ -183,6 +192,10 @@ import { BreadcrumbItem } from './types';
 })
 export class CollabSpaceHeaderComponent {
   @Input() Title = '';
+  /** The star (B22): the space in MJ's User Favorites, offered to a signed-in viewer. */
+  @Input() ShowStar = false;
+  @Input() IsStarred = false;
+  @Input() StarBusy = false;
   @Input() TypeName = '';
   @Input() TypeIconClass = '';
   @Input() TypeColor = '';
@@ -192,6 +205,7 @@ export class CollabSpaceHeaderComponent {
   @Input() BackgroundImageUrl: string | null = null;
 
   @Output() BreadcrumbSelectRequested = new EventEmitter<BreadcrumbItem>();
+  @Output() StarToggleRequested = new EventEmitter<void>();
 
   public onCrumbClick(crumb: BreadcrumbItem): void {
     this.BreadcrumbSelectRequested.emit(crumb);

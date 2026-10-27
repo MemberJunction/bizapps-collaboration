@@ -11,7 +11,7 @@ import { mjBizAppsCollaborationItemUseEntity, mjBizAppsCollaborationSpaceItemEnt
 import { randomUUID } from 'node:crypto';
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
-import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, storedFileExists } from '../world/local-storage-account.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
 import { deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
 
@@ -387,6 +387,236 @@ const checks: NamedCheck[] = [
             if (!kept.ok) throw new Error(kept.message);
             createdItemIds.push(kept.itemId);
             createdFileIds.push(kept.fileId);
+        },
+    },
+    {
+        Id: 'library.LB10',
+        Name: 'LB10 — uploading a variety of document formats (.pdf, .docx, .xlsx, .csv, .md, .json, .html, .xml, .txt, .png, .svg) across Shared and Team bands resolves each MJ Artifact Type, rewrites unsafe MIME types, and enforces band RLS',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const stamp = Date.now();
+
+            const catalog: Array<{
+                fileName: string;
+                mimeType: string;
+                expectedStoredMime: string;
+                expectedArtifactType: string;
+                band: 'Shared' | 'Team';
+                folder: string;
+                content: Buffer;
+            }> = [
+                {
+                    fileName: `lb10-roadmap-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    expectedStoredMime: 'application/pdf',
+                    expectedArtifactType: 'PDF',
+                    band: 'Shared',
+                    folder: 'Briefs',
+                    content: Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n'),
+                },
+                {
+                    fileName: `lb10-sow-${stamp}.docx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    expectedStoredMime: 'application/octet-stream',
+                    expectedArtifactType: 'Word Document',
+                    band: 'Shared',
+                    folder: 'Contracts',
+                    content: Buffer.from('PK\x03\x04 statement of work docx payload'),
+                },
+                {
+                    fileName: `lb10-financials-${stamp}.xlsx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    expectedStoredMime: 'application/octet-stream',
+                    expectedArtifactType: 'Excel Spreadsheet',
+                    band: 'Team',
+                    folder: 'Models',
+                    content: Buffer.from('PK\x03\x04 internal margin model xlsx payload'),
+                },
+                {
+                    fileName: `lb10-telemetry-${stamp}.csv`,
+                    mimeType: 'text/csv',
+                    expectedStoredMime: 'text/plain',
+                    expectedArtifactType: 'CSV',
+                    band: 'Shared',
+                    folder: 'Data',
+                    content: Buffer.from('site,dwell_hours,otif_pct\nChicago,3.8,94.2\nDallas,4.1,92.7\n'),
+                },
+                {
+                    fileName: `lb10-architecture-${stamp}.md`,
+                    mimeType: 'text/markdown',
+                    expectedStoredMime: 'text/plain',
+                    expectedArtifactType: 'Markdown Document',
+                    band: 'Shared',
+                    folder: 'Engineering',
+                    content: Buffer.from('# Architecture Overview\n\n- GraphQL transport\n- Row-Level Security\n'),
+                },
+                {
+                    fileName: `lb10-contract-${stamp}.json`,
+                    mimeType: 'application/json',
+                    expectedStoredMime: 'application/octet-stream',
+                    expectedArtifactType: 'JSON',
+                    band: 'Shared',
+                    folder: 'Engineering',
+                    content: Buffer.from(JSON.stringify({ openapi: '3.1.0', info: { title: 'Northwind Webhook API' } })),
+                },
+                {
+                    fileName: `lb10-portal-${stamp}.html`,
+                    mimeType: 'text/html',
+                    expectedStoredMime: 'text/plain',
+                    expectedArtifactType: 'HTML',
+                    band: 'Shared',
+                    folder: 'Snapshots',
+                    content: Buffer.from('<!doctype html><html><body><h1>Partner Portal</h1></body></html>'),
+                },
+                {
+                    fileName: `lb10-ledger-${stamp}.xml`,
+                    mimeType: 'application/xml',
+                    expectedStoredMime: 'application/octet-stream',
+                    expectedArtifactType: 'XML',
+                    band: 'Team',
+                    folder: 'Schemas',
+                    content: Buffer.from('<?xml version="1.0"?><ledger currency="USD"/>'),
+                },
+                {
+                    fileName: `lb10-playbook-${stamp}.txt`,
+                    mimeType: 'text/plain',
+                    expectedStoredMime: 'text/plain',
+                    expectedArtifactType: 'Generic Text',
+                    band: 'Team',
+                    folder: 'Notes',
+                    content: Buffer.from('Internal negotiation playbook: preserve 18% margin floor.'),
+                },
+                {
+                    fileName: `lb10-diagram-${stamp}.png`,
+                    mimeType: 'image/png',
+                    expectedStoredMime: 'image/png',
+                    expectedArtifactType: 'Image',
+                    band: 'Shared',
+                    folder: 'Diagrams',
+                    content: Buffer.from('\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'),
+                },
+                {
+                    fileName: `lb10-topology-${stamp}.svg`,
+                    mimeType: 'image/svg+xml',
+                    expectedStoredMime: 'application/octet-stream',
+                    expectedArtifactType: 'SVG Image',
+                    band: 'Shared',
+                    folder: 'Diagrams',
+                    content: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>'),
+                },
+            ];
+
+            const uploadedByDoc = new Map<string, { itemId: string; fileId: string; artifactVersionId: string }>();
+            for (const doc of catalog) {
+                const outcome = await uploadSpaceFile({
+                    user: ada,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: DISCOVERY_SPACE_ID,
+                    folder: doc.folder,
+                    fileName: doc.fileName,
+                    mimeType: doc.mimeType,
+                    content: doc.content,
+                    gate: () => decideUploadBand(ctx.Provider, ada, DISCOVERY_SPACE_ID, doc.band),
+                });
+                Assert(outcome.ok, `Upload must succeed for ${doc.fileName}: ${outcome.ok ? '' : outcome.message}`);
+                if (!outcome.ok) throw new Error(outcome.message);
+                createdItemIds.push(outcome.itemId);
+                createdFileIds.push(outcome.fileId);
+                uploadedByDoc.set(doc.fileName, outcome);
+
+                // Verify MJ: Files row ContentType (including text/plain rewrite for HTML, XML, SVG) and stored bytes on disk
+                const [fileRow] = await FindRows<{ ID: string; Name: string; ContentType: string; ProviderKey: string | null }>(
+                    ctx,
+                    FILE_ENTITY,
+                    `ID = '${outcome.fileId}'`,
+                    ['ID', 'Name', 'ContentType', 'ProviderKey'],
+                );
+                Assert(!!fileRow, `MJ: Files row exists for ${doc.fileName}`);
+                Assert(
+                    fileRow.ContentType === doc.expectedStoredMime,
+                    `${doc.fileName} stored ContentType expected ${doc.expectedStoredMime}, saw ${fileRow.ContentType}`,
+                );
+                Assert(!!fileRow.ProviderKey, `MJ: Files ProviderKey is set for ${doc.fileName}`);
+                const diskBytes = await readStoredFile(
+                    ctx.Provider,
+                    ctx.User,
+                    COLLABORATION_STORAGE_ACCOUNT_ID,
+                    fileRow.ProviderKey!,
+                );
+                Assert(
+                    Buffer.compare(diskBytes, doc.content) === 0,
+                    `Stored bytes on disk match uploaded payload for ${doc.fileName}`,
+                );
+
+                // Verify MJ: Artifact Versions & MJ: Artifacts & MJ: Artifact Types
+                const [verRow] = await FindRows<{ ID: string; ArtifactID: string; ContentMode: string; FileID: string; FileName: string; MimeType: string; ContentSizeBytes: number }>(
+                    ctx,
+                    'MJ: Artifact Versions',
+                    `ID = '${outcome.artifactVersionId}'`,
+                    ['ID', 'ArtifactID', 'ContentMode', 'FileID', 'FileName', 'MimeType', 'ContentSizeBytes'],
+                );
+                Assert(!!verRow && verRow.ContentMode === 'File', `Artifact Version in File mode exists for ${doc.fileName}`);
+                Assert(verRow.FileID.toLowerCase() === outcome.fileId.toLowerCase(), `Artifact Version links to FileID for ${doc.fileName}`);
+                Assert(verRow.MimeType === doc.expectedStoredMime, `Artifact Version MimeType matches for ${doc.fileName}`);
+                Assert(Number(verRow.ContentSizeBytes) === doc.content.byteLength, `Artifact Version ContentSizeBytes matches for ${doc.fileName}`);
+
+                const [artRow] = await FindRows<{ ID: string; TypeID: string }>(
+                    ctx,
+                    'MJ: Artifacts',
+                    `ID = '${verRow.ArtifactID}'`,
+                    ['ID', 'TypeID'],
+                );
+                Assert(!!artRow, `Artifact row exists for ${doc.fileName}`);
+                const [typeRow] = await FindRows<{ Name: string }>(
+                    ctx,
+                    'MJ: Artifact Types',
+                    `ID = '${artRow.TypeID}'`,
+                    ['Name'],
+                );
+                Assert(
+                    typeRow?.Name === doc.expectedArtifactType,
+                    `${doc.fileName} resolved MJ: Artifact Types expected "${doc.expectedArtifactType}", saw "${typeRow?.Name ?? ''}"`,
+                );
+
+                // Verify Space Item links ArtifactVersionID and Band
+                const [itemRow] = await FindRows<{ ID: string; Band: string; Folder: string; ArtifactVersionID: string | null }>(
+                    ctx,
+                    SPACE_ITEM_ENTITY,
+                    `ID = '${outcome.itemId}'`,
+                    ['ID', 'Band', 'Folder', 'ArtifactVersionID'],
+                );
+                Assert(itemRow?.Band === doc.band, `Space Item Band matches ${doc.band} for ${doc.fileName}`);
+                Assert(itemRow?.Folder === doc.folder, `Space Item Folder matches ${doc.folder} for ${doc.fileName}`);
+                Assert(
+                    itemRow?.ArtifactVersionID?.toLowerCase() === outcome.artifactVersionId.toLowerCase(),
+                    `Space Item ArtifactVersionID links to version for ${doc.fileName}`,
+                );
+            }
+
+            // Verify client Bea (Shared-band participant in Discovery) reads all 8 Shared uploaded documents and none of the 3 Team uploaded documents
+            const beaItems = await FindRows<{ ID: string }>(
+                ctx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}'`,
+                ['ID'],
+                bea,
+                { BypassCache: true },
+            );
+            const beaItemIdSet = new Set(beaItems.map((i) => i.ID.toLowerCase()));
+            for (const doc of catalog) {
+                const uploaded = uploadedByDoc.get(doc.fileName)!;
+                if (doc.band === 'Shared') {
+                    Assert(beaItemIdSet.has(uploaded.itemId.toLowerCase()), `Client Bea reads Shared uploaded document ${doc.fileName}`);
+                } else {
+                    Assert(!beaItemIdSet.has(uploaded.itemId.toLowerCase()), `Client Bea cannot read Team uploaded document ${doc.fileName}`);
+                }
+            }
         },
     },
 ];

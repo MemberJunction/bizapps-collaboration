@@ -4,7 +4,7 @@ A small Angular app that draws the UX storyboard's frames from fixtures, with Co
 
 - **Private.** It's never published, and `mj-app.json` doesn't list it.
 - **Layer:** `shell`. It's an app, not a library.
-- **Depends on:** Angular 21 (`common`, `core`, `forms`, `platform-browser`, `router`), `collaboration-core`, `collaboration-ng-widgets`, `collaboration-example-space-types` (frame 08 draws the example board), and MJ's `ng-ui-components` and `ng-shared-generic`.
+- **Depends on:** Angular 21 (`common`, `core`, `forms`, `platform-browser`, `router`), `collaboration-core`, `collaboration-ng-widgets`, `collaboration-example-space-types-ng` (frame 08 draws the example board), and MJ's `ng-ui-components` and `ng-shared-generic`.
 
 It also proves the widgets run in an Angular app that isn't Explorer.
 

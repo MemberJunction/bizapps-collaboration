@@ -136,9 +136,9 @@
             ]
         },
         { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAgent\b \bSkills\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceAgentSkills\b", 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAnchors\b",
+            "Description": "\bA\b \brecord\b \ba\b \bspace\b \bis\b \babout\b (\bD26\b: \ba\b \bspace\b \bmay\b \bhave\b \bseveral\b). \bThe\b \bprimary\b \banchor\b \bis\b \bthe\b \bone\b \bEnsureSpaceForRecord\b \bfinds\b \ba\b \bspace\b \bby\b; \bone\b \bper\b \bspace\b, \band\b \bone\b \bspace\b \bper\b (\btype\b, \brecord\b) \bas\b \bprimary\b.",
+            "BaseView": "\bvwSpaceAnchors\b", 
             "Fields": [         
                 {
                     "Name": "\bID\b", 
@@ -147,103 +147,54 @@
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bSkillID\b", 
-                    "Description": "",  
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ\b: \bAI\b \bSkills\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
                 "RelatedEntityFieldName": "\bID\b",
                     "AllowsNull": false 
                 },         
                 {
                     "Name": "\bSpaceTypeID\b", 
-                    "Description": "",  
+                    "Description": "\bThe\b \bspace\b'\bs\b \btype\b, \bdenormalized\b \bso\b \bthe\b \bprimary\b-\bper\b-\btype\b \bindex\b \bcan\b \bhold\b; \bthe\b \bserver\b \bkeeps\b \bit\b \bequal\b \bto\b \bthe\b \bspace\b'\bs\b \band\b \brewrites\b \bit\b \bwhen\b \bthe\b \btype\b \bchanges\b.",  
                     "Type": "\buniqueidentifier\b",
                 "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
                 "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": true 
+                    "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bSpaceID\b", 
-                    "Description": "",  
+                    "Name": "\bEntityID\b", 
+                    "Description": "\bThe\b \bentity\b \bof\b \bthe\b \banchored\b \brecord\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntity": "\bMJ\b: \bEntities\b",
                 "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\b__mj_CreatedAt\b", 
-                    "Description": "",  
-                    "Type": "\bdatetimeoffset\b",
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\b__mj_UpdatedAt\b", 
-                    "Description": "",  
-                    "Type": "\bdatetimeoffset\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bSkill\b", 
-                    "Description": "",  
+                    "Name": "\bRecordID\b", 
+                    "Description": "\bThe\b \brecord\b'\bs\b \bkey\b, \bin\b \bthe\b \bcanonical\b \bshape\b \bSpaceItem\b.\bRecordID\b \buses\b.",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bSpaceType\b", 
-                    "Description": "",  
+                    "Name": "\bRole\b", 
+                    "Description": "\bWhat\b \bthe\b \brecord\b \bis\b \bto\b \bthe\b \bspace\b, \bin\b \bthe\b \btype\b'\bs\b \bvocabulary\b: \bchapter\b, \bsponsor\b, \bevent\b. \bData\b \breach\b (\bD28\b) \bnames\b \ban\b \banchor\b \bby\b \bthis\b \brole\b.",  
                     "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bSpace\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                }        
-            ]
-        },
-        { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bAgents\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceAgents\b", 
-            "Fields": [         
-                {
-                    "Name": "\bID\b", 
-                    "Description": "",  
-                    "Type": "\buniqueidentifier\b",
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bAgentID\b", 
-                    "Description": "",  
-                    "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ\b: \bAI\b \bAgents\b",
-                "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bSpaceTypeID\b", 
-                    "Description": "",  
-                    "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
-                "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bSpaceID\b", 
-                    "Description": "",  
-                    "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
-                "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bIsDefault\b", 
-                    "Description": "",  
+                    "Name": "\bIsPrimary\b", 
+                    "Description": "\bThe\b \bone\b \banchor\b \ba\b \bspace\b \bis\b \bfound\b \bby\b. \bAt\b \bmost\b \bone\b \bper\b \bspace\b.",  
                     "Type": "\bbit\b",
                     "AllowsNull": false 
                 },         
                 {
+                    "Name": "\bSequence\b", 
+                    "Description": "\bDisplay\b \border\b \bamong\b \bthe\b \bspace\b'\bs\b \banchors\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
+                },         
+                {
                     "Name": "\b__mj_CreatedAt\b", 
                     "Description": "",  
                     "Type": "\bdatetimeoffset\b",
@@ -256,22 +207,22 @@
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bAgent\b", 
+                    "Name": "\bSpace\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
+                    "AllowsNull": false 
                 },         
                 {
                     "Name": "\bSpaceType\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
+                    "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bSpace\b", 
+                    "Name": "\bEntity\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
+                    "AllowsNull": false 
                 }        
             ]
         },
@@ -359,6 +310,127 @@
             ]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bGrants\b",
+            "Description": "\bSomething\b \bthe\b \bapp\b, \ba\b \bspace\b \btype\b \bor\b \ba\b \bspace\b \boffers\b \bin\b \bits\b \bspaces\b (\bD27\b'\bs\b \bseven\b \bkinds\b): \ban\b \bagent\b, \ban\b \baction\b, \ba\b \bquery\b, \ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b \bor\b \ba\b \bknowledge\b \bsource\b, \bwith\b \bthe\b \bband\b \bthat\b \bmay\b \buse\b \bit\b, \bbindings\b \bfrom\b \bthe\b \bspace\b \bto\b \bthe\b \btarget\b'\bs\b \bparameters\b, \band\b \ban\b \bagent\b'\bs\b \bnarrowed\b \bsettings\b. \bReplaces\b \bSpaceAgent\b, \bSpaceAgentSkill\b \band\b \bSpaceKnowledgeSource\b.",
+            "BaseView": "\bvwSpaceGrants\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceTypeID\b", 
+                    "Description": "\bThe\b \btype\b \bthe\b \bgrant\b \bbelongs\b \bto\b; \bnull\b \bwith\b \bSpaceID\b \bnull\b \bis\b \bthe\b \bapp\b'\bs\b \bown\b \brow\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthe\b \bgrant\b \bbelongs\b \bto\b; \bnever\b \bset\b \btogether\b \bwith\b \bSpaceTypeID\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bKind\b", 
+                    "Description": "\bAgent\b, \bAction\b, \bQuery\b, \bView\b, \bDashboard\b, \bComponent\b \bor\b \bKnowledgeSource\b. \bTargetEntityID\b \bmust\b \bbe\b \bthe\b \bkind\b'\bs\b \bentity\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTargetEntityID\b", 
+                    "Description": "\bThe\b \btarget\b'\bs\b \bentity\b: \bMJ\b: \bAI\b \bAgents\b, \bMJ\b: \bActions\b, \bMJ\b: \bQueries\b, \bMJ\b: \bUser\b \bViews\b, \bMJ\b: \bDashboards\b, \bMJ\b: \bComponents\b \bor\b \bMJ\b: \bContent\b \bSources\b, \bby\b \bKind\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bEntities\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTargetRecordID\b", 
+                    "Description": "\bThe\b \btarget\b \brecord\b'\bs\b \bkey\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bLabel\b", 
+                    "Description": "\bWhat\b \bthe\b \bspace\b \bcalls\b \bthe\b \btarget\b; \bnull\b \buses\b \bthe\b \btarget\b'\bs\b \bown\b \bname\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bBand\b", 
+                    "Description": "\bThe\b \bband\b \bthat\b \bmay\b \buse\b \bthe\b \bgrant\b (\bD31\b). \bA\b \bTeam\b \bgrant\b \bis\b \bnot\b \boffered\b \bin\b \ba\b \bchat\b \bwhere\b \banyone\b \bcannot\b \bsee\b \bTeam\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bIsDefault\b", 
+                    "Description": "\bFor\b \ban\b \bAgent\b \bgrant\b: \bthe\b \bagent\b \ba\b \bchat\b \bat\b \bthis\b \blevel\b \bstarts\b \bwith\b. \bOne\b \bper\b \blevel\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bBindings\b", 
+                    "Description": "\bJSON\b (\bSpaceGrantBindings\b): \bthe\b \btarget\b'\bs\b \bparameter\b \bor\b \bproperty\b \bnames\b \bmapped\b \bto\b \bwhere\b \beach\b \bvalue\b \bcomes\b \bfrom\b: \ban\b \banchor\b \bby\b \brole\b, \ba\b \bcolumn\b \bof\b \bthe\b \bspace\b, \ba\b \bconfiguration\b \bkey\b, \bthe\b \buser\b, \bor\b \ba\b \bliteral\b (\bD27\b).",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bSettings\b", 
+                    "Description": "\bJSON\b (\bAgentGrantSettings\b) \bfor\b \ban\b \bAgent\b \bgrant\b: \bskills\b, \bplan\b \bmode\b, \beffort\b, \bmemory\b \bwrites\b \band\b \bper\b-\brun\b \blimits\b, \beach\b \bonly\b \bnarrowing\b \bthe\b \bagent\b'\bs\b \bown\b \bdefinition\b (\bD31\b). \bNull\b \bfor\b \bthe\b \bother\b \bkinds\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bMode\b", 
+                    "Description": "\bExtend\b \badds\b \bthe\b \btarget\b \bat\b \bthis\b \blevel\b; \bRemove\b \btakes\b \ba\b \btarget\b \bgranted\b \babove\b \bout\b \bof\b \bthis\b \blevel\b'\bs\b \blist\b (\bD30\b).",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSequence\b", 
+                    "Description": "\bDisplay\b \border\b \bwithin\b \bthe\b \blevel\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceType\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bTargetEntity\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                }        
+            ]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bItems\b",
             "Description": "\bAn\b \bitem\b \bin\b \bexactly\b \bone\b \bspace\b: \bEntityID\b + \bRecordID\b, \bplus\b \bTeam\b \bor\b \bShared\b. \bUnique\b \bon\b (\bEntityID\b, \bRecordID\b) \bso\b \ban\b \bitem\b \bcannot\b \bhave\b \btwo\b \bparents\b.",
             "BaseView": "\bvwSpaceItems\b", 
@@ -430,6 +502,14 @@
                     "AllowsNull": true 
                 },         
                 {
+                    "Name": "\bArtifactVersionID\b", 
+                    "Description": "\bFor\b \ba\b \bdocument\b \bin\b \bthe\b \bLibrary\b: \bthe\b \bMJ\b \bArtifact\b \bVersion\b (\bContentMode\b \bFile\b) \bwrapping\b \bthe\b \bMJ\b: \bFiles\b \brow\b \bthe\b \bitem\b \bpoints\b \bat\b, \bso\b \bthe\b \bdocument\b \bhas\b \ba\b \btype\b, \ba\b \bviewer\b \band\b \bversions\b. \bNULL\b \bfor\b \bitems\b \bthat\b \bare\b \bnot\b \bfiles\b. \bArtifact\b \bPermissions\b \bare\b \bnot\b \bused\b \bby\b \bthe\b \bLibrary\b; \bthe\b \broster\b \bis\b \bthe\b \bone\b \bsharing\b \bmodel\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bArtifact\b \bVersions\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": true 
+                },         
+                {
                     "Name": "\bSpace\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
@@ -446,13 +526,19 @@
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bArtifactVersion\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
                 }        
             ]
         },
         { 
-            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bKnowledge\b \bSources\b",
-            "Description": "",
-            "BaseView": "\bvwSpaceKnowledgeSources\b", 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bMember\b \bPins\b",
+            "Description": "\bSomething\b \ba\b \bmember\b \bkeeps\b \bat\b \bthe\b \btop\b \bof\b \ba\b \bspace\b (\bB22\b): \ba\b \brecord\b \bof\b \bthe\b \bspace\b (\ban\b \bitem\b, \ba\b \bnote\b, \ba\b \btask\b) \bor\b \bone\b \bof\b \bthe\b \bspace\b'\bs\b \bgrants\b (\ba\b \bview\b, \ba\b \bdashboard\b, \ba\b \bcomponent\b). \bThe\b \bmember\b'\bs\b \bown\b; \bHome\b \blists\b \bpins\b \bfrom\b \bthe\b \bspaces\b \bthey\b \bstill\b \breach\b.",
+            "BaseView": "\bvwSpaceMemberPins\b", 
             "Fields": [         
                 {
                     "Name": "\bID\b", 
@@ -461,28 +547,54 @@
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bContentSourceID\b", 
-                    "Description": "",  
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthe\b \bpin\b \bis\b \bin\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ\b: \bContent\b \bSources\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
                 "RelatedEntityFieldName": "\bID\b",
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bSpaceTypeID\b", 
-                    "Description": "",  
+                    "Name": "\bUserID\b", 
+                    "Description": "\bWhose\b \bpin\b \bit\b \bis\b: \bthe\b \bcaller\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
+                "RelatedEntity": "\bMJ\b: \bUsers\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bKind\b", 
+                    "Description": "\bRecord\b: \ba\b \brecord\b \bof\b \bthe\b \bspace\b \bby\b \bentity\b \band\b \bkey\b. \bGrant\b: \bone\b \bof\b \bthe\b \bspace\b'\bs\b \bgrants\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTargetEntityID\b", 
+                    "Description": "\bFor\b \ba\b \bRecord\b \bpin\b: \bthe\b \brecord\b'\bs\b \bentity\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bEntities\b",
                 "RelatedEntityFieldName": "\bID\b",
                     "AllowsNull": true 
                 },         
                 {
-                    "Name": "\bSpaceID\b", 
-                    "Description": "",  
+                    "Name": "\bTargetRecordID\b", 
+                    "Description": "\bFor\b \ba\b \bRecord\b \bpin\b: \bthe\b \brecord\b'\bs\b \bkey\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bGrantID\b", 
+                    "Description": "\bFor\b \ba\b \bGrant\b \bpin\b: \bthe\b \bgrant\b \bin\b \bforce\b \bfor\b \bthe\b \bmember\b'\bs\b \bspace\b \band\b \bband\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bGrants\b",
                 "RelatedEntityFieldName": "\bID\b",
                     "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bSequence\b", 
+                    "Description": "\bThe\b \bmember\b'\bs\b \border\b \bof\b \bpins\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
                 },         
                 {
                     "Name": "\b__mj_CreatedAt\b", 
@@ -497,19 +609,19 @@
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bContentSource\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bSpaceType\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
                     "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bUser\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTargetEntity\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": true 
@@ -616,6 +728,83 @@
             ]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bNotes\b",
+            "Description": "\bA\b \blight\b \bnote\b \bin\b \ba\b \bspace\b (\bB21\b): \bthe\b \bspace\b'\bs\b \bown\b \brow\b \bon\b \ba\b \bband\b, \bnot\b \ba\b \blibrary\b \bitem\b, \bso\b \bthe\b \bmove\b-\band\b-\bpromote\b \brules\b \bdo\b \bnot\b \bapply\b \band\b \bit\b \bneeds\b \bno\b \bItemUse\b. \bPrivate\b \bnotes\b \bare\b \bthe\b \bauthor\b'\bs\b \balone\b.",
+            "BaseView": "\bvwSpaceNotes\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthe\b \bnote\b \bbelongs\b \bto\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bTitle\b", 
+                    "Description": "\bThe\b \bnote\b'\bs\b \btitle\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bBody\b", 
+                    "Description": "\bThe\b \bnote\b'\bs\b \bbody\b, \bMarkdown\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bBand\b", 
+                    "Description": "\bTeam\b \bor\b \bShared\b: \bwho\b \bin\b \bthe\b \bspace\b \bmay\b \bread\b \bit\b. \bA\b \bTeam\b \bnote\b \bmoves\b \bto\b \bShared\b \bonly\b \bwhen\b \bthe\b \bplan\b'\bs\b \bcall\b \b15\b \ballows\b \bit\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bVisibility\b", 
+                    "Description": "\bSpace\b: \bthe\b \bband\b \breads\b \bit\b. \bPrivate\b: \bthe\b \bauthor\b \balone\b, \band\b \bthen\b \bthe\b \bband\b \bis\b \bTeam\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bAuthorUserID\b", 
+                    "Description": "\bWho\b \bwrote\b \bthe\b \bnote\b: \bthe\b \bcaller\b \bon\b \bcreate\b, \band\b \bthe\b \bonly\b \bone\b \bwho\b \bedits\b \bor\b \bdeletes\b \bit\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bUsers\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bAuthorUser\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                }        
+            ]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
             "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
             "BaseView": "\bvwSpaceRoleTypes\b", 
@@ -713,6 +902,105 @@
             ]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bType\b \bStatus\b",
+            "Description": "\bA\b \bstatus\b \ba\b \bspace\b \btype\b \boffers\b \bits\b \bspaces\b: \bActive\b, \bPaused\b, \bClosed\b \band\b \bArchived\b \bship\b \bfor\b \bevery\b \btype\b; \ba\b \btype\b \bmay\b \badd\b \bits\b \bown\b. \bA\b \bspace\b \bis\b \bin\b \bexactly\b \bone\b \bof\b \bits\b \btype\b'\bs\b \bstatuses\b (\bSpace\b.\bStatusID\b) \band\b \bmay\b \bonly\b \bchoose\b \bamong\b \bthem\b. \bThe\b \battributes\b \bsay\b \bwhat\b \ba\b \bspace\b \bin\b \bthe\b \bstatus\b \ballows\b; \bthe\b \btype\b'\bs\b \bdriver\b \bmay\b \bstill\b \brefuse\b \ba\b \bchange\b.",
+            "BaseView": "\bvwSpaceTypeStatus\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceTypeID\b", 
+                    "Description": "\bThe\b \btype\b \bthis\b \bstatus\b \bbelongs\b \bto\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bCode\b", 
+                    "Description": "\bThe\b \bstatus\b'\bs\b \bkey\b \bwithin\b \bits\b \btype\b: \bactive\b, \bpaused\b, \bclosed\b, \barchived\b, \bor\b \ba\b \btype\b'\bs\b \bown\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bName\b", 
+                    "Description": "\bWhat\b \bthe\b \bstatus\b \bis\b \bcalled\b \bon\b \bscreen\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSequence\b", 
+                    "Description": "\bThe\b \bdefinitive\b \border\b \bof\b \bthe\b \btype\b'\bs\b \bstatuses\b, \bfor\b \bdisplay\b \band\b \bfor\b \bthe\b \brule\b \bthat\b \ba\b \bterminal\b \bstatus\b \bmay\b \bonly\b \bmove\b \bforward\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bIsDefault\b", 
+                    "Description": "\bThe\b \bstatus\b \ba\b \bnew\b \bspace\b \bof\b \bthe\b \btype\b \bstarts\b \bin\b; \bone\b \bper\b \btype\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bReadOnly\b", 
+                    "Description": "\bMembers\b \bmay\b \bread\b \bbut\b \bnot\b \bpost\b, \bupload\b, \bassign\b \bor\b \bedit\b \bwhile\b \bthe\b \bspace\b \bis\b \bin\b \bthis\b \bstatus\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bVisible\b", 
+                    "Description": "\bThe\b \bspace\b \bis\b \blisted\b \band\b \breachable\b \bby\b \bits\b \bmembers\b; \boff\b \bhides\b \bit\b \bfrom\b \beveryone\b \bbut\b \bits\b \bowner\b \band\b \bstaff\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bAgentRetrieval\b", 
+                    "Description": "\bAn\b \bagent\b \bmay\b \bquote\b \bthe\b \bspace\b'\bs\b \bmaterial\b \bwhile\b \bit\b \bis\b \bin\b \bthis\b \bstatus\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bCanChangeAfter\b", 
+                    "Description": "\bOnce\b \ba\b \bspace\b \breaches\b \bthis\b \bstatus\b \bit\b \bmay\b \bstill\b \bmove\b \bto\b \banother\b; \boff\b \bfreezes\b \bit\b \bthere\b. \bA\b \bfrozen\b \bstatus\b \bmust\b \bbe\b \bterminal\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bNotifyMembersOnEnter\b", 
+                    "Description": "\bEntering\b \bthis\b \bstatus\b \bsends\b \bthe\b \bspace\b'\bs\b \"\bstatus\b \bchanged\b\" \bnotice\b, \bone\b \bper\b \bmember\b, \bthrough\b \bMJ\b'\bs\b \bnotification\b \bchain\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bIsTerminal\b", 
+                    "Description": "\bEntering\b \bthis\b \bstatus\b \bstamps\b \bSpace\b.\bClosedAt\b; \bretention\b \band\b \bthe\b \bclosed\b \bviews\b \bcount\b \bfrom\b \bit\b. \bFrom\b \ba\b \bterminal\b \bstatus\b \ba\b \bspace\b \bmay\b \bmove\b \bonly\b \bto\b \ba\b \bhigher\b \bSequence\b, \bnever\b \bback\b \bto\b \ban\b \bopen\b \bone\b.",  
+                    "Type": "\bbit\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceType\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                }        
+            ]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bTypes\b",
             "Description": "\bKind\b \bof\b \bspace\b: \bvocabulary\b, \bwhich\b \bpanels\b \bare\b \bon\b, \bretention\b \band\b \bagent\b \bdefaults\b, \band\b \bhow\b \boutsiders\b \bjoin\b. \bBehavior\b \blives\b \bin\b \bthese\b \bcolumns\b, \bnot\b \bin\b \bcode\b \bbranched\b \bon\b \bthe\b \bname\b.",
             "BaseView": "\bvwSpaceTypes\b", 
@@ -775,18 +1063,6 @@
                     "Name": "\bWorkPanel\b", 
                     "Description": "\bTask\b / \bwork\b \bpanel\b \bis\b \bon\b.",  
                     "Type": "\bbit\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bGovernancePanel\b", 
-                    "Description": "\bGovernance\b \bpanel\b \bis\b \bon\b. \bCommittees\b \bstill\b \bowns\b \bmotions\b \band\b \bballots\b; \bthis\b \bonly\b \bsays\b \bthe\b \bpanel\b \bis\b \bpart\b \bof\b \bthe\b \btype\b.",  
-                    "Type": "\bbit\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bDefaultRetention\b", 
-                    "Description": "\bMonth\b, \bYear\b, \bor\b \bIndefinite\b. \bUsed\b \bwhen\b \bthe\b \bspace\b \bitself\b \bhas\b \bno\b \bRetention\b.",  
-                    "Type": "\bnvarchar\b",
                     "AllowsNull": false 
                 },         
                 {
@@ -878,24 +1154,6 @@
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bDefaultInheritsMembership\b", 
-                    "Description": "",  
-                    "Type": "\bbit\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bPostCloseAccess\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": false 
-                },         
-                {
-                    "Name": "\bPostCloseAccessDays\b", 
-                    "Description": "",  
-                    "Type": "\bint\b",
-                    "AllowsNull": true 
                 }        
             ]
         },
@@ -971,12 +1229,6 @@
                     "AllowsNull": true 
                 },         
                 {
-                    "Name": "\bRetention\b", 
-                    "Description": "\bMonth\b, \bYear\b, \bor\b \bIndefinite\b. \bNull\b \buses\b \bSpaceType\b.\bDefaultRetention\b.",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
                     "Name": "\b__mj_CreatedAt\b", 
                     "Description": "",  
                     "Type": "\bdatetimeoffset\b",
@@ -1025,29 +1277,11 @@
                     "AllowsNull": true 
                 },         
                 {
-                    "Name": "\bAnchorEntityID\b", 
-                    "Description": "",  
+                    "Name": "\bStatusID\b", 
+                    "Description": "\bThe\b \bstatus\b \bthe\b \bspace\b \bis\b \bin\b, \bone\b \bof\b \bits\b \btype\b'\bs\b (\bSpaceTypeStatus\b). \bNULL\b \buntil\b \bthe\b \bserver\b \bstamps\b \bit\b: \bthen\b \bthe\b \btype\b'\bs\b \bdefault\b \bwhile\b \bClosedAt\b \bis\b \bnull\b, \band\b \bthe\b \btype\b'\bs\b \bfirst\b \bterminal\b \bstatus\b \bonce\b \bClosedAt\b \bis\b \bset\b, \bas\b \bfnCollaborationSpaceStatuses\b \bderives\b \bit\b.",  
                     "Type": "\buniqueidentifier\b",
-                "RelatedEntity": "\bMJ\b: \bEntities\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bType\b \bStatus\b",
                 "RelatedEntityFieldName": "\bID\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bAnchorRecordID\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bPostCloseAccess\b", 
-                    "Description": "",  
-                    "Type": "\bnvarchar\b",
-                    "AllowsNull": true 
-                },         
-                {
-                    "Name": "\bPostCloseAccessDays\b", 
-                    "Description": "",  
-                    "Type": "\bint\b",
                     "AllowsNull": true 
                 },         
                 {
@@ -1069,7 +1303,7 @@
                     "AllowsNull": false 
                 },         
                 {
-                    "Name": "\bAnchorEntity\b", 
+                    "Name": "\bStatus\b", 
                     "Description": "",  
                     "Type": "\bnvarchar\b",
                     "AllowsNull": true 

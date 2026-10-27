@@ -18,6 +18,8 @@ export interface WriteContext {
     memberCap: number | null;
     memberCount: number;
     ownerCount: number;
+    /** The target space's type, for the rules that read the type's promise (item 157). */
+    typeId?: string | null;
 }
 
 export interface SpaceRow {
@@ -29,12 +31,10 @@ export interface SpaceRow {
     SpaceTypeID: string;
     AllowParentAssignees?: boolean;
     ClosedAt?: string | Date | null;
-    PostCloseAccess?: SpaceNode['postCloseAccess'];
-    PostCloseAccessDays?: number | null;
+    StatusID?: string | null;
 }
 
 export function toNode(row: SpaceRow): SpaceNode {
-    const spaceType = row.SpaceTypeID ? CollaborationEngine.Instance.SpaceTypeById(row.SpaceTypeID) : null;
     return {
         id: parseUuid(row.ID) ?? row.ID,
         parentId: row.ParentID ? parseUuid(row.ParentID) : null,
@@ -43,10 +43,8 @@ export function toNode(row: SpaceRow): SpaceNode {
         agentRetrieval: row.AgentRetrieval,
         allowParentAssignees: row.AllowParentAssignees !== undefined ? !!row.AllowParentAssignees : true,
         closedAt: row.ClosedAt ? String(row.ClosedAt) : null,
-        postCloseAccess: row.PostCloseAccess ?? null,
-        postCloseAccessDays: row.PostCloseAccessDays !== undefined ? row.PostCloseAccessDays : null,
-        spaceTypePostCloseAccess: spaceType?.PostCloseAccess ?? null,
-        spaceTypePostCloseAccessDays: spaceType?.PostCloseAccessDays !== undefined ? spaceType.PostCloseAccessDays : null,
+        // The space's effective status, from the engine's statuses; null for a type with none, which the rules read from ClosedAt alone
+        status: CollaborationEngine.Instance.StatusReachForSpace(row),
     };
 }
 
@@ -96,7 +94,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
     const caller = parseUuid(user.ID);
     const space = parseUuid(spaceId);
     if (!caller || !space) {
-        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0 };
+        return { spaces: [], memberships: [], role: null, roles: new Map(), approval: 'Approve', memberCap: null, memberCount: 0, ownerCount: 0, typeId: null };
     }
     const results = await rv.RunViews([
         { EntityName: MEMBERS, ExtraFilter: `UserID = '${caller}'`, MaxRows: 2000 },
@@ -156,6 +154,7 @@ export async function loadWriteContext(entity: BaseEntity, user: UserInfo, space
         memberCap: typeRows[0]?.MemberCap ?? null,
         memberCount: counted.length,
         ownerCount: owners.length,
+        typeId: typeId ? parseUuid(typeId) : null,
     };
 }
 

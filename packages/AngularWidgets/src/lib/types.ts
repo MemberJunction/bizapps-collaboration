@@ -256,12 +256,69 @@ export interface SpaceSettingsModel {
   backgroundImageUrl: string;
   inheritsMembership: boolean;
   agentRetrieval: 'Included' | 'ExcludedFromParentScope' | 'ExcludedEntirely' | string;
-  /** The space's own retention. Empty means it has none and uses its type's default. */
-  retention: 'Month' | 'Year' | 'Indefinite' | '' | string;
-  /** The space type's default retention, shown as what an empty retention means. */
-  typeDefaultRetention?: 'Month' | 'Year' | 'Indefinite' | string;
+  /** The name of the space's status (stage 1: one of its type's statuses). */
   status: string;
 }
 
 
 
+
+/** A note of the space (B21), as the Notes tab lists it. */
+export interface NoteModel {
+  id: string;
+  title: string;
+  body: string;
+  band: SpaceBand;
+  visibility: 'Space' | 'Private';
+  authorUserId: string;
+  authorName: string;
+  /** When it last changed, already formatted. */
+  updatedLabel: string;
+  /** The viewer wrote it: they edit and delete it. */
+  isMine: boolean;
+  /** The viewer may move it from Team to Shared (the plan's call 15). */
+  canPromote: boolean;
+  isPinned: boolean;
+}
+
+/** What the composer hands back: a new note (id null) or an edit. */
+export interface NoteDraft {
+  id: string | null;
+  title: string;
+  body: string;
+  band: SpaceBand;
+  visibility: 'Space' | 'Private';
+}
+
+/** What a member keeps at the top of a space (B22): a note, an item, or a granted view, query, dashboard or component. */
+export interface PinModel {
+  id: string;
+  kind: 'Record' | 'Grant';
+  title: string;
+  subtitle: string;
+  iconClass: string;
+  /** Where it opens: a note ('note:<id>'), an item ('item:<id>') or a data entry ('grant:<id>'). */
+  target: string;
+  spaceId: string;
+  spaceName: string;
+}
+
+/** One thing the data surface offers (B19): a granted view, query, dashboard or component. */
+export interface DataEntryModel {
+  grantId: string;
+  kind: 'View' | 'Query' | 'Dashboard' | 'Component';
+  label: string;
+  band: SpaceBand;
+  isDefault: boolean;
+  isPinned: boolean;
+}
+
+/** What running an entry gave: rows for a view or query; an embedded host for a dashboard or component; or why nothing. */
+export interface DataRunModel {
+  grantId: string;
+  status: 'running' | 'rows' | 'embedded' | 'unavailable' | 'error';
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  message: string;
+}

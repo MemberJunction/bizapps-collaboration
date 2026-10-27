@@ -1,7 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
+  HostListener,
   Inject,
   Input,
   OnInit,
@@ -15,7 +17,8 @@ import {
   type AgentTurnHandler,
 } from '@memberjunction/ng-conversations';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -31,28 +34,30 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective],
+  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
   template: `
-    <div class="chat-container" [class.read-only]="IsReadOnly" [class.read-only-chat]="IsReadOnly">
-      @if (ConversationId && CurrentUser) {
+    <div class="chat-container">
+      @if (IsPending) {
+        <div class="chat-pending" role="status" aria-live="polite">
+          <mj-loading Size="small" [ShowText]="false"></mj-loading>
+        </div>
+      } @else if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
-          [environmentId]="EnvironmentId"
-          [currentUser]="CurrentUser"
-          [conversationId]="ConversationId"
-          [applicationScope]="'Application'"
-          [applicationId]="ApplicationId"
-          [linkedEntityId]="SpaceEntityId"
-          [linkedRecordId]="SpaceId"
-          [defaultAgentId]="DefaultAgentId"
-          [allowMentions]="AllowMentions && !IsReadOnly"
-          [allowAgentMentions]="!IsReadOnly"
-          [allowEntityMentions]="false"
-          [allowSkillCommands]="false"
-          [allowAttachments]="AllowAttachments && !IsReadOnly"
+          [EnvironmentId]="EnvironmentId"
+          [CurrentUser]="CurrentUser"
+          [ConversationId]="ConversationId"
+          [ApplicationScope]="'Application'"
+          [ApplicationId]="ApplicationId"
+          [LinkedEntityId]="SpaceEntityId"
+          [LinkedRecordId]="SpaceId"
+          [DefaultAgentId]="DefaultAgentId"
+          [ReadOnly]="IsReadOnly"
+          [ReadOnlyMessage]="ReadOnlyNote"
+          [AllowMentions]="AllowMentions"
+          [AllowEntityMentions]="false"
+          [AllowSkillCommands]="false"
+          [AllowAttachments]="AllowAttachments"
           [AllowRealtime]="false"
-          [AllowPinning]="!IsReadOnly"
-          [AllowMessageEdit]="!IsReadOnly"
-          [AllowMessageDelete]="!IsReadOnly"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
           [MentionPeople]="MentionPeople"
@@ -80,8 +85,23 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
               <div class="header-right">
                 @if (IsReadOnly) {
-                  <span class="read-only-lock" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
-                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                  <span class="read-only-lock-wrap">
+                    <button
+                      type="button"
+                      class="read-only-lock"
+                      [title]="ReadOnlyNote"
+                      [attr.aria-label]="ReadOnlyNote"
+                      [attr.aria-expanded]="ReasonShown"
+                      [attr.aria-controls]="ReasonId"
+                      (focus)="onLockFocus()"
+                      (blur)="onLockBlur()"
+                      (keydown.escape)="onLockEscape()"
+                      (click)="onLockClick($event)">
+                      <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    </button>
+                    @if (ReasonShown) {
+                      <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
+                    }
                   </span>
                 }
                 @if (ParticipantCount > 0) {
@@ -94,8 +114,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                   <button
                     type="button"
                     mjButton
-                    variant="primary"
-                    size="sm"
+                    Variant="primary"
+                    Size="sm"
                     class="btn-new-convo-header"
                     (click)="onNewConversation()"
                     title="New Conversation"
@@ -112,44 +132,32 @@ import { COLLAB_TOKENS_CSS } from './tokens';
       } @else {
         <div class="no-conversation-state">
           @if (IsReadOnly) {
-            <span class="read-only-lock read-only-lock-corner" role="img" tabindex="0" [title]="ReadOnlyNote" [attr.aria-label]="ReadOnlyNote">
-              <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            <span class="read-only-lock-wrap read-only-lock-corner">
+              <button
+                type="button"
+                class="read-only-lock"
+                [title]="ReadOnlyNote"
+                [attr.aria-label]="ReadOnlyNote"
+                [attr.aria-expanded]="ReasonShown"
+                [attr.aria-controls]="ReasonId"
+                (focus)="onLockFocus()"
+                (blur)="onLockBlur()"
+                (keydown.escape)="onLockEscape()"
+                (click)="onLockClick($event)">
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
+              </button>
+              @if (ReasonShown) {
+                <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
+              }
             </span>
           }
-          <div class="empty-icon-wrap">
-            <i class="fa-solid fa-comments"></i>
-          </div>
-          @if (HasConversations) {
-            <h3 class="empty-title">Select a Conversation</h3>
-            <p class="empty-desc">
-              @if (CanStartConversation) {
-                Choose a conversation from the space sidebar or start a new one.
-              } @else {
-                Choose a conversation from the space sidebar to read it.
-              }
-            </p>
-          } @else {
-            <h3 class="empty-title">No conversations yet</h3>
-            <p class="empty-desc">
-              @if (CanStartConversation) {
-                Start a new conversation to begin collaborating.
-              } @else {
-                There are no conversations in this space.
-              }
-            </p>
-          }
-          @if (CanStartConversation && !IsReadOnly) {
-            <button
-              type="button"
-              mjButton
-              variant="primary"
-              size="md"
-              class="btn-new-convo"
-              (click)="onNewConversation()">
-              <i class="fa-solid fa-plus"></i>
-              <span>New Conversation</span>
-            </button>
-          }
+          <mj-empty-state
+            Icon="fa-solid fa-comments"
+            [Title]="HasConversations ? 'Select a Conversation' : 'No conversations yet'"
+            [Message]="emptyMessage"
+            [ActionText]="CanStartConversation && !IsReadOnly ? 'New Conversation' : ''"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="onNewConversation()" />
         </div>
       }
     </div>
@@ -245,33 +253,8 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         text-align: center;
       }
 
-      .empty-icon-wrap {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        display: grid;
-        place-items: center;
-        font-size: 26px;
-        color: var(--mj-brand-primary, #0076b6);
-        margin-bottom: 16px;
-      }
 
-      .empty-title {
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
-        margin-bottom: 6px;
-      }
 
-      .empty-desc {
-        max-width: 420px;
-        font-size: 13.5px;
-        color: var(--mj-text-secondary, #64748b);
-        line-height: 1.5;
-        margin-bottom: 20px;
-      }
 
       .btn-new-convo-header {
         display: inline-flex;
@@ -279,52 +262,133 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         gap: 6px;
       }
 
-      .btn-new-convo {
+
+      /* A conversation that can't be posted in says why from a lock, not a banner that takes a row: on hover, and, since a
+         keyboard has no hover and a touch screen no pointer, on focus and on tap, from a button that shows the reason beside it */
+      .read-only-lock-wrap {
+        position: relative;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
       }
-
-      .read-only-chat ::ng-deep .message-input-container-wrapper {
-        display: none !important;
-      }
-
-      /* A conversation that can't be posted in says why on hover: a lock, not a banner that takes a row */
       .read-only-lock {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 26px;
         height: 26px;
+        padding: 0;
         border-radius: 999px;
         font-size: 13px;
         color: var(--mj-status-warning, #d97706);
         background: var(--mj-bg-surface-sunken, #f1f5f9);
         border: 1px solid var(--mj-border-default, #e2e8f0);
-        cursor: help;
+        cursor: pointer;
       }
       .read-only-lock:focus-visible {
         outline: 2px solid var(--mj-brand-primary, #0076b6);
         outline-offset: 2px;
+      }
+      .read-only-reason {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 2;
+        min-width: 220px;
+        max-width: 320px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--mj-text-primary);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        box-shadow: var(--mj-shadow-md);
       }
       .read-only-lock-corner {
         position: absolute;
         top: 10px;
         right: 16px;
       }
+      .chat-pending {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        min-height: 120px;
+      }
     `,
   ],
 })
 export class CollabSpaceChatComponent implements OnInit {
-  constructor(@Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService) {}
+  constructor(
+    @Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService,
+    /** This chat's own element: a click in another chat's lock on the same page is outside it. */
+    @Inject(ElementRef) private readonly host: ElementRef<HTMLElement>,
+  ) {}
 
   public ngOnInit(): void {
     this.streaming.initialize();
   }
 
-  /** The conversation can be read and not posted in: the composer is hidden and `ReadOnlyNote` says why. */
+  /** The conversation can be read and not posted in: MJ's chat area takes `ReadOnly` and shows `ReadOnlyNote` where the composer was, and the header's lock says why. */
   @Input() public IsReadOnly = false;
+  /** The caller's seat is not known yet: neither a composer nor a note nor a lock, only a quiet wait, so nobody is told they can't post before the page knows. */
+  @Input() public IsPending = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
+
+  /** What the empty conversation area says, for someone who may start a conversation and for someone who may only read. */
+  public get emptyMessage(): string {
+    if (this.HasConversations) return this.CanStartConversation ? 'Choose a conversation from the space sidebar or start a new one.' : 'Choose a conversation from the space sidebar to read it.';
+    return this.CanStartConversation ? 'Start a new conversation to begin collaborating.' : 'There are no conversations in this space.';
+  }
+
+  private static nextReasonId = 0;
+  /** This instance's id for the reason, which the lock's `aria-controls` names: several chats can be on one page. */
+  public readonly ReasonId = `mjc-read-only-reason-${++CollabSpaceChatComponent.nextReasonId}`;
+
+  /**
+   * The lock's reason is on screen: shown while the lock has focus, toggled by a tap, a click, Enter or Space, and closed by
+   * Escape or by a tap or click anywhere else. It is the button's own label too, so it carries no live-region role of its own:
+   * a screen reader has already read it.
+   */
+  public ReasonShown = false;
+  /** Focus opened the reason, so the pointer's click that follows the mouse-down that focused the lock keeps it open. */
+  private reasonOpenedByFocus = false;
+
+  public onLockFocus(): void {
+    this.ReasonShown = true;
+    this.reasonOpenedByFocus = true;
+  }
+
+  public onLockBlur(): void {
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
+  /** A click made by Enter or Space (`detail` 0) always toggles; only a pointer's click right after focus is the one that keeps the reason open. */
+  public onLockClick(event: Pick<MouseEvent, 'detail'>): void {
+    const pointerAfterFocus = this.reasonOpenedByFocus && event.detail > 0;
+    this.reasonOpenedByFocus = false;
+    this.ReasonShown = pointerAfterFocus ? true : !this.ReasonShown;
+  }
+
+  /** Escape closes the reason and leaves the focus on the lock. */
+  public onLockEscape(): void {
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
+  /** A tap or click outside this chat's own lock closes the reason: it covers what is under it. Another chat's lock on the same page is outside. */
+  @HostListener('document:click', ['$event'])
+  public onDocumentClick(event: Pick<MouseEvent, 'target'>): void {
+    if (!this.ReasonShown) return;
+    const target = event.target;
+    const lockWrap = target instanceof Element ? target.closest('.read-only-lock-wrap') : null;
+    if (lockWrap && this.host.nativeElement.contains(lockWrap)) return;
+    this.ReasonShown = false;
+    this.reasonOpenedByFocus = false;
+  }
+
   @Input() public ConversationId: string | null = null;
   @Input() public ConversationName: string = '';
   @Input() public EnvironmentId = '';

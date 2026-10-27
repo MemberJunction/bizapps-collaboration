@@ -1,11 +1,16 @@
 import { BaseEntity, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import {
     agentMayQuote,
-    isAgentPostCloseAccessPermitted,
+    agentMayQuoteCandidate,
+    audienceOfConversationKind,
+    effectiveRetrievalScope,
     membershipReaches,
+    spaceAllowsAgentRetrieval,
     type Band,
     type MemberSnapshot,
+    type PrincipalReach,
     type RoleFlags,
+    type ScopeNarrowing,
     type SpaceNode,
 } from '@mj-biz-apps/collaboration-core';
 import { requireSystemUser, toNode, type SpaceRow } from './load-graph.js';
@@ -33,10 +38,28 @@ export interface SpaceAgentRetrievalDecision {
     reason: string;
 }
 
+export interface SpaceAgentRetrievalOptions {
+    maxRows?: number;
+    query?: string;
+    /**
+     * Explicit user IDs in the conversation's audience (B2.3). When provided (or when `conversationKind`
+     * is provided), retrieval is bounded to the intersection of what every audience member may reach and see.
+     */
+    audienceUserIds?: readonly string[];
+    /**
+     * Conversation kind (`'General'`, `'Topic'`, `'Private'`). When provided without `audienceUserIds`,
+     * the room's active participants are resolved from the space roster, and `'General'`/`'Topic'`
+     * further bound the allowed band to `'Shared'`.
+     */
+    conversationKind?: string;
+    narrowing?: ScopeNarrowing;
+}
+
 export interface SpaceAgentRetrievalResult {
     spaceId: string;
     askingUserId: string;
     callerCanSeeTeam: boolean;
+    audienceUserIds: string[];
     searchedSpaceIds: string[];
     candidateItems: SpaceAgentCandidateItem[];
     quotedItems: SpaceAgentCandidateItem[];
@@ -92,7 +115,6 @@ function isAncestorOrSelf(index: Map<string, SpaceNode>, ancestorId: string, nod
 function getReachableSubtreeSpaceIds(
     spaces: readonly SpaceNode[],
     askedFromSpaceId: string,
-    now: Date = new Date(),
 ): string[] {
     const index = new Map<string, SpaceNode>();
     for (const s of spaces) {
@@ -107,8 +129,8 @@ function getReachableSubtreeSpaceIds(
         if (!isAncestorOrSelf(index, cleanAsked, sid)) {
             continue;
         }
-        // Filter closed spaces unless ReadOnlyWithAgent within days
-        if (s.closedAt && !isAgentPostCloseAccessPermitted(s, now)) {
+        // A status that allows no agent retrieval (Archived) keeps the space out
+        if (!spaceAllowsAgentRetrieval(s)) {
             continue;
         }
         // Check ExcludedEntirely up to root
@@ -146,16 +168,17 @@ function getReachableSubtreeSpaceIds(
 
 /**
  * Resolves materials that the Collaboration Space Agent is permitted to quote
- * for a specific user asking from a specific space.
+ * for a specific user (and optional room audience) asking from a specific space.
  *
  * Rules enforced:
  * 1. User must reach the space where the question is asked.
- * 2. Determines candidate subtree spaces (filtering out parent/sibling spaces and excluded scopes in SQL).
+ * 2. Determines candidate subtree spaces (filtering out parent/sibling spaces and excluded scopes in SQL),
+ *    intersected across all participants in the room's audience when `audienceUserIds` or `conversationKind` is given (B2.3).
  * 3. Runs candidate query as the asking user (enforcing RLS fnCollaborationAccess & entity permissions).
  * 4. Batches target name and description lookups.
- * 5. Evaluates agentMayQuote for every candidate:
- *    - Must be within the asked space's subtree (no parent or sibling leak).
- *    - Items in Team band are dropped if the user cannot see the Team band.
+ * 5. Evaluates agentMayQuote and agentMayQuoteCandidate for every candidate:
+ *    - Must be within the asked space's subtree (no parent or sibling leak) and reachable by every audience member.
+ *    - Items in Team band are dropped if any audience member cannot see the Team band or if the conversation is Shared-audience.
  *    - Spaces marked ExcludedEntirely are never quoted.
  *    - Spaces marked ExcludedFromParentScope are never quoted from ancestors.
  */
@@ -163,7 +186,7 @@ export async function resolveSpaceAgentRetrieval(
     provider: IMetadataProvider,
     user: UserInfo,
     spaceId: string,
-    options?: { maxRows?: number; query?: string },
+    options?: SpaceAgentRetrievalOptions,
 ): Promise<SpaceAgentRetrievalResult> {
     const cleanSpaceId = parseUuid(spaceId);
     const cleanUserId = parseUuid(user?.ID);
@@ -173,12 +196,44 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: spaceId ?? '',
             askingUserId: user?.ID ?? '',
             callerCanSeeTeam: false,
+            audienceUserIds: [],
             searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
             decisions: [],
         };
     }
+
+    const explicitAudienceIds: string[] = [cleanUserId];
+    if (options?.audienceUserIds?.length) {
+        const seen = new Set<string>([cleanUserId.toLowerCase()]);
+        for (const rawId of options.audienceUserIds) {
+            const uid = parseUuid(rawId);
+            if (uid && !seen.has(uid.toLowerCase())) {
+                seen.add(uid.toLowerCase());
+                explicitAudienceIds.push(uid);
+            }
+        }
+    }
+
+    const loadRoomRoster = !!options?.conversationKind && !options?.audienceUserIds?.length;
+    const memberQueries: RunViewParams[] = loadRoomRoster
+        ? [
+              {
+                  EntityName: MEMBERS_ENTITY,
+                  ExtraFilter: `Status = 'Active'`,
+                  Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+                  MaxRows: 5000,
+                  ResultType: 'simple',
+              },
+          ]
+        : explicitAudienceIds.map((uid) => ({
+              EntityName: MEMBERS_ENTITY,
+              ExtraFilter: `UserID = '${uid}' AND Status = 'Active'`,
+              Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
+              MaxRows: 2000,
+              ResultType: 'simple',
+          }));
 
     // Load space hierarchy and role definitions as system user so full topological metadata is available
     const probe = await provider.GetEntityObject<BaseEntity>(SPACES_ENTITY, user);
@@ -188,7 +243,7 @@ export async function resolveSpaceAgentRetrieval(
     const batchRes = await rvSystem.RunViews([
         {
             EntityName: SPACES_ENTITY,
-            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'PostCloseAccess', 'PostCloseAccessDays', 'SpaceTypeID'],
+            Fields: ['ID', 'ParentID', 'InheritsMembership', 'OwnerID', 'AgentRetrieval', 'AllowParentAssignees', 'ClosedAt', 'StatusID', 'SpaceTypeID'],
             MaxRows: 2000,
             ResultType: 'simple',
         },
@@ -198,23 +253,19 @@ export async function resolveSpaceAgentRetrieval(
             MaxRows: 200,
             ResultType: 'simple',
         },
-        {
-            EntityName: MEMBERS_ENTITY,
-            ExtraFilter: `UserID = '${cleanUserId}' AND Status = 'Active'`,
-            Fields: ['SpaceID', 'UserID', 'Status', 'Band', 'SpaceRoleTypeID'],
-            MaxRows: 2000,
-            ResultType: 'simple',
-        },
+        ...memberQueries,
     ], system);
 
-    const [spacesRes, rolesRes, membersRes] = batchRes;
+    const [spacesRes, rolesRes, ...memberResults] = batchRes;
+    const failedMemberRes = memberResults.find((r) => !r?.Success);
 
-    if (!spacesRes?.Success || !rolesRes?.Success || !membersRes?.Success) {
-        LogError(`resolveSpaceAgentRetrieval failed to load space context: ${spacesRes?.ErrorMessage || rolesRes?.ErrorMessage || membersRes?.ErrorMessage}`);
+    if (!spacesRes?.Success || !rolesRes?.Success || failedMemberRes) {
+        LogError(`resolveSpaceAgentRetrieval failed to load space context: ${spacesRes?.ErrorMessage || rolesRes?.ErrorMessage || failedMemberRes?.ErrorMessage}`);
         return {
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam: false,
+            audienceUserIds: [cleanUserId],
             searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
@@ -242,17 +293,19 @@ export async function resolveSpaceAgentRetrieval(
     }
 
     const memberSnapshots: MemberSnapshot[] = [];
-    for (const m of (membersRes.Results as MemberRow[] ?? [])) {
-        const roleId = (parseUuid(m.SpaceRoleTypeID) ?? m.SpaceRoleTypeID).toLowerCase();
-        const flags = roleMap.get(roleId);
-        if (flags) {
-            memberSnapshots.push({
-                spaceId: parseUuid(m.SpaceID) ?? m.SpaceID,
-                userId: parseUuid(m.UserID) ?? m.UserID,
-                status: m.Status as MemberSnapshot['status'],
-                band: m.Band as Band,
-                role: flags,
-            });
+    for (const membersRes of memberResults) {
+        for (const m of (membersRes.Results as MemberRow[] ?? [])) {
+            const roleId = (parseUuid(m.SpaceRoleTypeID) ?? m.SpaceRoleTypeID).toLowerCase();
+            const flags = roleMap.get(roleId);
+            if (flags) {
+                memberSnapshots.push({
+                    spaceId: parseUuid(m.SpaceID) ?? m.SpaceID,
+                    userId: parseUuid(m.UserID) ?? m.UserID,
+                    status: m.Status as MemberSnapshot['status'],
+                    band: m.Band as Band,
+                    role: flags,
+                });
+            }
         }
     }
 
@@ -264,6 +317,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam: false,
+            audienceUserIds: [],
             searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
@@ -272,17 +326,77 @@ export async function resolveSpaceAgentRetrieval(
     }
 
     const callerCanSeeTeam = reach.role.canSeeTeamBand;
+    const roomBand = options?.conversationKind ? audienceOfConversationKind(options.conversationKind) : null;
+
+    let principalIds: string[];
+    if (options?.audienceUserIds?.length) {
+        principalIds = explicitAudienceIds;
+    } else if (loadRoomRoster) {
+        const seen = new Set<string>([cleanUserId.toLowerCase()]);
+        principalIds = [cleanUserId];
+        const candidateUsers = new Set<string>(memberSnapshots.map((m) => m.userId));
+        for (const uid of candidateUsers) {
+            if (seen.has(uid.toLowerCase())) continue;
+            const memberReach = membershipReaches(spaceNodes, memberSnapshots, uid, cleanSpaceId);
+            if (!memberReach) continue;
+            if (roomBand === 'Team' && !memberReach.role.canSeeTeamBand) continue;
+            seen.add(uid.toLowerCase());
+            principalIds.push(uid);
+        }
+    } else {
+        principalIds = [cleanUserId];
+    }
+
+    const principalReaches: PrincipalReach[] = principalIds.map((uid) => {
+        const reachableSpaceIds: string[] = [];
+        const canSeeTeamSpaceIds: string[] = [];
+        for (const s of spaceNodes) {
+            const r = membershipReaches(spaceNodes, memberSnapshots, uid, s.id);
+            if (r) {
+                reachableSpaceIds.push(s.id);
+                if (r.role.canSeeTeamBand) {
+                    canSeeTeamSpaceIds.push(s.id);
+                }
+            }
+        }
+        return {
+            userId: uid,
+            reachableSpaceIds,
+            canSeeTeamSpaceIds,
+            isInternalOrg: true,
+        };
+    });
+
+    const scope = effectiveRetrievalScope({
+        audience: {
+            principals: principalIds,
+            mode: principalIds.length > 1 ? 'Intersection' : 'Caller',
+            anchorSpaceId: cleanSpaceId,
+            narrowing: options?.narrowing ?? 'ThisSpaceAndSubspaces',
+        },
+        spaces: spaceNodes,
+        principalReaches,
+    });
+    if (roomBand === 'Shared') {
+        scope.allowedBand = 'Shared';
+        for (const key of scope.spaceBands.keys()) {
+            scope.spaceBands.set(key, 'Shared');
+        }
+    }
 
     // Filter to reachable subtree spaces in SQL rather than fetching all items and filtering in memory
     const subtreeSpaceIds = getReachableSubtreeSpaceIds(spaceNodes, cleanSpaceId);
-    const searchedSpaceIds = subtreeSpaceIds.filter((spaceId) =>
-        !!membershipReaches(spaceNodes, memberSnapshots, cleanUserId, spaceId)
+    const allowedSpaceSet = new Set(scope.allowedSpaceIds.map((id) => id.toLowerCase()));
+    const searchedSpaceIds = subtreeSpaceIds.filter((sid) =>
+        !!membershipReaches(spaceNodes, memberSnapshots, cleanUserId, sid) &&
+        allowedSpaceSet.has(sid.toLowerCase())
     );
     if (searchedSpaceIds.length === 0) {
         return {
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam,
+            audienceUserIds: principalIds,
             searchedSpaceIds: [],
             candidateItems: [],
             quotedItems: [],
@@ -306,6 +420,7 @@ export async function resolveSpaceAgentRetrieval(
             spaceId: cleanSpaceId,
             askingUserId: cleanUserId,
             callerCanSeeTeam,
+            audienceUserIds: principalIds,
             searchedSpaceIds,
             candidateItems: [],
             quotedItems: [],
@@ -332,7 +447,7 @@ export async function resolveSpaceAgentRetrieval(
         }
     }
 
-    const targetNames = new Map<string, { name: string; description: string | null }>();
+    const targetNames = new Map<string, { name: string; description: string | null; contentType: string | null }>();
     const entityEntries = Array.from(recordIdsByEntity.entries());
     const viewParams: RunViewParams[] = [];
     const validEntityIds: string[] = [];
@@ -341,10 +456,14 @@ export async function resolveSpaceAgentRetrieval(
         const entityInfo = provider.EntityByID(entityId);
         if (!entityInfo) continue;
         const targetInClause = recIds.map((id) => `'${id}'`).join(',');
+        const fields =
+            entityInfo.Name === 'MJ: Files'
+                ? ['ID', 'Name', 'Description', 'ContentType']
+                : ['ID', 'Name', 'Description'];
         viewParams.push({
             EntityName: entityInfo.Name,
             ExtraFilter: `ID IN (${targetInClause})`,
-            Fields: ['ID', 'Name', 'Description'],
+            Fields: fields,
             MaxRows: 2000,
             ResultType: 'simple',
         });
@@ -358,11 +477,17 @@ export async function resolveSpaceAgentRetrieval(
                 const res = batchResults[i];
                 const entityId = validEntityIds[i];
                 if (res.Success && res.Results) {
-                    for (const t of res.Results as Array<{ ID: string; Name?: string; Description?: string }>) {
+                    for (const t of res.Results as Array<{
+                        ID: string;
+                        Name?: string;
+                        Description?: string;
+                        ContentType?: string;
+                    }>) {
                         const id = (parseUuid(t.ID) ?? t.ID).toLowerCase();
                         targetNames.set(`${entityId}:${id}`, {
                             name: t.Name ?? 'Unnamed item',
                             description: t.Description ?? null,
+                            contentType: t.ContentType ?? null,
                         });
                     }
                 } else if (!res.Success) {
@@ -380,8 +505,12 @@ export async function resolveSpaceAgentRetrieval(
         const recId = cleanRecordId(raw.RecordID).toLowerCase();
         const target = targetNames.get(`${entityId}:${recId}`);
         const name = target?.name ?? `Item ${raw.ID}`;
-        if (options?.query && !name.toLowerCase().includes(options.query.toLowerCase())) {
-            continue;
+        const description = target?.description ?? null;
+        if (options?.query) {
+            const q = options.query.toLowerCase();
+            if (!name.toLowerCase().includes(q) && !(description && description.toLowerCase().includes(q))) {
+                continue;
+            }
         }
         candidateItems.push({
             ID: raw.ID,
@@ -389,9 +518,9 @@ export async function resolveSpaceAgentRetrieval(
             EntityID: raw.EntityID,
             RecordID: raw.RecordID,
             Name: name,
-            Description: target?.description ?? null,
+            Description: description,
             Band: raw.Band,
-            StoredContentType: null,
+            StoredContentType: target?.contentType ?? null,
         });
     }
 
@@ -400,7 +529,7 @@ export async function resolveSpaceAgentRetrieval(
 
     for (const item of candidateItems) {
         const itemSpaceId = parseUuid(item.SpaceID) ?? item.SpaceID;
-        const allowed = agentMayQuote({
+        const callerAllowed = agentMayQuote({
             callerCanRead: true, // Proven by successful RunView as user
             callerCanSeeTeam,
             itemBand: item.Band,
@@ -408,10 +537,20 @@ export async function resolveSpaceAgentRetrieval(
             askedFromSpaceId: cleanSpaceId,
             spaces: spaceNodes,
         });
+        const audienceDecision = agentMayQuoteCandidate(
+            {
+                id: item.ID,
+                spaceId: itemSpaceId,
+                band: item.Band,
+                title: item.Name,
+            },
+            scope,
+        );
+        const allowed = callerAllowed && audienceDecision.allowed;
 
         const reason = allowed
             ? 'Allowed: item is within asked space subtree and readable by caller.'
-            : 'Refused: agentMayQuote excluded item based on space subtree, team band, or retrieval policy.';
+            : audienceDecision.reason ?? 'Refused: agentMayQuote excluded item based on space subtree, team band, or retrieval policy.';
 
         decisions.push({ item, allowed, reason });
         if (allowed) {
@@ -423,6 +562,7 @@ export async function resolveSpaceAgentRetrieval(
         spaceId: cleanSpaceId,
         askingUserId: cleanUserId,
         callerCanSeeTeam,
+        audienceUserIds: principalIds,
         searchedSpaceIds,
         candidateItems,
         quotedItems,

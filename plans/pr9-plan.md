@@ -1,11 +1,13 @@
 # PR 9: finish the chat, then anchors, grants, data reach, notes and pins
 
+**Status: merged.** PR 9 merged into `next` on 2026-09-29 at `a8304e8` (merge commit `96a19b6`), as its builder left it at `67acf8f` with the docs brought to it ([the plan's D50](plan.md#37-decided-on-2026-09-29-rights-subtypes-and-home)). **[PR 10's plan](pr10-plan.md) carries everything after it** (D51), and replaces this plan's § 4 to § 10. [§ 3.6](#36-where-stage-0-stands) records where stage 0 stopped.
+
 **What this is.** The plan for PR 9 and the pull requests after it. #8 merged on 2026-09-29 with the chat built but not finished, and with its planned stages not started (Amith: merge it, and put what's left here). PR 9 finishes the chat, tests the extension model end to end, and ends with a review of what that found. The pull requests after it build what #8 planned, make the app ready for a first host, and then take up the rest of [the plan](plan.md). The reasons and rules are the plan's, v0.6, with its D38 to D48. [#8's plan](pr8-plan.md) keeps the detail of the stages this one reuses.
 
 **Who does what.**
 - **Ian runs it,** with an AI coding agent as the builder: the builder writes the code, and Ian supervises it and decides.
 - **The plan's author reviews each push** with one numbered punch list, and pushes only document updates, as for #7 and #8. Both sides merge the remote branch before pushing; nobody rebases or force-pushes.
-- **It merges by stage.** PR 9 merges when stage 0 is done. Each later stage is its own pull request, opened from `next` when the one before it merges, with the plan's item numbers kept. #7 and #8 each ran long and merged as complete enough; a stage at a time is easier to review and keeps `next` working.
+- **It merged by stage, until D51.** PR 9 merges when stage 0 is done. Each later stage is its own pull request, opened from `next` when the one before it merges, with the plan's item numbers kept. #7 and #8 each ran long and merged as complete enough; a stage at a time is easier to review and keeps `next` working.
 
 ## Contents
 

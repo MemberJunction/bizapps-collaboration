@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver, ResolverBase, AppContext, GetReadWriteProvider } from '@memberjunction/server';
 import { type Band } from '@mj-biz-apps/collaboration-core';
 import { configuredUploadMaxBytes } from './upload-limit.js';
-import { collaborationFileStore, decideUploadBand, requireSystemUser, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
+import { collaborationFileStore, decideUploadBand, loadSpaceConfiguration, requireSystemUser, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
@@ -67,11 +67,19 @@ export class UploadSpaceFileResolver extends ResolverBase {
         }
         const probe = await provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(ITEMS, user);
         const system = await requireSystemUser(probe);
+        // Storage is a setting (D17, item 6): the account the space's configuration resolves to, read through the one resolver; a chain
+        // that cannot be read refuses the upload rather than storing the file somewhere else
+        let storageAccountId: string | undefined;
+        try {
+            storageAccountId = (await loadSpaceConfiguration(provider, input.SpaceID)).configuration.Settings.StorageAccountID ?? undefined;
+        } catch (error) {
+            return { Success: false, ErrorMessage: error instanceof Error ? error.message : 'Upload refused: the space\'s settings could not be resolved.' };
+        }
         const outcome = await uploadSpaceFile({
             user,
             storageUser: system,
             provider,
-            store: collaborationFileStore(provider),
+            store: collaborationFileStore(provider, storageAccountId),
             spaceId: input.SpaceID,
             folder: input.Folder ?? null,
             fileName: input.FileName,

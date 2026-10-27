@@ -1,4 +1,35 @@
 packages:
   - 'packages/*'
+  - 'packages/ExampleSpaceTypes/*'
   - 'e2e'
 linkWorkspacePackages: true
+
+# Settings live here, not under package.json's "pnpm" key: pnpm 11 no longer reads that key, and pnpm 10 reads both.
+# Every @memberjunction package resolves to the one pinned version, so bizapps-common's and bizapps-tasks' published entities
+# (which ask for 6.1.x) share it instead of pulling a second MJ in.
+overrides:
+  '@types/node': '24.10.11'
+  '@angular/animations': '21.2.22'
+  '@angular/common': '21.2.22'
+  '@angular/compiler': '21.2.22'
+  '@angular/compiler-cli': '21.2.22'
+  '@angular/core': '21.2.22'
+  '@angular/forms': '21.2.22'
+  '@angular/platform-browser': '21.2.22'
+  '@angular/router': '21.2.22'
+  '@angular/cdk': '21.2.14'
+  '@memberjunction/*': '6.2.0-edge.2'
+  # vitest's transformer: vite 8 (oxc) leaves the test files' decorators in place and Node refuses them; 7 is what the workspace runs
+  vite: '7.3.6'
+
+# pnpm runs no dependency build script it has not been told about. esbuild's postinstall only checks its binary; the rest are
+# native or heavy builds nothing here uses at runtime (MJ's edge packages pull them in) and stay unbuilt.
+allowBuilds:
+  esbuild: true
+  '@apollo/protobufjs': false
+  '@google/genai': false
+  isolated-vm: false
+  oracledb: false
+  protobufjs: false
+  sharp: false
+  tesseract.js: false

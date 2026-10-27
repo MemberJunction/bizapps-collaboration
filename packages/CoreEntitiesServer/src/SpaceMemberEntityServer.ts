@@ -1,10 +1,11 @@
 import { BaseEntity, LogError, ValidationErrorInfo, ValidationErrorType, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { isSelfRemoval, membershipReaches, refuseInvite, ResolveSpaceRules, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
+import { isSelfRemoval, membershipReaches, refuseInvite, strandFromSavedRow, wouldStrandLastOwner } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { callerUuid, loadWriteContext } from './load-graph.js';
+import { spaceTypeAudience } from './space-audience.js';
 import type { MemberChangeKind } from './base-space-type-server-driver.js';
-import { failDelete, refusalOf, resolveSpaceDriver, subtypeOf } from './space-driver-call.js';
+import { failDelete, refusalOf, resolveSpaceDriver, driverBaseContext, subtypeOf } from './space-driver-call.js';
 import { ServerDriverRegistry } from './server-driver-registry.js';
 import { notifySpaceLifecycleSubscribers } from './space-lifecycle-subscribers.js';
 import { syncRoomEditGrantsForSpace } from './room-edit-grants.js';
@@ -90,6 +91,12 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         if (!context.role) {
             return fail(result, 'SpaceRoleTypeID', 'Invite refused: that role does not exist.');
         }
+        // The staff-only promise (item 157): a type that seats staff only takes no seat whose role cannot see the Team band
+        if (!context.role.canSeeTeamBand && this.Status !== 'Removed' && (!this.IsSaved || this.Fields.some((field) => (field.Name === 'SpaceRoleTypeID' || field.Name === 'Status') && field.Dirty))) {
+            if (spaceTypeAudience(context.typeId) === 'StaffOnly') {
+                return fail(result, 'SpaceRoleTypeID', "Invite refused: this space's type seats staff only, so a role that cannot see the Team band has no seat here.");
+            }
+        }
         const occupied = this.IsSaved && previous && previous !== 'Removed' ? Math.max(0, context.memberCount - 1) : context.memberCount;
         const currentRoleId = this.IsSaved ? parseUuid(String(this.Fields.find((field) => field.Name === 'SpaceRoleTypeID')?.OldValue ?? roleId)) : null;
         const currentRole = currentRoleId ? context.roles.get(currentRoleId) ?? null : null;
@@ -134,12 +141,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         try {
             const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(spaceId, this);
             const verdict = await spaceInfo.driver.ValidateMemberChange({
-                actingUser: user,
-                provider: this.ProviderToUse,
-                space: spaceInfo.space,
-                spaceType: spaceInfo.spaceType,
-                effectiveRules: ResolveSpaceRules(null, null),
-                subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                 member: this,
                 kind,
                 oldValues,
@@ -201,18 +203,15 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
         if (ok && this.ContextCurrentUser && this.SpaceID) {
             const user = this.ContextCurrentUser;
             // Nothing changed, nothing to tell: MJ's Save returns true for a clean record without writing it
+            let spaceTypeCodeForSubscribers: string | null = null;
             if (decided.changed && decided.kind) {
                 let typeCodeOfSeat: string | undefined;
                 try {
                     const spaceInfo = await ServerDriverRegistry.Instance.ResolveSpaceAndType(this.SpaceID, this);
                     typeCodeOfSeat = spaceInfo.spaceType.Code;
+                    spaceTypeCodeForSubscribers = typeCodeOfSeat ?? null;
                     await spaceInfo.driver.OnMemberChanged({
-                        actingUser: user,
-                        provider: this.ProviderToUse,
-                        space: spaceInfo.space,
-                        spaceType: spaceInfo.spaceType,
-                        effectiveRules: ResolveSpaceRules(null, null),
-                        subtypeEntityName: subtypeOf(spaceInfo.spaceType),
+                        ...(await driverBaseContext(this.ProviderToUse, user, spaceInfo.space, spaceInfo.spaceType, spaceInfo.configuration)),
                         member: this,
                         kind: decided.kind,
                         oldValues: decided.oldValues,
@@ -228,6 +227,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             if (becameActive) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                     spaceId: this.SpaceID,
+                    spaceTypeCode: spaceTypeCodeForSubscribers,
                     actingUserId: user.ID,
                     event: 'AfterMemberAdded',
                     timestamp: new Date(),
@@ -236,6 +236,7 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
             } else if (becameRemoved) {
                 notifySpaceLifecycleSubscribers(this.ProviderToUse, {
                     spaceId: this.SpaceID,
+                    spaceTypeCode: spaceTypeCodeForSubscribers,
                     actingUserId: user.ID,
                     event: 'AfterMemberRemoved',
                     timestamp: new Date(),

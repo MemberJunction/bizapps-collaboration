@@ -74,6 +74,9 @@ const personaEmailMap: Record<string, string> = {
     pat: 'pat.invited@collab-world.example',
     remy: 'remy.removed@collab-world.example',
     dev: 'dev.admin@collab-world.example',
+    lena: 'lena.leader@collab-world.example',
+    marco: 'marco.leader@collab-world.example',
+    nico: 'nico.national@collab-world.example',
 };
 
 const personaCache = new Map<string, UserInfo>();

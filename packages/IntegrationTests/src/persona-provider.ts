@@ -30,13 +30,18 @@ export function newSecondaryGraphQLProvider(): GraphQLDataProvider {
     }
 }
 
-export async function buildUserKeyProvider(rawKey: string): Promise<GraphQLDataProvider> {
+/**
+ * A GraphQL provider signed in with one user's minted key. With `webSocket`, it also opens MJAPI's subscription socket (the
+ * HTTP URL with its scheme swapped for ws), which the server authenticates with the same key; a check that subscribes disposes
+ * it with `DisposeWebSocketResources()` when it is done.
+ */
+export async function buildUserKeyProvider(rawKey: string, options: { webSocket?: boolean } = {}): Promise<GraphQLDataProvider> {
     const client = LoadClientConfig();
     const provider = newSecondaryGraphQLProvider();
     const config = new GraphQLProviderConfigData(
         '', // no JWT
         client.Url,
-        '', // no websocket needed
+        options.webSocket ? client.Url.replace(/^http/i, 'ws') : '', // the socket only when a check subscribes
         async () => '',
         undefined,
         undefined,
@@ -107,6 +112,8 @@ export interface PersonaIntegrationCheckContext extends IntegrationCheckContext 
 
 export class PersonaContextRegistry extends BaseSingleton<PersonaContextRegistry> {
     private readonly personaProviders = new Map<string, GraphQLDataProvider>();
+    /** Each persona's minted key, so a check can open a second, subscribing provider as the same person. */
+    private readonly personaRawKeys = new Map<string, string>();
     private readonly createdKeyIds: string[] = [];
     private readonly createdScopeRuleIds: string[] = [];
 
@@ -116,6 +123,14 @@ export class PersonaContextRegistry extends BaseSingleton<PersonaContextRegistry
 
     public static get Instance(): PersonaContextRegistry {
         return PersonaContextRegistry.getInstance<PersonaContextRegistry>();
+    }
+
+    /** A second provider as the persona, with MJAPI's subscription socket open. The persona's key is minted on first use. */
+    async getSubscribingProvider(ctx: IntegrationCheckContext, personaKey: string): Promise<GraphQLDataProvider> {
+        if (!this.personaRawKeys.has(personaKey)) await this.getPersonaContext(ctx, personaKey);
+        const rawKey = this.personaRawKeys.get(personaKey);
+        if (!rawKey) throw new Error(`No minted key for persona ${personaKey}: the client transport mints one per persona.`);
+        return buildUserKeyProvider(rawKey, { webSocket: true });
     }
 
     async getPersonaContext(ctx: IntegrationCheckContext, personaKey: string): Promise<PersonaIntegrationCheckContext> {
@@ -147,6 +162,7 @@ export class PersonaContextRegistry extends BaseSingleton<PersonaContextRegistry
             const minted = await mintUserApiKey(ctx, personaUser.ID, `test-persona-${personaKey}-${Date.now()}`);
             this.createdKeyIds.push(minted.keyId);
             this.createdScopeRuleIds.push(minted.scopeRuleId);
+            this.personaRawKeys.set(personaKey, minted.rawKey);
             provider = await buildUserKeyProviderWithRetry(minted.rawKey);
             this.personaProviders.set(userUuid, provider);
         }
@@ -228,3 +244,7 @@ export async function cleanupPersonaProviders(ctx: IntegrationCheckContext): Pro
     return PersonaRegistry.cleanup(ctx);
 }
 
+/** A provider as the persona with the subscription socket open; the caller disposes it with `DisposeWebSocketResources()`. */
+export async function getPersonaSubscribingProvider(ctx: IntegrationCheckContext, personaKey: string): Promise<GraphQLDataProvider> {
+    return PersonaContextRegistry.Instance.getSubscribingProvider(ctx, personaKey);
+}

@@ -14,7 +14,7 @@ import {
     ExampleBoardMeetingsTab,
     ExampleBoardMotionsTab,
     ExampleBoardPapersTab,
-} from '@mj-biz-apps/collaboration-example-space-types';
+} from '@mj-biz-apps/collaboration-example-space-types-ng';
 import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.fixture.js';
 
 @Component({

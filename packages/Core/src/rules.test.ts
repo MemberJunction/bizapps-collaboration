@@ -25,8 +25,9 @@ import {
     promotionStamps,
     refuseInvite,
     strandFromSavedRow,
-    retentionDeadline,
-    utcCalendarDaysBetween,
+    spaceAllowsAgentRetrieval,
+    spaceIsReadOnly,
+    spaceIsVisible,
     visibleSpaces,
     type InviteEmail,
     type MemberSnapshot,
@@ -232,17 +233,18 @@ describe('rosterBySeat', () => {
         assert.equal(membershipReaches(tree, seated, 'sam', 'under-sealed')?.userId, 'sam');
     });
 
-    it('stops the list at a closed parent whose post-close access has ended, as membershipReaches does', () => {
-        const now = new Date('2026-06-01T00:00:00Z');
-        const closedNone = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-01-01T00:00:00Z', postCloseAccess: 'None' as const } : node);
-        const walk = rosterBySeat(closedNone, seated, 'grandchild', now);
+    it('stops the list at a parent whose status hides it, as membershipReaches does', () => {
+        const hidden = { ReadOnly: true, Visible: false, AgentRetrieval: false };
+        const closedChild = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-01-01T00:00:00Z', status: hidden } : node);
+        const walk = rosterBySeat(closedChild, seated, 'grandchild');
         assert.equal(walk.stop, 'closed');
         assert.deepEqual(walk.groups.map((group) => group.spaceId), ['grandchild']);
-        assert.equal(membershipReaches(closedNone, seated, 'bea', 'grandchild', now), null);
-        // Within its window a closed parent still lets its people in, on both
-        const closedReadOnly = tree.map((node) => node.id === 'child' ? { ...node, closedAt: '2026-05-30T00:00:00Z', postCloseAccess: 'ReadOnly' as const, postCloseAccessDays: 30 } : node);
-        assert.deepEqual(rosterBySeat(closedReadOnly, seated, 'grandchild', now).groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
-        assert.equal(membershipReaches(closedReadOnly, seated, 'ada', 'grandchild', now)?.spaceId, 'root');
+        assert.equal(membershipReaches(closedChild, seated, 'bea', 'grandchild'), null);
+        // A read-only status that stays visible still lets its people in, on both
+        const readOnly = { ReadOnly: true, Visible: true, AgentRetrieval: true };
+        const pausedChild = tree.map((node) => node.id === 'child' ? { ...node, status: readOnly } : node);
+        assert.deepEqual(rosterBySeat(pausedChild, seated, 'grandchild').groups.map((group) => group.spaceId), ['grandchild', 'child', 'root']);
+        assert.equal(membershipReaches(pausedChild, seated, 'ada', 'grandchild')?.spaceId, 'root');
     });
 
     it('reports a parent the viewer was not given, the way a row filter hides it', () => {
@@ -770,20 +772,6 @@ describe('external participant persona', () => {
     });
 });
 
-describe('retentionDeadline', () => {
-    const start = new Date('2026-01-31T00:00:00Z');
-
-    it('has no deadline when retention is indefinite', () => {
-        assert.equal(retentionDeadline(start, 'Indefinite'), null);
-    });
-
-    it('adds one calendar month and one calendar year in UTC, clamping the day', () => {
-        assert.equal(retentionDeadline(start, 'Month')?.toISOString(), '2026-02-28T00:00:00.000Z');
-        assert.equal(retentionDeadline(new Date('2026-01-15T00:00:00Z'), 'Month')?.toISOString(), '2026-02-15T00:00:00.000Z');
-        assert.equal(retentionDeadline(start, 'Year')?.toISOString(), '2027-01-31T00:00:00.000Z');
-    });
-});
-
 describe('authorizeTaskAssignment', () => {
     const teamMemberRole: RoleFlags = { ...guestRole, canSeeTeamBand: true, canContribute: true };
     const sharedOnlyRole: RoleFlags = { ...guestRole, canSeeTeamBand: false, canContribute: true };
@@ -860,19 +848,15 @@ describe('access after close in membershipReaches', () => {
     const memberRole: RoleFlags = { level: 50, maxGrantableLevel: 50, isOwnerRole: false, canInvite: false, canContribute: true, canSeeTeamBand: true, canPromoteBand: false };
     const guestRole: RoleFlags = { level: 10, maxGrantableLevel: 10, isOwnerRole: false, canInvite: false, canContribute: false, canSeeTeamBand: false, canPromoteBand: false };
 
+    const active = { ReadOnly: false, Visible: true, AgentRetrieval: true };
+    const paused = { ReadOnly: true, Visible: true, AgentRetrieval: true };
+    const closed = { ReadOnly: true, Visible: true, AgentRetrieval: true };
+    const archived = { ReadOnly: true, Visible: false, AgentRetrieval: false };
     const closedDate = new Date('2026-01-01T00:00:00Z');
-    const withinWindowDate = new Date('2026-01-15T00:00:00Z'); // 14 days later
-    const outsideWindowDate = new Date('2026-02-15T00:00:00Z'); // 45 days later
+    const node = (id: string, extra: Partial<SpaceNode> = {}): SpaceNode => ({ id, parentId: null, inheritsMembership: true, ownerId: 'u1', agentRetrieval: 'Included', closedAt: null, ...extra });
 
-    it('open space grants full rights including canInvite and canContribute', () => {
-        const space: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: null,
-        };
+    it('an active space grants full rights including canInvite and canContribute', () => {
+        const space = node('sp1', { status: active });
         const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
         const reach = membershipReaches([space], [m], 'u1', 'sp1');
         assert.ok(reach);
@@ -880,179 +864,78 @@ describe('access after close in membershipReaches', () => {
         assert.equal(reach.role.canContribute, true);
     });
 
-    it('closed space with PostCloseAccess None refuses access', () => {
-        const space: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'None',
-        };
+    it('a hidden status (Archived) reaches no one, and the owner finds their seat only with the status filter off', () => {
+        const space = node('sp1', { closedAt: closedDate, status: archived });
         const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
-        const reach = membershipReaches([space], [m], 'u1', 'sp1', withinWindowDate);
-        assert.equal(reach, null);
+        assert.equal(membershipReaches([space], [m], 'u1', 'sp1'), null);
+        const owner = membershipReaches([space], [m], 'u1', 'sp1', new Date(), true);
+        assert.ok(owner);
+        assert.equal(owner.role.isOwnerRole, true);
+        assert.equal(owner.role.canContribute, true, 'with the filter off nothing is stripped: the caller judges the status change itself');
     });
 
-    it('closed space with ReadOnly permits access within window and strips canInvite and canContribute', () => {
-        const space: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'ReadOnly',
-            postCloseAccessDays: 30,
-        };
-        const mOwner: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
-        const mMember: MemberSnapshot = { spaceId: 'sp1', userId: 'u2', status: 'Active', band: 'Team', role: memberRole };
-        const mGuest: MemberSnapshot = { spaceId: 'sp1', userId: 'u3', status: 'Active', band: 'Shared', role: guestRole };
+    for (const [name, status] of [['Paused', paused], ['Closed', closed]] as const) {
+        it(`a read-only status (${name}) lets members in and strips canInvite and canContribute`, () => {
+            const space = node('sp1', { closedAt: name === 'Closed' ? closedDate : null, status });
+            const mOwner: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
+            const mMember: MemberSnapshot = { spaceId: 'sp1', userId: 'u2', status: 'Active', band: 'Team', role: memberRole };
+            const mGuest: MemberSnapshot = { spaceId: 'sp1', userId: 'u3', status: 'Active', band: 'Shared', role: guestRole };
 
-        // Owner: gets access but loses canInvite and canContribute
-        const reachOwner = membershipReaches([space], [mOwner], 'u1', 'sp1', withinWindowDate);
-        assert.ok(reachOwner);
-        assert.equal(reachOwner.role.canInvite, false);
-        assert.equal(reachOwner.role.canContribute, false);
-        assert.equal(reachOwner.role.isOwnerRole, true);
-        assert.equal(reachOwner.role.canSeeTeamBand, true);
+            const reachOwner = membershipReaches([space], [mOwner], 'u1', 'sp1');
+            assert.ok(reachOwner);
+            assert.equal(reachOwner.role.canInvite, false);
+            assert.equal(reachOwner.role.canContribute, false);
+            assert.equal(reachOwner.role.isOwnerRole, true);
+            assert.equal(reachOwner.role.canSeeTeamBand, true);
 
-        // Member: gets access but loses canContribute
-        const reachMember = membershipReaches([space], [mMember], 'u2', 'sp1', withinWindowDate);
-        assert.ok(reachMember);
-        assert.equal(reachMember.role.canInvite, false);
-        assert.equal(reachMember.role.canContribute, false);
-        assert.equal(reachMember.role.canSeeTeamBand, true);
+            const reachMember = membershipReaches([space], [mMember], 'u2', 'sp1');
+            assert.ok(reachMember);
+            assert.equal(reachMember.role.canInvite, false);
+            assert.equal(reachMember.role.canContribute, false);
+            assert.equal(reachMember.role.canSeeTeamBand, true);
 
-        // Guest: retains canSeeTeamBand = false
-        const reachGuest = membershipReaches([space], [mGuest], 'u3', 'sp1', withinWindowDate);
-        assert.ok(reachGuest);
-        assert.equal(reachGuest.role.canInvite, false);
-        assert.equal(reachGuest.role.canContribute, false);
-        assert.equal(reachGuest.role.canSeeTeamBand, false);
-    });
+            const reachGuest = membershipReaches([space], [mGuest], 'u3', 'sp1');
+            assert.ok(reachGuest);
+            assert.equal(reachGuest.role.canInvite, false);
+            assert.equal(reachGuest.role.canContribute, false);
+            assert.equal(reachGuest.role.canSeeTeamBand, false);
+        });
+    }
 
-    it('closed space with ReadOnly refuses access outside window', () => {
-        const space: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'ReadOnly',
-            postCloseAccessDays: 30,
-        };
-        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
-        const reach = membershipReaches([space], [m], 'u1', 'sp1', outsideWindowDate);
-        assert.equal(reach, null);
-    });
-
-    it('closed space inherits post-close access from space type when not overridden', () => {
-        const space: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: null,
-            postCloseAccessDays: null,
-            spaceTypePostCloseAccess: 'ReadOnly',
-            spaceTypePostCloseAccessDays: 90,
-        };
-        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
-        const reach = membershipReaches([space], [m], 'u1', 'sp1', outsideWindowDate);
-        assert.ok(reach, 'Type has 90 days window, 45 days is within window');
+    it('a space of a type with no statuses yet reads from closedAt alone: open = writable and visible, closed = read-only and visible', () => {
+        const open = node('open');
+        const shut = node('shut', { closedAt: closedDate });
+        assert.deepEqual([spaceIsVisible(open), spaceIsReadOnly(open), spaceAllowsAgentRetrieval(open)], [true, false, true]);
+        assert.deepEqual([spaceIsVisible(shut), spaceIsReadOnly(shut), spaceAllowsAgentRetrieval(shut)], [true, true, true]);
+        const m: MemberSnapshot = { spaceId: 'shut', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
+        const reach = membershipReaches([shut], [m], 'u1', 'shut');
+        assert.ok(reach);
         assert.equal(reach.role.canContribute, false);
     });
 
-    it('space postCloseAccess override overrides type defaults', () => {
-        // Space sets 'None' even though type defaults to 'ReadOnly'
-        const spaceOverridingToNone: SpaceNode = {
-            id: 'sp1',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'None',
-            spaceTypePostCloseAccess: 'ReadOnly',
-            spaceTypePostCloseAccessDays: 90,
-        };
-        const m: MemberSnapshot = { spaceId: 'sp1', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
-        assert.equal(membershipReaches([spaceOverridingToNone], [m], 'u1', 'sp1', withinWindowDate), null);
-
-        // Space sets 'ReadOnly' even though type defaults to 'None'
-        const spaceOverridingToReadOnly: SpaceNode = {
-            id: 'sp2',
-            parentId: null,
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'ReadOnly',
-            postCloseAccessDays: null, // indefinite
-            spaceTypePostCloseAccess: 'None',
-        };
-        const m2: MemberSnapshot = { spaceId: 'sp2', userId: 'u1', status: 'Active', band: 'Team', role: memberRole };
-        const reach2 = membershipReaches([spaceOverridingToReadOnly], [m2], 'u1', 'sp2', outsideWindowDate);
-        assert.ok(reach2);
-        assert.equal(reach2.role.canContribute, false);
+    it('the status row wins over closedAt when both are known', () => {
+        // A closed space whose status still allows writes (a type that chose so) is writable; an open space whose status is read-only is not
+        assert.equal(spaceIsReadOnly(node('a', { closedAt: closedDate, status: active })), false);
+        assert.equal(spaceIsReadOnly(node('b', { status: paused })), true);
+        assert.equal(spaceAllowsAgentRetrieval(node('c', { status: archived })), false);
     });
 
-    it('calculates calendar day differences in UTC matching SQL Server DATEDIFF(day, ...)', () => {
-        const d1 = new Date('2026-01-01T23:59:59Z');
-        const d2 = new Date('2026-01-02T00:00:01Z');
-        assert.equal(utcCalendarDaysBetween(d1, d2), 1, 'Crossing UTC midnight is 1 calendar day');
+    it('an open sub-space under a read-only parent strips contribute and invite rights from inherited members, and a hidden parent reaches no one', () => {
+        const parentSpace = node('parent1', { inheritsMembership: false, closedAt: closedDate, status: closed });
+        const childSpace = node('child1', { parentId: 'parent1', status: active });
+        const parentSeat: MemberSnapshot = { spaceId: 'parent1', userId: 'u1', status: 'Active', band: 'Team', role: ownerRole };
 
-        const d3 = new Date('2026-01-01T00:00:00Z');
-        const d4 = new Date('2026-01-01T23:59:59Z');
-        assert.equal(utcCalendarDaysBetween(d3, d4), 0, 'Same UTC calendar date is 0 days');
-    });
+        const reach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1');
+        assert.ok(reach, 'Member reaches the open child through the closed parent');
+        assert.equal(reach.role.canInvite, false, 'canInvite stripped because the parent is read-only');
+        assert.equal(reach.role.canContribute, false, 'canContribute stripped because the parent is read-only');
 
-    it('open sub-space under closed parent strips contribute and invite rights from inherited members', () => {
-        const parentSpace: SpaceNode = {
-            id: 'parent1',
-            parentId: null,
-            inheritsMembership: false,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: closedDate,
-            postCloseAccess: 'ReadOnly',
-            postCloseAccessDays: 30,
-        };
-        const childSpace: SpaceNode = {
-            id: 'child1',
-            parentId: 'parent1',
-            inheritsMembership: true,
-            ownerId: 'u1',
-            agentRetrieval: 'Included',
-            closedAt: null, // open sub-space
-        };
-        const parentSeat: MemberSnapshot = {
-            spaceId: 'parent1',
-            userId: 'u1',
-            status: 'Active',
-            band: 'Team',
-            role: ownerRole, // has canInvite: true, canContribute: true
-        };
+        const hiddenParent = { ...parentSpace, status: archived };
+        assert.equal(membershipReaches([hiddenParent, childSpace], [parentSeat], 'u1', 'child1'), null, 'No access to the child when the parent is hidden');
 
-        // Reading child space within parent's post-close access window:
-        const reach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', withinWindowDate);
-        assert.ok(reach, 'Member reaches open child via parent within parent post-close window');
-        assert.equal(reach.role.canInvite, false, 'canInvite stripped because parent is closed');
-        assert.equal(reach.role.canContribute, false, 'canContribute stripped because parent is closed');
-
-        // Reading child space past parent's post-close access window:
-        const pastWindowReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate);
-        assert.equal(pastWindowReach, null, 'No access to child when closed parent is past post-close access window');
-
-        // Reopening / ignorePostCloseFilter allows access without stripping:
-        const reopeningReach = membershipReaches([parentSpace, childSpace], [parentSeat], 'u1', 'child1', outsideWindowDate, true);
-        assert.ok(reopeningReach);
-        assert.equal(reopeningReach.role.canContribute, true, 'ignorePostCloseFilter preserves rights for reopen evaluation');
+        const ownerReach = membershipReaches([hiddenParent, childSpace], [parentSeat], 'u1', 'child1', new Date(), true);
+        assert.ok(ownerReach);
+        assert.equal(ownerReach.role.canContribute, true, 'the status filter off preserves rights for a status change');
     });
 });
 

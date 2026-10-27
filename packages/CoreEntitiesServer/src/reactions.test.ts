@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it, mock } from 'node:test';
+import { seedAppSettings } from './app-settings.test-support.ts';
+import { defaultConfiguration, stubConfigurationFor } from './configuration.test-support.ts';
 import { grantAdministerToDefaultRoles } from './administer.test-support.ts';
 import { BaseEntity, WellKnownUserSource, type UserInfo } from '@memberjunction/core';
 import {
@@ -13,6 +15,12 @@ import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
 import { SpaceEntityServer } from '../dist/SpaceEntityServer.js';
 import { SpaceItemEntityServer } from '../dist/SpaceItemEntityServer.js';
 import { SpaceMemberEntityServer } from '../dist/SpaceMemberEntityServer.js';
+
+// The one configuration starts from the app's settings row (B16): seeded here, as the shipped metadata seeds it
+let restoreAppSettingsRow: () => void;
+let restoreConfigurationLoader: () => void;
+before(() => { restoreAppSettingsRow = seedAppSettings(); restoreConfigurationLoader = stubConfigurationFor(); });
+after(() => { restoreAppSettingsRow(); restoreConfigurationLoader(); });
 
 // Staff stand-ins: the engine answers 'Administer Spaces' the way the shipped grants do, by the roles a test user carries
 let restoreAdminister: () => void;
@@ -75,7 +83,7 @@ describe('what each reaction hears, through Save', () => {
         resolveSpace = registry.ResolveSpaceAndType.bind(registry);
         resolveType = registry.ResolveType.bind(registry);
         getDriver = registry.GetDriverForType.bind(registry);
-        registry.ResolveSpaceAndType = (async (id: string) => ({ driver: driverFor(id), space: {}, spaceType: {} })) as unknown as typeof registry.ResolveSpaceAndType;
+        registry.ResolveSpaceAndType = (async (id: string) => ({ driver: driverFor(id), space: {}, spaceType: {}, configuration: defaultConfiguration({ ID: id }) })) as unknown as typeof registry.ResolveSpaceAndType;
         registry.ResolveType = (async () => ({ Code: 'test-type' })) as unknown as typeof registry.ResolveType;
         registry.GetDriverForType = (() => driverFor(SPACE)) as unknown as typeof registry.GetDriverForType;
         // MJ runs validation inside Save and clears the dirty flags when it is done: the stub does the same
@@ -282,5 +290,38 @@ describe('what each reaction hears, through Save', () => {
         const removed = await seatHeard(seatEntity({ Status: 'Removed' }, { Status: 'Active' }));
         assert.deepEqual(removed.map((h) => h.kind), ['Remove']);
         assert.deepEqual(removed[0].oldValues, { Status: 'Active' });
+    });
+
+    it('inside an entity transaction, a reaction that throws rolls the save back and refuses it; a clean save commits (item 35)', async () => {
+        const settled: string[] = [];
+        const scopedProvider = {
+            SupportsEntityTransactions: true,
+            BeginEntityTransaction: async () => ({ IsNested: false, Commit: async () => { settled.push('commit'); }, Rollback: async () => { settled.push('rollback'); } }),
+        };
+        drivers.clear();
+        driverFor(SPACE).OnSpaceChanged = () => { throw new Error('the space driver broke'); };
+        const refused = spaceEntity({ Name: 'New name' }, { Name: 'Old name' });
+        Object.defineProperty(refused, 'ProviderToUse', { value: scopedProvider, writable: true });
+        const history: Array<{ Message?: string }> = [];
+        Object.defineProperty(refused, 'RegisterResultHistoryEntry', { value: (entry: { Message?: string }) => history.push(entry), writable: true });
+        const spy = mock.method(console, 'error', () => undefined);
+        let saved: boolean;
+        try {
+            saved = await SpaceEntityServer.prototype.Save.call(refused);
+        } finally {
+            spy.mock.restore();
+        }
+        assert.equal(saved, false, 'the save is refused');
+        assert.deepEqual(settled, ['rollback'], 'the scope is rolled back, not committed');
+        assert.match(history[0]?.Message ?? '', /Space change refused: OnSpaceChanged of space type 'test-type' failed .* the space driver broke/);
+        assert.deepEqual(driverFor(PARENT).heard.map((h) => h.kind), ['UpdateChild'], 'the parent was still told, inside the scope that was rolled back');
+
+        settled.length = 0;
+        drivers.clear();
+        const clean = spaceEntity({ Name: 'New name' }, { Name: 'Old name' });
+        Object.defineProperty(clean, 'ProviderToUse', { value: scopedProvider, writable: true });
+        assert.equal(await SpaceEntityServer.prototype.Save.call(clean), true);
+        assert.deepEqual(settled, ['commit']);
+        assert.deepEqual(driverFor(SPACE).heard.map((h) => h.kind), ['Update']);
     });
 });
