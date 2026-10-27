@@ -318,6 +318,87 @@ const checks: NamedCheck[] = [
             Assert(!team?.Url, 'No URL comes back for a refused token');
         },
     },
+    {
+        Id: 'library.LB9',
+        Name: 'LB9 — UploadSpaceFile over the wire supports a variety of document types (.pdf, .docx, .xlsx, .csv, .md, .json, .html, .txt, .png) across Shared and Team bands and enforces RLS',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const stamp = Date.now();
+
+            const docs: Array<{
+                fileName: string;
+                mimeType: string;
+                expectedStoredMime: string;
+                band: 'Shared' | 'Team';
+                folder: string;
+                content: string;
+            }> = [
+                { fileName: `lb9-wire-brief-${stamp}.pdf`, mimeType: 'application/pdf', expectedStoredMime: 'application/pdf', band: 'Shared', folder: 'Briefs', content: '%PDF-1.4 wire brief' },
+                { fileName: `lb9-wire-sow-${stamp}.docx`, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', expectedStoredMime: 'application/octet-stream', band: 'Shared', folder: 'Contracts', content: 'PK\x03\x04 wire docx' },
+                { fileName: `lb9-wire-model-${stamp}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', expectedStoredMime: 'application/octet-stream', band: 'Team', folder: 'Models', content: 'PK\x03\x04 wire xlsx' },
+                { fileName: `lb9-wire-dwell-${stamp}.csv`, mimeType: 'text/csv', expectedStoredMime: 'text/plain', band: 'Shared', folder: 'Data', content: 'site,dwell\nChicago,3.8\n' },
+                { fileName: `lb9-wire-adr-${stamp}.md`, mimeType: 'text/markdown', expectedStoredMime: 'text/plain', band: 'Shared', folder: 'Engineering', content: '# Wire ADR\n' },
+                { fileName: `lb9-wire-api-${stamp}.json`, mimeType: 'application/json', expectedStoredMime: 'application/octet-stream', band: 'Shared', folder: 'Engineering', content: '{"openapi":"3.1.0"}' },
+                { fileName: `lb9-wire-portal-${stamp}.html`, mimeType: 'text/html', expectedStoredMime: 'text/plain', band: 'Shared', folder: 'Snapshots', content: '<html><body>Portal</body></html>' },
+                { fileName: `lb9-wire-notes-${stamp}.txt`, mimeType: 'text/plain', expectedStoredMime: 'text/plain', band: 'Team', folder: 'Notes', content: 'Internal wire notes' },
+                { fileName: `lb9-wire-layout-${stamp}.png`, mimeType: 'image/png', expectedStoredMime: 'image/png', band: 'Shared', folder: 'Diagrams', content: '\x89PNG\r\n\x1a\n' },
+            ];
+
+            const uploadedItemByDoc = new Map<string, string>();
+            for (const doc of docs) {
+                const res = await adaClient.UploadSpaceFile({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    FileName: doc.fileName,
+                    MimeType: doc.mimeType,
+                    Base64Data: Buffer.from(doc.content).toString('base64'),
+                    Folder: doc.folder,
+                    Band: doc.band,
+                });
+                Assert(res.Success === true && !!res.ItemID, `Wire upload succeeded for ${doc.fileName}: ${res.ErrorMessage ?? ''}`);
+                if (res.ItemID) {
+                    createdItemIds.push(res.ItemID);
+                    uploadedItemByDoc.set(doc.fileName, res.ItemID);
+                }
+
+                const [itemRow] = await FindRows<{ ID: string; RecordID: string; Band: string }>(
+                    ctx,
+                    SPACE_ITEM_ENTITY,
+                    `ID = '${res.ItemID}'`,
+                    ['ID', 'RecordID', 'Band'],
+                );
+                Assert(itemRow?.Band === doc.band, `Wire SpaceItem band matches ${doc.band} for ${doc.fileName}`);
+                const fileId = itemRow.RecordID.replace(/^ID\|/i, '');
+                const [fileRow] = await FindRows<{ ContentType: string }>(
+                    ctx,
+                    FILE_ENTITY,
+                    `ID = '${fileId}'`,
+                    ['ContentType'],
+                );
+                Assert(fileRow?.ContentType === doc.expectedStoredMime, `Wire stored ContentType matches for ${doc.fileName}`);
+            }
+
+            const beaVisible = await FindRows<{ ID: string }>(
+                beaCtx,
+                SPACE_ITEM_ENTITY,
+                `SpaceID = '${DISCOVERY_SPACE_ID}'`,
+                ['ID'],
+                beaCtx.User,
+                { BypassCache: true },
+            );
+            for (const doc of docs) {
+                const itemId = uploadedItemByDoc.get(doc.fileName)!;
+                const seen = beaVisible.some((r) => SameID(r.ID, itemId));
+                if (doc.band === 'Shared') {
+                    Assert(seen, `Bea reads Shared uploaded doc ${doc.fileName} over the wire`);
+                } else {
+                    Assert(!seen, `Bea cannot read Team uploaded doc ${doc.fileName} over the wire`);
+                }
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

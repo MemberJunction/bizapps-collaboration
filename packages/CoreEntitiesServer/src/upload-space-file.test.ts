@@ -180,6 +180,142 @@ describe('uploadSpaceFile', () => {
         });
         assert.deepEqual(mimeTypes, ['text/plain']);
     });
+
+    it('uploads a variety of document formats across Shared and Team bands with their resolved MJ Artifact Types and safe stored MIME types', async () => {
+        const catalog: Array<{
+            fileName: string;
+            mimeType: string;
+            expectedStoredMime: string;
+            expectedArtifactType: string;
+            band: Band;
+            folder: string;
+            content: Buffer;
+        }> = [
+            {
+                fileName: 'executive-brief.pdf',
+                mimeType: 'application/pdf',
+                expectedStoredMime: 'application/pdf',
+                expectedArtifactType: 'TYPE:PDF',
+                band: 'Shared',
+                folder: 'Briefs',
+                content: Buffer.from('%PDF-1.4 executive brief content'),
+            },
+            {
+                fileName: 'statement-of-work.docx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                expectedStoredMime: 'application/octet-stream',
+                expectedArtifactType: 'TYPE:Word Document',
+                band: 'Shared',
+                folder: 'Contracts',
+                content: Buffer.from('PK\x03\x04 word document payload'),
+            },
+            {
+                fileName: 'kpi-financial-model.xlsx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                expectedStoredMime: 'application/octet-stream',
+                expectedArtifactType: 'TYPE:Excel Spreadsheet',
+                band: 'Team',
+                folder: 'Models',
+                content: Buffer.from('PK\x03\x04 excel workbook payload'),
+            },
+            {
+                fileName: 'warehouse-dwell-metrics.csv',
+                mimeType: 'text/csv',
+                expectedStoredMime: 'text/plain',
+                expectedArtifactType: 'TYPE:CSV',
+                band: 'Shared',
+                folder: 'Data',
+                content: Buffer.from('facility,dwell_hours,otif_pct\nChicago,3.8,94.2\n'),
+            },
+            {
+                fileName: 'architecture-decisions.md',
+                mimeType: 'text/markdown',
+                expectedStoredMime: 'text/plain',
+                expectedArtifactType: 'TYPE:Markdown Document',
+                band: 'Shared',
+                folder: 'Engineering',
+                content: Buffer.from('# Architecture ADR-01\n\nUse GraphQL + Row-Level Security.\n'),
+            },
+            {
+                fileName: 'api-contract.json',
+                mimeType: 'application/json',
+                expectedStoredMime: 'application/octet-stream',
+                expectedArtifactType: 'TYPE:JSON',
+                band: 'Shared',
+                folder: 'Engineering',
+                content: Buffer.from(JSON.stringify({ openapi: '3.1.0', info: { title: 'Northwind API' } })),
+            },
+            {
+                fileName: 'onboarding-portal.html',
+                mimeType: 'text/html',
+                expectedStoredMime: 'text/plain',
+                expectedArtifactType: 'TYPE:HTML',
+                band: 'Shared',
+                folder: 'Snapshots',
+                content: Buffer.from('<!doctype html><html><body><h1>Onboarding</h1></body></html>'),
+            },
+            {
+                fileName: 'erp-schema-export.xml',
+                mimeType: 'application/xml',
+                expectedStoredMime: 'application/octet-stream',
+                expectedArtifactType: 'TYPE:XML',
+                band: 'Team',
+                folder: 'Schemas',
+                content: Buffer.from('<?xml version="1.0"?><schema name="NorthwindERP"/>'),
+            },
+            {
+                fileName: 'stakeholder-interview.txt',
+                mimeType: 'text/plain',
+                expectedStoredMime: 'text/plain',
+                expectedArtifactType: 'TYPE:Generic Text',
+                band: 'Team',
+                folder: 'Notes',
+                content: Buffer.from('Interview transcript: Operations VP confirmed Q4 target.'),
+            },
+            {
+                fileName: 'warehouse-floorplan.png',
+                mimeType: 'image/png',
+                expectedStoredMime: 'image/png',
+                expectedArtifactType: 'TYPE:Image',
+                band: 'Shared',
+                folder: 'Diagrams',
+                content: Buffer.from('\x89PNG\r\n\x1a\n floorplan'),
+            },
+            {
+                fileName: 'network-topology.svg',
+                mimeType: 'image/svg+xml',
+                expectedStoredMime: 'application/octet-stream',
+                expectedArtifactType: 'TYPE:SVG Image',
+                band: 'Shared',
+                folder: 'Diagrams',
+                content: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'),
+            },
+        ];
+
+        for (const doc of catalog) {
+            const { provider, store, item, mimeTypes, artifactRows } = harness(true, doc.band);
+            const outcome = await uploadSpaceFile({
+                user: USER,
+                storageUser: SYSTEM,
+                provider,
+                store,
+                spaceId: 'SPACE-MULTI',
+                folder: doc.folder,
+                fileName: doc.fileName,
+                mimeType: doc.mimeType,
+                content: doc.content,
+                gate: async () => ({ ok: true, band: doc.band }),
+            });
+            assert.equal(outcome.ok, true, `Upload must succeed for ${doc.fileName}`);
+            assert.deepEqual(mimeTypes, [doc.expectedStoredMime], `Stored MIME for ${doc.fileName}`);
+            assert.equal(artifactRows[0].values['TypeID'], doc.expectedArtifactType, `Artifact TypeID for ${doc.fileName}`);
+            assert.equal(artifactRows[1].values['FileName'], doc.fileName, `ArtifactVersion FileName for ${doc.fileName}`);
+            assert.equal(artifactRows[1].values['MimeType'], doc.expectedStoredMime, `ArtifactVersion MimeType for ${doc.fileName}`);
+            assert.equal(artifactRows[1].values['ContentSizeBytes'], doc.content.byteLength, `ArtifactVersion size for ${doc.fileName}`);
+            assert.equal(item.Band, doc.band, `SpaceItem band for ${doc.fileName}`);
+            assert.equal(item.Folder, doc.folder, `SpaceItem folder for ${doc.fileName}`);
+        }
+    });
 });
 
 describe('artifactTypeNameFor', () => {

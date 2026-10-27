@@ -447,7 +447,7 @@ export async function resolveSpaceAgentRetrieval(
         }
     }
 
-    const targetNames = new Map<string, { name: string; description: string | null }>();
+    const targetNames = new Map<string, { name: string; description: string | null; contentType: string | null }>();
     const entityEntries = Array.from(recordIdsByEntity.entries());
     const viewParams: RunViewParams[] = [];
     const validEntityIds: string[] = [];
@@ -456,10 +456,14 @@ export async function resolveSpaceAgentRetrieval(
         const entityInfo = provider.EntityByID(entityId);
         if (!entityInfo) continue;
         const targetInClause = recIds.map((id) => `'${id}'`).join(',');
+        const fields =
+            entityInfo.Name === 'MJ: Files'
+                ? ['ID', 'Name', 'Description', 'ContentType']
+                : ['ID', 'Name', 'Description'];
         viewParams.push({
             EntityName: entityInfo.Name,
             ExtraFilter: `ID IN (${targetInClause})`,
-            Fields: ['ID', 'Name', 'Description'],
+            Fields: fields,
             MaxRows: 2000,
             ResultType: 'simple',
         });
@@ -473,11 +477,17 @@ export async function resolveSpaceAgentRetrieval(
                 const res = batchResults[i];
                 const entityId = validEntityIds[i];
                 if (res.Success && res.Results) {
-                    for (const t of res.Results as Array<{ ID: string; Name?: string; Description?: string }>) {
+                    for (const t of res.Results as Array<{
+                        ID: string;
+                        Name?: string;
+                        Description?: string;
+                        ContentType?: string;
+                    }>) {
                         const id = (parseUuid(t.ID) ?? t.ID).toLowerCase();
                         targetNames.set(`${entityId}:${id}`, {
                             name: t.Name ?? 'Unnamed item',
                             description: t.Description ?? null,
+                            contentType: t.ContentType ?? null,
                         });
                     }
                 } else if (!res.Success) {
@@ -495,8 +505,12 @@ export async function resolveSpaceAgentRetrieval(
         const recId = cleanRecordId(raw.RecordID).toLowerCase();
         const target = targetNames.get(`${entityId}:${recId}`);
         const name = target?.name ?? `Item ${raw.ID}`;
-        if (options?.query && !name.toLowerCase().includes(options.query.toLowerCase())) {
-            continue;
+        const description = target?.description ?? null;
+        if (options?.query) {
+            const q = options.query.toLowerCase();
+            if (!name.toLowerCase().includes(q) && !(description && description.toLowerCase().includes(q))) {
+                continue;
+            }
         }
         candidateItems.push({
             ID: raw.ID,
@@ -504,9 +518,9 @@ export async function resolveSpaceAgentRetrieval(
             EntityID: raw.EntityID,
             RecordID: raw.RecordID,
             Name: name,
-            Description: target?.description ?? null,
+            Description: description,
             Band: raw.Band,
-            StoredContentType: null,
+            StoredContentType: target?.contentType ?? null,
         });
     }
 

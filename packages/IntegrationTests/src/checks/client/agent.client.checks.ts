@@ -407,6 +407,140 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'agent.AG8',
+        Name: 'AG8 — ExecuteSpaceChatTurn over the wire retrieves a variety of uploaded document types (.pdf, .docx, .xlsx, .csv, .md, .json, .html, .txt, .png) according to conversation audience',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const stamp = Date.now();
+
+            const docs: Array<{ fileName: string; mimeType: string; band: 'Shared' | 'Team'; content: string }> = [
+                { fileName: `ag8-wire-roadmap-${stamp}.pdf`, mimeType: 'application/pdf', band: 'Shared', content: '%PDF-1.4 roadmap' },
+                { fileName: `ag8-wire-sow-${stamp}.docx`, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', band: 'Shared', content: 'PK\x03\x04 sow docx' },
+                { fileName: `ag8-wire-pricing-${stamp}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', band: 'Team', content: 'PK\x03\x04 pricing xlsx' },
+                { fileName: `ag8-wire-metrics-${stamp}.csv`, mimeType: 'text/csv', band: 'Shared', content: 'site,otif\nChicago,94.2\n' },
+                { fileName: `ag8-wire-adr-${stamp}.md`, mimeType: 'text/markdown', band: 'Shared', content: '# ADR-01\n' },
+                { fileName: `ag8-wire-contract-${stamp}.json`, mimeType: 'application/json', band: 'Shared', content: '{"openapi":"3.1.0"}' },
+                { fileName: `ag8-wire-portal-${stamp}.html`, mimeType: 'text/html', band: 'Shared', content: '<html><body>Portal</body></html>' },
+                { fileName: `ag8-wire-playbook-${stamp}.txt`, mimeType: 'text/plain', band: 'Team', content: 'Internal playbook' },
+                { fileName: `ag8-wire-diagram-${stamp}.png`, mimeType: 'image/png', band: 'Shared', content: '\x89PNG\r\n\x1a\n' },
+            ];
+
+            const uploadedItemIds: string[] = [];
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+            let privConvId: string | null = null;
+            let privChatId: string | null = null;
+
+            try {
+                for (const doc of docs) {
+                    const up = await adaClient.UploadSpaceFile({
+                        SpaceID: DISCOVERY_SPACE_ID,
+                        FileName: doc.fileName,
+                        MimeType: doc.mimeType,
+                        Base64Data: Buffer.from(doc.content).toString('base64'),
+                        Folder: 'Briefs',
+                        Band: doc.band,
+                    });
+                    Assert(up.Success === true && !!up.ItemID, `AG8 wire upload succeeded for ${doc.fileName}: ${up.ErrorMessage ?? ''}`);
+                    if (up.ItemID) uploadedItemIds.push(up.ItemID);
+                }
+
+                const sharedDocNames = docs.filter((d) => d.band === 'Shared').map((d) => d.fileName);
+                const teamDocNames = docs.filter((d) => d.band === 'Team').map((d) => d.fileName);
+
+                const genStart = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-ag8-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(genStart.Success === true && !!genStart.ConversationID && !!genStart.SpaceChatID, `Ada creates General conversation: ${genStart.ErrorMessage ?? ''}`);
+                genConvId = genStart.ConversationID!;
+                genChatId = genStart.SpaceChatID!;
+
+                const genMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize uploaded documents`,
+                });
+                Assert(genMsg.Success === true && !!genMsg.DetailID, `Ada posts in General: ${genMsg.ErrorMessage ?? ''}`);
+                if (genMsg.DetailID) createdDetailIds.push(genMsg.DetailID);
+
+                const genTurn = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: genMsg.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(genTurn.Success === true && !!genTurn.ReplyDetailIDs?.length, `General turn over wire succeeded: ${genTurn.ErrorMessage ?? ''}`);
+                if (genTurn.ReplyDetailIDs) createdDetailIds.push(...genTurn.ReplyDetailIDs);
+                const [genReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${genTurn.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(!!genReply?.Message, 'General turn over wire persisted assistant reply');
+                for (const name of sharedDocNames) {
+                    Assert(genTurn.AllowedItemNames?.includes(name) === true, `General turn allows Shared uploaded doc ${name}`);
+                    Assert(genReply.Message.includes(name), `General turn assistant reply quotes Shared uploaded doc ${name}`);
+                }
+                for (const name of teamDocNames) {
+                    Assert(!genTurn.AllowedItemNames?.includes(name), `General turn blocks Team uploaded doc ${name}`);
+                    Assert(!genReply.Message.includes(name), `General turn assistant reply NEVER quotes Team uploaded doc ${name}`);
+                }
+
+                const privStart = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-ag8-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(privStart.Success === true && !!privStart.ConversationID && !!privStart.SpaceChatID, `Ada creates Private conversation: ${privStart.ErrorMessage ?? ''}`);
+                privConvId = privStart.ConversationID!;
+                privChatId = privStart.SpaceChatID!;
+
+                const privMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} summarize all uploaded documents`,
+                });
+                Assert(privMsg.Success === true && !!privMsg.DetailID, `Ada posts in Private: ${privMsg.ErrorMessage ?? ''}`);
+                if (privMsg.DetailID) createdDetailIds.push(privMsg.DetailID);
+
+                const privTurn = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: privConvId,
+                    UserMessageID: privMsg.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(privTurn.Success === true && !!privTurn.ReplyDetailIDs?.length, `Private turn over wire succeeded: ${privTurn.ErrorMessage ?? ''}`);
+                if (privTurn.ReplyDetailIDs) createdDetailIds.push(...privTurn.ReplyDetailIDs);
+                const [privReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${privTurn.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(!!privReply?.Message, 'Private turn over wire persisted assistant reply');
+                for (const name of [...sharedDocNames, ...teamDocNames]) {
+                    Assert(privTurn.AllowedItemNames?.includes(name) === true, `Private turn allows uploaded doc ${name}`);
+                    Assert(privReply.Message.includes(name), `Private turn assistant reply quotes uploaded doc ${name}`);
+                }
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                if (privConvId && privChatId) await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
+                await runAllSteps(
+                    uploadedItemIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG8 wire uploaded item')),
+                );
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

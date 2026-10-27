@@ -1,7 +1,17 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { createSpaceConversation, executeSpaceChatTurn, postSpaceMessage, resolveSpaceAgentRetrieval } from '@mj-biz-apps/collaboration-core-entities-server';
+import { noteDocument } from '@mj-biz-apps/collaboration-core';
+import {
+    collaborationFileStore,
+    createSpaceConversation,
+    decideUploadBand,
+    executeSpaceChatTurn,
+    postSpaceMessage,
+    resolveSpaceAgentRetrieval,
+    uploadSpaceFile,
+} from '@mj-biz-apps/collaboration-core-entities-server';
+import type { mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
@@ -21,6 +31,8 @@ import {
     TASK_ENTITY,
 } from '../entity-names.js';
 import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wire.js';
+import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
+import { worldStorageRoot } from '../world/seed-files.js';
 import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
 import { attachAgentToSpace, attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
@@ -885,6 +897,456 @@ const checks: NamedCheck[] = [
                 ['ID'],
             );
             Assert(grants.length === 0, `${grants.length} entity permission(s) still use the retired "Collaboration: Agent Catalog" filter. Clean them up as docs/reviewing-the-data.md says.`);
+        },
+    },
+    {
+        Id: 'agent.AG11',
+        Name: 'AG11 — End-to-end retrieval (resolveSpaceAgentRetrieval, executeSpaceChatTurn, and SearchEngine ExplainScope lane) works across a variety of documents uploaded into spaces (.pdf, .docx, .xlsx, .csv, .md, .json, .html, .txt, .png), Space Notes turned into documents, and polymorphic Tasks, enforcing band, audience, query, and subtree scoping',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const stamp = Date.now();
+
+            const workshopNoteTitle = `AG11 Kickoff Workshop Synthesis ${stamp}`;
+            const workshopNoteDoc = noteDocument({
+                Title: workshopNoteTitle,
+                Body: 'Agreed on EDI 856 ASN feed and webhook milestones.',
+            });
+            const privateNoteTitle = `AG11 Private Margin Memo ${stamp}`;
+
+            const uploadedDocs: Array<{
+                spaceId: string;
+                fileName: string;
+                mimeType: string;
+                expectedStoredMime: string;
+                band: 'Shared' | 'Team';
+                folder: string;
+                content: Buffer;
+            }> = [
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-roadmap-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    expectedStoredMime: 'application/pdf',
+                    band: 'Shared',
+                    folder: 'Briefs',
+                    content: Buffer.from('%PDF-1.4\n% Q4 client roadmap\n%%EOF\n'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-agreement-${stamp}.docx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    expectedStoredMime: 'application/octet-stream',
+                    band: 'Shared',
+                    folder: 'Contracts',
+                    content: Buffer.from('PK\x03\x04 master services agreement docx'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-pricing-model-${stamp}.xlsx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    expectedStoredMime: 'application/octet-stream',
+                    band: 'Team',
+                    folder: 'Models',
+                    content: Buffer.from('PK\x03\x04 internal pricing and margin workbook xlsx'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-warehouse-dwell-${stamp}.csv`,
+                    mimeType: 'text/csv',
+                    expectedStoredMime: 'text/plain',
+                    band: 'Shared',
+                    folder: 'Data',
+                    content: Buffer.from('facility,dwell_hours,otif_pct\nChicago,3.8,94.2\n'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-architecture-${stamp}.md`,
+                    mimeType: 'text/markdown',
+                    expectedStoredMime: 'text/plain',
+                    band: 'Shared',
+                    folder: 'Engineering',
+                    content: Buffer.from('# ADR-01 Event Bus\nUse GraphQL subscriptions and RLS.\n'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: workshopNoteDoc.fileName,
+                    mimeType: workshopNoteDoc.mimeType,
+                    expectedStoredMime: 'text/plain',
+                    band: 'Shared',
+                    folder: 'Notes',
+                    content: Buffer.from(workshopNoteDoc.content, 'utf8'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-webhook-schema-${stamp}.json`,
+                    mimeType: 'application/json',
+                    expectedStoredMime: 'application/octet-stream',
+                    band: 'Shared',
+                    folder: 'Engineering',
+                    content: Buffer.from(JSON.stringify({ openapi: '3.1.0', info: { title: 'Fulfillment Webhook' } })),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-portal-snapshot-${stamp}.html`,
+                    mimeType: 'text/html',
+                    expectedStoredMime: 'text/plain',
+                    band: 'Shared',
+                    folder: 'Snapshots',
+                    content: Buffer.from('<!doctype html><html><body><h1>Onboarding Portal</h1></body></html>'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-redline-playbook-${stamp}.txt`,
+                    mimeType: 'text/plain',
+                    expectedStoredMime: 'text/plain',
+                    band: 'Team',
+                    folder: 'Notes',
+                    content: Buffer.from('Internal negotiation playbook: hold 18% margin floor.'),
+                },
+                {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag11-bay-layout-${stamp}.png`,
+                    mimeType: 'image/png',
+                    expectedStoredMime: 'image/png',
+                    band: 'Shared',
+                    folder: 'Diagrams',
+                    content: Buffer.from('\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'),
+                },
+                {
+                    spaceId: DELIVERY_SPACE_ID,
+                    fileName: `ag11-delivery-cutover-${stamp}.md`,
+                    mimeType: 'text/markdown',
+                    expectedStoredMime: 'text/plain',
+                    band: 'Shared',
+                    folder: 'Runbooks',
+                    content: Buffer.from('# Delivery Cutover Checklist (ExcludedFromParentScope)\n'),
+                },
+            ];
+
+            const uploadedItemIds: string[] = [];
+            const uploadedFileIds: string[] = [];
+            const fileIdByName = new Map<string, string>();
+            let privateNoteId: string | null = null;
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+            let privConvId: string | null = null;
+            let privChatId: string | null = null;
+
+            try {
+                // Create a raw Private Space Note in Discovery (must NEVER be quoted)
+                const privateNote = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>(
+                    'MJ_BizApps_Collaboration: Space Notes',
+                    ada,
+                );
+                privateNote.NewRecord();
+                privateNote.SpaceID = DISCOVERY_SPACE_ID;
+                privateNote.Title = privateNoteTitle;
+                privateNote.Body = 'Confidential margin floor discussion.';
+                privateNote.Visibility = 'Private';
+                Assert(await privateNote.Save(), `Ada saves private note for AG11: ${privateNote.LatestResult?.CompleteMessage ?? ''}`);
+                privateNoteId = privateNote.ID;
+
+                for (const doc of uploadedDocs) {
+                    const outcome = await uploadSpaceFile({
+                        user: ada,
+                        storageUser: ctx.User,
+                        provider: ctx.Provider,
+                        store,
+                        spaceId: doc.spaceId,
+                        folder: doc.folder,
+                        fileName: doc.fileName,
+                        mimeType: doc.mimeType,
+                        content: doc.content,
+                        gate: () => decideUploadBand(ctx.Provider, ada, doc.spaceId, doc.band),
+                    });
+                    Assert(outcome.ok, `AG11 upload must succeed for ${doc.fileName}: ${outcome.ok ? '' : outcome.message}`);
+                    if (!outcome.ok) throw new Error(outcome.message);
+                    uploadedItemIds.push(outcome.itemId);
+                    uploadedFileIds.push(outcome.fileId);
+                    fileIdByName.set(doc.fileName, outcome.fileId);
+                    if (doc.fileName === `ag11-webhook-schema-${stamp}.json`) {
+                        const fileEntity = await ctx.Provider.GetEntityObject(FILE_ENTITY, ctx.User);
+                        Assert(await fileEntity.InnerLoad( new (await import('@memberjunction/core')).CompositeKey([{ FieldName: 'ID', Value: outcome.fileId }])), 'Load uploaded JSON file record');
+                        fileEntity.Set('Description', `Fulfillment OpenAPI 3.1 contract ${stamp}`);
+                        Assert(await fileEntity.Save(), `Save Description on uploaded JSON file: ${fileEntity.LatestResult?.CompleteMessage ?? ''}`);
+                    }
+                }
+
+                const discoverySharedNames = uploadedDocs
+                    .filter((d) => d.spaceId === DISCOVERY_SPACE_ID && d.band === 'Shared')
+                    .map((d) => d.fileName);
+                const discoveryTeamNames = uploadedDocs
+                    .filter((d) => d.spaceId === DISCOVERY_SPACE_ID && d.band === 'Team')
+                    .map((d) => d.fileName);
+                const deliveryCutoverName = `ag11-delivery-cutover-${stamp}.md`;
+
+                // 1. Direct resolveSpaceAgentRetrieval as Client Bea in Discovery
+                const beaRetrieval = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID);
+                const beaQuotedNames = beaRetrieval.quotedItems.map((i) => i.Name);
+                for (const name of discoverySharedNames) {
+                    const item = beaRetrieval.quotedItems.find((i) => i.Name === name);
+                    Assert(!!item, `Client Bea retrieves Shared uploaded document ${name}`);
+                    const spec = uploadedDocs.find((d) => d.fileName === name)!;
+                    Assert(
+                        item?.StoredContentType === spec.expectedStoredMime,
+                        `StoredContentType for ${name} expected ${spec.expectedStoredMime}, saw ${item?.StoredContentType}`,
+                    );
+                }
+                for (const teamName of discoveryTeamNames) {
+                    Assert(!beaQuotedNames.includes(teamName), `Client Bea NEVER retrieves Team uploaded document ${teamName}`);
+                }
+                Assert(!beaQuotedNames.includes(privateNoteTitle), 'Client Bea NEVER retrieves raw Private Space Note');
+                Assert(!beaQuotedNames.includes(deliveryCutoverName), 'Client Bea in Discovery does not retrieve sibling Delivery document');
+                Assert(beaQuotedNames.includes('Discovery plan'), 'Client Bea also retrieves polymorphic Shared Task "Discovery plan" alongside uploaded documents');
+
+                // 2. Direct resolveSpaceAgentRetrieval as Staff Ada in Discovery (Private context)
+                const adaRetrieval = await resolveSpaceAgentRetrieval(ctx.Provider, ada, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'Private',
+                });
+                const adaQuotedNames = adaRetrieval.quotedItems.map((i) => i.Name);
+                for (const name of [...discoverySharedNames, ...discoveryTeamNames]) {
+                    Assert(adaQuotedNames.includes(name), `Staff Ada (Private) in Discovery retrieves uploaded document ${name}`);
+                }
+                Assert(!adaQuotedNames.includes(privateNoteTitle), 'Staff Ada NEVER retrieves raw Private Space Note as a Space Item');
+                Assert(!adaQuotedNames.includes(deliveryCutoverName), 'Staff Ada in Discovery does not leak sibling Delivery document');
+
+                // 3. Query filtering (options.query) against uploaded documents (by Name and by Description)
+                const csvQuery = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    query: `ag11-warehouse-dwell-${stamp}`,
+                });
+                Assert(
+                    csvQuery.quotedItems.length === 1 && csvQuery.quotedItems[0].Name === `ag11-warehouse-dwell-${stamp}.csv`,
+                    'Query filter isolates matching Shared CSV for Bea',
+                );
+                const xlsxAsAda = await resolveSpaceAgentRetrieval(ctx.Provider, ada, DISCOVERY_SPACE_ID, {
+                    query: `ag11-pricing-model-${stamp}`,
+                });
+                Assert(
+                    xlsxAsAda.quotedItems.length === 1 && xlsxAsAda.quotedItems[0].Name === `ag11-pricing-model-${stamp}.xlsx`,
+                    'Query filter isolates matching Team XLSX for Ada',
+                );
+                const xlsxAsBea = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    query: `ag11-pricing-model-${stamp}`,
+                });
+                Assert(xlsxAsBea.quotedItems.length === 0, 'Query filter returns 0 items for Team XLSX when asked by Bea');
+                const descQuery = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    query: `Fulfillment OpenAPI 3.1 contract ${stamp}`,
+                });
+                Assert(
+                    descQuery.quotedItems.length === 1 && descQuery.quotedItems[0].Name === `ag11-webhook-schema-${stamp}.json`,
+                    'Query filter matches uploaded JSON document by its Description',
+                );
+
+                // 4. Parent-to-child retrieval from Northwind reaches Discovery's uploaded docs and excludes Delivery (ExcludedFromParentScope)
+                const northwindRetrieval = await resolveSpaceAgentRetrieval(ctx.Provider, ada, NORTHWIND_SPACE_ID);
+                const northwindNames = northwindRetrieval.quotedItems.map((i) => i.Name);
+                for (const name of [...discoverySharedNames, ...discoveryTeamNames]) {
+                    Assert(northwindNames.includes(name), `Parent Northwind retrieval reaches child Discovery uploaded doc ${name}`);
+                }
+                Assert(
+                    !northwindNames.includes(deliveryCutoverName),
+                    'Parent Northwind retrieval excludes Delivery uploaded doc (ExcludedFromParentScope)',
+                );
+
+                // 5. End-to-end executeSpaceChatTurn, reply verification, and SearchEngine ExplainScope lane verification in General vs Private conversations
+                const genStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag11-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(genStart.ok === true && !!genStart.conversationId && !!genStart.spaceChatId, `Ada creates General conversation for AG11: ${genStart.ok ? '' : genStart.message}`);
+                if (!genStart.ok || !genStart.conversationId || !genStart.spaceChatId) throw new Error('General conversation creation failed');
+                genConvId = genStart.conversationId;
+                genChatId = genStart.spaceChatId;
+
+                const genMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize all uploaded documents in Discovery`,
+                });
+                if (!genMsg.ok) throw new Error(genMsg.message);
+                Assert(genMsg.ok === true && !!genMsg.detailId, 'Ada posts in General conversation');
+                createdDetailIds.push(genMsg.detailId);
+
+                const genTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    userMessageId: genMsg.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                if (!genTurn.ok) throw new Error(genTurn.message);
+                Assert(genTurn.ok === true && genTurn.replyDetailIds.length > 0, 'General turn succeeded');
+                createdDetailIds.push(...genTurn.replyDetailIds);
+                const [genReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${genTurn.replyDetailIds[0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(!!genReply?.Message, 'General turn persisted assistant reply message');
+                for (const sharedDoc of discoverySharedNames) {
+                    Assert(
+                        genTurn.allowedItemNames?.includes(sharedDoc) === true,
+                        `General turn allowedItemNames includes Shared uploaded doc ${sharedDoc}`,
+                    );
+                    Assert(
+                        genReply.Message.includes(sharedDoc),
+                        `General turn assistant reply quotes Shared uploaded doc ${sharedDoc}`,
+                    );
+                }
+                for (const teamDoc of discoveryTeamNames) {
+                    Assert(
+                        !genTurn.allowedItemNames?.includes(teamDoc),
+                        `General turn allowedItemNames excludes Team uploaded doc ${teamDoc}`,
+                    );
+                    Assert(
+                        !genReply.Message.includes(teamDoc),
+                        `General turn assistant reply NEVER quotes Team uploaded doc ${teamDoc}`,
+                    );
+                }
+                Assert(!genReply.Message.includes(privateNoteTitle), 'General turn assistant reply NEVER mentions Private note');
+
+                const privStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag11-priv-${stamp}`,
+                    Kind: 'Private',
+                });
+                Assert(privStart.ok === true && !!privStart.conversationId && !!privStart.spaceChatId, `Ada creates Private conversation for AG11: ${privStart.ok ? '' : privStart.message}`);
+                if (!privStart.ok || !privStart.conversationId || !privStart.spaceChatId) throw new Error('Private conversation creation failed');
+                privConvId = privStart.conversationId;
+                privChatId = privStart.spaceChatId;
+
+                const privMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} summarize all uploaded documents including internal models`,
+                });
+                if (!privMsg.ok) throw new Error(privMsg.message);
+                Assert(privMsg.ok === true && !!privMsg.detailId, 'Ada posts in Private conversation');
+                createdDetailIds.push(privMsg.detailId);
+
+                const privTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: privConvId,
+                    userMessageId: privMsg.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                if (!privTurn.ok) throw new Error(privTurn.message);
+                Assert(privTurn.ok === true && privTurn.replyDetailIds.length > 0, 'Private turn succeeded');
+                createdDetailIds.push(...privTurn.replyDetailIds);
+                const [privReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${privTurn.replyDetailIds[0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(!!privReply?.Message, 'Private turn persisted assistant reply message');
+                for (const docName of [...discoverySharedNames, ...discoveryTeamNames]) {
+                    Assert(
+                        privTurn.allowedItemNames?.includes(docName) === true,
+                        `Private turn allowedItemNames includes uploaded doc ${docName}`,
+                    );
+                    Assert(
+                        privReply.Message.includes(docName),
+                        `Private turn assistant reply quotes uploaded doc ${docName}`,
+                    );
+                }
+                Assert(!privReply.Message.includes(privateNoteTitle), 'Private turn assistant reply NEVER mentions raw Private note');
+
+                // 6. Verify SearchEngine.ExplainScope Space Items lane filter against the uploaded documents (server harness)
+                if (!isClientTransport(ctx)) {
+                    await SearchEngine.Instance.Config({}, ada);
+                    const reachesFile = (rows: readonly { RecordID: string }[], fileId: string | undefined): boolean =>
+                        !!fileId && rows.some((r) => r.RecordID.toLowerCase().endsWith(fileId.toLowerCase()));
+
+                    const genExplained = await SearchEngine.Instance.ExplainScope(
+                        {
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: { PrimaryScopeRecordID: genChatId },
+                            AIAgentID: AGENT_ID,
+                        },
+                        bea,
+                    );
+                    const genItemsFilter = genExplained[0]?.Lanes.find((l) => l.Target.includes('Space Items'))?.RenderedFilter;
+                    Assert(!!genItemsFilter, 'General conversation renders Space Items lane filter');
+                    const genLaneRows = await FindRows<{ RecordID: string; Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        genItemsFilter!,
+                        ['RecordID', 'Band'],
+                    );
+                    for (const sharedDoc of discoverySharedNames) {
+                        Assert(
+                            reachesFile(genLaneRows, fileIdByName.get(sharedDoc)),
+                            `General Space Items lane reaches Shared uploaded doc ${sharedDoc}`,
+                        );
+                    }
+                    for (const teamDoc of discoveryTeamNames) {
+                        Assert(
+                            !reachesFile(genLaneRows, fileIdByName.get(teamDoc)),
+                            `General Space Items lane NEVER reaches Team uploaded doc ${teamDoc}`,
+                        );
+                    }
+                    Assert(
+                        !reachesFile(genLaneRows, fileIdByName.get(deliveryCutoverName)),
+                        'General Space Items lane NEVER reaches sibling Delivery doc',
+                    );
+
+                    const privExplained = await SearchEngine.Instance.ExplainScope(
+                        {
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: { PrimaryScopeRecordID: privChatId },
+                            AIAgentID: AGENT_ID,
+                        },
+                        ada,
+                    );
+                    const privItemsFilter = privExplained[0]?.Lanes.find((l) => l.Target.includes('Space Items'))?.RenderedFilter;
+                    Assert(!!privItemsFilter, 'Private conversation renders Space Items lane filter');
+                    const privLaneRows = await FindRows<{ RecordID: string; Band: string }>(
+                        ctx,
+                        SPACE_ITEM_ENTITY,
+                        privItemsFilter!,
+                        ['RecordID', 'Band'],
+                    );
+                    for (const docName of [...discoverySharedNames, ...discoveryTeamNames]) {
+                        Assert(
+                            reachesFile(privLaneRows, fileIdByName.get(docName)),
+                            `Private Space Items lane reaches uploaded doc ${docName}`,
+                        );
+                    }
+                    Assert(
+                        !reachesFile(privLaneRows, fileIdByName.get(deliveryCutoverName)),
+                        'Private Space Items lane NEVER reaches sibling Delivery doc',
+                    );
+                }
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                if (privConvId && privChatId) await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
+                await runAllSteps([
+                    ...(privateNoteId
+                        ? [
+                              () =>
+                                  deleteRowAndConfirm(
+                                      ctx.Provider,
+                                      ada,
+                                      'MJ_BizApps_Collaboration: Space Notes',
+                                      privateNoteId!,
+                                      'an AG11 private space note',
+                                  ),
+                          ]
+                        : []),
+                    ...uploadedItemIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG11 uploaded space item')),
+                    ...uploadedFileIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'an AG11 uploaded file')),
+                ]);
+            }
         },
     },
 ];
