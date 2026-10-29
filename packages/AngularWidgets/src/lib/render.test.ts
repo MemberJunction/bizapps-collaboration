@@ -413,6 +413,7 @@ class ChatAreaStub {
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
   public ReadOnlyMessage: string | null = null;
+  public EnableDecisionRouting = false;
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
   public ComposerDraftConsumed = new EventEmitter<void>();
@@ -425,7 +426,7 @@ declareComponent(ChatAreaStub, {
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
     'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
-    'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
+    'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
   outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
@@ -448,6 +449,8 @@ describe("a space's conversation, rendered", () => {
     expect(area).not.toBeNull();
     // MJ's chat area defaults AllowRealtime to true; the space must turn it off
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
+    // Multi-party space chats turn on Jev decision routing by default for active-agent follow-ups
+    expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(true);
   });
 });
 
