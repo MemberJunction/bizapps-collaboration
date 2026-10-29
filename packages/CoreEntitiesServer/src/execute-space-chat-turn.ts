@@ -328,11 +328,27 @@ async function runClaimedTurn(
     } else if (hasHumanMentionOnly) {
         return { ok: false, message: 'The message is addressed to a person and does not mention an agent.' };
     } else if (parentDetailId) {
-        const parentResolved = await resolveParentReplyAgent(view, system, conversationId, parentDetailId, conversationHistoryFrom);
+        const parentResolved = await resolveParentReplyAgent(view, system, conversationId, parentDetailId, callerId, conversationHistoryFrom);
         if (!parentResolved.ok) {
             return { ok: false, message: parentResolved.message };
         }
-        targetAgentId = parentResolved.agentId;
+        if (parentResolved.agentId) {
+            targetAgentId = parentResolved.agentId;
+        } else if (agentReplyMode === 'Always') {
+            if (!resolvedDefault) {
+                return { ok: false, message: 'No assistant is available in this space right now.' };
+            }
+            targetAgentId = resolvedDefault;
+        } else if (input.route === 'DecisionRouted' && parseUuid(input.agentId)) {
+            const requestedAgentId = parseUuid(input.agentId)!;
+            const hasPriorReply = await hasAgentRepliedInConversation(view, system, conversationId, requestedAgentId, conversationHistoryFrom);
+            if (!hasPriorReply) {
+                return { ok: false, message: 'The message does not mention an agent.' };
+            }
+            targetAgentId = requestedAgentId;
+        } else {
+            return { ok: false, message: 'The message does not mention an agent.' };
+        }
     } else if (agentReplyMode === 'Always') {
         if (!resolvedDefault) {
             return { ok: false, message: 'No assistant is available in this space right now.' };
@@ -477,6 +493,7 @@ async function runClaimedTurn(
             const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
                 role: m.role,
                 content: m.content,
+                ...(m.metadata ? { metadata: m.metadata } : {}),
             }));
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
@@ -642,12 +659,13 @@ async function resolveParentReplyAgent(
     system: UserInfo,
     conversationId: string,
     parentDetailId: string,
+    callerId: string,
     historyFrom: Date | undefined,
-): Promise<{ ok: true; agentId: string } | { ok: false; message: string }> {
-    const parentRes = await view.RunView<{ ID: string; Role: string | null; AgentID: string | null; __mj_CreatedAt?: string | Date | null }>({
+): Promise<{ ok: true; agentId: string | null } | { ok: false; message: string }> {
+    const parentRes = await view.RunView<{ ID: string; Role: string | null; AgentID: string | null; UserID?: string | null; __mj_CreatedAt?: string | Date | null }>({
         EntityName: DETAILS,
         ExtraFilter: `ID = '${parentDetailId}' AND ConversationID = '${conversationId}'`,
-        Fields: ['ID', 'Role', 'AgentID', '__mj_CreatedAt'],
+        Fields: ['ID', 'Role', 'AgentID', 'UserID', '__mj_CreatedAt'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -660,6 +678,10 @@ async function resolveParentReplyAgent(
         return { ok: true, agentId: parentAgentId };
     }
     if (parentRow.Role === 'User') {
+        const parentUserId = parseUuid(parentRow.UserID);
+        if (parentUserId && parentUserId.toLowerCase() === callerId.toLowerCase()) {
+            return { ok: true, agentId: null };
+        }
         return { ok: false, message: 'The message replies to a person and does not mention an agent.' };
     }
     return { ok: false, message: 'The message does not mention an agent.' };
