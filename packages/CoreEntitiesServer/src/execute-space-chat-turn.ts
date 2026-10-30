@@ -7,6 +7,7 @@ import {
 } from '@memberjunction/core';
 import {
     ConversationEngine,
+    ConversationWindowFields,
     MJConversationDetailEntity,
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
@@ -28,6 +29,15 @@ import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
+const SPEAKER_WINDOW_FIELDS = ['UserID', 'User', 'AgentID', 'Agent', 'ParentID'] as const;
+if (Array.isArray(ConversationWindowFields) && !Object.isFrozen(ConversationWindowFields)) {
+    const mutableFields = ConversationWindowFields as string[];
+    for (const field of SPEAKER_WINDOW_FIELDS) {
+        if (!mutableFields.includes(field)) {
+            mutableFields.push(field);
+        }
+    }
+}
 
 /** How a turn ended, told to whoever is watching it once its reply row is final. */
 export interface TurnOutcome {
@@ -498,11 +508,11 @@ async function runClaimedTurn(
                     metadata?: { rawContent?: string };
                 }
             > = ConversationEngine.AssembleContextWindow(windowRows, windowOptions);
-            const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
-                role: m.role,
-                content: m.content,
-                ...(m.metadata ? { metadata: m.metadata } : {}),
-            }));
+            const assembledMessages = ensureSpeakerAttributedMessages(
+                assembledWindow,
+                windowRows as ReadonlyArray<WindowRowWithSpeaker>,
+                speakerLabels,
+            );
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
@@ -720,5 +730,85 @@ async function hasAgentRepliedInConversation(
             return new Date(row.__mj_CreatedAt).getTime() >= historyFrom.getTime();
         }
         return true;
+    });
+}
+
+type WindowRowWithSpeaker = ReturnType<typeof ConversationEngine.LoadWindowRowsFresh> extends Promise<Array<infer R>>
+    ? R & {
+          UserID?: string | null;
+          User?: string | null;
+          AgentID?: string | null;
+          Agent?: string | null;
+          ParentID?: string | null;
+      }
+    : never;
+
+function resolveRowSpeakerLabel(
+    row: WindowRowWithSpeaker | undefined,
+    speakerLabels: ReadonlyMap<string, string>,
+): string | null {
+    if (!row) return null;
+    const role = (row.Role ?? '').trim().toLowerCase();
+    const isAssistant = role === 'ai' || role === 'assistant' || role === 'system';
+    const rawId = isAssistant ? row.AgentID : row.UserID;
+    const normalizedId = rawId ? (parseUuid(rawId) ?? rawId) : null;
+    if (normalizedId) {
+        for (const [k, v] of speakerLabels.entries()) {
+            if (k.toLowerCase() === normalizedId.toLowerCase() && v.trim()) {
+                return v.trim();
+            }
+        }
+    }
+    const nameField = isAssistant ? row.Agent : row.User;
+    if (nameField?.trim()) {
+        return nameField.trim();
+    }
+    return isAssistant ? 'Assistant' : 'User';
+}
+
+function ensureSpeakerAttributedMessages(
+    assembledWindow: ReadonlyArray<
+        ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
+            metadata?: { rawContent?: string };
+        }
+    >,
+    windowRows: ReadonlyArray<WindowRowWithSpeaker>,
+    speakerLabels: ReadonlyMap<string, string>,
+): ExecuteAgentParams['conversationMessages'] {
+    const rowsById = new Map<string, WindowRowWithSpeaker>();
+    for (const r of windowRows) {
+        rowsById.set((parseUuid(r.ID) ?? r.ID).toLowerCase(), r);
+    }
+    return assembledWindow.map((m) => {
+        const textContent = typeof m.content === 'string' ? m.content : '';
+        if (m.metadata?.rawContent !== undefined || m.metadata?.isConversationSummary === true || typeof m.content !== 'string') {
+            return {
+                role: m.role,
+                content: m.content,
+                ...(m.metadata ? { metadata: m.metadata } : {}),
+            };
+        }
+        const detailId = m.metadata?.conversationDetailId;
+        const row = detailId ? rowsById.get((parseUuid(detailId) ?? detailId).toLowerCase()) : undefined;
+        const speaker = resolveRowSpeakerLabel(row, speakerLabels);
+        if (!speaker) {
+            return {
+                role: m.role,
+                content: m.content,
+                ...(m.metadata ? { metadata: m.metadata } : {}),
+            };
+        }
+        const parentKey = row?.ParentID ? (parseUuid(row.ParentID) ?? row.ParentID).toLowerCase() : null;
+        const parentRow = parentKey ? rowsById.get(parentKey) : undefined;
+        const replyTo = resolveRowSpeakerLabel(parentRow, speakerLabels);
+        const prefix = replyTo ? `[${speaker} -> replying to ${replyTo}]: ` : `[${speaker}]: `;
+        return {
+            role: m.role,
+            content: `${prefix}${textContent}`,
+            metadata: {
+                ...(m.metadata ?? {}),
+                rawContent: textContent,
+            },
+        };
     });
 }
