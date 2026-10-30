@@ -6,7 +6,7 @@ import { type BaseEntity, CompositeKey, LogError, Metadata, RunView, type UserIn
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormResolverService } from '@memberjunction/ng-base-forms';
-import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJEmptyStateComponent, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJPageLayoutComponent, MJPageBodyComponent, MJButtonDirective, MJClickableDirective, MJViewToggleComponent, type ViewToggleOption } from '@memberjunction/ng-ui-components';
 import type { ResourceData, MJUserEntity } from '@memberjunction/core-entities';
 
 import { buildConversationEntries, chooseActiveConversation } from './logic/conversation-list.js';
@@ -23,7 +23,19 @@ import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
 import { settingsAccess, type SettingsAccess } from './logic/settings-access.js';
-import { countLabel, countText, invitationRows, taskRows, type HomeListKind, type HomeRowModel } from './logic/home-lists.js';
+import {
+    countLabel,
+    countText,
+    invitationRows,
+    needsYouCards,
+    pinRows,
+    spaceSignal,
+    taskRows,
+    type HomeListKind,
+    type HomeNeedsYouCardModel,
+    type HomeRowModel,
+    type HomeSpaceSignal,
+} from './logic/home-lists.js';
 import { NewSpaceDraft, SpaceDetails } from './logic/space-details.js';
 import { planDetailsView, type DetailsViewModel } from './logic/details-view.js';
 import { NewSpacePicks } from './logic/new-space-picks.js';
@@ -75,6 +87,9 @@ import {
     CollabSpaceLibraryComponent,
     CollabShareCheckDialogComponent,
     CollabAudiencePillComponent,
+    CollabAvatarStackComponent,
+    CollabTypeTileComponent,
+    CollabNeedsYouCardComponent,
     CollabUploadDialogComponent,
     CollabSpaceWorkComponent,
     CollabSpaceChatComponent,
@@ -139,7 +154,6 @@ import {
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
-import { pinRows } from './logic/home-lists.js';
 import {
     applyCollabPageToEntity,
     buildStarterPagesForSpace,
@@ -203,13 +217,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJButtonDirective,
         MJAlertComponent,
         MJClickableDirective,
-        MJEmptyStateComponent,
         MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
+        CollabAvatarStackComponent,
+        CollabTypeTileComponent,
+        CollabNeedsYouCardComponent,
         CollabUploadDialogComponent,
         CollabSpaceWorkComponent,
         CollabSpaceChatComponent,
@@ -277,181 +293,236 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         .collab-home-view {
             display: flex;
             flex-direction: column;
+            gap: 20px;
             height: 100%;
             overflow-y: auto;
             background: var(--mj-bg-surface-sunken);
-            padding: 24px;
+            padding: 20px 28px;
             box-sizing: border-box;
         }
-        .home-header {
-            background: var(--mj-bg-surface-card);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .home-greeting {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        .home-hero-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
-            color: var(--mj-text-inverse);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            flex-shrink: 0;
-            box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
-        }
-        .home-title {
-            margin: 0;
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--mj-text-primary);
-        }
-        .home-subtitle {
-            margin: 4px 0 0;
-            font-size: 13.5px;
-            color: var(--mj-text-secondary);
-        }
-        .home-quick-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 12px;
-        }
-        .stat-pill {
-            background: var(--mj-bg-surface-sunken);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 8px;
-            padding: 12px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .stat-pill:hover {
-            background: var(--mj-bg-surface-hover);
-            border-color: var(--mj-brand-primary);
-            transform: translateY(-1px);
-        }
-        .stat-pill.active {
-            border-color: var(--mj-brand-primary);
-            background: var(--mj-bg-surface-hover);
-        }
-        .home-list-wrap {
-            padding: 0 32px 8px;
-        }
-        .stat-val {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--mj-brand-primary);
-        }
-        .stat-lbl {
-            font-size: 12px;
-            color: var(--mj-text-secondary);
-            font-weight: 500;
-        }
-        .spaces-directory-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-        }
-        .space-directory-card {
-            background: var(--mj-bg-surface-card);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 10px;
-            padding: 18px;
-            cursor: pointer;
-            transition: all 0.15s ease;
+        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        .home-section {
             display: flex;
             flex-direction: column;
             gap: 10px;
-        }
-        .space-directory-card.closed { opacity: 0.7; }
-        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-        .space-directory-card:hover {
-            border-color: var(--mj-brand-primary);
-            box-shadow: var(--mj-shadow-md);
-            transform: translateY(-2px);
-        }
-        .card-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .space-icon-box {
-            width: 38px;
-            height: 38px;
-            border-radius: 8px;
-            background: var(--mj-brand-primary);
-            color: var(--mj-text-inverse);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-        }
-        .space-type-badge {
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 999px;
-            background: var(--mj-bg-surface-sunken);
-            color: var(--mj-text-secondary);
-        }
-        .space-name {
-            margin: 0;
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-        }
-        .space-desc {
-            margin: 0;
-            font-size: 12.5px;
-            color: var(--mj-text-secondary);
-            line-height: 1.4;
-            flex: 1;
-        }
-        .space-footer {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            border-top: 1px solid var(--mj-border-default);
-            padding-top: 8px;
-        }
-        .open-link {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--mj-brand-primary);
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
         }
         .section-title-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
+            gap: 12px;
         }
-        .section-title {
+        .section-title-group {
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 16px;
+            min-width: 0;
+        }
+        .section-title {
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
             font-weight: 700;
             color: var(--mj-text-primary);
         }
-        .section-badge {
+        .section-count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 7px;
+            border-radius: 999px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: var(--mj-brand-primary);
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        }
+        .section-count-badge.warn {
+            color: var(--mj-status-warning-text);
+            background: var(--mj-status-warning-bg);
+        }
+        .home-quiet-line {
+            margin: 0;
+            font-size: 13px;
+            color: var(--mj-text-secondary);
+            padding: 2px 0;
+        }
+        .home-inline-error {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--mj-status-error-text);
+        }
+        .home-needs-you-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .home-lists-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 16px;
+        }
+        .home-lists-row.has-pins {
+            grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        }
+        @media (max-width: 960px) {
+            .home-lists-row.has-pins {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+        .space-status-seg {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            padding: 2px;
+            border-radius: 8px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            margin-left: 4px;
+        }
+        .seg-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--mj-text-secondary);
+            cursor: pointer;
+        }
+        .seg-btn:hover {
+            color: var(--mj-text-primary);
+        }
+        .seg-btn.active {
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
+        }
+        .seg-count {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--mj-text-muted);
+        }
+        .seg-btn.active .seg-count {
+            color: var(--mj-brand-primary);
+        }
+        .recent-spaces-card {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 10px;
+            background: var(--mj-bg-surface);
+            overflow: hidden;
+        }
+        .recent-space-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto auto 14px;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-bottom: 1px solid var(--mj-border-subtle);
+            background: transparent;
+            font: inherit;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .recent-space-row:last-child {
+            border-bottom: none;
+        }
+        .recent-space-row:hover {
+            background: var(--mj-bg-surface-hover);
+        }
+        .recent-space-row:focus-visible {
+            outline: 2px solid var(--mj-brand-primary);
+            outline-offset: -2px;
+        }
+        .recent-space-row.closed {
+            opacity: 0.72;
+        }
+        .recent-space-main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .recent-space-name {
+            font-size: 13.5px;
+            font-weight: 650;
+            color: var(--mj-text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .recent-space-meta {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .recent-space-people {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            flex: none;
+        }
+        .recent-space-aud-div {
+            width: 1px;
+            height: 14px;
+            background: var(--mj-border-default);
+        }
+        .recent-space-signal {
+            display: inline-flex;
+            justify-content: flex-end;
+            min-width: 92px;
+            flex: none;
+        }
+        .signal-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 2px 8px;
+            white-space: nowrap;
+        }
+        .signal-pill.brand {
+            color: var(--mj-brand-primary);
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        }
+        .signal-pill.warn {
+            color: var(--mj-status-warning-text);
+            background: var(--mj-status-warning-bg);
+        }
+        .signal-pill.team {
+            color: var(--mj-text-secondary);
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+        }
+        .signal-pill.plain {
+            color: var(--mj-text-secondary);
+            background: var(--mj-bg-surface-sunken);
+        }
+        .signal-pill.muted {
+            color: var(--mj-text-muted);
+            background: var(--mj-bg-surface-sunken);
+        }
+        .recent-space-chev {
             font-size: 12px;
             color: var(--mj-text-muted);
+            justify-self: end;
         }
         .collab-inbox-view, .collab-tasks-view, .collab-files-view {
             display: flex;
@@ -555,16 +626,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         }
 
         .home-search-bar {
-            margin-bottom: 16px;
             position: relative;
+            width: 220px;
+            margin: 0;
         }
         .home-search-input {
             width: 100%;
-            padding: 10px 14px 10px 38px;
+            height: 32px;
+            padding: 0 10px 0 32px;
             border-radius: 8px;
             border: 1px solid var(--mj-border-default);
             background: var(--mj-bg-surface);
-            font-size: 13.5px;
+            font-size: 12.5px;
             color: var(--mj-text-primary);
             box-sizing: border-box;
             outline: none;
@@ -576,11 +649,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         }
         .home-search-icon {
             position: absolute;
-            left: 12px;
+            left: 10px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--mj-text-muted);
-            font-size: 14px;
+            font-size: 12.5px;
         }
 
         .collab-loading-state {
@@ -644,8 +717,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             max-width: 360px;
         }
         @media (prefers-reduced-motion: reduce) {
-            .stat-pill,
-            .space-directory-card,
+            .recent-space-row,
             .home-search-input {
                 transition: none;
             }
@@ -693,10 +765,10 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [ParentSpaceId]="activeParentSpaceId"
                             [ParentSpaceName]="activeParentSpaceName"
                             [PagesCount]="spacePages.length"
-                            [LibraryCount]="libraryTotalCount"
-                            [TaskCount]="taskCount"
+                            [LibraryCount]="railMode === 'home' ? homeSharedFiles : libraryTotalCount"
+                            [TaskCount]="railMode === 'home' ? homeOpenTasks : taskCount"
                             [MemberCount]="headerTotalPeople"
-                            [InboxCount]="0"
+                            [InboxCount]="homeAwaitingApproval"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
                             (SubSpaceCreateRequested)="openNewSpaceDialog(activeSpaceId)"
@@ -714,118 +786,169 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                         <main class="main">
                             @switch (activeView) {
                                 @case ('home') {
-                                    <div class="collab-home-view">
-                                        <header class="home-header">
-                                            <div class="home-greeting">
-                                                <div class="home-hero-icon">
-                                                    <i class="fa-solid fa-shapes"></i>
-                                                </div>
-                                                <div class="home-hero-text">
-                                                    <h1 class="home-title">Welcome to Collaboration</h1>
-                                                    <p class="home-subtitle">Unified spaces, documents, tasks, and communications across your teams and collaborators.</p>
-                                                </div>
-                                            </div>
-                                            <div class="home-quick-stats">
-                                                <div class="stat-pill" [mjClickable]="homeCountLabel('spaces')" (click)="onHomeSpacesRequested()">
-                                                    <span class="stat-val">{{ activeSpacesCount }}</span>
-                                                    <span class="stat-lbl">Active Spaces</span>
-                                                </div>
-                                                <div class="stat-pill" [class.active]="homeList === 'tasks'" [mjClickable]="homeCountLabel('tasks')" (click)="onHomeListRequested('tasks')">
-                                                    <span class="stat-val">{{ homeCountValue('tasks') }}</span>
-                                                    <span class="stat-lbl">Open Tasks</span>
-                                                </div>
-                                                <div class="stat-pill" [class.active]="homeList === 'approvals'" [mjClickable]="homeCountLabel('approvals')" (click)="onHomeListRequested('approvals')">
-                                                    <span class="stat-val">{{ homeCountValue('approvals') }}</span>
-                                                    <span class="stat-lbl">Invitations Waiting</span>
-                                                </div>
-                                                <div class="stat-pill" [mjClickable]="homeCountLabel('files')" (click)="onNavSelectRequested('files')">
-                                                    <span class="stat-val">{{ homeCountValue('files') }}</span>
-                                                    <span class="stat-lbl">Shared Files</span>
-                                                </div>
-                                                <div class="stat-pill" [class.active]="homeList === 'pins'" [mjClickable]="homePinsLabel" (click)="onHomeListRequested('pins')">
-                                                    <span class="stat-val">{{ homePins.length }}</span>
-                                                    <span class="stat-lbl">My Pins</span>
+                                    <div class="collab-home-view" data-testid="collab-home-view">
+                                        <section class="home-section" data-testid="home-needs-you" aria-labelledby="home-needs-you-heading">
+                                            <div class="section-title-row">
+                                                <div class="section-title-group">
+                                                    <h2 class="section-title" id="home-needs-you-heading">Needs you</h2>
+                                                    @if (homeAwaitingApproval > 0 || homeCountsFailed) {
+                                                        <span class="section-count-badge warn" [attr.aria-label]="homeCountLabel('approvals')">{{ homeCountValue('approvals') }}</span>
+                                                    }
                                                 </div>
                                             </div>
-                                        </header>
+                                            @if (isLoadingHomeList && homeNeedsYouCards.length === 0) {
+                                                <p class="home-quiet-line" role="status">Reading…</p>
+                                            } @else if (homeListError && homeNeedsYouCards.length === 0) {
+                                                <div class="home-inline-error" role="alert">
+                                                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                                                    <span>{{ homeListError }}</span>
+                                                    <button type="button" mjButton Variant="secondary" Size="sm" (click)="loadHomeLists()">Try again</button>
+                                                </div>
+                                            } @else if (homeNeedsYouCards.length === 0) {
+                                                <p class="home-quiet-line" data-testid="home-needs-you-empty" role="status">Nothing needs your attention right now.</p>
+                                            } @else {
+                                                <div class="home-needs-you-list">
+                                                    @for (card of homeNeedsYouCards; track card.id) {
+                                                        <mjc-needs-you-card
+                                                            [Item]="card"
+                                                            [Variant]="card.variant"
+                                                            [IconClass]="card.iconClass || 'fa-solid fa-user-plus'"
+                                                            [IsSpark]="!!card.isSpark"
+                                                            [Title]="card.title"
+                                                            [Subtitle]="card.subtitle"
+                                                            [ActionLabel]="card.actionLabel"
+                                                            (ActionRequested)="onHomeInvitationSelected(card.id)"
+                                                        />
+                                                    }
+                                                </div>
+                                            }
+                                        </section>
 
-                                        @if (homeList) {
-                                            <div class="home-list-wrap">
+                                        <div class="home-lists-row" [class.has-pins]="homePins.length > 0 || !!homePinsError">
+                                            <mjc-home-list
+                                                Id="coming-up"
+                                                Title="Coming up"
+                                                [Badge]="homeCountValue('tasks')"
+                                                [BadgeLabel]="homeCountLabel('tasks')"
+                                                [ShowClose]="false"
+                                                [Rows]="homeTaskRows"
+                                                [TotalCount]="homeOpenTasks"
+                                                [IsLoading]="isLoadingHomeList"
+                                                [ErrorMessage]="homeListError"
+                                                EmptyMessage="No open tasks in your spaces."
+                                                (RowSelected)="onHomeTaskSelected($event)"
+                                                (RetryRequested)="loadHomeLists()"
+                                            />
+                                            @if (homePins.length > 0 || homePinsError) {
                                                 <mjc-home-list
-                                                    [Id]="homeList"
-                                                    [Title]="homeListTitle"
-                                                    [Rows]="homeListRows"
-                                                    [TotalCount]="homeListTotal"
-                                                    [IsLoading]="isLoadingHomeList"
-                                                    [ErrorMessage]="homeListError"
-                                                    [EmptyMessage]="homeListEmpty"
-                                                    (RowSelected)="onHomeRowSelected($event)"
-                                                    (RetryRequested)="loadHomeLists()"
-                                                    (CloseRequested)="closeHomeList()"
+                                                    Id="pins"
+                                                    Title="Pinned"
+                                                    [Badge]="'' + homePins.length"
+                                                    [BadgeLabel]="homePinsLabel"
+                                                    [ShowClose]="false"
+                                                    [Rows]="homePinRows"
+                                                    [TotalCount]="homePins.length"
+                                                    [IsLoading]="isLoadingHomePins"
+                                                    [ErrorMessage]="homePinsError"
+                                                    EmptyMessage="Nothing pinned yet."
+                                                    (RowSelected)="onHomePinSelected($event)"
+                                                    (RetryRequested)="loadHomePins()"
                                                 />
-                                            </div>
-                                        }
+                                            }
+                                        </div>
 
-                                        <div class="home-body">
-                                            <section class="home-section">
-                                                <div class="section-title-row">
-                                                    <div class="section-title">
-                                                        <i class="fa-solid fa-layer-group"></i>
-                                                        <span>All spaces</span>
+                                        <section class="home-section" data-testid="home-recent-spaces" aria-labelledby="home-recent-spaces-heading">
+                                            <div class="section-title-row">
+                                                <div class="section-title-group">
+                                                    <h2 class="section-title" id="home-recent-spaces-heading">Your recent spaces</h2>
+                                                    <div class="space-status-seg" role="group" aria-label="Filter spaces by status">
+                                                        <button
+                                                            type="button"
+                                                            class="seg-btn"
+                                                            [class.active]="homeSpacesFilter === 'active'"
+                                                            [attr.aria-pressed]="homeSpacesFilter === 'active'"
+                                                            (click)="setHomeSpacesFilter('active')">
+                                                            <span>Active</span>
+                                                            <span class="seg-count">{{ activeSpacesCount }}</span>
+                                                        </button>
+                                                        @if (closedSpacesCount > 0) {
+                                                            <button
+                                                                type="button"
+                                                                class="seg-btn"
+                                                                [class.active]="homeSpacesFilter === 'closed'"
+                                                                [attr.aria-pressed]="homeSpacesFilter === 'closed'"
+                                                                (click)="setHomeSpacesFilter('closed')">
+                                                                <span>Closed</span>
+                                                                <span class="seg-count">{{ closedSpacesCount }}</span>
+                                                            </button>
+                                                        }
                                                     </div>
-                                                    <span class="section-badge">{{ filteredSpaces.length }} spaces</span>
                                                 </div>
                                                 <div class="home-search-bar">
-                                                    <i class="fa-solid fa-magnifying-glass home-search-icon"></i>
+                                                    <i class="fa-solid fa-magnifying-glass home-search-icon" aria-hidden="true"></i>
                                                     <input
                                                         type="text"
                                                         class="home-search-input"
                                                         [(ngModel)]="spaceSearchQuery"
-                                                        placeholder="Search spaces by name, description, or type..."
+                                                        aria-label="Filter spaces"
+                                                        placeholder="Filter spaces…"
                                                     />
                                                 </div>
-                                                @if (filteredSpaces.length === 0) {
-                                                    @if (spaceSearchQuery) {
-                                                        <mj-empty-state Icon="fa-solid fa-magnifying-glass" Title="No spaces match" Message="Try another search."></mj-empty-state>
-                                                    } @else {
-                                                        <mj-empty-state Icon="fa-solid fa-compass" Title="No spaces yet" Message="Spaces you belong to will appear here."></mj-empty-state>
-                                                    }
+                                            </div>
+                                            @if (filteredSpaces.length === 0) {
+                                                @if (spaceSearchQuery) {
+                                                    <p class="home-quiet-line" role="status">No spaces match "{{ spaceSearchQuery }}".</p>
+                                                } @else {
+                                                    <p class="home-quiet-line" role="status">No spaces to show.</p>
                                                 }
-                                                <div class="spaces-directory-grid">
+                                            } @else {
+                                                <div class="recent-spaces-card">
                                                     @for (space of filteredSpaces; track space.id) {
-                                                        <div class="space-directory-card" [class.closed]="space.isClosed" [mjClickable]="space.name" (click)="onSpaceOpenRequested(space.id)">
-                                                            <div class="card-top">
-                                                                <div class="space-icon-box" [style.background-color]="space.color || null">
-                                                                    <i [class]="space.iconClass"></i>
-                                                                </div>
-                                                                <div class="space-type-badge">
-                                                                    @if (space.parentName) {
-                                                                        <span>{{ space.parentName }} / </span>
-                                                                    }
-                                                                    {{ space.type }}
-                                                                </div>
-                                                            </div>
-                                                            <h3 class="space-name">
-                                                                {{ space.name }}
-                                                                @if (space.isClosed) {
-                                                                    <i class="fa-solid fa-lock" title="Closed" aria-hidden="true"></i>
-                                                                    <span class="visually-hidden">(closed)</span>
-                                                                }
-                                                            </h3>
-                                                            @if (space.description) {
-                                                                <p class="space-desc">{{ space.description }}</p>
-                                                            }
-                                                            <div class="space-footer">
-                                                                <span class="open-link">
-                                                                    <span>Open Space</span>
-                                                                    <i class="fa-solid fa-arrow-right"></i>
+                                                        <button
+                                                            type="button"
+                                                            class="recent-space-row"
+                                                            data-testid="recent-space-row"
+                                                            [class.closed]="space.isClosed"
+                                                            (click)="onSpaceOpenRequested(space.id)">
+                                                            <mjc-type-tile
+                                                                [IconClass]="space.iconClass"
+                                                                [Color]="space.color"
+                                                                [IsClosed]="space.isClosed"
+                                                                Size="md">
+                                                            </mjc-type-tile>
+                                                            <span class="recent-space-main">
+                                                                <span class="recent-space-name">{{ space.name }}</span>
+                                                                <span class="recent-space-meta">
+                                                                    {{ space.type }}@if (space.parentName) { · in {{ space.parentName }} }@if (space.description) { · {{ space.description }} }
                                                                 </span>
-                                                            </div>
-                                                        </div>
+                                                            </span>
+                                                            <span class="recent-space-people">
+                                                                @if (space.staffAvatars.length > 0) {
+                                                                    <mjc-avatar-stack [Avatars]="space.staffAvatars" Size="xs"></mjc-avatar-stack>
+                                                                }
+                                                                @if (space.staffAvatars.length > 0 && space.outsideAvatars.length > 0) {
+                                                                    <span class="recent-space-aud-div" aria-hidden="true"></span>
+                                                                }
+                                                                @if (space.outsideAvatars.length > 0) {
+                                                                    <mjc-avatar-stack [Avatars]="space.outsideAvatars" Size="xs"></mjc-avatar-stack>
+                                                                }
+                                                            </span>
+                                                            <span class="recent-space-signal">
+                                                                @if (space.signal; as sig) {
+                                                                    <span class="signal-pill" [class]="sig.variant">
+                                                                        @if (sig.iconClass) {
+                                                                            <i [class]="sig.iconClass" aria-hidden="true"></i>
+                                                                        }
+                                                                        <span>{{ sig.label }}</span>
+                                                                    </span>
+                                                                }
+                                                            </span>
+                                                            <i class="fa-solid fa-chevron-right recent-space-chev" aria-hidden="true"></i>
+                                                        </button>
                                                     }
                                                 </div>
-                                            </section>
-                                        </div>
+                                            }
+                                        </section>
                                     </div>
                                 }
 
@@ -2015,6 +2138,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return this.rawSpaces.filter(s => !s.ClosedAt).length;
     }
 
+    public get closedSpacesCount(): number {
+        return this.rawSpaces.filter(s => !!s.ClosedAt).length;
+    }
+
+    public homeSpacesFilter: 'active' | 'closed' = 'active';
+    public homeSpaceAvatarsBySpaceId = new Map<string, { staffAvatars: AvatarItem[]; outsideAvatars: AvatarItem[] }>();
+
+    public setHomeSpacesFilter(filter: 'active' | 'closed'): void {
+        this.homeSpacesFilter = filter;
+        this.RefreshView();
+    }
+
     public librarySharedCount = 0;
     public libraryTeamCount = 0;
 
@@ -2054,6 +2189,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** The latest Home list read; a read that was superseded (the other list, or a reload) does not clear the flag or set the rows. */
     private homeListLoadToken = 0;
     public homeListError = '';
+    public isLoadingHomePins = false;
+    private homePinsLoadToken = 0;
+    public homePinsError = '';
 
     private homeCountOf(which: 'tasks' | 'approvals' | 'files' | 'spaces'): { count: number; singular: string; plural: string } {
         switch (which) {
@@ -2095,14 +2233,20 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return `${this.homePins.length} ${this.homePins.length === 1 ? 'pin' : 'pins'}`;
     }
 
-    /** The rows of the list that is open, worked out when the list is opened or read and not on every change-detection pass. */
+    /** The rows of Home's inline sections, worked out when read and not on every change-detection pass. */
     public homeListRows: HomeListRow[] = [];
+    public homeNeedsYouCards: HomeNeedsYouCardModel[] = [];
+    public homeTaskRows: HomeListRow[] = [];
+    public homePinRows: HomeListRow[] = [];
 
     private refreshHomeListRows(): void {
         const date = (iso: string | null | undefined): string => (iso ? formatDateLocale(iso) : '');
+        this.homeNeedsYouCards = needsYouCards(this.homeInvitations, date);
+        this.homeTaskRows = taskRows(this.homeOpenTaskList, date);
+        this.homePinRows = pinRows(this.homePins);
         const rows: HomeRowModel[] = this.homeList === 'pins'
-            ? pinRows(this.homePins)
-            : this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : taskRows(this.homeOpenTaskList, date);
+            ? this.homePinRows
+            : this.homeList === 'approvals' ? invitationRows(this.homeInvitations, date) : this.homeTaskRows;
         this.homeListRows = rows;
     }
 
@@ -2152,19 +2296,31 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    public onHomeInvitationSelected(seatId: string): void {
+        const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, seatId));
+        if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
+    }
+
+    public onHomeTaskSelected(taskId: string): void {
+        const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, taskId));
+        if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
+    }
+
+    public onHomePinSelected(pinId: string): void {
+        const pin = this.homePins.find((p) => UUIDsEqual(p.id, pinId));
+        if (pin) this.openPin(pin);
+    }
+
     /** A row of a list opens its space on the tab where the thing is handled: People for an invitation, Work for a task. */
     public onHomeRowSelected(key: string): void {
         if (this.homeList === 'pins') {
-            const pin = this.homePins.find((p) => UUIDsEqual(p.id, key));
-            if (pin) this.openPin(pin);
+            this.onHomePinSelected(key);
             return;
         }
         if (this.homeList === 'approvals') {
-            const invitation = this.homeInvitations.find((i) => UUIDsEqual(i.SeatID, key));
-            if (invitation) this.openSpaceOnTab(invitation.SpaceID, 'People');
+            this.onHomeInvitationSelected(key);
         } else {
-            const task = this.homeOpenTaskList.find((t) => UUIDsEqual(t.TaskID, key));
-            if (task) this.openSpaceOnTab(task.SpaceID, 'Work');
+            this.onHomeTaskSelected(key);
         }
     }
 
@@ -2399,18 +2555,34 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         return found ? found.name : '';
     }
 
-    public get filteredSpaces(): { id: string; name: string; description: string; type: string; iconClass: string; color: string; parentName?: string; isClosed: boolean }[] {
+    public get filteredSpaces(): {
+        id: string;
+        name: string;
+        description: string;
+        type: string;
+        iconClass: string;
+        color: string;
+        parentName?: string;
+        isClosed: boolean;
+        staffAvatars: AvatarItem[];
+        outsideAvatars: AvatarItem[];
+        signal: HomeSpaceSignal | null;
+    }[] {
         const query = this.spaceSearchQuery.trim().toLowerCase();
         const spaceMap = new Map<string, RawSpaceRecord>();
         this.rawSpaces.forEach(s => spaceMap.set(s.ID, s));
 
         return this.rawSpaces
             .filter(s => {
-                if (!query) return !s.ParentID;
+                const isClosed = !!s.ClosedAt;
+                if (this.homeSpacesFilter === 'closed' ? !isClosed : isClosed) return false;
+                if (!query) return true;
+                const parentName = s.ParentID ? (spaceMap.get(s.ParentID)?.Name ?? '') : '';
                 const matchesName = s.Name.toLowerCase().includes(query);
                 const matchesDesc = (s.Description || '').toLowerCase().includes(query);
                 const matchesType = (s.SpaceType || '').toLowerCase().includes(query);
-                return matchesName || matchesDesc || matchesType;
+                const matchesParent = parentName.toLowerCase().includes(query);
+                return matchesName || matchesDesc || matchesType || matchesParent;
             })
             .map(s => {
                 const t = this.spaceTypeMap.get(s.SpaceTypeID);
@@ -2419,15 +2591,35 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 if (!typeName) {
                     LogError(`Missing space type for space ID: ${s.ID}`);
                 }
+                const avatars = this.homeSpaceAvatarsBySpaceId.get(s.ID.toLowerCase()) ?? {
+                    staffAvatars: [],
+                    outsideAvatars: [],
+                };
+                const invitationsWaiting = this.homeInvitations.filter(inv => UUIDsEqual(inv.SpaceID, s.ID)).length;
+                const openTasks = this.homeOpenTaskList.filter(task => UUIDsEqual(task.SpaceID, s.ID)).length;
+                const pinsCount = this.homePins.filter(pin => UUIDsEqual(pin.spaceId, s.ID)).length;
+                const childCount = this.rawSpaces.filter(child => !child.ClosedAt && child.ParentID && UUIDsEqual(child.ParentID, s.ID)).length;
+                const isClosed = !!s.ClosedAt;
+                const isSealed = s.InheritsMembership === false && !!s.ParentID;
                 return {
                     id: s.ID,
-                    isClosed: !!s.ClosedAt,
+                    isClosed,
                     name: s.Name,
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
                     iconClass: s.IconClass || t?.icon || 'fa-solid fa-compass',
                     color: s.Color || t?.color || '',
                     parentName: parent?.Name,
+                    staffAvatars: avatars.staffAvatars,
+                    outsideAvatars: avatars.outsideAvatars,
+                    signal: spaceSignal({
+                        isClosed,
+                        isSealed,
+                        invitationsWaiting,
+                        openTasks,
+                        pinsCount,
+                        childCount,
+                    }),
                 };
             });
     }
@@ -2572,8 +2764,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     this.rawSpaces = spacesRes.Results;
                     this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
                     void this.loadHomeCounts();
-                    // The pins count is the viewer's own list, read here so Home shows it before the list is opened
+                    void this.loadHomeLists();
                     void this.loadHomePins();
+                    void this.loadHomeSpaceAvatars();
 
                     const params = this._pendingQueryParams ?? this.GetQueryParams();
                     this._pendingQueryParams = null;
@@ -3512,9 +3705,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     /** *My pins* on Home: the viewer's pins across the spaces they reach, each named by its space. */
     public async loadHomePins(): Promise<void> {
         if (!this.currentUser) return;
-        const token = ++this.homeListLoadToken;
-        this.isLoadingHomeList = true;
-        this.homeListError = '';
+        const token = ++this.homePinsLoadToken;
+        this.isLoadingHomePins = true;
+        this.homePinsError = '';
         this.RefreshView();
         try {
             const res = await new RunView(this.RunViewToUse).RunView<PinRow>({
@@ -3525,7 +3718,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 ResultType: 'simple',
                 MaxRows: 200,
             });
-            if (token !== this.homeListLoadToken) return;
+            if (token !== this.homePinsLoadToken) return;
             if (!res?.Success) throw new Error(res?.ErrorMessage ?? 'unknown error');
             const noteIds = (res.Results ?? []).filter((p) => p.Kind === 'Record' && UUIDsEqual(p.TargetEntityID, notesEntityId())).map((p) => bareRecordId(p.TargetRecordID ?? ''));
             const noteTitles = new Map<string, string>();
@@ -3563,7 +3756,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     itemNames.set(fileId, { title: names.get(fileId) ?? 'A file', itemId: item.ID });
                 }
             }
-            if (token !== this.homeListLoadToken) return;
+            if (token !== this.homePinsLoadToken) return;
             this.homePins = (res.Results ?? []).map((pin): PinModel => {
                 const space = this.rawSpaces.find((s) => UUIDsEqual(s.ID, pin.SpaceID));
                 const base = { id: pin.ID, spaceId: pin.SpaceID, spaceName: space?.Name ?? 'A space' };
@@ -3575,14 +3768,103 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             });
             this.refreshHomeListRows();
         } catch (err) {
-            if (token !== this.homeListLoadToken) return;
-            this.homeListError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
-            this.logOnce('home-pins', this.homeListError);
+            if (token !== this.homePinsLoadToken) return;
+            this.homePinsError = `Your pins could not be read: ${err instanceof Error ? err.message : String(err)}`;
+            this.logOnce('home-pins', this.homePinsError);
         } finally {
-            if (token === this.homeListLoadToken) {
-                this.isLoadingHomeList = false;
+            if (token === this.homePinsLoadToken) {
+                this.isLoadingHomePins = false;
                 this.RefreshView();
             }
+        }
+    }
+
+    /** Batch-loads active space seats and user profiles so Home's recent spaces list renders staff and outside avatar stacks. */
+    private async loadHomeSpaceAvatars(): Promise<void> {
+        if (this.rawSpaces.length === 0) {
+            this.homeSpaceAvatarsBySpaceId = new Map();
+            return;
+        }
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const spaceIds = this.rawSpaces.map((sp) => `'${sp.ID}'`).join(',');
+            const membersRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                UserID: string;
+                User?: string | null;
+                Band: SpaceBand;
+                Status: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Members',
+                ExtraFilter: `Status = 'Active' AND SpaceID IN (${spaceIds})`,
+                ResultType: 'simple',
+                MaxRows: 1000,
+            });
+            if (!membersRes?.Success || !membersRes.Results) return;
+            const allMembers = membersRes.Results;
+            const userIds = [...new Set(allMembers.map((m) => m.UserID).filter(Boolean))];
+            const userProfileMap = new Map<string, { name?: string; avatarUrl?: string; iconClass?: string }>();
+            if (userIds.length > 0) {
+                const userRes = await rv.RunView<{
+                    ID: string;
+                    Name?: string | null;
+                    UserImageURL?: string | null;
+                    UserImageIconClass?: string | null;
+                }>({
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: `ID IN (${userIds.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID', 'Name', 'UserImageURL', 'UserImageIconClass'],
+                    ResultType: 'simple',
+                    MaxRows: userIds.length,
+                });
+                if (userRes?.Success && userRes.Results) {
+                    for (const u of userRes.Results) {
+                        userProfileMap.set((u.ID ?? '').toLowerCase(), {
+                            name: u.Name || undefined,
+                            avatarUrl: u.UserImageURL || undefined,
+                            iconClass: u.UserImageIconClass || undefined,
+                        });
+                    }
+                }
+            }
+            const spaceRows = this.rawSpaces.map((sp) => ({
+                ID: sp.ID,
+                Name: sp.Name,
+                ParentID: sp.ParentID ?? null,
+                InheritsMembership: !!sp.InheritsMembership,
+                ClosedAt: sp.ClosedAt,
+                Status: CollaborationEngineBase.Instance.StatusReachForSpace(sp),
+            }));
+            const nextMap = new Map<string, { staffAvatars: AvatarItem[]; outsideAvatars: AvatarItem[] }>();
+            for (const sp of this.rawSpaces) {
+                const chain = accessChain(sp.ID, spaceRows);
+                if (chain.length === 0) chain.push({ id: sp.ID, name: sp.Name });
+                const reached = nearestSeats(allMembers, chain);
+                const seatInputs = reached.map(({ row: m }) => {
+                    const profile = userProfileMap.get((m.UserID ?? '').toLowerCase());
+                    const name = m.User || profile?.name || 'Member';
+                    const initials = name.split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '??';
+                    return {
+                        id: m.ID,
+                        name,
+                        initials,
+                        band: m.Band || 'Team',
+                        status: m.Status || 'Active',
+                        avatarUrl: profile?.avatarUrl,
+                        iconClass: profile?.iconClass,
+                    };
+                });
+                const summary = summarizeSeats(seatInputs);
+                nextMap.set(sp.ID.toLowerCase(), {
+                    staffAvatars: summary.staffAvatars,
+                    outsideAvatars: summary.outsideAvatars,
+                });
+            }
+            this.homeSpaceAvatarsBySpaceId = nextMap;
+            this.RefreshView();
+        } catch (err) {
+            this.logOnce('home-space-avatars', `Home space avatars could not be read: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 

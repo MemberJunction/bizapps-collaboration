@@ -899,7 +899,7 @@ packages/Angular build: Done
    - Added `MJ_BizApps_Collaboration: Space Pages` permissions for `UI` and `Space Participant` (`C7F03B5D-7E84-4A9C-AD12-3B4A5F6E7D8C`) in `metadata/entities/.ui-role-permissions.json` and `metadata/entity-permissions/.entity-permissions.json`.
    - Validated with `pnpm exec mj sync validate --dir=metadata` (`0 errors`) and synced to the local database.
 5. **Client (`packages/Angular`):**
-   - Created `packages/Angular/src/lib/logic/space-pages.ts` and `packages/Angular/src/lib/logic/space-pages.test.ts` mapping `mjBizAppsCollaborationSpacePageEntity` rows to `CollabPageModel` (`spacePageRowToModel`, `applyModelToSpacePageEntity`, `buildPagesForSpace`), and deleted `packages/Angular/src/lib/logic/space-pages-storage.ts` and `packages/Angular/src/lib/logic/space-pages-storage.test.ts`.
+   - Created `packages/Angular/src/lib/logic/space-pages.ts` and `packages/Angular/src/lib/logic/space-pages.test.ts` mapping `mjBizAppsCollaborationSpacePageEntity` rows to `CollabPageModel` (`mapSpacePageRowToModel`, `applyCollabPageToEntity`, `buildStarterPagesForSpace`, `mergeSpacePagesWithDefaults`), and deleted `packages/Angular/src/lib/logic/space-pages-storage.ts` and `packages/Angular/src/lib/logic/space-pages-storage.test.ts`.
    - Updated `packages/Angular/src/lib/collaboration-section.component.ts`:
      - `canCustomizePages` now delegates to `pageEditVerdict(...)` from `@mj-biz-apps/collaboration-core`.
      - `loadSpaceNotes` no longer filters `isCollabPageNoteBody`.
@@ -951,7 +951,7 @@ packages/Angular build: Done
      - Every caller is refused in a closed space.
      - An outside participant (`casey-id`, `canSeeTeamBand: false`) is refused when attempting to write a `Team` page, and the `Collaboration: Visible Pages` RLS filter only exposes `Band = N'Shared'` to seats with `CanSeeTeamBand = 0`.
 3. **In `packages/Angular/src/lib/logic/space-pages.test.ts`:**
-   - Replaced `space-pages-storage.test.ts` with `space-pages.test.ts`, testing `spacePageRowToModel`, `applyModelToSpacePageEntity`, and `buildPagesForSpace` against `SpacePageRow` entities instead of `SpaceNote` JSON bodies.
+   - Replaced `space-pages-storage.test.ts` with `space-pages.test.ts`, testing `mapSpacePageRowToModel`, `applyCollabPageToEntity`, `buildStarterPagesForSpace`, and `mergeSpacePagesWithDefaults` against `SpacePageRow` entities instead of `SpaceNote` JSON bodies.
 
 ### Gate outputs
 
@@ -1621,3 +1621,203 @@ Integration: 5 passed, 0 failed
 - `plans/space-focused-ux/shots/step-m/chat-mention-light.png`
 - `plans/space-focused-ux/shots/step-m/chat-thread-reply-light.png`
 - `plans/space-focused-ux/shots/step-m/chat-unmentioned-followup-light.png`
+
+---
+
+## Round 4
+
+### 1. Round 3 Review Fixes (`R3-1` to `R3-4`, committed in `4827c06`)
+
+1. **`R3-1` — Thread avatar map reach-in removed (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - Removed the private reach-in cast `(this.chatArea as { userAvatarMap?: ... })` from `conversationParticipantsList` and `getSpeakerAvatarUrl` (`grep -c -i 'userAvatarMap' packages/AngularWidgets/src/lib/space-chat.component.ts` returns `0`).
+   - `conversationParticipantsList`, `getThreadParticipants`, and `getSpeakerAvatarUrl` now resolve member photos (`avatarUrl`), `iconClass`, `colorClass`, and `isOutside` directly from `this.SpaceMembers` via `getMemberForUser(userId, name)` (which `collaboration-section.component.ts` populates from `MJ: Users` `UserImageURL` and `UserImageIconClass` in `loadSpaceMembers`).
+   - Added a render test in `packages/AngularWidgets/src/lib/render.test.ts` verifying that a `SpaceMembers` entry with `avatarUrl: 'https://example.com/colin-photo.jpg'` renders `<img class="av-img">` inside `<mjc-avatar>` in both the collapsed thread bar and the expanded thread drawer, and confirmed in `plans/space-focused-ux/shots/round-4/chat-thread-open-light.png` that Colin Brockman's photo renders in the parent message, the thread bar, the thread drawer, and the space header audience pill.
+2. **`R3-2` — `activeAgentRoute` cleared at turn end (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - `onAgentTurnCompleted()` and `clearAgentTurnSafetyTimer()` now reset `this.activeAgentRoute = null` alongside `this.isAgentWorking = false`, preventing a previous turn's route badge from sticking into a subsequent turn.
+   - Asserted `expect(fixture.componentInstance.activeAgentRoute).toBeNull()` after `AfterAgentTurn.emit(...)` in `packages/AngularWidgets/src/lib/render.test.ts`.
+3. **`R3-3` — People popover uses `mj-menu` (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - Replaced the hand-rolled `isParticipantsPopoverOpen` state, `@HostListener('document:keydown.escape')`, and `@HostListener('document:mousedown')` with `[mjMenuTriggerFor]="participantsMenu"` on the header's people trigger button and `<mj-menu #participantsMenu>` containing `<div class="participants-menu-header">People in this conversation</div>` and `<mj-menu-item>` rows for each participant.
+   - Removed `HostListener` from `@angular/core` imports in `packages/AngularWidgets/src/lib/space-chat.component.ts`.
+4. **`R3-4` — Accuracy of `plans/space-focused-ux/ui-polish-notes.md`:**
+   - Fixed the 5 drifted file/identifier citations in earlier notes (`packages/MJCoreEntitiesServer/src/custom/MJConversationDetailEntityServer.server.ts`, `packages/Angular/Generic/conversations/src/lib/components/message/message-item.component.ts`, `packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts`, `mapSpacePageRowToModel` / `applyCollabPageToEntity` / `buildStarterPagesForSpace` / `mergeSpacePagesWithDefaults` in `packages/Angular/src/lib/logic/space-pages.ts`, and `getMemberForUser` in `packages/AngularWidgets/src/lib/space-chat.component.ts`).
+
+---
+
+### 2. Round 4 — Home (`docs/ux/README.md` Frame 01)
+
+- **Removed the welcome hero and four Title Case stat tiles (`packages/Angular/src/lib/collaboration-section.component.ts`):**
+  - Removed the `Collaboration Spaces` hero banner and the 4-tile `stats-grid` (`Active Spaces`, `Shared Files`, `Open Tasks`, `Awaiting Approval`) from Home.
+  - Bound `[InboxCount]="homeAwaitingApproval"`, `[TaskCount]="railMode === 'home' ? homeOpenTasks : taskCount"`, and `[LibraryCount]="railMode === 'home' ? homeSharedFiles : libraryTotalCount"` on `<mjc-space-rail>`, and added the `LibraryCount` badge to the `Recent files` row in `Mode === 'home'` in `packages/AngularWidgets/src/lib/space-rail.component.ts`.
+- **Three sections on Home (`packages/Angular/src/lib/collaboration-section.component.ts`, `packages/Angular/src/lib/logic/home-lists.ts`, `packages/AngularWidgets/src/lib/home-list.component.ts`):**
+  1. **Needs you** (`[data-testid="home-needs-you"]`):
+     - Heading with inline count badge (`homeCountValue('approvals')`).
+     - Renders `<mjc-needs-you-card>` rows mapped by `needsYouCards(invitations, formatDate)` in `packages/Angular/src/lib/logic/home-lists.ts`, with space name and invitation date in the subtitle and `Review on People` as the action button.
+     - When empty, renders a single quiet line (`<p class="home-quiet-line" data-testid="home-needs-you-empty" role="status">Nothing needs your attention right now.</p>`) instead of a dashed empty card.
+  2. **Coming up** and **Pinned** (`packages/AngularWidgets/src/lib/home-list.component.ts`):
+     - Added `@Input() Badge = ''`, `@Input() BadgeLabel = ''`, and `@Input() ShowClose = true` to `CollabHomeListComponent` (`<mjc-home-list>`), and tightened `.hl-rows` `max-height` to `220px`.
+     - Mounted `<mjc-home-list Id="coming-up" Title="Coming up" [Badge]="homeCountValue('tasks')" [ShowClose]="false" ...>` inline on Home, and `<mjc-home-list Id="pins" Title="Pinned" ... [ShowClose]="false">` beside it in `.home-split-grid` when pins exist.
+     - Separated `homePinsLoadToken`, `isLoadingHomePins`, and `homePinsError` from `homeListLoadToken` so `loadHomeLists()` and `loadHomePins()` run concurrently during `loadRealData()` without cancelling each other.
+  3. **Your recent spaces** (`[data-testid="home-recent-spaces"]`):
+     - Replaced the 3-column card grid and its `"Open Space →"` link with clickable `.recent-space-row` buttons (`[data-testid="recent-space-row"]`) where the row itself opens the space.
+     - Each row displays `<mjc-type-tile>`, the space name + type/parent/description subtitle, staff avatars (`<mjc-avatar-stack>`) followed by outside participant avatars with teal rings (`isOutside: true` from `summarizeSeats` in `loadHomeSpaceAvatars()`), and at most one `.signal-pill` badge computed by `spaceSignal(...)` in `packages/Angular/src/lib/logic/home-lists.ts` (`Closed`, invite waiting, open tasks, or `Sealed`).
+
+---
+
+### 3. Files Touched
+
+- `packages/AngularWidgets/src/lib/space-chat.component.ts` (in `4827c06`)
+- `packages/AngularWidgets/src/lib/home-list.component.ts`
+- `packages/AngularWidgets/src/lib/space-rail.component.ts`
+- `packages/AngularWidgets/src/lib/render.test.ts`
+- `packages/Angular/src/lib/logic/home-lists.ts`
+- `packages/Angular/src/lib/logic/home-lists.test.ts`
+- `packages/Angular/src/lib/collaboration-section.component.ts`
+- `plans/space-focused-ux/ui-polish-notes.md`
+- `plans/space-focused-ux/shots/round-4/*.png`
+
+---
+
+### 4. Test Changes and Rationale
+
+1. **`packages/Angular/src/lib/logic/home-lists.test.ts`:**
+   - Added unit tests for `needsYouCards` (mapping `HomeInvitationGraphQL` rows to `HomeNeedsYouCardModel` with space name + formatted date in `subtitle`) and `spaceSignal` (picking one signal per space row in priority order: `Closed` > `invite waiting` > `open tasks` > `Sealed` > `null`).
+2. **`packages/AngularWidgets/src/lib/render.test.ts`:**
+   - Added render tests for `CollabHomeListComponent` (`Badge`, `BadgeLabel`, and `ShowClose = false`) and `CollabSpaceRailComponent` in `Mode="home"` (`InboxCount`, `TaskCount`, and `LibraryCount` badges on `Inbox`, `My tasks`, and `Recent files`).
+   - Added render test for `CollabSpaceChatComponent` verifying that `SpaceMembers` `avatarUrl` renders `<img class="av-img">` in the thread bar and thread drawer, `activeAgentRoute` resets to `null` on `AfterAgentTurn`, and the people trigger opens `<mj-menu>`.
+
+---
+
+### 5. Gate Outputs (Real Verbatim Output)
+
+#### 1. `node scripts/check-mj-tokens.mjs`, `node scripts/check-mj-inputs.mjs`, `node scripts/check-registered-exports.mjs`, & Grep Checks
+
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (118 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ node scripts/check-registered-exports.mjs
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/space-chat.component.ts packages/AngularWidgets/src/lib/avatar.component.ts packages/AngularWidgets/src/lib/home-list.component.ts packages/AngularWidgets/src/lib/space-rail.component.ts packages/Angular/src/lib/collaboration-section.component.ts packages/Angular/src/lib/logic/home-lists.ts || true
+packages/AngularWidgets/src/lib/space-chat.component.ts:0
+packages/AngularWidgets/src/lib/avatar.component.ts:0
+packages/AngularWidgets/src/lib/home-list.component.ts:0
+packages/AngularWidgets/src/lib/space-rail.component.ts:0
+packages/Angular/src/lib/collaboration-section.component.ts:0
+packages/Angular/src/lib/logic/home-lists.ts:0
+
+$ grep -c -i 'userAvatarMap' packages/AngularWidgets/src/lib/space-chat.component.ts || true
+0
+```
+
+#### 2. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets test`
+
+```text
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (123 tests) 16ms
+ ✓ src/lib/render.test.ts (59 tests) 757ms
+
+ Test Files  3 passed (3)
+      Tests  192 passed (192)
+   Start at  11:48:03
+   Duration  12.37s (transform 18.01s, setup 0ms, import 24.56s, tests 779ms, environment 264ms)
+```
+
+#### 3. `pnpm --filter @mj-biz-apps/collaboration-ng test`
+
+```text
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+▶ Home's lists
+  ✔ shows an invitation as a row that opens the People tab of its space (0.649667ms)
+  ✔ does not invent a date or a role for an invitation that has none (0.085208ms)
+  ✔ shows a task with its status, priority and due date, and skips what is missing (0.108125ms)
+  ✔ shows a dash, not zero, for a count that could not be read, and says so to a screen reader (0.066917ms)
+  ✔ maps invitations to NeedsYou cards with space and date in the subtitle (0.086708ms)
+  ✔ picks one signal per space row in priority order (0.09975ms)
+✔ Home's lists (1.592375ms)
+...
+ℹ tests 161
+ℹ suites 45
+ℹ pass 161
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 238.598042
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 59ms
+   ✓ a space's details, rendered (5)
+     ✓ mounts MemberJunction's form host on the subtype's record with only the subtype's sections, and no toolbar, related entities or links 22ms
+     ✓ hands the form host the same config until the sections change, not a new one on every pass 8ms
+     ✓ draws a field for each column when there is no form, bound to the record, read-only on the About card 13ms
+     ✓ mounts the type's own component with the record and the edit mode 8ms
+     ✓ says a change happened from what was typed (input, change, focus leaving) and from a field's own change event 6ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  11:48:18
+   Duration  6.12s (transform 3.99s, setup 0ms, import 5.82s, tests 59ms, environment 160ms)
+```
+
+#### 4. `ngc -p tsconfig.json --noEmit` (`@mj-biz-apps/collaboration-ng-widgets` & `@mj-biz-apps/collaboration-ng`)
+
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets exec ngc -p tsconfig.json --noEmit
+src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+
+13   imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
+                                                                               ~~~~~~~~~~~~~~~~~~~
+
+$ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
+src/lib/collaboration-section.component.ts:1569:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+
+1569                                                                         <span class="config-meta">{{ reach.Fields?.length ? reach.Fields.length + ' field' + (reach.Fields.length === 1 ? '' : 's') : 'every field' }}</span>
+                                                                                                                        ~~~~~~
+```
+
+#### 5. Integration Gate (`node test-harnesses/integration.mjs row-filters`)
+
+```text
+$ node test-harnesses/integration.mjs row-filters
+  Collaboration integration SERVER (SQLServerDataProvider → localhost:1436/MJ_6_2_0_CLEAN_4789)
+
+  ok   row-filters.RF1              5ms  RF1 — Bea (Client on Discovery) sees Discovery and Field notes, but nothing from Harbor
+  ok   row-filters.RF2              7ms  RF2 — Bea sees only Shared band items; Team items (discovery-brief) are hidden
+  ok   row-filters.RF3              2ms  RF3 — Harper (Client on Harbor) sees Harbor, but nothing from Discovery or Committee
+  ok   row-filters.RF4              2ms  RF4 — Dana (Director on Committee) sees Committee, but not Discovery or Harbor
+  ok   row-filters.RF5              357ms  RF5 — Bea (outside Client on Discovery) reads Space Pages and gets Shared pages only, never a Team page
+
+  5 passed / 0 failed
+```
+
+### 6. Screenshots (`plans/space-focused-ux/shots/round-4/`, 1440×900, light and dark)
+
+- `plans/space-focused-ux/shots/round-4/home-light.png`
+- `plans/space-focused-ux/shots/round-4/home-dark.png`
+- `plans/space-focused-ux/shots/round-4/discovery-overview-light.png`
+- `plans/space-focused-ux/shots/round-4/discovery-overview-dark.png`
+- `plans/space-focused-ux/shots/round-4/field-notes-light.png`
+- `plans/space-focused-ux/shots/round-4/field-notes-dark.png`
+- `plans/space-focused-ux/shots/round-4/library-light.png`
+- `plans/space-focused-ux/shots/round-4/library-dark.png`
+- `plans/space-focused-ux/shots/round-4/work-light.png`
+- `plans/space-focused-ux/shots/round-4/work-dark.png`
+- `plans/space-focused-ux/shots/round-4/chat-thread-open-light.png`
+- `plans/space-focused-ux/shots/round-4/chat-thread-open-dark.png`
+- `plans/space-focused-ux/shots/round-4/page-edit-mode-light.png`
+- `plans/space-focused-ux/shots/round-4/page-edit-mode-dark.png`
+- `plans/space-focused-ux/shots/round-4/rail-collapsed-light.png`
+- `plans/space-focused-ux/shots/round-4/rail-collapsed-dark.png`
+

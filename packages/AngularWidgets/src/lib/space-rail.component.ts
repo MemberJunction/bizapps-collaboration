@@ -445,6 +445,9 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                 <i class="fa-solid fa-folder-open row-icon" aria-hidden="true"></i>
                 @if (!isCollapsed) {
                   <span class="row-label">Recent files</span>
+                  @if (LibraryCount > 0) {
+                    <span class="row-count count">{{ LibraryCount }}</span>
+                  }
                 }
               </button>
             </div>

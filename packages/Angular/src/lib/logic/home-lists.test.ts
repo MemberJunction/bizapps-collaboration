@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { countLabel, countText, invitationRows, taskRows } from './home-lists.ts';
+import { countLabel, countText, invitationRows, needsYouCards, spaceSignal, taskRows } from './home-lists.ts';
 
 const day = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : '');
 
@@ -33,6 +33,55 @@ describe("Home's lists", () => {
         assert.equal(countLabel(1, false, 'open task', 'open tasks'), '1 open task');
         assert.equal(countLabel(0, false, 'open task', 'open tasks'), '0 open tasks');
         assert.equal(countLabel(3, true, 'open task', 'open tasks'), 'open tasks: could not be read');
+    });
+
+    it('maps invitations to NeedsYou cards with space and date in the subtitle', () => {
+        const cards = needsYouCards(
+            [{ SeatID: 's1', SpaceID: 'sp1', SpaceName: 'Audit committee', Person: 'Pat Invited', RoleName: 'Guest', InvitedAt: '2026-10-28T17:47:03.773Z' }],
+            day,
+        );
+        assert.deepEqual(cards, [
+            {
+                id: 's1',
+                spaceId: 'sp1',
+                variant: 'warn',
+                iconClass: 'fa-solid fa-user-plus',
+                title: 'Pat Invited is invited as Guest',
+                subtitle: 'Audit committee · Invited 2026-10-28',
+                actionLabel: 'Review on People',
+            },
+        ]);
+    });
+
+    it('picks one signal per space row in priority order', () => {
+        assert.deepEqual(
+            spaceSignal({ isClosed: true, isSealed: true, invitationsWaiting: 2, openTasks: 3, pinsCount: 1, childCount: 1 }),
+            { label: 'Closed', variant: 'muted', iconClass: 'fa-solid fa-lock' },
+        );
+        assert.deepEqual(
+            spaceSignal({ isClosed: false, isSealed: true, invitationsWaiting: 1, openTasks: 3, pinsCount: 1, childCount: 1 }),
+            { label: '1 invite waiting', variant: 'warn' },
+        );
+        assert.deepEqual(
+            spaceSignal({ isClosed: false, isSealed: true, invitationsWaiting: 0, openTasks: 3, pinsCount: 1, childCount: 1 }),
+            { label: 'Sealed', variant: 'team', iconClass: 'fa-solid fa-lock' },
+        );
+        assert.deepEqual(
+            spaceSignal({ isClosed: false, isSealed: false, invitationsWaiting: 0, openTasks: 2, pinsCount: 1, childCount: 1 }),
+            { label: '2 open tasks', variant: 'brand' },
+        );
+        assert.deepEqual(
+            spaceSignal({ isClosed: false, isSealed: false, invitationsWaiting: 0, openTasks: 0, pinsCount: 2, childCount: 1 }),
+            { label: '2 pinned', variant: 'plain' },
+        );
+        assert.deepEqual(
+            spaceSignal({ isClosed: false, isSealed: false, invitationsWaiting: 0, openTasks: 0, pinsCount: 0, childCount: 1 }),
+            { label: '1 sub-space', variant: 'plain' },
+        );
+        assert.equal(
+            spaceSignal({ isClosed: false, isSealed: false, invitationsWaiting: 0, openTasks: 0, pinsCount: 0, childCount: 0 }),
+            null,
+        );
     });
 });
 

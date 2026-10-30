@@ -848,6 +848,33 @@ describe("Home's lists, rendered", () => {
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[aria-label="Close this list"]')!.click();
     expect(closed).toHaveBeenCalledTimes(1);
   });
+
+  it('renders an inline count badge beside the heading and hides the close button when ShowClose is false', async () => {
+    const fixture = await render({ Id: 'coming-up', Title: 'Coming up', Badge: '8', BadgeLabel: '8 open tasks', ShowClose: false, Rows: rows });
+    const host = fixture.nativeElement as HTMLElement;
+    const badge = host.querySelector('.hl-badge');
+    expect(badge?.textContent?.trim()).toBe('8');
+    expect(badge?.getAttribute('aria-label')).toBe('8 open tasks');
+    expect(host.querySelector('[aria-label="Close this list"]')).toBeNull();
+  });
+
+  it('renders Inbox, My tasks, and Recent files count badges in the Home rail', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+    fixture.componentRef.setInput('Mode', 'home');
+    fixture.componentRef.setInput('InboxCount', 1);
+    fixture.componentRef.setInput('TaskCount', 8);
+    fixture.componentRef.setInput('LibraryCount', 14);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const rowsByLabel = Array.from(host.querySelectorAll<HTMLButtonElement>('.rail-row')).map((btn) => ({
+      label: btn.querySelector('.row-label')?.textContent?.trim(),
+      count: btn.querySelector('.row-count')?.textContent?.trim() ?? null,
+    }));
+    expect(rowsByLabel).toContainEqual({ label: 'Inbox', count: '1' });
+    expect(rowsByLabel).toContainEqual({ label: 'My tasks', count: '8' });
+    expect(rowsByLabel).toContainEqual({ label: 'Recent files', count: '14' });
+  });
 });
 
 describe("The Overview's contributed cards, rendered", () => {

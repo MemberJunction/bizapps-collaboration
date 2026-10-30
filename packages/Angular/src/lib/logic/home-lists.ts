@@ -72,3 +72,79 @@ export function pinRows(pins: ReadonlyArray<{ id: string; title: string; subtitl
         actionLabel: 'Open',
     }));
 }
+
+/** One item in Home's *Needs you* section, rendered with `mjc-needs-you-card`. */
+export interface HomeNeedsYouCardModel {
+    id: string;
+    spaceId: string;
+    variant: 'blue' | 'warn' | 'red';
+    iconClass: string;
+    isSpark?: boolean;
+    title: string;
+    subtitle: string;
+    actionLabel: string;
+}
+
+/** Builds Home's *Needs you* cards from the invitations waiting on an owner across the viewer's spaces. */
+export function needsYouCards(invitations: readonly HomeInvitationGraphQL[], formatDate: DateFormatter): HomeNeedsYouCardModel[] {
+    const rows = invitationRows(invitations, formatDate);
+    return rows.map((row, idx) => ({
+        id: row.key,
+        spaceId: invitations[idx]?.SpaceID ?? '',
+        variant: 'warn',
+        iconClass: row.iconClass,
+        title: row.title,
+        subtitle: [row.spaceName, row.detail].filter(Boolean).join(' · '),
+        actionLabel: row.actionLabel,
+    }));
+}
+
+export interface HomeSpaceSignalInput {
+    isClosed: boolean;
+    isSealed: boolean;
+    invitationsWaiting: number;
+    openTasks: number;
+    pinsCount: number;
+    childCount: number;
+}
+
+export interface HomeSpaceSignal {
+    label: string;
+    variant: 'brand' | 'warn' | 'team' | 'plain' | 'muted';
+    iconClass?: string;
+}
+
+/** Computes the single signal badge for a space row on Home (`docs/ux/README.md`, frame 01). */
+export function spaceSignal(input: HomeSpaceSignalInput): HomeSpaceSignal | null {
+    if (input.isClosed) {
+        return { label: 'Closed', variant: 'muted', iconClass: 'fa-solid fa-lock' };
+    }
+    if (input.invitationsWaiting > 0) {
+        return {
+            label: `${input.invitationsWaiting} ${input.invitationsWaiting === 1 ? 'invite waiting' : 'invites waiting'}`,
+            variant: 'warn',
+        };
+    }
+    if (input.isSealed) {
+        return { label: 'Sealed', variant: 'team', iconClass: 'fa-solid fa-lock' };
+    }
+    if (input.openTasks > 0) {
+        return {
+            label: `${input.openTasks} open ${input.openTasks === 1 ? 'task' : 'tasks'}`,
+            variant: 'brand',
+        };
+    }
+    if (input.pinsCount > 0) {
+        return {
+            label: `${input.pinsCount} pinned`,
+            variant: 'plain',
+        };
+    }
+    if (input.childCount > 0) {
+        return {
+            label: `${input.childCount} ${input.childCount === 1 ? 'sub-space' : 'sub-spaces'}`,
+            variant: 'plain',
+        };
+    }
+    return null;
+}
