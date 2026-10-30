@@ -2340,3 +2340,133 @@ $ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
 src/lib/collaboration-section.component.ts:1569:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
 ```
 
+---
+
+## Round 6 fixes
+
+### 1. Summary of Changes
+
+- **`R6-S1` — Read agents through MJ's public API (`AIEngineBase.Instance.Agents`):**
+  - Added `@memberjunction/ai-engine-base` (`"6.2.0-edge.2"`) to `peerDependencies` and `devDependencies` in `packages/AngularWidgets/package.json`.
+  - Updated `CollabSpaceChatComponent.getCachedAgents()` in `packages/AngularWidgets/src/lib/space-chat.component.ts` to import `AIEngineBase` from `@memberjunction/ai-engine-base` and read `AIEngineBase.Instance.Agents`, deleting the `GetGlobalObjectStore()` `___SINGLETON__AIEngineBase` store scan and the `MentionAutocomplete.Instance.GetAvailableAgents()` fallback.
+  - Updated unit and render tests in `packages/AngularWidgets/src/lib/widgets.test.ts` and `packages/AngularWidgets/src/lib/render.test.ts` to spy on `AIEngineBase.Instance.Agents` instead of writing to `GetGlobalObjectStore()`.
+- **`R6-Q1` — Refuse seat band / role type mismatch on `SpaceMemberEntityServer` & fix Colin's seat through the People page:**
+  - Updated `SpaceMemberEntityServer.ValidateAsync()` in `packages/CoreEntitiesServer/src/SpaceMemberEntityServer.ts` to refuse any seat whose `Band` is `'Team'` when its role type marks outside (`!context.role.canSeeTeamBand`): `Invite refused: a role that cannot see the Team band cannot sit on the Team band.`.
+  - Updated `onChangeMemberRole` in `packages/Angular/src/lib/collaboration-section.component.ts` to set `seat.Band = role.CanSeeTeamBand ? 'Team' : 'Shared'` alongside `seat.SpaceRoleTypeID = role.ID` when changing a seat's role on the People page.
+  - Added a test in `packages/CoreEntitiesServer/src/space-member-entity-server.test.ts` (`refuses a seat whose band is Team when its role type marks outside (CanSeeTeamBand = false)`) verifying that both new and saved seats with `Band = 'Team'` on an outside role (`OUTSIDE_ADMIN_ROLE`) are refused while `Band = 'Shared'` succeeds.
+  - Fixed Colin Brockman's seat on `"Northwind relationship"` (`C1000001-0000-4000-8000-000000000001`) through the People page UI (`?view=space&tab=people&space=C1000001-0000-4000-8000-000000000001`, selecting `Owner` in the row's role dropdown and clicking `Confirm`): his seat became **`Role = Owner` (`owner`), `Band = Team`, `Status = Active`**.
+
+### 2. Files Changed
+
+- `packages/AngularWidgets/package.json`
+- `packages/AngularWidgets/src/lib/space-chat.component.ts`
+- `packages/AngularWidgets/src/lib/widgets.test.ts`
+- `packages/AngularWidgets/src/lib/render.test.ts`
+- `packages/Angular/src/lib/collaboration-section.component.ts`
+- `packages/CoreEntitiesServer/src/SpaceMemberEntityServer.ts`
+- `packages/CoreEntitiesServer/src/space-member-entity-server.test.ts`
+- `plans/space-focused-ux/ui-polish-notes.md`
+
+### 3. Gate Outputs (Real Verbatim Output)
+
+#### Token, Input, Registered Export, & Hex Fallback Grep Checks
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ node scripts/check-registered-exports.mjs
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/space-chat.component.ts packages/Angular/src/lib/collaboration-section.component.ts || true
+packages/AngularWidgets/src/lib/space-chat.component.ts:0
+packages/Angular/src/lib/collaboration-section.component.ts:0
+```
+
+#### `SpaceMemberEntityServer` Unit Tests (`space-member-entity-server.test.ts`)
+```text
+$ node --experimental-strip-types --test packages/CoreEntitiesServer/src/space-member-entity-server.test.ts
+▶ a member leaving a space
+  ✔ is judged by the space type's driver, as a Remove (1.311959ms)
+  ✔ is refused when the space type refuses it (0.222542ms)
+  ✔ is refused, closed, when the space type cannot be resolved (0.182208ms)
+✔ a member leaving a space (2.157583ms)
+▶ a seat being deleted
+  ✔ is judged by the space type's driver, as a Remove, and refused when the type says no (0.992375ms)
+  ✔ is refused when the space type cannot be resolved (0.4485ms)
+✔ a seat being deleted (1.639666ms)
+▶ the kind of change a seat save is
+  ✔ names a removal, a role change and a band change from what changed (0.109792ms)
+  ✔ calls a new seat, an approval and a reinstatement an Invite: they have no kind of their own (0.058792ms)
+  ✔ gives a save that touches no status, role or band no kind, so it raises no seat reaction (0.030375ms)
+✔ the kind of change a seat save is (0.294792ms)
+▶ a seat saved through its own validation
+  ✔ tells the driver, when it is asked to judge and when it is told, the same kind and the same old values, for a band edit the gate puts back (1.124833ms)
+  ✔ tells the driver an Invite, both times, for an approval whose band no longer matches the role (0.337417ms)
+  ✔ tells the driver an Invite, both times, for a new seat whose band differs from its role: the gate derives the band, the kind is what was asked (0.346875ms)
+  ✔ tells the driver an Invite for a removed seat made Invited again, since a re-invitation is a seat coming back (0.390834ms)
+  ✔ says nothing to the driver, asked or told, when the save touches no status, role or band (0.163875ms)
+  ✔ starts each save clean: a refused save leaves no reading for the next (0.256583ms)
+  ✔ refuses a seat whose band is Team when its role type marks outside (CanSeeTeamBand = false) (0.374167ms)
+✔ a seat saved through its own validation (3.167667ms)
+ℹ tests 15
+ℹ suites 4
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 302.313625
+```
+
+#### `@mj-biz-apps/collaboration-ng-widgets` Unit & DOM Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
+
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (125 tests) 16ms
+ ✓ src/lib/render.test.ts (65 tests) 770ms
+
+ Test Files  3 passed (3)
+      Tests  200 passed (200)
+   Start at  15:35:21
+   Duration  12.92s (transform 19.17s, setup 0ms, import 25.83s, tests 792ms, environment 352ms)
+```
+
+#### `@mj-biz-apps/collaboration-ng` Logic & Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng test
+
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+ℹ tests 161
+ℹ suites 45
+ℹ pass 161
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 293.719959
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 43ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:36:46
+   Duration  8.29s (transform 5.05s, setup 0ms, import 7.08s, tests 43ms, environment 940ms)
+```
+
+#### Angular Template Type-Checks (`ngc --noEmit`)
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets exec ngc -p tsconfig.json --noEmit
+src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+
+$ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
+src/lib/collaboration-section.component.ts:1622:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+```

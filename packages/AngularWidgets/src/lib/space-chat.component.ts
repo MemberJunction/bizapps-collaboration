@@ -16,8 +16,8 @@ import {
   SimpleChanges,
   ViewChild,
 } from '@angular/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { UserInfo } from '@memberjunction/core';
-import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
   ConversationsModule,
   ConversationStreamingService,
@@ -1593,52 +1593,27 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   public getCachedAgents(): CachedAiAgentMetadata[] {
     const out: CachedAiAgentMetadata[] = [];
     const seen = new Set<string>();
-    const pushAgent = (raw: unknown): void => {
-      if (!raw || typeof raw !== 'object') return;
-      const rec = raw as Record<string, unknown>;
-      const id = typeof rec['ID'] === 'string' ? rec['ID'].trim() : '';
-      const name = typeof rec['Name'] === 'string' ? rec['Name'].trim() : '';
-      if (!id && !name) return;
-      const key = (id || name).toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      out.push({
-        ID: id,
-        Name: name,
-        LogoURL: typeof rec['LogoURL'] === 'string' && rec['LogoURL'].trim() ? rec['LogoURL'].trim() : null,
-        IconClass: typeof rec['IconClass'] === 'string' && rec['IconClass'].trim() ? rec['IconClass'].trim() : null,
-        Description: typeof rec['Description'] === 'string' && rec['Description'].trim() ? rec['Description'].trim() : null,
-      });
-    };
-
     try {
-      const store = GetGlobalObjectStore() as Record<string, unknown> | null;
-      if (store) {
-        for (const key of Object.keys(store)) {
-          if (key === '___SINGLETON__AIEngineBase' || key.startsWith('___SINGLETON__AIEngineBase')) {
-            const engine = store[key] as { ReadableAgents?: unknown[]; Agents?: unknown[] } | null;
-            const list = Array.isArray(engine?.ReadableAgents) && engine.ReadableAgents.length > 0
-              ? engine.ReadableAgents
-              : Array.isArray(engine?.Agents)
-                ? engine.Agents
-                : [];
-            for (const item of list) pushAgent(item);
-          }
-        }
+      const agents = AIEngineBase.Instance.Agents ?? [];
+      for (const agent of agents) {
+        if (!agent) continue;
+        const id = typeof agent.ID === 'string' ? agent.ID.trim() : '';
+        const name = typeof agent.Name === 'string' ? agent.Name.trim() : '';
+        if (!id && !name) continue;
+        const key = (id || name).toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          ID: id,
+          Name: name,
+          LogoURL: typeof agent.LogoURL === 'string' && agent.LogoURL.trim() ? agent.LogoURL.trim() : null,
+          IconClass: typeof agent.IconClass === 'string' && agent.IconClass.trim() ? agent.IconClass.trim() : null,
+          Description: typeof agent.Description === 'string' && agent.Description.trim() ? agent.Description.trim() : null,
+        });
       }
     } catch {
-      // Ignore global store access errors in isolated unit environments
+      // AIEngineBase.Instance.Agents throws when not loaded or permission-constrained
     }
-
-    if (out.length === 0) {
-      try {
-        const fallbackList = MentionAutocomplete.Instance?.GetAvailableAgents?.() ?? [];
-        for (const item of fallbackList) pushAgent(item);
-      } catch {
-        // Ignore if MentionAutocomplete is not initialized
-      }
-    }
-
     return out;
   }
 

@@ -2115,40 +2115,35 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(CollabOpenTasksPageBlockComponent.isActive(ctx)).toBe(true);
   });
 
-  it('supports Round 6 AI agent metadata from cached MJ: AI Agents, matching People & Agents participant counts, and grouped Team/Outside audience pill counts (R5-S2, G1, G2, G3)', async () => {
-    const { GetGlobalObjectStore } = await import('@memberjunction/global');
+  it('supports Round 6 AI agent metadata from AIEngineBase.Instance.Agents, matching People & Agents participant counts, and grouped Team/Outside audience pill counts (R5-S2, G1, G2, G3, R6-S1)', async () => {
+    const { AIEngineBase } = await import('@memberjunction/ai-engine-base');
     const { CollabAvatarComponent } = await import('./avatar.component.ts');
     const { CollabAudiencePillComponent } = await import('./audience-pill.component.ts');
 
-    const store = GetGlobalObjectStore() as Record<string, unknown>;
-    const prevEngine = store['___SINGLETON__AIEngineBase'];
+    const agentsSpy = vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue([
+      {
+        ID: 'agent-sage',
+        Name: 'Sage',
+        LogoURL: null,
+        IconClass: 'fa-brands fa-superpowers',
+        Description: 'Ambient assistant',
+      },
+      {
+        ID: 'agent-codesmith',
+        Name: 'Codesmith',
+        LogoURL: 'https://cdn.example.com/codesmith.png',
+        IconClass: 'fa-solid fa-code',
+        Description: 'Coding specialist',
+      },
+      {
+        ID: 'agent-plain',
+        Name: 'PlainBot',
+        LogoURL: null,
+        IconClass: null,
+        Description: 'Fallback icon agent',
+      },
+    ] as unknown as typeof AIEngineBase.Instance.Agents);
     try {
-      store['___SINGLETON__AIEngineBase'] = {
-        Agents: [
-          {
-            ID: 'agent-sage',
-            Name: 'Sage',
-            LogoURL: null,
-            IconClass: 'fa-brands fa-superpowers',
-            Description: 'Ambient assistant',
-          },
-          {
-            ID: 'agent-codesmith',
-            Name: 'Codesmith',
-            LogoURL: 'https://cdn.example.com/codesmith.png',
-            IconClass: 'fa-solid fa-code',
-            Description: 'Coding specialist',
-          },
-          {
-            ID: 'agent-plain',
-            Name: 'PlainBot',
-            LogoURL: null,
-            IconClass: null,
-            Description: 'Fallback icon agent',
-          },
-        ],
-      };
-
       const av = new CollabAvatarComponent();
       expect(av.isAi).toBe(false);
       av.IsAi = true;
@@ -2166,7 +2161,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
         { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'Checking Q3 numbers now.' },
       ];
 
-      // G1: Agent metadata resolved from cached MJ: AI Agents
+      // G1: Agent metadata resolved from cached MJ: AI Agents via AIEngineBase.Instance.Agents
       expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
       expect(chat.getSpeakerAvatarUrl(chat.ThreadMessages[1])).toBeNull();
       expect(chat.getSpeakerIconClass(chat.ThreadMessages[1])).toBe('fa-brands fa-superpowers');
@@ -2210,11 +2205,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
       expect(pill.teamCount).toBe(2);
       expect(pill.outsideCount).toBe(1);
     } finally {
-      if (prevEngine === undefined) {
-        delete store['___SINGLETON__AIEngineBase'];
-      } else {
-        store['___SINGLETON__AIEngineBase'] = prevEngine;
-      }
+      agentsSpy.mockRestore();
     }
   });
 });

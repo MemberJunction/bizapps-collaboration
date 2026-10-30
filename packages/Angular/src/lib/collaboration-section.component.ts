@@ -6367,12 +6367,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     public onChangeMemberRole(change: { member: SpaceMemberModel; roleCode: string }): Promise<void> {
-        const roleId = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(change.roleCode)?.ID;
-        if (!roleId) {
+        const role = CollaborationEngineBase.Instance.SpaceRoleTypeByCode(change.roleCode);
+        if (!role) {
             SharedService.Instance.CreateSimpleNotification(`There is no role called ${change.roleCode}.`, 'error', 5000);
             return Promise.resolve();
         }
-        return this.changeSeat(change.member, (seat) => { seat.SpaceRoleTypeID = roleId; }, 'change the role');
+        return this.changeSeat(change.member, (seat) => {
+            seat.SpaceRoleTypeID = role.ID;
+            seat.Band = role.CanSeeTeamBand ? 'Team' : 'Shared';
+        }, 'change the role');
     }
 
     /** True while a close or reopen is with the server. */

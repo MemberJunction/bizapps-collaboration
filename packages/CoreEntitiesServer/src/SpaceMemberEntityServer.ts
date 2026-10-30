@@ -125,6 +125,9 @@ export class SpaceMemberEntityServer extends mjBizAppsCollaborationSpaceMemberEn
                 return fail(result, 'Status', 'Invite refused: an owner of this space has to approve the member.');
             }
         }
+        if (!context.role.canSeeTeamBand && this.Band === 'Team') {
+            return fail(result, 'Band', 'Invite refused: a role that cannot see the Team band cannot sit on the Team band.');
+        }
         this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared';
 
         // Extensibility Driver Validation: only for a change to the seat itself

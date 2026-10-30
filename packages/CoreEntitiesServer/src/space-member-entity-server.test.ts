@@ -18,11 +18,13 @@ const OWNER = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE9';
 const SPACE = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEE2';
 const MEMBER_ROLE = '7F565CD3-5E5C-4073-AD3D-55EFE85B0D40';
 const OWNER_ROLE = '69090145-C214-4C16-83C5-9D0F1F3B6DE4';
+const OUTSIDE_ADMIN_ROLE = '88479F4D-81E5-42C2-89B8-2A5D270BE7A0';
 const TYPE = 'C76A0ACA-CBF8-43AD-A996-9296CDA681BE';
 
 const roles = [
     { ID: OWNER_ROLE, Level: 40, MaxGrantableLevel: 40, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: true, CanContribute: true },
     { ID: MEMBER_ROLE, Level: 20, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
+    { ID: OUTSIDE_ADMIN_ROLE, Level: 20, MaxGrantableLevel: 10, CanInvite: true, CanPromoteBand: false, CanSeeTeamBand: false, IsOwnerRole: false, CanContribute: true },
 ];
 const members = [
     { ID: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEF1', SpaceID: SPACE, UserID: LEAVER, Status: 'Active', Band: 'Team', SpaceRoleTypeID: MEMBER_ROLE },
@@ -348,5 +350,25 @@ describe('a seat saved through its own validation', () => {
         driver = new SpyDriver({ ok: true });
         assert.equal(await refused.Save(), true);
         assert.deepEqual(driver.heard.map((c) => c.kind), ['BandChange']);
+    });
+
+    it('refuses a seat whose band is Team when its role type marks outside (CanSeeTeamBand = false)', async () => {
+        driver = new SpyDriver({ ok: true });
+        const mismatchedNew = editedSeat({ Status: 'Active', Band: 'Team', SpaceRoleTypeID: OUTSIDE_ADMIN_ROLE }, [], false);
+        assert.equal(await mismatchedNew.Save(), false);
+        assert.match(lastRefusal, /cannot see the Team band cannot sit on the Team band/);
+        assert.deepEqual(driver.judged, []);
+
+        const mismatchedSaved = editedSeat(
+            { Status: 'Active', Band: 'Team', SpaceRoleTypeID: OUTSIDE_ADMIN_ROLE },
+            [{ Name: 'Band', OldValue: 'Shared' }],
+            true,
+        );
+        assert.equal(await mismatchedSaved.Save(), false);
+        assert.match(lastRefusal, /cannot see the Team band cannot sit on the Team band/);
+
+        const matchingShared = editedSeat({ Status: 'Active', Band: 'Shared', SpaceRoleTypeID: OUTSIDE_ADMIN_ROLE }, [], false);
+        assert.equal(await matchingShared.Save(), true, lastRefusal);
+        assert.equal(matchingShared.Band, 'Shared');
     });
 });

@@ -31,7 +31,8 @@ import { CollabNewConversationDialogComponent } from './new-conversation-dialog.
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
-import { GetGlobalObjectStore, RegisterClassEx } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { RegisterClassEx } from '@memberjunction/global';
 import { BaseSpacePageBlock } from './base-space-page-block.ts';
 import { CollabSpaceHeaderComponent } from './space-header.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
@@ -1745,28 +1746,24 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
 });
 
 describe('Round 6 UI Polish: reply parent excerpt, AI agent marks, people & agents menu, and audience pill, rendered', () => {
-  it('renders Replying to <author> + excerpt with full hover text on every reply, AI agent rounded-square marks with cached MJ: AI Agents LogoURL/IconClass, and matching People & Agents list + button count that update live without reload (R5-S2, G1, G2)', () => {
-    const store = GetGlobalObjectStore() as Record<string, unknown>;
-    const prevEngine = store['___SINGLETON__AIEngineBase'];
+  it('renders Replying to <author> + excerpt with full hover text on every reply, AI agent rounded-square marks with cached MJ: AI Agents LogoURL/IconClass, and matching People & Agents list + button count that update live without reload (R5-S2, G1, G2, R6-S1)', () => {
+    const agentsSpy = vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue([
+      {
+        ID: 'agent-sage',
+        Name: 'Sage',
+        LogoURL: null,
+        IconClass: 'fa-brands fa-superpowers',
+        Description: 'Ambient assistant',
+      },
+      {
+        ID: 'agent-codesmith',
+        Name: 'Codesmith',
+        LogoURL: 'https://cdn.example.com/codesmith.png',
+        IconClass: 'fa-solid fa-code',
+        Description: 'Coding specialist',
+      },
+    ] as unknown as typeof AIEngineBase.Instance.Agents);
     try {
-      store['___SINGLETON__AIEngineBase'] = {
-        Agents: [
-          {
-            ID: 'agent-sage',
-            Name: 'Sage',
-            LogoURL: null,
-            IconClass: 'fa-brands fa-superpowers',
-            Description: 'Ambient assistant',
-          },
-          {
-            ID: 'agent-codesmith',
-            Name: 'Codesmith',
-            LogoURL: 'https://cdn.example.com/codesmith.png',
-            IconClass: 'fa-solid fa-code',
-            Description: 'Coding specialist',
-          },
-        ],
-      };
 
       TestBed.resetTestingModule();
       provideStreamingStub();
@@ -1863,11 +1860,7 @@ describe('Round 6 UI Polish: reply parent excerpt, AI agent marks, people & agen
       expect(logoImg).not.toBeNull();
       expect(logoImg.getAttribute('src')).toBe('https://cdn.example.com/codesmith.png');
     } finally {
-      if (prevEngine === undefined) {
-        delete store['___SINGLETON__AIEngineBase'];
-      } else {
-        store['___SINGLETON__AIEngineBase'] = prevEngine;
-      }
+      agentsSpy.mockRestore();
     }
   });
 
