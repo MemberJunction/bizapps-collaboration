@@ -9,6 +9,7 @@ export interface AvatarItem {
   avatarUrl?: string;
   iconClass?: string;
   colorClass?: string;
+  isAi?: boolean;
   isOutside?: boolean;
   isOnline?: boolean;
 }

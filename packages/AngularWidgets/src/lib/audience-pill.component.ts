@@ -32,21 +32,25 @@ export interface AudiencePopoverPersonItem {
         aria-haspopup="dialog"
         title="View space people &amp; access"
         (click)="togglePopover($event)">
-        @if (StaffAvatars && StaffAvatars.length > 0) {
-          <mjc-avatar-stack [Avatars]="StaffAvatars" [Max]="MaxStaff" Size="sm"></mjc-avatar-stack>
+        @if (teamCount > 0 || outsideCount === 0) {
+          <span class="aud-side-group" data-testid="audience-pill-team-group">
+            <span class="aud-side-label" data-testid="audience-pill-team-label">Team {{ teamCount }}</span>
+            @if (StaffAvatars && StaffAvatars.length > 0) {
+              <mjc-avatar-stack [Avatars]="StaffAvatars" [Max]="MaxStaff" Size="xs"></mjc-avatar-stack>
+            }
+          </span>
         }
-        @if (StaffAvatars && StaffAvatars.length > 0 && OutsideAvatars && OutsideAvatars.length > 0) {
+        @if (teamCount > 0 && outsideCount > 0) {
           <span class="aud-div"></span>
         }
-        @if (OutsideAvatars && OutsideAvatars.length > 0) {
-          <mjc-avatar-stack [Avatars]="OutsideAvatars" [Max]="MaxOutside" Size="sm"></mjc-avatar-stack>
+        @if (outsideCount > 0) {
+          <span class="aud-side-group outside" data-testid="audience-pill-outside-group">
+            <span class="aud-side-label outside" data-testid="audience-pill-outside-label">Outside {{ outsideCount }}</span>
+            @if (OutsideAvatars && OutsideAvatars.length > 0) {
+              <mjc-avatar-stack [Avatars]="OutsideAvatars" [Max]="MaxOutside" Size="xs"></mjc-avatar-stack>
+            }
+          </span>
         }
-        <div class="aud-t">
-          <b>{{ TotalPeople }} {{ TotalPeople === 1 ? 'person' : 'people' }}</b>
-          @if (Summary) {
-            <span>{{ Summary }}</span>
-          }
-        </div>
         <i class="fa-solid fa-chevron-down aud-caret" [class.open]="isOpen" aria-hidden="true"></i>
       </button>
 
@@ -54,10 +58,7 @@ export interface AudiencePopoverPersonItem {
         <div class="aud-popover" data-testid="audience-pill-popover" role="dialog" aria-label="People in this space">
           <div class="aud-pop-head">
             <div class="aud-pop-head-text">
-              <span class="aud-pop-title">People in this space ({{ TotalPeople }})</span>
-              @if (Summary) {
-                <span class="aud-pop-sub">{{ Summary }}</span>
-              }
+              <span class="aud-pop-title">People in this space ({{ TotalPeople || (teamCount + outsideCount) }})</span>
             </div>
             <button
               type="button"
@@ -72,9 +73,9 @@ export interface AudiencePopoverPersonItem {
           <div class="aud-pop-body">
             @if (teamDisplayList.length > 0) {
               <div class="aud-pop-section">
-                <div class="aud-pop-sec-head">
+                <div class="aud-pop-sec-head" data-testid="audience-pop-team-heading">
                   <i class="fa-solid fa-lock" aria-hidden="true"></i>
-                  <span>Team ({{ teamDisplayList.length }})</span>
+                  <span>Team {{ teamDisplayList.length }}</span>
                 </div>
                 @for (person of teamDisplayList; track person.id) {
                   <button
@@ -112,9 +113,9 @@ export interface AudiencePopoverPersonItem {
 
             @if (outsideDisplayList.length > 0) {
               <div class="aud-pop-section">
-                <div class="aud-pop-sec-head outside">
+                <div class="aud-pop-sec-head outside" data-testid="audience-pop-outside-heading">
                   <i class="fa-solid fa-eye" aria-hidden="true"></i>
-                  <span>Outside participants ({{ outsideDisplayList.length }})</span>
+                  <span>Outside {{ outsideDisplayList.length }}</span>
                 </div>
                 @for (person of outsideDisplayList; track person.id) {
                   <button
@@ -196,11 +197,11 @@ export interface AudiencePopoverPersonItem {
       align-items: center;
       gap: var(--mj-space-2-5);
       margin-right: var(--mj-space-1);
-      padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-2);
+      padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-2-5);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-full);
       background: var(--mj-bg-surface);
-      height: 36px;
+      min-height: 38px;
       box-sizing: border-box;
       user-select: none;
       cursor: pointer;
@@ -214,25 +215,26 @@ export interface AudiencePopoverPersonItem {
       background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
       box-shadow: var(--mj-shadow-sm);
     }
-    .aud-div {
-      width: 1px;
-      height: 18px;
-      background: var(--mj-border-default);
-    }
-    .aud-t {
-      display: flex;
+    .aud-side-group {
+      display: inline-flex;
       flex-direction: column;
-      line-height: var(--mj-leading-tight);
+      align-items: flex-start;
+      gap: var(--mj-space-0-5);
     }
-    .aud-t b {
+    .aud-side-label {
       font-size: var(--mj-text-xs);
       font-weight: var(--mj-font-semibold);
-      color: var(--mj-text-primary);
-    }
-    .aud-t span {
-      font-size: var(--mj-text-xs);
-      color: var(--mj-text-muted);
+      line-height: var(--mj-leading-tight);
+      color: var(--mj-text-secondary);
       white-space: nowrap;
+    }
+    .aud-side-label.outside {
+      color: var(--mjc-shared);
+    }
+    .aud-div {
+      width: 1px;
+      height: 24px;
+      background: var(--mj-border-default);
     }
     .aud-caret {
       font-size: var(--mj-text-xs);
@@ -518,6 +520,14 @@ export class CollabAudiencePillComponent {
     this.isOpen = false;
     this.MemberSelectRequested.emit(person);
     this.ManagePeopleRequested.emit();
+  }
+
+  public get teamCount(): number {
+    return this.teamDisplayList.length;
+  }
+
+  public get outsideCount(): number {
+    return this.outsideDisplayList.length;
   }
 
   public get teamDisplayList(): AudiencePopoverPersonItem[] {

@@ -17,6 +17,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import type { UserInfo } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
   ConversationsModule,
   ConversationStreamingService,
@@ -27,7 +28,7 @@ import {
   type AgentTurnRoute,
   type BeforeAgentTurnEventArgs,
 } from '@memberjunction/ng-conversations';
-import type { MentionPerson } from '@memberjunction/conversations-runtime';
+import { MentionAutocomplete, type MentionPerson } from '@memberjunction/conversations-runtime';
 import {
   MJButtonDirective,
   MJEmptyStateComponent,
@@ -67,6 +68,27 @@ export interface PendingAgentPromptState {
   reasonLabel: string;
   suggestedAgentName: string;
   suggestedAgentId: string | null;
+}
+
+export interface CachedAiAgentMetadata {
+  ID: string;
+  Name: string;
+  LogoURL: string | null;
+  IconClass: string | null;
+  Description: string | null;
+}
+
+export interface ChatParticipantListItem {
+  id: string;
+  name: string;
+  initials: string;
+  imageUrl: string | null;
+  iconClass: string;
+  colorClass: string;
+  role: string;
+  subtitle: string;
+  isAi: boolean;
+  isOutside: boolean;
 }
 
 /**
@@ -212,47 +234,88 @@ export interface PendingAgentPromptState {
                       }
                     </span>
                   }
-                  @if (ParticipantCount > 0) {
+                  @if (conversationParticipantTotal > 0) {
                     <button
                       type="button"
                       class="participant-count-pill"
                       data-testid="chat-participants-pill"
                       [mjMenuTriggerFor]="participantsMenu"
-                      title="View people and the Assistant in this conversation">
+                      title="View people and agents in this conversation">
                       <i class="fa-solid fa-users" aria-hidden="true"></i>
-                      <span>{{ ParticipantCount }}</span>
+                      <span>{{ conversationParticipantTotal }}</span>
                       <i class="fa-solid fa-chevron-down participant-pill-caret" aria-hidden="true"></i>
                     </button>
                     <ng-template #participantsMenu>
                       <mj-menu AriaLabel="In this conversation" data-testid="chat-participants-popover">
-                        @for (person of conversationParticipantsList; track person.id) {
-                          <mj-menu-item
-                            data-testid="chat-participant-mention-btn"
-                            [Disabled]="IsReadOnly"
-                            (Triggered)="mentionParticipant(person.name)">
-                            <div class="chat-participant-row">
-                              <mjc-avatar
-                                Size="sm"
-                                [Initials]="person.initials"
-                                [Name]="person.name"
-                                [AvatarUrl]="person.imageUrl || ''"
-                                [IconClass]="person.iconClass"
-                                [ColorClass]="person.colorClass"
-                                [PersonId]="person.id"
-                                [IsOutside]="person.isOutside" />
-                              <div class="chat-participant-info">
-                                <div class="chat-participant-name-line">
-                                  <span class="chat-participant-name">{{ person.name }}</span>
-                                  @if (person.role) {
-                                    <span class="chat-participant-badge" [class.is-ai]="person.isAi">{{ person.role }}</span>
+                        @if (conversationPeopleList.length > 0) {
+                          <div class="chat-participants-section-head" data-testid="chat-participants-people-heading">
+                            <span>People ({{ conversationPeopleList.length }})</span>
+                          </div>
+                          @for (person of conversationPeopleList; track person.id) {
+                            <mj-menu-item
+                              data-testid="chat-participant-mention-btn"
+                              [Disabled]="IsReadOnly"
+                              (Triggered)="mentionParticipant(person.name)">
+                              <div class="chat-participant-row">
+                                <mjc-avatar
+                                  Size="sm"
+                                  [Initials]="person.initials"
+                                  [Name]="person.name"
+                                  [AvatarUrl]="person.imageUrl || ''"
+                                  [IconClass]="person.iconClass"
+                                  [ColorClass]="person.colorClass"
+                                  [PersonId]="person.id"
+                                  [IsAi]="false"
+                                  [IsOutside]="person.isOutside" />
+                                <div class="chat-participant-info">
+                                  <div class="chat-participant-name-line">
+                                    <span class="chat-participant-name">{{ person.name }}</span>
+                                    @if (person.role) {
+                                      <span class="chat-participant-badge">{{ person.role }}</span>
+                                    }
+                                  </div>
+                                  @if (person.subtitle) {
+                                    <span class="chat-participant-sub">{{ person.subtitle }}</span>
                                   }
                                 </div>
-                                @if (person.subtitle) {
-                                  <span class="chat-participant-sub">{{ person.subtitle }}</span>
-                                }
                               </div>
-                            </div>
-                          </mj-menu-item>
+                            </mj-menu-item>
+                          }
+                        }
+                        @if (conversationAgentsList.length > 0) {
+                          <div class="chat-participants-section-head is-ai" data-testid="chat-participants-agents-heading">
+                            <span>Agents ({{ conversationAgentsList.length }})</span>
+                          </div>
+                          @for (agent of conversationAgentsList; track agent.id) {
+                            <mj-menu-item
+                              data-testid="chat-participant-mention-btn"
+                              [Disabled]="IsReadOnly"
+                              (Triggered)="mentionParticipant(agent.name)">
+                              <div class="chat-participant-row">
+                                <mjc-avatar
+                                  Size="sm"
+                                  [Initials]="agent.initials"
+                                  [Name]="agent.name"
+                                  [AvatarUrl]="agent.imageUrl || ''"
+                                  [IconClass]="agent.iconClass"
+                                  [ColorClass]="agent.colorClass"
+                                  [PersonId]="agent.id"
+                                  [IsAi]="true"
+                                  [IsOutside]="false" />
+                                <div class="chat-participant-info">
+                                  <div class="chat-participant-name-line">
+                                    <span class="chat-participant-name">{{ agent.name }}</span>
+                                    @if (agent.role) {
+                                      <span class="chat-participant-badge is-ai">{{ agent.role }}</span>
+                                    }
+                                  </div>
+                                  @if (agent.subtitle) {
+                                    <span class="chat-participant-sub">{{ agent.subtitle }}</span>
+                                  }
+                                </div>
+                              </div>
+                            </mj-menu-item>
+                          }
                         }
                       </mj-menu>
                     </ng-template>
@@ -265,22 +328,18 @@ export interface PendingAgentPromptState {
           <ng-template mjChatSlot="messageExtra" let-message="message">
             @if (message) {
               <div class="msg-thread-extra" [attr.data-message-id]="message.ID">
-                @if (getAskedByName(message); as askedBy) {
-                  <span class="msg-asked-by-chip" data-testid="message-asked-by">
-                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
-                    <span>Asked by {{ askedBy }}</span>
-                  </span>
-                }
                 @if (getParentMessage(message); as parentMsg) {
                   <button
                     type="button"
                     class="msg-thread-parent-chip"
                     data-testid="message-thread-parent"
                     (click)="scrollToMessage(parentMsg.ID)"
-                    [title]="'Jump to message from ' + getSpeakerName(parentMsg)">
+                    [title]="getFormattedMessageBody(parentMsg)">
                     <i class="fa-solid fa-reply" aria-hidden="true"></i>
                     <span class="parent-speaker">Replying to {{ getSpeakerName(parentMsg) }}</span>
-                    <span class="parent-excerpt">"{{ getMessageExcerpt(parentMsg, 64) }}"</span>
+                    @if (getMessageExcerpt(parentMsg, 64); as parentExcerpt) {
+                      <span class="parent-excerpt">"{{ parentExcerpt }}"</span>
+                    }
                   </button>
                 }
 
@@ -304,6 +363,7 @@ export interface PendingAgentPromptState {
                             [IconClass]="part.iconClass"
                             [ColorClass]="part.colorClass"
                             [PersonId]="part.personId"
+                            [IsAi]="part.isAi"
                             [IsOutside]="part.isOutside" />
                         }
                       </span>
@@ -350,6 +410,7 @@ export interface PendingAgentPromptState {
                           [IconClass]="getSpeakerIconClass(reply)"
                           [ColorClass]="getSpeakerColorClass(reply)"
                           [PersonId]="getSpeakerPersonId(reply)"
+                          [IsAi]="isAiMessage(reply)"
                           [IsOutside]="isOutsideSpeaker(reply)" />
                         <div class="thread-reply-content">
                           <div class="thread-reply-meta">
@@ -362,15 +423,16 @@ export interface PendingAgentPromptState {
                                   Assistant
                                 </span>
                               }
-                              @if (getAskedByName(reply); as askedBy) {
-                                <span class="thread-asked-by-pill" data-testid="thread-reply-asked-by">
-                                  Asked by {{ askedBy }}
-                                </span>
-                              }
-                              @if (getNestedReplyTargetName(reply, message.ID); as nestedTarget) {
-                                <span class="thread-nested-target">
+                              @if (getThreadReplyTarget(reply, message.ID); as replyTarget) {
+                                <span
+                                  class="thread-nested-target"
+                                  data-testid="thread-reply-target"
+                                  [title]="getFormattedMessageBody(replyTarget)">
                                   <i class="fa-solid fa-reply" aria-hidden="true"></i>
-                                  to {{ nestedTarget }}
+                                  <span class="parent-speaker">Replying to {{ getSpeakerName(replyTarget) }}</span>
+                                  @if (getMessageExcerpt(replyTarget, 64); as targetExcerpt) {
+                                    <span class="parent-excerpt">"{{ targetExcerpt }}"</span>
+                                  }
                                 </span>
                               }
                             </div>
@@ -658,6 +720,25 @@ export interface PendingAgentPromptState {
         transform: rotate(180deg);
       }
 
+      .chat-participants-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--mj-space-1-5) var(--mj-space-3) var(--mj-space-1);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-semibold);
+        color: var(--mj-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        user-select: none;
+      }
+      .chat-participants-section-head.is-ai {
+        border-top: 1px solid var(--mj-border-subtle);
+        margin-top: var(--mj-space-1);
+        padding-top: var(--mj-space-2);
+        color: var(--mj-brand-tertiary);
+      }
+
       .chat-participant-row {
         display: flex;
         align-items: center;
@@ -809,24 +890,6 @@ export interface PendingAgentPromptState {
         flex-direction: column;
         gap: var(--mj-space-2);
         margin-top: var(--mj-space-2);
-      }
-
-      .msg-asked-by-chip,
-      .thread-asked-by-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--mj-space-1-5);
-        align-self: flex-start;
-        padding: 2px var(--mj-space-2);
-        border-radius: var(--mj-radius-full);
-        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 24%, transparent);
-        color: var(--mj-brand-primary);
-        font-size: var(--mj-text-xs);
-        font-weight: var(--mj-font-semibold);
-      }
-      .msg-asked-by-chip i {
-        font-size: 10px;
       }
 
       .msg-thread-parent-chip {
@@ -1525,7 +1588,89 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.PendingMessageConsumed.emit();
   }
 
-  // ── Conversation Participants Menu ────────────────────────────────────────
+  // ── Cached AI Agent Metadata (`MJ: AI Agents`) & Participants Menu ────────
+
+  public getCachedAgents(): CachedAiAgentMetadata[] {
+    const out: CachedAiAgentMetadata[] = [];
+    const seen = new Set<string>();
+    const pushAgent = (raw: unknown): void => {
+      if (!raw || typeof raw !== 'object') return;
+      const rec = raw as Record<string, unknown>;
+      const id = typeof rec['ID'] === 'string' ? rec['ID'].trim() : '';
+      const name = typeof rec['Name'] === 'string' ? rec['Name'].trim() : '';
+      if (!id && !name) return;
+      const key = (id || name).toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        ID: id,
+        Name: name,
+        LogoURL: typeof rec['LogoURL'] === 'string' && rec['LogoURL'].trim() ? rec['LogoURL'].trim() : null,
+        IconClass: typeof rec['IconClass'] === 'string' && rec['IconClass'].trim() ? rec['IconClass'].trim() : null,
+        Description: typeof rec['Description'] === 'string' && rec['Description'].trim() ? rec['Description'].trim() : null,
+      });
+    };
+
+    try {
+      const store = GetGlobalObjectStore() as Record<string, unknown> | null;
+      if (store) {
+        for (const key of Object.keys(store)) {
+          if (key === '___SINGLETON__AIEngineBase' || key.startsWith('___SINGLETON__AIEngineBase')) {
+            const engine = store[key] as { ReadableAgents?: unknown[]; Agents?: unknown[] } | null;
+            const list = Array.isArray(engine?.ReadableAgents) && engine.ReadableAgents.length > 0
+              ? engine.ReadableAgents
+              : Array.isArray(engine?.Agents)
+                ? engine.Agents
+                : [];
+            for (const item of list) pushAgent(item);
+          }
+        }
+      }
+    } catch {
+      // Ignore global store access errors in isolated unit environments
+    }
+
+    if (out.length === 0) {
+      try {
+        const fallbackList = MentionAutocomplete.Instance?.GetAvailableAgents?.() ?? [];
+        for (const item of fallbackList) pushAgent(item);
+      } catch {
+        // Ignore if MentionAutocomplete is not initialized
+      }
+    }
+
+    return out;
+  }
+
+  public resolveAgentMetadata(agentId?: string | null, agentName?: string | null): CachedAiAgentMetadata | null {
+    const agents = this.getCachedAgents();
+    if (agents.length === 0) return null;
+    const idNorm = (agentId ?? '').trim().toLowerCase();
+    if (idNorm) {
+      const byId = agents.find((a) => a.ID.toLowerCase() === idNorm);
+      if (byId) return byId;
+    }
+    const nameNorm = (agentName ?? '').trim().toLowerCase();
+    if (nameNorm) {
+      const byName = agents.find((a) => a.Name.toLowerCase() === nameNorm);
+      if (byName) return byName;
+    }
+    return null;
+  }
+
+  public normalizeAgentIconClass(iconClass?: string | null, hasLogoUrl = false): string {
+    const raw = (iconClass ?? '').trim();
+    if (!raw) {
+      return hasLogoUrl ? '' : 'fa-solid fa-robot';
+    }
+    if (
+      raw.startsWith('fa-') &&
+      !/\b(fa-solid|fa-regular|fa-brands|fa-light|fa-thin|fa-duotone|fas|far|fab)\b/.test(raw)
+    ) {
+      return `fa-solid ${raw}`;
+    }
+    return raw;
+  }
 
   private getMemberForUser(userId: string | null | undefined, name?: string | null): SpaceMemberModel | null {
     const uid = (userId ?? '').trim().toLowerCase();
@@ -1540,88 +1685,149 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return null;
   }
 
-  public get conversationParticipantsList(): Array<{
-    id: string;
-    name: string;
-    initials: string;
-    imageUrl: string | null;
-    iconClass: string;
-    colorClass: string;
-    role: string;
-    subtitle: string;
-    isAi: boolean;
-    isOutside: boolean;
-  }> {
-    const seen = new Set<string>();
-    const list: Array<{
-      id: string;
-      name: string;
-      initials: string;
-      imageUrl: string | null;
-      iconClass: string;
-      colorClass: string;
-      role: string;
-      subtitle: string;
-      isAi: boolean;
-      isOutside: boolean;
-    }> = [];
+  private isSystemUser(userId?: string | null, userName?: string | null): boolean {
+    const uid = (userId ?? '').trim().toLowerCase();
+    if (uid === '00000000-0000-0000-0000-000000000000' || uid === 'ecafccec-6a37-ef11-86d4-000d3a4e707e') {
+      return true;
+    }
+    const uname = (userName ?? '').trim().toLowerCase();
+    return uname === 'system';
+  }
 
-    if (this.CurrentUser?.ID) {
-      const id = this.CurrentUser.ID.toLowerCase();
-      seen.add(id);
-      const name = this.CurrentUser.Name || 'You';
-      const member = this.getMemberForUser(this.CurrentUser.ID, name);
+  public get conversationPeopleList(): ChatParticipantListItem[] {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    const list: ChatParticipantListItem[] = [];
+
+    const addPerson = (opts: {
+      id?: string | null;
+      name?: string | null;
+      email?: string | null;
+      role?: string;
+      member?: SpaceMemberModel | null;
+    }): void => {
+      const rawId = (opts.id ?? opts.member?.userId ?? opts.member?.id ?? '').trim();
+      const rawName = (opts.name ?? opts.member?.name ?? '').trim();
+      if (!rawId && !rawName) return;
+      if (this.isSystemUser(rawId, rawName)) return;
+      const idKey = rawId.toLowerCase();
+      const nameKey = rawName.toLowerCase();
+      if ((idKey && seenIds.has(idKey)) || (nameKey && seenNames.has(nameKey))) return;
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+
+      const member = opts.member ?? this.getMemberForUser(rawId, rawName);
+      const displayName = rawName || member?.name || 'Team Member';
       list.push({
-        id: this.CurrentUser.ID,
-        name,
-        initials: member?.initials || this.computeInitials(name),
+        id: rawId || member?.userId || member?.id || `person-${nameKey}`,
+        name: displayName,
+        initials: member?.initials || this.computeInitials(displayName),
         imageUrl: member?.avatarUrl ?? null,
         iconClass: member?.iconClass ?? '',
         colorClass: member?.colorClass ?? '',
-        role: 'You',
-        subtitle: this.CurrentUser.Email || '',
+        role: opts.role ?? '',
+        subtitle: (opts.email ?? member?.email ?? '').trim(),
         isAi: false,
         isOutside: member?.band === 'Shared',
+      });
+    };
+
+    if (this.CurrentUser?.ID || this.CurrentUser?.Name) {
+      addPerson({
+        id: this.CurrentUser.ID,
+        name: this.CurrentUser.Name || 'You',
+        email: this.CurrentUser.Email,
+        role: 'You',
       });
     }
 
     for (const person of this.MentionPeople ?? []) {
-      const id = (person.ID ?? '').toLowerCase();
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      const name = person.Name || 'Team Member';
-      const member = this.getMemberForUser(person.ID, name);
-      list.push({
+      addPerson({
         id: person.ID,
-        name,
-        initials: member?.initials || this.computeInitials(name),
-        imageUrl: member?.avatarUrl ?? null,
-        iconClass: member?.iconClass ?? '',
-        colorClass: member?.colorClass ?? '',
-        role: '',
-        subtitle: person.Email || '',
-        isAi: false,
-        isOutside: member?.band === 'Shared',
+        name: person.Name || 'Team Member',
+        email: person.Email,
       });
     }
 
-    const agentName = this.DefaultAgentName.trim();
-    if (agentName) {
-      list.push({
-        id: this.DefaultAgentId || 'agent-default',
-        name: agentName,
-        initials: 'AI',
-        imageUrl: null,
-        iconClass: '',
-        colorClass: '',
-        role: 'Assistant',
-        subtitle: 'Answers when mentioned or in a thread',
-        isAi: true,
-        isOutside: false,
+    for (const member of this.SpaceMembers ?? []) {
+      if (member.status && member.status !== 'Active') continue;
+      if (this.AudienceBand === 'Team' && member.band !== 'Team') continue;
+      addPerson({
+        id: member.userId || member.id,
+        name: member.name,
+        email: member.email,
+        member,
+      });
+    }
+
+    for (const msg of this.allMessages) {
+      if (this.isAiMessage(msg)) continue;
+      if (!msg.UserID?.trim() && !msg.User?.trim()) continue;
+      addPerson({
+        id: msg.UserID,
+        name: msg.User || this.getSpeakerName(msg),
       });
     }
 
     return list;
+  }
+
+  public get conversationAgentsList(): ChatParticipantListItem[] {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    const list: ChatParticipantListItem[] = [];
+
+    const addAgent = (agentId?: string | null, agentName?: string | null): void => {
+      const meta = this.resolveAgentMetadata(agentId, agentName);
+      const displayName = (meta?.Name || agentName || '').trim();
+      const resolvedId = (meta?.ID || agentId || '').trim();
+      if (!displayName && !resolvedId) return;
+      const finalName = displayName || 'Assistant';
+      const finalId = resolvedId || `agent-${finalName.toLowerCase()}`;
+      const idKey = finalId.toLowerCase();
+      const nameKey = finalName.toLowerCase();
+      if ((idKey && seenIds.has(idKey)) || (nameKey && seenNames.has(nameKey))) return;
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+
+      const logoUrl = meta?.LogoURL?.trim() || null;
+      const iconClass = this.normalizeAgentIconClass(meta?.IconClass, !!logoUrl);
+      list.push({
+        id: finalId,
+        name: finalName,
+        initials: this.computeInitials(finalName),
+        imageUrl: logoUrl,
+        iconClass,
+        colorClass: '',
+        role: 'Assistant',
+        subtitle: meta?.Description?.trim() || 'Answers when mentioned or in a thread',
+        isAi: true,
+        isOutside: false,
+      });
+    };
+
+    if (this.DefaultAgentName.trim() || this.DefaultAgentId?.trim()) {
+      addAgent(this.DefaultAgentId, this.DefaultAgentName);
+    }
+
+    for (const msg of this.allMessages) {
+      if (!this.isAiMessage(msg)) continue;
+      addAgent(msg.AgentID, msg.Agent || this.DefaultAgentName);
+    }
+
+    if (this.isAgentWorking && this.activeAgentName.trim()) {
+      addAgent(null, this.activeAgentName);
+    }
+
+    return list;
+  }
+
+  public get conversationParticipantsList(): ChatParticipantListItem[] {
+    return [...this.conversationPeopleList, ...this.conversationAgentsList];
+  }
+
+  public get conversationParticipantTotal(): number {
+    return this.conversationParticipantsList.length;
   }
 
   public mentionParticipant(name: string): void {
@@ -1648,18 +1854,15 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return this.ThreadMessages;
   }
 
+  /**
+   * Resolves the message `ParentID` points to in `allMessages` (for both person replies and agent replies).
+   */
   public getParentMessage(message: ChatThreadMessageLike | null | undefined): ChatThreadMessageLike | null {
     const parentId = message?.ParentID;
     if (!parentId) return null;
     const norm = parentId.trim().toLowerCase();
-    const parent = this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === norm) ?? null;
-    if (!parent) return null;
-    // An agent's answer to a top-level message stays in the main flow and is not a thread reply
-    const parentParentId = parent.ParentID?.trim().toLowerCase();
-    if (this.isAiMessage(message) && (!parentParentId || parentParentId === 'null')) {
-      return null;
-    }
-    return parent;
+    if (!norm || norm === 'null') return null;
+    return this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === norm) ?? null;
   }
 
   /**
@@ -1757,12 +1960,22 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return replies.length > 0 ? replies[replies.length - 1] : rootMessage;
   }
 
-  public getNestedReplyTargetName(reply: ChatThreadMessageLike, rootMessageId: string): string | null {
-    const pid = (reply.ParentID ?? '').trim().toLowerCase();
+  /**
+   * Returns the message a thread drawer item is replying to:
+   * - for an AI reply in the thread, the message it answers (`ParentID`);
+   * - for a nested human reply in the thread (`ParentID !== rootMessageId`), the message it answers.
+   */
+  public getThreadReplyTarget(reply: ChatThreadMessageLike, rootMessageId: string): ChatThreadMessageLike | null {
+    const pid = (reply?.ParentID ?? '').trim().toLowerCase();
     const rootNorm = (rootMessageId ?? '').trim().toLowerCase();
-    if (!pid || !rootNorm || pid === rootNorm) return null;
-    const parent = this.getParentMessage(reply);
-    return parent ? this.getSpeakerName(parent) : null;
+    if (!pid || pid === 'null') return null;
+    if (!this.isAiMessage(reply) && pid === rootNorm) return null;
+    return this.getParentMessage(reply);
+  }
+
+  public getNestedReplyTargetName(reply: ChatThreadMessageLike, rootMessageId: string): string | null {
+    const target = this.getThreadReplyTarget(reply, rootMessageId);
+    return target ? this.getSpeakerName(target) : null;
   }
 
   public isThreadExpanded(messageId: string): boolean {
@@ -1822,9 +2035,11 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   public getSpeakerName(message: ChatThreadMessageLike | null | undefined): string {
     if (!message) return 'Member';
     if (this.isAiMessage(message)) {
-      return message.Agent?.trim() || this.DefaultAgentName || 'Assistant';
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      return meta?.Name || message.Agent?.trim() || this.DefaultAgentName || 'Assistant';
     }
-    if (message.User?.trim()) {
+    if (message.User?.trim() && !this.isSystemUser(message.UserID, message.User)) {
       return message.User.trim();
     }
     if (message.UserID && this.CurrentUser?.ID && message.UserID.toLowerCase() === this.CurrentUser.ID.toLowerCase()) {
@@ -1836,36 +2051,34 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return person?.Name || 'Team Member';
   }
 
-  /**
-   * Resolves "Asked by" from the author of the message the AI reply answers (`ParentID`).
-   * Every AI reply keeps `UserID = system.ID` on the server (A19 / R5-B1), and only a
-   * message's author can ask an agent to answer it (R5-B2).
-   */
-  public getAskedByName(message: ChatThreadMessageLike | null | undefined): string | null {
-    if (!message || !this.isAiMessage(message)) return null;
-    const parentId = (message.ParentID ?? '').trim().toLowerCase();
-    if (!parentId || parentId === 'null') return null;
-    const parent = this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === parentId) ?? null;
-    if (!parent || this.isAiMessage(parent)) return null;
-    if (!parent.User?.trim() && !parent.UserID?.trim()) return null;
-    return this.getSpeakerName(parent);
-  }
-
   public getSpeakerInitials(message: ChatThreadMessageLike | null | undefined): string {
-    if (this.isAiMessage(message)) return 'AI';
+    if (this.isAiMessage(message)) {
+      return this.computeInitials(this.getSpeakerName(message));
+    }
     const member = this.getMemberForUser(message?.UserID, message?.User);
     if (member?.initials) return member.initials;
     return this.computeInitials(this.getSpeakerName(message));
   }
 
   public getSpeakerAvatarUrl(message: ChatThreadMessageLike | null | undefined): string | null {
-    if (!message || this.isAiMessage(message)) return null;
+    if (!message) return null;
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      return meta?.LogoURL?.trim() || null;
+    }
     const member = this.getMemberForUser(message.UserID, message.User);
     return member?.avatarUrl ?? null;
   }
 
   public getSpeakerIconClass(message: ChatThreadMessageLike | null | undefined): string {
-    if (!message || this.isAiMessage(message)) return '';
+    if (!message) return '';
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      const hasLogo = !!meta?.LogoURL?.trim();
+      return this.normalizeAgentIconClass(meta?.IconClass, hasLogo);
+    }
     return this.getMemberForUser(message.UserID, message.User)?.iconClass ?? '';
   }
 
@@ -1876,7 +2089,10 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   public getSpeakerPersonId(message: ChatThreadMessageLike | null | undefined): string {
     if (!message) return '';
-    if (this.isAiMessage(message)) return message.AgentID || this.DefaultAgentId || 'assistant';
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent);
+      return meta?.ID || message.AgentID || this.DefaultAgentId || 'assistant';
+    }
     return message.UserID || this.getMemberForUser(message.UserID, message.User)?.userId || '';
   }
 
@@ -2183,7 +2399,14 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     }
   }
 
+  private lastKnownMessageCount = 0;
+
   private syncLiveProgressFromChatArea(): void {
+    const currentMessageCount = this.allMessages.length;
+    if (currentMessageCount !== this.lastKnownMessageCount) {
+      this.lastKnownMessageCount = currentMessageCount;
+      this.cdr?.markForCheck();
+    }
     const area = this.chatArea as {
       isProcessing?: boolean;
       StatusText?: string | null;

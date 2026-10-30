@@ -22,6 +22,7 @@ import {
   ConversationStreamingService,
 } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CollabAudiencePillComponent } from './audience-pill.component.ts';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
@@ -30,7 +31,7 @@ import { CollabNewConversationDialogComponent } from './new-conversation-dialog.
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
-import { RegisterClassEx } from '@memberjunction/global';
+import { GetGlobalObjectStore, RegisterClassEx } from '@memberjunction/global';
 import { BaseSpacePageBlock } from './base-space-page-block.ts';
 import { CollabSpaceHeaderComponent } from './space-header.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
@@ -1673,7 +1674,7 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
     expect(selected).toEqual([{ label: 'All spaces' }]);
   });
 
-  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Asked by <Person> from the parent message author while AI reply UserID stays system (F7, R5-B1)', async () => {
+  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Replying to <Person> + excerpt from the parent message while AI reply UserID stays system (F7, R5-B1, R5-S2)', async () => {
     vi.useFakeTimers();
     TestBed.resetTestingModule();
     provideStreamingStub();
@@ -1699,8 +1700,12 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    const askedByChip = host.querySelector('[data-testid="message-asked-by"]');
-    expect(askedByChip?.textContent?.trim()).toBe('Asked by Ada Lovelace');
+    const replyParent = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]');
+    expect(replyParent).not.toBeNull();
+    expect(replyParent?.textContent).toContain('Replying to Ada Lovelace');
+    expect(replyParent?.textContent).toContain('Can someone check Q3 variance?');
+    expect(replyParent?.getAttribute('title')).toBe('Can someone check Q3 variance?');
+    expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
 
     // Trigger a reply to Ada without @mentioning an agent -> prompt appears
     fixture.componentInstance.onUserMessageSent(
@@ -1738,6 +1743,178 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
     vi.useRealTimers();
   });
 });
+
+describe('Round 6 UI Polish: reply parent excerpt, AI agent marks, people & agents menu, and audience pill, rendered', () => {
+  it('renders Replying to <author> + excerpt with full hover text on every reply, AI agent rounded-square marks with cached MJ: AI Agents LogoURL/IconClass, and matching People & Agents list + button count that update live without reload (R5-S2, G1, G2)', () => {
+    const store = GetGlobalObjectStore() as Record<string, unknown>;
+    const prevEngine = store['___SINGLETON__AIEngineBase'];
+    try {
+      store['___SINGLETON__AIEngineBase'] = {
+        Agents: [
+          {
+            ID: 'agent-sage',
+            Name: 'Sage',
+            LogoURL: null,
+            IconClass: 'fa-brands fa-superpowers',
+            Description: 'Ambient assistant',
+          },
+          {
+            ID: 'agent-codesmith',
+            Name: 'Codesmith',
+            LogoURL: 'https://cdn.example.com/codesmith.png',
+            IconClass: 'fa-solid fa-code',
+            Description: 'Coding specialist',
+          },
+        ],
+      };
+
+      TestBed.resetTestingModule();
+      provideStreamingStub();
+      TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+      const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+
+      const fullRootText =
+        'Can someone verify the Q3 variance schedule on page 4 and confirm whether the revenue adjustment was booked in September?';
+      const msg1 = { ID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: fullRootText };
+      const msg2 = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'I verified page 4 — the variance is +4.2%.' };
+      const msg3 = { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Thanks Colin, checking the September journal entry now.' };
+      const msg4 = { ID: 'msg-4', ParentID: 'msg-3', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'Journal entry #418 matches the September adjustment.' };
+
+      fixture.componentRef.setInput('ConversationId', 'conv-r6');
+      fixture.componentRef.setInput('ConversationName', 'Variance Review');
+      fixture.componentRef.setInput('SpaceId', 'space-1');
+      fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
+      fixture.componentRef.setInput('DefaultAgentName', 'Sage');
+      fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
+      fixture.componentRef.setInput('SpaceMembers', [
+        { id: 'm1', userId: 'user-colin', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+        { id: 'm2', userId: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+        { id: 'm3', userId: 'user-client', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
+      ]);
+      fixture.detectChanges();
+
+      const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+      area.DisplayMessages = [msg1, msg2];
+      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+
+      // R5-S2: Main-flow reply (msg-2) shows "Replying to Colin Brockman" + truncated excerpt + full hover title
+      const mainReplyCue = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]')!;
+      expect(mainReplyCue).not.toBeNull();
+      expect(mainReplyCue.textContent).toContain('Replying to Colin Brockman');
+      expect(mainReplyCue.textContent).toContain('Can someone verify the Q3 variance schedule on page 4');
+      expect(mainReplyCue.getAttribute('title')).toBe(fullRootText);
+      expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
+
+      // G1: Thread bar shows AI agent avatar with rounded-square .ai-av and Sage's IconClass from cached MJ: AI Agents (not plain "AI" text)
+      const threadToggleBtn = host.querySelector<HTMLButtonElement>('[data-testid="message-thread-replies"]')!;
+      expect(threadToggleBtn).not.toBeNull();
+      const threadBarAiAv = threadToggleBtn.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(threadBarAiAv).not.toBeNull();
+      expect(threadBarAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+      expect(threadBarAiAv.textContent?.trim()).toBe('');
+
+      // Expand the thread drawer and verify R5-S2 + G1 inside the thread
+      threadToggleBtn.click();
+      fixture.detectChanges();
+
+      const drawer = host.querySelector<HTMLElement>('[data-testid="message-thread-drawer"]')!;
+      expect(drawer).not.toBeNull();
+      const drawerAiAv = drawer.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(drawerAiAv).not.toBeNull();
+      expect(drawerAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+
+      const nestedTargetCue = drawer.querySelector<HTMLElement>('[data-testid="thread-reply-target"]')!;
+      expect(nestedTargetCue).not.toBeNull();
+      expect(nestedTargetCue.textContent).toContain('Replying to Ada Lovelace');
+      expect(nestedTargetCue.textContent).toContain('Thanks Colin, checking the September journal entry now.');
+      expect(nestedTargetCue.getAttribute('title')).toBe('Thanks Colin, checking the September journal entry now.');
+
+      // G2: Header participants button count matches the menu items (3 people + 1 agent = 4)
+      const partBtn = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
+      expect(partBtn).not.toBeNull();
+      expect(partBtn.textContent?.trim()).toBe('4');
+
+      partBtn.click();
+      fixture.detectChanges();
+      const popover = document.body.querySelector<HTMLElement>('[data-testid="chat-participants-popover"]')!;
+      expect(popover).not.toBeNull();
+      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (3)');
+      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (1)');
+      const menuRows = popover.querySelectorAll('.chat-participant-row');
+      expect(menuRows.length).toBe(Number(partBtn.textContent?.trim()));
+      const agentMenuAv = popover.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(agentMenuAv).not.toBeNull();
+      expect(agentMenuAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+
+      // Live update without reload when a new person posts and a second agent (with LogoURL) answers
+      const msg5 = { ID: 'msg-5', ParentID: 'msg-1', Role: 'User', UserID: 'user-riku', User: 'Riku Sato', Message: '@Codesmith please check the SQL script.' };
+      const msg6 = { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', AgentID: 'agent-codesmith', Agent: 'Codesmith', Message: 'SQL script looks clean.' };
+      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4, msg5, msg6]);
+      fixture.detectChanges();
+
+      expect(partBtn.textContent?.trim()).toBe('6');
+      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (4)');
+      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (2)');
+      expect(popover.querySelectorAll('.chat-participant-row').length).toBe(6);
+      const logoImg = popover.querySelector<HTMLImageElement>('.av.ai-av img.av-img')!;
+      expect(logoImg).not.toBeNull();
+      expect(logoImg.getAttribute('src')).toBe('https://cdn.example.com/codesmith.png');
+    } finally {
+      if (prevEngine === undefined) {
+        delete store['___SINGLETON__AIEngineBase'];
+      } else {
+        store['___SINGLETON__AIEngineBase'] = prevEngine;
+      }
+    }
+  });
+
+  it('groups faces by side on CollabAudiencePillComponent with "Team N" and teal "Outside N", drops the separate summary line, and shows only Team when there are no outside people (G3)', () => {
+    const fixture = TestBed.createComponent(CollabAudiencePillComponent);
+    fixture.componentRef.setInput('CanInvite', true);
+    fixture.componentRef.setInput('Members', [
+      { id: 'm1', userId: 'u1', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+      { id: 'm2', userId: 'u2', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+      { id: 'm3', userId: 'u3', name: 'Riku Sato', email: 'riku@example.com', initials: 'RS', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+      { id: 'm4', userId: 'u4', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
+    ]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLButtonElement>('[data-testid="audience-pill-trigger"]')!;
+    expect(trigger).not.toBeNull();
+
+    const teamLabel = trigger.querySelector<HTMLElement>('[data-testid="audience-pill-team-label"]')!;
+    const outsideLabel = trigger.querySelector<HTMLElement>('[data-testid="audience-pill-outside-label"]')!;
+    expect(teamLabel?.textContent?.trim()).toBe('Team 3');
+    expect(outsideLabel?.textContent?.trim()).toBe('Outside 1');
+    expect(outsideLabel.classList.contains('outside')).toBe(true);
+    expect(trigger.textContent).not.toContain('3 Team · 1 Outside');
+    expect(trigger.textContent).not.toContain('4 people');
+
+    // Open popover and verify the same two headings ("Team 3" and "Outside 1") appear
+    trigger.click();
+    fixture.detectChanges();
+    const popover = host.querySelector<HTMLElement>('[data-testid="audience-pill-popover"]')!;
+    expect(popover).not.toBeNull();
+    expect(popover.querySelector('[data-testid="audience-pop-team-heading"]')?.textContent?.trim()).toBe('Team 3');
+    expect(popover.querySelector('[data-testid="audience-pop-outside-heading"]')?.textContent?.trim()).toBe('Outside 1');
+
+    // When there are no outside people, only the Team group shows on the pill
+    fixture.componentRef.setInput('Members', [
+      { id: 'm1', userId: 'u1', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+      { id: 'm2', userId: 'u2', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+    ]);
+    fixture.detectChanges();
+
+    expect(trigger.querySelector('[data-testid="audience-pill-team-label"]')?.textContent?.trim()).toBe('Team 2');
+    expect(trigger.querySelector('[data-testid="audience-pill-outside-group"]')).toBeNull();
+    expect(trigger.querySelector('[data-testid="audience-pill-outside-label"]')).toBeNull();
+  });
+});
+
 
 
 

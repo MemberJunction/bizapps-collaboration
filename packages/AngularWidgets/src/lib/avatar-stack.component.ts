@@ -19,6 +19,7 @@ import { AvatarItem } from './types';
           [ColorClass]="av.colorClass || ''"
           [PersonId]="av.id || ''"
           [Size]="Size"
+          [IsAi]="!!av.isAi"
           [IsOutside]="!!av.isOutside"
           [IsOnline]="!!av.isOnline"
           [Stacked]="true">

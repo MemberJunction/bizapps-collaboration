@@ -2222,3 +2222,121 @@ AngularWidgets ngc --noEmit: exit 0
 $ (cd packages/Angular && ./node_modules/.bin/ngc -p tsconfig.json --noEmit && echo "Angular ngc --noEmit: exit 0")
 Angular ngc --noEmit: exit 0
 ```
+
+---
+
+## Round 6
+
+### 1. Summary of Round 6 Changes (`R5-S2` & `G1`–`G3`)
+
+1. **`R5-S2` — Reply parent author & excerpt on every reply (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - Removed `getAskedByName` and the separate `[data-testid="message-asked-by"]` / `[data-testid="thread-reply-asked-by"]` chips.
+   - Updated `getParentMessage(message)` to resolve the parent message `ParentID` points to in `this.allMessages` for both person replies and agent replies, and added `getThreadReplyTarget(reply, rootMessageId)` for replies inside the expanded thread drawer.
+   - Main-flow replies (`[data-testid="message-thread-parent"]`) and thread drawer replies (`[data-testid="thread-reply-target"]`) now show `Replying to <author>` followed by a short excerpt (`getMessageExcerpt(parent, 64)`) and the full parent message text on hover (`[title]="getFormattedMessageBody(parent)"`).
+2. **`G1` — AI agent rounded-square marks with cached `MJ: AI Agents` metadata (`packages/AngularWidgets/src/lib/avatar.component.ts`, `packages/AngularWidgets/src/lib/avatar-stack.component.ts`, `packages/AngularWidgets/src/lib/types.ts`, `packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - Added `@Input() public IsAi = false;` (and `get isAi()`) to `CollabAvatarComponent` (`mjc-avatar`), `isAi?: boolean` on `AvatarItem`, and `[IsAi]="!!av.isAi"` on `CollabAvatarStackComponent` (`mjc-avatar-stack`), styling `.av.ai-av` as a rounded square (`border-radius: 8px`, `.xs` `5px`, `.sm` `6px`, `.md` `9px`, `.lg` `11px`, `.xl` `14px`) with the AI brand gradient (`linear-gradient(135deg, var(--mjc-ai-from), var(--mjc-ai-to))`).
+   - Added `getCachedAgents()`, `resolveAgentMetadata(agentId, agentName)`, and `normalizeAgentIconClass(iconClass, hasLogoUrl)` in `CollabSpaceChatComponent`, reading from MJ's cached `AIEngineBase` singleton in `GetGlobalObjectStore()` (and falling back to `MentionAutocomplete.Instance.GetAvailableAgents()`) so thread bar avatars, thread reply avatars, and the conversation participants menu use the agent's own `Name`, `LogoURL` (when present), and `IconClass` (e.g. `fa-brands fa-superpowers` for Sage), falling back to `fa-solid fa-robot` only when the agent has neither `LogoURL` nor `IconClass`.
+3. **`G2` — Chat header people button & menu grouped into `People (N)` and `Agents (N)` from one list (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - Replaced the separate `ParticipantCount` input binding on `[data-testid="chat-participants-pill"]` with `conversationParticipantTotal` (`this.conversationParticipantsList.length`), derived from `conversationPeopleList` + `conversationAgentsList` so the button count and the menu items always come from the same list.
+   - Grouped the `[data-testid="chat-participants-popover"]` menu into `People ({{ conversationPeopleList.length }})` (`[data-testid="chat-participants-people-heading"]`) and `Agents ({{ conversationAgentsList.length }})` (`[data-testid="chat-participants-agents-heading"]`), including active `SpaceMembers` as well as speakers and AI agents from `this.allMessages`, and tracking `lastKnownMessageCount` in `syncLiveProgressFromChatArea()` so new speakers/agents update the count and list live without reload.
+4. **`G3` — Space header people pill grouped by side (`packages/AngularWidgets/src/lib/audience-pill.component.ts`):**
+   - Updated `CollabAudiencePillComponent` (`mjc-audience-pill`) so the trigger pill (`[data-testid="audience-pill-trigger"]`) groups faces by side: `Team {{ teamCount }}` (`[data-testid="audience-pill-team-label"]`) over the team avatar stack, a divider, and teal `Outside {{ outsideCount }}` (`[data-testid="audience-pill-outside-label"]`, `color: var(--mjc-shared)`) over the outside avatar stack.
+   - Removed the redundant `"4 people / 3 Team · 1 Outside"` text block on the pill, hid the Outside group when `outsideCount === 0`, and matched the popover headings (`Team {{ teamDisplayList.length }}` and `Outside {{ outsideDisplayList.length }}`) to the trigger pill labels.
+
+### 2. Files Changed
+
+- `packages/AngularWidgets/src/lib/types.ts`
+- `packages/AngularWidgets/src/lib/avatar.component.ts`
+- `packages/AngularWidgets/src/lib/avatar-stack.component.ts`
+- `packages/AngularWidgets/src/lib/audience-pill.component.ts`
+- `packages/AngularWidgets/src/lib/space-chat.component.ts`
+- `packages/AngularWidgets/src/lib/widgets.test.ts`
+- `packages/AngularWidgets/src/lib/render.test.ts`
+- `plans/space-focused-ux/ui-polish-notes.md`
+- `plans/space-focused-ux/shots/round-6/before-header-pill.png`
+- `plans/space-focused-ux/shots/round-6/after-header-pill.png`
+- `plans/space-focused-ux/shots/round-6/before-people-list.png`
+- `plans/space-focused-ux/shots/round-6/after-people-list.png`
+- `plans/space-focused-ux/shots/round-6/before-thread.png`
+- `plans/space-focused-ux/shots/round-6/after-thread.png`
+
+### 3. Tests Added / Updated
+
+- `packages/AngularWidgets/src/lib/widgets.test.ts`:
+  - Updated `CollabSpaceChatComponent` parent/target assertions for `getParentMessage` and `getThreadReplyTarget` (`R5-S2`).
+  - Added unit test verifying `CollabAvatarComponent.IsAi`, `CollabSpaceChatComponent` agent metadata resolution (`Name`, `LogoURL`, `IconClass`, and `fa-solid fa-robot` fallback) from cached `MJ: AI Agents`, `conversationPeopleList` / `conversationAgentsList` / `conversationParticipantTotal` live updates, and `CollabAudiencePillComponent` `teamCount` / `outsideCount` (`G1`, `G2`, `G3`).
+- `packages/AngularWidgets/src/lib/render.test.ts`:
+  - Updated the `F7, R5-B1, R5-S2` render test to assert `[data-testid="message-thread-parent"]` renders `Replying to Ada Lovelace` with excerpt `"Can someone check Q3 variance?"` and full hover `[title]`.
+  - Added `Round 6 UI Polish: reply parent excerpt, AI agent marks, people & agents menu, and audience pill, rendered` testing `R5-S2`, `G1`, `G2`, and `G3` in rendered DOM.
+
+### 4. Gate Outputs (Real Verbatim Output)
+
+#### Token, Input, Registered Export, & Hex Fallback Grep Checks
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ node scripts/check-registered-exports.mjs
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/types.ts packages/AngularWidgets/src/lib/avatar.component.ts packages/AngularWidgets/src/lib/avatar-stack.component.ts packages/AngularWidgets/src/lib/audience-pill.component.ts packages/AngularWidgets/src/lib/space-chat.component.ts || true
+packages/AngularWidgets/src/lib/types.ts:0
+packages/AngularWidgets/src/lib/avatar.component.ts:0
+packages/AngularWidgets/src/lib/avatar-stack.component.ts:0
+packages/AngularWidgets/src/lib/audience-pill.component.ts:0
+packages/AngularWidgets/src/lib/space-chat.component.ts:0
+```
+
+#### `@mj-biz-apps/collaboration-ng-widgets` Unit & DOM Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
+
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (125 tests) 18ms
+ ✓ src/lib/render.test.ts (65 tests) 895ms
+
+ Test Files  3 passed (3)
+      Tests  200 passed (200)
+   Start at  15:08:45
+   Duration  11.98s (transform 17.50s, setup 0ms, import 23.40s, tests 919ms, environment 240ms)
+```
+
+#### `@mj-biz-apps/collaboration-ng` Logic & Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng test
+
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+ℹ tests 161
+ℹ suites 45
+ℹ pass 161
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 260.823083
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 56ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:08:59
+   Duration  6.42s (transform 4.07s, setup 0ms, import 6.04s, tests 56ms, environment 244ms)
+```
+
+#### Angular Template Type-Checks (`ngc --noEmit`)
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets exec ngc -p tsconfig.json --noEmit
+src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+
+$ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
+src/lib/collaboration-section.component.ts:1569:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+```
+

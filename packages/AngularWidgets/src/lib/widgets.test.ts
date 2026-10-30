@@ -1953,24 +1953,24 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(openedItems).toEqual([{ kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' }]);
 
     // 2. Thread parent & transitive Slack-thread replies resolution:
-    //    - msg-2 (AI reply to top-level msg-1) stays in the main flow (getParentMessage is null)
+    //    - Every reply (including msg-2, AI reply to top-level msg-1) resolves its parent via getParentMessage (R5-S2)
     //    - msg-3 (person reply to msg-1), msg-5 (person reply to msg-3), and msg-6 (AI reply to msg-5) are in the thread
     chat.ThreadMessages = [
       ...chat.ThreadMessages,
       { ID: 'msg-5', ParentID: 'msg-3', Role: 'User', User: 'Riku Sato', Message: 'Good catch @Sage — can you also check page 5?' },
       { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Page 5 is within tolerance.' },
     ];
-    expect(chat.getParentMessage(chat.ThreadMessages[1])).toBeNull();
+    expect(chat.getParentMessage(chat.ThreadMessages[1])?.ID).toBe('msg-1');
     expect(chat.getParentMessage(chat.ThreadMessages[2])?.ID).toBe('msg-1');
     expect(chat.getRepliesFor('msg-1').map((m) => m.ID)).toEqual(['msg-3', 'msg-5', 'msg-6']);
     expect(chat.getLastReplySpeaker('msg-1')).toBe('Sage');
     expect(chat.getThreadParticipants('msg-1').map((p) => p.name)).toEqual(['Colin Brockman', 'Riku Sato', 'Sage']);
     expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Colin Brockman');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[3], 'msg-1')?.ID).toBe('msg-3');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[4], 'msg-1')?.ID).toBe('msg-5');
+    expect(chat.getThreadReplyTarget(chat.ThreadMessages[2], 'msg-1')).toBeNull();
     expect(chat.getSpeakerName(chat.ThreadMessages[0])).toBe('Ada Lovelace');
     expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
-    expect(chat.getAskedByName(chat.ThreadMessages[1])).toBe('Ada Lovelace');
-    expect(chat.getAskedByName(chat.ThreadMessages[4])).toBe('Riku Sato');
-    expect(chat.getAskedByName({ ID: 'msg-ai-root', Role: 'AI', Agent: 'Sage', Message: 'Welcome' })).toBeNull();
     expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
     expect(chat.isAiMessage(chat.ThreadMessages[0])).toBe(false);
 
@@ -2114,7 +2114,111 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(CollabOpenTasksPageBlockComponent.canView(ctx)).toBe(true);
     expect(CollabOpenTasksPageBlockComponent.isActive(ctx)).toBe(true);
   });
+
+  it('supports Round 6 AI agent metadata from cached MJ: AI Agents, matching People & Agents participant counts, and grouped Team/Outside audience pill counts (R5-S2, G1, G2, G3)', async () => {
+    const { GetGlobalObjectStore } = await import('@memberjunction/global');
+    const { CollabAvatarComponent } = await import('./avatar.component.ts');
+    const { CollabAudiencePillComponent } = await import('./audience-pill.component.ts');
+
+    const store = GetGlobalObjectStore() as Record<string, unknown>;
+    const prevEngine = store['___SINGLETON__AIEngineBase'];
+    try {
+      store['___SINGLETON__AIEngineBase'] = {
+        Agents: [
+          {
+            ID: 'agent-sage',
+            Name: 'Sage',
+            LogoURL: null,
+            IconClass: 'fa-brands fa-superpowers',
+            Description: 'Ambient assistant',
+          },
+          {
+            ID: 'agent-codesmith',
+            Name: 'Codesmith',
+            LogoURL: 'https://cdn.example.com/codesmith.png',
+            IconClass: 'fa-solid fa-code',
+            Description: 'Coding specialist',
+          },
+          {
+            ID: 'agent-plain',
+            Name: 'PlainBot',
+            LogoURL: null,
+            IconClass: null,
+            Description: 'Fallback icon agent',
+          },
+        ],
+      };
+
+      const av = new CollabAvatarComponent();
+      expect(av.isAi).toBe(false);
+      av.IsAi = true;
+      expect(av.isAi).toBe(true);
+
+      const chat = new CollabSpaceChatComponent();
+      chat.DefaultAgentId = 'agent-sage';
+      chat.DefaultAgentName = 'Sage';
+      chat.SpaceMembers = [
+        { id: 'm1', userId: 'u-colin', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+        { id: 'm2', userId: 'u-ada', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+      ];
+      chat.ThreadMessages = [
+        { ID: 'msg-1', Role: 'User', UserID: 'u-colin', User: 'Colin Brockman', Message: 'Can someone check Q3 numbers?' },
+        { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'Checking Q3 numbers now.' },
+      ];
+
+      // G1: Agent metadata resolved from cached MJ: AI Agents
+      expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
+      expect(chat.getSpeakerAvatarUrl(chat.ThreadMessages[1])).toBeNull();
+      expect(chat.getSpeakerIconClass(chat.ThreadMessages[1])).toBe('fa-brands fa-superpowers');
+
+      const logoMsg = { ID: 'msg-logo', Role: 'AI', AgentID: 'agent-codesmith', Message: 'Done.' };
+      expect(chat.getSpeakerName(logoMsg)).toBe('Codesmith');
+      expect(chat.getSpeakerAvatarUrl(logoMsg)).toBe('https://cdn.example.com/codesmith.png');
+      expect(chat.getSpeakerIconClass(logoMsg)).toBe('fa-solid fa-code');
+
+      const fallbackMsg = { ID: 'msg-plain', Role: 'AI', AgentID: 'agent-plain', Message: 'Hello.' };
+      expect(chat.getSpeakerName(fallbackMsg)).toBe('PlainBot');
+      expect(chat.getSpeakerAvatarUrl(fallbackMsg)).toBeNull();
+      expect(chat.getSpeakerIconClass(fallbackMsg)).toBe('fa-solid fa-robot');
+
+      // G2: People & Agents lists and button count come from the same list and update live when someone posts or an agent answers
+      expect(chat.conversationPeopleList.map((p) => p.name)).toEqual(['Colin Brockman', 'Ada Lovelace']);
+      expect(chat.conversationAgentsList.map((a) => a.name)).toEqual(['Sage']);
+      expect(chat.conversationParticipantTotal).toBe(
+        chat.conversationPeopleList.length + chat.conversationAgentsList.length,
+      );
+      expect(chat.conversationParticipantTotal).toBe(3);
+
+      // A new person posts and a second agent answers without reload
+      chat.ThreadMessages = [
+        ...chat.ThreadMessages,
+        { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'u-riku', User: 'Riku Sato', Message: '@Codesmith can you verify the script?' },
+        { ID: 'msg-4', ParentID: 'msg-3', Role: 'AI', AgentID: 'agent-codesmith', Agent: 'Codesmith', Message: 'Script verified.' },
+      ];
+      expect(chat.conversationPeopleList.map((p) => p.name)).toEqual(['Colin Brockman', 'Ada Lovelace', 'Riku Sato']);
+      expect(chat.conversationAgentsList.map((a) => a.name)).toEqual(['Sage', 'Codesmith']);
+      expect(chat.conversationParticipantTotal).toBe(5);
+      expect(chat.conversationParticipantsList.length).toBe(chat.conversationParticipantTotal);
+
+      // G3: Audience pill teamCount and outsideCount
+      const pill = new CollabAudiencePillComponent();
+      pill.Members = [
+        { id: 'm1', userId: 'u1', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+        { id: 'm2', userId: 'u2', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+        { id: 'm3', userId: 'u3', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
+      ];
+      expect(pill.teamCount).toBe(2);
+      expect(pill.outsideCount).toBe(1);
+    } finally {
+      if (prevEngine === undefined) {
+        delete store['___SINGLETON__AIEngineBase'];
+      } else {
+        store['___SINGLETON__AIEngineBase'] = prevEngine;
+      }
+    }
+  });
 });
+
 
 
 
