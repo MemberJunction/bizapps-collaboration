@@ -4,15 +4,18 @@ import {
     BaseSpaceTypeServerDriver,
     createSpaceConversation,
     createSpaceTask,
+    postSpaceMessage,
     ServerDriverRegistry,
     type ChatChangeContext,
     type DriverValidationResult,
+    type MessageContext,
+    type MessageValidationContext,
     type TaskFiledContext,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import { ExampleBoardServerDriver } from '@mj-biz-apps/collaboration-example-space-types-server';
 import { mjBizAppsCollabExamplesExampleBoardEntity } from '@mj-biz-apps/collaboration-example-space-types-entities';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceMemberEntity, mjBizAppsCollaborationSpaceTypeEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
+import { CONVERSATION_DETAIL_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY, SPACE_TYPE_ENTITY, TASK_ACTIVITY_ENTITY, TASK_ENTITY, TASK_LINK_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser } from '../wire.js';
 import { CHECK_SPACE_PREFIX } from '../world/ids.js';
 import { cleanupConversation, cleanupSpace, cleanupStep, deleteRowAndConfirm, deleteWhere, registerChecks } from './cleanup-helpers.js';
@@ -79,14 +82,24 @@ async function closeAndRemove(ctx: IntegrationCheckContext, spaceId: string): Pr
 }
 
 /** What the EX5 and EX6 driver was asked, so a check can see the hook ran. */
-const asked = { taskFiled: [] as string[], chatKinds: [] as string[] };
+const asked = { taskFiled: [] as string[], chatKinds: [] as string[], messagesPosted: [] as string[] };
 
-/** A test driver: it refuses a Topic conversation, and records the tasks filed in its spaces. */
+/** A test driver: it refuses a Topic conversation, refuses a message containing 'FORBIDDEN', and records the tasks and messages filed in its spaces. */
 @RegisterClass(BaseSpaceTypeServerDriver, 'ex5-spy')
 class Ex5SpyDriver extends BaseSpaceTypeServerDriver {
     public override ValidateChatChange(ctx: ChatChangeContext): DriverValidationResult {
         asked.chatKinds.push(ctx.chatKind);
         return ctx.chatKind === 'Topic' ? { ok: false, message: 'The EX5 driver does not take Topic conversations.' } : { ok: true };
+    }
+
+    public override ValidateMessage(ctx: MessageValidationContext): DriverValidationResult {
+        return ctx.messageText.includes('FORBIDDEN')
+            ? { ok: false, message: 'The EX5 driver refuses FORBIDDEN messages.' }
+            : { ok: true };
+    }
+
+    public override OnMessagePosted(ctx: MessageContext): void {
+        asked.messagesPosted.push(ctx.messageId);
     }
 
     public override OnTaskFiled(ctx: TaskFiledContext): void {
@@ -241,15 +254,37 @@ const checks: NamedCheck[] = [
             const space = await newSpace(ctx, ada, { name: 'EX5-Space', typeId: type.ID });
             Assert(await space.Save(), `Ada creates a space of the spy type: ${space.LatestResult?.CompleteMessage ?? ''}`);
             let conversationId: string | undefined;
+            const postedMessageIds: string[] = [];
             try {
                 await seatOwner(ctx, ada, space.ID);
                 asked.chatKinds.length = 0;
+                asked.messagesPosted.length = 0;
                 const topic = await createSpaceConversation(ctx.Provider, ada, { SpaceID: space.ID, Name: 'Topic talk', Kind: 'Topic' });
                 Assert(!topic.ok && /does not take Topic/.test(topic.message ?? ''), `The driver's refusal comes back: ${topic.message ?? ''}`);
                 const general = await createSpaceConversation(ctx.Provider, ada, { SpaceID: space.ID, Name: 'General talk', Kind: 'General' });
                 Assert(general.ok === true, `A General conversation the driver accepts is created: ${general.message ?? ''}`);
                 conversationId = general.conversationId;
                 Assert(asked.chatKinds.join(',') === 'Topic,General', `The driver was asked about each start, in order: ${asked.chatKinds.join(',')}`);
+
+                // Posting a message on the server PostSpaceMessage path asks ValidateMessage and notifies OnMessagePosted
+                const blockedMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: space.ID,
+                    conversationId: conversationId!,
+                    text: 'This contains FORBIDDEN text.',
+                });
+                Assert(!blockedMsg.ok && /refuses FORBIDDEN/.test(blockedMsg.message), 'ValidateMessage refuses a FORBIDDEN message');
+                Assert(asked.messagesPosted.length === 0, 'OnMessagePosted does not run when ValidateMessage refuses');
+
+                const allowedMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: space.ID,
+                    conversationId: conversationId!,
+                    text: 'Clean agenda update.',
+                });
+                Assert(allowedMsg.ok === true && Boolean(allowedMsg.detailId), 'An allowed message is posted');
+                if (allowedMsg.ok) {
+                    postedMessageIds.push(allowedMsg.detailId);
+                    Assert(asked.messagesPosted.length === 1 && asked.messagesPosted[0] === allowedMsg.detailId, 'OnMessagePosted receives the saved detail ID');
+                }
 
                 // The type now names a driver nobody registered: fail closed, for a new conversation too
                 const dev = await GetPersonaUser(ctx, 'dev');
@@ -270,6 +305,9 @@ const checks: NamedCheck[] = [
                     Assert(await restore.Save(), `Dev restores the driver: ${restore.LatestResult?.CompleteMessage ?? ''}`);
                     ServerDriverRegistry.Instance.ClearCache();
                 });
+                for (const detailId of postedMessageIds) {
+                    await deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, detailId, 'an EX5 message detail');
+                }
                 if (conversationId) await cleanupConversationById(ctx, conversationId);
                 await cleanupSpace(ctx.Provider, ctx.User, space.ID);
                 await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_TYPE_ENTITY, type.ID, 'the EX5 test type');

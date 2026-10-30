@@ -92,6 +92,7 @@ import {
     BaseSpaceTab,
     BaseSpaceTypeUIDriver,
     type BeforeInviteEvent,
+    type BeforePostMessageEvent,
     type BeforeStartChatEvent,
     type SpaceOverviewCardDescriptor,
     type SpaceTabDescriptor,
@@ -4943,6 +4944,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
         if (beforeAsk.cancel) {
             SharedService.Instance.CreateSimpleNotification(beforeAsk.cancelReason ?? 'This space does not allow a new conversation.', 'warning', 5000);
+            return;
+        }
+        const beforePost: BeforePostMessageEvent = { cancel: false, spaceId, chatId: '', messageText: askedMessage };
+        if (!this.runBeforeHook('BeforePostMessage', spaceId, () => this.uiDriver.BeforePostMessage(beforePost))) {
+            SharedService.Instance.CreateSimpleNotification("This space's type couldn't check this message.", 'error', 5000);
+            return;
+        }
+        if (beforePost.cancel) {
+            SharedService.Instance.CreateSimpleNotification(beforePost.cancelReason ?? 'This space does not allow posting that message.', 'warning', 5000);
             return;
         }
         this.isSubmittingAsk = true;

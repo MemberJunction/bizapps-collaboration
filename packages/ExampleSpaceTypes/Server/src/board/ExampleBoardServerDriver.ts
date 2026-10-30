@@ -12,6 +12,7 @@ import {
     type ChildSpaceChangeContext,
     type MemberChangeContext,
     type ItemChangeContext,
+    type MessageValidationContext,
     type TaskFiledContext,
     type AgentContextParams,
     type AgentContextResult,
@@ -184,6 +185,25 @@ export class ExampleBoardServerDriver extends BaseSpaceTypeServerDriver {
 
     public override OnItemChanged(_ctx: ItemChangeContext): void {
         // Item change reaction
+    }
+
+    /**
+     * Validates messages posted via the server `PostSpaceMessage` path against `Extensions.example-board.BlockedPhrases`.
+     * Note: Gates the server `PostSpaceMessage` path only; direct browser `MJ: Conversation Details` entity saves bypass this until A19 / D44.
+     */
+    public override ValidateMessage(
+        ctx: MessageValidationContext
+    ): DriverValidationResult {
+        const blockedPhrases = stringList(readExtension(ctx.spaceType.Configuration, KEY)['BlockedPhrases'], 'BlockedPhrases');
+        const text = (ctx.messageText ?? '').toLowerCase();
+        const matched = blockedPhrases.find((phrase) => phrase.length > 0 && text.includes(phrase));
+        if (matched) {
+            return {
+                ok: false,
+                message: `Message contains a phrase ("${matched}") that is not permitted in this Board space.`,
+            };
+        }
+        return { ok: true };
     }
 
     public override OnTaskFiled(_ctx: TaskFiledContext): void {
