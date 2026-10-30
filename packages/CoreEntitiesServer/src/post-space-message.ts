@@ -3,7 +3,7 @@ import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import type { SpaceAgentCandidateItem } from './space-agent-retrieval.js';
-import { resolveSpaceDriver } from './space-driver-call.js';
+import { refusalOf, resolveSpaceDriver } from './space-driver-call.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
@@ -64,7 +64,7 @@ export async function postSpaceMessage(
     const reach = membershipReaches(context.spaces, context.memberships, callerId, spaceId);
     if (!reach?.role.canContribute) return { ok: false, message: 'Your role on this space cannot post.' };
 
-    // A type whose driver is missing refuses (fail closed); message hooks wait for MJ to say who wrote a message
+    // A type whose driver is missing refuses (fail closed). Note: ValidateMessage and OnMessagePosted gate the server PostSpaceMessage path only; direct browser MJ: Conversation Details saves bypass them until A19 / D44.
     const driver = await resolveSpaceDriver(probe, provider, user, spaceId);
     if (!driver.ok) return { ok: false, message: driver.message };
 
@@ -112,6 +112,13 @@ export async function postSpaceMessage(
         }
     }
 
+    const msgRefusal = refusalOf(await driver.call.driver.ValidateMessage({
+        ...driver.call.base,
+        chatId: foundChat.ID,
+        messageText: text,
+    }));
+    if (msgRefusal) return { ok: false, message: msgRefusal };
+
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
     detail.ConversationID = conversationId;
@@ -130,6 +137,16 @@ export async function postSpaceMessage(
         const message = detail.LatestResult?.CompleteMessage || detail.LatestResult?.Message || 'The message was refused.';
         LogError(`Space message failed for space ${spaceId} and user ${callerId}: ${message}`);
         return { ok: false, message };
+    }
+    try {
+        await driver.call.driver.OnMessagePosted({
+            ...driver.call.base,
+            chatId: foundChat.ID,
+            messageId: detail.ID,
+            messageText: text,
+        });
+    } catch (hookErr) {
+        LogError(`postSpaceMessage: OnMessagePosted failed for space ${spaceId}: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`);
     }
     return { ok: true, detailId: detail.ID, conversationId };
 }

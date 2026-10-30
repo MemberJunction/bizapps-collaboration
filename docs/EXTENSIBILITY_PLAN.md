@@ -300,13 +300,13 @@ export class CommitteeSpaceServerDriver extends BaseSpaceTypeServerDriver { … 
 | Sub-spaces, on the **parent's** type driver | `ValidateChildSpaceChange` | `OnChildSpaceChanged` |
 | Members | `ValidateMemberChange` (invite, role, band, remove) | `OnMemberChanged` |
 | Items | `ValidateItemChange` (add, update, promote, move, remove) | `OnItemChanged` |
-| Chats | `ValidateChatChange`, when a conversation is started. `ValidateChatMemberChange` waits for chats with their own people (A5), and `ValidateMessage` for A19 (the plan's D44). | `OnMessagePosted`, which waits for A19 too |
+| Chats | `ValidateChatChange`, when a conversation is started; `ValidateMessage`, on the server `PostSpaceMessage` path only (direct entity saves to `MJ: Conversation Details` wait for A19 / the plan's D44). `ValidateChatMemberChange` waits for chats with their own people (A5). | `OnMessagePosted`, on the server `PostSpaceMessage` path only (direct entity saves wait for A19 too) |
 | Agents | | `BuildAgentContext` adds type-specific instructions and data to an agent turn, such as the roster and the next meeting. It receives the chat and its members' bands, so it can leave out Team-only data when an outside person is in the chat. Not called yet: the agent turn doesn't use it. |
 | Tasks | | `OnTaskFiled` |
 | Anchored spaces | `ValidateAnchor` (who may open the record's space) | `ResolveAnchorParent` names the parent, for example the account's root space |
 
 **Where Collaboration calls them.**
-- `SpaceEntityServer`, `SpaceMemberEntityServer` and `SpaceItemEntityServer`; `CreateSpaceConversation` (`ValidateChatChange`); `CreateSpaceTask` (`OnTaskFiled`); and `EnsureSpaceForRecord` (`ValidateAnchor`, `ResolveAnchorParent`). The message hooks wait for A19 (D44), adding people waits for A5, and the agent turn doesn't call `BuildAgentContext` yet.
+- `SpaceEntityServer`, `SpaceMemberEntityServer` and `SpaceItemEntityServer`; `CreateSpaceConversation` (`ValidateChatChange`); `PostSpaceMessage` (`ValidateMessage` and `OnMessagePosted`, which gate the server `PostSpaceMessage` path only — direct entity saves to `MJ: Conversation Details` wait for A19 / D44); `CreateSpaceTask` (`OnTaskFiled`); and `EnsureSpaceForRecord` (`ValidateAnchor`, `ResolveAnchorParent`). Adding people to a chat waits for A5, and the agent turn doesn't call `BuildAgentContext` yet.
 - Validate hooks run in `ValidateAsync` and add `ValidationErrorInfo`, so `Save()` returns false with the driver's message.
 - React hooks run after the space's own save, as above, inside the caller's transaction when there is one. Running them inside the save's own transaction, through MJ's `RunInEntityTransaction`, is planned for stage 2; then a thrown error will roll the whole save back.
 - Email, HTTP and other outside work goes through `provider.RunAfterCommit`.
@@ -357,7 +357,7 @@ The first two apply to a new space, and to an existing one only in the direction
 
 Today the page calls `GetTabs`, `GetTabLabel`, `GetOverviewCards` and `GetDetailsForm`. `GetHeaderChips`, `GetHeaderActions`, `GetSettingsSections`, `GetNewSpaceSteps` and `GetVocabulary` are declared and not called yet. `GetOverviewCards` gets only the contributed cards, since the Overview's own sections aren't descriptors.
 
-**Events.** The UI driver has cancellable `Before…` hooks and one `After…` hook: `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `cancel` and `cancelReason`. Today the page raises only `BeforeInvite` and `BeforeStartChat`; the others are declared and not raised yet. The driver can cancel, and the server hook still enforces.
+**Events.** The UI driver has cancellable `Before…` hooks and one `After…` hook: `BeforeInvite`, `BeforeCreateChildSpace`, `BeforeStartChat`, `BeforeAddToChat`, `BeforePostMessage`, `BeforeCloseSpace` and `AfterSpaceOpened`. Their args carry `cancel` and `cancelReason`. Today the page raises `BeforeInvite`, `BeforeStartChat` and `BeforePostMessage` (when asking from the Overview); the others are declared and not raised yet. The driver can cancel, and `ValidateMessage` enforces on the server `PostSpaceMessage` path only.
 
 **Words.** Tab labels come from the type's and the space's `Labels` ([§ 4](#4-configuration-one-bag-per-type-and-per-space)), through the driver's `GetTabLabel`, which it can override. A space's noun, the type's `Vocabulary`, comes through `GetVocabulary`, which the page doesn't call yet.
 
