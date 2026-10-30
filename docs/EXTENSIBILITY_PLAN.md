@@ -478,12 +478,13 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 
 ### When an agent answers
 
-- **By default** (`Chats.AgentReplyMode` = `MentionOrOneToOne`), an agent answers when it's tagged, or on every message in a chat that holds exactly one person and one agent. In any other chat, a space's conversations included, it answers only when tagged. Until chats with their own people exist, `MentionOrOneToOne` works as `MentionOnly` (the plan's D25).
+- **By default** (`Chats.AgentReplyMode` = `MentionOrOneToOne`), an agent answers when it's tagged, when a person replies directly to one of its messages (`ParentID` pointing to an `AI` message within the caller's history floor), or on every message in a chat that holds exactly one person and one agent. In any other chat, a space's conversations included, it answers only when tagged or replied to in a thread. Replying to another person's message without mentioning an agent, or tagging a person (`@{"type":"user",...}`) without tagging an agent, never starts an agent turn—even under `Always`. Until chats with their own people exist, `MentionOrOneToOne` works as `MentionOnly` (the plan's D25).
 - **A type or a space can change it** to `MentionOnly` or `Always`.
 - **The reply goes to the chat it was asked in.** A private chat's reply is seen only by that person; a group chat's by everyone in it.
 - **In the chat area:** MJ's `mj-conversation-chat-area` has `AgentReplyMode`, `Always` (its default) or `MentionOnly`, from MemberJunction/MJ#4788 ([§ 9](#9-mj-changes)). Collaboration works out its own three modes and passes one of those two:
   - for a chat with one person and one agent under `MentionOrOneToOne`, `Always`, with that agent as the default and the only allowed agent;
   - for any other chat, `MentionOnly`, unless the space's mode is `Always`.
+  - `EnableDecisionRouting` defaults to `false` on `mj-collab-space-chat` until a decision model and labelled evaluation corpus are configured; the server never trusts a client `route: 'DecisionRouted'` string to bypass `MentionOnly`.
 
 ### Every agent turn goes through Collaboration's server
 
@@ -498,7 +499,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 ### What an agent sees
 
 - **Messages:** only the ones every current person in the chat can see: those after the latest `HistoryFrom` among them, and not sealed for any of them. So a summary can't show history to someone added with none.
-  - Collaboration's server passes that floor when it runs the agent, and MJ's server loads the conversation from it ([§ 9](#9-mj-changes), `AgentHistoryFrom`).
+  - Collaboration's server passes that floor when it runs the agent, and MJ's server loads the conversation from it ([§ 9](#9-mj-changes), `AgentHistoryFrom`), assembling the context window with `speakerAttribution: 'always'` and `speakerLabels` so each message is prefixed with `[Speaker]:` or `[Speaker -> replying to Target]:`.
   - Under a floor, MJ skips its summary of earlier messages, since the summary covers messages before the floor. The agent then sees the last 20 messages after the floor.
   - Until A5, the floor is the asker's own: the start of their seat, unless `Chats.HistoryOnAdd` is `All`.
 - **Search: the audience of the answer decides it** (the plan's D2). This extends the subtree bound this plan first set:
@@ -547,7 +548,7 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
 
 | Addition | What it does | Collaboration uses it for |
 |---|---|---|
-| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn: no placeholder row and no events | Tagged-only replies in a space's conversations |
+| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn unless routed as a follow-up to an agent already participating in the conversation | Tagged, thread-reply, and decision-routed follow-up replies in a space's conversations |
 | `AllowedAgentIDs` | Narrows the `@` list, every route and the default agent's delegation to these agents | The space's allowed list |
 | `MentionPeople` | The people this composer's `@` list offers. By default it offers only the current user. | The chat's members |
 | `AgentHistoryFrom` | The first moment an agent turn may read. MJ's server loads the agent's context from there and skips its summary of earlier messages. | The chat's floor ([§ 8](#8-chats-history-and-agents)) |

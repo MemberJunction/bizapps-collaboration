@@ -15,6 +15,7 @@ export interface PostSpaceMessageInput {
     spaceId: string;
     text: string;
     conversationId?: string;
+    parentDetailId?: string | null;
 }
 
 export type PostSpaceMessageResult =
@@ -91,6 +92,22 @@ export async function postSpaceMessage(
         return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
     }
     const conversationId = parsedTarget;
+    const parsedParentId = input.parentDetailId ? parseUuid(input.parentDetailId) : null;
+    if (input.parentDetailId && !parsedParentId) {
+        return { ok: false, message: 'The parent message ID is invalid.' };
+    }
+    if (parsedParentId) {
+        const parentCheck = await view.RunView<{ ID: string; ConversationID: string }>({
+            EntityName: DETAILS,
+            ExtraFilter: `ID = '${parsedParentId}' AND ConversationID = '${conversationId}'`,
+            Fields: ['ID', 'ConversationID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (!parentCheck.Success || !parentCheck.Results?.[0]) {
+            return { ok: false, message: 'The parent message does not belong to this conversation.' };
+        }
+    }
 
     const detail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     detail.NewRecord();
@@ -98,6 +115,9 @@ export async function postSpaceMessage(
     detail.UserID = callerId;
     detail.Role = 'User';
     detail.Message = text;
+    if (parsedParentId) {
+        detail.ParentID = parsedParentId;
+    }
     detail.Status = 'Complete';
     detail.HiddenToUser = false;
     detail.IsPinned = false;

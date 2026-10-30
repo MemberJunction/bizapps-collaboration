@@ -12,6 +12,9 @@ export class PostSpaceMessageInput {
 
     @Field({ nullable: true })
     ConversationID?: string;
+
+    @Field({ nullable: true })
+    ParentDetailID?: string;
 }
 
 @ObjectType()
@@ -45,6 +48,7 @@ export class PostSpaceMessageResolver extends ResolverBase {
                 spaceId: input.SpaceID,
                 text: input.Text ?? '',
                 conversationId: input.ConversationID,
+                parentDetailId: input.ParentDetailID,
             });
             if (result.ok === false) return { Success: false, ErrorMessage: result.message };
             return {

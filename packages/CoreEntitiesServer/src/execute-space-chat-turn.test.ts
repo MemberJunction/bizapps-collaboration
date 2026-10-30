@@ -102,6 +102,19 @@ describe('executeSpaceChatTurn', () => {
         messageRole?: string;
         messageConversationId?: string;
         messageText?: string;
+        messageParentId?: string | null;
+        conversationDetails?: ReadonlyArray<{
+            ID: string;
+            Sequence?: number;
+            Role: string;
+            Message?: string;
+            UserID?: string | null;
+            User?: string | null;
+            AgentID?: string | null;
+            Agent?: string | null;
+            ParentID?: string | null;
+            __mj_CreatedAt?: string | Date | null;
+        }>;
         spaceConfiguration?: string | null;
         allowedAgents?: string[];
         /** No agent is Active: the agents read comes back empty. */
@@ -168,6 +181,7 @@ describe('executeSpaceChatTurn', () => {
                         UserID: messageUserId,
                         Role: messageRole,
                         Message: messageText,
+                        ParentID: options.messageParentId ?? null,
                         AgentID: null as string | null,
                         Status: 'Complete',
                         HiddenToUser: false,
@@ -421,8 +435,23 @@ describe('executeSpaceChatTurn', () => {
                 }
 
                 if (EntityName === 'MJ: Conversation Details') {
-                    if (options.hasExistingReplyDetail && String(ExtraFilter).includes(USER_MESSAGE_ID)) {
+                    if (options.hasExistingReplyDetail && String(ExtraFilter).includes(`ParentID = '${USER_MESSAGE_ID}'`)) {
                         return mockResult<T>([{ ID: 'detail-reply-1', ParentID: USER_MESSAGE_ID, Role: 'AI' }]);
+                    }
+                    if (options.conversationDetails && !String(ExtraFilter).includes(`ParentID = '${USER_MESSAGE_ID}'`)) {
+                        const rows = options.conversationDetails.map((r, index) => ({
+                            Sequence: r.Sequence ?? index + 1,
+                            SummaryOfEarlierConversation: null,
+                            ...r,
+                        }));
+                        const byId = /\bID = '([^']+)'/.exec(String(ExtraFilter))?.[1];
+                        if (byId) {
+                            return mockResult<T>(rows.filter((r) => r.ID.toLowerCase() === byId.toLowerCase()));
+                        }
+                        if (String(ExtraFilter).includes("Role = 'AI'")) {
+                            return mockResult<T>(rows.filter((r) => r.Role === 'AI'));
+                        }
+                        return mockResult<T>(rows);
                     }
                     return mockResult<T>([]);
                 }
@@ -498,6 +527,270 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(result.ok, false);
         if (!result.ok) {
             assert.match(result.message, /does not mention an agent/i);
+        }
+    });
+
+    it('refuses a message that @-mentions a person without mentioning an agent', async () => {
+        const provider = createMockProvider({
+            messageText: `@{"type":"user","id":"${OTHER_USER_ID}","name":"Other User"} can you review the draft?`,
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /addressed to a person and does not mention an agent/i);
+        }
+    });
+
+    it('succeeds under MentionOnly when replying (ParentID) to an AI message in the conversation', async () => {
+        const parentAiDetailId = 'aaaaaaaa-1111-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'Can you expand on point 2?',
+            messageParentId: parentAiDetailId,
+            conversationDetails: [
+                {
+                    ID: parentAiDetailId,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    Message: 'Here are the 3 key points.',
+                    __mj_CreatedAt: new Date('2026-02-01T00:00:00Z'),
+                },
+            ],
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, true);
+    });
+
+    it('refuses when replying (ParentID) to a human message without mentioning an agent', async () => {
+        const parentHumanDetailId = 'bbbbbbbb-1111-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'I agree with your point!',
+            messageParentId: parentHumanDetailId,
+            conversationDetails: [
+                {
+                    ID: parentHumanDetailId,
+                    Role: 'User',
+                    UserID: OTHER_USER_ID,
+                    User: 'Other User',
+                    Message: 'We should ship on Tuesday.',
+                    __mj_CreatedAt: new Date('2026-02-01T00:00:00Z'),
+                },
+            ],
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /replies to a person and does not mention an agent/i);
+        }
+    });
+
+    it('refuses an untagged follow-up with agentId under MentionOnly when the server decision selects no_agent (human-to-human remark)', async () => {
+        const provider = createMockProvider({
+            messageText: 'Hey Bea, are you free after standup?',
+            conversationDetails: [
+                {
+                    ID: 'detail-1',
+                    Sequence: 1,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} draft the release notes`,
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:00Z'),
+                },
+                {
+                    ID: 'detail-2',
+                    Sequence: 2,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    ParentID: 'detail-1',
+                    Message: 'Here is the initial draft.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
+                },
+                {
+                    ID: USER_MESSAGE_ID,
+                    Sequence: 3,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: 'Hey Bea, are you free after standup?',
+                    __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
+                },
+            ],
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: ALLOWED_AGENT_ID,
+            decisionRunner: async () => ({
+                Success: true,
+                ModelName: 'Jev',
+                ResolvedModel: 'typesafe/jev-1.13-20260917',
+                Answers: {
+                    route: {
+                        Kind: 'Choice',
+                        Value: 'no_agent',
+                        Confidence: 0.98,
+                        Probabilities: { [ALLOWED_AGENT_ID]: 0.02, no_agent: 0.98 },
+                    },
+                    continues: {
+                        Kind: 'Likelihood',
+                        Probability: 0.05,
+                    },
+                },
+            }),
+        });
+        assert.equal(result.ok, false);
+        if (!result.ok) {
+            assert.match(result.message, /does not mention an agent/i);
+        }
+    });
+
+    it('routes an untagged follow-up under MentionOnly when the server decision confirms the participating agent', async () => {
+        const detail1Id = 'bbbbbbbb-0001-4111-8111-111111111111';
+        const detail2Id = 'bbbbbbbb-0002-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'Make the second paragraph shorter',
+            conversationDetails: [
+                {
+                    ID: detail1Id,
+                    Sequence: 1,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} draft the release notes`,
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:00Z'),
+                },
+                {
+                    ID: detail2Id,
+                    Sequence: 2,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    ParentID: detail1Id,
+                    Message: 'Here is the initial draft.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
+                },
+                {
+                    ID: USER_MESSAGE_ID,
+                    Sequence: 3,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: 'Make the second paragraph shorter',
+                    __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
+                },
+            ],
+        });
+        let capturedState = '';
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            agentId: undefined,
+            decisionRunner: async ({ state }) => {
+                capturedState = state;
+                return {
+                    Success: true,
+                    ModelName: 'LLM Decision',
+                    ResolvedModel: 'GPT-OSS-120B',
+                    Answers: {
+                        route: {
+                            Kind: 'Choice',
+                            Value: ALLOWED_AGENT_ID,
+                            Confidence: 0.95,
+                            Probabilities: { [ALLOWED_AGENT_ID]: 0.95, no_agent: 0.05 },
+                        },
+                        continues: {
+                            Kind: 'Likelihood',
+                            Probability: 0.95,
+                        },
+                    },
+                };
+            },
+        });
+        assert.equal(result.ok, true);
+        assert.match(capturedState, /Make the second paragraph shorter/);
+    });
+
+    it('attributes speakers and reply targets via AssembleContextWindow on a thread-reply turn', async () => {
+        const detail1Id = 'aaaaaaaa-0001-4111-8111-111111111111';
+        const detail2Id = 'aaaaaaaa-0002-4111-8111-111111111111';
+        const detail3Id = 'aaaaaaaa-0003-4111-8111-111111111111';
+        const provider = createMockProvider({
+            messageText: 'Make the second paragraph shorter',
+            messageParentId: detail2Id,
+            conversationDetails: [
+                {
+                    ID: detail1Id,
+                    Sequence: 1,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    Message: `@{"type":"agent","id":"${ALLOWED_AGENT_ID}","name":"Sage"} draft the release notes`,
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:00Z'),
+                },
+                {
+                    ID: detail2Id,
+                    Sequence: 2,
+                    Role: 'AI',
+                    AgentID: ALLOWED_AGENT_ID,
+                    Agent: 'Sage',
+                    ParentID: detail1Id,
+                    Message: 'Here is the initial draft.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:00:05Z'),
+                },
+                {
+                    ID: detail3Id,
+                    Sequence: 3,
+                    Role: 'User',
+                    UserID: OTHER_USER_ID,
+                    User: 'Other User',
+                    Message: 'Looks good so far.',
+                    __mj_CreatedAt: new Date('2026-02-01T10:01:00Z'),
+                },
+                {
+                    ID: USER_MESSAGE_ID,
+                    Sequence: 4,
+                    Role: 'User',
+                    UserID: CALLER_ID,
+                    User: 'Caller',
+                    ParentID: detail2Id,
+                    Message: 'Make the second paragraph shorter',
+                    __mj_CreatedAt: new Date('2026-02-01T10:02:00Z'),
+                },
+            ],
+        });
+
+        let capturedMessages: Array<{ role: string; content: unknown }> | undefined;
+        const heldRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            capturedMessages = (params.conversationMessages ?? []) as Array<{ role: string; content: unknown }>;
+            return heldRunAgent.call(AgentRunner.prototype, params) as never;
+        };
+
+        try {
+            const result = await executeSpaceChatTurn(provider, callerUser, {
+                ...defaultInput,
+                agentId: undefined,
+            });
+            assert.equal(result.ok, true, result.ok ? '' : result.message);
+            assert.ok(capturedMessages && capturedMessages.length === 4);
+            assert.match(String(capturedMessages[0].content), /^\[Caller\]:/);
+            assert.equal(capturedMessages[1].content, '[Sage -> replying to Caller]: Here is the initial draft.');
+            assert.equal(capturedMessages[2].content, '[Other User]: Looks good so far.');
+            assert.equal(
+                capturedMessages[3].content,
+                '[Caller -> replying to Sage]: Make the second paragraph shorter',
+            );
+        } finally {
+            AgentRunner.prototype.RunAgent = heldRunAgent;
         }
     });
 
@@ -742,7 +1035,7 @@ describe('executeSpaceChatTurn', () => {
                         OnFinished: (outcome) => outcomes.push({ replyDetailId: outcome.replyDetailId, success: outcome.success, runId: outcome.agentRun?.ID }),
                     },
                 });
-                assert.equal(result.ok, true);
+                assert.equal(result.ok, true, result.ok ? '' : result.message);
                 assert.equal(result.ok && result.replyDetailIds.length, 1);
                 assert.equal(provider.savedDetails[provider.savedDetails.length - 1].Status, 'In-Progress', 'the reply is still In-Progress when the call returns');
                 assert.equal(outcomes.length, 0, 'the run has not ended');
@@ -775,7 +1068,7 @@ describe('executeSpaceChatTurn', () => {
                     background: true,
                     observer: { OnFinished: (outcome) => { outcomes.push({ success: outcome.success, errorMessage: outcome.errorMessage }); throw new Error('the observer broke'); } },
                 });
-                assert.equal(result.ok, true);
+                assert.equal(result.ok, true, result.ok ? '' : result.message);
                 await new Promise((resolve) => setTimeout(resolve, 20));
                 assert.deepEqual(outcomes, [{ success: false, errorMessage: 'Simulated LLM failure' }]);
                 const reply = provider.savedDetails[provider.savedDetails.length - 1];

@@ -22,6 +22,7 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
+import { resolveTurnAgentViaDecision, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
@@ -63,6 +64,8 @@ export interface ExecuteSpaceChatTurnInput {
      */
     background?: boolean;
     observer?: TurnObserver;
+    /** Optional unit-test seam for server-side decision routing; production uses AgentDecisionService (Default Decision). */
+    decisionRunner?: SpaceChatDecisionRunner;
 }
 
 /** What the turn gave the agent (B20), for the harness and the log: never the values, only the names and ids. */
@@ -297,24 +300,72 @@ async function runClaimedTurn(
 
     const messageText = userDetail.Message ?? '';
 
-    // 7. Mention rule: decide from saved message alone using MentionParser (Item 6)
+    // 7a. History floor from Chats.HistoryOnAdd (Item 16) — resolved before agent continuity checks so prior replies respect the floor
+    let conversationHistoryFrom: Date | undefined;
+    if (historyOnAdd !== 'All' && reach) {
+        const memberRowRes = await view.RunView<{ __mj_CreatedAt: string | Date | null }>({
+            EntityName: 'MJ_BizApps_Collaboration: Space Members',
+            ExtraFilter: `SpaceID = '${reach.spaceId}' AND UserID = '${callerId}' AND Status = 'Active'`,
+            Fields: ['__mj_CreatedAt'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, system);
+        if (memberRowRes.Success && memberRowRes.Results?.[0]?.__mj_CreatedAt) {
+            conversationHistoryFrom = new Date(memberRowRes.Results[0].__mj_CreatedAt);
+        }
+    }
+
+    // 7. Mention and thread-reply rules (Item 6)
     const parser = new MentionParser();
     const parseResult = parser.parseMentions(messageText, availableAgents);
     const taggedAgentId = parseResult.agentMention?.id
         ? parseUuid(parseResult.agentMention.id)
         : null;
+    const hasHumanMentionOnly = !taggedAgentId && (parseResult.userMentions?.length ?? 0) > 0;
+    const parentDetailId = parseUuid(userDetail.ParentID);
 
     let targetAgentId: string;
     if (taggedAgentId) {
         targetAgentId = taggedAgentId;
+    } else if (hasHumanMentionOnly) {
+        return { ok: false, message: 'The message is addressed to a person and does not mention an agent.' };
+    } else if (parentDetailId) {
+        const parentResolved = await resolveParentReplyAgent(view, system, conversationId, parentDetailId, callerId, conversationHistoryFrom);
+        if (!parentResolved.ok) {
+            return { ok: false, message: parentResolved.message };
+        }
+        if (parentResolved.agentId) {
+            targetAgentId = parentResolved.agentId;
+        } else if (agentReplyMode === 'Always') {
+            if (!resolvedDefault) {
+                return { ok: false, message: 'No assistant is available in this space right now.' };
+            }
+            targetAgentId = resolvedDefault;
+        } else {
+            return { ok: false, message: 'The message does not mention an agent.' };
+        }
     } else if (agentReplyMode === 'Always') {
         if (!resolvedDefault) {
             return { ok: false, message: 'No assistant is available in this space right now.' };
         }
         targetAgentId = resolvedDefault;
     } else {
-        // Under MentionOnly without a tagged agent: refuse!
-        return { ok: false, message: 'The message does not mention an agent.' };
+        // Under MentionOnly without a tagged agent or thread reply to AI: evaluate via server-side decision routing
+        const decisionResolved = await resolveTurnAgentViaDecision({
+            view,
+            system,
+            spaceId,
+            conversationId,
+            userMessageId,
+            messageText,
+            allowedAgentIds: allowed.allowedAgentIds,
+            conversationHistoryFrom,
+            decisionRunner: input.decisionRunner,
+        });
+        if (!decisionResolved.ok) {
+            return { ok: false, message: decisionResolved.message };
+        }
+        targetAgentId = decisionResolved.agentId;
     }
 
     // Treat client's agentId strictly as a check (Item 6)
@@ -351,37 +402,32 @@ async function runClaimedTurn(
     const turnContext: SpaceTurnContext = { spaceId, conversationId, audience, spaceData: turnTools.spaceData, agentRunId: null };
 
     // 7c. The type's word on the turn (item 83): the people in the chat, by band, then the driver's instructions and data
+    const speakerLabels = new Map<string, string>();
+    if (user?.Name) {
+        speakerLabels.set(callerId, user.Name);
+    }
     let typeContext: AgentContextResult = { instructions: [], contextData: {} };
     try {
-        const seats = await view.RunView<{ UserID: string; Band: string }>({
+        const seats = await view.RunView<{ UserID: string; User?: string | null; Band: string }>({
             EntityName: 'MJ_BizApps_Collaboration: Space Members',
             ExtraFilter: `SpaceID = '${spaceId}' AND Status = 'Active'${audience === 'Team' ? " AND Band = 'Team'" : ''}`,
-            Fields: ['UserID', 'Band'],
+            Fields: ['UserID', 'User', 'Band'],
             ResultType: 'simple',
             MaxRows: 5000,
         }, system);
         if (!seats.Success) throw new Error(seats.ErrorMessage ?? 'the space\'s seats could not be read');
         const viewerBands: Record<string, 'Team' | 'Shared'> = {};
-        for (const seat of seats.Results ?? []) viewerBands[(parseUuid(seat.UserID) ?? seat.UserID).toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
+        for (const seat of seats.Results ?? []) {
+            const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
+            viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
+            if (seat.User?.trim()) {
+                speakerLabels.set(seatUserId, seat.User.trim());
+            }
+        }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
         typeContext = { instructions: [...(built?.instructions ?? [])], contextData: { ...(built?.contextData ?? {}) } };
     } catch (contextError) {
         LogError(`executeSpaceChatTurn: the type's driver failed building the agent context for space ${spaceId}; the turn runs without it: ${contextError instanceof Error ? contextError.message : String(contextError)}`);
-    }
-
-    // 8. History floor from Chats.HistoryOnAdd (Item 16)
-    let conversationHistoryFrom: Date | undefined;
-    if (historyOnAdd !== 'All' && reach) {
-        const memberRowRes = await view.RunView<{ __mj_CreatedAt: string | Date | null }>({
-            EntityName: 'MJ_BizApps_Collaboration: Space Members',
-            ExtraFilter: `SpaceID = '${reach.spaceId}' AND UserID = '${callerId}' AND Status = 'Active'`,
-            Fields: ['__mj_CreatedAt'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, system);
-        if (memberRowRes.Success && memberRowRes.Results?.[0]?.__mj_CreatedAt) {
-            conversationHistoryFrom = new Date(memberRowRes.Results[0].__mj_CreatedAt);
-        }
     }
 
     // 9. Bound agent to conversation audience (Item 23 / B2.3: what the room can reach)
@@ -439,15 +485,13 @@ async function runClaimedTurn(
                 provider,
                 conversationHistoryFrom
             );
-            const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
+            const assembledMessages = ConversationEngine.AssembleContextWindow(windowRows, {
                 excludeDetailIds: [assistantDetail.ID],
                 historyFrom: conversationHistoryFrom ?? null,
                 maxTailMessages: 20,
+                speakerAttribution: 'always',
+                speakerLabels,
             });
-            const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
-                role: m.role,
-                content: m.content,
-            }));
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
@@ -606,3 +650,37 @@ async function runClaimedTurn(
     }
     return settleTurn();
 }
+
+async function resolveParentReplyAgent(
+    view: RunView,
+    system: UserInfo,
+    conversationId: string,
+    parentDetailId: string,
+    callerId: string,
+    historyFrom: Date | undefined,
+): Promise<{ ok: true; agentId: string | null } | { ok: false; message: string }> {
+    const parentRes = await view.RunView<{ ID: string; Role: string | null; AgentID: string | null; UserID?: string | null; __mj_CreatedAt?: string | Date | null }>({
+        EntityName: DETAILS,
+        ExtraFilter: `ID = '${parentDetailId}' AND ConversationID = '${conversationId}'`,
+        Fields: ['ID', 'Role', 'AgentID', 'UserID', '__mj_CreatedAt'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, system);
+    const parentRow = parentRes.Success ? parentRes.Results?.[0] : undefined;
+    if (!parentRow || (historyFrom && parentRow.__mj_CreatedAt && new Date(parentRow.__mj_CreatedAt).getTime() < historyFrom.getTime())) {
+        return { ok: false, message: 'The message does not mention an agent.' };
+    }
+    const parentAgentId = parseUuid(parentRow.AgentID);
+    if (parentRow.Role === 'AI' && parentAgentId) {
+        return { ok: true, agentId: parentAgentId };
+    }
+    if (parentRow.Role === 'User') {
+        const parentUserId = parseUuid(parentRow.UserID);
+        if (parentUserId && parentUserId.toLowerCase() === callerId.toLowerCase()) {
+            return { ok: true, agentId: null };
+        }
+        return { ok: false, message: 'The message replies to a person and does not mention an agent.' };
+    }
+    return { ok: false, message: 'The message does not mention an agent.' };
+}
+

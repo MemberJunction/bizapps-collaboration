@@ -7,7 +7,7 @@ import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import { ChatSlotDirective, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ChatSlotDirective, ConversationStreamingService, ResolveAgentTurn } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
@@ -413,6 +413,7 @@ class ChatAreaStub {
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
   public ReadOnlyMessage: string | null = null;
+  public EnableDecisionRouting = false;
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
   public ComposerDraftConsumed = new EventEmitter<void>();
@@ -425,7 +426,7 @@ declareComponent(ChatAreaStub, {
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
     'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
-    'AgentReplyMode', 'AllowedAgentIDs', 'MentionPeople', 'AgentHistoryFrom',
+    'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
   outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
@@ -448,6 +449,46 @@ describe("a space's conversation, rendered", () => {
     expect(area).not.toBeNull();
     // MJ's chat area defaults AllowRealtime to true; the space must turn it off
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
+    // Multi-party space chats default Jev decision routing to off until a decision model and labelled corpus are configured
+    expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(false);
+  });
+
+  it('exercises MJ client-side ResolveAgentTurn for thread replies under MentionOnly and person-only suppression under Always', () => {
+    const baseCandidates = {
+      MentionedAgentIds: [] as string[],
+      MentionedUserIds: [] as string[],
+      ReplyParentAgentId: null as string | null,
+      ReplyParentIsHuman: false,
+      ContinuityAgentId: 'a-sage',
+      ConversationDefaultAgentId: 'a-sage',
+      HostDefaultAgentId: 'a-sage',
+      ConversationManagerAgentId: 'a-mgr',
+    };
+    const isKnown = (id: string) => id === 'a-sage' || id === 'a-mgr';
+
+    // Under MentionOnly, replying to an AI message (ParentID) routes as ThreadReply without a mention
+    const threadTarget = ResolveAgentTurn(
+      { ...baseCandidates, ReplyParentAgentId: 'a-sage' },
+      { ReplyMode: 'MentionOnly', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(threadTarget).toEqual({ AgentId: 'a-sage', Route: 'ThreadReply' });
+
+    // Under Always, tagging a person (@Person) without tagging an agent suppresses the turn
+    const humanMentionTarget = ResolveAgentTurn(
+      { ...baseCandidates, MentionedUserIds: ['u-bob'] },
+      { ReplyMode: 'Always', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(humanMentionTarget).toBeNull();
+
+    // Under Always, replying to another person's message without tagging an agent suppresses the turn
+    const humanReplyTarget = ResolveAgentTurn(
+      { ...baseCandidates, ReplyParentIsHuman: true },
+      { ReplyMode: 'Always', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(humanReplyTarget).toBeNull();
   });
 });
 
