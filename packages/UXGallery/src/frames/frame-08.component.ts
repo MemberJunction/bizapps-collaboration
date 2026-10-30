@@ -9,6 +9,7 @@ import {
     CollabChatScopeBarComponent,
     CollabNewConversationDialogComponent,
     type NewConversationSubmitPayload,
+    type SpaceChatCitationModel,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import {
@@ -153,6 +154,7 @@ import { FRAME_08_FIXTURE, type Frame08FixtureData } from '../fixtures/frame-08.
                             <mjc-chat-scope-bar
                                 [RetrievalScope]="chatRetrievalScope"
                                 [AllowEverythingScope]="activeChatKind === 'Assistant'"
+                                [Citations]="sourcesInScope"
                                 (RetrievalScopeChanged)="chatRetrievalScope = $event"
                             />
                         </div>
@@ -312,6 +314,24 @@ export class Frame08Component {
     public activeChatName = 'Audit Committee General';
     public activeChatKind: 'General' | 'Topic' | 'Private' | 'Assistant' = 'General';
     public chatRetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+    public sourcesInScope: SpaceChatCitationModel[] = [
+        {
+            SpaceItemID: 'item-board-pack-fy26',
+            SpaceID: 'space-audit-committee',
+            EntityID: 'entity-files',
+            RecordID: 'file-board-pack-fy26',
+            Name: 'FY2026 Audit Committee Pack.pdf',
+            Band: 'Shared',
+        },
+        {
+            SpaceItemID: 'item-charter-review',
+            SpaceID: 'space-audit-committee',
+            EntityID: 'entity-files',
+            RecordID: 'file-charter-review',
+            Name: 'Audit Charter Review Memo.docx',
+            Band: 'Shared',
+        },
+    ];
 
     public onConversationCreated(payload: NewConversationSubmitPayload): void {
         this.activeChatName = payload.name;

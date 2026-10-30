@@ -54,7 +54,7 @@ export { CollabNewConversationDialogComponent, NewConversationSubmitPayload } fr
 export { CollabNewSpaceDialogComponent, NewSpaceTypeOption, NewSpaceSubmitPayload } from './lib/new-space-dialog.component';
 export { CollabHomeListComponent, HomeListRow } from './lib/home-list.component';
 export { CollabSpaceWorkComponent } from './lib/space-work.component';
-export { CollabSpaceChatComponent, CollabChatScopeBarComponent } from './lib/space-chat.component';
+export { CollabSpaceChatComponent, CollabChatScopeBarComponent, type SpaceChatCitationModel } from './lib/space-chat.component';
 export { CollabSpacePeopleComponent } from './lib/space-people.component';
 export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export { COLLAB_TOKENS_CSS } from './lib/tokens';

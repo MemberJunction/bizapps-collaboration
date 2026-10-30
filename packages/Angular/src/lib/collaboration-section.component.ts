@@ -94,6 +94,7 @@ import {
     type BeforeInviteEvent,
     type BeforePostMessageEvent,
     type BeforeStartChatEvent,
+    type SpaceChatCitationModel,
     type SpaceOverviewCardDescriptor,
     type SpaceTabDescriptor,
     type SpaceUIContext,
@@ -1113,7 +1114,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AgentTurnHandler]="handleAgentTurn"
                                                     [RetrievalScope]="chatRetrievalScope"
                                                     [AllowEverythingScope]="isOneToOneActiveConversation"
+                                                    [Citations]="chatCitations"
                                                     (RetrievalScopeChanged)="onChatRetrievalScopeChanged($event)"
+                                                    (CitationClicked)="onChatCitationClicked($event)"
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
                                                     (ComposerDraftConsumed)="composerDraft = null"
@@ -1512,6 +1515,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public canCloseCurrentSpace = false;
     public loadErrorMessage = '';
     public isSubmittingAsk = false;
+    public chatCitations: SpaceChatCitationModel[] = [];
 
     public async updateCanConfigureCurrentSpace(): Promise<void> {
         // The grants can change while the page is open (a host edits them): what the page offers follows them on the next selection
@@ -4825,12 +4829,26 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
-            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
+            const result = spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
+            this.chatCitations = result.Citations ?? [];
+            this.RefreshView();
+            return result;
         } catch (error) {
             LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
             return spaceTurnFailure(error);
         }
     };
+
+    public onChatCitationClicked(citation: SpaceChatCitationModel): void {
+        if (!citation?.SpaceItemID) return;
+        if (!this.hasTab('Library')) return;
+        this.selectedItemId = citation.SpaceItemID;
+        this.isDrawerOpen = true;
+        this.setTab('Library');
+        this.UpdateQueryParams({ tab: 'library', item: citation.SpaceItemID });
+        void this.showPreviewFor(citation.SpaceItemID);
+        this.RefreshView();
+    }
 
     public onTaskSelected(task: TaskItemModel): void {
         if (!task?.id) return;
