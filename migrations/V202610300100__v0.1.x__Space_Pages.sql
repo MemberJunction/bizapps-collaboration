@@ -8,7 +8,7 @@ CREATE TABLE [${flyway:defaultSchema}].[SpacePage] (
     [BuiltInTab] NVARCHAR(30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [Title] NVARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IconClass] NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [Band] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SpacePage_Band] DEFAULT (N'Shared'),
+    [Band] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SpacePage_Band] DEFAULT (N'Team'),
     [Status] NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SpacePage_Status] DEFAULT (N'Published'),
     [Sequence] INT NOT NULL CONSTRAINT [DF_SpacePage_Sequence] DEFAULT (0),
     [PublishedBlocks] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -19,7 +19,6 @@ CREATE TABLE [${flyway:defaultSchema}].[SpacePage] (
     CONSTRAINT [PK_SpacePage] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_SpacePage_Space] FOREIGN KEY ([SpaceID]) REFERENCES [${flyway:defaultSchema}].[Space] ([ID]),
     CONSTRAINT [FK_SpacePage_PublishedByUser] FOREIGN KEY ([PublishedByUserID]) REFERENCES [${mjSchema}].[User] ([ID]),
-    CONSTRAINT [CK_SpacePage_BuiltInTab] CHECK ([BuiltInTab] IS NULL OR [BuiltInTab] IN (N'Overview', N'Library', N'Data', N'Work', N'Notes', N'People')),
     CONSTRAINT [CK_SpacePage_Band] CHECK ([Band]=N'Shared' OR [Band]=N'Team'),
     CONSTRAINT [CK_SpacePage_Status] CHECK ([Status]=N'Draft' OR [Status]=N'Published')
 );
@@ -30,13 +29,13 @@ ON [${flyway:defaultSchema}].[SpacePage] ([SpaceID], [BuiltInTab])
 WHERE ([BuiltInTab] IS NOT NULL);
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A customizable block-canvas page in a space: either the saved block layout for a built-in tab (BuiltInTab set) or a custom page in the space''s Pages tab (BuiltInTab null).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A customizable block-canvas page in a space: either the saved block layout for a tab (BuiltInTab set) or a custom page in the space''s Pages tab (BuiltInTab null).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage';
 GO
 
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The space this page belongs to.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'SpaceID';
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'BuiltInTab';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The tab key this page lays out (built-in or contributed by a space type), or null for a custom page.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'BuiltInTab';
 GO
 
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The published title of the page.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'Title';
@@ -57,10 +56,10 @@ GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of published canvas blocks (id, type, title, width, body, and block-specific properties).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'PublishedBlocks';
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of unpublished draft canvas blocks while a draft is in progress.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'DraftBlocks';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page''s band), as row filters apply per row rather than per column.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'DraftBlocks';
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Unpublished draft title while a draft is in progress.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'DraftTitle';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page''s band), as row filters apply per row rather than per column.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'DraftTitle';
 GO
 
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The user who most recently published this page.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'SpacePage', @level2type = N'COLUMN', @level2name = N'PublishedByUserID';
@@ -101,7 +100,7 @@ GO
          'efe52365-941e-4a5a-b6e3-6733013ec9e3',
          'MJ_BizApps_Collaboration: Space Pages',
          'Space Pages',
-         'A customizable block-canvas page in a space: either the saved block layout for a built-in tab (BuiltInTab set) or a custom page in the space''s Pages tab (BuiltInTab null).',
+         'A customizable block-canvas page in a space: either the saved block layout for a tab (BuiltInTab set) or a custom page in the space''s Pages tab (BuiltInTab null).',
          NULL,
          'SpacePage',
          'vwSpacePages',
@@ -355,7 +354,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = 'EFE52365-941E-4A5A-B6E3-6733013EC9E3'),
             'BuiltInTab',
             'Built In Tab',
-            'The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.',
+            'The tab key this page lays out (built-in or contributed by a space type), or null for a custom page.',
             'nvarchar',
             60,
             0,
@@ -550,7 +549,7 @@ GO
             0,
             0,
             0,
-            'Shared',
+            'Team',
             0,
             1,
             0,
@@ -796,7 +795,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = 'EFE52365-941E-4A5A-B6E3-6733013EC9E3'),
             'DraftBlocks',
             'Draft Blocks',
-            'JSON array of unpublished draft canvas blocks while a draft is in progress.',
+            'JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page''s band), as row filters apply per row rather than per column.',
             'nvarchar',
             -1,
             0,
@@ -859,7 +858,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = 'EFE52365-941E-4A5A-B6E3-6733013EC9E3'),
             'DraftTitle',
             'Draft Title',
-            'Unpublished draft title while a draft is in progress.',
+            'Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page''s band), as row filters apply per row rather than per column.',
             'nvarchar',
             400,
             0,
@@ -1142,45 +1141,6 @@ EXEC [${mjSchema}].[spUpdateExistingEntityFieldsFromSchema] @ExcludedSchemaNames
 /* SQL text to set default column width where needed */
 EXEC [${mjSchema}].[spSetDefaultColumnWidthWhereNeeded] @ExcludedSchemaNames='sys,staging,dbo,${mjSchema}', @IncludedSchemaNames='${flyway:defaultSchema}';
 
-/* SQL text to insert entity field value with ID af30dba4-bc00-4c63-9fa2-b6d27a5375ec */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('af30dba4-bc00-4c63-9fa2-b6d27a5375ec', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 1, 'Data', 'Data', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 323c0309-75ca-43fd-b5a1-c9534948715d */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('323c0309-75ca-43fd-b5a1-c9534948715d', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 2, 'Library', 'Library', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID e3e954a2-fced-4875-b9a4-0c56070b50bc */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('e3e954a2-fced-4875-b9a4-0c56070b50bc', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 3, 'Notes', 'Notes', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 733073ae-98f7-4da4-b648-f2ae3fcdb9a8 */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('733073ae-98f7-4da4-b648-f2ae3fcdb9a8', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 4, 'Overview', 'Overview', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID b2ab2e0d-fc49-40b8-a6c4-279f35ebb3e9 */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('b2ab2e0d-fc49-40b8-a6c4-279f35ebb3e9', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 5, 'People', 'People', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID faa4b9cd-d18b-466e-a9d7-eefd99ac2994 */
-INSERT INTO [${mjSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('faa4b9cd-d18b-466e-a9d7-eefd99ac2994', '3A50AC92-7B75-4F19-873F-BCCB0B4641F5', 6, 'Work', 'Work', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 3A50AC92-7B75-4F19-873F-BCCB0B4641F5 */
-UPDATE [${mjSchema}].[EntityField] SET ValueListType='List' WHERE ID='3A50AC92-7B75-4F19-873F-BCCB0B4641F5';
-
 /* SQL text to insert entity field value with ID a7323627-654a-460f-acde-fc2110d235a4 */
 INSERT INTO [${mjSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
@@ -1424,7 +1384,7 @@ BEGIN
                 CASE WHEN @BuiltInTab_Clear = 1 THEN NULL ELSE ISNULL(@BuiltInTab, NULL) END,
                 @Title,
                 CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
-                ISNULL(@Band, 'Shared'),
+                ISNULL(@Band, 'Team'),
                 ISNULL(@Status, 'Published'),
                 ISNULL(@Sequence, 0),
                 CASE WHEN @PublishedBlocks_Clear = 1 THEN NULL ELSE ISNULL(@PublishedBlocks, NULL) END,
@@ -1459,7 +1419,7 @@ BEGIN
                 CASE WHEN @BuiltInTab_Clear = 1 THEN NULL ELSE ISNULL(@BuiltInTab, NULL) END,
                 @Title,
                 CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
-                ISNULL(@Band, 'Shared'),
+                ISNULL(@Band, 'Team'),
                 ISNULL(@Status, 'Published'),
                 ISNULL(@Sequence, 0),
                 CASE WHEN @PublishedBlocks_Clear = 1 THEN NULL ELSE ISNULL(@PublishedBlocks, NULL) END,

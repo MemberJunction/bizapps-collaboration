@@ -10,7 +10,7 @@ import type {
     SpacePageBlockDescriptor,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 
-export type BuiltInTabName = 'Overview' | 'Library' | 'Data' | 'Work' | 'Notes' | 'People';
+export type BuiltInTabName = string;
 
 export type StarterBlockDescriptor = Pick<
     SpacePageBlockDescriptor,
@@ -177,17 +177,12 @@ export function mapSpacePageRowToModel(
     };
 }
 
-const VALID_BUILT_IN_TABS = new Set<string>(['Overview', 'Library', 'Data', 'Work', 'Notes', 'People']);
-
 export function applyCollabPageToEntity(
     entity: SpacePageEntityTarget,
     page: CollabPageModel,
     currentUserId: string | null | undefined,
 ): void {
-    const builtInTab =
-        page.builtInTabId && VALID_BUILT_IN_TABS.has(page.builtInTabId)
-            ? (page.builtInTabId as BuiltInTabName)
-            : null;
+    const builtInTab = page.builtInTabId?.trim() || null;
     entity.BuiltInTab = builtInTab;
     entity.Title = page.title.trim() || 'Untitled Page';
     entity.IconClass = page.iconClass || 'fa-solid fa-compass';

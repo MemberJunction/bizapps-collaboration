@@ -205,6 +205,7 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                     <div class="sp-page-context">
                         <span class="sp-edit-dot" aria-hidden="true"></span>
                         <span class="sp-edit-status" data-testid="page-edit-status">Editing · Draft</span>
+                        <span class="sp-edit-hint" data-testid="page-edit-hint">Drafts are visible to everyone who can see this page.</span>
                     </div>
                     <div class="sp-toolbar-right">
                         <button
@@ -1335,6 +1336,10 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
             font-size: var(--mj-text-sm);
             font-weight: var(--mj-font-semibold);
             color: var(--mj-text-primary);
+        }
+        .sp-edit-hint {
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
         .sp-context-ic {
             color: var(--mj-brand-primary);
@@ -2672,6 +2677,37 @@ export class CollabSpacePagesComponent {
 
     private openFaqs = new Set<string>();
     private safeUrlCache = new Map<string, SafeResourceUrl>();
+    private cachedRegisteredBlocks: {
+        spaceTypeCode: string;
+        cards: readonly SpaceOverviewCardDescriptor[];
+        blocks: SpacePageBlockDescriptor[];
+    } | null = null;
+    private cachedBlockContext: {
+        base: SpacePageBlockContext | null;
+        spaceId: string;
+        spaceTypeCode: string;
+        canSeeTeam: boolean;
+        canWrite: boolean;
+        isReadOnly: boolean;
+        sharedLabel: string;
+        teamLabel: string;
+        cards: readonly SpaceOverviewCardDescriptor[];
+        aboutTpl: TemplateRef<unknown> | null;
+        mainTpl: TemplateRef<unknown> | null;
+        value: SpacePageBlockContext;
+    } | null = null;
+    private cachedBlockInputs = new Map<
+        string,
+        {
+            kind: SpacePageBlockDescriptor['kind'];
+            spaceId: string;
+            block: CollabPageBlock;
+            readOnly: boolean;
+            context: SpacePageBlockContext;
+            sequence: number;
+            inputs: Record<string, unknown>;
+        }
+    >();
 
     public get effectiveCanSeeTeam(): boolean {
         return this.CanSeeTeam || Boolean(this.BlockContext?.canSeeTeam);
@@ -2690,23 +2726,77 @@ export class CollabSpacePagesComponent {
     }
 
     public get registeredBlocks(): SpacePageBlockDescriptor[] {
-        return assembleSpacePageBlocks(this.resolvedSpaceTypeCode, this.resolvedContributedCards);
+        const spaceTypeCode = this.resolvedSpaceTypeCode;
+        const cards = this.resolvedContributedCards;
+        if (
+            this.cachedRegisteredBlocks &&
+            this.cachedRegisteredBlocks.spaceTypeCode === spaceTypeCode &&
+            this.cachedRegisteredBlocks.cards === cards
+        ) {
+            return this.cachedRegisteredBlocks.blocks;
+        }
+        const blocks = assembleSpacePageBlocks(spaceTypeCode, cards);
+        this.cachedRegisteredBlocks = { spaceTypeCode, cards, blocks };
+        return blocks;
     }
 
     public get resolvedBlockContext(): SpacePageBlockContext {
-        return {
-            ...(this.BlockContext ?? {}),
-            spaceId: this.resolvedSpaceId,
-            spaceTypeCode: this.resolvedSpaceTypeCode,
-            canSeeTeam: this.effectiveCanSeeTeam,
-            canWrite: !this.IsReadOnly && this.CanWrite,
-            isReadOnly: this.IsReadOnly,
-            sharedLabel: this.BlockContext?.sharedLabel ?? this.SharedLabel,
-            teamLabel: this.BlockContext?.teamLabel ?? this.TeamLabel,
-            contributedCards: this.resolvedContributedCards,
-            aboutTemplate: this.BlockContext?.aboutTemplate ?? this.aboutProjectedTpl ?? null,
-            mainViewTemplate: this.BlockContext?.mainViewTemplate ?? this.mainProjectedTpl ?? null,
+        const base = this.BlockContext;
+        const spaceId = this.resolvedSpaceId;
+        const spaceTypeCode = this.resolvedSpaceTypeCode;
+        const canSeeTeam = this.effectiveCanSeeTeam;
+        const canWrite = !this.IsReadOnly && this.CanWrite;
+        const isReadOnly = this.IsReadOnly;
+        const sharedLabel = base?.sharedLabel ?? this.SharedLabel;
+        const teamLabel = base?.teamLabel ?? this.TeamLabel;
+        const cards = this.resolvedContributedCards;
+        const aboutTpl = base?.aboutTemplate ?? this.aboutProjectedTpl ?? null;
+        const mainTpl = base?.mainViewTemplate ?? this.mainProjectedTpl ?? null;
+        const cached = this.cachedBlockContext;
+        if (
+            cached &&
+            cached.base === base &&
+            cached.spaceId === spaceId &&
+            cached.spaceTypeCode === spaceTypeCode &&
+            cached.canSeeTeam === canSeeTeam &&
+            cached.canWrite === canWrite &&
+            cached.isReadOnly === isReadOnly &&
+            cached.sharedLabel === sharedLabel &&
+            cached.teamLabel === teamLabel &&
+            cached.cards === cards &&
+            cached.aboutTpl === aboutTpl &&
+            cached.mainTpl === mainTpl
+        ) {
+            return cached.value;
+        }
+        const value: SpacePageBlockContext = {
+            ...(base ?? {}),
+            spaceId,
+            spaceTypeCode,
+            canSeeTeam,
+            canWrite,
+            isReadOnly,
+            sharedLabel,
+            teamLabel,
+            contributedCards: cards,
+            aboutTemplate: aboutTpl,
+            mainViewTemplate: mainTpl,
         };
+        this.cachedBlockContext = {
+            base,
+            spaceId,
+            spaceTypeCode,
+            canSeeTeam,
+            canWrite,
+            isReadOnly,
+            sharedLabel,
+            teamLabel,
+            cards,
+            aboutTpl,
+            mainTpl,
+            value,
+        };
+        return value;
     }
 
     public get visiblePages(): CollabPageModel[] {
@@ -3001,18 +3091,45 @@ export class CollabSpacePagesComponent {
     }
 
     public registeredBlockInputs(block: CollabPageBlock, reg: SpacePageBlockDescriptor): Record<string, unknown> {
-        if (reg.kind === 'card') {
-            return {
-                SpaceId: this.resolvedSpaceId,
-                Sequence: reg.sortKey,
-            };
+        const key = `${block.id}:${reg.key}`;
+        const spaceId = this.resolvedSpaceId;
+        const readOnly = this.IsReadOnly || !this.CanWrite;
+        const context = this.resolvedBlockContext;
+        const sequence = reg.sortKey;
+        const cached = this.cachedBlockInputs.get(key);
+        if (
+            cached &&
+            cached.kind === reg.kind &&
+            cached.spaceId === spaceId &&
+            cached.block === block &&
+            cached.readOnly === readOnly &&
+            cached.context === context &&
+            cached.sequence === sequence
+        ) {
+            return cached.inputs;
         }
-        return {
-            SpaceId: this.resolvedSpaceId,
-            Config: block,
-            ReadOnly: this.IsReadOnly || !this.CanWrite,
-            Context: this.resolvedBlockContext,
-        };
+        const inputs: Record<string, unknown> =
+            reg.kind === 'card'
+                ? {
+                      SpaceId: spaceId,
+                      Sequence: sequence,
+                  }
+                : {
+                      SpaceId: spaceId,
+                      Config: block,
+                      ReadOnly: readOnly,
+                      Context: context,
+                  };
+        this.cachedBlockInputs.set(key, {
+            kind: reg.kind,
+            spaceId,
+            block,
+            readOnly,
+            context,
+            sequence,
+            inputs,
+        });
+        return inputs;
     }
 
     public shouldRenderBlock(block: CollabPageBlock): boolean {

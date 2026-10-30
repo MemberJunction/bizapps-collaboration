@@ -451,7 +451,7 @@
   },
   {
     "primaryKey": {
-      "ID": "A4D8193B-5C62-4E7A-8B90-1F2E3D4C5B6A"
+      "ID": "00946333-EA10-4A0E-83D5-86C8AA224AF4"
     },
     "fields": {
       "Name": "Collaboration: Visible Pages",
@@ -461,7 +461,7 @@
   },
   {
     "primaryKey": {
-      "ID": "B5E92A4C-6D73-4F8B-9C01-2A3F4E5D6C7B"
+      "ID": "658D79AC-98A5-429D-A5A0-9C1CC69D179C"
     },
     "fields": {
       "Name": "Collaboration: Pages The Caller May Change",

@@ -1742,12 +1742,21 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     const parentId = message?.ParentID;
     if (!parentId) return null;
     const norm = parentId.trim().toLowerCase();
-    return this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === norm) ?? null;
+    const parent = this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === norm) ?? null;
+    if (!parent) return null;
+    // An agent's answer to a top-level message stays in the main flow and is not a thread reply
+    const parentParentId = parent.ParentID?.trim().toLowerCase();
+    if (this.isAiMessage(message) && (!parentParentId || parentParentId === 'null')) {
+      return null;
+    }
+    return parent;
   }
 
   /**
    * Collects all transitive replies in the Slack-style thread rooted at `parentId`
-   * (direct children and replies-to-replies), preserving chronological order.
+   * (person replies to `parentId`, plus person or agent replies to those thread replies),
+   * preserving chronological order. An agent's direct answer to a top-level message stays in
+   * the main flow and is not part of the thread.
    */
   public getRepliesFor(parentId: string | null | undefined): ChatThreadMessageLike[] {
     if (!parentId) return [];
@@ -1761,10 +1770,14 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       for (const m of all) {
         const id = (m.ID ?? '').trim().toLowerCase();
         const pid = (m.ParentID ?? '').trim().toLowerCase();
-        if (id && pid && pid !== 'null' && inThread.has(pid) && !inThread.has(id)) {
-          inThread.add(id);
-          added = true;
+        if (!id || !pid || pid === 'null' || !inThread.has(pid) || inThread.has(id)) {
+          continue;
         }
+        if (pid === rootNorm && this.isAiMessage(m)) {
+          continue;
+        }
+        inThread.add(id);
+        added = true;
       }
     }
     inThread.delete(rootNorm);

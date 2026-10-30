@@ -1938,7 +1938,7 @@ export class mjBizAppsCollaborationSpaceNoteResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ_BizApps_Collaboration: Space Pages
 //****************************************************************************
-@ObjectType({ description: "A customizable block-canvas page in a space: either the saved block layout for a built-in tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null)." })
+@ObjectType({ description: "A customizable block-canvas page in a space: either the saved block layout for a tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null)." })
 export class mjBizAppsCollaborationSpacePage_ {
     @Field() 
     @MaxLength(36)
@@ -1948,7 +1948,7 @@ export class mjBizAppsCollaborationSpacePage_ {
     @MaxLength(36)
     SpaceID?: string;
         
-    @Field({nullable: true, description: "The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page."}) 
+    @Field({nullable: true, description: "The tab key this page lays out (built-in or contributed by a space type), or null for a custom page."}) 
     @MaxLength(30)
     BuiltInTab?: string;
         
@@ -1974,10 +1974,10 @@ export class mjBizAppsCollaborationSpacePage_ {
     @Field({nullable: true, description: "JSON array of published canvas blocks (id, type, title, width, body, and block-specific properties)."}) 
     PublishedBlocks?: string;
         
-    @Field({nullable: true, description: "JSON array of unpublished draft canvas blocks while a draft is in progress."}) 
+    @Field({nullable: true, description: "JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column."}) 
     DraftBlocks?: string;
         
-    @Field({nullable: true, description: "Unpublished draft title while a draft is in progress."}) 
+    @Field({nullable: true, description: "Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column."}) 
     @MaxLength(200)
     DraftTitle?: string;
         

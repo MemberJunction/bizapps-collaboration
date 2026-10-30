@@ -157,4 +157,43 @@ describe('space-pages', () => {
         assert.equal(merged[6].id, 'custom-roadmap-1');
         assert.equal(merged[6].builtInTabId, null);
     });
+
+    it('preserves contributed tab keys (e.g. BaseSpaceTab keys) on entity.BuiltInTab', () => {
+        const contributedTabPage: CollabPageModel = {
+            id: 'page-meetings',
+            builtInTabId: 'meetings',
+            title: 'Committee Meetings',
+            iconClass: 'fa-solid fa-calendar-days',
+            pageType: 'Overview',
+            band: 'Team',
+            status: 'Published',
+            sequence: 6,
+            collaborative: true,
+            summary: 'Contributed meetings tab layout',
+            body: '',
+            updatedLabel: 'Just now',
+            authorName: 'Ada',
+            blocks: [],
+            comments: [],
+        };
+
+        const entity: SpacePageEntityTarget = {
+            SpaceID: 'space-1',
+            BuiltInTab: null,
+            Title: '',
+            IconClass: null,
+            Band: 'Team',
+            Status: 'Published',
+            Sequence: 0,
+            PublishedBlocks: null,
+            DraftBlocks: null,
+            DraftTitle: null,
+            PublishedByUserID: null,
+            PublishedAt: null,
+        };
+
+        applyCollabPageToEntity(entity, contributedTabPage, 'user-1');
+        assert.equal(entity.BuiltInTab, 'meetings');
+    });
 });
+

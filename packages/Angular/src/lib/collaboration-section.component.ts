@@ -2727,20 +2727,74 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             .toUpperCase();
     }
 
+    private cachedSpacePages: {
+        spaceId: string;
+        spaceTitle: string;
+        spaceSubtitle: string;
+        spaceTypeName: string;
+        spaceTypeCode: string;
+        contributedCards: readonly SpaceOverviewCardDescriptor[];
+        libraryRows: LibraryRowModel[];
+        spaceMembers: SpaceMemberModel[];
+        defaultBand: SpaceBand;
+        persistedPages: CollabPageModel[];
+        pages: CollabPageModel[];
+    } | null = null;
+
     public get spacePages(): CollabPageModel[] {
+        const spaceId = this.activeSpaceId || 'default';
+        const spaceTitle = this.spaceTitle || 'Workspace';
+        const spaceSubtitle = this.spaceSubtitle || '';
+        const spaceTypeName = this.spaceTypeName || 'Workspace';
+        const spaceTypeCode = this.activeSpaceTypeCode || '';
+        const contributedCards = this.overviewContributedCards;
+        const libraryRows = this.libraryRows;
+        const spaceMembers = this.spaceMembers;
+        const defaultBand = this.noteDefaultBand;
+        const persistedPages = this.persistedPages;
+        const cached = this.cachedSpacePages;
+        if (
+            cached &&
+            cached.spaceId === spaceId &&
+            cached.spaceTitle === spaceTitle &&
+            cached.spaceSubtitle === spaceSubtitle &&
+            cached.spaceTypeName === spaceTypeName &&
+            cached.spaceTypeCode === spaceTypeCode &&
+            cached.contributedCards === contributedCards &&
+            cached.libraryRows === libraryRows &&
+            cached.spaceMembers === spaceMembers &&
+            cached.defaultBand === defaultBand &&
+            cached.persistedPages === persistedPages
+        ) {
+            return cached.pages;
+        }
         const starters = buildStarterPagesForSpace({
-            spaceId: this.activeSpaceId || 'default',
-            spaceTitle: this.spaceTitle || 'Workspace',
-            spaceSubtitle: this.spaceSubtitle || '',
-            spaceTypeName: this.spaceTypeName || 'Workspace',
-            spaceTypeCode: this.activeSpaceTypeCode,
-            contributedCards: this.overviewContributedCards,
-            descriptors: assembleSpacePageBlocks(this.activeSpaceTypeCode || '*', this.overviewContributedCards),
-            libraryRows: this.libraryRows,
-            spaceMembers: this.spaceMembers,
-            defaultBand: this.noteDefaultBand,
+            spaceId,
+            spaceTitle,
+            spaceSubtitle,
+            spaceTypeName,
+            spaceTypeCode,
+            contributedCards,
+            descriptors: assembleSpacePageBlocks(spaceTypeCode || '*', contributedCards),
+            libraryRows,
+            spaceMembers,
+            defaultBand,
         });
-        return mergeSpacePagesWithDefaults(this.persistedPages, starters);
+        const pages = mergeSpacePagesWithDefaults(persistedPages, starters);
+        this.cachedSpacePages = {
+            spaceId,
+            spaceTitle,
+            spaceSubtitle,
+            spaceTypeName,
+            spaceTypeCode,
+            contributedCards,
+            libraryRows,
+            spaceMembers,
+            defaultBand,
+            persistedPages,
+            pages,
+        };
+        return pages;
     }
 
     public isCustomizingPages = false;

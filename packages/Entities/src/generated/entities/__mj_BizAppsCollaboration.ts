@@ -723,19 +723,11 @@ export const mjBizAppsCollaborationSpacePageSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
         * * Description: The space this page belongs to.`),
-    BuiltInTab: z.union([z.literal('Data'), z.literal('Library'), z.literal('Notes'), z.literal('Overview'), z.literal('People'), z.literal('Work')]).nullable().describe(`
+    BuiltInTab: z.string().nullable().describe(`
         * * Field Name: BuiltInTab
         * * Display Name: Built In Tab
         * * SQL Data Type: nvarchar(30)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Data
-    *   * Library
-    *   * Notes
-    *   * Overview
-    *   * People
-    *   * Work
-        * * Description: The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.`),
+        * * Description: The tab key this page lays out (built-in or contributed by a space type), or null for a custom page.`),
     Title: z.string().describe(`
         * * Field Name: Title
         * * Display Name: Title
@@ -750,7 +742,7 @@ export const mjBizAppsCollaborationSpacePageSchema = z.object({
         * * Field Name: Band
         * * Display Name: Band
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: Shared
+        * * Default Value: Team
     * * Value List Type: List
     * * Possible Values 
     *   * Shared
@@ -781,12 +773,12 @@ export const mjBizAppsCollaborationSpacePageSchema = z.object({
         * * Field Name: DraftBlocks
         * * Display Name: Draft Blocks
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress.`),
+        * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column.`),
     DraftTitle: z.string().nullable().describe(`
         * * Field Name: DraftTitle
         * * Display Name: Draft Title
         * * SQL Data Type: nvarchar(200)
-        * * Description: Unpublished draft title while a draft is in progress.`),
+        * * Description: Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column.`),
     PublishedByUserID: z.string().nullable().describe(`
         * * Field Name: PublishedByUserID
         * * Display Name: Published By User ID
@@ -3058,7 +3050,7 @@ export class mjBizAppsCollaborationSpaceNoteEntity extends BaseEntity<mjBizAppsC
  * * Schema: __mj_BizAppsCollaboration
  * * Base Table: SpacePage
  * * Base View: vwSpacePages
- * * @description A customizable block-canvas page in a space: either the saved block layout for a built-in tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null).
+ * * @description A customizable block-canvas page in a space: either the saved block layout for a tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null).
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -3114,20 +3106,12 @@ export class mjBizAppsCollaborationSpacePageEntity extends BaseEntity<mjBizAppsC
     * * Field Name: BuiltInTab
     * * Display Name: Built In Tab
     * * SQL Data Type: nvarchar(30)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Data
-    *   * Library
-    *   * Notes
-    *   * Overview
-    *   * People
-    *   * Work
-    * * Description: The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.
+    * * Description: The tab key this page lays out (built-in or contributed by a space type), or null for a custom page.
     */
-    get BuiltInTab(): 'Data' | 'Library' | 'Notes' | 'Overview' | 'People' | 'Work' | null {
+    get BuiltInTab(): string | null {
         return this.Get('BuiltInTab');
     }
-    set BuiltInTab(value: 'Data' | 'Library' | 'Notes' | 'Overview' | 'People' | 'Work' | null) {
+    set BuiltInTab(value: string | null) {
         this.Set('BuiltInTab', value);
     }
 
@@ -3161,7 +3145,7 @@ export class mjBizAppsCollaborationSpacePageEntity extends BaseEntity<mjBizAppsC
     * * Field Name: Band
     * * Display Name: Band
     * * SQL Data Type: nvarchar(10)
-    * * Default Value: Shared
+    * * Default Value: Team
     * * Value List Type: List
     * * Possible Values 
     *   * Shared
@@ -3224,7 +3208,7 @@ export class mjBizAppsCollaborationSpacePageEntity extends BaseEntity<mjBizAppsC
     * * Field Name: DraftBlocks
     * * Display Name: Draft Blocks
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress.
+    * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column.
     */
     get DraftBlocks(): string | null {
         return this.Get('DraftBlocks');
@@ -3237,7 +3221,7 @@ export class mjBizAppsCollaborationSpacePageEntity extends BaseEntity<mjBizAppsC
     * * Field Name: DraftTitle
     * * Display Name: Draft Title
     * * SQL Data Type: nvarchar(200)
-    * * Description: Unpublished draft title while a draft is in progress.
+    * * Description: Unpublished draft title while a draft is in progress. Readable by anyone who can read the page (within the page's band), as row filters apply per row rather than per column.
     */
     get DraftTitle(): string | null {
         return this.Get('DraftTitle');

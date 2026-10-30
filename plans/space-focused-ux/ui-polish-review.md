@@ -123,6 +123,63 @@ The fixes:
 
 **Next:** fix R2-1 to R2-8 and commit. Then step M, including the chat bubble. Then round 2b. Stop after round 2b.
 
+## Round 2b review: R2 fixes, step M and round 2b (`a52f906`, `784359c`, `78f9f7c`, `737044b`; MJ `a7c25e8f37`; 2026-10-30)
+
+**Verdict: R2-1 to R2-8 are fixed, step M is done, and round 2b has the right design. 3 blockers and 5 should-fixes, then on to round 3.**
+
+Verified by the reviewer:
+- The full `pnpm test` passes (exit 0); `check-mj-tokens` and `check-mj-inputs` pass; `ngc --noEmit` exits 0 in both packages.
+- The local DB (read-only query) shows:
+  - `Shell.ChatOverlay.Enabled` = `false`;
+  - MJ migration `202610281836` applied;
+  - the `SpacePage` table present.
+- Workspace MJ is on `next`, plus one opt-in commit with a test.
+- PR #19 is merged in, and its `EnableDecisionRouting` and route forwarding survived.
+- The four requested page tests are in `stage1-servers.test.ts`. No `__collabPage` code is left.
+
+Process note: the round 2 commit `792b272` was rewritten as `4cc903c`. The code is identical, but don't amend or rewrite a reviewed commit; add a new one.
+
+### Blockers
+
+**B-1. Replace the three hand-made metadata IDs.**
+- They are invented patterns, not random UUIDs: `A4D8193B-5C62-4E7A-8B90-1F2E3D4C5B6A` and `B5E92A4C-6D73-4F8B-9C01-2A3F4E5D6C7B` (the two row filters), and `C7F03B5D-7E84-4A9C-AD12-3B4A5F6E7D8C`.
+- Generate each with `uuidgen | tr '[:lower:]' '[:upper:]'`.
+- Push the metadata again, and remove the old rows from the local DB, so it matches.
+
+**B-2. Collapsed threads hide every agent answer (step M).**
+- Collaboration's server sets each agent reply's `ParentID` to the user's message (`execute-space-chat-turn.ts:457`, and the lookup at line 239 depends on it).
+- With `[CollapseThreadReplies]="true"`, every answer drops into a "1 reply" thread under its question. See `shots/step-m/chat-unmentioned-followup-light.png`.
+- Fix it in the MJ commit, where "thread reply" is defined:
+  - a person's message with a loaded parent is a thread reply;
+  - any message whose parent is itself a thread reply stays in that thread;
+  - an agent's answer to a top-level message stays in the main flow.
+- Tests cover all three cases. Take the step M chat screenshots again.
+
+**B-3. A page that doesn't name its band is a Team page.**
+- Change both places from Shared to Team: the migration's `DF_SpacePage_Band` and `stampDefaults()` in `SpacePageEntityServer.ts`.
+- This is the same fail-closed rule as R2-1.
+
+### Should-fix
+
+**S-1. Let any tab have a layout.**
+- `CK_SpacePage_BuiltInTab` hard-codes six tab ids, so a tab a space type contributes (a `BaseSpaceTab`, like a committee's Meetings) can never get a page layout. Drop the CHECK, and drop the six-tab list from the column description.
+- The migration hasn't shipped, so edit it. Bring the local DB in line by dropping the constraint and repairing the Flyway checksum, then run CodeGen. Say exactly what you ran.
+
+**S-2. One method for the edit check.** `SpacePageEntityServer.ValidateAsync` and `Delete` repeat the same context load and `pageEditVerdict` call (about 35 lines each). Move it into one private method that both call.
+
+**S-3. Compute pages when the data changes, not on every check.**
+- `spacePages` in `collaboration-section.component.ts` is a getter that rebuilds the starter pages and scans the ClassFactory. It is bound 7 times, so it reruns on every change detection.
+- Compute it when the space, the saved pages or the contributions change.
+- Keep `registeredBlockInputs()` and the block context stable between checks, so `NgComponentOutlet` doesn't reset every block's inputs each time.
+
+**S-4. Prove the Team-page read rule with a real read.** The current test re-implements the filter in JavaScript and pattern-matches the filter text. Add a check to `test-harnesses/integration.mjs`: an outside persona reads a space's pages and gets Shared pages only. Run one integration job at a time.
+
+**S-5. Say who can see drafts.**
+- `DraftBlocks` and `DraftTitle` can be read by anyone who can read the page; a row filter can't hide a column. That's acceptable, because a draft never leaves the page's band.
+- Say so in both column descriptions. In the editor's bar, show a quiet hint: "Drafts are visible to everyone who can see this page."
+
+**Next:** fix B-1 to B-3 and S-1 to S-5, and commit. Then do round 3 (chat). Also check the route in the step M "unmentioned follow-up" shot. Its banner says `@Mention` for a message with no mention: find the route the server actually received for that turn, and make sure the label resets each turn. Run every gate, write "## Round 3" in the notes, save screenshots to `shots/round-3/`, commit, then stop.
+
 ### Now: turn off the floating chat bubble in the local install (Colin, 2026-10-29)
 
 MJ's floating chat bubble sits on top of the chat composer's controls.
@@ -205,4 +262,4 @@ Build Home as Needs you, then Coming up, then your recent spaces, each with one 
 - Remove the welcome hero and the stat tiles. A count shows as a badge on the row or rail item it belongs to.
 - When nothing needs you, show one quiet line, not an empty card.
 
-Order of the remaining work: **R2 fixes + step M + 2b (stop) → 3, chat (stop) → 4, Home (stop)**.
+Order of the remaining work: **round 2b fixes + 3, chat (stop) → 4, Home (stop)**.
