@@ -3,6 +3,7 @@ export { BaseSpaceOverviewCard } from './lib/base-space-overview-card';
 export {
     BaseSpacePageBlock,
     assembleSpacePageBlocks,
+    defaultBlocksForBuiltInTab,
     BUILT_IN_SPACE_PAGE_BLOCKS,
     CollabPinnedPageBlockComponent,
     CollabNeedsYouPageBlockComponent,
@@ -89,13 +90,12 @@ export { CollabSpaceSettingsComponent } from './lib/space-settings.component';
 export {
     CollabSpacePagesComponent,
     COLLAB_BLOCK_OPTIONS,
-    COLLAB_WIDGET_BLOCK_OPTIONS,
     COLLAB_PAGE_ICONS,
     type CollabPageModel,
     type CollabPageBlock,
+    type CollabContentBlockType,
     type CollabPageBlockType,
     type CollabBlockWidth,
-    type CollabWidgetVisibility,
     type CollabPageComment,
     type CollabPageType,
     type CollabCalloutVariant,

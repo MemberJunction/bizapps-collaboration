@@ -87,6 +87,7 @@ import {
     type NewSpaceSubmitPayload,
     type TabItem,
     assembleSpaceContributions,
+    assembleSpacePageBlocks,
     BaseSpaceOverviewCard,
     BaseSpaceTab,
     BaseSpaceTypeUIDriver,
@@ -123,7 +124,6 @@ import {
     CollabPinnedStripComponent,
     CollabSpaceDataComponent,
     type CollabPageModel,
-    type CollabWidgetVisibility,
     type SpacePageBlockContext,
     type SpaceRailCustomPage,
     type NoteModel,
@@ -1017,7 +1017,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="overviewWidgetVisibility"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1058,7 +1057,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1118,7 +1116,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1235,7 +1232,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1286,7 +1282,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1343,7 +1338,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
@@ -1480,7 +1474,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         [DefaultBand]="noteDefaultBand"
                                                         [SharedLabel]="sharedBandLabel"
                                                         [TeamLabel]="teamBandLabel"
-                                                        [WidgetVisibility]="overviewWidgetVisibility"
                                                         (PageSelectRequested)="onPageSelected($event)"
                                                         (PageSaveRequested)="onPageSave($event)"
                                                         (PageDeleteRequested)="onPageDelete($event)"
@@ -2739,6 +2732,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             spaceTitle: this.spaceTitle || 'Workspace',
             spaceSubtitle: this.spaceSubtitle || '',
             spaceTypeName: this.spaceTypeName || 'Workspace',
+            spaceTypeCode: this.activeSpaceTypeCode,
+            contributedCards: this.overviewContributedCards,
+            descriptors: assembleSpacePageBlocks(this.activeSpaceTypeCode || '*', this.overviewContributedCards),
             libraryRows: this.libraryRows,
             spaceMembers: this.spaceMembers,
             defaultBand: this.noteDefaultBand,
@@ -2775,28 +2771,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         );
     }
 
-    public get overviewWidgetVisibility(): CollabWidgetVisibility {
-        const hasVisibleContributedCards = this.overviewContributedCards.some(
-            (c) => c.side !== 'Team' || this.canSeeTeamSide,
-        );
-        return {
-            Pinned: this.spacePins.length > 0,
-            NeedsYou: this.overviewNeedsYou.length > 0,
-            SharedFiles: this.hasTab('Library'),
-            TeamFiles: this.canSeeTeamSide && this.hasTab('Library'),
-            AskBox:
-                this.canStartConversation &&
-                !this.isSpaceClosed &&
-                this.hasTab('Chat'),
-            Discussion: this.hasTab('Chat'),
-            ContributedCards: hasVisibleContributedCards,
-            About: this.hasDetails,
-            SubSpaces:
-                this.overviewSubSpaces.length > 0 ||
-                (this.canCreateSpace && !this.isSpaceClosed),
-        };
-    }
-
     public get spacePageBlockContext(): SpacePageBlockContext {
         const canChat = this.canStartConversation && !this.isSpaceClosed && this.hasTab('Chat');
         return {
@@ -2810,7 +2784,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             isReadOnly: this.isSpaceClosed,
             sharedLabel: this.sharedBandLabel,
             teamLabel: this.teamBandLabel,
-            pinnedItems: this.spacePins,
+            pins: this.spacePins,
             pinnedTitle: this.pinnedLabel,
             needsYouItems: this.overviewNeedsYou,
             sharedItems: this.overviewSharedItems,
@@ -2818,11 +2792,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             showLibraryLink: this.hasTab('Library'),
             teamItems: this.overviewTeamItems,
             teamTotalCount: this.libraryTeamCount,
-            showAskBox: canChat,
             canStartConversation: canChat,
             agentAvailable: this.chatDefaultAgentId !== null,
             isSubmittingAsk: this.isSubmittingAsk,
-            showDiscussionSnippet: this.hasTab('Chat'),
             showChatLink: this.hasTab('Chat'),
             discussionAudienceCount: this.discussionAudienceCount,
             roomMessages: this.overviewRoomMessages,
@@ -2831,18 +2803,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             hasAbout: this.hasDetails,
             aboutTitle: this.aboutTitle,
             subSpaces: this.overviewSubSpaces,
-            canSeeSubSpaces:
-                this.overviewSubSpaces.length > 0 ||
-                (this.canCreateSpace && !this.isSpaceClosed),
             canAddSubSpace: this.canCreateSpace && !this.isSpaceClosed,
             onPinOpen: (pin) => this.onPinOpen(pin),
-            onPinUnpin: (pin) => this.onUnpin(pin),
-            onItemSelected: (id) => this.onItemSelected(id),
+            onUnpin: (pin) => this.onUnpin(pin),
+            onItemSelected: (item) => this.onItemSelected(item),
             onOpenLibraryRequested: () => this.onOpenLibraryRequested(),
-            onShareRequested: (id) => this.onShareRequested(id),
+            onShareRequested: (item) => this.onShareRequested(item),
             onAskRequested: (msg) => this.onOverviewAskRequested(msg),
             onOpenChatRequested: () => this.onOpenChatRequested(),
-            onSubSpaceSelected: (id) => this.onSpaceOpenRequested(id),
+            onSubSpaceSelected: (sub) => this.onSpaceOpenRequested(sub.id),
             onNewSubSpaceRequested: () => this.openNewSpaceDialog(this.activeSpaceId),
         };
     }

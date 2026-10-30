@@ -7,7 +7,7 @@ import {
   buildStarterPagesForSpace,
   mergeSpacePagesWithDefaults,
 } from './space-pages-storage.ts';
-import type { CollabPageModel } from '@mj-biz-apps/collaboration-ng-widgets';
+import type { CollabPageModel, SpaceOverviewCardDescriptor } from '@mj-biz-apps/collaboration-ng-widgets';
 
 describe('space-pages-storage', () => {
   it('identifies serialized custom page JSON vs plain markdown note body', () => {
@@ -59,11 +59,16 @@ describe('space-pages-storage', () => {
   });
 
   it('builds starter pages for all built-in space tabs and merges saved customizations + user pages', () => {
+    const DummyCard = class {} as unknown as SpaceOverviewCardDescriptor['component'];
     const pages = buildStarterPagesForSpace({
       spaceId: 's-1',
       spaceTitle: 'Board of Directors',
       spaceSubtitle: 'Quarterly governance and packets',
       spaceTypeName: 'Board',
+      spaceTypeCode: 'board',
+      contributedCards: [
+        { key: 'board:motions', title: 'Motions & Votes', side: 'Shared', sortKey: 45, component: DummyCard },
+      ],
       defaultBand: 'Shared',
       libraryRows: [
         { id: 'doc-1', kind: 'pdf', name: 'Q3 Financial Packet.pdf', folder: 'Packets', band: 'Shared', who: 'Ada', when: 'Today' },
@@ -77,18 +82,17 @@ describe('space-pages-storage', () => {
     assert.deepEqual(pages.map((p) => p.builtInTabId), ['Overview', 'Library', 'Data', 'Work', 'Notes', 'People']);
     assert.equal(pages[0].band, 'Shared');
     assert.equal(pages[0].isSeed, true);
-    // Overview contains only the authentic workspace widgets in their exact original zones
-    assert.equal(pages[0].blocks.every((b) => b.type.startsWith('Widget:')), true);
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:Pinned')?.width, 'full');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:NeedsYou')?.width, 'main');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:SharedFiles')?.width, 'main');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:TeamFiles')?.width, 'main');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:AskBox')?.width, 'side');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:Discussion')?.width, 'side');
-    assert.equal(pages[0].blocks.some((b) => b.type === 'Widget:ContributedCards'), false);
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:About')?.width, 'side');
-    assert.equal(pages[0].blocks.some((b) => b.type === 'Widget:SubSpaces'), false);
-    assert.equal(pages[1].blocks.some((b) => b.type === 'Widget:MainView'), true);
+    // Overview contains the registered blocks whose defaultTabs include 'Overview' plus contributed cards
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:pinned')?.width, 'full');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:needs-you')?.width, 'main');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:shared-files')?.width, 'main');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:team-files')?.width, 'main');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:ask-box')?.width, 'side');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:discussion')?.width, 'side');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'board:motions')?.width, 'side');
+    assert.equal(pages[0].blocks.find((b) => b.type === 'collab:about')?.width, 'side');
+    assert.equal(pages[0].blocks.some((b) => b.type === 'collab:sub-spaces'), false);
+    assert.equal(pages[1].blocks.some((b) => b.type === 'collab:main-view'), true);
 
     const savedCustomOverview: CollabPageModel = {
       ...pages[0],
@@ -97,10 +101,8 @@ describe('space-pages-storage', () => {
       title: 'Custom Board Overview',
       widgetsInitialized: true,
       blocks: [
-        { id: 'seed-blk-callout', type: 'Callout', title: 'Legacy Seed Callout', body: 'Should be stripped' },
-        { id: 'seed-blk-widget-contributed', type: 'Widget:ContributedCards', title: '', width: 'side' },
-        { id: 'seed-blk-widget-shared-files', type: 'Widget:SharedFiles', title: '', width: 'half' },
-        { id: 'seed-blk-widget-ask-box', type: 'Widget:AskBox', title: '', width: 'half' },
+        { id: 'seed-blk-shared-files', type: 'collab:shared-files', title: '', width: 'main' },
+        { id: 'seed-blk-ask-box', type: 'collab:ask-box', title: '', width: 'side' },
       ],
     };
     const legacySavedLibrary: CollabPageModel = {
@@ -133,18 +135,15 @@ describe('space-pages-storage', () => {
     assert.equal(merged.length, 7);
     assert.equal(merged[0].id, 'saved-overview-1');
     assert.equal(merged[0].title, 'Custom Board Overview');
-    // Strips legacy synthetic seed-blk-callout and seed-blk-widget-contributed, and normalizes 'half' widget widths to 'main' / 'side'
-    assert.equal(merged[0].blocks.some((b) => b.id === 'seed-blk-callout'), false);
-    assert.equal(merged[0].blocks.some((b) => b.id === 'seed-blk-widget-contributed'), false);
-    assert.equal(merged[0].blocks.find((b) => b.type === 'Widget:SharedFiles')?.width, 'main');
-    assert.equal(merged[0].blocks.find((b) => b.type === 'Widget:AskBox')?.width, 'side');
-    // Respects intentional removal of Widget:About when widgetsInitialized is true
-    assert.equal(merged[0].blocks.some((b) => b.type === 'Widget:About'), false);
-    // Upgrades legacy saved Library page by appending missing Widget:MainView
+    assert.equal(merged[0].blocks.find((b) => b.type === 'collab:shared-files')?.width, 'main');
+    assert.equal(merged[0].blocks.find((b) => b.type === 'collab:ask-box')?.width, 'side');
+    // Respects intentional removal of collab:about when widgetsInitialized is true
+    assert.equal(merged[0].blocks.some((b) => b.type === 'collab:about'), false);
+    // Upgrades legacy saved Library page by appending missing collab:main-view
     assert.equal(merged[1].id, 'saved-library-legacy');
     assert.equal(merged[1].blocks.length, 2);
     assert.equal(merged[1].blocks[0].id, 'custom-callout');
-    assert.equal(merged[1].blocks[1].type, 'Widget:MainView');
+    assert.equal(merged[1].blocks[1].type, 'collab:main-view');
     assert.equal(merged[6].id, 'custom-roadmap-1');
     assert.equal(merged[6].builtInTabId, null);
   });

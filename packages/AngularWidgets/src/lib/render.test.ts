@@ -1068,7 +1068,7 @@ describe('the conversation of a space, read-only', () => {
   metadata: {
     slot: 'page-block',
     contributionKey: 'test:custom-metric',
-    title: 'Custom metric block',
+    label: 'Custom metric block',
     icon: 'fa-solid fa-gauge-high',
     side: 'Shared',
     defaultZone: 'main',
@@ -1094,7 +1094,7 @@ class TestCustomMetricBlockComponent extends BaseSpacePageBlock {}
   metadata: {
     slot: 'page-block',
     contributionKey: 'test:team-audit',
-    title: 'Team audit block',
+    label: 'Team audit block',
     icon: 'fa-solid fa-user-shield',
     side: 'Team',
     defaultZone: 'main',
@@ -1114,6 +1114,30 @@ class TestCustomMetricBlockComponent extends BaseSpacePageBlock {}
   `,
 })
 class TestTeamAuditBlockComponent extends BaseSpacePageBlock {}
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:omitted-side',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:omitted-side',
+    label: 'Omitted side block',
+    icon: 'fa-solid fa-shield-halved',
+    defaultZone: 'main',
+    sortKey: 57,
+    spaceTypes: ['*'],
+    description: 'Block registered with no side in metadata',
+  },
+})
+@Component({
+  selector: 'mjc-test-omitted-side-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-omitted-side-block">
+      Omitted side block for {{ SpaceId }}
+    </div>
+  `,
+})
+class TestOmittedSideBlockComponent extends BaseSpacePageBlock {}
 
 describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
   const sampleOverviewPage = (blocks: CollabPageModel['blocks']): CollabPageModel => ({
@@ -1175,11 +1199,13 @@ describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
     expect(rendered?.textContent).toContain('Metric block for space-42 (readonly=false)');
   });
 
-  it('filters the block picker and rendered page by side so non-Team viewers never see or render a Team block', () => {
+  it('filters the block picker and rendered page by side (including blocks registered with no side, which default to Team) so non-Team viewers never see or render a Team block', () => {
     void TestTeamAuditBlockComponent;
+    void TestOmittedSideBlockComponent;
     const pageWithTeamBlock = sampleOverviewPage([
       { id: 'blk-team-1', type: 'test:team-audit', title: '', width: 'main' },
-      { id: 'blk-team-files', type: 'Widget:TeamFiles', title: '', width: 'main' },
+      { id: 'blk-omitted-side', type: 'test:omitted-side', title: '', width: 'main' },
+      { id: 'blk-team-files', type: 'collab:team-files', title: '', width: 'main' },
     ]);
 
     const fixture = TestBed.createComponent(CollabSpacePagesComponent);
@@ -1192,19 +1218,23 @@ describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
     const host = fixture.nativeElement as HTMLElement;
     const comp = fixture.componentInstance;
 
-    // Non-Team viewer does not see Team blocks in the picker or on the rendered page
-    const sharedOnlyOptions = comp.availableWidgetBlockOptions( sampleOverviewPage([]) );
+    // Non-Team viewer does not see Team blocks or omitted-side blocks in the picker or on the rendered page
+    const sharedOnlyOptions = comp.availableWidgetBlockOptions(sampleOverviewPage([]));
     expect(sharedOnlyOptions.some((o) => o.type === 'test:team-audit')).toBe(false);
+    expect(sharedOnlyOptions.some((o) => o.type === 'test:omitted-side')).toBe(false);
     expect(sharedOnlyOptions.some((o) => o.type === 'collab:team-files')).toBe(false);
     expect(host.querySelector('[data-testid="test-team-audit-block"]')).toBeNull();
+    expect(host.querySelector('[data-testid="test-omitted-side-block"]')).toBeNull();
 
-    // Switching CanSeeTeam to true exposes Team blocks in the picker and renders them on the page
+    // Switching CanSeeTeam to true exposes Team blocks and omitted-side blocks in the picker and renders them on the page
     fixture.componentRef.setInput('CanSeeTeam', true);
     fixture.detectChanges();
     const teamOptions = comp.availableWidgetBlockOptions(sampleOverviewPage([]));
     expect(teamOptions.some((o) => o.type === 'test:team-audit')).toBe(true);
+    expect(teamOptions.some((o) => o.type === 'test:omitted-side')).toBe(true);
     expect(teamOptions.some((o) => o.type === 'collab:team-files')).toBe(true);
     expect(host.querySelector('[data-testid="test-team-audit-block"]')?.textContent).toContain('Internal team audit block for space-99');
+    expect(host.querySelector('[data-testid="test-omitted-side-block"]')?.textContent).toContain('Omitted side block for space-99');
   });
 
   it('renders a muted "This block is no longer available" notice in edit mode and nothing for viewers when a block key is unregistered', async () => {

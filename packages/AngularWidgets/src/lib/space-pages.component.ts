@@ -25,7 +25,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 import { LibraryRowModel, SpaceBand, SpaceMemberModel } from './types';
 import { DiffSegment, DiffWords, HasTextChange, SummarizeDiff } from './page-diff';
 
-export type CollabPageBlockType =
+export type CollabContentBlockType =
     | 'Heading'
     | 'Text'
     | 'Callout'
@@ -39,42 +39,12 @@ export type CollabPageBlockType =
     | 'Checklist'
     | 'FAQ'
     | 'Table'
-    | 'Divider'
-    | 'Widget:Pinned'
-    | 'Widget:NeedsYou'
-    | 'Widget:SharedFiles'
-    | 'Widget:TeamFiles'
-    | 'Widget:AskBox'
-    | 'Widget:Discussion'
-    | 'Widget:About'
-    | 'Widget:SubSpaces'
-    | 'Widget:MainView'
-    | 'collab:pinned'
-    | 'collab:needs-you'
-    | 'collab:shared-files'
-    | 'collab:team-files'
-    | 'collab:ask'
-    | 'collab:discussion'
-    | 'collab:sub-spaces'
-    | 'collab:about'
-    | 'collab:main-view'
-    | (string & {});
+    | 'Divider';
+
+export type CollabPageBlockType = string;
 
 export type CollabCalloutVariant = 'info' | 'success' | 'warning' | 'danger';
 export type CollabBlockWidth = 'full' | 'half' | 'main' | 'side';
-
-export interface CollabWidgetVisibility {
-    Pinned?: boolean;
-    NeedsYou?: boolean;
-    SharedFiles?: boolean;
-    TeamFiles?: boolean;
-    AskBox?: boolean;
-    Discussion?: boolean;
-    About?: boolean;
-    SubSpaces?: boolean;
-    MainView?: boolean;
-    [key: string]: boolean | undefined;
-}
 
 export interface CollabFactPair {
     label: string;
@@ -187,18 +157,6 @@ export const COLLAB_BLOCK_OPTIONS: CollabBlockOption[] = [
     { type: 'FAQ', label: 'FAQ accordion', icon: 'fa-solid fa-circle-question', hint: 'Expandable question & answer pairs' },
     { type: 'Table', label: 'Table', icon: 'fa-solid fa-table', hint: 'Structured rows & columns for schedules or matrices' },
     { type: 'Divider', label: 'Divider', icon: 'fa-solid fa-minus', hint: 'Subtle horizontal rule between sections' },
-];
-
-export const COLLAB_WIDGET_BLOCK_OPTIONS: CollabBlockOption[] = [
-    { type: 'collab:shared-files', label: 'Shared files', icon: 'fa-solid fa-eye', hint: 'Deliverables and files shared with everyone in this space' },
-    { type: 'collab:team-files', label: 'Team working files', icon: 'fa-solid fa-lock', hint: 'Internal team-only files and working papers' },
-    { type: 'collab:ask', label: 'Ask about this space', icon: 'fa-solid fa-wand-magic-sparkles', hint: 'Ask questions about this space' },
-    { type: 'collab:discussion', label: 'Recent discussion', icon: 'fa-solid fa-comments', hint: 'Recent messages in this space' },
-    { type: 'collab:pinned', label: 'Pinned items', icon: 'fa-solid fa-thumbtack', hint: 'Quick access to items pinned in this space' },
-    { type: 'collab:needs-you', label: 'Needs your attention', icon: 'fa-solid fa-bell', hint: 'Approvals, reviews, or tasks waiting on you' },
-    { type: 'collab:sub-spaces', label: 'Sub-spaces', icon: 'fa-solid fa-sitemap', hint: 'Sub-spaces inside this space' },
-    { type: 'collab:about', label: 'About this space', icon: 'fa-solid fa-circle-info', hint: 'Key details for this space' },
-    { type: 'collab:main-view', label: 'Page content', icon: 'fa-solid fa-window-maximize', hint: 'Main content area for this page' },
 ];
 
 export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
@@ -833,8 +791,8 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                             <div class="sp-ov-full">
                                 @if (isCustomizing && canEditPage(page)) {
                                     <div class="sp-insert-line">
-                                        <button type="button" class="sp-insert-btn" (click)="openBlockPicker(0, 'full')" title="Insert full-width block or widget at top">
-                                            <i class="fa-solid fa-plus"></i> Insert full-width banner or strip at top
+                                        <button type="button" class="sp-insert-btn" (click)="openBlockPicker(0, 'full')" title="Add a block here">
+                                            <i class="fa-solid fa-plus"></i> Add a block here
                                         </button>
                                     </div>
                                 }
@@ -908,7 +866,7 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                         </div>
                     }
 
-                    <!-- Fallback Projected Content (when no collab:main-view / Widget:MainView block is on the page) -->
+                    <!-- Fallback Projected Content (when no collab:main-view block is on the page) -->
                     @if (!hasMainViewBlock(page)) {
                         <div class="sp-projected-content">
                             <ng-container *ngTemplateOutlet="mainProjectedTpl"></ng-container>
@@ -2662,7 +2620,6 @@ export class CollabSpacePagesComponent {
     @Input() SpaceTypeCode = '*';
     @Input() ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
     @Input() BlockContext: SpacePageBlockContext | null = null;
-    @Input() WidgetVisibility: CollabWidgetVisibility = {};
 
     @ViewChild('aboutProjectedTpl', { static: true }) public aboutProjectedTpl?: TemplateRef<unknown>;
     @ViewChild('mainProjectedTpl', { static: true }) public mainProjectedTpl?: TemplateRef<unknown>;
@@ -2675,7 +2632,6 @@ export class CollabSpacePagesComponent {
     @Output() OpenLibraryFileRequested = new EventEmitter<string>();
 
     public readonly blockOptions = COLLAB_BLOCK_OPTIONS;
-    public readonly widgetBlockOptions = COLLAB_WIDGET_BLOCK_OPTIONS;
     public readonly pageIcons = COLLAB_PAGE_ICONS;
 
     public isCustomizing = false;
@@ -2780,7 +2736,7 @@ export class CollabSpacePagesComponent {
     }
 
     public isMainViewBlock(type: CollabPageBlockType): boolean {
-        return type === 'collab:main-view' || type === 'Widget:MainView';
+        return normalizeContributionKey(type) === 'collab:main-view';
     }
 
     public hasMainViewBlock(page: CollabPageModel): boolean {
@@ -2792,24 +2748,7 @@ export class CollabSpacePagesComponent {
         if (block.width === 'side') return 'side';
         if (block.width === 'main') return 'main';
         const reg = this.registeredBlockFor(block.type);
-        if (reg) return reg.defaultZone;
-        switch (block.type) {
-            case 'Widget:Pinned':
-            case 'collab:pinned':
-                return 'full';
-            case 'Widget:AskBox':
-            case 'collab:ask':
-            case 'Widget:Discussion':
-            case 'collab:discussion':
-            case 'Widget:ContributedCards':
-            case 'Widget:About':
-            case 'collab:about':
-            case 'Widget:SubSpaces':
-            case 'collab:sub-spaces':
-                return 'side';
-            default:
-                return 'main';
-        }
+        return reg ? reg.defaultZone : 'main';
     }
 
     public overviewBlocksForZone(
@@ -3042,15 +2981,15 @@ export class CollabSpacePagesComponent {
 
     public registeredBlockFor(type: CollabPageBlockType): SpacePageBlockDescriptor | null {
         if (STATIC_CONTENT_BLOCK_TYPES.has(type)) return null;
-        return this.registeredBlocks.find((b) => b.key === type || b.legacyType === type) ?? null;
+        const normalized = normalizeContributionKey(type);
+        return this.registeredBlocks.find((b) => normalizeContributionKey(b.key) === normalized) ?? null;
     }
 
     public blockTypeLabel(type: CollabPageBlockType): string {
         return (
             this.blockOptions.find((o) => o.type === type)?.label ??
-            this.registeredBlockFor(type)?.title ??
-            this.widgetBlockOptions.find((o) => o.type === type)?.label ??
-            type.replace(/^(Widget:|collab:)/, '')
+            this.registeredBlockFor(type)?.label ??
+            type.replace(/^collab:/, '')
         );
     }
 
@@ -3058,37 +2997,7 @@ export class CollabSpacePagesComponent {
         if (reg.side === 'Team' && !this.effectiveCanSeeTeam) {
             return false;
         }
-        switch (reg.key) {
-            case 'collab:pinned':
-                if (this.WidgetVisibility.Pinned !== undefined) return this.WidgetVisibility.Pinned;
-                return this.BlockContext ? (this.BlockContext.pinnedItems?.length ?? 0) > 0 : true;
-            case 'collab:needs-you':
-                if (this.WidgetVisibility.NeedsYou !== undefined) return this.WidgetVisibility.NeedsYou;
-                return this.BlockContext ? (this.BlockContext.needsYouItems?.length ?? 0) > 0 : true;
-            case 'collab:shared-files':
-                if (this.WidgetVisibility.SharedFiles !== undefined) return this.WidgetVisibility.SharedFiles;
-                return true;
-            case 'collab:team-files':
-                if (this.WidgetVisibility.TeamFiles !== undefined) return this.WidgetVisibility.TeamFiles;
-                return this.effectiveCanSeeTeam;
-            case 'collab:ask':
-                if (this.WidgetVisibility.AskBox !== undefined) return this.WidgetVisibility.AskBox;
-                return this.BlockContext ? Boolean(this.BlockContext.showAskBox) : true;
-            case 'collab:discussion':
-                if (this.WidgetVisibility.Discussion !== undefined) return this.WidgetVisibility.Discussion;
-                return this.BlockContext ? Boolean(this.BlockContext.showDiscussionSnippet) : true;
-            case 'collab:sub-spaces':
-                if (this.WidgetVisibility.SubSpaces !== undefined) return this.WidgetVisibility.SubSpaces;
-                return this.BlockContext ? Boolean(this.BlockContext.canSeeSubSpaces) : true;
-            case 'collab:about':
-                if (this.WidgetVisibility.About !== undefined) return this.WidgetVisibility.About;
-                return Boolean(this.BlockContext?.aboutTemplate || this.aboutProjectedTpl);
-            case 'collab:main-view':
-                if (this.WidgetVisibility.MainView !== undefined) return this.WidgetVisibility.MainView;
-                return Boolean(this.BlockContext?.mainViewTemplate || this.mainProjectedTpl);
-            default:
-                return true;
-        }
+        return reg.isActive ? reg.isActive(this.resolvedBlockContext) : true;
     }
 
     public registeredBlockInputs(block: CollabPageBlock, reg: SpacePageBlockDescriptor): Record<string, unknown> {
@@ -3122,29 +3031,19 @@ export class CollabSpacePagesComponent {
     }
 
     public availableWidgetBlockOptions(page: CollabPageModel): CollabBlockOption[] {
-        const existingKeys = new Set<string>();
-        for (const b of page.blocks) {
-            existingKeys.add(b.type);
-            const reg = this.registeredBlockFor(b.type);
-            if (reg) {
-                existingKeys.add(reg.key);
-                if (reg.legacyType) {
-                    existingKeys.add(reg.legacyType);
-                }
-            }
-        }
+        const existingKeys = new Set<string>(page.blocks.map((b) => normalizeContributionKey(b.type)));
         return this.registeredBlocks
             .filter((reg) => {
                 if (reg.side === 'Team' && !this.effectiveCanSeeTeam) return false;
                 if (reg.key === 'collab:main-view' && !this.isWorkspaceTabLayout(page)) return false;
-                if (existingKeys.has(reg.key) || (reg.legacyType && existingKeys.has(reg.legacyType))) return false;
+                if (existingKeys.has(normalizeContributionKey(reg.key))) return false;
                 return true;
             })
             .map((reg) => ({
                 type: reg.key,
-                label: reg.title,
+                label: reg.label,
                 icon: reg.icon,
-                hint: reg.description || reg.title,
+                hint: reg.description || reg.label,
             }));
     }
 

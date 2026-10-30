@@ -1,10 +1,13 @@
 import { ChangeDetectionStrategy, Component, Directive, Input, type TemplateRef, type Type, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJGlobal, RegisterClassEx } from '@memberjunction/global';
+import { type ClassRegistration, MJGlobal, RegisterClassEx } from '@memberjunction/global';
 import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
-import { BaseSpaceOverviewCard } from './base-space-overview-card';
-import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
+import {
+    assembleSpaceContributions,
+    type SpaceContributionMetadata,
+    type SpaceOverviewCardDescriptor,
+} from './base-space-type-ui-driver';
 import { CollabPinnedStripComponent } from './pinned-strip.component';
 import { CollabSpaceOverviewComponent, type RoomMiniMessage, type SubSpaceSummary } from './space-overview.component';
 import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, PinModel, SpaceBand } from './types';
@@ -24,16 +27,12 @@ export interface SpacePageBlockContext {
     firmName?: string;
     clientOrgName?: string;
     canSeeTeam?: boolean;
-    canSeeTeamSide?: boolean;
     canWrite?: boolean;
     isReadOnly?: boolean;
     sharedLabel?: string;
     teamLabel?: string;
     showLibraryLink?: boolean;
     showChatLink?: boolean;
-    showAskBox?: boolean;
-    showDiscussionSnippet?: boolean;
-    canSeeSubSpaces?: boolean;
     canStartConversation?: boolean;
     agentAvailable?: boolean;
     isSubmittingAsk?: boolean;
@@ -42,8 +41,6 @@ export interface SpacePageBlockContext {
     discussionAudienceCount?: number;
     discussionBand?: SpaceBand;
     pins?: PinModel[];
-    pinnedItems?: PinModel[];
-    pinnedLabel?: string;
     pinnedTitle?: string;
     needsYouItems?: NeedsYouItemModel[];
     sharedItems?: ItemCardModel[];
@@ -59,44 +56,40 @@ export interface SpacePageBlockContext {
     mainViewTemplate?: TemplateRef<unknown> | null;
     onPinOpen?: (pin: PinModel) => void;
     onUnpin?: (pin: PinModel) => void;
-    onPinUnpin?: (pin: PinModel) => void;
-    onItemSelected?: (item: any) => void;
-    onShareRequested?: (item: any) => void;
+    onNeedsYouAction?: (item: NeedsYouItemModel) => void;
+    onItemSelected?: (item: ItemCardModel | ItemRowModel) => void;
+    onShareRequested?: (item: ItemRowModel) => void;
     onOpenLibraryRequested?: () => void;
     onAskRequested?: (question: string) => void;
     onOpenChatRequested?: () => void;
-    onSubSpaceSelected?: (subSpace: any) => void;
+    onSubSpaceSelected?: (subSpace: SubSpaceSummary) => void;
     onNewSubSpaceRequested?: () => void;
     registerAskBoxClearer?: (clearFn: () => void) => void;
 }
 
-export interface SpacePageBlockMetadata {
-    slot?: string;
-    contributionKey?: string;
-    legacyType?: string;
-    title?: string;
-    label?: string;
-    icon?: string;
-    description?: string;
+export interface SpacePageBlockMetadata extends SpaceContributionMetadata {
+    slot?: 'page-block';
+    contributionKey: string;
+    label: string;
+    icon: string;
+    description: string;
     emptyText?: string;
     side?: 'Shared' | 'Team';
     defaultZone?: 'full' | 'main' | 'side';
-    defaultWidth?: 'full' | 'main' | 'side';
+    defaultTabs?: readonly string[];
     sortKey?: number;
-    spaceTypes?: string[];
+    spaceTypes: string[];
 }
 
 export interface SpacePageBlockDescriptor {
     key: string;
-    legacyType?: string;
-    title: string;
     label: string;
     icon: string;
     description: string;
     emptyText: string;
     side: 'Shared' | 'Team';
     defaultZone: 'full' | 'main' | 'side';
-    defaultWidth: 'full' | 'main' | 'side';
+    defaultTabs: readonly string[];
     sortKey: number;
     spaceTypes: string[];
     kind: 'page-block' | 'card';
@@ -106,6 +99,10 @@ export interface SpacePageBlockDescriptor {
 
 /**
  * Base class for live page blocks registered with `@RegisterClassEx(BaseSpacePageBlock, ...)`.
+ *
+ * Blocks are mounted dynamically with `NgComponentOutlet`, which binds `@Input()` properties (`SpaceId`, `Config`,
+ * `ReadOnly`, `Context`) but cannot bind `@Output()` event emitters. User action callbacks are therefore carried on
+ * `SpacePageBlockContext`.
  */
 @Directive()
 export abstract class BaseSpacePageBlock extends BaseAngularComponent {
@@ -124,16 +121,16 @@ export abstract class BaseSpacePageBlock extends BaseAngularComponent {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:pinned',
-        legacyType: 'Widget:Pinned',
         label: 'Pinned items',
         icon: 'fa-solid fa-thumbtack',
         description: 'Quick access to items pinned in this space',
         emptyText: 'Pinned items show here when there are any.',
         side: 'Shared',
-        defaultWidth: 'full',
+        defaultZone: 'full',
+        defaultTabs: ['Overview'],
         sortKey: 10,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-pinned',
@@ -141,31 +138,19 @@ export abstract class BaseSpacePageBlock extends BaseAngularComponent {
     changeDetection: ChangeDetectionStrategy.OnPush,
     imports: [CommonModule, CollabPinnedStripComponent],
     template: `
-        @if (resolvedPins.length > 0) {
+        @if ((Context?.pins?.length ?? 0) > 0) {
             <mjc-pinned-strip
-                [Pins]="resolvedPins"
-                [Title]="Config?.title || Context?.pinnedTitle || Context?.pinnedLabel || 'Pinned'"
+                [Pins]="Context?.pins || []"
+                [Title]="Config?.title || Context?.pinnedTitle || 'Pinned'"
                 (OpenRequested)="Context?.onPinOpen?.($event)"
-                (UnpinRequested)="onUnpin($event)"
+                (UnpinRequested)="Context?.onUnpin?.($event)"
             />
         }
     `,
 })
 export class CollabPinnedPageBlockComponent extends BaseSpacePageBlock {
-    public get resolvedPins(): PinModel[] {
-        return this.Context?.pinnedItems ?? this.Context?.pins ?? [];
-    }
-
-    public onUnpin(pin: PinModel): void {
-        if (this.Context?.onPinUnpin) {
-            this.Context.onPinUnpin(pin);
-        } else {
-            this.Context?.onUnpin?.(pin);
-        }
-    }
-
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ((ctx?.pinnedItems ?? ctx?.pins)?.length ?? 0) > 0;
+        return (ctx?.pins?.length ?? 0) > 0;
     }
 }
 
@@ -174,16 +159,16 @@ export class CollabPinnedPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:needs-you',
-        legacyType: 'Widget:NeedsYou',
         label: 'Needs your attention',
         icon: 'fa-solid fa-bell',
         description: 'Approvals, reviews, or tasks waiting on you',
         emptyText: 'Items needing your attention show here when there are any.',
         side: 'Shared',
-        defaultWidth: 'main',
+        defaultZone: 'main',
+        defaultTabs: ['Overview'],
         sortKey: 20,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-needs-you',
@@ -196,6 +181,7 @@ export class CollabPinnedPageBlockComponent extends BaseSpacePageBlock {
             [CustomTitle]="Config?.title || ''"
             [SpaceId]="SpaceId"
             [NeedsYouItems]="Context?.needsYouItems || []"
+            (NeedsYouActionRequested)="Context?.onNeedsYouAction?.($event)"
             (ItemSelectRequested)="Context?.onItemSelected?.($event)"
         />
     `,
@@ -211,16 +197,16 @@ export class CollabNeedsYouPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:shared-files',
-        legacyType: 'Widget:SharedFiles',
         label: 'Shared files',
         icon: 'fa-solid fa-eye',
         description: 'Deliverables and files shared with everyone in this space',
         emptyText: 'Shared files show here when there are any.',
         side: 'Shared',
-        defaultWidth: 'main',
+        defaultZone: 'main',
+        defaultTabs: ['Overview'],
         sortKey: 30,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-shared-files',
@@ -254,16 +240,16 @@ export class CollabSharedFilesPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:team-files',
-        legacyType: 'Widget:TeamFiles',
         label: 'Team working files',
         icon: 'fa-solid fa-lock',
         description: 'Internal team-only files and working papers',
         emptyText: 'Team working files show here when there are any.',
         side: 'Team',
-        defaultWidth: 'main',
+        defaultZone: 'main',
+        defaultTabs: ['Overview'],
         sortKey: 40,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-team-files',
@@ -280,7 +266,7 @@ export class CollabSharedFilesPageBlockComponent extends BaseSpacePageBlock {
             [ClientOrgName]="Context?.clientOrgName || ''"
             [TeamItems]="Context?.teamItems || []"
             [TeamTotalCount]="Context?.teamTotalCount ?? 0"
-            [CanSeeTeamSide]="Context?.canSeeTeam ?? Context?.canSeeTeamSide ?? true"
+            [CanSeeTeamSide]="Context?.canSeeTeam ?? true"
             (OpenLibraryRequested)="Context?.onOpenLibraryRequested?.()"
             (ItemSelectRequested)="Context?.onItemSelected?.($event)"
             (ShareRequested)="Context?.onShareRequested?.($event)"
@@ -289,7 +275,7 @@ export class CollabSharedFilesPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabTeamFilesPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean((ctx.canSeeTeam ?? ctx.canSeeTeamSide) && (ctx.showLibraryLink ?? true)) : true;
+        return ctx ? Boolean(ctx.canSeeTeam && (ctx.showLibraryLink ?? true)) : true;
     }
 }
 
@@ -298,16 +284,16 @@ export class CollabTeamFilesPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:ask',
-        legacyType: 'Widget:AskBox',
         label: 'Ask about this space',
         icon: 'fa-solid fa-wand-magic-sparkles',
         description: 'Ask questions about this space',
         emptyText: 'The ask box shows here when chat is available.',
         side: 'Shared',
-        defaultWidth: 'side',
+        defaultZone: 'side',
+        defaultTabs: ['Overview'],
         sortKey: 50,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-ask',
@@ -332,7 +318,7 @@ export class CollabAskPageBlockComponent extends BaseSpacePageBlock {
     @ViewChild('overviewRef') private overviewRef?: CollabSpaceOverviewComponent;
 
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean(ctx.canStartConversation) : true;
+        return ctx ? Boolean(ctx.canStartConversation && !ctx.isReadOnly && (ctx.showChatLink ?? true)) : true;
     }
 
     public onAsk(question: string): void {
@@ -346,16 +332,16 @@ export class CollabAskPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:discussion',
-        legacyType: 'Widget:Discussion',
         label: 'Recent discussion',
         icon: 'fa-solid fa-comments',
         description: 'Recent messages in this space',
         emptyText: 'Recent discussion shows here when there are messages.',
         side: 'Shared',
-        defaultWidth: 'side',
+        defaultZone: 'side',
+        defaultTabs: ['Overview'],
         sortKey: 60,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-discussion',
@@ -378,7 +364,7 @@ export class CollabAskPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabDiscussionPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean(ctx.showChatLink) : true;
+        return ctx ? Boolean(ctx.showChatLink ?? true) : true;
     }
 }
 
@@ -387,16 +373,16 @@ export class CollabDiscussionPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:sub-spaces',
-        legacyType: 'Widget:SubSpaces',
         label: 'Sub-spaces',
         icon: 'fa-solid fa-sitemap',
         description: 'Sub-spaces inside this space',
         emptyText: 'Sub-spaces show here when there are any.',
         side: 'Shared',
-        defaultWidth: 'side',
+        defaultZone: 'side',
+        defaultTabs: [],
         sortKey: 70,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-sub-spaces',
@@ -411,14 +397,14 @@ export class CollabDiscussionPageBlockComponent extends BaseSpacePageBlock {
             [SpaceName]="Context?.spaceName || ''"
             [SubSpaces]="Context?.subSpaces || []"
             [CanAddSubSpace]="(Context?.canAddSubSpace ?? false) && !ReadOnly"
-            (SubSpaceSelectRequested)="Context?.onSubSpaceSelected?.($event.id)"
+            (SubSpaceSelectRequested)="Context?.onSubSpaceSelected?.($event)"
             (NewSubSpaceRequested)="Context?.onNewSubSpaceRequested?.()"
         />
     `,
 })
 export class CollabSubSpacesPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean((ctx.subSpaces?.length ?? 0) > 0 || ctx.canAddSubSpace) : true;
+        return ctx ? Boolean((ctx.subSpaces?.length ?? 0) > 0 || (ctx.canAddSubSpace && !ctx.isReadOnly)) : true;
     }
 }
 
@@ -427,16 +413,16 @@ export class CollabSubSpacesPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:about',
-        legacyType: 'Widget:About',
         label: 'About this space',
         icon: 'fa-solid fa-circle-info',
         description: 'Key details for this space',
         emptyText: 'About details show here when there are any.',
         side: 'Shared',
-        defaultWidth: 'side',
+        defaultZone: 'side',
+        defaultTabs: ['Overview'],
         sortKey: 80,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-about',
@@ -470,16 +456,16 @@ export class CollabAboutPageBlockComponent extends BaseSpacePageBlock {
     metadata: {
         slot: 'page-block',
         contributionKey: 'collab:main-view',
-        legacyType: 'Widget:MainView',
         label: 'Page content',
         icon: 'fa-solid fa-window-maximize',
         description: 'Main content area for this page',
         emptyText: 'Page content shows here when available.',
         side: 'Shared',
-        defaultWidth: 'full',
+        defaultZone: 'full',
+        defaultTabs: ['Library', 'Data', 'Work', 'Notes', 'People'],
         sortKey: 90,
         spaceTypes: ['*'],
-    },
+    } satisfies SpacePageBlockMetadata,
 })
 @Component({
     selector: 'mjc-page-block-main-view',
@@ -510,170 +496,114 @@ export const BUILT_IN_SPACE_PAGE_BLOCKS = [
     CollabMainViewPageBlockComponent,
 ] as const;
 
-function matchesSpaceType(spaceTypes: readonly string[], spaceTypeCode: string): boolean {
-    if (spaceTypes.length === 0) return true;
-    const normalized = (spaceTypeCode || '*').toLowerCase().trim();
-    return spaceTypes.some((t) => t === '*' || normalized === '*' || t.toLowerCase().trim() === normalized);
+function descriptorFromRegistration(reg: ClassRegistration): SpacePageBlockDescriptor {
+    const meta = (reg.Metadata ?? {}) as Partial<SpacePageBlockMetadata>;
+    const key = (meta.contributionKey ?? reg.Key ?? '').trim();
+    const label = (meta.label ?? key).trim() || key;
+    const icon = (meta.icon ?? '').trim() || 'fa-solid fa-puzzle-piece';
+    const description = (meta.description ?? '').trim();
+    const emptyText = (meta.emptyText ?? '').trim() || `${label} items show here when there are any.`;
+    // A block that doesn't name its side is a Team block (EXTENSIBILITY_PLAN.md §6)
+    const side: 'Shared' | 'Team' = meta.side === 'Shared' ? 'Shared' : 'Team';
+    const defaultZone: 'full' | 'main' | 'side' =
+        meta.defaultZone === 'full' || meta.defaultZone === 'main' || meta.defaultZone === 'side'
+            ? meta.defaultZone
+            : 'side';
+    const defaultTabs: readonly string[] = Array.isArray(meta.defaultTabs) ? meta.defaultTabs : [];
+    const sortKey = typeof meta.sortKey === 'number' ? meta.sortKey : 100;
+    const spaceTypes = Array.isArray(meta.spaceTypes) ? meta.spaceTypes : ['*'];
+    const subClass = reg.SubClass as Type<unknown> & { isActive?: (ctx: SpacePageBlockContext | null) => boolean };
+
+    return {
+        key,
+        label,
+        icon,
+        description,
+        emptyText,
+        side,
+        defaultZone,
+        defaultTabs,
+        sortKey,
+        spaceTypes,
+        kind: 'page-block',
+        component: subClass,
+        isActive: typeof subClass.isActive === 'function' ? subClass.isActive : undefined,
+    };
+}
+
+function builtInBlockDescriptors(): SpacePageBlockDescriptor[] {
+    const builtInSet = new Set<unknown>(BUILT_IN_SPACE_PAGE_BLOCKS);
+    const allRegs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseSpacePageBlock);
+    const builtIns: SpacePageBlockDescriptor[] = [];
+    for (const reg of allRegs) {
+        if (builtInSet.has(reg.SubClass)) {
+            builtIns.push(descriptorFromRegistration(reg));
+        }
+    }
+    return builtIns.sort((a, b) => a.sortKey - b.sortKey);
 }
 
 /**
- * Assembles all `BaseSpacePageBlock` and `BaseSpaceOverviewCard` registrations from the class factory
- * (plus any driver-supplied `SpaceOverviewCardDescriptor`s) that match `spaceTypeCode`.
+ * Assembles the built-in `BaseSpacePageBlock` parts, any contributed `BaseSpacePageBlock` parts (via `assembleSpaceContributions`),
+ * and the UI driver's final `contributedCards` for `spaceTypeCode`.
  */
 export function assembleSpacePageBlocks(
     spaceTypeCode: string,
     contributedCards: readonly SpaceOverviewCardDescriptor[] = [],
 ): SpacePageBlockDescriptor[] {
-    // Reference BUILT_IN_SPACE_PAGE_BLOCKS so the bundler never tree-shakes built-in block registrations
-    void BUILT_IN_SPACE_PAGE_BLOCKS;
+    const code = (spaceTypeCode || '*').trim() || '*';
+    const builtIns = builtInBlockDescriptors();
+    const pageBlocks = assembleSpaceContributions(
+        BaseSpacePageBlock,
+        code,
+        builtIns,
+        (reg) => descriptorFromRegistration(reg),
+    );
 
-    const factory = MJGlobal.Instance.ClassFactory;
-    const byKey = new Map<string, { priority: number; desc: SpacePageBlockDescriptor }>();
-
-    const pageBlockRegs = factory.GetAllRegistrationsByMetadata(BaseSpacePageBlock, (meta) => {
-        if (!meta) return true;
-        const m = meta as Record<string, unknown>;
-        const spaceTypes = Array.isArray(m['spaceTypes']) ? (m['spaceTypes'] as string[]) : ['*'];
-        return matchesSpaceType(spaceTypes, spaceTypeCode);
-    });
-
-    for (const reg of pageBlockRegs) {
-        const raw = (reg.Metadata ?? {}) as Record<string, unknown>;
-        const key =
-            typeof raw['contributionKey'] === 'string' && raw['contributionKey'].trim()
-                ? raw['contributionKey'].trim()
-                : (reg.Key || '').trim();
-        if (!key) continue;
-
-        const label =
-            typeof raw['label'] === 'string' && raw['label'].trim()
-                ? raw['label'].trim()
-                : typeof raw['title'] === 'string' && raw['title'].trim()
-                  ? raw['title'].trim()
-                  : key;
-        const icon = typeof raw['icon'] === 'string' && raw['icon'].trim() ? raw['icon'].trim() : 'fa-solid fa-puzzle-piece';
-        const description =
-            typeof raw['description'] === 'string' && raw['description'].trim()
-                ? raw['description'].trim()
-                : typeof raw['hint'] === 'string' && raw['hint'].trim()
-                  ? raw['hint'].trim()
-                  : '';
-        const emptyText =
-            typeof raw['emptyText'] === 'string' && raw['emptyText'].trim()
-                ? raw['emptyText'].trim()
-                : `${label} items show here when there are any.`;
-        const side: 'Shared' | 'Team' = raw['side'] === 'Team' ? 'Team' : 'Shared';
-        const rawZone = raw['defaultZone'] ?? raw['defaultWidth'];
-        const defaultWidth: 'full' | 'main' | 'side' =
-            rawZone === 'full' || rawZone === 'main' || rawZone === 'side'
-                ? rawZone
-                : 'side';
-        const sortKey = typeof raw['sortKey'] === 'number' ? raw['sortKey'] : 100;
-        const spaceTypes = Array.isArray(raw['spaceTypes']) ? (raw['spaceTypes'] as string[]) : ['*'];
-        const legacyType = typeof raw['legacyType'] === 'string' ? raw['legacyType'] : undefined;
-        const subClass = reg.SubClass as Type<unknown> & { isActive?: (ctx: SpacePageBlockContext | null) => boolean };
-
-        const normalized = normalizeContributionKey(key);
-        const existing = byKey.get(normalized);
-        if (!existing || reg.Priority > existing.priority) {
-            byKey.set(normalized, {
-                priority: reg.Priority,
-                desc: {
-                    key,
-                    legacyType,
-                    title: label,
-                    label,
-                    icon,
-                    description,
-                    emptyText,
-                    side,
-                    defaultZone: defaultWidth,
-                    defaultWidth,
-                    sortKey,
-                    spaceTypes,
-                    kind: 'page-block',
-                    component: subClass,
-                    isActive: typeof subClass.isActive === 'function' ? subClass.isActive : undefined,
-                },
-            });
-        }
+    const byKey = new Map<string, SpacePageBlockDescriptor>();
+    for (const block of pageBlocks) {
+        byKey.set(normalizeContributionKey(block.key), block);
     }
 
-    // Include driver-supplied and class-factory-registered BaseSpaceOverviewCard contributions
+    // Use only the contributedCards passed in (already finalized by the space type's UI driver)
     for (const card of contributedCards) {
         if (!card.key || !card.component) continue;
         const normalized = normalizeContributionKey(card.key);
         if (byKey.has(normalized)) continue;
         const label = card.title || card.key;
         byKey.set(normalized, {
-            priority: 0,
-            desc: {
-                key: card.key,
-                title: label,
-                label,
-                icon: 'fa-solid fa-puzzle-piece',
-                description: card.subtitle || `${label} card for this space`,
-                emptyText: `${label} items show here when there are any.`,
-                side: card.side === 'Shared' ? 'Shared' : 'Team',
-                defaultZone: 'side',
-                defaultWidth: 'side',
-                sortKey: (card.sortKey ?? 100) + 100,
-                spaceTypes: [spaceTypeCode || '*'],
-                kind: 'card',
-                component: card.component,
-            },
+            key: card.key,
+            label,
+            icon: 'fa-solid fa-puzzle-piece',
+            description: card.subtitle || `${label} card for this space`,
+            emptyText: `${label} items show here when there are any.`,
+            side: card.side === 'Shared' ? 'Shared' : 'Team',
+            defaultZone: 'side',
+            defaultTabs: ['Overview'],
+            sortKey: (card.sortKey ?? 100) + 100,
+            spaceTypes: [code],
+            kind: 'card',
+            component: card.component,
         });
     }
 
-    const cardRegs = factory.GetAllRegistrationsByMetadata(BaseSpaceOverviewCard, (meta) => {
-        if (!meta) return false;
-        const m = meta as Record<string, unknown>;
-        const spaceTypes = Array.isArray(m['spaceTypes']) ? (m['spaceTypes'] as string[]) : [];
-        if (spaceTypes.length === 0) return false;
-        return matchesSpaceType(spaceTypes, spaceTypeCode);
-    });
+    return [...byKey.values()].sort((a, b) => a.sortKey - b.sortKey);
+}
 
-    for (const reg of cardRegs) {
-        const raw = (reg.Metadata ?? {}) as Record<string, unknown>;
-        const key =
-            typeof raw['contributionKey'] === 'string' && raw['contributionKey'].trim()
-                ? raw['contributionKey'].trim()
-                : (reg.Key || '').trim();
-        if (!key) continue;
-        const normalized = normalizeContributionKey(key);
-        if (byKey.has(normalized)) continue;
-        const label =
-            typeof raw['title'] === 'string' && raw['title'].trim()
-                ? raw['title'].trim()
-                : typeof raw['label'] === 'string' && raw['label'].trim()
-                  ? raw['label'].trim()
-                  : key;
-        const side: 'Shared' | 'Team' = raw['side'] === 'Shared' ? 'Shared' : 'Team';
-        const sortKey = (typeof raw['sortKey'] === 'number' ? raw['sortKey'] : 100) + 100;
-        const spaceTypes = Array.isArray(raw['spaceTypes']) ? (raw['spaceTypes'] as string[]) : ['*'];
-        byKey.set(normalized, {
-            priority: reg.Priority,
-            desc: {
-                key,
-                legacyType: reg.Key && reg.Key !== key ? reg.Key : undefined,
-                title: label,
-                label,
-                icon: typeof raw['icon'] === 'string' && raw['icon'].trim() ? raw['icon'].trim() : 'fa-solid fa-puzzle-piece',
-                description:
-                    typeof raw['description'] === 'string' && raw['description'].trim()
-                        ? raw['description'].trim()
-                        : `${label} card for this space`,
-                emptyText: `${label} items show here when there are any.`,
-                side,
-                defaultZone: 'side',
-                defaultWidth: 'side',
-                sortKey,
-                spaceTypes,
-                kind: 'card',
-                component: reg.SubClass as Type<unknown>,
-            },
-        });
-    }
-
-    return [...byKey.values()].map((v) => v.desc).sort((a, b) => a.sortKey - b.sortKey);
+/**
+ * Derives the default page blocks for a built-in tab (`'Overview'`, `'Library'`, `'Data'`, `'Work'`, `'Notes'`, `'People'`)
+ * directly from the assembled block descriptors.
+ */
+export function defaultBlocksForBuiltInTab(
+    builtInTabId: string,
+    descriptors: readonly SpacePageBlockDescriptor[],
+): { id: string; type: string; title: string; width: 'full' | 'main' | 'side' }[] {
+    return descriptors
+        .filter((d) => d.defaultTabs.includes(builtInTabId))
+        .map((d) => ({
+            id: `seed-blk-${builtInTabId.toLowerCase()}-${d.key}`,
+            type: d.key,
+            title: '',
+            width: d.defaultZone,
+        }));
 }
