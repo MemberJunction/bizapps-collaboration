@@ -1103,6 +1103,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [DefaultAgentId]="chatDefaultAgentId"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
+                                                    [EnableDecisionRouting]="chatDecisionRoutingAvailable"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
                                                     [MentionPeople]="chatMentionPeople"
@@ -1462,6 +1463,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public composerDraft: string | null = null;
     public chatAgentReplyMode: AgentReplyMode = 'MentionOnly';
     public chatAllowedAgentIds: readonly string[] = [];
+    public chatDecisionRoutingAvailable = false;
     public chatDefaultAgentId: string | null = null;
     public chatDefaultAgentName: string | null = null;
     public chatAgentHistoryFrom: Date | null = null;
@@ -3096,6 +3098,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.hostRulesRequestId++;
         this.chatAgentReplyMode = 'MentionOnly';
         this.chatAllowedAgentIds = [];
+        this.chatDecisionRoutingAvailable = false;
         this.chatDefaultAgentId = null;
         this.chatDefaultAgentName = null;
         this.chatAgentHistoryFrom = null;
@@ -4687,6 +4690,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         // Reset to safe defaults first
         this.chatAgentReplyMode = 'MentionOnly';
         this.chatAllowedAgentIds = [];
+        this.chatDecisionRoutingAvailable = false;
         this.chatDefaultAgentId = null;
         this.chatDefaultAgentName = null;
         this.chatAgentHistoryFrom = null;
@@ -4702,6 +4706,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (res?.Success) {
                 this.chatAgentReplyMode = res.AgentReplyMode ?? 'MentionOnly';
                 this.chatAllowedAgentIds = res.AllowedAgentIDs ?? [];
+                this.chatDecisionRoutingAvailable = res.DecisionRoutingAvailable === true;
                 this.chatDefaultAgentId = res.DefaultAgentID ?? null;
                 this.chatDefaultAgentName = res.DefaultAgentName ?? null;
                 this.chatAgentHistoryFrom = res.AgentHistoryFrom ? new Date(res.AgentHistoryFrom) : null;

@@ -7,6 +7,7 @@ import {
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { evaluateCanStartSpaceConversation } from './create-space-conversation.js';
+import { isDecisionRoutingAvailable } from './space-chat-decision-routing.js';
 import { asMetadata, parseUuid } from './uuid.js';
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { spaceWriteRefusal } from './space-status-gate.js';
@@ -32,6 +33,7 @@ export interface SpaceChatHostRulesResult {
     mentionPeople: SpaceChatHostRulesMentionPerson[];
     canStartConversation: boolean;
     allowedConversationKinds: string[];
+    decisionRoutingAvailable?: boolean;
 }
 
 interface SpaceRow {
@@ -501,5 +503,6 @@ export async function resolveSpaceChatHostRules(
         mentionPeople,
         canStartConversation: startPerms.canStartConversation,
         allowedConversationKinds: startPerms.allowedConversationKinds,
+        decisionRoutingAvailable: isDecisionRoutingAvailable(),
     };
 }

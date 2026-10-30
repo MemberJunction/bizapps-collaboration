@@ -548,7 +548,7 @@ Collaboration keeps MJ's `mj-conversation-chat-area` and never forks it (decisio
 
 | Addition | What it does | Collaboration uses it for |
 |---|---|---|
-| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn: no placeholder row and no events | Tagged-only replies in a space's conversations |
+| `AgentReplyMode`: `Always` (default) or `MentionOnly` | In `MentionOnly`, a message that tags no agent starts no turn unless routed as a follow-up to an agent already participating in the conversation | Tagged, thread-reply, and decision-routed follow-up replies in a space's conversations |
 | `AllowedAgentIDs` | Narrows the `@` list, every route and the default agent's delegation to these agents | The space's allowed list |
 | `MentionPeople` | The people this composer's `@` list offers. By default it offers only the current user. | The chat's members |
 | `AgentHistoryFrom` | The first moment an agent turn may read. MJ's server loads the agent's context from there and skips its summary of earlier messages. | The chat's floor ([§ 8](#8-chats-history-and-agents)) |

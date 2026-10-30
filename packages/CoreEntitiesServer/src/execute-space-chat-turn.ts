@@ -22,6 +22,7 @@ import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
 import { resolveSpaceChatSettings } from './resolve-space-chat-settings.js';
 import { resolveSpaceDriver } from './space-driver-call.js';
+import { resolveTurnAgentViaDecision, type SpaceChatDecisionRunner } from './space-chat-decision-routing.js';
 import { parseUuid } from './uuid.js';
 import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate.js';
 
@@ -63,6 +64,8 @@ export interface ExecuteSpaceChatTurnInput {
      */
     background?: boolean;
     observer?: TurnObserver;
+    /** Optional unit-test seam for server-side decision routing; production uses AgentDecisionService (Default Decision). */
+    decisionRunner?: SpaceChatDecisionRunner;
 }
 
 /** What the turn gave the agent (B20), for the harness and the log: never the values, only the names and ids. */
@@ -347,8 +350,22 @@ async function runClaimedTurn(
         }
         targetAgentId = resolvedDefault;
     } else {
-        // Under MentionOnly without a tagged agent or thread reply to AI: refuse!
-        return { ok: false, message: 'The message does not mention an agent.' };
+        // Under MentionOnly without a tagged agent or thread reply to AI: evaluate via server-side decision routing
+        const decisionResolved = await resolveTurnAgentViaDecision({
+            view,
+            system,
+            spaceId,
+            conversationId,
+            userMessageId,
+            messageText,
+            allowedAgentIds: allowed.allowedAgentIds,
+            conversationHistoryFrom,
+            decisionRunner: input.decisionRunner,
+        });
+        if (!decisionResolved.ok) {
+            return { ok: false, message: decisionResolved.message };
+        }
+        targetAgentId = decisionResolved.agentId;
     }
 
     // Treat client's agentId strictly as a check (Item 6)

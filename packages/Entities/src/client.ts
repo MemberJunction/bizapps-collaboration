@@ -156,6 +156,8 @@ export interface SpaceChatHostRulesGraphQLPayload {
     AllowedConversationKinds: string[];
     /** The largest upload the host takes. */
     UploadMaxBytes?: number;
+    /** Whether the host has a Decision model configured for multi-party chat routing. */
+    DecisionRoutingAvailable?: boolean;
     MentionPeople: {
         ID: string;
         Name: string;
@@ -313,6 +315,7 @@ query GetSpaceChatHostRules($spaceId: String!, $conversationId: String) {
         CanStartConversation
         AllowedConversationKinds
         UploadMaxBytes
+        DecisionRoutingAvailable
         MentionPeople {
             ID
             Name

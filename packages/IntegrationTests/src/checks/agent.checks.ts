@@ -7,6 +7,7 @@ import {
     createSpaceConversation,
     decideUploadBand,
     executeSpaceChatTurn,
+    isDecisionRoutingAvailable,
     postSpaceMessage,
     resolveSpaceAgentRetrieval,
     uploadSpaceFile,
@@ -505,13 +506,13 @@ const checks: NamedCheck[] = [
                     }
                 }
 
-                // Multi-party routing: 2) untagged follow-up with agentId is refused under MentionOnly even after the agent has replied
+                // Multi-party routing: 2) untagged human-to-human remark with agentId is refused under MentionOnly even after the agent has replied
                 const followUpPost = await postSpaceMessage(ctx.Provider, bea, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: convId,
-                    text: 'What shared materials are available in Discovery?',
+                    text: 'Hey Ada, I am grabbing coffee before our 2pm client call — do you want an iced latte?',
                 });
-                Assert(followUpPost.ok === true && !!followUpPost.detailId, 'Untagged follow-up message posted');
+                Assert(followUpPost.ok === true && !!followUpPost.detailId, 'Untagged human-to-human message posted');
                 if (followUpPost.ok && followUpPost.detailId) {
                     createdDetailIds.push(followUpPost.detailId);
                     const followUpTurn = await executeSpaceChatTurn(ctx.Provider, bea, {
@@ -520,12 +521,35 @@ const checks: NamedCheck[] = [
                         userMessageId: followUpPost.detailId,
                         agentId: COLLABORATION_TEST_AGENT_ID,
                     });
-                    Assert(!followUpTurn.ok, 'Untagged follow-up under MentionOnly is refused by server');
+                    Assert(!followUpTurn.ok, 'Untagged human-to-human remark under MentionOnly is refused by server');
                     if (!followUpTurn.ok) {
                         Assert(
                             followUpTurn.message === 'The message does not mention an agent.',
-                            `Untagged follow-up refusal matches: ${followUpTurn.message}`,
+                            `Untagged human-to-human refusal matches: ${followUpTurn.message}`,
                         );
+                    }
+                }
+
+                // Multi-party routing: 2b) when a Decision model is configured on the host, an untagged follow-up to the active agent is routed by the server
+                if (isDecisionRoutingAvailable()) {
+                    const routedFollowUpPost = await postSpaceMessage(ctx.Provider, ada, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: convId,
+                        text: 'Can you list the shared files you just found in Discovery again?',
+                    });
+                    Assert(routedFollowUpPost.ok === true && !!routedFollowUpPost.detailId, 'Untagged agent follow-up message posted');
+                    if (routedFollowUpPost.ok && routedFollowUpPost.detailId) {
+                        createdDetailIds.push(routedFollowUpPost.detailId);
+                        const routedTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                            spaceId: DISCOVERY_SPACE_ID,
+                            conversationId: convId,
+                            userMessageId: routedFollowUpPost.detailId,
+                        });
+                        Assert(routedTurn.ok === true, `Server decision routing accepted untagged follow-up to active agent: ${routedTurn.ok ? '' : routedTurn.message}`);
+                        if (routedTurn.ok) {
+                            createdDetailIds.push(...routedTurn.replyDetailIds);
+                            Assert(routedTurn.replyDetailIds.length > 0, 'Decision-routed turn created assistant reply');
+                        }
                     }
                 }
 

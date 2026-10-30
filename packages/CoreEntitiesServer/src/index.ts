@@ -81,6 +81,8 @@ export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpa
 export { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
 export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
 export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult, TurnObserver, TurnOutcome } from './execute-space-chat-turn.js';
+export { isDecisionRoutingAvailable, resolveTurnAgentViaDecision, SERVER_DECISION_ROUTING_TIMEOUT_MS } from './space-chat-decision-routing.js';
+export type { SpaceChatDecisionRunner, ResolveTurnAgentViaDecisionParams, ResolveTurnAgentViaDecisionResult } from './space-chat-decision-routing.js';
 export { resolveSpaceChatHostRules } from './resolve-space-chat-host-rules.js';
 export { createSpace, type CreateSpaceInput, type CreateSpaceResult } from './create-space.js';
 export { resolveHomeCounts, type HomeCounts } from './resolve-home-counts.js';
