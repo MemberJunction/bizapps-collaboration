@@ -1,5 +1,6 @@
+import { CompositeKey } from '@memberjunction/core';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { CollaborationClient } from '@mj-biz-apps/collaboration-entities';
+import { CollaborationClient, type mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
@@ -16,6 +17,15 @@ import {
 } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, getPersonaContext } from '../../wire.js';
 import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
+import {
+    makeDocx,
+    makeGzip,
+    makePdf,
+    makeXlsx,
+    makeZip,
+    purgeTestSpaceItemPipelineRows,
+    waitForSpaceItemPipeline,
+} from '../content-pipeline-fixtures.js';
 import { attachTestAgent, detachTestAgent } from '../test-agent-attachment.js';
 
 const createdDetailIds: string[] = [];
@@ -81,7 +91,7 @@ const checks: NamedCheck[] = [
                 `SearchScopeID = '${SEARCH_SCOPE_ID}'`,
                 ['ID', 'SearchScopeID', 'ExtraFilter', 'RequiredMetadataKeys'],
             );
-            Assert(scopeEntities.length === 2, 'Search Scope has 2 entity lanes (Space Items and Tasks)');
+            Assert(scopeEntities.length === 3, 'Search Scope has 3 entity lanes (Space Items, Tasks, and Content Item Chunks)');
             for (const lane of scopeEntities) {
                 Assert(lane.ExtraFilter.includes('context.SecondaryScopes.SpaceID'), 'ExtraFilter binds context.SecondaryScopes.SpaceID template');
                 const reqKeys = JSON.parse(lane.RequiredMetadataKeys ?? '[]');
@@ -535,9 +545,461 @@ const checks: NamedCheck[] = [
             } finally {
                 if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
                 if (privConvId && privChatId) await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);
-                await runAllSteps(
-                    uploadedItemIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG8 wire uploaded item')),
+                await runAllSteps([
+                    ...uploadedItemIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG8 wire uploaded item')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, uploadedItemIds),
+                ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG9',
+        Name: 'AG9 — Content Pipeline over the wire extracts uploaded space files into Content Item Chunks, Assistant quotes extracted phrases bounded by space and band, promotion from Team to Shared reaches outside clients without re-indexing, deletion removes chunks and tombstones Content Items, and every file-types.ts format is handled cleanly',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const adaCtx = await getPersonaClientContext(ctx, 'ada');
+            const beaCtx = await getPersonaClientContext(ctx, 'bea');
+            const adaClient = new CollaborationClient(adaCtx.GraphQLProvider);
+            const beaClient = new CollaborationClient(beaCtx.GraphQLProvider);
+            const stamp = Date.now();
+
+            const sharedPdfPhrase = `WireOrchidLedger${stamp}`;
+            const teamPdfPhrase = `WireCobaltMargin${stamp}`;
+            const siblingPdfPhrase = `WireVermilionCutover${stamp}`;
+
+            const trackedItemIds: string[] = [];
+            const deletedItemIds = new Set<string>();
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+
+            const upload = async (spec: {
+                spaceId: string;
+                fileName: string;
+                mimeType: string;
+                band: 'Shared' | 'Team';
+                content: Buffer;
+            }): Promise<string> => {
+                const up = await adaClient.UploadSpaceFile({
+                    SpaceID: spec.spaceId,
+                    FileName: spec.fileName,
+                    MimeType: spec.mimeType,
+                    Base64Data: spec.content.toString('base64'),
+                    Folder: 'Pipeline',
+                    Band: spec.band,
+                });
+                Assert(up.Success === true && !!up.ItemID, `AG9 wire upload succeeded for ${spec.fileName}: ${up.ErrorMessage ?? ''}`);
+                if (!up.ItemID) throw new Error(up.ErrorMessage ?? 'Missing ItemID');
+                trackedItemIds.push(up.ItemID);
+                return up.ItemID;
+            };
+
+            try {
+                // 1. Staff member (Ada) uploads a Shared PDF with a unique phrase into Discovery,
+                //    a Team PDF with a unique phrase into Discovery, and a Shared PDF into sibling Delivery.
+                const sharedPdfItemId = await upload({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag9-wire-shared-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Shared',
+                    content: makePdf(`Discovery Wire Shared Brief: ${sharedPdfPhrase}`),
+                });
+
+                const teamPdfItemId = await upload({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag9-wire-team-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Team',
+                    content: makePdf(`Discovery Wire Team Pricing: ${teamPdfPhrase}`),
+                });
+
+                const siblingPdfItemId = await upload({
+                    spaceId: DELIVERY_SPACE_ID,
+                    fileName: `ag9-wire-sibling-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Shared',
+                    content: makePdf(`Delivery Wire Sibling Cutover: ${siblingPdfPhrase}`),
+                });
+
+                const sharedPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, sharedPdfItemId);
+                const teamPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, teamPdfItemId);
+                const siblingPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, siblingPdfItemId);
+
+                Assert(
+                    sharedPipeline.extractionStatus === 'Complete' &&
+                        sharedPipeline.chunks.some((c) => c.Text.includes(sharedPdfPhrase)),
+                    `Wire Shared PDF extracted and segmented with unique phrase ${sharedPdfPhrase}`,
                 );
+                Assert(
+                    teamPipeline.extractionStatus === 'Complete' &&
+                        teamPipeline.chunks.some((c) => c.Text.includes(teamPdfPhrase)),
+                    `Wire Team PDF extracted and segmented with unique phrase ${teamPdfPhrase}`,
+                );
+                Assert(
+                    siblingPipeline.extractionStatus === 'Complete' &&
+                        siblingPipeline.chunks.some((c) => c.Text.includes(siblingPdfPhrase)),
+                    `Wire Sibling Delivery PDF extracted and segmented with unique phrase ${siblingPdfPhrase}`,
+                );
+
+                // Create a General conversation in Discovery over the wire
+                const genStart = await adaClient.CreateSpaceConversation({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-client-ag9-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(
+                    genStart.Success === true && !!genStart.ConversationID && !!genStart.SpaceChatID,
+                    `Ada creates General conversation for AG9: ${genStart.ErrorMessage ?? ''}`,
+                );
+                genConvId = genStart.ConversationID!;
+                genChatId = genStart.SpaceChatID!;
+
+                // Scenario 1 & 3: Staff member (Ada, who can open both Discovery and Delivery) asks the Assistant in Discovery;
+                // Assistant quotes the Shared PDF's phrase within a minute and NEVER quotes the sibling Delivery PDF's phrase.
+                const adaMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} quote the uploaded executive brief in Discovery`,
+                });
+                Assert(adaMsg.Success === true && !!adaMsg.DetailID, `Ada posts in General: ${adaMsg.ErrorMessage ?? ''}`);
+                if (adaMsg.DetailID) createdDetailIds.push(adaMsg.DetailID);
+
+                const adaTurn = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: adaMsg.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(adaTurn.Success === true && !!adaTurn.ReplyDetailIDs?.length, `Ada General turn succeeded: ${adaTurn.ErrorMessage ?? ''}`);
+                if (adaTurn.ReplyDetailIDs) createdDetailIds.push(...adaTurn.ReplyDetailIDs);
+
+                const [adaReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${adaTurn.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!adaReply?.Message && adaReply.Message.includes(sharedPdfPhrase),
+                    `Assistant over wire in Discovery quotes Shared PDF phrase "${sharedPdfPhrase}"`,
+                );
+                Assert(
+                    !adaReply.Message.includes(siblingPdfPhrase),
+                    `Assistant over wire asked in Discovery NEVER quotes sibling Delivery phrase "${siblingPdfPhrase}"`,
+                );
+                Assert(
+                    !adaReply.Message.includes(teamPdfPhrase),
+                    `Assistant over wire in General conversation NEVER quotes Team PDF phrase "${teamPdfPhrase}"`,
+                );
+
+                // Scenario 2: Outside client (Bea) in a General chat asks for the Team document's phrase and doesn't get it
+                const beaMsg1 = await beaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} what is ${teamPdfPhrase}?`,
+                });
+                Assert(beaMsg1.Success === true && !!beaMsg1.DetailID, `Bea posts in General: ${beaMsg1.ErrorMessage ?? ''}`);
+                if (beaMsg1.DetailID) createdDetailIds.push(beaMsg1.DetailID);
+
+                const beaTurn1 = await beaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: beaMsg1.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(beaTurn1.Success === true && !!beaTurn1.ReplyDetailIDs?.length, `Bea General turn 1 succeeded: ${beaTurn1.ErrorMessage ?? ''}`);
+                if (beaTurn1.ReplyDetailIDs) createdDetailIds.push(...beaTurn1.ReplyDetailIDs);
+
+                const [beaReply1] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${beaTurn1.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!beaReply1?.Message && !beaReply1.Message.includes(teamPdfPhrase),
+                    `Outside client Bea in General chat over wire does NOT get Team PDF phrase "${teamPdfPhrase}"`,
+                );
+                Assert(
+                    !beaReply1.Message.includes(siblingPdfPhrase),
+                    `Outside client Bea in Discovery over wire does NOT get sibling Delivery phrase "${siblingPdfPhrase}"`,
+                );
+
+                // Scenario 5: Moving an item from Team to Shared makes its text reachable to outside members without re-indexing
+                const teamChunkIdBefore = teamPipeline.chunks[0].ID;
+                const teamContentItemIdBefore = teamPipeline.contentItemId;
+
+                const teamItemEntity = await adaCtx.GraphQLProvider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(
+                    SPACE_ITEM_ENTITY,
+                );
+                Assert(await teamItemEntity.InnerLoad(CompositeKey.FromID(teamPdfItemId)), 'Ada loads Team Space Item over wire');
+                teamItemEntity.Band = 'Shared';
+                Assert(
+                    await teamItemEntity.Save(),
+                    `Ada promotes Space Item from Team to Shared over wire: ${teamItemEntity.LatestResult?.CompleteMessage ?? ''}`,
+                );
+
+                const beaMsg2 = await beaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} quote the newly shared brief`,
+                });
+                Assert(beaMsg2.Success === true && !!beaMsg2.DetailID, `Bea posts second message in General: ${beaMsg2.ErrorMessage ?? ''}`);
+                if (beaMsg2.DetailID) createdDetailIds.push(beaMsg2.DetailID);
+
+                const beaTurn2 = await beaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: beaMsg2.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(beaTurn2.Success === true && !!beaTurn2.ReplyDetailIDs?.length, `Bea General turn 2 succeeded: ${beaTurn2.ErrorMessage ?? ''}`);
+                if (beaTurn2.ReplyDetailIDs) createdDetailIds.push(...beaTurn2.ReplyDetailIDs);
+
+                const [beaReply2] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${beaTurn2.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!beaReply2?.Message && beaReply2.Message.includes(teamPdfPhrase),
+                    `After moving item from Team to Shared over wire, Assistant quotes "${teamPdfPhrase}" to outside client Bea in General chat`,
+                );
+
+                const teamPipelineAfter = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, teamPdfItemId);
+                Assert(
+                    teamPipelineAfter.contentItemId.toLowerCase() === teamContentItemIdBefore.toLowerCase() &&
+                        teamPipelineAfter.chunks[0].ID.toLowerCase() === teamChunkIdBefore.toLowerCase(),
+                    'Promotion from Team to Shared keeps the exact same ContentItem and ContentItemChunk IDs without re-indexing',
+                );
+
+                // Scenario 4: After the item is deleted, the phrase is no longer found and its chunks and vectors are gone
+                await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, sharedPdfItemId, 'the AG9 wire Shared PDF space item');
+                deletedItemIds.add(sharedPdfItemId);
+
+                for (let attempt = 0; attempt < 100; attempt++) {
+                    const chunks = await FindRows<{ ID: string }>(
+                        ctx,
+                        'MJ: Content Item Chunks',
+                        `ContentItemID = '${sharedPipeline.contentItemId}'`,
+                        ['ID'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    const [ci] = await FindRows<{ ID: string; DeleteStatus: string }>(
+                        ctx,
+                        'MJ: Content Items',
+                        `ID = '${sharedPipeline.contentItemId}'`,
+                        ['ID', 'DeleteStatus'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    if (chunks.length === 0 && ci?.DeleteStatus === 'Deleted') {
+                        break;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+
+                const remainingChunks = await FindRows<{ ID: string }>(
+                    ctx,
+                    'MJ: Content Item Chunks',
+                    `ContentItemID = '${sharedPipeline.contentItemId}'`,
+                    ['ID'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(remainingChunks.length === 0, 'All MJ: Content Item Chunks rows for deleted item are gone');
+
+                const [tombstoneCi] = await FindRows<{ ID: string; DeleteStatus: string }>(
+                    ctx,
+                    'MJ: Content Items',
+                    `ID = '${sharedPipeline.contentItemId}'`,
+                    ['ID', 'DeleteStatus'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    tombstoneCi?.DeleteStatus === 'Deleted',
+                    `Deleted item's MJ: Content Items row is marked Deleted (saw DeleteStatus=${tombstoneCi?.DeleteStatus})`,
+                );
+
+                const beaMsg3 = await beaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@${COLLABORATION_TEST_AGENT_NAME} quote remaining documents in Discovery`,
+                });
+                Assert(beaMsg3.Success === true && !!beaMsg3.DetailID, `Bea posts after deletion: ${beaMsg3.ErrorMessage ?? ''}`);
+                if (beaMsg3.DetailID) createdDetailIds.push(beaMsg3.DetailID);
+
+                const beaTurn3 = await beaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: beaMsg3.DetailID!,
+                    AgentID: COLLABORATION_TEST_AGENT_ID,
+                });
+                Assert(beaTurn3.Success === true && !!beaTurn3.ReplyDetailIDs?.length, `Bea turn after deletion succeeded: ${beaTurn3.ErrorMessage ?? ''}`);
+                if (beaTurn3.ReplyDetailIDs) createdDetailIds.push(...beaTurn3.ReplyDetailIDs);
+
+                const [beaReply3] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${beaTurn3.ReplyDetailIDs![0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!beaReply3?.Message && !beaReply3.Message.includes(sharedPdfPhrase),
+                    `After item is deleted, Assistant no longer quotes "${sharedPdfPhrase}"`,
+                );
+
+                // Scenario 6: Every text format in packages/Core/src/file-types.ts extracts;
+                // images, audio, and video are skipped or take MJ's media path, and never fail the upload.
+                const textFormatSpecs: Array<{
+                    ext: string;
+                    fileName: string;
+                    mimeType: string;
+                    phrase: string;
+                    content: Buffer;
+                }> = [
+                    {
+                        ext: 'docx',
+                        fileName: `ag9-wire-format-${stamp}.docx`,
+                        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        phrase: `WireDocxToken${stamp}`,
+                        content: makeDocx(`Word contract clause WireDocxToken${stamp}`),
+                    },
+                    {
+                        ext: 'xlsx',
+                        fileName: `ag9-wire-format-${stamp}.xlsx`,
+                        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        phrase: `WireXlsxToken${stamp}`,
+                        content: makeXlsx(`WireXlsxToken${stamp}`),
+                    },
+                    {
+                        ext: 'csv',
+                        fileName: `ag9-wire-format-${stamp}.csv`,
+                        mimeType: 'text/csv',
+                        phrase: `WireCsvToken${stamp}`,
+                        content: Buffer.from(`metric,token\notif,WireCsvToken${stamp}\n`, 'utf8'),
+                    },
+                    {
+                        ext: 'txt',
+                        fileName: `ag9-wire-format-${stamp}.txt`,
+                        mimeType: 'text/plain',
+                        phrase: `WireTxtToken${stamp}`,
+                        content: Buffer.from(`Plain text field notes WireTxtToken${stamp}`, 'utf8'),
+                    },
+                    {
+                        ext: 'md',
+                        fileName: `ag9-wire-format-${stamp}.md`,
+                        mimeType: 'text/markdown',
+                        phrase: `WireMdToken${stamp}`,
+                        content: Buffer.from(`# Architecture Decision\nWireMdToken${stamp}\n`, 'utf8'),
+                    },
+                    {
+                        ext: 'json',
+                        fileName: `ag9-wire-format-${stamp}.json`,
+                        mimeType: 'application/json',
+                        phrase: `WireJsonToken${stamp}`,
+                        content: Buffer.from(JSON.stringify({ schema: 'v1', token: `WireJsonToken${stamp}` }), 'utf8'),
+                    },
+                    {
+                        ext: 'xml',
+                        fileName: `ag9-wire-format-${stamp}.xml`,
+                        mimeType: 'application/xml',
+                        phrase: `WireXmlToken${stamp}`,
+                        content: Buffer.from(`<?xml version="1.0"?><manifest><token>WireXmlToken${stamp}</token></manifest>`, 'utf8'),
+                    },
+                    {
+                        ext: 'html',
+                        fileName: `ag9-wire-format-${stamp}.html`,
+                        mimeType: 'text/html',
+                        phrase: `WireHtmlToken${stamp}`,
+                        content: Buffer.from(`<!doctype html><html><body><p>WireHtmlToken${stamp}</p></body></html>`, 'utf8'),
+                    },
+                    {
+                        ext: 'zip',
+                        fileName: `ag9-wire-format-${stamp}.zip`,
+                        mimeType: 'application/zip',
+                        phrase: `WireZipToken${stamp}`,
+                        content: makeZip([{ name: 'bundle-readme.txt', data: Buffer.from(`Archive member WireZipToken${stamp}`, 'utf8') }]),
+                    },
+                    {
+                        ext: 'gz',
+                        fileName: `ag9-wire-format-${stamp}.txt.gz`,
+                        mimeType: 'application/gzip',
+                        phrase: `WireGzToken${stamp}`,
+                        content: makeGzip(`Gzipped log entry WireGzToken${stamp}`),
+                    },
+                ];
+
+                const uploadedTextFormats: Array<{ itemId: string; ext: string; phrase: string; fileName: string }> = [];
+                for (const spec of textFormatSpecs) {
+                    const itemId = await upload({
+                        spaceId: DISCOVERY_SPACE_ID,
+                        fileName: spec.fileName,
+                        mimeType: spec.mimeType,
+                        band: 'Shared',
+                        content: spec.content,
+                    });
+                    uploadedTextFormats.push({ itemId, ext: spec.ext, phrase: spec.phrase, fileName: spec.fileName });
+                }
+
+                for (const tf of uploadedTextFormats) {
+                    const pipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, tf.itemId);
+                    Assert(
+                        pipeline.chunks.some((c) => c.Text.includes(tf.phrase)),
+                        `Wire format .${tf.ext} (${tf.fileName}) extracted phrase "${tf.phrase}" into Content Item Chunks`,
+                    );
+                }
+
+                const mediaFormatSpecs: Array<{ ext: string; fileName: string; mimeType: string; content: Buffer }> = [
+                    { ext: 'png', fileName: `ag9-wire-media-${stamp}.png`, mimeType: 'image/png', content: Buffer.from('\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR') },
+                    { ext: 'jpg', fileName: `ag9-wire-media-${stamp}.jpg`, mimeType: 'image/jpeg', content: Buffer.from('\xff\xd8\xff\xe0\x00\x10JFIF\x00') },
+                    { ext: 'gif', fileName: `ag9-wire-media-${stamp}.gif`, mimeType: 'image/gif', content: Buffer.from('GIF89a\x01\x00\x01\x00') },
+                    { ext: 'webp', fileName: `ag9-wire-media-${stamp}.webp`, mimeType: 'image/webp', content: Buffer.from('RIFF\x14\x00\x00\x00WEBPVP8 ') },
+                    { ext: 'svg', fileName: `ag9-wire-media-${stamp}.svg`, mimeType: 'image/svg+xml', content: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>') },
+                    { ext: 'mp4', fileName: `ag9-wire-media-${stamp}.mp4`, mimeType: 'video/mp4', content: Buffer.from('\x00\x00\x00\x18ftypmp42') },
+                    { ext: 'mp3', fileName: `ag9-wire-media-${stamp}.mp3`, mimeType: 'audio/mpeg', content: Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00') },
+                    { ext: 'wav', fileName: `ag9-wire-media-${stamp}.wav`, mimeType: 'audio/wav', content: Buffer.from('RIFF$\x00\x00\x00WAVEfmt ') },
+                ];
+
+                const uploadedMediaIds: string[] = [];
+                for (const media of mediaFormatSpecs) {
+                    const itemId = await upload({
+                        spaceId: DISCOVERY_SPACE_ID,
+                        fileName: media.fileName,
+                        mimeType: media.mimeType,
+                        band: 'Shared',
+                        content: media.content,
+                    });
+                    uploadedMediaIds.push(itemId);
+                }
+
+                for (let idx = 0; idx < uploadedMediaIds.length; idx++) {
+                    const mediaPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, uploadedMediaIds[idx]);
+                    Assert(
+                        mediaPipeline.extractionStatus === 'Skipped' || mediaPipeline.extractionStatus === 'Complete',
+                        `Wire media format .${mediaFormatSpecs[idx].ext} completes pipeline cleanly without failing upload (status=${mediaPipeline.extractionStatus})`,
+                    );
+                }
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                const remainingToDelete = trackedItemIds.filter((id) => !deletedItemIds.has(id));
+                await runAllSteps([
+                    ...remainingToDelete
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG9 wire uploaded space item')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, trackedItemIds),
+                ]);
             }
         },
     },

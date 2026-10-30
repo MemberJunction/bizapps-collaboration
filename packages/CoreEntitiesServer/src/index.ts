@@ -1,6 +1,12 @@
 export { LoadSpaceEntityServer, SpaceEntityServer } from './SpaceEntityServer.js';
 export { CollaborationEngine } from './CollaborationEngine.js';
-export { LoadSpaceItemEntityServer, releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+export {
+    LoadSpaceItemEntityServer,
+    releaseStoredFile,
+    SPACE_FILES_CONTENT_SOURCE_ID,
+    SpaceItemEntityServer,
+    vouchStoredFile,
+} from './SpaceItemEntityServer.js';
 export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMemberEntityServer.js';
 export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEntityServer.js';
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
@@ -16,6 +22,7 @@ export { notifySpaceStatusChange, SPACE_STATUS_NOTIFICATION_TYPE } from './space
 export type { SpaceStatusNoticeInput } from './space-status-notices.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
+export { backfillSpaceFiles, type BackfillSpaceFilesResult } from './backfill-space-files.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
 export { filterRoomReplyItems, postSpaceMessage } from './post-space-message.js';

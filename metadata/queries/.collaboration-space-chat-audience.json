@@ -15,6 +15,55 @@
       "CacheEnabled": false,
       "IsMaterialized": false,
       "SQL": "SELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n\nUNION ALL\n\nSELECT 'Team' AS Band\nFROM [__mj_BizAppsCollaboration].[SpaceChat] sc\nINNER JOIN [__mj_BizAppsCollaboration].[fnCollaborationAccess]({{ UserID | sqlString }}) a ON a.SpaceID = sc.SpaceID\nWHERE (sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER) OR sc.ConversationID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER))\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND sc.Kind = 'Private'\n  AND a.CanSeeTeam = 1\n\nUNION ALL\n\nSELECT 'Shared' AS Band\nFROM [__mj_BizAppsCollaboration].[Space] s\nWHERE s.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  AND LEN(TRIM({{ PrimaryScopeRecordID | sqlString }})) = 36\n  AND NOT EXISTS (\n      SELECT 1 FROM [__mj_BizAppsCollaboration].[SpaceChat] sc\n      WHERE sc.ID = TRY_CAST({{ PrimaryScopeRecordID | sqlString }} AS UNIQUEIDENTIFIER)\n  )"
+    },
+    "relatedEntities": {
+      "MJ: Query Permissions": [
+        {
+          "primaryKey": {
+            "ID": "60778B97-FC3C-4304-92EE-6C4BDA16146E"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Space Participant"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "0EFEE942-952F-4C14-B454-FA98BFEFCB62"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "A952D428-F863-4966-BD2F-834A1FA23C79"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "ECE422EC-A542-4A60-9AC8-55C53F680AB6"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          }
+        },
+        {
+          "primaryKey": {
+            "ID": "2B6AA1D1-4A66-4403-8D71-F3196497A119"
+          },
+          "fields": {
+            "QueryID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator"
+          }
+        }
+      ]
     }
   }
 ]

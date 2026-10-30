@@ -1,0 +1,14 @@
+[
+  {
+    "primaryKey": {
+      "ID": "141EB800-8708-41EC-8054-ADEFBC4577D6"
+    },
+    "fields": {
+      "Name": "Space File",
+      "Description": "File uploaded into a Collaboration space library",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Claude 3.5 Sonnet",
+      "MinTags": 1,
+      "MaxTags": 5
+    }
+  }
+]

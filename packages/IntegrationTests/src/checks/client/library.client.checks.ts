@@ -3,6 +3,7 @@ import { CollaborationClient, mjBizAppsCollaborationItemUseEntity } from '@mj-bi
 import { FILE_ENTITY, ITEM_USE_ENTITY, SPACE_ITEM_ENTITY } from '../../entity-names.js';
 import { FindRows, getPersonaClientContext, SameID } from '../../wire.js';
 import { deleteRowAndConfirm, registerChecks, runAllSteps } from '../cleanup-helpers.js';
+import { purgeTestSpaceItemPipelineRows } from '../content-pipeline-fixtures.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
@@ -405,8 +406,14 @@ registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     // Every step runs and reads back, newest first; the first failure is thrown at the end
-    Teardown: async (ctx: IntegrationCheckContext) =>
-        runAllSteps(
-            createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
-        ),
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        const itemsToPurge = createdItemIds.splice(0);
+        await runAllSteps([
+            ...itemsToPurge
+                .slice()
+                .reverse()
+                .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+            () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, itemsToPurge),
+        ]);
+    },
 });

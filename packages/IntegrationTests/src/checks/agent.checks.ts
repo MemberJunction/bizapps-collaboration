@@ -1,4 +1,4 @@
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, RunView, type UserInfo } from '@memberjunction/core';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { noteDocument } from '@mj-biz-apps/collaboration-core';
@@ -11,7 +11,7 @@ import {
     resolveSpaceAgentRetrieval,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
-import type { mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
+import type { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_ID, COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import {
     AI_AGENT_ENTITY,
@@ -34,6 +34,15 @@ import { FindRows, GetPersonaUser, SameID, View, isClientTransport } from '../wi
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
 import { cleanupConversation, deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import {
+    makeDocx,
+    makeGzip,
+    makePdf,
+    makeXlsx,
+    makeZip,
+    purgeTestSpaceItemPipelineRows,
+    waitForSpaceItemPipeline,
+} from './content-pipeline-fixtures.js';
 import { attachAgentToSpace, attachTestAgent, detachTestAgent } from './test-agent-attachment.js';
 
 const AGENT_ID = '9E6D761A-197A-40AF-995B-3D3DD9BD7B9E';
@@ -105,7 +114,7 @@ const checks: NamedCheck[] = [
                 `SearchScopeID = '${SEARCH_SCOPE_ID}'`,
                 ['ID', 'SearchScopeID', 'ExtraFilter', 'RequiredMetadataKeys'],
             );
-            Assert(scopeEntities.length === 2, 'Search Scope has 2 entity lanes (Space Items and Tasks)');
+            Assert(scopeEntities.length === 3, 'Search Scope has 3 entity lanes (Space Items, Tasks, and Content Item Chunks)');
             for (const lane of scopeEntities) {
                 Assert(lane.ExtraFilter.includes('context.SecondaryScopes.SpaceID'), 'ExtraFilter binds context.SecondaryScopes.SpaceID template');
                 const reqKeys = JSON.parse(lane.RequiredMetadataKeys ?? '[]');
@@ -211,13 +220,13 @@ const checks: NamedCheck[] = [
             const resolvedSpaceIds = (Array.isArray(rawVal) ? rawVal : [rawVal]).map((id) => String(id).toLowerCase());
             Assert(resolvedSpaceIds.includes(DISCOVERY_SPACE_ID.toLowerCase()), 'Resolved SpaceID set includes Discovery Space');
 
-            Assert(scopeExp.Lanes.length === 2, 'ExplainScope reports 2 lanes');
+            Assert(scopeExp.Lanes.length === 3, 'ExplainScope reports 3 lanes');
             for (const lane of scopeExp.Lanes) {
                 Assert(lane.Status === 'Active', `Lane ${lane.Target} status is Active`);
                 Assert(!!lane.RenderedFilter && lane.RenderedFilter.toLowerCase().includes(DISCOVERY_SPACE_ID.toLowerCase()), `Lane ${lane.Target} filter rendered with Discovery SpaceID`);
             }
 
-            // 9. Verify expansion query injection safety: single quote in PrimaryScopeRecordID returns empty set, not error
+            // 9. Verify expansion query injection safety: single quote in PrimaryScopeRecordID returns empty set (not SQL error), which ScopeDimensionResolver refuses on required SpaceID
             const injectionExp = await SearchEngine.Instance.ExplainScope(
                 {
                     ScopeIDs: [SEARCH_SCOPE_ID],
@@ -229,21 +238,15 @@ const checks: NamedCheck[] = [
                 bea,
             );
             Assert(injectionExp.length === 1, 'ExplainScope with quote handled without error');
-            const injSpaceDim = injectionExp[0].Dimensions.find((d) => d.Name === 'SpaceID');
-            if (!injSpaceDim) {
-                throw new Error('SpaceID dimension must be present in explanation');
-            }
-            Assert(injSpaceDim.Provenance === 'ServerDerived', 'SpaceID dimension provenance must be ServerDerived');
-            const injVals = (Array.isArray(injSpaceDim.Value) ? injSpaceDim.Value : (injSpaceDim.Value ? [injSpaceDim.Value] : []));
-            Assert(injVals.length === 0, `Quote injection must return empty SpaceID set, saw ${injVals.length}`);
-            Assert(injectionExp[0].Reachable === true, 'Lanes are active with always-false branch, so Reachable is true');
-            Assert(injectionExp[0].Lanes.length === 2, 'ExplainScope reports 2 lanes');
+            Assert(injectionExp[0].Reachable === false, 'Quote injection resolves empty SpaceID set and makes scope unreachable');
+            Assert(
+                injectionExp[0].Diagnostics.some((d) => d.includes('Required dimension "SpaceID" resolved to no value')),
+                `Quote injection diagnostic reports empty required SpaceID dimension (saw: ${JSON.stringify(injectionExp[0].Diagnostics)})`,
+            );
+            Assert(injectionExp[0].Lanes.length === 3, 'ExplainScope reports 3 lanes');
             for (const lane of injectionExp[0].Lanes) {
-                Assert(lane.Status === 'Active', `Lane ${lane.Target} status is Active`);
-                Assert(
-                    !!lane.RenderedFilter && lane.RenderedFilter.includes('SpaceID IS NULL AND 1 = 0'),
-                    `Lane ${lane.Target} renders always-false branch (saw: ${lane.RenderedFilter})`,
-                );
+                Assert(lane.Status === 'Skipped', `Lane ${lane.Target} is Skipped when required SpaceID resolves empty`);
+                Assert(lane.RenderedFilter === null, `Lane ${lane.Target} renders no filter when required SpaceID resolves empty`);
             }
 
             // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval for Bea in Discovery
@@ -1345,6 +1348,543 @@ const checks: NamedCheck[] = [
                         : []),
                     ...uploadedItemIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG11 uploaded space item')),
                     ...uploadedFileIds.reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'an AG11 uploaded file')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, uploadedItemIds),
+                ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG12',
+        Name: 'AG12 — Content Pipeline extracts uploaded space files into Content Item Chunks, Assistant quotes extracted phrases bounded by space and band, promotion from Team to Shared reaches outside clients without re-indexing, deletion removes chunks and tombstones Content Items, and every file-types.ts format is handled cleanly',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await ensureLocalStorageAccount(ctx.Provider, ctx.User, worldStorageRoot());
+            const store = collaborationFileStore(ctx.Provider, COLLABORATION_STORAGE_ACCOUNT_ID);
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const stamp = Date.now();
+
+            const sharedPdfPhrase = `OrchidQuantumLedger${stamp}`;
+            const sharedPdfPostDeletePhrase = `PostDeleteOrchid${stamp}`;
+            const teamPdfPhrase = `CobaltMarginCeiling${stamp}`;
+            const teamPdfPostPromotePhrase = `PostPromoteCobalt${stamp}`;
+            const siblingPdfPhrase = `VermilionCutoverRunbook${stamp}`;
+
+            const trackedItemIds: string[] = [];
+            const deletedItemIds = new Set<string>();
+            let genConvId: string | null = null;
+            let genChatId: string | null = null;
+
+            const upload = async (spec: {
+                spaceId: string;
+                fileName: string;
+                mimeType: string;
+                band: 'Shared' | 'Team';
+                content: Buffer;
+            }): Promise<{ itemId: string; fileId: string }> => {
+                const outcome = await uploadSpaceFile({
+                    user: ada,
+                    storageUser: ctx.User,
+                    provider: ctx.Provider,
+                    store,
+                    spaceId: spec.spaceId,
+                    folder: 'Pipeline',
+                    fileName: spec.fileName,
+                    mimeType: spec.mimeType,
+                    content: spec.content,
+                    gate: () => decideUploadBand(ctx.Provider, ada, spec.spaceId, spec.band),
+                });
+                Assert(outcome.ok, `AG12 upload must succeed for ${spec.fileName}: ${outcome.ok ? '' : outcome.message}`);
+                if (!outcome.ok) throw new Error(outcome.message);
+                trackedItemIds.push(outcome.itemId);
+                return { itemId: outcome.itemId, fileId: outcome.fileId };
+            };
+
+            try {
+                // 1. Staff member (Ada) uploads a Shared PDF with a unique phrase into Discovery,
+                //    a Team PDF with a unique phrase into Discovery, and a Shared PDF into sibling Delivery.
+                const sharedPdf = await upload({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag12-shared-brief-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Shared',
+                    content: makePdf(`Discovery Shared Executive Brief: ${sharedPdfPhrase} ${sharedPdfPostDeletePhrase}`),
+                });
+
+                const teamPdf = await upload({
+                    spaceId: DISCOVERY_SPACE_ID,
+                    fileName: `ag12-team-brief-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Team',
+                    content: makePdf(`Internal Team Pricing Floor: ${teamPdfPhrase} ${teamPdfPostPromotePhrase}`),
+                });
+
+                const siblingPdf = await upload({
+                    spaceId: DELIVERY_SPACE_ID,
+                    fileName: `ag12-delivery-sibling-${stamp}.pdf`,
+                    mimeType: 'application/pdf',
+                    band: 'Shared',
+                    content: makePdf(`Sibling Delivery Cutover: ${siblingPdfPhrase}`),
+                });
+
+                const sharedPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, sharedPdf.itemId);
+                const teamPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, teamPdf.itemId);
+                const siblingPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, siblingPdf.itemId);
+
+                Assert(
+                    sharedPipeline.extractionStatus === 'Complete' &&
+                        sharedPipeline.chunks.some((c) => c.Text.includes(sharedPdfPhrase)),
+                    `Shared PDF extracted and segmented with unique phrase ${sharedPdfPhrase}`,
+                );
+                Assert(
+                    teamPipeline.extractionStatus === 'Complete' &&
+                        teamPipeline.chunks.some((c) => c.Text.includes(teamPdfPhrase)),
+                    `Team PDF extracted and segmented with unique phrase ${teamPdfPhrase}`,
+                );
+                Assert(
+                    siblingPipeline.extractionStatus === 'Complete' &&
+                        siblingPipeline.chunks.some((c) => c.Text.includes(siblingPdfPhrase)),
+                    `Sibling Delivery PDF extracted and segmented with unique phrase ${siblingPdfPhrase}`,
+                );
+
+                // Create a General conversation in Discovery
+                const genStart = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-ag12-gen-${stamp}`,
+                    Kind: 'General',
+                });
+                Assert(
+                    genStart.ok === true && !!genStart.conversationId && !!genStart.spaceChatId,
+                    `Ada creates General conversation for AG12: ${genStart.ok ? '' : genStart.message}`,
+                );
+                if (!genStart.ok || !genStart.conversationId || !genStart.spaceChatId) {
+                    throw new Error('General conversation creation failed');
+                }
+                genConvId = genStart.conversationId;
+                genChatId = genStart.spaceChatId;
+
+                // Scenario 1 & 3: Staff member (Ada, who can open both Discovery and Delivery) asks the Assistant in Discovery;
+                // Assistant quotes the Shared PDF's phrase within a minute and NEVER quotes the sibling Delivery PDF's phrase.
+                const adaMsg = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} quote the uploaded executive brief in Discovery`,
+                });
+                if (!adaMsg.ok) throw new Error(adaMsg.message);
+                createdDetailIds.push(adaMsg.detailId);
+
+                const adaTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    userMessageId: adaMsg.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                if (!adaTurn.ok) throw new Error(adaTurn.message);
+                createdDetailIds.push(...adaTurn.replyDetailIds);
+
+                const [adaReply] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${adaTurn.replyDetailIds[0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!adaReply?.Message && adaReply.Message.includes(sharedPdfPhrase),
+                    `Assistant in Discovery quotes the Shared PDF phrase "${sharedPdfPhrase}" (got: ${adaReply?.Message})`,
+                );
+                Assert(
+                    !adaReply.Message.includes(siblingPdfPhrase),
+                    `Assistant asked in Discovery NEVER quotes sibling Delivery phrase "${siblingPdfPhrase}"`,
+                );
+                Assert(
+                    !adaReply.Message.includes(teamPdfPhrase),
+                    `Assistant in General conversation NEVER quotes Team PDF phrase "${teamPdfPhrase}"`,
+                );
+
+                // Scenario 2: Outside client (Bea) in a General chat asks for the Team document's phrase and doesn't get it
+                const beaMsg1 = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} what is ${teamPdfPhrase}?`,
+                });
+                if (!beaMsg1.ok) throw new Error(beaMsg1.message);
+                createdDetailIds.push(beaMsg1.detailId);
+
+                const beaTurn1 = await executeSpaceChatTurn(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    userMessageId: beaMsg1.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                if (!beaTurn1.ok) throw new Error(beaTurn1.message);
+                createdDetailIds.push(...beaTurn1.replyDetailIds);
+
+                const [beaReply1] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${beaTurn1.replyDetailIds[0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!beaReply1?.Message && !beaReply1.Message.includes(teamPdfPhrase),
+                    `Outside client Bea in General chat does NOT get Team PDF phrase "${teamPdfPhrase}"`,
+                );
+                Assert(
+                    !beaReply1.Message.includes(siblingPdfPhrase),
+                    `Outside client Bea in Discovery does NOT get sibling Delivery phrase "${siblingPdfPhrase}"`,
+                );
+
+                const beaQueryTeamBefore = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'General',
+                    query: teamPdfPhrase,
+                });
+                Assert(
+                    beaQueryTeamBefore.quotedItems.length === 0,
+                    'resolveSpaceAgentRetrieval query for Team phrase as Bea returns 0 items before promotion',
+                );
+
+                // Also verify SearchEngine lexical search over the Content Item Chunks lane in Collaboration Space Scope
+                if (!isClientTransport(ctx)) {
+                    await SearchEngine.Instance.Config({}, ada);
+                    const searchScope = async (asUser: UserInfo, primaryId: string, query: string) =>
+                        SearchEngine.Instance.Search(
+                            {
+                                Query: query,
+                                ScopeIDs: [SEARCH_SCOPE_ID],
+                                SearchContext: { PrimaryScopeRecordID: primaryId },
+                                AIAgentID: AGENT_ID,
+                                MaxResults: 50,
+                                Mode: 'preview',
+                            },
+                            asUser,
+                        );
+
+                    const sharedHits = await searchScope(bea, genChatId, sharedPdfPhrase);
+                    Assert(
+                        sharedHits.Success === true &&
+                            sharedHits.Results.some((r) => r.RecordID.toLowerCase().endsWith(sharedPipeline.chunks[0].ID.toLowerCase())),
+                        `Lexical search on Collaboration Space Scope finds Shared PDF chunk for "${sharedPdfPhrase}"`,
+                    );
+
+                    const teamHitsGeneral = await searchScope(bea, genChatId, teamPdfPhrase);
+                    Assert(
+                        teamHitsGeneral.Success === true &&
+                            !teamHitsGeneral.Results.some((r) => r.RecordID.toLowerCase().endsWith(teamPipeline.chunks[0].ID.toLowerCase())),
+                        `Lexical search on General chat NEVER returns Team PDF chunk for "${teamPdfPhrase}"`,
+                    );
+
+                    const siblingHitsFromDiscovery = await searchScope(ada, genChatId, siblingPdfPhrase);
+                    Assert(
+                        siblingHitsFromDiscovery.Success === true &&
+                            !siblingHitsFromDiscovery.Results.some((r) =>
+                                r.RecordID.toLowerCase().endsWith(siblingPipeline.chunks[0].ID.toLowerCase()),
+                            ),
+                        `Lexical search asked in Discovery NEVER returns sibling Delivery chunk for "${siblingPdfPhrase}"`,
+                    );
+                }
+
+                // Scenario 5: Moving an item from Team to Shared makes its text reachable to outside members without re-indexing
+                const teamChunkIdBefore = teamPipeline.chunks[0].ID;
+                const teamContentItemIdBefore = teamPipeline.contentItemId;
+
+                const teamItemEntity = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpaceItemEntity>(
+                    SPACE_ITEM_ENTITY,
+                    ada,
+                );
+                Assert(await teamItemEntity.InnerLoad(CompositeKey.FromID(teamPdf.itemId)), 'Ada loads Team Space Item');
+                teamItemEntity.Band = 'Shared';
+                Assert(await teamItemEntity.Save(), `Ada promotes Space Item from Team to Shared: ${teamItemEntity.LatestResult?.CompleteMessage ?? ''}`);
+
+                const beaQueryTeamAfter = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                    conversationKind: 'General',
+                    query: teamPdfPhrase,
+                });
+                Assert(
+                    beaQueryTeamAfter.quotedItems.length === 1 &&
+                        beaQueryTeamAfter.quotedItems[0].ChunkTexts?.some((t) => t.includes(teamPdfPhrase)) === true,
+                    'After moving item from Team to Shared, outside client Bea reaches its extracted text immediately',
+                );
+
+                const beaMsg2 = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} quote the newly shared brief`,
+                });
+                if (!beaMsg2.ok) throw new Error(beaMsg2.message);
+                createdDetailIds.push(beaMsg2.detailId);
+
+                const beaTurn2 = await executeSpaceChatTurn(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: genConvId,
+                    userMessageId: beaMsg2.detailId,
+                    agentId: COLLABORATION_TEST_AGENT_ID,
+                });
+                if (!beaTurn2.ok) throw new Error(beaTurn2.message);
+                createdDetailIds.push(...beaTurn2.replyDetailIds);
+
+                const [beaReply2] = await FindRows<{ Message: string }>(
+                    ctx,
+                    CONVERSATION_DETAIL_ENTITY,
+                    `ID = '${beaTurn2.replyDetailIds[0]}'`,
+                    ['Message'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    !!beaReply2?.Message && beaReply2.Message.includes(teamPdfPhrase),
+                    `After moving item from Team to Shared, Assistant quotes "${teamPdfPhrase}" to outside client Bea in General chat`,
+                );
+
+                const teamPipelineAfter = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, teamPdf.itemId);
+                Assert(
+                    teamPipelineAfter.contentItemId.toLowerCase() === teamContentItemIdBefore.toLowerCase() &&
+                        teamPipelineAfter.chunks[0].ID.toLowerCase() === teamChunkIdBefore.toLowerCase(),
+                    'Promotion from Team to Shared keeps the exact same ContentItem and ContentItemChunk IDs without re-indexing',
+                );
+
+                if (!isClientTransport(ctx)) {
+                    const promotedHits = await SearchEngine.Instance.Search(
+                        {
+                            Query: teamPdfPostPromotePhrase,
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: { PrimaryScopeRecordID: genChatId },
+                            AIAgentID: AGENT_ID,
+                            MaxResults: 50,
+                            Mode: 'preview',
+                        },
+                        bea,
+                    );
+                    Assert(
+                        promotedHits.Success === true &&
+                            promotedHits.Results.some((r) => r.RecordID.toLowerCase().endsWith(teamChunkIdBefore.toLowerCase())),
+                        `After moving item from Team to Shared, lexical search as Bea in General chat finds "${teamPdfPostPromotePhrase}" without re-indexing`,
+                    );
+                }
+
+                // Scenario 4: After the item is deleted, the phrase is no longer found and its chunks and vectors are gone
+                await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, sharedPdf.itemId, 'the AG12 Shared PDF space item');
+                deletedItemIds.add(sharedPdf.itemId);
+
+                for (let attempt = 0; attempt < 100; attempt++) {
+                    const chunks = await FindRows<{ ID: string }>(
+                        ctx,
+                        'MJ: Content Item Chunks',
+                        `ContentItemID = '${sharedPipeline.contentItemId}'`,
+                        ['ID'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    const [ci] = await FindRows<{ ID: string; DeleteStatus: string }>(
+                        ctx,
+                        'MJ: Content Items',
+                        `ID = '${sharedPipeline.contentItemId}'`,
+                        ['ID', 'DeleteStatus'],
+                        undefined,
+                        { BypassCache: true },
+                    );
+                    if (chunks.length === 0 && ci?.DeleteStatus === 'Deleted') {
+                        break;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+
+                const afterDeleteQuery = await resolveSpaceAgentRetrieval(ctx.Provider, ada, DISCOVERY_SPACE_ID, {
+                    query: sharedPdfPhrase,
+                });
+                Assert(afterDeleteQuery.quotedItems.length === 0, 'Deleted item phrase is no longer returned by resolveSpaceAgentRetrieval');
+
+                const remainingChunks = await FindRows<{ ID: string }>(
+                    ctx,
+                    'MJ: Content Item Chunks',
+                    `ContentItemID = '${sharedPipeline.contentItemId}'`,
+                    ['ID'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(remainingChunks.length === 0, 'All MJ: Content Item Chunks rows for deleted item are gone');
+
+                const [tombstoneCi] = await FindRows<{ ID: string; DeleteStatus: string }>(
+                    ctx,
+                    'MJ: Content Items',
+                    `ID = '${sharedPipeline.contentItemId}'`,
+                    ['ID', 'DeleteStatus'],
+                    undefined,
+                    { BypassCache: true },
+                );
+                Assert(
+                    tombstoneCi?.DeleteStatus === 'Deleted',
+                    `Deleted item's MJ: Content Items row is marked Deleted (saw DeleteStatus=${tombstoneCi?.DeleteStatus})`,
+                );
+
+                if (!isClientTransport(ctx)) {
+                    const deletedHits = await SearchEngine.Instance.Search(
+                        {
+                            Query: sharedPdfPostDeletePhrase,
+                            ScopeIDs: [SEARCH_SCOPE_ID],
+                            SearchContext: { PrimaryScopeRecordID: genChatId },
+                            AIAgentID: AGENT_ID,
+                            MaxResults: 50,
+                            Mode: 'preview',
+                        },
+                        ada,
+                    );
+                    Assert(
+                        deletedHits.Success === true && deletedHits.Results.length === 0,
+                        `Lexical search no longer finds "${sharedPdfPostDeletePhrase}" after item deletion`,
+                    );
+                }
+
+                // Scenario 6: Every text format in packages/Core/src/file-types.ts extracts;
+                // images, audio, and video are skipped or take MJ's media path, and never fail the upload.
+                const textFormatSpecs: Array<{
+                    ext: string;
+                    fileName: string;
+                    mimeType: string;
+                    phrase: string;
+                    content: Buffer;
+                }> = [
+                    {
+                        ext: 'docx',
+                        fileName: `ag12-format-${stamp}.docx`,
+                        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        phrase: `DocxExtractToken${stamp}`,
+                        content: makeDocx(`Word contract clause DocxExtractToken${stamp}`),
+                    },
+                    {
+                        ext: 'xlsx',
+                        fileName: `ag12-format-${stamp}.xlsx`,
+                        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        phrase: `XlsxExtractToken${stamp}`,
+                        content: makeXlsx(`XlsxExtractToken${stamp}`),
+                    },
+                    {
+                        ext: 'csv',
+                        fileName: `ag12-format-${stamp}.csv`,
+                        mimeType: 'text/csv',
+                        phrase: `CsvExtractToken${stamp}`,
+                        content: Buffer.from(`metric,token\notif,CsvExtractToken${stamp}\n`, 'utf8'),
+                    },
+                    {
+                        ext: 'txt',
+                        fileName: `ag12-format-${stamp}.txt`,
+                        mimeType: 'text/plain',
+                        phrase: `TxtExtractToken${stamp}`,
+                        content: Buffer.from(`Plain text field notes TxtExtractToken${stamp}`, 'utf8'),
+                    },
+                    {
+                        ext: 'md',
+                        fileName: `ag12-format-${stamp}.md`,
+                        mimeType: 'text/markdown',
+                        phrase: `MdExtractToken${stamp}`,
+                        content: Buffer.from(`# Architecture Decision\nMdExtractToken${stamp}\n`, 'utf8'),
+                    },
+                    {
+                        ext: 'json',
+                        fileName: `ag12-format-${stamp}.json`,
+                        mimeType: 'application/json',
+                        phrase: `JsonExtractToken${stamp}`,
+                        content: Buffer.from(JSON.stringify({ schema: 'v1', token: `JsonExtractToken${stamp}` }), 'utf8'),
+                    },
+                    {
+                        ext: 'xml',
+                        fileName: `ag12-format-${stamp}.xml`,
+                        mimeType: 'application/xml',
+                        phrase: `XmlExtractToken${stamp}`,
+                        content: Buffer.from(`<?xml version="1.0"?><manifest><token>XmlExtractToken${stamp}</token></manifest>`, 'utf8'),
+                    },
+                    {
+                        ext: 'html',
+                        fileName: `ag12-format-${stamp}.html`,
+                        mimeType: 'text/html',
+                        phrase: `HtmlExtractToken${stamp}`,
+                        content: Buffer.from(`<!doctype html><html><body><p>HtmlExtractToken${stamp}</p></body></html>`, 'utf8'),
+                    },
+                    {
+                        ext: 'zip',
+                        fileName: `ag12-format-${stamp}.zip`,
+                        mimeType: 'application/zip',
+                        phrase: `ZipExtractToken${stamp}`,
+                        content: makeZip([{ name: 'bundle-readme.txt', data: Buffer.from(`Archive member ZipExtractToken${stamp}`, 'utf8') }]),
+                    },
+                    {
+                        ext: 'gz',
+                        fileName: `ag12-format-${stamp}.txt.gz`,
+                        mimeType: 'application/gzip',
+                        phrase: `GzExtractToken${stamp}`,
+                        content: makeGzip(`Gzipped log entry GzExtractToken${stamp}`),
+                    },
+                ];
+
+                const uploadedTextFormats: Array<{ itemId: string; ext: string; phrase: string; fileName: string }> = [];
+                for (const spec of textFormatSpecs) {
+                    const up = await upload({
+                        spaceId: DISCOVERY_SPACE_ID,
+                        fileName: spec.fileName,
+                        mimeType: spec.mimeType,
+                        band: 'Shared',
+                        content: spec.content,
+                    });
+                    uploadedTextFormats.push({ itemId: up.itemId, ext: spec.ext, phrase: spec.phrase, fileName: spec.fileName });
+                }
+
+                for (const tf of uploadedTextFormats) {
+                    const pipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, tf.itemId);
+                    Assert(
+                        pipeline.chunks.some((c) => c.Text.includes(tf.phrase)),
+                        `Format .${tf.ext} (${tf.fileName}) extracted phrase "${tf.phrase}" into Content Item Chunks`,
+                    );
+                    const byPhrase = await resolveSpaceAgentRetrieval(ctx.Provider, bea, DISCOVERY_SPACE_ID, {
+                        query: tf.phrase,
+                    });
+                    Assert(
+                        byPhrase.quotedItems.some((i) => i.ID.toLowerCase() === tf.itemId.toLowerCase()),
+                        `resolveSpaceAgentRetrieval finds .${tf.ext} Space Item by extracted phrase "${tf.phrase}"`,
+                    );
+                }
+
+                const mediaFormatSpecs: Array<{ ext: string; fileName: string; mimeType: string; content: Buffer }> = [
+                    { ext: 'png', fileName: `ag12-media-${stamp}.png`, mimeType: 'image/png', content: Buffer.from('\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR') },
+                    { ext: 'jpg', fileName: `ag12-media-${stamp}.jpg`, mimeType: 'image/jpeg', content: Buffer.from('\xff\xd8\xff\xe0\x00\x10JFIF\x00') },
+                    { ext: 'gif', fileName: `ag12-media-${stamp}.gif`, mimeType: 'image/gif', content: Buffer.from('GIF89a\x01\x00\x01\x00') },
+                    { ext: 'webp', fileName: `ag12-media-${stamp}.webp`, mimeType: 'image/webp', content: Buffer.from('RIFF\x14\x00\x00\x00WEBPVP8 ') },
+                    { ext: 'svg', fileName: `ag12-media-${stamp}.svg`, mimeType: 'image/svg+xml', content: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>') },
+                    { ext: 'mp4', fileName: `ag12-media-${stamp}.mp4`, mimeType: 'video/mp4', content: Buffer.from('\x00\x00\x00\x18ftypmp42') },
+                    { ext: 'mp3', fileName: `ag12-media-${stamp}.mp3`, mimeType: 'audio/mpeg', content: Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00') },
+                    { ext: 'wav', fileName: `ag12-media-${stamp}.wav`, mimeType: 'audio/wav', content: Buffer.from('RIFF$\x00\x00\x00WAVEfmt ') },
+                ];
+
+                const uploadedMediaIds: string[] = [];
+                for (const media of mediaFormatSpecs) {
+                    const up = await upload({
+                        spaceId: DISCOVERY_SPACE_ID,
+                        fileName: media.fileName,
+                        mimeType: media.mimeType,
+                        band: 'Shared',
+                        content: media.content,
+                    });
+                    uploadedMediaIds.push(up.itemId);
+                }
+
+                for (let idx = 0; idx < uploadedMediaIds.length; idx++) {
+                    const mediaPipeline = await waitForSpaceItemPipeline(ctx.Provider, ctx.User, uploadedMediaIds[idx]);
+                    Assert(
+                        mediaPipeline.extractionStatus === 'Skipped' || mediaPipeline.extractionStatus === 'Complete',
+                        `Media format .${mediaFormatSpecs[idx].ext} completes pipeline cleanly without failing upload (status=${mediaPipeline.extractionStatus})`,
+                    );
+                }
+            } finally {
+                if (genConvId && genChatId) await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
+                const remainingToDelete = trackedItemIds.filter((id) => !deletedItemIds.has(id));
+                await runAllSteps([
+                    ...remainingToDelete
+                        .slice()
+                        .reverse()
+                        .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG12 uploaded space item')),
+                    () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, trackedItemIds),
                 ]);
             }
         },
