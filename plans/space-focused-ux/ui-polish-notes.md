@@ -2350,24 +2350,25 @@ src/lib/collaboration-section.component.ts:1569:116 - warning NG8107: The left s
   - Added `@memberjunction/ai-engine-base` (`"6.2.0-edge.2"`) to `peerDependencies` and `devDependencies` in `packages/AngularWidgets/package.json`.
   - Updated `CollabSpaceChatComponent.getCachedAgents()` in `packages/AngularWidgets/src/lib/space-chat.component.ts` to import `AIEngineBase` from `@memberjunction/ai-engine-base` and read `AIEngineBase.Instance.Agents`, deleting the `GetGlobalObjectStore()` `___SINGLETON__AIEngineBase` store scan and the `MentionAutocomplete.Instance.GetAvailableAgents()` fallback.
   - Updated unit and render tests in `packages/AngularWidgets/src/lib/widgets.test.ts` and `packages/AngularWidgets/src/lib/render.test.ts` to spy on `AIEngineBase.Instance.Agents` instead of writing to `GetGlobalObjectStore()`.
-- **`R6-Q1` — Refuse seat band / role type mismatch on `SpaceMemberEntityServer` & fix Colin's seat through the People page:**
-  - Updated `SpaceMemberEntityServer.ValidateAsync()` in `packages/CoreEntitiesServer/src/SpaceMemberEntityServer.ts` to refuse any seat whose `Band` is `'Team'` when its role type marks outside (`!context.role.canSeeTeamBand`): `Invite refused: a role that cannot see the Team band cannot sit on the Team band.`.
+- **`R6-Q1` — Keep People-page band sync on role change & Colin's fixed seat; revert server seat-band refusal for follow-up:**
   - Updated `onChangeMemberRole` in `packages/Angular/src/lib/collaboration-section.component.ts` to set `seat.Band = role.CanSeeTeamBand ? 'Team' : 'Shared'` alongside `seat.SpaceRoleTypeID = role.ID` when changing a seat's role on the People page.
-  - Added a test in `packages/CoreEntitiesServer/src/space-member-entity-server.test.ts` (`refuses a seat whose band is Team when its role type marks outside (CanSeeTeamBand = false)`) verifying that both new and saved seats with `Band = 'Team'` on an outside role (`OUTSIDE_ADMIN_ROLE`) are refused while `Band = 'Shared'` succeeds.
   - Fixed Colin Brockman's seat on `"Northwind relationship"` (`C1000001-0000-4000-8000-000000000001`) through the People page UI (`?view=space&tab=people&space=C1000001-0000-4000-8000-000000000001`, selecting `Owner` in the row's role dropdown and clicking `Confirm`): his seat became **`Role = Owner` (`owner`), `Band = Team`, `Status = Active`**.
+  - Per `Round 6 fixes review`, took the new server refusal and its test back out of `packages/CoreEntitiesServer/src/SpaceMemberEntityServer.ts` and `packages/CoreEntitiesServer/src/space-member-entity-server.test.ts` (where `SpaceMemberEntityServer` continues to derive `this.Band = context.role.canSeeTeamBand ? 'Team' : 'Shared'`), and added the follow-up item below.
 
-### 2. Files Changed
+### 2. Follow-up
+
+- Refuse a Team seat with an outside role, after updating the EX12 and S3 fixtures.
+
+### 3. Files Changed
 
 - `packages/AngularWidgets/package.json`
 - `packages/AngularWidgets/src/lib/space-chat.component.ts`
 - `packages/AngularWidgets/src/lib/widgets.test.ts`
 - `packages/AngularWidgets/src/lib/render.test.ts`
 - `packages/Angular/src/lib/collaboration-section.component.ts`
-- `packages/CoreEntitiesServer/src/SpaceMemberEntityServer.ts`
-- `packages/CoreEntitiesServer/src/space-member-entity-server.test.ts`
 - `plans/space-focused-ux/ui-polish-notes.md`
 
-### 3. Gate Outputs (Real Verbatim Output)
+### 4. Gate Outputs (Real Verbatim Output)
 
 #### Token, Input, Registered Export, & Hex Fallback Grep Checks
 ```text
@@ -2389,36 +2390,35 @@ packages/Angular/src/lib/collaboration-section.component.ts:0
 ```text
 $ node --experimental-strip-types --test packages/CoreEntitiesServer/src/space-member-entity-server.test.ts
 ▶ a member leaving a space
-  ✔ is judged by the space type's driver, as a Remove (1.311959ms)
-  ✔ is refused when the space type refuses it (0.222542ms)
-  ✔ is refused, closed, when the space type cannot be resolved (0.182208ms)
-✔ a member leaving a space (2.157583ms)
+  ✔ is judged by the space type's driver, as a Remove (1.378959ms)
+  ✔ is refused when the space type refuses it (0.239083ms)
+  ✔ is refused, closed, when the space type cannot be resolved (0.195583ms)
+✔ a member leaving a space (2.284042ms)
 ▶ a seat being deleted
-  ✔ is judged by the space type's driver, as a Remove, and refused when the type says no (0.992375ms)
-  ✔ is refused when the space type cannot be resolved (0.4485ms)
-✔ a seat being deleted (1.639666ms)
+  ✔ is judged by the space type's driver, as a Remove, and refused when the type says no (0.991375ms)
+  ✔ is refused when the space type cannot be resolved (0.42375ms)
+✔ a seat being deleted (1.597875ms)
 ▶ the kind of change a seat save is
-  ✔ names a removal, a role change and a band change from what changed (0.109792ms)
-  ✔ calls a new seat, an approval and a reinstatement an Invite: they have no kind of their own (0.058792ms)
-  ✔ gives a save that touches no status, role or band no kind, so it raises no seat reaction (0.030375ms)
-✔ the kind of change a seat save is (0.294792ms)
+  ✔ names a removal, a role change and a band change from what changed (0.076959ms)
+  ✔ calls a new seat, an approval and a reinstatement an Invite: they have no kind of their own (0.038917ms)
+  ✔ gives a save that touches no status, role or band no kind, so it raises no seat reaction (0.024917ms)
+✔ the kind of change a seat save is (0.223792ms)
 ▶ a seat saved through its own validation
-  ✔ tells the driver, when it is asked to judge and when it is told, the same kind and the same old values, for a band edit the gate puts back (1.124833ms)
-  ✔ tells the driver an Invite, both times, for an approval whose band no longer matches the role (0.337417ms)
-  ✔ tells the driver an Invite, both times, for a new seat whose band differs from its role: the gate derives the band, the kind is what was asked (0.346875ms)
-  ✔ tells the driver an Invite for a removed seat made Invited again, since a re-invitation is a seat coming back (0.390834ms)
-  ✔ says nothing to the driver, asked or told, when the save touches no status, role or band (0.163875ms)
-  ✔ starts each save clean: a refused save leaves no reading for the next (0.256583ms)
-  ✔ refuses a seat whose band is Team when its role type marks outside (CanSeeTeamBand = false) (0.374167ms)
-✔ a seat saved through its own validation (3.167667ms)
-ℹ tests 15
+  ✔ tells the driver, when it is asked to judge and when it is told, the same kind and the same old values, for a band edit the gate puts back (1.103375ms)
+  ✔ tells the driver an Invite, both times, for an approval whose band no longer matches the role (0.572917ms)
+  ✔ tells the driver an Invite, both times, for a new seat whose band differs from its role: the gate derives the band, the kind is what was asked (0.325875ms)
+  ✔ tells the driver an Invite for a removed seat made Invited again, since a re-invitation is a seat coming back (0.253875ms)
+  ✔ says nothing to the driver, asked or told, when the save touches no status, role or band (0.135458ms)
+  ✔ starts each save clean: a refused save leaves no reading for the next (0.265166ms)
+✔ a seat saved through its own validation (2.816ms)
+ℹ tests 14
 ℹ suites 4
-ℹ pass 15
+ℹ pass 14
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 302.313625
+ℹ duration_ms 304.484584
 ```
 
 #### `@mj-biz-apps/collaboration-ng-widgets` Unit & DOM Render Tests
