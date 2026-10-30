@@ -483,13 +483,21 @@ async function runClaimedTurn(
                 provider,
                 conversationHistoryFrom
             );
-            const assembledWindow = ConversationEngine.AssembleContextWindow(windowRows, {
+            const windowOptions: NonNullable<Parameters<typeof ConversationEngine.AssembleContextWindow>[1]> & {
+                speakerAttribution?: 'off' | 'auto' | 'always';
+                speakerLabels?: ReadonlyMap<string, string>;
+            } = {
                 excludeDetailIds: [assistantDetail.ID],
                 historyFrom: conversationHistoryFrom ?? null,
                 maxTailMessages: 20,
                 speakerAttribution: 'always',
                 speakerLabels,
-            });
+            };
+            const assembledWindow: ReadonlyArray<
+                ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
+                    metadata?: { rawContent?: string };
+                }
+            > = ConversationEngine.AssembleContextWindow(windowRows, windowOptions);
             const assembledMessages: ExecuteAgentParams['conversationMessages'] = assembledWindow.map((m) => ({
                 role: m.role,
                 content: m.content,
