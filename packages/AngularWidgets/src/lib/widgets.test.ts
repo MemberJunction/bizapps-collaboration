@@ -1950,16 +1950,20 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     chat.onOpenLinkedItem();
     expect(openedItems).toEqual([{ kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' }]);
 
-    // 2. Thread parent & transitive Slack-thread replies resolution (including reply-to-reply)
+    // 2. Thread parent & transitive Slack-thread replies resolution:
+    //    - msg-2 (AI reply to top-level msg-1) stays in the main flow (getParentMessage is null)
+    //    - msg-3 (person reply to msg-1), msg-5 (person reply to msg-3), and msg-6 (AI reply to msg-5) are in the thread
     chat.ThreadMessages = [
       ...chat.ThreadMessages,
-      { ID: 'msg-5', ParentID: 'msg-2', Role: 'User', User: 'Riku Sato', Message: 'Good catch @Sage — can you also check page 5?' },
+      { ID: 'msg-5', ParentID: 'msg-3', Role: 'User', User: 'Riku Sato', Message: 'Good catch @Sage — can you also check page 5?' },
+      { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', Message: 'Page 5 is within tolerance.' },
     ];
-    expect(chat.getParentMessage(chat.ThreadMessages[1])?.ID).toBe('msg-1');
-    expect(chat.getRepliesFor('msg-1').map((m) => m.ID)).toEqual(['msg-2', 'msg-3', 'msg-5']);
-    expect(chat.getLastReplySpeaker('msg-1')).toBe('Riku Sato');
-    expect(chat.getThreadParticipants('msg-1').map((p) => p.name)).toEqual(['Sage', 'Colin Brockman', 'Riku Sato']);
-    expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Sage');
+    expect(chat.getParentMessage(chat.ThreadMessages[1])).toBeNull();
+    expect(chat.getParentMessage(chat.ThreadMessages[2])?.ID).toBe('msg-1');
+    expect(chat.getRepliesFor('msg-1').map((m) => m.ID)).toEqual(['msg-3', 'msg-5', 'msg-6']);
+    expect(chat.getLastReplySpeaker('msg-1')).toBe('Sage');
+    expect(chat.getThreadParticipants('msg-1').map((p) => p.name)).toEqual(['Colin Brockman', 'Riku Sato', 'Sage']);
+    expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Colin Brockman');
     expect(chat.getSpeakerName(chat.ThreadMessages[0])).toBe('Ada Lovelace');
     expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
     expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
@@ -1983,7 +1987,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(chat.pendingAgentPrompt).toEqual({
       messageId: 'msg-4',
       messageText: 'Sounds good to me.',
-      reasonLabel: 'Replied to Ada Lovelace — AI stays silent on human thread replies',
+      reasonLabel: 'You replied to Ada Lovelace.',
       suggestedAgentName: 'Sage',
       suggestedAgentId: null,
     });
@@ -1995,11 +1999,12 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(chat.pendingAgentPrompt).toBeNull();
     expect(chat.isAgentWorking).toBe(true);
     expect(chat.activeAgentName).toBe('Sage');
-    expect(chat.formatRouteBadge(chat.activeAgentRoute)).toBe('↪ Thread Reply');
+    expect(chat.formatRouteBadge(chat.activeAgentRoute)).toBe('Replying in the thread');
     expect(stepIns).toEqual([{ messageId: 'msg-4', messageText: 'Sounds good to me.', agentName: 'Sage' }]);
 
     chat.onAgentTurnCompleted();
     expect(chat.isAgentWorking).toBe(false);
+    expect(chat.activeAgentRoute).toBe('');
     vi.useRealTimers();
   });
 

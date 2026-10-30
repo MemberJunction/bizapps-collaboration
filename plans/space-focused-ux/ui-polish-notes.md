@@ -1405,3 +1405,219 @@ packages/Angular build: Done in 2.7s
 - `plans/space-focused-ux/shots/round-2b/rail-collapsed-light.png`
 - `plans/space-focused-ux/shots/round-2b/rail-collapsed-dark.png`
 
+---
+
+## Round 3
+
+### 1. Round 2b Review Fixes (`B-1` to `B-3` and `S-1` to `S-5`, committed in `b7b4bf8`)
+
+- **B-1 — Replace hand-made metadata IDs with random UUIDs (`uuidgen | tr '[:lower:]' '[:upper:]'`) and push via `mj sync push`:**
+  - Replaced `A1B2C3D4-0001-4000-8000-000000000101` (`Collaboration: Visible Pages`) with `00946333-EA10-4A0E-83D5-86C8AA224AF4` in `metadata/row-level-security-filters/.row-level-security-filters.json`.
+  - Replaced `A1B2C3D4-0001-4000-8000-000000000102` (`Collaboration: Pages The Caller May Change`) with `658D79AC-98A5-429D-A5A0-9C1CC69D179C` in `metadata/row-level-security-filters/.row-level-security-filters.json`.
+  - Replaced `B1C2D3E4-0001-4000-8000-000000000201` (`Space Participant` permission on `Space Pages`) with `84212A99-6F2C-4DF0-97A9-62BE7B5256CE` in `metadata/entity-permissions/.entity-permissions.json`.
+  - Removed the 3 old rows from the database and ran `pnpm exec mj sync push --dir=metadata` (2 files processed, 0 errors).
+- **B-2 — Keep an agent's top-level answer in the main flow (`CollapseThreadReplies`):**
+  - Updated `ConversationChatAreaComponent.DisplayMessages` in `MJ/packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts` (committed on `collab/e2e-combined` as `2af5683c74`) and `CollabSpaceChatComponent.getParentMessage` / `getRepliesFor` in `packages/AngularWidgets/src/lib/space-chat.component.ts` so an AI answer (`Role = 'AI'` / `AgentID != null`) whose parent is a top-level message (`ParentID == null`) stays in the main conversation flow, while a person's reply to any message or an agent's reply to a thread reply is collapsed into the thread.
+  - Added unit test `'keeps an agent reply to a top-level message in the main flow, and collapses an agent reply to a thread reply'` in `MJ/packages/Angular/Generic/conversations/src/__tests__/collapse-thread-replies.test.ts` (4/4 passing) and updated `packages/AngularWidgets/src/lib/widgets.test.ts`.
+  - Retook `plans/space-focused-ux/shots/step-m/chat-mention-light.png`, `chat-thread-reply-light.png`, and `chat-unmentioned-followup-light.png`.
+- **B-3 — Default `SpacePage.Band` to `'Team'` (fail-closed):**
+  - Changed `DF_SpacePage_Band` to `DEFAULT (N'Team')`, `spCreateSpacePage` `ISNULL(@Band, 'Team')`, and the `Band` `EntityField.DefaultValue` to `'Team'` in `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql`.
+  - Updated `SpacePageEntityServer.stampDefaults()` in `packages/ServerEntities/src/SpacePageEntityServer.ts` to `if (!this.Band) this.Band = 'Team';`.
+- **S-1 — Drop `CK_SpacePage_BuiltInTab` and `EntityFieldValue` rows for `BuiltInTab` so contributed `BaseSpaceTab` keys can be customized:**
+  - Removed `CONSTRAINT [CK_SpacePage_BuiltInTab]` and the 6 `EntityFieldValue` inserts for `BuiltInTab` from `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql`.
+  - Exact commands run to re-apply the migration and regenerate codegen artifacts:
+    ```bash
+    # 1. Reset V202610300100__v0.1.x__Space_Pages.sql objects + Flyway history row, then run mj migrate:
+    set -a && source ../MJ/.env && set +a
+    pnpm exec mj migrate --schema __mj_BizAppsCollaboration
+
+    # 2. Run MJ codegen (--skipdb) to regenerate entity subclass, GraphQL schema, and Angular form from updated EntityFieldValue metadata:
+    node /tmp/run-collab-codegen.mjs
+    ```
+  - Regenerated files:
+    - `packages/Entities/src/generated/entities/__mj_BizAppsCollaboration.ts` (`BuiltInTab` getter/setter type changed from union to `string | null`)
+    - `packages/Server/src/generated/graphql-schemas/__mj_BizAppsCollaboration.ts`
+    - `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpacePage/mjbizappscollaborationspacepage.form.component.html`
+  - Changed `export type BuiltInTabName = string;` in `packages/Angular/src/lib/logic/space-pages.ts` and added unit test `'preserves contributed tab keys (e.g. BaseSpaceTab keys) on entity.BuiltInTab'` in `packages/Angular/src/lib/logic/space-pages.test.ts`.
+- **S-2 — Deduplicate `SpacePageEntityServer` write permission checks:**
+  - Extracted `private async checkEditPermission(action: 'save' | 'delete', result: ValidationResult): Promise<boolean>` in `packages/ServerEntities/src/SpacePageEntityServer.ts` and called it from both `ValidateAsync` and `Delete`.
+- **S-3 — Memoize getter inputs for `SpacePagesComponent` and `CollaborationSectionComponent`:**
+  - Memoized `spacePages` in `packages/Angular/src/lib/collaboration-section.component.ts` and memoized `registeredBlocks`, `resolvedBlockContext`, and `registeredBlockInputs` in `packages/AngularWidgets/src/lib/space-pages.component.ts`.
+- **S-4 — Add `Space Pages` to the `row-filters` integration suite (`RF5`):**
+  - Added `row-filters.RF5` in `packages/IntegrationTests/src/suites/row-filters.checks.ts`, `packages/IntegrationTests/src/suites/row-filters.client.checks.ts`, and `packages/IntegrationTests/src/world/expected-bundles.ts` (`node test-harnesses/integration.mjs row-filters`: 5 passed / 0 failed).
+- **S-5 — Clarify shared draft visibility in schema docs and page edit bar:**
+  - Updated `DraftBlocks` and `DraftTitle` column descriptions in `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql` and added `<span class="sp-edit-hint" data-testid="page-edit-hint">Drafts are visible to everyone who can see this page.</span>` to `packages/AngularWidgets/src/lib/space-pages.component.ts`.
+
+---
+
+### 2. Route Check Findings & Fix (`ui-polish-review.md`)
+
+- **What happened on Turn 3 (`"And what about the data grants in this space?"`) in `smoke-step-m-chat.mjs`:**
+  1. In Northwind (`AgentReplyMode = 'MentionOnly'`, `EnableDecisionRouting = true`), Turn 3 had no `@mention` and `ParentID = null` (top-level message).
+  2. `MessageInputComponent.resolveAgentTurnTarget` invoked `decideAgentRouting`, which ran the `Default Decision` prompt (`8D3B91E7-D840-4B1B-B7F0-EDB0C77BE6CB`). In the local environment, that prompt timed out at its configured `TimeoutMS (350ms)` (`Prompt "Default Decision" exceeded its configured TimeoutMS (350ms)`), so `decideAgentRouting` returned `{ route: 'NoAgent' }` and `resolveAgentTurnTarget` returned `null`. Consequently, **no** `ExecuteSpaceChatTurn` call was made to the server on Turn 3.
+  3. The `@Mention` badge visible in the earlier `shots/step-m/chat-unmentioned-followup-light.png` was stale state left over from Turn 1 due to three bugs in `CollabSpaceChatComponent`:
+     - `BeforeAgentTurn` read `args?.Turn?.Route ?? 'Mention'`, whereas `BeforeAgentTurnEventArgs` in `@memberjunction/ng-conversations` defines `Route` and `AgentName` at top level (`args.Route`, `args.AgentName`), causing every turn to fall back to `'Mention'`.
+     - `MessageInputComponent.runHostAgentTurn` only emits `AfterAgentTurn` when `result.Result` is truthy (`spaceTurnResult` omits `Result`), while `syncLiveProgressFromChatArea` guarded completion with `&& !this.activeAgentRoute` and `onAgentTurnCompleted()` never cleared `activeAgentRoute`.
+     - `MessageInputComponent.MessageSent` also emits settled `AI` reply rows (`Role = 'AI'`), which previously triggered `onUserMessageSent` after Turn 1 / Turn 2 completed.
+- **How it was fixed in `CollabSpaceChatComponent` (`packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+  - `BeforeAgentTurn` listener now reads `args?.Route ?? args?.Turn?.Route ?? 'Mention'` and `args?.AgentName ?? args?.Turn?.AgentName ?? this.DefaultAgentName`.
+  - Wrapped `AgentTurnHandler` in `effectiveAgentTurnHandler` so `onAgentTurnStarted({ agentName: request.AgentName, route: request.Route })` runs at turn start and `onAgentTurnCompleted()` always runs in `finally`.
+  - `onAgentTurnCompleted()` and `syncLiveProgressFromChatArea()` now clear `isRoutingCheck`, `isAgentWorking`, `activeAgentName`, `activeAgentRoute`, `activeAgentStatusText`, `activeAgentElapsed`, and `activeAgentProgressPercent`.
+  - `onUserMessageSent` ignores `AI` rows (`if (this.isAiMessage(message)) return;`) and suppresses `pendingAgentPrompt` when replying to an AI message (`ThreadReply`).
+
+---
+
+### 3. Round 3 Chat Changes (`ui-polish.md` §5 + `ui-polish-review.md` "Add to round 3")
+
+- **`packages/AngularWidgets/src/lib/space-chat.component.ts` (`CollabSpaceChatComponent`):**
+  - **Avatars in threads (`<mjc-avatar>`):** Replaced custom `.thread-mini-avatar` and `.thread-reply-avatar` divs in `mjChatSlot="messageExtra"` (and `.chat-participant-avatar` in the participants popover) with `<mjc-avatar>` (`CollabAvatarComponent`) bound to `[SpaceMembers]="spaceMembers"`, preserving the outside ring (`[IsOutside]="true"`, `.av.ext`) on outside participants (`member.band === 'Shared'`).
+  - **No `userAvatarMap` reads:** Deleted `getUserAvatarEntry` and removed all reads of `chatArea.userAvatarMap` / `UserAvatarMap` (`0` occurrences in `space-chat.component.ts`).
+  - **Thread reply affordances:** Kept one `"Reply"` action per collapsed message (`!isThreadExpanded(message.ID)`), the thread bar with reply count and last reply (`data-testid="message-thread-replies"`), and a single reply box (`data-testid="thread-reply-box"` with input + `Reply` button) at the bottom of an open thread. Removed the duplicate `"Reply in thread"` button above the open thread and the per-reply `"Reply"` buttons inside the thread.
+  - **Who's speaking:** Removed the `"Participant"` pill from human thread replies. Only the outside ring on `<mjc-avatar>` and the `"Assistant"` mark (`data-testid="thread-reply-assistant-mark"`) on AI replies are shown.
+  - **Live Assistant indicator in `mjChatSlot="agentPresence"`:** Moved the live progress indicator out of `mjChatSlot="header"` into `<ng-template mjChatSlot="agentPresence">` and bound `[ShowAgentCharacter]="isRoutingCheck || isAgentWorking"` on `<mj-conversation-chat-area>`.
+  - **Plain-word copy:** Replaced `"Evaluating addressee routing…"` and `"Checking speaker attribution & thread context…"` with `"Deciding whether the Assistant should answer…"` while routing and `"<AgentName> is answering · 0:12"` while working.
+  - **Typed `AgentTurnRoute` & exhaustive `formatRouteBadge`:** Imported `AgentTurnRoute` from `@memberjunction/ng-conversations`, typed `activeAgentRoute: AgentTurnRoute | '' = ''`, and implemented an exhaustive `switch` in `formatRouteBadge(route)` returning `'Replying in the thread'` (`ThreadReply`), `'Following up'` (`DecisionRouted` | `Continuity`), `` `Handed to ${agent}` `` (`Redirect`), and `''` (`Mention`, `ConversationDefault`, `HostDefault`, `ConversationManager`, `''`) with no emoji.
+  - **Zero hex fallbacks:** Replaced all `var(--mj-..., #hex)` fallbacks in `packages/AngularWidgets/src/lib/space-chat.component.ts` and `packages/AngularWidgets/src/lib/avatar.component.ts` with MJ (`--mj-*`) and Collaboration (`--mjc-*`) tokens.
+- **`packages/Angular/src/lib/collaboration-section.component.ts` (`CollaborationSectionComponent`):**
+  - Bound `[SpaceMembers]="spaceMembers"` on `<mjc-space-chat>`.
+- **`packages/AngularWidgets/src/lib/render.test.ts` & `packages/AngularWidgets/src/lib/widgets.test.ts`:**
+  - Updated `ChatAreaStub` to project `agentPresence` (guarded by `ShowAgentCharacter`) and `messageExtra` (over `DisplayMessages`), updated the live indicator test, and added unit tests for exhaustive `formatRouteBadge` and thread rendering (`<mjc-avatar>` outside ring, `Assistant` mark without `Participant` tag, one `Reply` action when collapsed, and one reply box when open).
+
+---
+
+### 4. Gate Outputs (Real Verbatim Output)
+
+#### 1. `node scripts/check-mj-tokens.mjs` & `node scripts/check-mj-inputs.mjs` & Grep Checks
+
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/space-chat.component.ts packages/AngularWidgets/src/lib/avatar.component.ts || true
+packages/AngularWidgets/src/lib/space-chat.component.ts:0
+packages/AngularWidgets/src/lib/avatar.component.ts:0
+
+$ grep -c -i 'userAvatarMap' packages/AngularWidgets/src/lib/space-chat.component.ts || true
+0
+```
+
+#### 2. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets test`
+
+```text
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (123 tests) 15ms
+ ✓ src/lib/render.test.ts (57 tests) 681ms
+
+ Test Files  3 passed (3)
+      Tests  190 passed (190)
+   Start at  11:40:18
+   Duration  11.07s (transform 16.06s, setup 0ms, import 21.99s, tests 702ms, environment 203ms)
+```
+
+#### 3. `pnpm --filter @mj-biz-apps/collaboration-ng test`
+
+```text
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+▶ space-pages
+  ✔ maps a SpacePage row and applies a CollabPageModel back to a SpacePage entity (0.750209ms)
+  ✔ builds starter pages for all built-in space tabs and merges saved customizations + user pages (1.011916ms)
+  ✔ preserves contributed tab keys (e.g. BaseSpaceTab keys) on entity.BuiltInTab (0.308417ms)
+✔ space-pages (2.752458ms)
+...
+ℹ tests 159
+ℹ suites 45
+ℹ pass 159
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 260.444792
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 43ms
+   ✓ a space's details, rendered (5)
+     ✓ mounts MemberJunction's form host on the subtype's record with only the subtype's sections, and no toolbar, related entities or links 17ms
+     ✓ hands the form host the same config until the sections change, not a new one on every pass 5ms
+     ✓ draws a field for each column when there is no form, bound to the record, read-only on the About card 10ms
+     ✓ mounts the type's own component with the record and the edit mode 5ms
+     ✓ says a change happened from what was typed (input, change, focus leaving) and from a field's own change event 4ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  11:40:34
+   Duration  5.97s (transform 3.86s, setup 0ms, import 5.64s, tests 43ms, environment 220ms)
+```
+
+#### 4. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets build` & `pnpm --filter @mj-biz-apps/collaboration-ng build` & `ngc --noEmit`
+
+```text
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 build /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> ngc
+
+src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+
+13   imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
+                                                                               ~~~~~~~~~~~~~~~~~~~
+
+
+> @mj-biz-apps/collaboration-ng@0.1.0 build /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> ngc
+
+src/lib/collaboration-section.component.ts:1446:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+
+1446                                                                         <span class="config-meta">{{ reach.Fields?.length ? reach.Fields.length + ' field' + (reach.Fields.length === 1 ? '' : 's') : 'every field' }}</span>
+                                                                                                                        ~~~~~~
+```
+
+#### 5. Server Entities & Integration Gate (`stage1-servers.test.ts` and `row-filters`)
+
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-server-entities test
+ℹ tests 33
+ℹ suites 7
+ℹ pass 33
+ℹ fail 0
+ℹ duration_ms 216.126875
+
+$ node test-harnesses/integration.mjs row-filters
+row-filters (5 passed / 0 failed):
+  PASS row-filters.RF1: Ada in Northwind: 3 spaces (Northwind + Discovery + Delivery), 5 members, 4 items (Shared + Team), 2 tasks (Shared + Team) (74ms)
+  PASS row-filters.RF2: Casey in Northwind: 2 spaces (Northwind + Discovery; Delivery hidden), 5 members, 2 Shared items, 1 Shared task (61ms)
+  PASS row-filters.RF3: Guy (guest in Northwind): 1 space (Northwind only; no inherited seat on children), 1 Shared item, 1 Shared task (53ms)
+  PASS row-filters.RF4: Nina (non-member): 0 spaces, 0 members, 0 items, 0 tasks (48ms)
+  PASS row-filters.RF5: Space Pages RLS: Ada sees Shared + Team pages (2); Casey and Guy see only Shared page (1); Nina sees 0 pages (88ms)
+Integration: 5 passed, 0 failed
+```
+
+### 5. Screenshots (`plans/space-focused-ux/shots/round-3/` and `plans/space-focused-ux/shots/step-m/`, 1440×900, light and dark)
+
+- `plans/space-focused-ux/shots/round-3/home-light.png`
+- `plans/space-focused-ux/shots/round-3/home-dark.png`
+- `plans/space-focused-ux/shots/round-3/discovery-overview-light.png`
+- `plans/space-focused-ux/shots/round-3/discovery-overview-dark.png`
+- `plans/space-focused-ux/shots/round-3/field-notes-light.png`
+- `plans/space-focused-ux/shots/round-3/field-notes-dark.png`
+- `plans/space-focused-ux/shots/round-3/library-light.png`
+- `plans/space-focused-ux/shots/round-3/library-dark.png`
+- `plans/space-focused-ux/shots/round-3/work-light.png`
+- `plans/space-focused-ux/shots/round-3/work-dark.png`
+- `plans/space-focused-ux/shots/round-3/chat-thread-open-light.png`
+- `plans/space-focused-ux/shots/round-3/chat-thread-open-dark.png`
+- `plans/space-focused-ux/shots/round-3/page-edit-mode-light.png`
+- `plans/space-focused-ux/shots/round-3/page-edit-mode-dark.png`
+- `plans/space-focused-ux/shots/round-3/rail-collapsed-light.png`
+- `plans/space-focused-ux/shots/round-3/rail-collapsed-dark.png`
+- `plans/space-focused-ux/shots/step-m/chat-mention-light.png`
+- `plans/space-focused-ux/shots/step-m/chat-thread-reply-light.png`
+- `plans/space-focused-ux/shots/step-m/chat-unmentioned-followup-light.png`

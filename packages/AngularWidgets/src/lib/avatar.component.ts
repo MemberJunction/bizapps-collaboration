@@ -43,7 +43,7 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       border-radius: 99px;
       font-size: 11px;
       font-weight: 650;
-      color: var(--mj-brand-on-primary, #ffffff);
+      color: var(--mj-brand-on-primary);
       letter-spacing: .01em;
       background: var(--mj-text-muted);
       user-select: none;
@@ -94,8 +94,8 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       width: 9px;
       height: 9px;
       border-radius: 9px;
-      background: var(--mj-status-success, #22c55e);
-      box-shadow: 0 0 0 2px var(--mj-bg-surface, #ffffff);
+      background: var(--mj-status-success);
+      box-shadow: 0 0 0 2px var(--mj-bg-surface);
     }
   `]
 })

@@ -22,11 +22,14 @@ import {
   ConversationStreamingService,
   type AgentReplyMode,
   type AgentTurnHandler,
+  type AgentTurnRequest,
+  type AgentTurnRoute,
 } from '@memberjunction/ng-conversations';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import type { SpaceBand } from './types';
+import type { SpaceBand, SpaceMemberModel } from './types';
+import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
@@ -60,14 +63,13 @@ export interface PendingAgentPromptState {
 
 /**
  * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules,
- * plus the UI representation of multi-party speaker attribution, thread replies (`ParentID` / `ThreadReply`),
- * live agent execution progress bar, and the "Ask if an agent should go" prompt (MJ PR #6176).
+ * with collapsed threads in `messageExtra` and the live Assistant indicator in `agentPresence`.
  */
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
+  imports: [CollabAvatarComponent, CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
   template: `
     <div class="chat-container">
       @if (IsPending) {
@@ -93,19 +95,52 @@ export interface PendingAgentPromptState {
           [AllowAttachments]="AllowAttachments"
           [AllowRealtime]="false"
           [CollapseThreadReplies]="true"
+          [ShowAgentCharacter]="isRoutingCheck || isAgentWorking"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
           [EnableDecisionRouting]="EnableDecisionRouting"
           [MentionPeople]="MentionPeople"
           [AgentHistoryFrom]="AgentHistoryFrom"
-          [AgentTurnHandler]="AgentTurnHandler"
+          [AgentTurnHandler]="effectiveAgentTurnHandler"
           [AutoNameConversation]="AutoNameConversation"
           [ComposerDraft]="ComposerDraft"
           [PendingMessage]="PendingMessage"
           [PendingMessageConversationId]="PendingMessageConversationId"
           (ComposerDraftConsumed)="onComposerDraftConsumed()"
           (PendingMessageConsumed)="onPendingMessageConsumed()">
-          
+
+          <ng-template mjChatSlot="agentPresence">
+            @if (isRoutingCheck || isAgentWorking) {
+              <div class="agent-working-progress-banner" data-testid="agent-working-progress-bar" role="status" aria-live="polite">
+                <div class="agent-progress-track">
+                  <div
+                    class="agent-progress-fill"
+                    [class.indeterminate]="activeAgentProgressPercent === null"
+                    [style.width.%]="activeAgentProgressPercent ?? 42">
+                  </div>
+                </div>
+                <div class="agent-progress-body">
+                  <div class="agent-progress-left">
+                    <i class="fa-solid fa-robot agent-progress-icon" aria-hidden="true"></i>
+                    @if (isRoutingCheck && !isAgentWorking) {
+                      <span class="agent-progress-title">Deciding whether the Assistant should answer…</span>
+                    } @else {
+                      <span class="agent-progress-title">
+                        {{ activeAgentName || DefaultAgentName || 'Assistant' }} is answering{{ activeAgentElapsed ? ' · ' + activeAgentElapsed : '' }}
+                      </span>
+                      @if (formatRouteBadge(activeAgentRoute); as routeReason) {
+                        <span class="agent-route-badge" data-testid="agent-route-badge">{{ routeReason }}</span>
+                      }
+                      @if (activeAgentStatusText) {
+                        <span class="agent-progress-step">{{ activeAgentStatusText }}</span>
+                      }
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </ng-template>
+
           <ng-template mjChatSlot="header">
             <div class="space-chat-header-wrap">
               <div class="space-chat-header-slot">
@@ -166,7 +201,7 @@ export interface PendingAgentPromptState {
                         [class.open]="showParticipantsPopover"
                         [attr.aria-expanded]="showParticipantsPopover"
                         (click)="toggleParticipantsPopover($event)"
-                        title="View people &amp; AI agents in this conversation">
+                        title="View people and the Assistant in this conversation">
                         <i class="fa-solid fa-users" aria-hidden="true"></i>
                         <span>{{ ParticipantCount }}</span>
                         <i class="fa-solid fa-chevron-down participant-pill-caret" [class.open]="showParticipantsPopover" aria-hidden="true"></i>
@@ -181,17 +216,20 @@ export interface PendingAgentPromptState {
                           <div class="chat-participants-list">
                             @for (person of conversationParticipantsList; track person.id) {
                               <div class="chat-participant-row">
-                                <div class="chat-participant-avatar" [class.is-ai]="person.isAi">
-                                  @if (person.imageUrl) {
-                                    <img [src]="person.imageUrl" [alt]="person.name" class="avatar-img" />
-                                  } @else {
-                                    <i [class]="person.iconClass" aria-hidden="true"></i>
-                                  }
-                                </div>
+                                <mjc-avatar
+                                  Size="sm"
+                                  [Initials]="person.initials"
+                                  [Name]="person.name"
+                                  [AvatarUrl]="person.imageUrl || ''"
+                                  [ColorClass]="person.colorClass"
+                                  [PersonId]="person.id"
+                                  [IsOutside]="person.isOutside" />
                                 <div class="chat-participant-info">
                                   <div class="chat-participant-name-line">
                                     <span class="chat-participant-name">{{ person.name }}</span>
-                                    <span class="chat-participant-badge" [class.is-ai]="person.isAi">{{ person.role }}</span>
+                                    @if (person.role) {
+                                      <span class="chat-participant-badge" [class.is-ai]="person.isAi">{{ person.role }}</span>
+                                    }
                                   </div>
                                   @if (person.subtitle) {
                                     <span class="chat-participant-sub">{{ person.subtitle }}</span>
@@ -216,42 +254,9 @@ export interface PendingAgentPromptState {
                   }
                 </div>
               </div>
-
-              <!-- PR #6176: Live Agent Activity & Routing Decision Progress Bar -->
-              @if (isRoutingCheck || isAgentWorking) {
-                <div class="agent-working-progress-banner" data-testid="agent-working-progress-bar" role="status" aria-live="polite">
-                  <div class="agent-progress-track">
-                    <div
-                      class="agent-progress-fill"
-                      [class.indeterminate]="activeAgentProgressPercent === null"
-                      [style.width.%]="activeAgentProgressPercent ?? 42">
-                    </div>
-                  </div>
-                  <div class="agent-progress-body">
-                    <div class="agent-progress-left">
-                      <span class="agent-pulse-dot" aria-hidden="true"></span>
-                      <i class="fa-solid fa-robot agent-progress-icon" aria-hidden="true"></i>
-                      @if (isRoutingCheck && !isAgentWorking) {
-                        <span class="agent-progress-title">Evaluating addressee routing…</span>
-                        <span class="agent-progress-step">Checking speaker attribution &amp; thread context to see if an AI agent should respond</span>
-                      } @else {
-                        <span class="agent-progress-title">&#64;{{ activeAgentName || DefaultAgentName }} is working</span>
-                        @if (activeAgentRoute) {
-                          <span class="agent-route-badge" data-testid="agent-route-badge">{{ formatRouteBadge(activeAgentRoute) }}</span>
-                        }
-                        <span class="agent-progress-step">{{ activeAgentStatusText || 'Generating response…' }}</span>
-                      }
-                    </div>
-                    @if (activeAgentElapsed) {
-                      <span class="agent-progress-elapsed">{{ activeAgentElapsed }}</span>
-                    }
-                  </div>
-                </div>
-              }
             </div>
           </ng-template>
 
-          <!-- PR #6176: Slack-style Collapsed Thread Bar & Expandable Thread Replies Under Parent Message -->
           <ng-template mjChatSlot="messageExtra" let-message="message">
             @if (message) {
               <div class="msg-thread-extra" [attr.data-message-id]="message.ID">
@@ -261,13 +266,10 @@ export interface PendingAgentPromptState {
                     class="msg-thread-parent-chip"
                     data-testid="message-thread-parent"
                     (click)="scrollToMessage(parentMsg.ID)"
-                    [title]="'Jump to parent message from ' + getSpeakerName(parentMsg)">
+                    [title]="'Jump to message from ' + getSpeakerName(parentMsg)">
                     <i class="fa-solid fa-reply" aria-hidden="true"></i>
                     <span class="parent-speaker">Replying to {{ getSpeakerName(parentMsg) }}</span>
                     <span class="parent-excerpt">"{{ getMessageExcerpt(parentMsg, 64) }}"</span>
-                    @if (isAiMessage(message) && !isAiMessage(parentMsg)) {
-                      <span class="thread-route-tag">Thread Reply</span>
-                    }
                   </button>
                 }
 
@@ -282,13 +284,15 @@ export interface PendingAgentPromptState {
                       (click)="toggleThreadExpanded(message.ID)">
                       <span class="thread-avatar-stack">
                         @for (part of getThreadParticipants(message.ID); track part.key) {
-                          <span class="thread-mini-avatar" [class.is-ai]="part.isAi" [title]="part.name">
-                            @if (part.imageUrl) {
-                              <img [src]="part.imageUrl" [alt]="part.name" class="avatar-img" />
-                            } @else {
-                              <i [class]="part.iconClass" aria-hidden="true"></i>
-                            }
-                          </span>
+                          <mjc-avatar
+                            Size="xs"
+                            [Stacked]="true"
+                            [Initials]="part.initials"
+                            [Name]="part.name"
+                            [AvatarUrl]="part.imageUrl || ''"
+                            [ColorClass]="part.colorClass"
+                            [PersonId]="part.personId"
+                            [IsOutside]="part.isOutside" />
                         }
                       </span>
                       <span class="thread-reply-count">
@@ -296,8 +300,7 @@ export interface PendingAgentPromptState {
                       </span>
                       @if (hasInProgressReply(message.ID)) {
                         <span class="thread-live-pill">
-                          <span class="thread-live-dot" aria-hidden="true"></span>
-                          &#64;{{ activeAgentName || DefaultAgentName }} is replying…
+                          {{ activeAgentName || DefaultAgentName || 'Assistant' }} is answering…
                         </span>
                       } @else {
                         <span class="thread-last-speaker">Last reply from {{ getLastReplySpeaker(message.ID) }}</span>
@@ -309,16 +312,16 @@ export interface PendingAgentPromptState {
                     </button>
                   }
 
-                  @if (!IsReadOnly && message.ID) {
+                  @if (!IsReadOnly && message.ID && !isThreadExpanded(message.ID)) {
                     <button
                       type="button"
                       class="msg-reply-btn"
                       data-testid="message-reply-btn"
                       [class.active]="replyToMessage?.ID === message.ID"
                       (click)="startReplyTo(message)"
-                      title="Reply in thread (sets ParentID for addressee routing)">
+                      title="Reply">
                       <i class="fa-solid fa-reply" aria-hidden="true"></i>
-                      <span>{{ getRepliesFor(message.ID).length > 0 ? 'Reply in thread' : 'Reply' }}</span>
+                      <span>Reply</span>
                     </button>
                   }
                 </div>
@@ -327,22 +330,25 @@ export interface PendingAgentPromptState {
                   <div class="msg-thread-replies-drawer" data-testid="message-thread-drawer" role="region" aria-label="Thread replies">
                     @for (reply of getRepliesFor(message.ID); track reply.ID) {
                       <div class="thread-reply-item" [attr.data-message-id]="reply.ID">
-                        <div class="thread-reply-avatar" [class.is-ai]="isAiMessage(reply)">
-                          @if (getSpeakerAvatarUrl(reply); as avatarUrl) {
-                            <img [src]="avatarUrl" [alt]="getSpeakerName(reply)" class="avatar-img" />
-                          } @else {
-                            <i [class]="getSpeakerAvatarIconClass(reply)" aria-hidden="true"></i>
-                          }
-                        </div>
+                        <mjc-avatar
+                          Size="sm"
+                          [Initials]="getSpeakerInitials(reply)"
+                          [Name]="getSpeakerName(reply)"
+                          [AvatarUrl]="getSpeakerAvatarUrl(reply) || ''"
+                          [ColorClass]="getSpeakerColorClass(reply)"
+                          [PersonId]="getSpeakerPersonId(reply)"
+                          [IsOutside]="isOutsideSpeaker(reply)" />
                         <div class="thread-reply-content">
                           <div class="thread-reply-meta">
                             <div class="thread-reply-meta-left">
                               <span class="thread-reply-author" [class.is-ai]="isAiMessage(reply)">
                                 {{ getSpeakerName(reply) }}
                               </span>
-                              <span class="thread-reply-role-pill" [class.is-ai]="isAiMessage(reply)">
-                                {{ isAiMessage(reply) ? 'AI Agent' : 'Participant' }}
-                              </span>
+                              @if (isAiMessage(reply)) {
+                                <span class="thread-reply-role-pill is-ai" data-testid="thread-reply-assistant-mark">
+                                  Assistant
+                                </span>
+                              }
                               @if (getNestedReplyTargetName(reply, message.ID); as nestedTarget) {
                                 <span class="thread-nested-target">
                                   <i class="fa-solid fa-reply" aria-hidden="true"></i>
@@ -350,30 +356,31 @@ export interface PendingAgentPromptState {
                                 </span>
                               }
                             </div>
-                            @if (!IsReadOnly && reply.ID) {
-                              <button
-                                type="button"
-                                class="thread-inline-reply-btn"
-                                [class.active]="replyToMessage?.ID === reply.ID"
-                                (click)="startReplyTo(reply); $event.stopPropagation()"
-                                [title]="'Reply to ' + getSpeakerName(reply) + ' in thread'">
-                                <i class="fa-solid fa-reply" aria-hidden="true"></i>
-                                <span>Reply</span>
-                              </button>
-                            }
                           </div>
                           <div class="thread-reply-body">{{ getFormattedMessageBody(reply) }}</div>
                         </div>
                       </div>
                     }
                     @if (!IsReadOnly) {
-                      <div class="thread-drawer-footer">
+                      <div class="thread-reply-box" data-testid="thread-reply-box">
+                        <input
+                          type="text"
+                          class="thread-reply-input"
+                          data-testid="thread-reply-input"
+                          placeholder="Reply in thread…"
+                          aria-label="Reply in thread"
+                          [value]="getThreadDraft(message.ID)"
+                          (input)="onThreadDraftInput(message.ID, $any($event.target).value)"
+                          (keydown.enter)="$event.preventDefault(); submitThreadReply(message)" />
                         <button
+                          mjButton
+                          Variant="primary"
+                          Size="sm"
                           type="button"
-                          class="thread-drawer-reply-btn"
-                          (click)="startReplyTo(getLatestThreadTarget(message))">
-                          <i class="fa-solid fa-reply" aria-hidden="true"></i>
-                          <span>Reply in thread</span>
+                          data-testid="thread-reply-send"
+                          [disabled]="!getThreadDraft(message.ID).trim()"
+                          (click)="submitThreadReply(message)">
+                          Reply
                         </button>
                       </div>
                     }
@@ -383,7 +390,6 @@ export interface PendingAgentPromptState {
             }
           </ng-template>
 
-          <!-- PR #6176: Composer Thread Reply Bar & "Ask if an Agent Should Go" Prompt -->
           <ng-template mjChatSlot="composerExtra">
             @if (replyToMessage) {
               <div class="composer-reply-banner" data-testid="composer-reply-banner" role="region" aria-label="Replying in thread">
@@ -395,12 +401,11 @@ export interface PendingAgentPromptState {
                       @if (isAiMessage(replyToMessage)) {
                         <span class="route-preview-pill agent" data-testid="reply-route-pill">
                           <i class="fa-solid fa-robot" aria-hidden="true"></i>
-                          <span>ThreadReply &rarr; &#64;{{ getSpeakerName(replyToMessage) }} will respond</span>
+                          <span>{{ getSpeakerName(replyToMessage) }} will reply in the thread</span>
                         </span>
                       } @else {
                         <span class="route-preview-pill human" data-testid="reply-route-pill">
-                          <i class="fa-solid fa-user-check" aria-hidden="true"></i>
-                          <span>Human thread reply &middot; AI stays silent unless &#64;mentioned</span>
+                          <span>Replying in the thread</span>
                         </span>
                       }
                     </div>
@@ -412,22 +417,22 @@ export interface PendingAgentPromptState {
                   class="reply-banner-close"
                   data-testid="composer-reply-cancel"
                   (click)="clearReplyTo()"
-                  title="Cancel thread reply"
-                  aria-label="Cancel thread reply">
+                  title="Cancel reply"
+                  aria-label="Cancel reply">
                   <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
               </div>
             }
 
             @if (pendingAgentPrompt) {
-              <div class="ask-agent-prompt-bar" data-testid="ask-agent-should-go-bar" role="region" aria-label="Ask if an AI agent should respond">
+              <div class="ask-agent-prompt-bar" data-testid="ask-agent-should-go-bar" role="region" aria-label="Ask if the Assistant should answer">
                 <div class="ask-agent-left">
                   <div class="ask-agent-icon">
-                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
                   </div>
                   <div class="ask-agent-text">
-                    <span class="ask-agent-title">No AI agent stepped in</span>
-                    <span class="ask-agent-reason">({{ pendingAgentPrompt.reasonLabel }}). Should an agent respond to this message?</span>
+                    <span class="ask-agent-title">Ask {{ pendingAgentPrompt.suggestedAgentName }} to answer?</span>
+                    <span class="ask-agent-reason">{{ pendingAgentPrompt.reasonLabel }}</span>
                   </div>
                 </div>
                 <div class="ask-agent-actions">
@@ -436,15 +441,14 @@ export interface PendingAgentPromptState {
                     class="ask-agent-confirm-btn"
                     data-testid="ask-agent-go-confirm"
                     (click)="confirmAgentShouldGo()">
-                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
-                    <span>Let &#64;{{ pendingAgentPrompt.suggestedAgentName }} respond</span>
+                    <span>Ask {{ pendingAgentPrompt.suggestedAgentName }}</span>
                   </button>
                   <button
                     type="button"
                     class="ask-agent-dismiss-btn"
                     data-testid="ask-agent-go-dismiss"
                     (click)="dismissAgentPrompt()">
-                    <span>Keep human-only</span>
+                    <span>Dismiss</span>
                   </button>
                 </div>
               </div>
@@ -782,12 +786,12 @@ export interface PendingAgentPromptState {
         background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
       }
 
-      /* PR #6176: Live Agent Activity & Routing Decision Progress Bar */
+      /* Live Assistant presence bar in mjChatSlot="agentPresence" */
       .agent-working-progress-banner {
         display: flex;
         flex-direction: column;
         background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
-        border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-border-default));
+        border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-border-default));
       }
 
       .agent-progress-track {
@@ -800,8 +804,8 @@ export interface PendingAgentPromptState {
 
       .agent-progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, var(--mj-brand-primary), var(--mj-brand-tertiary));
-        transition: width 0.25s ease;
+        background: var(--mj-brand-primary);
+        transition: width var(--mj-transition-fast);
       }
 
       .agent-progress-fill.indeterminate {
@@ -815,48 +819,56 @@ export interface PendingAgentPromptState {
         100% { transform: translateX(260%); }
       }
 
+      @media (prefers-reduced-motion: reduce) {
+        .agent-progress-fill,
+        .linked-workstream-pill,
+        .participant-count-pill,
+        .participant-pill-caret,
+        .msg-thread-replies-btn.slack-thread-bar,
+        .msg-reply-btn {
+          transition: none;
+        }
+        .agent-progress-fill.indeterminate {
+          animation: none;
+          width: 100%;
+        }
+      }
+
       .agent-progress-body {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        padding: 6px 16px;
-        font-size: 12px;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        font-size: var(--mj-text-xs);
       }
 
       .agent-progress-left {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--mj-space-2);
         min-width: 0;
         flex-wrap: wrap;
       }
 
-      .agent-pulse-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 999px;
-        background: var(--mj-brand-primary);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 24%, transparent);
-      }
-
       .agent-progress-icon {
         color: var(--mj-brand-primary);
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
       }
 
       .agent-progress-title {
         font-weight: 700;
         color: var(--mj-text-primary);
+        font-variant-numeric: tabular-nums;
       }
 
       .agent-route-badge {
         display: inline-flex;
         align-items: center;
-        padding: 1px 7px;
+        padding: 1px var(--mj-space-2);
         border-radius: 999px;
-        font-size: 10.5px;
-        font-weight: 700;
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
         background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
         color: var(--mj-brand-primary);
         border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
@@ -869,33 +881,26 @@ export interface PendingAgentPromptState {
         text-overflow: ellipsis;
       }
 
-      .agent-progress-elapsed {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--mj-text-muted);
-        font-variant-numeric: tabular-nums;
-      }
-
-      /* PR #6176: Slack-style Collapsed Thread Bar & Expandable Thread Replies */
+      /* Collapsed thread bar & expandable thread replies in mjChatSlot="messageExtra" */
       .msg-thread-extra {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        margin-top: 6px;
+        gap: var(--mj-space-2);
+        margin-top: var(--mj-space-2);
       }
 
       .msg-thread-parent-chip {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
         align-self: flex-start;
-        padding: 3px 9px;
-        border-radius: 6px;
+        padding: var(--mj-space-1) var(--mj-space-2);
+        border-radius: var(--mj-radius-sm);
         border: 1px solid var(--mj-border-default);
         border-left: 3px solid var(--mj-brand-primary);
         background: var(--mj-bg-surface-sunken);
         color: var(--mj-text-secondary);
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         cursor: pointer;
         max-width: 100%;
         text-align: left;
@@ -919,34 +924,25 @@ export interface PendingAgentPromptState {
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .thread-route-tag {
-        padding: 1px 6px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 700;
-        background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-        color: var(--mj-brand-primary);
-        white-space: nowrap;
-      }
 
       .msg-thread-actions-row {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--mj-space-2);
         flex-wrap: wrap;
       }
 
-      /* Slack-style Collapsed Thread Bar */
+      /* Collapsed Thread Bar */
       .msg-thread-replies-btn.slack-thread-bar {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 4px 10px 4px 6px;
-        border-radius: 8px;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
         border: 1px solid transparent;
         background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
         color: var(--mj-text-secondary);
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
         cursor: pointer;
         transition: all var(--mj-transition-fast);
         max-width: 100%;
@@ -962,26 +958,8 @@ export interface PendingAgentPromptState {
         align-items: center;
       }
 
-      .thread-mini-avatar {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        display: inline-grid;
-        place-items: center;
-        font-size: 9.5px;
-        background: var(--mj-text-primary);
-        color: var(--mj-text-inverse);
-        border: 1.5px solid var(--mj-bg-surface);
+      .thread-avatar-stack mjc-avatar + mjc-avatar {
         margin-left: -4px;
-        overflow: hidden;
-      }
-      .thread-mini-avatar:first-child {
-        margin-left: 0;
-      }
-      .thread-mini-avatar.is-ai {
-        border-radius: 5px;
-        background: var(--mj-brand-primary);
-        color: var(--mj-text-inverse);
       }
 
       .thread-reply-count {
@@ -991,7 +969,7 @@ export interface PendingAgentPromptState {
       }
 
       .thread-last-speaker {
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         color: var(--mj-text-muted);
         white-space: nowrap;
       }
@@ -999,24 +977,17 @@ export interface PendingAgentPromptState {
       .thread-live-pill {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        font-size: 11px;
+        gap: var(--mj-space-1);
+        font-size: var(--mj-text-xs);
         font-weight: 600;
         color: var(--mj-brand-tertiary);
-      }
-
-      .thread-live-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 999px;
-        background: var(--mj-brand-tertiary);
       }
 
       .thread-view-cue {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        font-size: 11px;
+        gap: var(--mj-space-1);
+        font-size: var(--mj-text-xs);
         font-weight: 600;
         color: var(--mj-brand-primary);
         margin-left: 2px;
@@ -1028,13 +999,13 @@ export interface PendingAgentPromptState {
       .msg-reply-btn {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 3px 9px;
-        border-radius: 6px;
+        gap: var(--mj-space-1);
+        padding: 3px var(--mj-space-2);
+        border-radius: var(--mj-radius-sm);
         border: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface);
         color: var(--mj-text-secondary);
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         font-weight: 600;
         cursor: pointer;
         transition: all var(--mj-transition-fast);
@@ -1049,50 +1020,29 @@ export interface PendingAgentPromptState {
       .msg-thread-replies-drawer {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 10px 12px;
-        margin-top: 4px;
-        border-left: 3px solid var(--mj-brand-primary);
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-3);
+        margin-top: var(--mj-space-1);
         background: var(--mj-bg-surface-sunken);
         border: 1px solid var(--mj-border-default);
-        border-left-width: 3px;
-        border-left-color: var(--mj-brand-primary);
-        border-radius: 0 10px 10px 0;
+        border-left: 3px solid var(--mj-brand-primary);
+        border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
       }
 
       .thread-reply-item {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
-        padding: 8px 10px;
-        border-radius: 8px;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-md);
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-subtle);
-      }
-
-      .thread-reply-avatar {
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        font-size: 11px;
-        background: var(--mj-text-primary);
-        color: var(--mj-text-inverse);
-        flex-shrink: 0;
-        margin-top: 1px;
-        overflow: hidden;
-      }
-      .thread-reply-avatar.is-ai {
-        border-radius: 6px;
-        background: var(--mj-brand-primary);
-        color: var(--mj-text-inverse);
       }
 
       .thread-reply-content {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: var(--mj-space-1);
         min-width: 0;
         flex: 1;
       }
@@ -1101,14 +1051,14 @@ export interface PendingAgentPromptState {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
-        font-size: 11.5px;
+        gap: var(--mj-space-2);
+        font-size: var(--mj-text-xs);
       }
 
       .thread-reply-meta-left {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
         flex-wrap: wrap;
       }
 
@@ -1123,7 +1073,7 @@ export interface PendingAgentPromptState {
       .thread-reply-role-pill {
         font-size: 10px;
         font-weight: 600;
-        padding: 1px 6px;
+        padding: 1px var(--mj-space-2);
         border-radius: 999px;
         background: var(--mj-bg-surface-sunken);
         color: var(--mj-text-secondary);
@@ -1136,7 +1086,7 @@ export interface PendingAgentPromptState {
       .thread-nested-target {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--mj-space-1);
         font-size: 10.5px;
         color: var(--mj-text-muted);
       }
@@ -1144,65 +1094,46 @@ export interface PendingAgentPromptState {
         font-size: 9px;
       }
 
-      .thread-inline-reply-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 7px;
-        border-radius: 5px;
-        border: 1px solid var(--mj-border-default);
-        background: var(--mj-bg-surface);
-        color: var(--mj-text-secondary);
-        font-size: 10.5px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .thread-inline-reply-btn:hover,
-      .thread-inline-reply-btn.active {
-        border-color: var(--mj-brand-primary);
-        color: var(--mj-brand-primary);
-      }
-
       .thread-reply-body {
-        font-size: 12.5px;
+        font-size: var(--mj-text-sm);
         line-height: 1.45;
         color: var(--mj-text-primary);
         white-space: pre-wrap;
         word-break: break-word;
       }
 
-      .thread-drawer-footer {
+      .thread-reply-box {
         display: flex;
         align-items: center;
-        padding-top: 2px;
+        gap: var(--mj-space-2);
+        padding-top: var(--mj-space-1);
       }
 
-      .thread-drawer-reply-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+      .thread-reply-input {
+        flex: 1;
+        min-width: 0;
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface);
-        color: var(--mj-brand-primary);
-        font-size: 11.5px;
-        font-weight: 600;
-        cursor: pointer;
+        color: var(--mj-text-primary);
+        font-size: var(--mj-text-xs);
       }
-      .thread-drawer-reply-btn:hover {
-        background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+      .thread-reply-input:focus {
+        outline: 2px solid var(--mj-brand-primary);
+        outline-offset: 1px;
+        border-color: var(--mj-brand-primary);
       }
 
-      /* PR #6176: Composer Thread Reply Banner */
+      /* Composer Thread Reply Banner */
       .composer-reply-banner {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        padding: 8px 14px;
-        margin: 0 12px 6px;
-        border-radius: 10px;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        margin: 0 var(--mj-space-3) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
         border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-border-default));
         background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
       }
@@ -1210,14 +1141,14 @@ export interface PendingAgentPromptState {
       .reply-banner-left {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
+        gap: var(--mj-space-3);
         min-width: 0;
       }
 
       .reply-banner-icon {
         margin-top: 3px;
         color: var(--mj-brand-primary);
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
       }
 
       .reply-banner-info {
@@ -1230,20 +1161,20 @@ export interface PendingAgentPromptState {
       .reply-banner-top {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--mj-space-2);
         flex-wrap: wrap;
       }
 
       .reply-banner-label {
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
         color: var(--mj-text-primary);
       }
 
       .route-preview-pill {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 2px 8px;
+        gap: var(--mj-space-1);
+        padding: 2px var(--mj-space-2);
         border-radius: 999px;
         font-size: 11px;
         font-weight: 600;
@@ -1258,7 +1189,7 @@ export interface PendingAgentPromptState {
       }
 
       .reply-banner-excerpt {
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         color: var(--mj-text-secondary);
         white-space: nowrap;
         overflow: hidden;
@@ -1268,7 +1199,7 @@ export interface PendingAgentPromptState {
       .reply-banner-close {
         width: 24px;
         height: 24px;
-        border-radius: 6px;
+        border-radius: var(--mj-radius-sm);
         border: 1px solid transparent;
         background: transparent;
         color: var(--mj-text-secondary);
@@ -1282,15 +1213,15 @@ export interface PendingAgentPromptState {
         color: var(--mj-text-primary);
       }
 
-      /* PR #6176: "Ask if an agent should go" Prompt Bar */
+      /* Ask if the Assistant should answer prompt bar */
       .ask-agent-prompt-bar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        padding: 8px 14px;
-        margin: 0 12px 6px;
-        border-radius: 10px;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        margin: 0 var(--mj-space-3) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
         border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 35%, var(--mj-border-default));
         background: color-mix(in srgb, var(--mj-brand-tertiary) 6%, var(--mj-bg-surface));
         flex-wrap: wrap;
@@ -1299,28 +1230,28 @@ export interface PendingAgentPromptState {
       .ask-agent-left {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: var(--mj-space-3);
         min-width: 0;
       }
 
       .ask-agent-icon {
         width: 26px;
         height: 26px;
-        border-radius: 7px;
+        border-radius: var(--mj-radius-sm);
         display: grid;
         place-items: center;
         background: color-mix(in srgb, var(--mj-brand-tertiary) 14%, transparent);
         color: var(--mj-brand-tertiary);
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
         flex-shrink: 0;
       }
 
       .ask-agent-text {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
         flex-wrap: wrap;
-        font-size: 12px;
+        font-size: var(--mj-text-xs);
       }
 
       .ask-agent-title {
@@ -1335,20 +1266,20 @@ export interface PendingAgentPromptState {
       .ask-agent-actions {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
         flex-shrink: 0;
       }
 
       .ask-agent-confirm-btn {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 5px 11px;
-        border-radius: 7px;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-1) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
         border: 1px solid var(--mj-brand-primary);
         background: var(--mj-brand-primary);
         color: var(--mj-text-inverse);
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         font-weight: 600;
         cursor: pointer;
       }
@@ -1359,12 +1290,12 @@ export interface PendingAgentPromptState {
       .ask-agent-dismiss-btn {
         display: inline-flex;
         align-items: center;
-        padding: 5px 10px;
-        border-radius: 7px;
+        padding: var(--mj-space-1) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
         border: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface);
         color: var(--mj-text-secondary);
-        font-size: 11.5px;
+        font-size: var(--mj-text-xs);
         font-weight: 600;
         cursor: pointer;
       }
@@ -1386,7 +1317,7 @@ export interface PendingAgentPromptState {
       .btn-new-convo-header {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
       }
 
       /* A conversation that can't be posted in says why from a lock, not a banner that takes a row: on hover, and, since a
@@ -1421,9 +1352,9 @@ export interface PendingAgentPromptState {
         z-index: 2;
         min-width: 220px;
         max-width: 320px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        font-size: 12px;
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-md);
+        font-size: var(--mj-text-xs);
         line-height: 1.4;
         color: var(--mj-text-primary);
         background: var(--mj-bg-surface);
@@ -1459,6 +1390,9 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   private boundInputInstance: unknown = null;
   private cleanups: Array<() => void> = [];
   private noAgentPromptTimer: ReturnType<typeof setTimeout> | undefined;
+  private threadDrafts = new Map<string, string>();
+  private cachedRawTurnHandler: AgentTurnHandler | null = null;
+  private cachedWrappedTurnHandler: AgentTurnHandler | null = null;
 
   public ngOnInit(): void {
     this.streaming?.initialize();
@@ -1468,9 +1402,9 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     if (changes['ConversationId'] && !changes['ConversationId'].firstChange) {
       this.replyToMessage = null;
       this.pendingAgentPrompt = null;
-      this.isRoutingCheck = false;
-      this.isAgentWorking = false;
+      this.onAgentTurnCompleted();
       this.expandedThreadIds.clear();
+      this.threadDrafts.clear();
       this.syncParentMessageIdToComposer(null);
     }
   }
@@ -1499,27 +1433,50 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public DefaultAgentName = 'Sage';
   /** Optional explicit thread messages list (used by tests or before chatArea populates). */
   @Input() public ThreadMessages: readonly ChatThreadMessageLike[] = [];
+  /** Space roster members so thread avatars and outside participant rings use `mjc-avatar` without reading internal chat area state. */
+  @Input() public SpaceMembers: readonly SpaceMemberModel[] = [];
 
   @Output() public LinkedItemOpenRequested = new EventEmitter<WorkstreamLinkedItem>();
   @Output() public AgentStepInRequested = new EventEmitter<{ messageId: string; messageText: string; agentName: string }>();
 
-  /** PR #6176: Active message being replied to in a thread (`ParentID`). */
+  /** Active message being replied to in a thread (`ParentID`). */
   public replyToMessage: ChatThreadMessageLike | null = null;
-  /** PR #6176: Expanded inline thread drawers keyed by parent message ID. */
+  /** Expanded inline thread drawers keyed by parent message ID. */
   public expandedThreadIds = new Set<string>();
-  /** PR #6176: True while `RunRoutingDecision` / intent check is evaluating whether an agent should respond. */
+  /** True while routing decision is checking whether the Assistant should answer. */
   public isRoutingCheck = false;
-  /** PR #6176: True while an AI agent turn is actively running. */
+  /** True while an AI agent turn is actively running. */
   public isAgentWorking = false;
   public activeAgentName = '';
-  public activeAgentRoute = '';
+  public activeAgentRoute: AgentTurnRoute | '' = '';
   public activeAgentStatusText = '';
   public activeAgentElapsed = '';
   public activeAgentProgressPercent: number | null = null;
-  /** PR #6176: Prompt shown when a user message resolves to `NoAgent` so the user can ask an agent to step in if desired. */
+  /** Prompt shown when a user message resolves to `NoAgent` so the user can ask the Assistant to answer if desired. */
   public pendingAgentPrompt: PendingAgentPromptState | null = null;
   /** Interactive conversation participants popover state in the chat header. */
   public showParticipantsPopover = false;
+
+  public get effectiveAgentTurnHandler(): AgentTurnHandler | null {
+    const raw = this.AgentTurnHandler;
+    if (!raw) return null;
+    if (raw === this.cachedRawTurnHandler && this.cachedWrappedTurnHandler) {
+      return this.cachedWrappedTurnHandler;
+    }
+    this.cachedRawTurnHandler = raw;
+    this.cachedWrappedTurnHandler = async (request: AgentTurnRequest) => {
+      this.onAgentTurnStarted({
+        agentName: request.AgentName ?? this.DefaultAgentName,
+        route: request.Route,
+      });
+      try {
+        return await raw(request);
+      } finally {
+        this.onAgentTurnCompleted();
+      }
+    };
+    return this.cachedWrappedTurnHandler;
+  }
 
   public get hasRealChatArea(): boolean {
     const area = this.chatArea as { slotTemplate?: unknown } | undefined;
@@ -1646,15 +1603,29 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.cdr?.markForCheck();
   }
 
+  private getMemberForUser(userId: string | null | undefined, name?: string | null): SpaceMemberModel | null {
+    const uid = (userId ?? '').trim().toLowerCase();
+    if (uid) {
+      const byId = this.SpaceMembers.find((m) => (m.userId ?? '').trim().toLowerCase() === uid || (m.id ?? '').trim().toLowerCase() === uid);
+      if (byId) return byId;
+    }
+    const cleanName = (name ?? '').trim().toLowerCase();
+    if (cleanName) {
+      return this.SpaceMembers.find((m) => (m.name ?? '').trim().toLowerCase() === cleanName) ?? null;
+    }
+    return null;
+  }
+
   public get conversationParticipantsList(): Array<{
     id: string;
     name: string;
     initials: string;
     imageUrl: string | null;
-    iconClass: string;
+    colorClass: string;
     role: string;
     subtitle: string;
     isAi: boolean;
+    isOutside: boolean;
   }> {
     const seen = new Set<string>();
     const list: Array<{
@@ -1662,26 +1633,28 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: string;
       initials: string;
       imageUrl: string | null;
-      iconClass: string;
+      colorClass: string;
       role: string;
       subtitle: string;
       isAi: boolean;
+      isOutside: boolean;
     }> = [];
 
     if (this.CurrentUser?.ID) {
       const id = this.CurrentUser.ID.toLowerCase();
       seen.add(id);
       const name = this.CurrentUser.Name || 'You';
-      const avatar = this.getUserAvatarEntry(this.CurrentUser.ID);
+      const member = this.getMemberForUser(this.CurrentUser.ID, name);
       list.push({
         id: this.CurrentUser.ID,
         name,
-        initials: this.computeInitials(name),
-        imageUrl: avatar?.imageUrl ?? null,
-        iconClass: avatar?.iconClass || 'fa-solid fa-user',
+        initials: member?.initials || this.computeInitials(name),
+        imageUrl: member?.avatarUrl ?? null,
+        colorClass: member?.colorClass ?? '',
         role: 'You',
         subtitle: this.CurrentUser.Email || '',
         isAi: false,
+        isOutside: member?.band === 'Shared',
       });
     }
 
@@ -1689,17 +1662,18 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       const id = (person.ID ?? '').toLowerCase();
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      const name = person.Name || 'Participant';
-      const avatar = this.getUserAvatarEntry(person.ID);
+      const name = person.Name || 'Team Member';
+      const member = this.getMemberForUser(person.ID, name);
       list.push({
         id: person.ID,
         name,
-        initials: this.computeInitials(name),
-        imageUrl: avatar?.imageUrl ?? null,
-        iconClass: avatar?.iconClass || 'fa-solid fa-user',
-        role: 'Participant',
+        initials: member?.initials || this.computeInitials(name),
+        imageUrl: member?.avatarUrl ?? null,
+        colorClass: member?.colorClass ?? '',
+        role: '',
         subtitle: person.Email || '',
         isAi: false,
+        isOutside: member?.band === 'Shared',
       });
     }
 
@@ -1709,10 +1683,11 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: agentName,
       initials: 'AI',
       imageUrl: null,
-      iconClass: 'fa-solid fa-robot',
-      role: 'AI Agent',
-      subtitle: `Responds when @mentioned or in thread replies`,
+      colorClass: '',
+      role: 'Assistant',
+      subtitle: 'Answers when mentioned or in a thread',
       isAi: true,
+      isOutside: false,
     });
 
     return list;
@@ -1727,13 +1702,18 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.cdr?.markForCheck();
   }
 
-  // ── PR #6176: Threads & Replies (`ParentID` & `ThreadReply`) ──────────────
+  // ── Threads & Replies (`ParentID` & `ThreadReply`) ────────────────────────
 
   public get allMessages(): readonly ChatThreadMessageLike[] {
     const area = this.chatArea as { DisplayMessages?: ChatThreadMessageLike[]; messages?: ChatThreadMessageLike[] } | undefined;
-    const live = area?.messages ?? area?.DisplayMessages;
-    if (Array.isArray(live) && live.length > 0) {
-      return live;
+    if (Array.isArray(area?.messages) && area.messages.length > 0) {
+      return area.messages;
+    }
+    if (this.ThreadMessages.length > 0) {
+      return this.ThreadMessages;
+    }
+    if (Array.isArray(area?.DisplayMessages) && area.DisplayMessages.length > 0) {
+      return area.DisplayMessages;
     }
     return this.ThreadMessages;
   }
@@ -1753,7 +1733,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   }
 
   /**
-   * Collects all transitive replies in the Slack-style thread rooted at `parentId`
+   * Collects all transitive replies in the thread rooted at `parentId`
    * (person replies to `parentId`, plus person or agent replies to those thread replies),
    * preserving chronological order. An agent's direct answer to a top-level message stays in
    * the main flow and is not part of the thread.
@@ -1790,8 +1770,10 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     name: string;
     initials: string;
     imageUrl: string | null;
-    iconClass: string;
+    colorClass: string;
+    personId: string;
     isAi: boolean;
+    isOutside: boolean;
   }> {
     const replies = this.getRepliesFor(parentId);
     const seen = new Set<string>();
@@ -1800,8 +1782,10 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: string;
       initials: string;
       imageUrl: string | null;
-      iconClass: string;
+      colorClass: string;
+      personId: string;
       isAi: boolean;
+      isOutside: boolean;
     }> = [];
     for (const r of replies) {
       const isAi = this.isAiMessage(r);
@@ -1814,8 +1798,10 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
         name,
         initials: this.getSpeakerInitials(r),
         imageUrl: this.getSpeakerAvatarUrl(r),
-        iconClass: this.getSpeakerAvatarIconClass(r),
+        colorClass: this.getSpeakerColorClass(r),
+        personId: this.getSpeakerPersonId(r),
         isAi,
+        isOutside: this.isOutsideSpeaker(r),
       });
       if (participants.length >= 4) break;
     }
@@ -1859,16 +1845,51 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.cdr?.markForCheck();
   }
 
+  public getThreadDraft(rootMessageId: string): string {
+    return this.threadDrafts.get(rootMessageId) ?? '';
+  }
+
+  public onThreadDraftInput(rootMessageId: string, value: string): void {
+    this.threadDrafts.set(rootMessageId, value);
+    this.cdr?.markForCheck();
+  }
+
+  public async submitThreadReply(rootMessage: ChatThreadMessageLike): Promise<void> {
+    if (this.IsReadOnly) return;
+    const draft = (this.threadDrafts.get(rootMessage.ID) ?? '').trim();
+    if (!draft) return;
+    const target = this.getLatestThreadTarget(rootMessage);
+    this.threadDrafts.set(rootMessage.ID, '');
+    this.replyToMessage = target;
+    this.syncParentMessageIdToComposer(target.ID);
+    const input = this.getActiveMessageInput() as { SendMessageWithText?: (text: string) => Promise<boolean> } | null;
+    if (typeof input?.SendMessageWithText === 'function') {
+      await input.SendMessageWithText(draft);
+      this.replyToMessage = null;
+      this.syncParentMessageIdToComposer(null);
+    } else {
+      this.PendingMessageConversationId = this.ConversationId;
+      this.PendingMessage = draft;
+    }
+    this.cdr?.markForCheck();
+  }
+
   public isAiMessage(message: ChatThreadMessageLike | null | undefined): boolean {
     if (!message) return false;
     const role = (message.Role ?? '').trim().toLowerCase();
     return role === 'ai' || role === 'assistant' || !!message.AgentID;
   }
 
+  public isOutsideSpeaker(message: ChatThreadMessageLike | null | undefined): boolean {
+    if (!message || this.isAiMessage(message)) return false;
+    const member = this.getMemberForUser(message.UserID, message.User);
+    return member?.band === 'Shared';
+  }
+
   public getSpeakerName(message: ChatThreadMessageLike | null | undefined): string {
-    if (!message) return 'Participant';
+    if (!message) return 'Member';
     if (this.isAiMessage(message)) {
-      return message.Agent?.trim() || this.DefaultAgentName || 'AI Agent';
+      return message.Agent?.trim() || this.DefaultAgentName || 'Assistant';
     }
     if (message.User?.trim()) {
       return message.User.trim();
@@ -1876,48 +1897,34 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     if (message.UserID && this.CurrentUser?.ID && message.UserID.toLowerCase() === this.CurrentUser.ID.toLowerCase()) {
       return this.CurrentUser.Name || 'You';
     }
+    const member = this.getMemberForUser(message.UserID);
+    if (member?.name) return member.name;
     const person = this.MentionPeople?.find((p) => p.ID.toLowerCase() === (message.UserID ?? '').toLowerCase());
     return person?.Name || 'Team Member';
   }
 
   public getSpeakerInitials(message: ChatThreadMessageLike | null | undefined): string {
     if (this.isAiMessage(message)) return 'AI';
+    const member = this.getMemberForUser(message?.UserID, message?.User);
+    if (member?.initials) return member.initials;
     return this.computeInitials(this.getSpeakerName(message));
-  }
-
-  /**
-   * Resolves the user's avatar entry from `ConversationChatAreaComponent.userAvatarMap`
-   * (or `UserAvatarMap`) so thread avatars match `<mj-conversation-message-item>`.
-   */
-  public getUserAvatarEntry(userId: string | null | undefined): { imageUrl: string | null; iconClass: string | null } | null {
-    if (!userId) return null;
-    const area = this.chatArea as {
-      userAvatarMap?: Map<string, { imageUrl: string | null; iconClass: string | null }>;
-      UserAvatarMap?: Map<string, { imageUrl: string | null; iconClass: string | null }>;
-    } | undefined;
-    const map = area?.userAvatarMap ?? area?.UserAvatarMap;
-    if (!map) return null;
-    const direct = map.get(userId);
-    if (direct) return direct;
-    const target = userId.trim().toLowerCase();
-    for (const [key, val] of map.entries()) {
-      if (key.trim().toLowerCase() === target) {
-        return val;
-      }
-    }
-    return null;
   }
 
   public getSpeakerAvatarUrl(message: ChatThreadMessageLike | null | undefined): string | null {
     if (!message || this.isAiMessage(message)) return null;
-    return this.getUserAvatarEntry(message.UserID)?.imageUrl ?? null;
+    const member = this.getMemberForUser(message.UserID, message.User);
+    return member?.avatarUrl ?? null;
   }
 
-  public getSpeakerAvatarIconClass(message: ChatThreadMessageLike | null | undefined): string {
-    if (this.isAiMessage(message)) {
-      return 'fa-solid fa-robot';
-    }
-    return this.getUserAvatarEntry(message?.UserID)?.iconClass || 'fa-solid fa-user';
+  public getSpeakerColorClass(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message || this.isAiMessage(message)) return '';
+    return this.getMemberForUser(message.UserID, message.User)?.colorClass ?? '';
+  }
+
+  public getSpeakerPersonId(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message) return '';
+    if (this.isAiMessage(message)) return message.AgentID || this.DefaultAgentId || 'assistant';
+    return message.UserID || this.getMemberForUser(message.UserID, message.User)?.userId || '';
   }
 
   private computeInitials(name: string): string {
@@ -1939,7 +1946,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       })
       .trim();
     if (!cleaned && (message?.Status ?? '').trim().toLowerCase() === 'in-progress') {
-      return 'Generating response…';
+      return 'Answering…';
     }
     return cleaned;
   }
@@ -1952,6 +1959,9 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   public startReplyTo(message: ChatThreadMessageLike): void {
     if (this.IsReadOnly) return;
+    if (this.getRepliesFor(message.ID).length > 0) {
+      this.expandedThreadIds.add(message.ID);
+    }
     this.replyToMessage = message;
     this.pendingAgentPrompt = null;
     this.syncParentMessageIdToComposer(message.ID);
@@ -1976,42 +1986,72 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     }
   }
 
-  // ── PR #6176: Progress Bar & "Ask if an Agent Should Go" Prompt ───────────
+  // ── Live Assistant Presence & Route Reason ────────────────────────────────
 
-  public formatRouteBadge(route: string): string {
+  /**
+   * Formats a plain-words reason for `AgentTurnRoute` only when the reason isn't obvious
+   * (no emoji, no invented route names).
+   */
+  public formatRouteBadge(route: AgentTurnRoute | '' | null | undefined): string {
+    if (!route) return '';
     switch (route) {
-      case 'ThreadReply': return '↪ Thread Reply';
-      case 'Mention': return '@Mention';
-      case 'DecisionRouted': return '⚡ Auto-Routed';
-      case 'Continuity': return 'Continuity';
-      case 'Pinned': return 'Pinned Agent';
-      case 'Default': return 'Default Agent';
-      default: return route;
+      case 'ThreadReply':
+        return 'Replying in the thread';
+      case 'DecisionRouted':
+      case 'Continuity':
+        return 'Following up';
+      case 'Redirect':
+        return `Handed to ${this.activeAgentName || this.DefaultAgentName || 'Assistant'}`;
+      case 'Mention':
+      case 'ConversationDefault':
+      case 'HostDefault':
+      case 'ConversationManager':
+        return '';
+      default: {
+        const _exhaustive: never = route;
+        return _exhaustive;
+      }
     }
   }
 
   /**
-   * Called when a user sends a message so we can track whether PR #6176 routed it to an agent
-   * or settled it as human-only (`NoAgent`), and clear any active thread `ParentMessageId`.
+   * Called when a user sends a message so we can track whether it started an Assistant turn
+   * or settled without one, and clear any active thread `ParentMessageId`.
    */
   public onUserMessageSent(message: ChatThreadMessageLike, hadReplyParent: ChatThreadMessageLike | null = this.replyToMessage): void {
+    if (this.isAiMessage(message)) {
+      if (this.noAgentPromptTimer !== undefined) {
+        clearTimeout(this.noAgentPromptTimer);
+        this.noAgentPromptTimer = undefined;
+      }
+      this.pendingAgentPrompt = null;
+      this.cdr?.markForCheck();
+      return;
+    }
     this.replyToMessage = null;
     this.syncParentMessageIdToComposer(null);
     this.pendingAgentPrompt = null;
+    this.activeAgentRoute = '';
+    this.activeAgentStatusText = '';
+    this.activeAgentElapsed = '';
 
     const text = message.Message ?? '';
     const hasExplicitAgentMention = text.includes('"type":"agent"') || /@\b(sage|agent|assistant)\b/i.test(text);
-    if (hasExplicitAgentMention) {
+    const msgIdNorm = (message.ID ?? '').trim().toLowerCase();
+    const alreadyAnsweredByAi =
+      (hadReplyParent != null && this.isAiMessage(hadReplyParent)) ||
+      (msgIdNorm.length > 0 &&
+        this.allMessages.some((m) => this.isAiMessage(m) && (m.ParentID ?? '').trim().toLowerCase() === msgIdNorm));
+    if (hasExplicitAgentMention || alreadyAnsweredByAi) {
       this.cdr?.markForCheck();
       return;
     }
 
-    // Determine PR #6176's reason if no agent turn starts
-    let reasonLabel = 'Human-to-human message — no AI agent was triggered';
+    let reasonLabel = 'The Assistant only steps in when mentioned or in a thread.';
     if (hadReplyParent && !this.isAiMessage(hadReplyParent)) {
-      reasonLabel = `Replied to ${this.getSpeakerName(hadReplyParent)} — AI stays silent on human thread replies`;
+      reasonLabel = `You replied to ${this.getSpeakerName(hadReplyParent)}.`;
     } else if (text.includes('"type":"user"')) {
-      reasonLabel = 'Addressed to a team member — AI stays silent unless @mentioned';
+      reasonLabel = 'Your message was addressed to a person.';
     }
 
     if (this.noAgentPromptTimer !== undefined) {
@@ -2032,7 +2072,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     }, 120);
   }
 
-  public onAgentTurnStarted(info: { agentName?: string | null; route?: string | null; statusText?: string | null }): void {
+  public onAgentTurnStarted(info: { agentName?: string | null; route?: AgentTurnRoute | null; statusText?: string | null }): void {
     if (this.noAgentPromptTimer !== undefined) {
       clearTimeout(this.noAgentPromptTimer);
       this.noAgentPromptTimer = undefined;
@@ -2040,16 +2080,19 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.pendingAgentPrompt = null;
     this.isRoutingCheck = false;
     this.isAgentWorking = true;
-    this.activeAgentName = info.agentName?.trim() || this.DefaultAgentName || 'Sage';
-    this.activeAgentRoute = info.route?.trim() || 'Mention';
-    this.activeAgentStatusText = info.statusText?.trim() || 'Generating response…';
+    this.activeAgentName = info.agentName?.trim() || this.DefaultAgentName || 'Assistant';
+    this.activeAgentRoute = info.route ?? 'Mention';
+    this.activeAgentStatusText = info.statusText?.trim() || '';
     this.cdr?.markForCheck();
   }
 
   public onAgentTurnCompleted(): void {
     this.isRoutingCheck = false;
     this.isAgentWorking = false;
+    this.activeAgentName = '';
+    this.activeAgentRoute = '';
     this.activeAgentStatusText = '';
+    this.activeAgentElapsed = '';
     this.activeAgentProgressPercent = null;
     this.cdr?.markForCheck();
   }
@@ -2061,7 +2104,6 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.onAgentTurnStarted({
       agentName: prompt.suggestedAgentName,
       route: 'ThreadReply',
-      statusText: `Stepping in on thread…`,
     });
     this.AgentStepInRequested.emit({
       messageId: prompt.messageId,
@@ -2069,7 +2111,6 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       agentName: prompt.suggestedAgentName,
     });
 
-    // Also trigger via chatArea if available
     const area = this.chatArea as { OnResendInPlaceRequested?: (msg: unknown) => void; messages?: ChatThreadMessageLike[] } | undefined;
     const msgEntity = area?.messages?.find((m) => m.ID === prompt.messageId);
     if (msgEntity && typeof area?.OnResendInPlaceRequested === 'function') {
@@ -2108,14 +2149,22 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       this.clearSubscriptions();
       this.boundChatArea = this.chatArea;
       const area = this.chatArea as {
-        BeforeAgentTurn?: { subscribe?: (fn: (args: { Turn?: { AgentName?: string | null; Route?: string } }) => void) => { unsubscribe: () => void } };
+        BeforeAgentTurn?: {
+          subscribe?: (
+            fn: (args: {
+              AgentName?: string | null;
+              Route?: AgentTurnRoute;
+              Turn?: { AgentName?: string | null; Route?: AgentTurnRoute };
+            }) => void,
+          ) => { unsubscribe: () => void };
+        };
         AfterAgentTurn?: { subscribe?: (fn: () => void) => { unsubscribe: () => void } };
       };
       if (typeof area.BeforeAgentTurn?.subscribe === 'function') {
         const sub = area.BeforeAgentTurn.subscribe((args) => {
           this.onAgentTurnStarted({
-            agentName: args?.Turn?.AgentName ?? this.DefaultAgentName,
-            route: args?.Turn?.Route ?? 'Mention',
+            agentName: args?.AgentName ?? args?.Turn?.AgentName ?? this.DefaultAgentName,
+            route: args?.Route ?? args?.Turn?.Route ?? 'Mention',
           });
         });
         this.cleanups.push(() => sub.unsubscribe());
@@ -2170,10 +2219,14 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     if (area.isProcessing && !this.isAgentWorking) {
       this.isAgentWorking = true;
       if (!this.activeAgentName) {
-        this.activeAgentName = this.DefaultAgentName || 'Sage';
+        this.activeAgentName = this.DefaultAgentName || 'Assistant';
       }
-    } else if (area.isProcessing === false && this.isAgentWorking && !this.activeAgentRoute) {
-      this.isAgentWorking = false;
+    } else if (area.isProcessing === false && this.isAgentWorking) {
+      const hasInProgress = this.allMessages.some((m) => (m.Status ?? '').trim().toLowerCase() === 'in-progress');
+      if (!hasInProgress) {
+        this.onAgentTurnCompleted();
+        return;
+      }
     }
     if (area.StatusText && area.StatusText !== this.activeAgentStatusText) {
       this.activeAgentStatusText = area.StatusText;

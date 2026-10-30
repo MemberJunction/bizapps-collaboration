@@ -1197,6 +1197,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
                                                     [HasConversations]="spaceConversations.length > 0"
                                                     [MentionPeople]="chatMentionPeople"
+                                                    [SpaceMembers]="spaceMembers"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
                                                     [AgentTurnHandler]="handleAgentTurn"
                                                     [AutoNameConversation]="false"
