@@ -435,7 +435,6 @@ const checks: NamedCheck[] = [
                     SpaceID: DISCOVERY_SPACE_ID,
                     ConversationID: genConvId,
                     UserMessageID: threadReplyMsg.DetailID!,
-                    Route: 'ThreadReply',
                 });
                 Assert(threadTurnRes.Success === true, `Thread-reply agent turn succeeded over wire without @mention: ${threadTurnRes.ErrorMessage ?? ''}`);
                 if (threadTurnRes.ReplyDetailIDs) createdDetailIds.push(...threadTurnRes.ReplyDetailIDs);

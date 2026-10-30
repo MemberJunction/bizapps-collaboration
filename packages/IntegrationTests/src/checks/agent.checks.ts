@@ -495,7 +495,6 @@ const checks: NamedCheck[] = [
                         conversationId: convId,
                         userMessageId: personPost.detailId,
                         agentId: COLLABORATION_TEST_AGENT_ID,
-                        route: 'DecisionRouted',
                     });
                     Assert(!personTurn.ok, 'Turn on human-addressed message is refused');
                     if (!personTurn.ok) {
@@ -506,7 +505,7 @@ const checks: NamedCheck[] = [
                     }
                 }
 
-                // Multi-party routing: 2) untagged follow-up with client route='DecisionRouted' is refused under MentionOnly
+                // Multi-party routing: 2) untagged follow-up with agentId is refused under MentionOnly even after the agent has replied
                 const followUpPost = await postSpaceMessage(ctx.Provider, bea, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: convId,
@@ -520,9 +519,8 @@ const checks: NamedCheck[] = [
                         conversationId: convId,
                         userMessageId: followUpPost.detailId,
                         agentId: COLLABORATION_TEST_AGENT_ID,
-                        route: 'DecisionRouted',
                     });
-                    Assert(!followUpTurn.ok, 'Untagged DecisionRouted follow-up under MentionOnly is refused by server');
+                    Assert(!followUpTurn.ok, 'Untagged follow-up under MentionOnly is refused by server');
                     if (!followUpTurn.ok) {
                         Assert(
                             followUpTurn.message === 'The message does not mention an agent.',

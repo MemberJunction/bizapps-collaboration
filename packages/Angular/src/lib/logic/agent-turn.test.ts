@@ -7,8 +7,6 @@ describe("the space's agent turn, as the page asks for it", () => {
         const input = spaceTurnInput('space-1', { ConversationId: 'conv-1', UserMessageId: 'msg-1', AgentId: 'agent-1' });
         assert.equal(input.Background, true);
         assert.deepEqual(input, { SpaceID: 'space-1', ConversationID: 'conv-1', UserMessageID: 'msg-1', AgentID: 'agent-1', Background: true });
-        const routed = spaceTurnInput('space-1', { ConversationId: 'conv-1', UserMessageId: 'msg-1', AgentId: 'agent-1', Route: 'DecisionRouted' });
-        assert.equal(routed.Route, 'DecisionRouted');
     });
 
     it("answers the chat area in its own words: the reply rows and the run, or the server's refusal", () => {

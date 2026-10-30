@@ -537,7 +537,6 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: ALLOWED_AGENT_ID,
-            route: 'DecisionRouted',
         });
         assert.equal(result.ok, false);
         if (!result.ok) {
@@ -564,7 +563,6 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: ALLOWED_AGENT_ID,
-            route: 'ThreadReply',
         });
         assert.equal(result.ok, true);
     });
@@ -595,23 +593,7 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
-    it('refuses DecisionRouted under MentionOnly when no agent has replied in the conversation yet (cold start)', async () => {
-        const provider = createMockProvider({
-            messageText: 'Make the second paragraph shorter',
-            conversationDetails: [],
-        });
-        const result = await executeSpaceChatTurn(provider, callerUser, {
-            ...defaultInput,
-            agentId: ALLOWED_AGENT_ID,
-            route: 'DecisionRouted',
-        });
-        assert.equal(result.ok, false);
-        if (!result.ok) {
-            assert.match(result.message, /does not mention an agent/i);
-        }
-    });
-
-    it('refuses a DecisionRouted untagged follow-up under MentionOnly even after the agent has replied in the conversation (server does not trust client route string)', async () => {
+    it('refuses an untagged follow-up with agentId under MentionOnly even after the agent has replied in the conversation', async () => {
         const provider = createMockProvider({
             messageText: 'Make the second paragraph shorter',
             conversationDetails: [
@@ -648,7 +630,6 @@ describe('executeSpaceChatTurn', () => {
         const result = await executeSpaceChatTurn(provider, callerUser, {
             ...defaultInput,
             agentId: ALLOWED_AGENT_ID,
-            route: 'DecisionRouted',
         });
         assert.equal(result.ok, false);
         if (!result.ok) {
@@ -716,7 +697,6 @@ describe('executeSpaceChatTurn', () => {
             const result = await executeSpaceChatTurn(provider, callerUser, {
                 ...defaultInput,
                 agentId: undefined,
-                route: 'ThreadReply',
             });
             assert.equal(result.ok, true, result.ok ? '' : result.message);
             assert.ok(capturedMessages && capturedMessages.length === 4);

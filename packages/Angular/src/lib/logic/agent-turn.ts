@@ -5,7 +5,6 @@ export interface SpaceTurnRequest {
     ConversationId: string;
     UserMessageId: string;
     AgentId: string;
-    Route?: string;
 }
 
 /** What the host answers the chat area with: the reply rows it wrote, and the run that is answering. */
@@ -27,7 +26,6 @@ export function spaceTurnInput(spaceId: string, request: SpaceTurnRequest): Exec
         ConversationID: request.ConversationId,
         UserMessageID: request.UserMessageId,
         AgentID: request.AgentId,
-        ...(request.Route ? { Route: request.Route } : {}),
         Background: true,
     };
 }

@@ -57,7 +57,6 @@ export interface ExecuteSpaceChatTurnInput {
     conversationId: string;
     userMessageId: string;
     agentId?: string;
-    route?: string;
     /**
      * Return as soon as the reply row is written In-Progress, and run the agent after that: the caller shows the row, and the
      * observer's callbacks carry the run's progress to it. Without it the call returns when the reply is final.
