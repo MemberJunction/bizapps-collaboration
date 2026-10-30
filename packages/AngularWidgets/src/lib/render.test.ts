@@ -947,4 +947,28 @@ describe('the conversation of a space, read-only', () => {
     await render({});
     expect(streamingStub.initialize).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the linked workstream actionable item pill and PR #6176 live agent working progress bar in the header', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('LinkedWorkstreamItem', { kind: 'task', id: 'task-1', title: 'Audit Charter Review', status: 'InProgress' });
+    fixture.componentInstance.onAgentTurnStarted({ agentName: 'Sage', route: 'ThreadReply', statusText: 'Drafting audit summary…' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const pill = host.querySelector('[data-testid="linked-workstream-pill"]');
+    expect(pill?.textContent).toContain('Audit Charter Review');
+    expect(pill?.textContent).toContain('InProgress');
+
+    const progress = host.querySelector('[data-testid="agent-working-progress-bar"]');
+    expect(progress?.textContent).toContain('@Sage is working');
+    expect(progress?.textContent).toContain('↪ Thread Reply');
+    expect(progress?.textContent).toContain('Drafting audit summary…');
+  });
 });
+

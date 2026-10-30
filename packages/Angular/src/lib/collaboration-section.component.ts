@@ -119,18 +119,32 @@ import {
     type SpaceDetailsFormDescriptor,
     type SpaceConversationItem,
     CollabSpaceNotesComponent,
+    CollabSpacePagesComponent,
     CollabPinnedStripComponent,
     CollabSpaceDataComponent,
+    type CollabPageModel,
+    type CollabWidgetVisibility,
+    type SpaceRailCustomPage,
     type NoteModel,
     type NoteDraft,
     type PinModel,
     type DataEntryModel,
     type DataRunModel,
+    type WorkstreamLinkedItem,
+    type WorkstreamLinkTaskOption,
+    type WorkstreamLinkFileOption,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 import { MJReactModule } from '@memberjunction/ng-react';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { notesVisibleTo } from './logic/visible-notes.js';
 import { pinRows } from './logic/home-lists.js';
+import {
+    buildStarterPagesForSpace,
+    isCollabPageNoteBody,
+    mergeSpacePagesWithDefaults,
+    parseCollabPageFromNote,
+    serializeCollabPageBody,
+} from './logic/space-pages-storage.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
 const notesEntityId = (): string => Metadata.Provider.EntityByName('MJ_BizApps_Collaboration: Space Notes')?.ID ?? '';
@@ -191,7 +205,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
-        CollabSpaceTabsComponent,
         CollabSpaceOverviewComponent,
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
@@ -205,6 +218,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabNewSpaceDialogComponent,
         CollabHomeListComponent,
         CollabSpaceNotesComponent,
+        CollabSpacePagesComponent,
         CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         MJReactModule,
@@ -658,20 +672,31 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [SpaceBand]="spaceAudienceBand"
                             [ActiveTab]="activeTab"
                             [Tabs]="tabs"
+                            [CustomPages]="railCustomPages"
+                            [CanEditPages]="canCustomizePages"
+                            [IsCustomizingPages]="isCustomizingPages"
                             [Conversations]="spaceConversations"
                             [CanConfigure]="showsSettings"
                             [ActiveConversationId]="activeConversationId"
                             [CanStartConversation]="canStartConversation"
+                            [SubSpaces]="overviewSubSpaces"
+                            [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
+                            [ParentSpaceId]="activeParentSpaceId"
+                            [ParentSpaceName]="activeParentSpaceName"
+                            [PagesCount]="spacePages.length"
                             [LibraryCount]="libraryTotalCount"
                             [TaskCount]="taskCount"
                             [MemberCount]="headerTotalPeople"
                             [InboxCount]="0"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
+                            (SubSpaceCreateRequested)="openNewSpaceDialog(activeSpaceId)"
                             (SpaceOpenRequested)="onSpaceOpenRequested($event)"
                             (SpaceToggleRequested)="onSpaceToggleRequested($event)"
                             (NavSelectRequested)="onNavSelectRequested($event)"
                             (TabSelectRequested)="onTabSelectRequested($event)"
+                            (NewPageRequested)="onNewPageRequestedFromRail()"
+                            (CustomizePagesToggleRequested)="onToggleCustomizePages()"
                             (ConversationSelectRequested)="onSpaceConversationSelected($event)"
                             (NewConversationRequested)="openNewConversationDialog()"
                             (BackToSpacesRequested)="onBackToSpacesRequested()"
@@ -915,43 +940,41 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         [ShowStar]="!!currentUser"
                                         [IsStarred]="isSpaceStarred"
                                         [StarBusy]="isTogglingStar"
+                                        [SubSpaces]="overviewSubSpaces"
+                                        [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
                                         (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
                                         (StarToggleRequested)="onStarToggle()"
+                                        (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                        (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
                                     >
                                         <div actions class="row gap8">
                                             <mjc-audience-pill
                                                 [StaffAvatars]="headerStaffAvatars"
                                                 [OutsideAvatars]="headerOutsideAvatars"
+                                                [Members]="spaceMembers"
+                                                [CanInvite]="canInviteHere"
                                                 [TotalPeople]="headerTotalPeople"
                                                 [Summary]="headerAudienceSummary"
+                                                (ManagePeopleRequested)="onTabSelectRequested('People')"
+                                                (InviteRequested)="onInviteClicked()"
                                             />
-                                            @if (canAddHere && hasTab('Notes') && activeTab !== 'Notes') {
-                                                <button mjButton Variant="secondary" Size="md" (click)="onQuickNoteClicked()" title="Write a note in this space">
-                                                    <i class="fa-solid fa-note-sticky"></i>Note
-                                                </button>
-                                            }
                                             @if (activeTab === 'Overview') {
                                                 @if (canInviteHere) {
-                                                    <button mjButton Variant="secondary" Size="md" (click)="onInviteClicked()">
+                                                    <button mjButton Variant="secondary" Size="sm" (click)="onInviteClicked()">
                                                         <i class="fa-solid fa-user-plus"></i>Invite
                                                     </button>
                                                 }
                                                 @if (canAddHere && hasTab('Work')) {
-                                                    <button mjButton Variant="primary" Size="md" (click)="onNewClicked()">
+                                                    <button mjButton Variant="primary" Size="sm" (click)="onNewClicked()">
                                                         <i class="fa-solid fa-plus"></i>New
                                                     </button>
                                                 }
                                             } @else if (canAddHere && hasTab('Library') && !contributedTabComponent) {
-                                                <button mjButton Variant="primary" Size="md" (click)="onUploadClicked()">
+                                                <button mjButton Variant="primary" Size="sm" (click)="onUploadClicked()">
                                                     <i class="fa-solid fa-arrow-up-from-bracket"></i>Upload
                                                 </button>
                                             }
                                         </div>
-                                        <mjc-space-tabs
-                                            [Tabs]="tabs"
-                                            [ActiveTab]="activeTab"
-                                            (TabSelectRequested)="onTabSelectRequested($event)"
-                                        />
                                     </mjc-space-header>
 
                                     <div class="content-area">
@@ -960,131 +983,291 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
-                                                @if (spacePins.length > 0) {
-                                                    <div class="pinned-wrap">
-                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
-                                                    </div>
-                                                }
-                                                <mjc-space-overview
-                                                    #spaceOverview
-                                                    [SpaceId]="activeSpaceId"
-                                                    [ContributedCards]="overviewContributedCards"
-                                                    [ShowLibraryLink]="hasTab('Library')"
-                                                    [ShowChatLink]="hasTab('Chat')"
-                                                    [SpaceName]="spaceTitle"
-                                                    [FirmName]="firmName"
-                                                    [ClientOrgName]="clientOrgName"
-                                                    [AudienceCount]="discussionAudienceCount"
-                                                    [SharedAudienceCount]="headerTotalPeople"
-                                                    [NeedsYouItems]="overviewNeedsYou"
-                                                    [SharedItems]="overviewSharedItems"
-                                                    [TeamItems]="overviewTeamItems"
-                                                    [TeamTotalCount]="libraryTeamCount"
-                                                    [RoomMessages]="overviewRoomMessages"
-                                                    [SubSpaces]="overviewSubSpaces"
-                                                    [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
-                                                    [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
-                                                    [CanSeeTeamSide]="canSeeTeamSide"
-                                                    [AgentAvailable]="chatDefaultAgentId !== null"
-                                                    [IsSubmittingAsk]="isSubmittingAsk"
-                                                    [DiscussionBand]="chatAudienceBand"
-                                                    [HasAbout]="hasDetails"
-                                                    [AboutTitle]="aboutTitle"
-                                                    (OpenLibraryRequested)="onOpenLibraryRequested()"
-                                                    (OpenChatRequested)="onOpenChatRequested()"
-                                                    (ItemSelectRequested)="onItemSelected($event)"
-                                                    (ShareRequested)="onShareRequested($event)"
-                                                    (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
-                                                    (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
-                                                    (AskRequested)="onOverviewAskRequested($event)"
-                                                >
-                                                    <div mjcAbout style="display: contents">
-                                                        @if (spaceDetails; as details) {
-                                                            @if (detailsView; as view) {
-                                                                <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [FormSections]="view.formSections" [EditMode]="false" />
+                                                <ng-template #pinnedWidgetTpl let-block="block">
+                                                    @if (spacePins.length > 0) {
+                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="block?.title || pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
+                                                    }
+                                                </ng-template>
+                                                <ng-template #needsYouWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'NeedsYou'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [NeedsYouItems]="overviewNeedsYou"
+                                                        (ItemSelectRequested)="onItemSelected($event)"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #sharedFilesWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'SharedFiles'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [ShowLibraryLink]="hasTab('Library')"
+                                                        [SpaceName]="spaceTitle"
+                                                        [FirmName]="firmName"
+                                                        [ClientOrgName]="clientOrgName"
+                                                        [SharedAudienceCount]="headerTotalPeople"
+                                                        [SharedItems]="overviewSharedItems"
+                                                        (OpenLibraryRequested)="onOpenLibraryRequested()"
+                                                        (ItemSelectRequested)="onItemSelected($event)"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #teamFilesWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'TeamFiles'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [ShowLibraryLink]="hasTab('Library')"
+                                                        [FirmName]="firmName"
+                                                        [ClientOrgName]="clientOrgName"
+                                                        [TeamItems]="overviewTeamItems"
+                                                        [TeamTotalCount]="libraryTeamCount"
+                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                        (OpenLibraryRequested)="onOpenLibraryRequested()"
+                                                        (ItemSelectRequested)="onItemSelected($event)"
+                                                        (ShareRequested)="onShareRequested($event)"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #askBoxWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        #spaceOverview
+                                                        [Section]="'AskBox'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [SpaceName]="spaceTitle"
+                                                        [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
+                                                        [AgentAvailable]="chatDefaultAgentId !== null"
+                                                        [IsSubmittingAsk]="isSubmittingAsk"
+                                                        (AskRequested)="onOverviewAskRequested($event)"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #discussionWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'Discussion'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [ShowChatLink]="hasTab('Chat')"
+                                                        [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
+                                                        [AudienceCount]="discussionAudienceCount"
+                                                        [RoomMessages]="overviewRoomMessages"
+                                                        [DiscussionBand]="chatAudienceBand"
+                                                        (OpenChatRequested)="onOpenChatRequested()"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #contributedCardsWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'ContributedCards'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [ContributedCards]="overviewContributedCards"
+                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                    />
+                                                </ng-template>
+                                                <ng-template #aboutWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'About'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [HasAbout]="hasDetails"
+                                                        [AboutTitle]="aboutTitle"
+                                                    >
+                                                        <div mjcAbout style="display: contents">
+                                                            @if (spaceDetails; as details) {
+                                                                @if (detailsView; as view) {
+                                                                    <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [FormSections]="view.formSections" [EditMode]="false" />
+                                                                }
                                                             }
-                                                        }
-                                                    </div>
-                                                </mjc-space-overview>
+                                                        </div>
+                                                    </mjc-space-overview>
+                                                </ng-template>
+                                                <ng-template #subSpacesWidgetTpl let-block="block">
+                                                    <mjc-space-overview
+                                                        [Section]="'SubSpaces'"
+                                                        [CustomTitle]="block?.title || ''"
+                                                        [SpaceId]="activeSpaceId"
+                                                        [SpaceName]="spaceTitle"
+                                                        [SubSpaces]="overviewSubSpaces"
+                                                        [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
+                                                        (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                                        (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
+                                                    />
+                                                </ng-template>
+
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Overview'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="overviewWidgetVisibility"
+                                                    [PinnedWidgetTpl]="pinnedWidgetTpl"
+                                                    [NeedsYouWidgetTpl]="needsYouWidgetTpl"
+                                                    [SharedFilesWidgetTpl]="sharedFilesWidgetTpl"
+                                                    [TeamFilesWidgetTpl]="teamFilesWidgetTpl"
+                                                    [AskBoxWidgetTpl]="askBoxWidgetTpl"
+                                                    [DiscussionWidgetTpl]="discussionWidgetTpl"
+                                                    [ContributedCardsWidgetTpl]="contributedCardsWidgetTpl"
+                                                    [AboutWidgetTpl]="aboutWidgetTpl"
+                                                    [SubSpacesWidgetTpl]="subSpacesWidgetTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                />
                                             }
                                             @case ('Library') {
-                                                <mjc-space-library
-                                                    [TotalCount]="libraryTotalCount"
-                                                    [SharedCount]="librarySharedCount"
-                                                    [TeamCount]="libraryTeamCount"
-                                                    [Collections]="libraryCollections"
-                                                    [SmartViews]="librarySmartViews"
-                                                    [CanSeeTeamSide]="canSeeTeamSide"
-                                                    [CanShareItems]="canShareItems"
-                                                    [Rows]="libraryRows"
-                                                    [SelectedRowId]="selectedItemId || ''"
-                                                    [ShowDrawer]="isDrawerOpen"
-                                                    [PreviewMeta]="previewMeta"
-                                                    [PreviewParagraphs]="previewParagraphs"
-                                                    [PreviewBandLabel]="previewBandLabel"
-                                                    [PreviewAudienceSub]="previewAudienceSub"
-                                                    [PreviewStaffAvatars]="previewStaffAvatars"
-                                                    [PreviewFlagTitle]="previewFlagTitle"
-                                                    [PreviewFlagDescription]="previewFlagDescription"
-                                                    [PreviewRecentUses]="previewRecentUses"
-                                                    [IsOpeningFile]="isOpeningFile"
-                                                    [OpeningLabel]="openingFileLabel"
-                                                    (RowSelectRequested)="onRowSelected($event)"
-                                                    (ShareRequested)="onShareRequested($event)"
-                                                    (CloseDrawerRequested)="onCloseDrawerRequested()"
-                                                    (OpenFileRequested)="onOpenFileRequested($event)"
+                                                <ng-template #libraryMainTpl>
+                                                    <mjc-space-library
+                                                        [TotalCount]="libraryTotalCount"
+                                                        [SharedCount]="librarySharedCount"
+                                                        [TeamCount]="libraryTeamCount"
+                                                        [Collections]="libraryCollections"
+                                                        [SmartViews]="librarySmartViews"
+                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                        [CanShareItems]="canShareItems"
+                                                        [Rows]="libraryRows"
+                                                        [SelectedRowId]="selectedItemId || ''"
+                                                        [ShowDrawer]="isDrawerOpen"
+                                                        [PreviewMeta]="previewMeta"
+                                                        [PreviewParagraphs]="previewParagraphs"
+                                                        [PreviewBandLabel]="previewBandLabel"
+                                                        [PreviewAudienceSub]="previewAudienceSub"
+                                                        [PreviewStaffAvatars]="previewStaffAvatars"
+                                                        [PreviewFlagTitle]="previewFlagTitle"
+                                                        [PreviewFlagDescription]="previewFlagDescription"
+                                                        [PreviewRecentUses]="previewRecentUses"
+                                                        [IsOpeningFile]="isOpeningFile"
+                                                        [OpeningLabel]="openingFileLabel"
+                                                        (RowSelectRequested)="onRowSelected($event)"
+                                                        (ShareRequested)="onShareRequested($event)"
+                                                        (CloseDrawerRequested)="onCloseDrawerRequested()"
+                                                        (OpenFileRequested)="onOpenFileRequested($event)"
+                                                    />
+                                                </ng-template>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Library'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    [MainViewWidgetTpl]="libraryMainTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
                                                 />
                                             }
                                             @case ('Work') {
-                                                <div class="work-tab-container">
-                                                    <div class="work-view-toolbar">
-                                                        <mj-view-toggle
-                                                            [Options]="workViewOptions"
-                                                            [ActiveKey]="workViewMode"
-                                                            (KeyChange)="onWorkViewModeChanged($event)"
-                                                        />
-                                                    </div>
-                                                    <div class="work-view-body">
-                                                        @switch (workViewMode) {
-                                                            @case ('list') {
-                                                                <mjc-space-work
-                                                                    [Tasks]="spaceTasks"
-                                                                    [SpaceName]="spaceTitle"
-                                                                    [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
-                                                                    [CanCreateTask]="!isSpaceClosed && canContribute"
-                                                                    [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                    [AllowedBands]="bandChoice?.allowed ?? bothBands"
-                                                                    [CanSeeTeamSide]="canSeeTeamSide"
-                                                                    (TaskSelectRequested)="onTaskSelected($event)"
-                                                                    (TaskToggleRequested)="onTaskToggled($event)"
-                                                                    (CreateTaskRequested)="onCreateTask($event)"
-                                                                />
-                                                            }
-                                                            @case ('kanban') {
-                                                                <div class="work-kanban-pane">
-                                                                    <bizapps-task-kanban
-                                                                        [ExtraFilter]="taskScopeFilter"
+                                                <ng-template #workMainTpl>
+                                                    <div class="work-tab-container">
+                                                        <div class="work-view-toolbar">
+                                                            <mj-view-toggle
+                                                                [Options]="workViewOptions"
+                                                                [ActiveKey]="workViewMode"
+                                                                (KeyChange)="onWorkViewModeChanged($event)"
+                                                            />
+                                                        </div>
+                                                        <div class="work-view-body">
+                                                            @switch (workViewMode) {
+                                                                @case ('list') {
+                                                                    <mjc-space-work
+                                                                        [Tasks]="spaceTasks"
+                                                                        [SpaceName]="spaceTitle"
+                                                                        [DefaultBand]="bandChoice?.start ?? typeDefaultBand ?? spaceAudienceBand"
+                                                                        [CanCreateTask]="!isSpaceClosed && canContribute"
                                                                         [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                        (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                        [AllowedBands]="bandChoice?.allowed ?? bothBands"
+                                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                                        (TaskSelectRequested)="onTaskSelected($event)"
+                                                                        (TaskToggleRequested)="onTaskToggled($event)"
+                                                                        (CreateTaskRequested)="onCreateTask($event)"
                                                                     />
-                                                                </div>
+                                                                }
+                                                                @case ('kanban') {
+                                                                    <div class="work-kanban-pane">
+                                                                        <bizapps-task-kanban
+                                                                            [ExtraFilter]="taskScopeFilter"
+                                                                            [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                            (BeforeStatusChange)="onBeforeKanbanStatusChange($event)"
+                                                                            (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                            (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                        />
+                                                                    </div>
+                                                                }
+                                                                @case ('gantt') {
+                                                                    <div class="work-gantt-pane">
+                                                                        <bizapps-task-gantt
+                                                                            [ExtraFilter]="taskScopeFilter"
+                                                                            [Height]="'620px'"
+                                                                            [ReadOnly]="isSpaceClosed || !canContribute"
+                                                                            (TaskClicked)="onTaskDoubleClicked($event)"
+                                                                            (TaskDoubleClicked)="onTaskDoubleClicked($event)"
+                                                                        />
+                                                                    </div>
+                                                                }
                                                             }
-                                                            @case ('gantt') {
-                                                                <div class="work-gantt-pane">
-                                                                    <bizapps-task-gantt
-                                                                        [ExtraFilter]="taskScopeFilter"
-                                                                        [Height]="'620px'"
-                                                                        [ReadOnly]="isSpaceClosed || !canContribute"
-                                                                        (TaskClicked)="onTaskDoubleClicked($event)"
-                                                                        (TaskDoubleClicked)="onTaskDoubleClicked($event)"
-                                                                    />
-                                                                </div>
-                                                            }
-                                                        }
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </ng-template>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Work'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    [MainViewWidgetTpl]="workMainTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                />
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
@@ -1101,6 +1284,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AudienceBand]="chatAudienceBand"
                                                     [ParticipantCount]="conversationParticipantCount"
                                                     [DefaultAgentId]="chatDefaultAgentId"
+                                                    [DefaultAgentName]="chatDefaultAgentName || 'Sage'"
+                                                    [LinkedWorkstreamItem]="activeConversationLinkedItem"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
                                                     [CanStartConversation]="canStartConversation && !isSpaceClosed"
@@ -1114,70 +1299,161 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PendingMessage]="pendingChatMessage"
                                                     [PendingMessageConversationId]="pendingChatMessageConversationId"
                                                     (PendingMessageConsumed)="pendingChatMessage = null; pendingChatMessageConversationId = null"
+                                                    (LinkedItemOpenRequested)="onOpenLinkedWorkstreamItem($event)"
                                                     (NewConversationRequested)="openNewConversationDialog()"
                                                 />
                                             }
                                             @case ('Data') {
-                                                <mjc-space-data
-                                                    [Entries]="dataEntries"
-                                                    [SelectedGrantId]="selectedDataGrantId"
-                                                    [SelectedLabel]="selectedDataLabel"
-                                                    [Run]="dataRun"
-                                                    [CanPin]="!!currentUser"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    [EmptyMessage]="dataEmptyMessage"
-                                                    (EntrySelectRequested)="onDataEntrySelected($event)"
-                                                    (PinToggleRequested)="onDataPinToggle($event)"
-                                                    (RerunRequested)="rerunDataEntry()"
-                                                >
-                                                    @if (dataEmbedded; as embedded) {
-                                                        <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
-                                                    }
-                                                </mjc-space-data>
-                                            }
-                                            @case ('Notes') {
-                                                <mjc-space-notes
-                                                    #notesPanel
-                                                    [Title]="notesLabel"
-                                                    [Notes]="spaceNotes"
-                                                    [IsLoading]="isLoadingNotes"
-                                                    [ErrorMessage]="notesError"
-                                                    [IsSaving]="isSavingNote"
-                                                    [SaveError]="noteSaveError"
-                                                    [CanWrite]="canContribute"
+                                                <ng-template #dataMainTpl>
+                                                    <mjc-space-data
+                                                        [Entries]="dataEntries"
+                                                        [SelectedGrantId]="selectedDataGrantId"
+                                                        [SelectedLabel]="selectedDataLabel"
+                                                        [Run]="dataRun"
+                                                        [CanPin]="!!currentUser"
+                                                        [SharedLabel]="sharedBandLabel"
+                                                        [TeamLabel]="teamBandLabel"
+                                                        [EmptyMessage]="dataEmptyMessage"
+                                                        (EntrySelectRequested)="onDataEntrySelected($event)"
+                                                        (PinToggleRequested)="onDataPinToggle($event)"
+                                                        (RerunRequested)="rerunDataEntry()"
+                                                    >
+                                                        @if (dataEmbedded; as embedded) {
+                                                            <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
+                                                        }
+                                                    </mjc-space-data>
+                                                </ng-template>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Data'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
-                                                    [PromotionConsequence]="notePromotionConsequence"
-                                                    [AutoOpen]="notesAutoOpen"
-                                                    (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
-                                                    (SaveRequested)="onNoteSave($event)"
-                                                    (DeleteRequested)="onNoteDelete($event)"
-                                                    (PromoteRequested)="onNotePromote($event)"
-                                                    (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
-                                                    (PinToggleRequested)="onNotePinToggle($event)"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    [MainViewWidgetTpl]="dataMainTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                />
+                                            }
+                                            @case ('Notes') {
+                                                <ng-template #notesMainTpl>
+                                                    <mjc-space-notes
+                                                        #notesPanel
+                                                        [Title]="notesLabel"
+                                                        [Notes]="spaceNotes"
+                                                        [IsLoading]="isLoadingNotes"
+                                                        [ErrorMessage]="notesError"
+                                                        [IsSaving]="isSavingNote"
+                                                        [SaveError]="noteSaveError"
+                                                        [CanWrite]="canContribute"
+                                                        [CanSeeTeam]="canSeeTeamSide"
+                                                        [IsReadOnly]="isSpaceClosed"
+                                                        [DefaultBand]="noteDefaultBand"
+                                                        [SharedLabel]="sharedBandLabel"
+                                                        [TeamLabel]="teamBandLabel"
+                                                        [PromotionConsequence]="notePromotionConsequence"
+                                                        [AutoOpen]="notesAutoOpen"
+                                                        (ComposerOpenChanged)="onNotesComposerOpenChanged($event)"
+                                                        (SaveRequested)="onNoteSave($event)"
+                                                        (DeleteRequested)="onNoteDelete($event)"
+                                                        (PromoteRequested)="onNotePromote($event)"
+                                                        (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
+                                                        (PinToggleRequested)="onNotePinToggle($event)"
+                                                    />
+                                                </ng-template>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Notes'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    [MainViewWidgetTpl]="notesMainTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
                                                 />
                                             }
                                             @case ('People') {
-                                                <mjc-space-people
-                                                    [Members]="spaceMembers"
-                                                    [SpaceName]="spaceTitle"
-                                                    [IsSendingInvite]="isSendingInvite"
-                                                    [InviteOutcome]="inviteOutcome"
-                                                    [RedemptionUrl]="inviteRedemptionUrl"
-                                                    [CanInvite]="canInviteHere"
-                                                    [CanSeeTeamSide]="canSeeTeamSide"
-                                                    [RoleOptions]="grantableRoleOptions"
-                                                    [CanManageSeats]="canInviteHere"
-                                                    [IsBusy]="isChangingSeat"
-                                                    (InviteMemberRequested)="onInviteMember($event)"
-                                                    (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
-                                                    (ApproveMemberRequested)="onApproveMember($event)"
-                                                    (RemoveMemberRequested)="onRemoveMember($event)"
-                                                    (ChangeRoleRequested)="onChangeMemberRole($event)"
+                                                <ng-template #peopleMainTpl>
+                                                    <mjc-space-people
+                                                        [Members]="spaceMembers"
+                                                        [SpaceName]="spaceTitle"
+                                                        [IsSendingInvite]="isSendingInvite"
+                                                        [InviteOutcome]="inviteOutcome"
+                                                        [RedemptionUrl]="inviteRedemptionUrl"
+                                                        [CanInvite]="canInviteHere"
+                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                        [RoleOptions]="grantableRoleOptions"
+                                                        [CanManageSeats]="canInviteHere"
+                                                        [IsBusy]="isChangingSeat"
+                                                        (InviteMemberRequested)="onInviteMember($event)"
+                                                        (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
+                                                        (ApproveMemberRequested)="onApproveMember($event)"
+                                                        (RemoveMemberRequested)="onRemoveMember($event)"
+                                                        (ChangeRoleRequested)="onChangeMemberRole($event)"
+                                                    />
+                                                </ng-template>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'People'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    [MainViewWidgetTpl]="peopleMainTpl"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
                                                 />
                                             }
                                             @case ('Settings') {
@@ -1266,7 +1542,34 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 }
                                             }
                                             @default {
-                                                @if (contributedTabComponent; as tabComponent) {
+                                                @if (activeTab.startsWith('page:')) {
+                                                    <mjc-space-pages
+                                                        #spacePagesHost
+                                                        [Pages]="spacePages"
+                                                        [ActivePageId]="activeCustomPageId"
+                                                        [LibraryRows]="libraryRows"
+                                                        [SpaceMembers]="spaceMembers"
+                                                        [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                        [CurrentUserInitials]="currentUserInitials"
+                                                        [CanWrite]="canCustomizePages"
+                                                        [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                        [(IsCustomizing)]="isCustomizingPages"
+                                                        [CanSeeTeam]="canSeeTeamSide"
+                                                        [IsReadOnly]="isSpaceClosed"
+                                                        [IsSaving]="isSavingPage"
+                                                        [ErrorMessage]="notesError"
+                                                        [SaveError]="pageSaveError"
+                                                        [DefaultBand]="noteDefaultBand"
+                                                        [SharedLabel]="sharedBandLabel"
+                                                        [TeamLabel]="teamBandLabel"
+                                                        (PageSelectRequested)="onPageSelected($event)"
+                                                        (PageSaveRequested)="onPageSave($event)"
+                                                        (PageDeleteRequested)="onPageDelete($event)"
+                                                        (PageReorderRequested)="onPageReorder($event)"
+                                                        (PromotePageRequested)="onPagePromote($event)"
+                                                        (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                    />
+                                                } @else if (contributedTabComponent; as tabComponent) {
                                                     <ng-container *ngComponentOutlet="tabComponent; inputs: { SpaceId: activeSpaceId, SpaceTypeCode: activeSpaceTypeCode }"></ng-container>
                                                 }
                                             }
@@ -1350,6 +1653,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                 [SpaceName]="spaceTitle"
                                 [AllowedKinds]="canStartConversationKinds"
                                 [IsSubmitting]="isCreatingConversation"
+                                [Tasks]="workstreamTaskOptions"
+                                [Files]="workstreamFileOptions"
                                 (CancelRequested)="closeNewConversationDialog()"
                                 (SubmitRequested)="onSubmitNewConversation($event)"
                             />
@@ -1638,6 +1943,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     /** Opens a tab of the space shown. A tab the space doesn't have (its type turned the panel off) opens the Overview instead. */
     private setTab(id: string): void {
+        if (id.startsWith('page:')) {
+            if (this.activeTab === 'Settings' && this.spaceDetails?.Dirty) {
+                this.spaceDetails.Discard();
+                this.detailsMessage = '';
+                this.detailsError = '';
+            }
+            this.activeTab = id;
+            this.activePageId = id.slice(5);
+            return;
+        }
         const resolved = this.spaceTabModel ? resolveTabId(this.spaceTabModel, id) : id;
         // Details changed in Settings and not saved are not carried to the Overview's About card
         if (this.activeTab === 'Settings' && resolved !== 'Settings' && this.spaceDetails?.Dirty) {
@@ -2448,10 +2763,14 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     }
 
     /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
-    // ── Stage 4 (B19, B21, B22): the data surface, notes, pins and the star ─────────────────────────────────────────────
+    // ── Stage 4 (B19, B21, B22): the data surface, notes, customizable pages, pins and the star ─────────────────────────
     /** The server's whole configuration document per space, cut to the viewer, kept beside its rules for the data surface and Settings. */
     private readonly serverConfigurationBySpace = new Map<string, { configuration: EffectiveSpaceConfiguration; full: boolean }>();
     public spaceNotes: NoteModel[] = [];
+    public persistedPages: CollabPageModel[] = [];
+    public activePageId = '';
+    public isSavingPage = false;
+    public pageSaveError = '';
     public isLoadingNotes = false;
     public notesError = '';
     public isSavingNote = false;
@@ -2468,9 +2787,143 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public isTogglingStar = false;
     public spaceAnchors: AnchorRow[] = [];
     @ViewChild('notesPanel') private notesPanel?: CollabSpaceNotesComponent;
+    @ViewChild('spacePagesHost') private spacePagesHost?: CollabSpacePagesComponent;
+
+    public get activeParentSpaceId(): string {
+        const parentId = this.activeSpaceRecord?.ParentID;
+        if (!parentId) return '';
+        const parent = this.rawSpaces.find((s) => UUIDsEqual(s.ID, parentId));
+        return parent?.ID ?? '';
+    }
+
+    public get activeParentSpaceName(): string {
+        const parentId = this.activeSpaceRecord?.ParentID;
+        if (!parentId) return '';
+        const parent = this.rawSpaces.find((s) => UUIDsEqual(s.ID, parentId));
+        return parent?.Name ?? '';
+    }
+
+    public get currentUserInitials(): string {
+        const name = this.currentUser?.FirstLast || this.currentUser?.Name || 'ME';
+        return name
+            .split(' ')
+            .filter(Boolean)
+            .map((w) => w[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+    }
+
+    public get spacePages(): CollabPageModel[] {
+        const starters = buildStarterPagesForSpace({
+            spaceId: this.activeSpaceId || 'default',
+            spaceTitle: this.spaceTitle || 'Workspace',
+            spaceSubtitle: this.spaceSubtitle || '',
+            spaceTypeName: this.spaceTypeName || 'Workspace',
+            libraryRows: this.libraryRows,
+            spaceMembers: this.spaceMembers,
+            defaultBand: this.noteDefaultBand,
+        });
+        return mergeSpacePagesWithDefaults(this.persistedPages, starters);
+    }
+
+    public isCustomizingPages = false;
+
+    /**
+     * Only space administrators, space owners, or leads with promotion/publishing rights
+     * may customize page layouts, add/edit/remove blocks, or publish page changes.
+     */
+    public get canCustomizePages(): boolean {
+        if (this.isSpaceClosed) return false;
+        const isSpaceOwner =
+            !!this.activeSpaceRecord &&
+            !!this.currentUser &&
+            UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
+        return (
+            this.settingsAccessNow.canEdit ||
+            isSpaceOwner ||
+            (this.callerSeat?.role.canPromoteBand ?? false) ||
+            this.mayAdministerSpaces
+        );
+    }
+
+    public get overviewWidgetVisibility(): CollabWidgetVisibility {
+        const hasVisibleContributedCards = this.overviewContributedCards.some(
+            (c) => c.side !== 'Team' || this.canSeeTeamSide,
+        );
+        return {
+            Pinned: this.spacePins.length > 0,
+            NeedsYou: this.overviewNeedsYou.length > 0,
+            SharedFiles: this.hasTab('Library'),
+            TeamFiles: this.canSeeTeamSide && this.hasTab('Library'),
+            AskBox:
+                this.canStartConversation &&
+                !this.isSpaceClosed &&
+                this.hasTab('Chat'),
+            Discussion: this.hasTab('Chat'),
+            ContributedCards: hasVisibleContributedCards,
+            About: this.hasDetails,
+            SubSpaces:
+                this.overviewSubSpaces.length > 0 ||
+                (this.canCreateSpace && !this.isSpaceClosed),
+        };
+    }
+
+    public get railCustomPages(): SpaceRailCustomPage[] {
+        return this.spacePages
+            .filter((p) => !p.builtInTabId && (p.band === 'Shared' || this.canSeeTeamSide))
+            .map((p) => ({
+                id: p.id,
+                title: p.draftTitle || p.title,
+                iconClass: p.iconClass || 'fa-regular fa-file-lines',
+                band: p.band,
+                isDraft: p.status === 'Draft',
+            }));
+    }
+
+    public get activeCustomPageId(): string {
+        if (this.activeTab.startsWith('page:')) {
+            return this.activeTab.slice(5);
+        }
+        return this.activePageId;
+    }
+
+    public onToggleCustomizePages(): void {
+        if (!this.canCustomizePages) return;
+        if (!this.spacePagesHost) {
+            this.activeView = 'space';
+            this.setTab('Overview');
+            this.isCustomizingPages = true;
+            this.RefreshView();
+            return;
+        }
+        this.isCustomizingPages = !this.isCustomizingPages;
+        this.RefreshView();
+    }
+
+    public onNewPageRequestedFromRail(): void {
+        if (!this.canCustomizePages) return;
+        if (this.spacePagesHost) {
+            this.spacePagesHost.openNewPageModal();
+            this.RefreshView();
+            return;
+        }
+        this.activeView = 'space';
+        this.setTab('Overview');
+        this.RefreshView();
+        setTimeout(() => {
+            this.spacePagesHost?.openNewPageModal();
+            this.RefreshView();
+        }, 0);
+    }
 
     private resetStage4(_spaceId: string): void {
         this.spaceNotes = [];
+        this.persistedPages = [];
+        this.activePageId = '';
+        this.isCustomizingPages = false;
+        this.isSavingPage = false;
+        this.pageSaveError = '';
         this.isLoadingNotes = false;
         this.notesError = '';
         this.isSavingNote = false;
@@ -2558,7 +3011,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             : `This space's type offers no views, queries, dashboards or components.`;
     }
 
-    // ── notes (B21) ──────────────────────────────────────────────────────────────
+    // ── notes & customizable pages (B21) ─────────────────────────────────────────
 
     private noteModel(row: NoteRow): NoteModel {
         const me = this.currentUser?.ID ?? '';
@@ -2599,10 +3052,36 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!res?.Success) {
                 this.notesError = `The notes could not be read: ${res?.ErrorMessage ?? 'unknown error'}`;
                 this.spaceNotes = [];
+                this.persistedPages = [];
                 return;
             }
             // Another person's private note is never shown, whatever the viewer's roles read on the server
-            this.spaceNotes = notesVisibleTo(res.Results ?? [], this.currentUser?.ID).map((row) => this.noteModel(row));
+            const visibleRows = notesVisibleTo(res.Results ?? [], this.currentUser?.ID);
+            const plainNotes: NoteModel[] = [];
+            const pageModels: CollabPageModel[] = [];
+            for (const row of visibleRows) {
+                const mapped = this.noteModel(row);
+                if (isCollabPageNoteBody(row.Body)) {
+                    const page = parseCollabPageFromNote({
+                        id: row.ID,
+                        title: row.Title,
+                        body: row.Body,
+                        band: row.Band,
+                        authorName: mapped.authorName,
+                        updatedLabel: mapped.updatedLabel,
+                        canPromote: mapped.canPromote,
+                    });
+                    if (page) pageModels.push(page);
+                } else {
+                    plainNotes.push(mapped);
+                }
+            }
+            pageModels.sort((a, b) => a.sequence - b.sequence || a.title.localeCompare(b.title));
+            this.spaceNotes = plainNotes;
+            this.persistedPages = pageModels;
+            if (!this.activePageId && this.spacePages.length > 0) {
+                this.activePageId = this.spacePages[0].id;
+            }
         } catch (err) {
             if (!isCurrent()) return;
             this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
@@ -2611,6 +3090,128 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.isLoadingNotes = false;
                 this.RefreshView();
             }
+        }
+    }
+
+    public onPageSelected(pageId: string): void {
+        this.activePageId = pageId;
+        const page = this.spacePages.find((p) => p.id === pageId);
+        if (page?.builtInTabId) {
+            this.onTabSelectRequested(page.builtInTabId);
+            return;
+        }
+        this.onTabSelectRequested(`page:${pageId}`);
+    }
+
+    public async onPageSave(page: CollabPageModel): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.isSavingPage = true;
+        this.pageSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const note = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            const isExistingRecord = !!page.id && !page.isSeed && isValidUuid(page.id);
+            if (isExistingRecord) {
+                if (!(await note.Load(page.id))) throw new Error('The page could not be loaded.');
+            } else {
+                note.NewRecord();
+                note.SpaceID = spaceId;
+                note.AuthorUserID = this.currentUser?.ID ?? '';
+            }
+            note.Title = page.title.trim() || 'Untitled Page';
+            note.Body = serializeCollabPageBody(page);
+            note.Band = page.band;
+            note.Visibility = 'Space';
+            if (!(await note.Save())) throw new Error(note.LatestResult?.CompleteMessage || 'The page was not saved.');
+            this.activePageId = note.ID;
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            if (!page.builtInTabId) {
+                this.setTab(`page:${note.ID}`);
+                this.UpdateQueryParams({ view: 'space', tab: this.activeTab });
+            }
+            SharedService.Instance.CreateSimpleNotification(`Page "${note.Title}" saved.`, 'info', 2500);
+        } catch (err) {
+            this.pageSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Page save failed: ${this.pageSaveError}`);
+        } finally {
+            this.isSavingPage = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onPageDelete(page: CollabPageModel): Promise<void> {
+        if (!page.id || page.isSeed || page.builtInTabId || !isValidUuid(page.id)) return;
+        const spaceId = this.activeSpaceId;
+        this.isSavingPage = true;
+        this.pageSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
+            if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not deleted.');
+            this.activePageId = '';
+            if (this.activeTab === `page:${page.id}`) {
+                this.setTab('Overview');
+                this.UpdateQueryParams({ view: 'space', tab: 'overview' });
+            }
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            SharedService.Instance.CreateSimpleNotification(`Page "${page.title}" deleted.`, 'info', 2500);
+        } catch (err) {
+            this.pageSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Page delete failed: ${this.pageSaveError}`);
+        } finally {
+            this.isSavingPage = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onPageReorder(pages: CollabPageModel[]): Promise<void> {
+        const spaceId = this.activeSpaceId;
+        this.isSavingPage = true;
+        this.pageSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            for (const page of pages) {
+                if (!page.id || page.isSeed || !isValidUuid(page.id)) continue;
+                const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+                if (await entity.Load(page.id)) {
+                    entity.Body = serializeCollabPageBody(page);
+                    await entity.Save();
+                }
+            }
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.pageSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Page reorder failed: ${this.pageSaveError}`);
+        } finally {
+            this.isSavingPage = false;
+            this.RefreshView();
+        }
+    }
+
+    public async onPagePromote(page: CollabPageModel): Promise<void> {
+        if (!page.id || page.isSeed || !isValidUuid(page.id)) return;
+        const spaceId = this.activeSpaceId;
+        this.isSavingPage = true;
+        this.pageSaveError = '';
+        this.RefreshView();
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
+            entity.Band = 'Shared';
+            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not shared.');
+            SharedService.Instance.CreateSimpleNotification(`"${page.title}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
+            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+        } catch (err) {
+            this.pageSaveError = err instanceof Error ? err.message : String(err);
+            LogError(`Page promote failed: ${this.pageSaveError}`);
+        } finally {
+            this.isSavingPage = false;
+            this.RefreshView();
         }
     }
 
@@ -4026,11 +4627,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
         // A tab the type or another app contributed can only be resolved once the space's tabs are built
         if (this.spaceTabModel) {
-            const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
-            if (named) this.activeTab = named;
-            else if (!resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
-            // A link to a tab the space doesn't have: the URL says the tab that opened
-            if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
+            if (params['tab']?.startsWith('page:')) {
+                this.activeTab = params['tab'];
+                this.activePageId = params['tab'].slice(5);
+            } else {
+                const named = params['tab'] ? resolveTabId(this.spaceTabModel, params['tab']) : null;
+                if (named) this.activeTab = named;
+                else if (!this.activeTab.startsWith('page:') && !resolveTabId(this.spaceTabModel, this.activeTab)) this.activeTab = 'Overview';
+                // A link to a tab the space doesn't have: the URL says the tab that opened
+                if (params['tab'] && !named) this.UpdateQueryParams({ tab: this.activeTab.toLowerCase() });
+            }
         }
 
         if (params['item'] && isValidUuid(params['item'])) {
@@ -4077,7 +4683,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.settingsSaveSuccess = '';
         this.settingsInfoMessage = '';
         // The URL names the tab that opened, which is the Overview when the type has no such tab
-        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.toLowerCase() });
+        this.UpdateQueryParams({ view: 'space', tab: this.activeTab.startsWith('page:') ? this.activeTab : this.activeTab.toLowerCase() });
         this.syncStateWithAgent();
         this.RefreshView();
     }
@@ -4626,6 +5232,61 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
     }
 
+    public workstreamLinks = new Map<string, WorkstreamLinkedItem>();
+
+    public get workstreamTaskOptions(): WorkstreamLinkTaskOption[] {
+        return this.spaceTasks.map((t) => ({
+            id: t.id,
+            name: t.name,
+            status: t.status,
+            priority: t.priority,
+        }));
+    }
+
+    public get workstreamFileOptions(): WorkstreamLinkFileOption[] {
+        return this.libraryRows.map((r) => ({
+            id: r.id,
+            title: r.name,
+            kind: r.kind,
+        }));
+    }
+
+    public get activeConversationLinkedItem(): WorkstreamLinkedItem | null {
+        const convId = (this.activeConversationId ?? '').trim().toLowerCase();
+        if (!convId) return null;
+        const stored = this.workstreamLinks.get(convId);
+        if (stored) {
+            if (stored.kind === 'task') {
+                const liveTask = this.spaceTasks.find((t) => UUIDsEqual(t.id, stored.id));
+                if (liveTask) {
+                    return { ...stored, title: liveTask.name, status: liveTask.status };
+                }
+            }
+            return stored;
+        }
+        const convName = (this.activeConversationName ?? '').trim().toLowerCase();
+        if (convName) {
+            const matchedTask = this.spaceTasks.find((t) => t.name.trim().toLowerCase() === convName);
+            if (matchedTask) {
+                return { kind: 'task', id: matchedTask.id, title: matchedTask.name, status: matchedTask.status };
+            }
+        }
+        return null;
+    }
+
+    public onOpenLinkedWorkstreamItem(item: WorkstreamLinkedItem): void {
+        if (item.kind === 'task') {
+            this.onTabSelectRequested('Work');
+            this.onTaskDoubleClicked(item.id);
+        } else if (item.kind === 'file') {
+            this.onTabSelectRequested('Library');
+            const row = this.libraryRows.find((r) => UUIDsEqual(r.id, item.id));
+            if (row) {
+                this.onRowSelected(row);
+            }
+        }
+    }
+
     public async onSubmitNewConversation(payload: NewConversationSubmitPayload): Promise<void> {
         // The space and the selection this conversation is for, taken before the first await: the person may move on while it is created
         const spaceId = this.activeSpaceId;
@@ -4653,6 +5314,47 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 LogError('Failed to create space conversation: ' + msg);
                 SharedService.Instance.CreateSimpleNotification(msg, 'error', 5000);
                 return;
+            }
+
+            if (res.ConversationID && payload.kind === 'Topic' && payload.linkedAction) {
+                const convKey = res.ConversationID.trim().toLowerCase();
+                const link = payload.linkedAction;
+                if (link.mode === 'task' && link.targetId) {
+                    const matched = this.spaceTasks.find((t) => UUIDsEqual(t.id, link.targetId!));
+                    this.workstreamLinks.set(convKey, {
+                        kind: 'task',
+                        id: link.targetId,
+                        title: matched?.name ?? link.targetTitle ?? payload.name,
+                        status: matched?.status ?? 'Open',
+                    });
+                } else if (link.mode === 'file' && link.targetId) {
+                    const matched = this.libraryRows.find((r) => UUIDsEqual(r.id, link.targetId!));
+                    this.workstreamLinks.set(convKey, {
+                        kind: 'file',
+                        id: link.targetId,
+                        title: matched?.name ?? link.targetTitle ?? payload.name,
+                    });
+                } else if (link.mode === 'new-task') {
+                    const taskTitle = link.newTaskTitle?.trim() || payload.name;
+                    try {
+                        const taskRes = await client.CreateSpaceTask({
+                            SpaceID: spaceId,
+                            Name: taskTitle,
+                            Band: this.bandChoice?.start ?? this.typeDefaultBand ?? this.spaceAudienceBand,
+                        });
+                        if (taskRes.Success && taskRes.TaskID) {
+                            this.workstreamLinks.set(convKey, {
+                                kind: 'task',
+                                id: taskRes.TaskID,
+                                title: taskTitle,
+                                status: 'Open',
+                            });
+                            await this.loadSpaceTasks(spaceId, isCurrent);
+                        }
+                    } catch (taskErr) {
+                        LogError('Could not create linked task for workstream: ' + (taskErr instanceof Error ? taskErr.message : String(taskErr)));
+                    }
+                }
             }
 
             SharedService.Instance.CreateSimpleNotification('Conversation created.', 'info', 3000);
