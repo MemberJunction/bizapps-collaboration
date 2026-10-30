@@ -5,9 +5,22 @@ import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { MJButtonDirective, MJConfirmService, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJConfirmService,
+  MJDialogComponent,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import { type AgentTurnRoute, ChatSlotDirective, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import {
+  type AfterAgentTurnEventArgs,
+  type AgentTurnRoute,
+  type BeforeAgentTurnEventArgs,
+  ChatSlotDirective,
+  ConversationStreamingService,
+} from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabBandChipComponent } from './band-chip.component.ts';
@@ -517,6 +530,8 @@ class ChatAreaStub {
   public DisplayMessages: Record<string, unknown>[] = [];
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
+  public BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  public AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
   public ComposerDraftConsumed = new EventEmitter<void>();
   public PendingMessageConsumed = new EventEmitter<void>();
 }
@@ -539,8 +554,20 @@ declareComponent(ChatAreaStub, {
     'CollapseThreadReplies', 'ShowAgentCharacter', 'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
-  outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
+  outputs: ['BeforeAgentTurn', 'AfterAgentTurn', 'ComposerDraftConsumed', 'PendingMessageConsumed'],
 });
+
+const chatTestImports = [
+  CollabAvatarComponent,
+  CollabBandChipComponent,
+  MJButtonDirective,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+  SharedGenericModule,
+  ChatSlotDirective,
+  ChatAreaStub,
+];
 
 /** MJ's status-push subscription, as the space's chat starts it. */
 const streamingStub = { initialize: vi.fn() };
@@ -549,7 +576,7 @@ const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamin
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -855,7 +882,7 @@ describe('the conversation of a space, read-only', () => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -879,7 +906,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'This space is closed. Conversations are read-only.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -919,7 +946,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -956,7 +983,7 @@ describe('the conversation of a space, read-only', () => {
   it('toggles the reason on the first Enter after tabbing to the lock, closes it on Escape without moving focus, and on a tap outside', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -1004,7 +1031,7 @@ describe('the conversation of a space, read-only', () => {
   it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const chats = [1, 2].map(() => {
       const fixture = TestBed.createComponent(CollabSpaceChatComponent);
       fixture.componentRef.setInput('ConversationId', null);
@@ -1047,7 +1074,7 @@ describe('the conversation of a space, read-only', () => {
   it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -1063,22 +1090,33 @@ describe('the conversation of a space, read-only', () => {
     expect(streamingStub.initialize).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the linked workstream pill in the header and the live Assistant indicator in agentPresence with plain-word route copy', async () => {
+  it('renders the linked workstream pill in the header and binds BeforeAgentTurn / AfterAgentTurn typed outputs for the agentPresence indicator', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, {
-      set: { imports: [CollabAvatarComponent, CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] },
-    });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
     fixture.componentRef.setInput('LinkedWorkstreamItem', { kind: 'task', id: 'task-1', title: 'Audit Charter Review', status: 'InProgress' });
-    fixture.componentInstance.onAgentTurnStarted({ agentName: 'Sage', route: 'ThreadReply', statusText: 'Drafting audit summary…' });
     fixture.detectChanges();
     await fixture.whenStable();
 
     const host = fixture.nativeElement as HTMLElement;
     const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+
+    // Emit typed BeforeAgentTurn from chat area
+    area.BeforeAgentTurn.emit({
+      AgentId: 'agent-1',
+      AgentName: 'Sage',
+      Route: 'ThreadReply',
+      ConversationId: 'c1',
+      UserMessageId: 'm1',
+      ParentMessageId: 'm0',
+      MessageText: 'Follow up',
+      Cancel: false,
+    });
+    fixture.componentInstance.activeAgentStatusText = 'Drafting audit summary…';
+    fixture.detectChanges();
     expect(area.ShowAgentCharacter).toBe(true);
 
     const pill = host.querySelector('[data-testid="linked-workstream-pill"]');
@@ -1092,25 +1130,37 @@ describe('the conversation of a space, read-only', () => {
     expect(progress?.textContent).toContain('Replying in the thread');
     expect(progress?.textContent).toContain('Drafting audit summary…');
 
-    // Completing the turn resets ShowAgentCharacter and clears activeAgentRoute so it never sticks across turns
-    fixture.componentInstance.onAgentTurnCompleted();
+    // Emitting AfterAgentTurn resets ShowAgentCharacter and clears activeAgentRoute to null so it never sticks across turns
+    area.AfterAgentTurn.emit({
+      AgentId: 'agent-1',
+      AgentName: 'Sage',
+      Route: 'ThreadReply',
+      ConversationId: 'c1',
+      UserMessageId: 'm1',
+      AgentMessage: null,
+      Success: true,
+    });
     fixture.detectChanges();
     expect(area.ShowAgentCharacter).toBe(false);
-    expect(fixture.componentInstance.activeAgentRoute).toBe('');
+    expect(fixture.componentInstance.activeAgentRoute).toBeNull();
     expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).toBeNull();
+
+    // A null route shows no route badge label
+    fixture.componentInstance.onAgentTurnStarted({ agentName: 'Sage', route: null });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="agent-route-badge"]')).toBeNull();
   });
 
-  it('formats AgentTurnRoute values in plain words and hides obvious routes', () => {
+  it('formats AgentTurnRoute values in plain words and hides obvious or null routes', () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, {
-      set: { imports: [CollabAvatarComponent, CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] },
-    });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     const comp = fixture.componentInstance;
     comp.activeAgentName = 'Sage';
 
-    const cases: Array<[AgentTurnRoute, string]> = [
+    const cases: Array<[AgentTurnRoute | null, string]> = [
       ['ThreadReply', 'Replying in the thread'],
       ['DecisionRouted', 'Following up'],
       ['Continuity', 'Following up'],
@@ -1119,42 +1169,67 @@ describe('the conversation of a space, read-only', () => {
       ['ConversationDefault', ''],
       ['HostDefault', ''],
       ['ConversationManager', ''],
+      [null, ''],
     ];
     for (const [route, expected] of cases) {
       expect(comp.formatRouteBadge(route)).toBe(expected);
     }
   });
 
-  it('renders thread replies with CollabAvatarComponent (keeping outside participant ring), Assistant mark without Participant tag, one Reply action when collapsed, and one reply box when open', async () => {
+  it('renders a member with a UserImageURL as an <img> in the thread bar and thread drawer, preserves outside ring, and opens the people menu via mj-menu', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, {
-      set: { imports: [CollabAvatarComponent, CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] },
-    });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
-    const rootMsg = { ID: 'msg-root', ParentID: null, UserID: 'u1', User: 'Ada Lovelace', Message: 'Root question about Q3 variances', __mj_CreatedAt: new Date() };
+    const rootMsg = { ID: 'msg-root', ParentID: null, UserID: 'u1', User: 'Colin Brockman', Message: 'Root question about Q3 variances', __mj_CreatedAt: new Date() };
+    const memberPhotoReply = { ID: 'msg-r0', ParentID: 'msg-root', UserID: 'u1', User: 'Colin Brockman', Role: 'User', Message: 'Adding context in thread', __mj_CreatedAt: new Date() };
     const outsideReply = { ID: 'msg-r1', ParentID: 'msg-root', UserID: 'u-ext', User: 'Priya Nair', Role: 'User', Message: 'External client perspective on Q3', __mj_CreatedAt: new Date() };
     const aiReply = { ID: 'msg-r2', ParentID: 'msg-r1', UserID: null, User: 'Sage', Role: 'AI', Message: 'Here is the variance breakdown.', __mj_CreatedAt: new Date() };
 
     fixture.componentRef.setInput('ConversationId', 'c1');
-    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Colin Brockman', Email: 'colin@acme.com' } as unknown as UserInfo);
+    fixture.componentRef.setInput('ParticipantCount', 3);
     fixture.detectChanges();
     await fixture.whenStable();
 
     const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
     area.DisplayMessages = [rootMsg];
     fixture.componentRef.setInput('SpaceMembers', [
-      { id: 'm1', userId: 'u1', name: 'Ada Lovelace', email: 'ada@acme.com', initials: 'AL', roleName: 'Lead', roleCode: 'Lead', band: 'Team', status: 'Active' },
-      { id: 'm2', userId: 'u-ext', name: 'Priya Nair', email: 'priya@partner.org', initials: 'PN', roleName: 'Client', roleCode: 'Client', band: 'Shared', status: 'Active' },
+      {
+        id: 'm1',
+        userId: 'u1',
+        name: 'Colin Brockman',
+        email: 'colin@acme.com',
+        initials: 'CB',
+        avatarUrl: 'https://example.com/colin-photo.jpg',
+        roleName: 'Lead',
+        roleCode: 'Lead',
+        band: 'Team',
+        status: 'Active',
+      },
+      {
+        id: 'm2',
+        userId: 'u-ext',
+        name: 'Priya Nair',
+        email: 'priya@partner.org',
+        initials: 'PN',
+        roleName: 'Client',
+        roleCode: 'Client',
+        band: 'Shared',
+        status: 'Active',
+      },
     ]);
-    fixture.componentRef.setInput('ThreadMessages', [rootMsg, outsideReply, aiReply]);
+    fixture.componentRef.setInput('ThreadMessages', [rootMsg, memberPhotoReply, outsideReply, aiReply]);
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    // Collapsed: thread bar shows reply count & last reply, and one Reply action button is shown
-    const threadBar = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-replies"]');
-    expect(threadBar?.textContent).toContain('2 replies');
-    expect(threadBar?.textContent).toContain('Last reply from Sage');
+    // Collapsed: thread bar shows reply count & last reply, one Reply action button, and an <img> for the member with UserImageURL
+    const threadBar = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-replies"]')!;
+    expect(threadBar.textContent).toContain('3 replies');
+    expect(threadBar.textContent).toContain('Last reply from Sage');
+    const threadBarImg = threadBar.querySelector<HTMLImageElement>('mjc-avatar img.av-img');
+    expect(threadBarImg).not.toBeNull();
+    expect(threadBarImg?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
     expect(host.querySelectorAll('[data-message-id="msg-root"] [data-testid="message-reply-btn"]').length).toBe(1);
     expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')).toBeNull();
 
@@ -1162,21 +1237,34 @@ describe('the conversation of a space, read-only', () => {
     fixture.componentInstance.toggleThreadExpanded('msg-root');
     fixture.detectChanges();
     expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-reply-btn"]')).toBeNull();
-    const threadContainer = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]');
+    const threadContainer = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')!;
     expect(threadContainer).not.toBeNull();
-    expect(threadContainer?.querySelectorAll('[data-testid="thread-reply-box"]').length).toBe(1);
+    expect(threadContainer.querySelectorAll('[data-testid="thread-reply-box"]').length).toBe(1);
 
-    // Thread replies use <mjc-avatar> and preserve the outside ring (.ext) for Shared-band (outside) participants
-    const avatars = threadContainer!.querySelectorAll('.thread-reply-item mjc-avatar .av');
-    expect(avatars.length).toBe(2);
-    expect(avatars[0].classList.contains('ext')).toBe(true);
-    expect(avatars[1].classList.contains('ext')).toBe(false);
+    // Thread replies use <mjc-avatar>, render <img> for member with avatarUrl, and preserve the outside ring (.ext)
+    const avatars = threadContainer.querySelectorAll('.thread-reply-item mjc-avatar .av');
+    expect(avatars.length).toBe(3);
+    expect(avatars[0].querySelector('img.av-img')?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
+    expect(avatars[1].classList.contains('ext')).toBe(true);
+    expect(avatars[2].classList.contains('ext')).toBe(false);
 
     // AI reply shows Assistant mark; human reply has no "Participant" tag
-    const assistantMarks = threadContainer!.querySelectorAll('[data-testid="thread-reply-assistant-mark"]');
+    const assistantMarks = threadContainer.querySelectorAll('[data-testid="thread-reply-assistant-mark"]');
     expect(assistantMarks.length).toBe(1);
     expect(assistantMarks[0].textContent?.trim()).toBe('Assistant');
-    expect(threadContainer!.textContent).not.toContain('Participant');
+    expect(threadContainer.textContent).not.toContain('Participant');
+
+    // People popover uses mj-menu opened by [mjMenuTriggerFor] and mentions a participant when triggered
+    const participantsPill = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
+    expect(participantsPill).not.toBeNull();
+    participantsPill.click();
+    fixture.detectChanges();
+    const menu = document.body.querySelector('[data-testid="chat-participants-popover"]');
+    expect(menu).not.toBeNull();
+    const firstMenuItemBtn = document.body.querySelector<HTMLElement>('[data-testid="chat-participant-mention-btn"] button, [data-testid="chat-participant-mention-btn"]')!;
+    firstMenuItemBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.ComposerDraft).toBe('@Colin Brockman ');
   });
 });
 

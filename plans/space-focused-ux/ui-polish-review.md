@@ -180,6 +180,52 @@ Process note: the round 2 commit `792b272` was rewritten as `4cc903c`. The code 
 
 **Next:** fix B-1 to B-3 and S-1 to S-5, and commit. Then do round 3 (chat). Also check the route in the step M "unmentioned follow-up" shot. Its banner says `@Mention` for a message with no mention: find the route the server actually received for that turn, and make sure the label resets each turn. Run every gate, write "## Round 3" in the notes, save screenshots to `shots/round-3/`, commit, then stop.
 
+## Round 3 review: round 2b fixes and chat (`b7b4bf8`, `89fb77f`; MJ `2af5683c74`; 2026-10-30)
+
+**Verdict: every round 2b item is fixed, and the chat is much calmer. 1 blocker and 3 should-fixes, then round 4.**
+
+Verified by the reviewer:
+- The full `pnpm test` passes; `check-mj-tokens` and `check-mj-inputs` pass; `ngc --noEmit` exits 0 in both packages.
+- `node test-harnesses/integration.mjs row-filters`, rerun: 5 passed, including RF5 (an outside client gets Shared pages only).
+- Local DB (read-only):
+  - the new filter and permission IDs are present, and the patterned ones are gone;
+  - the tab CHECK is dropped;
+  - `DF_SpacePage_Band` is `N'Team'`.
+- MJ `2af5683c74` keeps an agent's answer to a top-level message in the main flow, with tests.
+- In the chat:
+  - routes are typed as `AgentTurnRoute` and labeled in plain words;
+  - the indicator sits in `agentPresence`;
+  - there's one Reply per message and one reply box per thread;
+  - the "Participant" tag is gone.
+
+### Blocker
+
+**R3-1. Thread avatars went back to initials, and Colin asked for photos on 10-29.**
+- `shots/round-3/chat-thread-open-light.png` shows "CB" where the earlier round showed his photo.
+- Root cause: the member model's `avatarUrl` is never set. Nothing loads the MJ user's `UserImageURL` (MJ's chat reads `UserImageURL` and `UserImageIconClass`, `conversation-chat-area.component.ts:4529`). So the audience pill, People, the share dialog and now threads all fall back to initials.
+- Fill `avatarUrl` (and the icon class, when set) once, where space members are loaded. Then every surface shows the same picture.
+- Add a test: a member with a `UserImageURL` renders an `<img>` in the thread bar.
+
+### Should-fix
+
+**R3-2. Bind the chat area's typed outputs; don't cast and subscribe.**
+- Use `(BeforeAgentTurn)="onBeforeAgentTurn($event)"` with `BeforeAgentTurnEventArgs` (exported from `@memberjunction/ng-conversations`, `lib/events/chat-events.ts:55`). Do the same for `AfterAgentTurn`.
+- Read `args.Route` and `args.AgentName`. A null route shows no label.
+- Delete:
+  - the structural cast of `this.chatArea`;
+  - the invented `Turn` field;
+  - the `'Mention'` fallback.
+
+**R3-3. Notes must name real paths.**
+- The S-4 notes say `src/suites/row-filters.checks.ts` and `src/world/expected-bundles.ts`. The files are `src/checks/row-filters.checks.ts` and `src/expected-bundles.ts`.
+- Check every backticked path and identifier in the notes against `git ls-files` and `git grep` before committing.
+
+**R3-4. Use `mj-menu` for the people popover.**
+- The chat header's participant popover is hand-rolled, with its own document-click listener.
+- Make each person an `mj-menu-item` (avatar inside, `(Triggered)` mentions them), opened by `[mjMenuTriggerFor]`. That brings outside-click, Escape and focus return, like the header's `⋯` menu (R1-1).
+
+**Next:** fix R3-1 to R3-4 and commit. Then do round 4 (Home) as written above. Run every gate, write "## Round 4" in the notes, save screenshots to `shots/round-4/`, commit, then stop.
+
 ### Now: turn off the floating chat bubble in the local install (Colin, 2026-10-29)
 
 MJ's floating chat bubble sits on top of the chat composer's controls.
@@ -262,4 +308,4 @@ Build Home as Needs you, then Coming up, then your recent spaces, each with one 
 - Remove the welcome hero and the stat tiles. A count shows as a badge on the row or rail item it belongs to.
 - When nothing needs you, show one quiet line, not an empty card.
 
-Order of the remaining work: **round 2b fixes + 3, chat (stop) → 4, Home (stop)**.
+Order of the remaining work: **round 3 fixes + 4, Home (stop)**. That is the last planned round.

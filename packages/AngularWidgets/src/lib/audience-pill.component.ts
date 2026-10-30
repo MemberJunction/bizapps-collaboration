@@ -13,6 +13,7 @@ export interface AudiencePopoverPersonItem {
   roleLabel: string;
   status: string;
   avatarUrl?: string;
+  iconClass?: string;
   isOutside: boolean;
 }
 
@@ -86,6 +87,7 @@ export interface AudiencePopoverPersonItem {
                       [Name]="person.name"
                       [Initials]="person.initials"
                       [AvatarUrl]="person.avatarUrl || ''"
+                      [IconClass]="person.iconClass || ''"
                       [IsOutside]="false"
                       Size="sm">
                     </mjc-avatar>
@@ -125,6 +127,7 @@ export interface AudiencePopoverPersonItem {
                       [Name]="person.name"
                       [Initials]="person.initials"
                       [AvatarUrl]="person.avatarUrl || ''"
+                      [IconClass]="person.iconClass || ''"
                       [IsOutside]="true"
                       Size="sm">
                     </mjc-avatar>
@@ -528,6 +531,7 @@ export class CollabAudiencePillComponent {
         roleLabel: m.roleName || '',
         status: m.status || 'Active',
         avatarUrl: m.avatarUrl,
+        iconClass: m.iconClass,
         isOutside: false,
       }));
     }
@@ -539,6 +543,7 @@ export class CollabAudiencePillComponent {
       roleLabel: 'Team',
       status: 'Active',
       avatarUrl: a.avatarUrl,
+      iconClass: a.iconClass,
       isOutside: false,
     }));
   }
@@ -554,6 +559,7 @@ export class CollabAudiencePillComponent {
         roleLabel: m.roleName || 'Outside',
         status: m.status || 'Active',
         avatarUrl: m.avatarUrl,
+        iconClass: m.iconClass,
         isOutside: true,
       }));
     }
@@ -565,6 +571,7 @@ export class CollabAudiencePillComponent {
       roleLabel: 'Outside',
       status: 'Active',
       avatarUrl: a.avatarUrl,
+      iconClass: a.iconClass,
       isOutside: true,
     }));
   }

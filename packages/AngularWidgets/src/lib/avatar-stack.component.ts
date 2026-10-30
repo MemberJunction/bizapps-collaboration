@@ -15,6 +15,7 @@ import { AvatarItem } from './types';
           [Initials]="av.initials"
           [Name]="av.name || ''"
           [AvatarUrl]="av.avatarUrl || ''"
+          [IconClass]="av.iconClass || ''"
           [ColorClass]="av.colorClass || ''"
           [PersonId]="av.id || ''"
           [Size]="Size"

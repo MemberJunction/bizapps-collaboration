@@ -1969,12 +1969,9 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
     expect(chat.isAiMessage(chat.ThreadMessages[0])).toBe(false);
 
-    // 2b. Interactive conversation participants popover & @Mention helper
-    chat.toggleParticipantsPopover();
-    expect(chat.showParticipantsPopover).toBe(true);
+    // 2b. Conversation participants @Mention helper
     chat.mentionParticipant('Ada Lovelace');
     expect(chat.ComposerDraft).toBe('@Ada Lovelace ');
-    expect(chat.showParticipantsPopover).toBe(false);
 
     // 3. Starting a reply to a human message sets replyToMessage, and sending without an agent turn triggers "Ask if an agent should go"
     chat.startReplyTo(chat.ThreadMessages[0]);
@@ -1992,7 +1989,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
       suggestedAgentId: null,
     });
 
-    // 4. Confirming "Let @Sage respond" starts the live agent working progress bar and emits AgentStepInRequested
+    // 4. Confirming "Ask Sage" starts the live agent working progress bar and emits AgentStepInRequested
     const stepIns: unknown[] = [];
     chat.AgentStepInRequested.subscribe((ev) => stepIns.push(ev));
     chat.confirmAgentShouldGo();
@@ -2004,7 +2001,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
 
     chat.onAgentTurnCompleted();
     expect(chat.isAgentWorking).toBe(false);
-    expect(chat.activeAgentRoute).toBe('');
+    expect(chat.activeAgentRoute).toBeNull();
     vi.useRealTimers();
   });
 

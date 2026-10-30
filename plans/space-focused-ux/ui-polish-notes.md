@@ -483,7 +483,7 @@ packages/Angular build: Done
 - `packages/Angular/src/lib/collaboration-section.component.ts`
 - `packages/Angular/src/lib/logic/space-pages-storage.ts`
 - `packages/Angular/src/lib/logic/space-pages-storage.test.ts`
-- `packages/IntegrationTests/src/world/seed.ts`
+- `packages/IntegrationTests/src/world/seed-plan.ts`
 
 ### Test changes and rationale
 
@@ -874,7 +874,7 @@ packages/Angular build: Done
 1. **Local floating chat bubble disabled via Explorer record form:**
    - Opened the `Application Settings` record (`6855118F-E692-4737-A125-AE267D2DC39C`, `Shell.ChatOverlay.Enabled`) in MJExplorer (`http://localhost:4200`), set `Value` to `false`, and clicked `Save` (local database only; no Collaboration code or metadata touched).
 2. **`MJ` branch `collab/e2e-combined` (`a7c25e8f37`):**
-   - Restored the 15 partial `#6176` paths to `origin/next`, fast-forwarded `origin/next`, and re-applied `CollapseThreadReplies` on `MJConversationChatAreaComponent` as strictly opt-in (`@Input() CollapseThreadReplies: boolean = false;`, `const collapseThreads = this.CollapseThreadReplies;`) with unit tests in `packages/Angular/Generic/conversations/src/__tests__/collapse-thread-replies.test.ts`.
+   - Restored the 15 partial `#6176` paths to `origin/next`, fast-forwarded `origin/next`, and re-applied `CollapseThreadReplies` on `MJConversationChatAreaComponent` as strictly opt-in (`@Input() CollapseThreadReplies: boolean = false;`, `const collapseThreads = this.CollapseThreadReplies;`) with unit tests in `MJ/packages/Angular/Generic/conversations/src/__tests__/collapse-thread-replies.test.ts`.
 3. **`bizapps-collaboration` branch `feat/collab-ui-polish` (`784359c` + `78f9f7c`):**
    - Merged `origin/feat/multi-party-agent-routing` (`0eafa89`, PR #19) into `feat/collab-ui-polish`.
    - Bound `[CollapseThreadReplies]="true"` on `<mj-conversation-chat-area>` in `packages/AngularWidgets/src/lib/space-chat.component.ts` and added an assertion in `packages/AngularWidgets/src/lib/render.test.ts`.
@@ -1421,10 +1421,10 @@ packages/Angular build: Done in 2.7s
   - Added unit test `'keeps an agent reply to a top-level message in the main flow, and collapses an agent reply to a thread reply'` in `MJ/packages/Angular/Generic/conversations/src/__tests__/collapse-thread-replies.test.ts` (4/4 passing) and updated `packages/AngularWidgets/src/lib/widgets.test.ts`.
   - Retook `plans/space-focused-ux/shots/step-m/chat-mention-light.png`, `chat-thread-reply-light.png`, and `chat-unmentioned-followup-light.png`.
 - **B-3 — Default `SpacePage.Band` to `'Team'` (fail-closed):**
-  - Changed `DF_SpacePage_Band` to `DEFAULT (N'Team')`, `spCreateSpacePage` `ISNULL(@Band, 'Team')`, and the `Band` `EntityField.DefaultValue` to `'Team'` in `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql`.
-  - Updated `SpacePageEntityServer.stampDefaults()` in `packages/ServerEntities/src/SpacePageEntityServer.ts` to `if (!this.Band) this.Band = 'Team';`.
+  - Changed `DF_SpacePage_Band` to `DEFAULT (N'Team')`, `spCreateSpacePage` `ISNULL(@Band, 'Team')`, and the `Band` `EntityField.DefaultValue` to `'Team'` in `migrations/V202610300100__v0.1.x__Space_Pages.sql`.
+  - Updated `SpacePageEntityServer.stampDefaults()` in `packages/CoreEntitiesServer/src/SpacePageEntityServer.ts` to `if (!this.Band) this.Band = 'Team';`.
 - **S-1 — Drop `CK_SpacePage_BuiltInTab` and `EntityFieldValue` rows for `BuiltInTab` so contributed `BaseSpaceTab` keys can be customized:**
-  - Removed `CONSTRAINT [CK_SpacePage_BuiltInTab]` and the 6 `EntityFieldValue` inserts for `BuiltInTab` from `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql`.
+  - Removed `CONSTRAINT [CK_SpacePage_BuiltInTab]` and the 6 `EntityFieldValue` inserts for `BuiltInTab` from `migrations/V202610300100__v0.1.x__Space_Pages.sql`.
   - Exact commands run to re-apply the migration and regenerate codegen artifacts:
     ```bash
     # 1. Reset V202610300100__v0.1.x__Space_Pages.sql objects + Flyway history row, then run mj migrate:
@@ -1440,13 +1440,13 @@ packages/Angular build: Done in 2.7s
     - `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpacePage/mjbizappscollaborationspacepage.form.component.html`
   - Changed `export type BuiltInTabName = string;` in `packages/Angular/src/lib/logic/space-pages.ts` and added unit test `'preserves contributed tab keys (e.g. BaseSpaceTab keys) on entity.BuiltInTab'` in `packages/Angular/src/lib/logic/space-pages.test.ts`.
 - **S-2 — Deduplicate `SpacePageEntityServer` write permission checks:**
-  - Extracted `private async checkEditPermission(action: 'save' | 'delete', result: ValidationResult): Promise<boolean>` in `packages/ServerEntities/src/SpacePageEntityServer.ts` and called it from both `ValidateAsync` and `Delete`.
+  - Extracted `private async checkEditPermission(action: 'save' | 'delete', result: ValidationResult): Promise<boolean>` in `packages/CoreEntitiesServer/src/SpacePageEntityServer.ts` and called it from both `ValidateAsync` and `Delete`.
 - **S-3 — Memoize getter inputs for `SpacePagesComponent` and `CollaborationSectionComponent`:**
   - Memoized `spacePages` in `packages/Angular/src/lib/collaboration-section.component.ts` and memoized `registeredBlocks`, `resolvedBlockContext`, and `registeredBlockInputs` in `packages/AngularWidgets/src/lib/space-pages.component.ts`.
 - **S-4 — Add `Space Pages` to the `row-filters` integration suite (`RF5`):**
-  - Added `row-filters.RF5` in `packages/IntegrationTests/src/suites/row-filters.checks.ts`, `packages/IntegrationTests/src/suites/row-filters.client.checks.ts`, and `packages/IntegrationTests/src/world/expected-bundles.ts` (`node test-harnesses/integration.mjs row-filters`: 5 passed / 0 failed).
+  - Added `row-filters.RF5` in `packages/IntegrationTests/src/checks/row-filters.checks.ts`, `packages/IntegrationTests/src/checks/client/row-filters.client.checks.ts`, and `packages/IntegrationTests/src/expected-bundles.ts` (`node test-harnesses/integration.mjs row-filters`: 5 passed / 0 failed).
 - **S-5 — Clarify shared draft visibility in schema docs and page edit bar:**
-  - Updated `DraftBlocks` and `DraftTitle` column descriptions in `migrations/v0.1/V202610300100__v0.1.x__Space_Pages.sql` and added `<span class="sp-edit-hint" data-testid="page-edit-hint">Drafts are visible to everyone who can see this page.</span>` to `packages/AngularWidgets/src/lib/space-pages.component.ts`.
+  - Updated `DraftBlocks` and `DraftTitle` column descriptions in `migrations/V202610300100__v0.1.x__Space_Pages.sql` and added `<span class="sp-edit-hint" data-testid="page-edit-hint">Drafts are visible to everyone who can see this page.</span>` to `packages/AngularWidgets/src/lib/space-pages.component.ts`.
 
 ---
 

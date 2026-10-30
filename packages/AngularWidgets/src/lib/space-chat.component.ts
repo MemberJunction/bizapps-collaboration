@@ -20,13 +20,21 @@ import type { UserInfo } from '@memberjunction/core';
 import {
   ConversationsModule,
   ConversationStreamingService,
+  type AfterAgentTurnEventArgs,
   type AgentReplyMode,
   type AgentTurnHandler,
   type AgentTurnRequest,
   type AgentTurnRoute,
+  type BeforeAgentTurnEventArgs,
 } from '@memberjunction/ng-conversations';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
-import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJEmptyStateComponent,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type { SpaceBand, SpaceMemberModel } from './types';
 import { CollabAvatarComponent } from './avatar.component';
@@ -69,7 +77,17 @@ export interface PendingAgentPromptState {
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabAvatarComponent, CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
+  imports: [
+    CollabAvatarComponent,
+    CollabBandChipComponent,
+    ConversationsModule,
+    MJButtonDirective,
+    MJEmptyStateComponent,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+    SharedGenericModule,
+  ],
   template: `
     <div class="chat-container">
       @if (IsPending) {
@@ -106,6 +124,8 @@ export interface PendingAgentPromptState {
           [ComposerDraft]="ComposerDraft"
           [PendingMessage]="PendingMessage"
           [PendingMessageConversationId]="PendingMessageConversationId"
+          (BeforeAgentTurn)="onBeforeAgentTurn($event)"
+          (AfterAgentTurn)="onAfterAgentTurn($event)"
           (ComposerDraftConsumed)="onComposerDraftConsumed()"
           (PendingMessageConsumed)="onPendingMessageConsumed()">
 
@@ -193,64 +213,49 @@ export interface PendingAgentPromptState {
                     </span>
                   }
                   @if (ParticipantCount > 0) {
-                    <div class="participant-pill-wrap">
-                      <button
-                        type="button"
-                        class="participant-count-pill"
-                        data-testid="chat-participants-pill"
-                        [class.open]="showParticipantsPopover"
-                        [attr.aria-expanded]="showParticipantsPopover"
-                        (click)="toggleParticipantsPopover($event)"
-                        title="View people and the Assistant in this conversation">
-                        <i class="fa-solid fa-users" aria-hidden="true"></i>
-                        <span>{{ ParticipantCount }}</span>
-                        <i class="fa-solid fa-chevron-down participant-pill-caret" [class.open]="showParticipantsPopover" aria-hidden="true"></i>
-                      </button>
-
-                      @if (showParticipantsPopover) {
-                        <div class="chat-participants-popover" data-testid="chat-participants-popover" role="dialog" aria-label="Conversation participants">
-                          <div class="chat-participants-head">
-                            <span class="chat-participants-title">In this conversation ({{ conversationParticipantsList.length }})</span>
-                            <span class="chat-participants-sub">{{ AudienceBand === 'Team' ? 'Team only' : 'Shared audience' }}</span>
-                          </div>
-                          <div class="chat-participants-list">
-                            @for (person of conversationParticipantsList; track person.id) {
-                              <div class="chat-participant-row">
-                                <mjc-avatar
-                                  Size="sm"
-                                  [Initials]="person.initials"
-                                  [Name]="person.name"
-                                  [AvatarUrl]="person.imageUrl || ''"
-                                  [ColorClass]="person.colorClass"
-                                  [PersonId]="person.id"
-                                  [IsOutside]="person.isOutside" />
-                                <div class="chat-participant-info">
-                                  <div class="chat-participant-name-line">
-                                    <span class="chat-participant-name">{{ person.name }}</span>
-                                    @if (person.role) {
-                                      <span class="chat-participant-badge" [class.is-ai]="person.isAi">{{ person.role }}</span>
-                                    }
-                                  </div>
-                                  @if (person.subtitle) {
-                                    <span class="chat-participant-sub">{{ person.subtitle }}</span>
+                    <button
+                      type="button"
+                      class="participant-count-pill"
+                      data-testid="chat-participants-pill"
+                      [mjMenuTriggerFor]="participantsMenu"
+                      title="View people and the Assistant in this conversation">
+                      <i class="fa-solid fa-users" aria-hidden="true"></i>
+                      <span>{{ ParticipantCount }}</span>
+                      <i class="fa-solid fa-chevron-down participant-pill-caret" aria-hidden="true"></i>
+                    </button>
+                    <ng-template #participantsMenu>
+                      <mj-menu AriaLabel="In this conversation" data-testid="chat-participants-popover">
+                        @for (person of conversationParticipantsList; track person.id) {
+                          <mj-menu-item
+                            data-testid="chat-participant-mention-btn"
+                            [Disabled]="IsReadOnly"
+                            (Triggered)="mentionParticipant(person.name)">
+                            <div class="chat-participant-row">
+                              <mjc-avatar
+                                Size="sm"
+                                [Initials]="person.initials"
+                                [Name]="person.name"
+                                [AvatarUrl]="person.imageUrl || ''"
+                                [IconClass]="person.iconClass"
+                                [ColorClass]="person.colorClass"
+                                [PersonId]="person.id"
+                                [IsOutside]="person.isOutside" />
+                              <div class="chat-participant-info">
+                                <div class="chat-participant-name-line">
+                                  <span class="chat-participant-name">{{ person.name }}</span>
+                                  @if (person.role) {
+                                    <span class="chat-participant-badge" [class.is-ai]="person.isAi">{{ person.role }}</span>
                                   }
                                 </div>
-                                @if (!IsReadOnly) {
-                                  <button
-                                    type="button"
-                                    class="chat-participant-mention-btn"
-                                    data-testid="chat-participant-mention-btn"
-                                    (click)="mentionParticipant(person.name)"
-                                    [title]="'Mention @' + person.name + ' in message'">
-                                    &#64;Mention
-                                  </button>
+                                @if (person.subtitle) {
+                                  <span class="chat-participant-sub">{{ person.subtitle }}</span>
                                 }
                               </div>
-                            }
-                          </div>
-                        </div>
-                      }
-                    </div>
+                            </div>
+                          </mj-menu-item>
+                        }
+                      </mj-menu>
+                    </ng-template>
                   }
                 </div>
               </div>
@@ -290,6 +295,7 @@ export interface PendingAgentPromptState {
                             [Initials]="part.initials"
                             [Name]="part.name"
                             [AvatarUrl]="part.imageUrl || ''"
+                            [IconClass]="part.iconClass"
                             [ColorClass]="part.colorClass"
                             [PersonId]="part.personId"
                             [IsOutside]="part.isOutside" />
@@ -335,6 +341,7 @@ export interface PendingAgentPromptState {
                           [Initials]="getSpeakerInitials(reply)"
                           [Name]="getSpeakerName(reply)"
                           [AvatarUrl]="getSpeakerAvatarUrl(reply) || ''"
+                          [IconClass]="getSpeakerIconClass(reply)"
                           [ColorClass]="getSpeakerColorClass(reply)"
                           [PersonId]="getSpeakerPersonId(reply)"
                           [IsOutside]="isOutsideSpeaker(reply)" />
@@ -611,12 +618,6 @@ export interface PendingAgentPromptState {
         flex-shrink: 0;
       }
 
-      .participant-pill-wrap {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-      }
-
       .participant-count-pill {
         display: inline-flex;
         align-items: center;
@@ -632,7 +633,7 @@ export interface PendingAgentPromptState {
         transition: all var(--mj-transition-fast);
       }
       .participant-count-pill:hover,
-      .participant-count-pill.open {
+      .participant-count-pill[aria-expanded='true'] {
         border-color: var(--mj-brand-primary);
         color: var(--mj-brand-primary);
         background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface));
@@ -642,89 +643,15 @@ export interface PendingAgentPromptState {
         opacity: 0.7;
         transition: transform var(--mj-transition-fast);
       }
-      .participant-pill-caret.open {
+      .participant-count-pill[aria-expanded='true'] .participant-pill-caret {
         transform: rotate(180deg);
-      }
-
-      .chat-participants-popover {
-        position: absolute;
-        top: calc(100% + 8px);
-        right: 0;
-        z-index: 40;
-        width: 300px;
-        max-height: 360px;
-        display: flex;
-        flex-direction: column;
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-default);
-        border-radius: 12px;
-        box-shadow: var(--mj-shadow-lg);
-        overflow: hidden;
-      }
-
-      .chat-participants-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        border-bottom: 1px solid var(--mj-border-subtle);
-        background: var(--mj-bg-surface-sunken);
-      }
-
-      .chat-participants-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--mj-text-primary);
-      }
-
-      .chat-participants-sub {
-        font-size: 10.5px;
-        font-weight: 600;
-        color: var(--mj-text-muted);
-      }
-
-      .chat-participants-list {
-        display: flex;
-        flex-direction: column;
-        padding: 6px;
-        overflow-y: auto;
-        gap: 2px;
       }
 
       .chat-participant-row {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 7px 8px;
-        border-radius: 8px;
-      }
-      .chat-participant-row:hover {
-        background: var(--mj-bg-surface-hover);
-      }
-
-      .chat-participant-avatar {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        font-size: 12px;
-        background: var(--mj-text-primary);
-        color: var(--mj-text-inverse);
-        flex-shrink: 0;
-        overflow: hidden;
-      }
-      .chat-participant-avatar.is-ai {
-        border-radius: 7px;
-        background: var(--mj-brand-primary);
-        color: var(--mj-text-inverse);
-      }
-
-      .avatar-img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: inherit;
+        min-width: 220px;
       }
 
       .chat-participant-info {
@@ -768,22 +695,6 @@ export interface PendingAgentPromptState {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-
-      .chat-participant-mention-btn {
-        padding: 3px 8px;
-        border-radius: 6px;
-        border: 1px solid var(--mj-border-default);
-        background: var(--mj-bg-surface);
-        color: var(--mj-brand-primary);
-        font-size: 11px;
-        font-weight: 600;
-        cursor: pointer;
-        flex-shrink: 0;
-      }
-      .chat-participant-mention-btn:hover {
-        border-color: var(--mj-brand-primary);
-        background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
       }
 
       /* Live Assistant presence bar in mjChatSlot="agentPresence" */
@@ -1448,14 +1359,12 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   /** True while an AI agent turn is actively running. */
   public isAgentWorking = false;
   public activeAgentName = '';
-  public activeAgentRoute: AgentTurnRoute | '' = '';
+  public activeAgentRoute: AgentTurnRoute | null = null;
   public activeAgentStatusText = '';
   public activeAgentElapsed = '';
   public activeAgentProgressPercent: number | null = null;
   /** Prompt shown when a user message resolves to `NoAgent` so the user can ask the Assistant to answer if desired. */
   public pendingAgentPrompt: PendingAgentPromptState | null = null;
-  /** Interactive conversation participants popover state in the chat header. */
-  public showParticipantsPopover = false;
 
   public get effectiveAgentTurnHandler(): AgentTurnHandler | null {
     const raw = this.AgentTurnHandler;
@@ -1527,13 +1436,6 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
         this.reasonOpenedByFocus = false;
       }
     }
-    if (this.showParticipantsPopover) {
-      const pillWrap = target instanceof Element ? target.closest('.participant-pill-wrap') : null;
-      if (!pillWrap || !this.host?.nativeElement.contains(pillWrap)) {
-        this.showParticipantsPopover = false;
-        this.cdr?.markForCheck();
-      }
-    }
   }
 
   @Input() public ConversationId: string | null = null;
@@ -1595,13 +1497,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.PendingMessageConsumed.emit();
   }
 
-  // ── Interactive Conversation Participants Popover ─────────────────────────
-
-  public toggleParticipantsPopover(event?: MouseEvent): void {
-    event?.stopPropagation();
-    this.showParticipantsPopover = !this.showParticipantsPopover;
-    this.cdr?.markForCheck();
-  }
+  // ── Conversation Participants Menu ────────────────────────────────────────
 
   private getMemberForUser(userId: string | null | undefined, name?: string | null): SpaceMemberModel | null {
     const uid = (userId ?? '').trim().toLowerCase();
@@ -1621,6 +1517,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     name: string;
     initials: string;
     imageUrl: string | null;
+    iconClass: string;
     colorClass: string;
     role: string;
     subtitle: string;
@@ -1633,6 +1530,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: string;
       initials: string;
       imageUrl: string | null;
+      iconClass: string;
       colorClass: string;
       role: string;
       subtitle: string;
@@ -1650,6 +1548,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
         name,
         initials: member?.initials || this.computeInitials(name),
         imageUrl: member?.avatarUrl ?? null,
+        iconClass: member?.iconClass ?? '',
         colorClass: member?.colorClass ?? '',
         role: 'You',
         subtitle: this.CurrentUser.Email || '',
@@ -1669,6 +1568,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
         name,
         initials: member?.initials || this.computeInitials(name),
         imageUrl: member?.avatarUrl ?? null,
+        iconClass: member?.iconClass ?? '',
         colorClass: member?.colorClass ?? '',
         role: '',
         subtitle: person.Email || '',
@@ -1683,6 +1583,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: agentName,
       initials: 'AI',
       imageUrl: null,
+      iconClass: '',
       colorClass: '',
       role: 'Assistant',
       subtitle: 'Answers when mentioned or in a thread',
@@ -1698,7 +1599,6 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     const prefix = `@${name.trim()} `;
     const existing = (this.ComposerDraft ?? '').trim();
     this.ComposerDraft = existing ? `${existing} ${prefix}` : prefix;
-    this.showParticipantsPopover = false;
     this.cdr?.markForCheck();
   }
 
@@ -1770,6 +1670,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     name: string;
     initials: string;
     imageUrl: string | null;
+    iconClass: string;
     colorClass: string;
     personId: string;
     isAi: boolean;
@@ -1782,6 +1683,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       name: string;
       initials: string;
       imageUrl: string | null;
+      iconClass: string;
       colorClass: string;
       personId: string;
       isAi: boolean;
@@ -1798,6 +1700,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
         name,
         initials: this.getSpeakerInitials(r),
         imageUrl: this.getSpeakerAvatarUrl(r),
+        iconClass: this.getSpeakerIconClass(r),
         colorClass: this.getSpeakerColorClass(r),
         personId: this.getSpeakerPersonId(r),
         isAi,
@@ -1916,6 +1819,11 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return member?.avatarUrl ?? null;
   }
 
+  public getSpeakerIconClass(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message || this.isAiMessage(message)) return '';
+    return this.getMemberForUser(message.UserID, message.User)?.iconClass ?? '';
+  }
+
   public getSpeakerColorClass(message: ChatThreadMessageLike | null | undefined): string {
     if (!message || this.isAiMessage(message)) return '';
     return this.getMemberForUser(message.UserID, message.User)?.colorClass ?? '';
@@ -1990,9 +1898,9 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   /**
    * Formats a plain-words reason for `AgentTurnRoute` only when the reason isn't obvious
-   * (no emoji, no invented route names).
+   * (no emoji, no invented route names). A null route shows no label.
    */
-  public formatRouteBadge(route: AgentTurnRoute | '' | null | undefined): string {
+  public formatRouteBadge(route: AgentTurnRoute | null | undefined): string {
     if (!route) return '';
     switch (route) {
       case 'ThreadReply':
@@ -2031,7 +1939,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.replyToMessage = null;
     this.syncParentMessageIdToComposer(null);
     this.pendingAgentPrompt = null;
-    this.activeAgentRoute = '';
+    this.activeAgentRoute = null;
     this.activeAgentStatusText = '';
     this.activeAgentElapsed = '';
 
@@ -2072,6 +1980,17 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     }, 120);
   }
 
+  public onBeforeAgentTurn(args: BeforeAgentTurnEventArgs): void {
+    this.onAgentTurnStarted({
+      agentName: args.AgentName,
+      route: args.Route,
+    });
+  }
+
+  public onAfterAgentTurn(_args: AfterAgentTurnEventArgs): void {
+    this.onAgentTurnCompleted();
+  }
+
   public onAgentTurnStarted(info: { agentName?: string | null; route?: AgentTurnRoute | null; statusText?: string | null }): void {
     if (this.noAgentPromptTimer !== undefined) {
       clearTimeout(this.noAgentPromptTimer);
@@ -2081,7 +2000,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.isRoutingCheck = false;
     this.isAgentWorking = true;
     this.activeAgentName = info.agentName?.trim() || this.DefaultAgentName || 'Assistant';
-    this.activeAgentRoute = info.route ?? 'Mention';
+    this.activeAgentRoute = info.route ?? null;
     this.activeAgentStatusText = info.statusText?.trim() || '';
     this.cdr?.markForCheck();
   }
@@ -2090,7 +2009,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.isRoutingCheck = false;
     this.isAgentWorking = false;
     this.activeAgentName = '';
-    this.activeAgentRoute = '';
+    this.activeAgentRoute = null;
     this.activeAgentStatusText = '';
     this.activeAgentElapsed = '';
     this.activeAgentProgressPercent = null;
@@ -2148,33 +2067,6 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     if (this.chatArea && this.chatArea !== this.boundChatArea) {
       this.clearSubscriptions();
       this.boundChatArea = this.chatArea;
-      const area = this.chatArea as {
-        BeforeAgentTurn?: {
-          subscribe?: (
-            fn: (args: {
-              AgentName?: string | null;
-              Route?: AgentTurnRoute;
-              Turn?: { AgentName?: string | null; Route?: AgentTurnRoute };
-            }) => void,
-          ) => { unsubscribe: () => void };
-        };
-        AfterAgentTurn?: { subscribe?: (fn: () => void) => { unsubscribe: () => void } };
-      };
-      if (typeof area.BeforeAgentTurn?.subscribe === 'function') {
-        const sub = area.BeforeAgentTurn.subscribe((args) => {
-          this.onAgentTurnStarted({
-            agentName: args?.AgentName ?? args?.Turn?.AgentName ?? this.DefaultAgentName,
-            route: args?.Route ?? args?.Turn?.Route ?? 'Mention',
-          });
-        });
-        this.cleanups.push(() => sub.unsubscribe());
-      }
-      if (typeof area.AfterAgentTurn?.subscribe === 'function') {
-        const sub = area.AfterAgentTurn.subscribe(() => {
-          this.onAgentTurnCompleted();
-        });
-        this.cleanups.push(() => sub.unsubscribe());
-      }
     }
 
     const activeInput = this.getActiveMessageInput();

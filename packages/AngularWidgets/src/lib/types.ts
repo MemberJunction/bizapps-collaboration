@@ -7,6 +7,7 @@ export interface AvatarItem {
   initials: string;
   name?: string;
   avatarUrl?: string;
+  iconClass?: string;
   colorClass?: string;
   isOutside?: boolean;
   isOnline?: boolean;
@@ -226,6 +227,7 @@ export interface SpaceMemberModel {
   email: string;
   initials: string;
   avatarUrl?: string;
+  iconClass?: string;
   colorClass?: string;
   roleName: string;
   roleCode: string;

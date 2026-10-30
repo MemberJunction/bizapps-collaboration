@@ -16,6 +16,8 @@ export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
       [attr.aria-label]="name || initials">
       @if (avatarUrl) {
         <img [src]="avatarUrl" [alt]="name || initials" class="av-img" />
+      } @else if (iconClass) {
+        <i [class]="iconClass" aria-hidden="true"></i>
       } @else {
         {{ initials }}
       }
@@ -104,6 +106,7 @@ export class CollabAvatarComponent {
   @Input() public Initials = '';
   @Input() public Name = '';
   @Input() public AvatarUrl = '';
+  @Input() public IconClass = '';
   @Input() public ColorClass = '';
   @Input() public PersonId = '';
   @Input() public Size: AvatarSize = 'md';
@@ -122,6 +125,10 @@ export class CollabAvatarComponent {
 
   public get avatarUrl(): string {
     return this.Avatar?.avatarUrl || this.AvatarUrl;
+  }
+
+  public get iconClass(): string {
+    return this.Avatar?.iconClass || this.IconClass;
   }
 
   public get isOutside(): boolean {

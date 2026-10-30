@@ -4481,11 +4481,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (membersRes.Results) {
                 const reached = nearestSeats(membersRes.Results, chain);
                 const userIds = [...new Set(reached.map(r => r.row.UserID).filter(Boolean))];
-                const userEmailMap = new Map<string, string>();
+                const userProfileMap = new Map<string, { email: string; avatarUrl?: string; iconClass?: string }>();
                 if (userIds.length > 0) {
                     try {
                         const userFilter = userIds.map(id => `'${id}'`).join(',');
-                        const userRes = await rv.RunView<{ ID: string; Email: string }>({
+                        const userRes = await rv.RunView<{
+                            ID: string;
+                            Email?: string | null;
+                            UserImageURL?: string | null;
+                            UserImageIconClass?: string | null;
+                        }>({
                             EntityName: 'MJ: Users',
                             ExtraFilter: `ID IN (${userFilter})`,
                             ResultType: 'simple',
@@ -4493,11 +4498,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         });
                         if (userRes?.Success && userRes.Results) {
                             for (const u of userRes.Results) {
-                                userEmailMap.set(u.ID, u.Email || '');
+                                userProfileMap.set((u.ID ?? '').toLowerCase(), {
+                                    email: u.Email || '',
+                                    avatarUrl: u.UserImageURL || undefined,
+                                    iconClass: u.UserImageIconClass || undefined,
+                                });
                             }
                         }
                     } catch (userErr) {
-                        LogError('Error loading user emails for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
+                        LogError('Error loading user profiles for space members: ' + (userErr instanceof Error ? userErr.message : String(userErr)));
                     }
                 }
 
@@ -4510,12 +4519,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         : null;
                     const roleCode = roleType?.Code || 'member';
                     const canContribute = roleType ? roleType.CanContribute : false;
+                    const profile = userProfileMap.get((m.UserID ?? '').toLowerCase());
                     return {
                         id: m.ID,
                         userId: m.UserID,
                         name,
-                        email: userEmailMap.get(m.UserID) || '',
+                        email: profile?.email || '',
                         initials,
+                        avatarUrl: profile?.avatarUrl,
+                        iconClass: profile?.iconClass,
                         roleName: roleType?.Name || m.SpaceRoleType || 'Member',
                         roleCode,
                         roleId: m.SpaceRoleTypeID || undefined,
@@ -4966,6 +4978,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 initials: m.initials || m.name?.slice(0, 2).toUpperCase() || '??',
                 name: m.name,
                 avatarUrl: m.avatarUrl,
+                iconClass: m.iconClass,
                 colorClass: m.colorClass,
             },
         }));
