@@ -2470,3 +2470,77 @@ src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent 
 $ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
 src/lib/collaboration-section.component.ts:1622:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
 ```
+
+---
+
+## Bug fix: an extra agent grant becomes the space's default
+
+### What changed
+
+- **`packages/CoreEntitiesServer/src/resolve-allowed-agents.ts`:**
+  - Updated `agentsFromConfiguration` (line 94) to honor `configuration.DefaultAgentGrantID` only when that grant is explicitly flagged (`item.isDefault`). When a space has only an unflagged `Extend` agent grant (such as Northwind's seeded grant for Sage with `IsDefault = false`) and no app-level agent grants exist, `configuredDefault` is `undefined`, falling through to the "nearest flagged, else first" rule so the shipped **Collaboration Space Agent** (`isDefault: true`, `source: 'App'`) remains the default while the granted agent stays allowed.
+- **`packages/CoreEntitiesServer/src/resolve-allowed-agents.test.ts`:**
+  - Added two unit tests:
+    - `keeps the shipped assistant as default when a space has only an unflagged space-level Agent grant and no app grants`
+    - `lets a flagged space-level Agent grant win over the shipped assistant when no app grants exist`
+
+### Gate outputs
+
+#### 1. `CoreEntitiesServer` build & unit tests
+
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-core-entities-server run build && pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec tsc -p tsconfig.test.json && node --test packages/CoreEntitiesServer/src/*.test.ts
+
+▶ Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hierarchy
+  ✔ returns built-in default agent when no SpaceAgent rows exist (3.793208ms)
+  ✔ app-wide SpaceAgent row is resolved when present (0.839958ms)
+  ✔ extends app agent with type agent when type ListMode is Extend (0.518916ms)
+  ✔ keeps the shipped assistant as default when a space has only an unflagged space-level Agent grant and no app grants (0.306208ms)
+  ✔ lets a flagged space-level Agent grant win over the shipped assistant when no app grants exist (0.309958ms)
+  ✔ replaces app agent with type agent when type ListMode is Replace (0.274917ms)
+  ✔ replaces with space agent when space ListMode is Replace (via SpaceOverridable) (0.5565ms)
+  ✔ leaves a disabled non-default agent out of the list (0.608083ms)
+  ✔ falls back to the next default when the configured default is disabled (0.368666ms)
+  ✔ falls back to the first Active agent when the disabled default was the only one marked default (0.453958ms)
+  ✔ returns no default and no agents when not even the shipped agent is Active (0.291125ms)
+  ✔ refuses, rather than skipping a link, when a type configuration does not parse (0.361375ms)
+  ✔ refuses when a space that holds agent rows has a configuration that does not parse (0.286708ms)
+  ✔ gives no agents and no default when a level replaced the list and none of its agents is Active, and the shipped one is Active (0.30775ms)
+  ✔ uses the shipped agent as the last resort when nothing configured is Active (0.296125ms)
+  ✔ resolves bound knowledge sources across type and space hierarchy (0.382458ms)
+  ✔ resolves the AI skills the agent grants' settings name across type and space hierarchy (0.485959ms)
+✔ Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hierarchy (11.625583ms)
+...
+ℹ tests 348
+ℹ suites 67
+ℹ pass 348
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3353.607375
+```
+
+#### 2. Server integration harness (`agent` bundle — `AG1`..`AG12`)
+
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-integration-tests run build && node test-harnesses/integration.mjs agent
+
+  Collaboration integration SERVER (SQLServerDataProvider → localhost:1436/MJ_6_2_0_CLEAN_4789)
+
+  ok   agent.AG1                    324ms  AG1 — Collaboration Space Agent, skills, and Search Scope metadata contract
+  ok   agent.AG2                    40ms  AG2 — Client asks in Discovery: retrieves only Discovery Shared material, never Team
+  ok   agent.AG3                    52ms  AG3 — Asked from child space stays inside child space (no parent or sibling leak)
+  ok   agent.AG4                    51ms  AG4 — Staff owner asks in Discovery: can quote Team items
+  ok   agent.AG5                    19ms  AG5 — Parent-to-child retrieval honors ExcludedFromParentScope and ExcludedEntirely
+  ok   agent.AG6                    1276ms  AG6 — Server room agent execution via postSpaceMessage saves assistant detail with quotes
+  ok   agent.AG7                    2533ms  AG7 — Agent turns bound by conversation kind: General excludes Team items, Private includes discovery-brief.pdf
+  ok   agent.AG8                    1522ms  AG8 — A conversation's kind bounds the search itself: its lane filter, run on the real tables, returns Shared for General and Shared plus Team for Private
+  ok   agent.AG9                    187ms  AG9 — A client's agent reads stay narrow: no other user's permission row, no agent outside the spaces they reach
+  ok   agent.AG10                   3ms  AG10 — No Space Participant grant still uses the retired "Collaboration: Agent Catalog" filter
+  ok   agent.AG11                   19992ms  AG11 — End-to-end uploaded files (text, markdown, JSON, CSV, PDF) are extracted and retrieved by the Space Agent within space and band boundaries
+  ok   agent.AG12                   31721ms  AG12 — Content Pipeline extracts uploaded space files into Content Item Chunks, Assistant quotes extracted phrases bounded by space and band, promotion from Team to Shared reaches outside clients without re-indexing, deletion removes chunks and tombstones Content Items, and every file-types.ts format is handled cleanly
+
+  12 passed / 0 failed
+```
+
