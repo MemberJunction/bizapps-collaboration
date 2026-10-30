@@ -329,7 +329,8 @@ async function runClaimedTurn(
     const taggedAgentId = parseResult.agentMention?.id
         ? parseUuid(parseResult.agentMention.id)
         : null;
-    const hasHumanMentionOnly = !taggedAgentId && (parseResult.userMentions?.length ?? 0) > 0;
+    const hasMarkdownUserMention = /@\[[^\]]+\]\(\s*user:[^)]+\)/i.test(messageText);
+    const hasHumanMentionOnly = !taggedAgentId && ((parseResult.userMentions?.length ?? 0) > 0 || hasMarkdownUserMention);
     const parentDetailId = parseUuid(userDetail.ParentID);
 
     let targetAgentId: string;

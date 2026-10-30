@@ -230,20 +230,29 @@ const checks: NamedCheck[] = [
             );
             Assert(injectionExp.length === 1, 'ExplainScope with quote handled without error');
             const injSpaceDim = injectionExp[0].Dimensions.find((d) => d.Name === 'SpaceID');
-            if (!injSpaceDim) {
-                throw new Error('SpaceID dimension must be present in explanation');
-            }
-            Assert(injSpaceDim.Provenance === 'ServerDerived', 'SpaceID dimension provenance must be ServerDerived');
-            const injVals = (Array.isArray(injSpaceDim.Value) ? injSpaceDim.Value : (injSpaceDim.Value ? [injSpaceDim.Value] : []));
-            Assert(injVals.length === 0, `Quote injection must return empty SpaceID set, saw ${injVals.length}`);
-            Assert(injectionExp[0].Reachable === true, 'Lanes are active with always-false branch, so Reachable is true');
-            Assert(injectionExp[0].Lanes.length === 2, 'ExplainScope reports 2 lanes');
-            for (const lane of injectionExp[0].Lanes) {
-                Assert(lane.Status === 'Active', `Lane ${lane.Target} status is Active`);
+            if (injSpaceDim) {
+                Assert(injSpaceDim.Provenance === 'ServerDerived', 'SpaceID dimension provenance must be ServerDerived');
+                const injVals = (Array.isArray(injSpaceDim.Value) ? injSpaceDim.Value : (injSpaceDim.Value ? [injSpaceDim.Value] : []));
+                Assert(injVals.length === 0, `Quote injection must return empty SpaceID set, saw ${injVals.length}`);
+                Assert(injectionExp[0].Reachable === true, 'Lanes are active with always-false branch, so Reachable is true');
+                Assert(injectionExp[0].Lanes.length === 2, 'ExplainScope reports 2 lanes');
+                for (const lane of injectionExp[0].Lanes) {
+                    Assert(lane.Status === 'Active', `Lane ${lane.Target} status is Active`);
+                    Assert(
+                        !!lane.RenderedFilter && lane.RenderedFilter.includes('SpaceID IS NULL AND 1 = 0'),
+                        `Lane ${lane.Target} renders always-false branch (saw: ${lane.RenderedFilter})`,
+                    );
+                }
+            } else {
+                Assert(injectionExp[0].Reachable === false, 'Quote injection resulting in empty required SpaceID is refused as unreachable');
                 Assert(
-                    !!lane.RenderedFilter && lane.RenderedFilter.includes('SpaceID IS NULL AND 1 = 0'),
-                    `Lane ${lane.Target} renders always-false branch (saw: ${lane.RenderedFilter})`,
+                    injectionExp[0].Diagnostics.some((d) => d.includes('Required dimension "SpaceID" resolved to no value')),
+                    `Diagnostics report empty required SpaceID refusal (saw: ${injectionExp[0].Diagnostics.join('; ')})`,
                 );
+                Assert(injectionExp[0].Lanes.length === 2, 'ExplainScope reports 2 lanes');
+                for (const lane of injectionExp[0].Lanes) {
+                    Assert(lane.Status === 'Skipped', `Lane ${lane.Target} status is Skipped when required dimension resolves to empty`);
+                }
             }
 
             // 10. Verify parity between expansion query and resolveSpaceAgentRetrieval for Bea in Discovery
@@ -471,6 +480,86 @@ const checks: NamedCheck[] = [
                 Assert(details[0].AgentID?.toLowerCase() === COLLABORATION_TEST_AGENT_ID.toLowerCase(), 'Assistant detail names the test agent');
                 Assert(details[0].Message.includes('site-photo.png'), 'Assistant response quotes site-photo.png');
                 Assert(!details[0].Message.includes('discovery-brief.pdf'), 'Assistant response never mentions discovery-brief.pdf');
+
+                // Multi-party routing: 1) message addressed to a person (@{"type":"user",...}) is refused
+                const personPost = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: convId,
+                    text: `@{"type":"user","id":"${bea.ID}","name":"${bea.Name}"} thanks for asking!`,
+                });
+                Assert(personPost.ok === true && !!personPost.detailId, 'Human-addressed message posted');
+                if (personPost.ok && personPost.detailId) {
+                    createdDetailIds.push(personPost.detailId);
+                    const personTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: convId,
+                        userMessageId: personPost.detailId,
+                        agentId: COLLABORATION_TEST_AGENT_ID,
+                        route: 'DecisionRouted',
+                    });
+                    Assert(!personTurn.ok, 'Turn on human-addressed message is refused');
+                    if (!personTurn.ok) {
+                        Assert(
+                            personTurn.message === 'The message is addressed to a person and does not mention an agent.',
+                            `Human-addressed refusal matches: ${personTurn.message}`,
+                        );
+                    }
+                }
+
+                // Multi-party routing: 2) untagged follow-up with route='DecisionRouted' routes to active agent
+                const followUpPost = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: convId,
+                    text: 'What shared materials are available in Discovery?',
+                });
+                Assert(followUpPost.ok === true && !!followUpPost.detailId, 'Untagged follow-up message posted');
+                if (followUpPost.ok && followUpPost.detailId) {
+                    createdDetailIds.push(followUpPost.detailId);
+                    const followUpTurn = await executeSpaceChatTurn(ctx.Provider, bea, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: convId,
+                        userMessageId: followUpPost.detailId,
+                        agentId: COLLABORATION_TEST_AGENT_ID,
+                        route: 'DecisionRouted',
+                    });
+                    Assert(followUpTurn.ok === true, `DecisionRouted follow-up turn succeeds: ${followUpTurn.ok ? '' : followUpTurn.message}`);
+                    if (followUpTurn.ok) {
+                        createdDetailIds.push(...followUpTurn.replyDetailIds);
+                        Assert(followUpTurn.replyDetailIds.length > 0, 'DecisionRouted follow-up created assistant reply');
+                    }
+                }
+
+                // Multi-party routing: 3) thread reply (ParentID pointing to assistant reply) routes without @mention
+                const threadReplyPost = await postSpaceMessage(ctx.Provider, ada, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: convId,
+                    text: 'Can you confirm the shared items in this thread?',
+                    parentDetailId: assistantDetailId,
+                });
+                Assert(threadReplyPost.ok === true && !!threadReplyPost.detailId, 'Thread reply message posted');
+                if (threadReplyPost.ok && threadReplyPost.detailId) {
+                    createdDetailIds.push(threadReplyPost.detailId);
+                    const [savedUserThreadMsg] = await FindRows<{ ID: string; ParentID: string | null }>(
+                        ctx,
+                        CONVERSATION_DETAIL_ENTITY,
+                        `ID = '${threadReplyPost.detailId}'`,
+                        ['ID', 'ParentID'],
+                    );
+                    Assert(
+                        savedUserThreadMsg?.ParentID?.toLowerCase() === assistantDetailId!.toLowerCase(),
+                        'postSpaceMessage persisted ParentID on user thread reply',
+                    );
+                    const threadTurn = await executeSpaceChatTurn(ctx.Provider, ada, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: convId,
+                        userMessageId: threadReplyPost.detailId,
+                    });
+                    Assert(threadTurn.ok === true, `Thread reply turn succeeds without @mention: ${threadTurn.ok ? '' : threadTurn.message}`);
+                    if (threadTurn.ok) {
+                        createdDetailIds.push(...threadTurn.replyDetailIds);
+                        Assert(threadTurn.replyDetailIds.length > 0, 'Thread reply turn created assistant reply');
+                    }
+                }
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, convId, chatId);
             }
