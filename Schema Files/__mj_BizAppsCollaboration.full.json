@@ -805,6 +805,119 @@
             ]
         },
         { 
+            "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bPages\b",
+            "Description": "\bA\b \bcustomizable\b \bblock\b-\bcanvas\b \bpage\b \bin\b \ba\b \bspace\b: \beither\b \bthe\b \bsaved\b \bblock\b \blayout\b \bfor\b \ba\b \bbuilt\b-\bin\b \btab\b (\bBuiltInTab\b \bset\b) \bor\b \ba\b \bcustom\b \bpage\b \bin\b \bthe\b \bspace\b'\bs\b \bPages\b \btab\b (\bBuiltInTab\b \bnull\b).",
+            "BaseView": "\bvwSpacePages\b", 
+            "Fields": [         
+                {
+                    "Name": "\bID\b", 
+                    "Description": "",  
+                    "Type": "\buniqueidentifier\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpaceID\b", 
+                    "Description": "\bThe\b \bspace\b \bthis\b \bpage\b \bbelongs\b \bto\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ_BizApps_Collaboration\b: \bSpaces\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bBuiltInTab\b", 
+                    "Description": "\bThe\b \bbuilt\b-\bin\b \btab\b \bthis\b \bpage\b \blays\b \bout\b (\bOverview\b, \bLibrary\b, \bData\b, \bWork\b, \bNotes\b, \bor\b \bPeople\b), \bor\b \bnull\b \bfor\b \ba\b \bcustom\b \bpage\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bTitle\b", 
+                    "Description": "\bThe\b \bpublished\b \btitle\b \bof\b \bthe\b \bpage\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bIconClass\b", 
+                    "Description": "\bFont\b \bAwesome\b \bicon\b \bclass\b \bdisplayed\b \bbeside\b \bthe\b \bpage\b \btitle\b \bin\b \bthe\b \bpage\b \brail\b \band\b \bheader\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bBand\b", 
+                    "Description": "\bTeam\b \bor\b \bShared\b: \bwho\b \bin\b \bthe\b \bspace\b \bmay\b \bread\b \bthe\b \bpage\b. \bA\b \bShared\b \bpage\b \bnever\b \bmoves\b \bback\b \bto\b \bTeam\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bStatus\b", 
+                    "Description": "\bDraft\b \bor\b \bPublished\b \blifecycle\b \bstate\b \bof\b \bthe\b \bpage\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSequence\b", 
+                    "Description": "\bDisplay\b \border\b \bamong\b \bpages\b \bin\b \bthe\b \bspace\b.",  
+                    "Type": "\bint\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bPublishedBlocks\b", 
+                    "Description": "\bJSON\b \barray\b \bof\b \bpublished\b \bcanvas\b \bblocks\b (\bid\b, \btype\b, \btitle\b, \bwidth\b, \bbody\b, \band\b \bblock\b-\bspecific\b \bproperties\b).",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bDraftBlocks\b", 
+                    "Description": "\bJSON\b \barray\b \bof\b \bunpublished\b \bdraft\b \bcanvas\b \bblocks\b \bwhile\b \ba\b \bdraft\b \bis\b \bin\b \bprogress\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bDraftTitle\b", 
+                    "Description": "\bUnpublished\b \bdraft\b \btitle\b \bwhile\b \ba\b \bdraft\b \bis\b \bin\b \bprogress\b.",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bPublishedByUserID\b", 
+                    "Description": "\bThe\b \buser\b \bwho\b \bmost\b \brecently\b \bpublished\b \bthis\b \bpage\b.",  
+                    "Type": "\buniqueidentifier\b",
+                "RelatedEntity": "\bMJ\b: \bUsers\b",
+                "RelatedEntityFieldName": "\bID\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\bPublishedAt\b", 
+                    "Description": "\bWhen\b \bthis\b \bpage\b \bwas\b \bmost\b \brecently\b \bpublished\b.",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": true 
+                },         
+                {
+                    "Name": "\b__mj_CreatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\b__mj_UpdatedAt\b", 
+                    "Description": "",  
+                    "Type": "\bdatetimeoffset\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bSpace\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": false 
+                },         
+                {
+                    "Name": "\bPublishedByUser\b", 
+                    "Description": "",  
+                    "Type": "\bnvarchar\b",
+                    "AllowsNull": true 
+                }        
+            ]
+        },
+        { 
             "Name": "\bMJ_BizApps_Collaboration\b: \bSpace\b \bRole\b \bTypes\b",
             "Description": "\bWhat\b \ba\b \bspace\b \bmember\b \bis\b \ballowed\b \bto\b \bdo\b. \bThe\b \bengine\b \breads\b \bLevel\b \band\b \bthe\b \bBIT\b \bflags\b. \bIt\b \bnever\b \bcompares\b \bCode\b \bor\b \bName\b.",
             "BaseView": "\bvwSpaceRoleTypes\b", 

@@ -10,6 +10,8 @@ import type {
     SpacePageBlockDescriptor,
 } from '@mj-biz-apps/collaboration-ng-widgets';
 
+export type BuiltInTabName = 'Overview' | 'Library' | 'Data' | 'Work' | 'Notes' | 'People';
+
 export type StarterBlockDescriptor = Pick<
     SpacePageBlockDescriptor,
     'key' | 'defaultZone' | 'defaultTabs' | 'sortKey'
@@ -47,89 +49,190 @@ export function starterBlocksForTab(
         }));
 }
 
-export interface StoredPageEnvelope {
-    __collabPage: 1;
-    builtInTabId?: string | null;
-    iconClass: string;
-    pageType: CollabPageType;
-    status: 'Published' | 'Draft';
-    sequence: number;
-    collaborative: boolean;
-    widgetsInitialized?: boolean;
-    summary: string;
-    body: string;
-    draftTitle?: string | null;
-    draftBody?: string | null;
+export interface SpacePagePayload {
     blocks: CollabPageBlock[];
-    comments: CollabPageComment[];
+    pageType?: CollabPageType;
+    collaborative?: boolean;
+    widgetsInitialized?: boolean;
+    summary?: string;
+    body?: string;
+    comments?: CollabPageComment[];
 }
 
-export function isCollabPageNoteBody(body: string | null | undefined): boolean {
-    if (!body || !body.trim().startsWith('{')) return false;
+export interface SpacePageRow {
+    ID: string;
+    SpaceID: string;
+    BuiltInTab: BuiltInTabName | null;
+    Title: string;
+    IconClass: string | null;
+    Band: SpaceBand;
+    Status: 'Draft' | 'Published';
+    Sequence: number;
+    PublishedBlocks: string | null;
+    DraftBlocks: string | null;
+    DraftTitle: string | null;
+    PublishedByUserID: string | null;
+    PublishedByUser?: string | null;
+    PublishedAt: string | Date | null;
+    __mj_UpdatedAt?: string;
+}
+
+export interface SpacePageEntityTarget {
+    SpaceID: string;
+    BuiltInTab: BuiltInTabName | null;
+    Title: string;
+    IconClass: string | null;
+    Band: SpaceBand;
+    Status: 'Draft' | 'Published';
+    Sequence: number;
+    PublishedBlocks: string | null;
+    DraftBlocks: string | null;
+    DraftTitle: string | null;
+    PublishedByUserID: string | null;
+    PublishedAt: Date | null;
+}
+
+export function serializePagePayload(input: {
+    blocks: CollabPageBlock[];
+    pageType?: CollabPageType;
+    collaborative?: boolean;
+    widgetsInitialized?: boolean;
+    summary?: string;
+    body?: string;
+    comments?: CollabPageComment[];
+}): string {
+    const payload: SpacePagePayload = {
+        blocks: input.blocks ?? [],
+        pageType: input.pageType ?? 'Overview',
+        collaborative: input.collaborative ?? true,
+        widgetsInitialized: input.widgetsInitialized ?? true,
+        summary: input.summary ?? '',
+        body: input.body ?? '',
+        comments: input.comments ?? [],
+    };
+    return JSON.stringify(payload);
+}
+
+export function parsePagePayload(raw: string | null | undefined): Required<SpacePagePayload> {
+    const empty: Required<SpacePagePayload> = {
+        blocks: [],
+        pageType: 'Overview',
+        collaborative: true,
+        widgetsInitialized: true,
+        summary: '',
+        body: '',
+        comments: [],
+    };
+    if (!raw || !raw.trim()) return empty;
     try {
-        const parsed = JSON.parse(body) as Partial<StoredPageEnvelope>;
-        return parsed.__collabPage === 1;
+        const parsed = JSON.parse(raw) as CollabPageBlock[] | SpacePagePayload;
+        if (Array.isArray(parsed)) {
+            return { ...empty, blocks: parsed };
+        }
+        if (parsed && typeof parsed === 'object') {
+            return {
+                blocks: Array.isArray(parsed.blocks) ? parsed.blocks : [],
+                pageType: parsed.pageType ?? 'Overview',
+                collaborative: parsed.collaborative ?? true,
+                widgetsInitialized: parsed.widgetsInitialized ?? true,
+                summary: parsed.summary ?? '',
+                body: parsed.body ?? '',
+                comments: Array.isArray(parsed.comments) ? parsed.comments : [],
+            };
+        }
+        return empty;
     } catch {
-        return false;
+        return empty;
     }
 }
 
-export function serializeCollabPageBody(page: CollabPageModel): string {
-    const envelope: StoredPageEnvelope = {
-        __collabPage: 1,
-        builtInTabId: page.builtInTabId ?? null,
-        iconClass: page.iconClass || 'fa-solid fa-compass',
-        pageType: page.pageType || 'Overview',
-        status: page.status || 'Published',
-        sequence: page.sequence ?? 0,
-        collaborative: page.collaborative ?? true,
-        widgetsInitialized: page.widgetsInitialized ?? true,
-        summary: page.summary || '',
-        body: page.body || '',
-        draftTitle: page.draftTitle ?? null,
-        draftBody: page.draftBody ?? null,
-        blocks: page.blocks || [],
-        comments: page.comments || [],
+export function mapSpacePageRowToModel(
+    row: SpacePageRow,
+    opts: { authorName: string; updatedLabel: string; canPromote: boolean },
+): CollabPageModel {
+    const published = parsePagePayload(row.PublishedBlocks);
+    const draft = row.DraftBlocks ? parsePagePayload(row.DraftBlocks) : null;
+    const active = row.Status === 'Draft' && draft ? draft : published;
+    return {
+        id: row.ID,
+        builtInTabId: row.BuiltInTab ?? null,
+        title: row.Title,
+        iconClass: row.IconClass || 'fa-solid fa-compass',
+        pageType: active.pageType,
+        band: row.Band,
+        status: row.Status || 'Published',
+        sequence: typeof row.Sequence === 'number' ? row.Sequence : 0,
+        collaborative: active.collaborative,
+        widgetsInitialized: active.widgetsInitialized,
+        summary: active.summary,
+        body: published.body,
+        draftTitle: row.DraftTitle ?? null,
+        draftBody: draft ? draft.body : null,
+        blocks: active.blocks,
+        comments: active.comments,
+        updatedLabel: opts.updatedLabel,
+        authorName: opts.authorName,
+        canPromote: opts.canPromote,
+        isSeed: false,
     };
-    return JSON.stringify(envelope);
 }
 
-export function parseCollabPageFromNote(input: {
-    id: string;
-    title: string;
-    body: string | null;
-    band: SpaceBand;
-    authorName: string;
-    updatedLabel: string;
-    canPromote: boolean;
-}): CollabPageModel | null {
-    if (!isCollabPageNoteBody(input.body)) return null;
-    try {
-        const env = JSON.parse(input.body!) as StoredPageEnvelope;
-        return {
-            id: input.id,
-            builtInTabId: env.builtInTabId ?? null,
-            title: input.title,
-            iconClass: env.iconClass || 'fa-solid fa-compass',
-            pageType: env.pageType || 'Overview',
-            band: input.band,
-            status: env.status || 'Published',
-            sequence: typeof env.sequence === 'number' ? env.sequence : 0,
-            collaborative: env.collaborative ?? true,
-            widgetsInitialized: Boolean(env.widgetsInitialized),
-            summary: env.summary || '',
-            body: env.body || '',
-            draftTitle: env.draftTitle ?? null,
-            draftBody: env.draftBody ?? null,
-            blocks: Array.isArray(env.blocks) ? env.blocks : [],
-            comments: Array.isArray(env.comments) ? env.comments : [],
-            updatedLabel: input.updatedLabel,
-            authorName: input.authorName,
-            canPromote: input.canPromote,
-            isSeed: false,
-        };
-    } catch {
-        return null;
+const VALID_BUILT_IN_TABS = new Set<string>(['Overview', 'Library', 'Data', 'Work', 'Notes', 'People']);
+
+export function applyCollabPageToEntity(
+    entity: SpacePageEntityTarget,
+    page: CollabPageModel,
+    currentUserId: string | null | undefined,
+): void {
+    const builtInTab =
+        page.builtInTabId && VALID_BUILT_IN_TABS.has(page.builtInTabId)
+            ? (page.builtInTabId as BuiltInTabName)
+            : null;
+    entity.BuiltInTab = builtInTab;
+    entity.Title = page.title.trim() || 'Untitled Page';
+    entity.IconClass = page.iconClass || 'fa-solid fa-compass';
+    entity.Band = page.band;
+    entity.Status = page.status || 'Published';
+    entity.Sequence = page.sequence ?? 0;
+
+    if (entity.Status === 'Draft') {
+        if (!entity.PublishedBlocks) {
+            entity.PublishedBlocks = serializePagePayload({
+                blocks: page.blocks,
+                pageType: page.pageType,
+                collaborative: page.collaborative,
+                widgetsInitialized: page.widgetsInitialized ?? true,
+                summary: page.summary,
+                body: page.body,
+                comments: page.comments,
+            });
+        }
+        entity.DraftTitle = page.draftTitle ?? page.title;
+        entity.DraftBlocks = serializePagePayload({
+            blocks: page.blocks,
+            pageType: page.pageType,
+            collaborative: page.collaborative,
+            widgetsInitialized: page.widgetsInitialized ?? true,
+            summary: page.summary,
+            body: page.draftBody ?? page.body,
+            comments: page.comments,
+        });
+    } else {
+        entity.PublishedBlocks = serializePagePayload({
+            blocks: page.blocks,
+            pageType: page.pageType,
+            collaborative: page.collaborative,
+            widgetsInitialized: page.widgetsInitialized ?? true,
+            summary: page.summary,
+            body: page.body,
+            comments: page.comments,
+        });
+        entity.DraftTitle = null;
+        entity.DraftBlocks = null;
+        if (currentUserId) {
+            entity.PublishedByUserID = currentUserId;
+        }
+        entity.PublishedAt = new Date();
     }
 }
 

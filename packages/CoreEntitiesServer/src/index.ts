@@ -9,6 +9,7 @@ export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, primaryAnchorColl
 export { spaceSeatsParticipants, spaceTypeAudience, type SeatsAudience } from './space-audience.js';
 export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } from './SpaceGrantEntityServer.js';
 export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
+export { LoadSpacePageEntityServer, SpacePageEntityServer } from './SpacePageEntityServer.js';
 export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';
 export { LoadSpaceTypeStatusEntityServer, SpaceTypeStatusEntityServer } from './SpaceTypeStatusEntityServer.js';
 export { notifySpaceStatusChange, SPACE_STATUS_NOTIFICATION_TYPE } from './space-status-notices.js';

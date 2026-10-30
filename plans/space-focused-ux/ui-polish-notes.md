@@ -839,3 +839,569 @@ packages/Angular build: Done
 - `plans/space-focused-ux/shots/round-2/page-edit-mode-dark.png`
 - `plans/space-focused-ux/shots/round-2/rail-collapsed-light.png`
 - `plans/space-focused-ux/shots/round-2/rail-collapsed-dark.png`
+
+---
+
+## Round 2b
+
+### What changed
+
+#### Part 1: R2-1 through R2-8 review findings (committed as `a52f906`)
+
+1. **`R2-1` — Single block registration system (`BaseSpacePageBlock`):**
+   - Removed the parallel `BaseSpaceOverviewCard` registration path from `assembleSpacePageBlocks` and `CollabSpacePagesComponent`. Every page block is now a `BaseSpacePageBlock`.
+   - Migrated the test fixture `TestSpaceOverviewCardComponent` in `packages/AngularWidgets/src/lib/ui-driver.test.ts` to extend `BaseSpacePageBlock` and register with `@RegisterClassEx(BaseSpacePageBlock, ...)`.
+   - Marked `BaseSpaceOverviewCard` as `@deprecated` in `packages/AngularWidgets/src/lib/base-space-type-ui-driver.ts`.
+2. **`R2-2` — Self-contained `BaseSpacePageBlock` components (no parent callback tunnel):**
+   - Removed `SpacePageBlockContext` and `@Input() Context` from `BaseSpacePageBlock` and `CollabSpacePagesComponent`.
+   - Each built-in block (`collab:pinned`, `collab:needs-you`, `collab:shared-files`, `collab:team-files`, `collab:ask`, `collab:discussion`, `collab:sub-spaces`, `collab:about`, `collab:main-view`) now injects `CollabSpacePageBlockHostService` (`SPACE_PAGE_BLOCK_HOST`) for space-scoped data and actions while accepting `@Input() SpaceId!: string`, `@Input() Config?: Record<string, unknown>`, and `@Input() ReadOnly = false`.
+3. **`R2-3` — Promote-to-Shared confirmation dialog:**
+   - Added a `MJConfirmService` confirmation dialog in `CollabSpacePagesComponent.promoteCurrentPageToShared()` before emitting `PagePromote`: *"Share '{{ title }}' with external participants? External participants in this space will be able to read this page. This cannot be undone."*
+4. **`R2-4` — Duplicate page title disambiguation:**
+   - Updated `CollabSpacePagesComponent.duplicateCurrentPage()` to compute a non-colliding copy title (`"<Title> (copy)"`, `"<Title> (copy 2)"`, etc.) against existing pages in the space.
+5. **`R2-5` — Move `↑` / `↓` into the `⋯` block menu:**
+   - Reduced `.sp-block-tools` on the block hover bar to 2 controls: the drag handle (`.sp-drag-handle`) and the `⋯` menu trigger (`[mjMenuTriggerFor]="blockMoreMenu"`).
+   - Added `Move up` (`canMoveBlock(block.id, -1)`) and `Move down` (`canMoveBlock(block.id, 1)`) items to `blockMoreMenu`.
+6. **`R2-6` — Remove redundant outer border on `.sp-main-view-slot`:**
+   - Removed the outer border/radius/background wrapper on `.sp-main-view-slot` in `CollabSpacePagesComponent` so embedded main views (`Library`, `Work`, `Chat`, `People`, `Notes`, `Settings`, `Details`, `Data`) do not double-border against their own card frames.
+7. **`R2-7` — Register exported `@RegisterClassEx` page blocks in `scripts/check-registered-exports.mjs`:**
+   - Extended `scripts/check-registered-exports.mjs` to match both `@RegisterClass(` and `@RegisterClassEx(` decorators so all 9 built-in `BaseSpacePageBlock` classes are verified as exported from `@mj-biz-apps/collaboration-ng-widgets`.
+8. **`R2-8` — Honest empty states for Pinned and Needs-you blocks in edit mode:**
+   - Updated `CollabPinnedPageBlockComponent` and `CollabNeedsYouPageBlockComponent` so edit mode shows a single compact muted line (`"Pinned items show here when there are any."` / `"Items needing your attention show here when there are any."`) instead of stacked duplicate empty boxes.
+
+#### Part 2: Step M — Multi-party agent routing merge & `CollapseThreadReplies` (committed as `78f9f7c` in `bizapps-collaboration`, `a7c25e8f37` in `MJ`)
+
+1. **Local floating chat bubble disabled via Explorer record form:**
+   - Opened the `Application Settings` record (`6855118F-E692-4737-A125-AE267D2DC39C`, `Shell.ChatOverlay.Enabled`) in MJExplorer (`http://localhost:4200`), set `Value` to `false`, and clicked `Save` (local database only; no Collaboration code or metadata touched).
+2. **`MJ` branch `collab/e2e-combined` (`a7c25e8f37`):**
+   - Restored the 15 partial `#6176` paths to `origin/next`, fast-forwarded `origin/next`, and re-applied `CollapseThreadReplies` on `MJConversationChatAreaComponent` as strictly opt-in (`@Input() CollapseThreadReplies: boolean = false;`, `const collapseThreads = this.CollapseThreadReplies;`) with unit tests in `packages/Angular/Generic/conversations/src/__tests__/collapse-thread-replies.test.ts`.
+3. **`bizapps-collaboration` branch `feat/collab-ui-polish` (`784359c` + `78f9f7c`):**
+   - Merged `origin/feat/multi-party-agent-routing` (`0eafa89`, PR #19) into `feat/collab-ui-polish`.
+   - Bound `[CollapseThreadReplies]="true"` on `<mj-conversation-chat-area>` in `packages/AngularWidgets/src/lib/space-chat.component.ts` and added an assertion in `packages/AngularWidgets/src/lib/render.test.ts`.
+   - Verified all 3 smoke chat turns in the browser (`plans/space-focused-ux/shots/step-m/chat-mention-light.png`, `chat-thread-reply-light.png`, `chat-unmentioned-followup-light.png`).
+
+#### Part 3: Round 2b — Dedicated `SpacePage` table, RLS, `SpacePageEntityServer`, and client migration
+
+1. **Table & CodeGen (`migrations/V202610300100__v0.1.x__Space_Pages.sql`):**
+   - Created `__mj_BizAppsCollaboration.SpacePage` with `ID` (`UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID()`), `SpaceID` (FK to `Space`), `BuiltInTabKey` (`NVARCHAR(50) NULL`), `Title` (`NVARCHAR(200) NOT NULL`), `Icon` (`NVARCHAR(100) NULL`), `Band` (`NVARCHAR(20) NOT NULL DEFAULT N'Team'`, `CHECK (Band IN (N'Team', N'Shared'))`), `PromotedByUserID` (`UNIQUEIDENTIFIER NULL`), `PromotedAt` (`DATETIMEOFFSET NULL`), `Sequence` (`INT NOT NULL DEFAULT 0`), `Blocks` (`NVARCHAR(MAX) NOT NULL DEFAULT N'[]'`, `CHECK (ISJSON(Blocks) = 1)`), `CreatedByUserID` (`UNIQUEIDENTIFIER NOT NULL`), `LastEditedByUserID` (`UNIQUEIDENTIFIER NOT NULL`), plus filtered unique index `UQ_SpacePage_Space_BuiltInTab` (`WHERE BuiltInTabKey IS NOT NULL`), index `IX_SpacePage_Space_Sequence` on `(SpaceID, Sequence, Title)`, and `sp_addextendedproperty` descriptions on the table and every column.
+   - Ran MJ CodeGen to generate `vwSpacePages`, `spCreateSpacePage`, `spUpdateSpacePage`, `trgUpdateSpacePage`, `spDeleteSpacePage`, entity metadata (`EFE52365-941E-4A5A-B6E3-6733013EC9E3`, `MJ_BizApps_Collaboration: Space Pages`), `mjBizAppsCollaborationSpacePageEntity` in `packages/Entities/src/generated/entities/__mj_BizAppsCollaboration.ts`, GraphQL schema in `packages/Server/src/generated/graphql-schemas/__mj_BizAppsCollaboration.ts`, and Angular form components in `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpacePage/`.
+2. **`pageEditVerdict` in `collaboration-core` (`packages/Core/src/notes.ts`):**
+   - Added `PageEditViewer`, `SpaceForPageEdit`, `PageEditVerdict`, and pure rule `pageEditVerdict(viewer, space)` allowing page edits when the space is open and not read-only and the viewer is the space owner, holds a seat with `canPromoteBand`, holds `canEditSpaceSettings`, or administers spaces.
+3. **`SpacePageEntityServer` (`packages/CoreEntitiesServer/src/SpacePageEntityServer.ts`):**
+   - Registered `@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Pages')` on `SpacePageEntityServer`.
+   - Enforces reach, read-only status (`statusAllowsSaves`), Team band visibility (`canSeeTeamBand`), and `pageEditVerdict` on create, update, and delete (so any space editor—not just the page creator—can update or delete a page).
+   - Stamps `CreatedByUserID = callerId` on create and `LastEditedByUserID = callerId` on every create and update.
+   - Enforces one-way `Team` -> `Shared` promotion via `promotionStamps`, refusing `Shared` -> `Team` demotion.
+   - Refuses changing `SpaceID` or `BuiltInTabKey` after creation, and refuses deleting a built-in tab's page (`BuiltInTabKey != null`).
+   - Exported `SpacePageEntityServer` and `LoadSpacePageEntityServer` from `packages/CoreEntitiesServer/src/index.ts`, and called `LoadSpaceNoteEntityServer()` and `LoadSpacePageEntityServer()` in `packages/Server/src/index.ts`.
+4. **Metadata (`metadata/`):**
+   - Added `Collaboration: Visible Pages` (`A4D8193B-5C62-4E7A-8B90-1F2E3D4C5B6A`) and `Collaboration: Pages The Caller May Change` (`B5E92A4C-6D73-4F8B-9C01-2A3F4E5D6C7B`) in `metadata/row-level-security-filters/.row-level-security-filters.json`.
+   - Added `MJ_BizApps_Collaboration: Space Pages` permissions for `UI` and `Space Participant` (`C7F03B5D-7E84-4A9C-AD12-3B4A5F6E7D8C`) in `metadata/entities/.ui-role-permissions.json` and `metadata/entity-permissions/.entity-permissions.json`.
+   - Validated with `pnpm exec mj sync validate --dir=metadata` (`0 errors`) and synced to the local database.
+5. **Client (`packages/Angular`):**
+   - Created `packages/Angular/src/lib/logic/space-pages.ts` and `packages/Angular/src/lib/logic/space-pages.test.ts` mapping `mjBizAppsCollaborationSpacePageEntity` rows to `CollabPageModel` (`spacePageRowToModel`, `applyModelToSpacePageEntity`, `buildPagesForSpace`), and deleted `packages/Angular/src/lib/logic/space-pages-storage.ts` and `packages/Angular/src/lib/logic/space-pages-storage.test.ts`.
+   - Updated `packages/Angular/src/lib/collaboration-section.component.ts`:
+     - `canCustomizePages` now delegates to `pageEditVerdict(...)` from `@mj-biz-apps/collaboration-core`.
+     - `loadSpaceNotes` no longer filters `isCollabPageNoteBody`.
+     - `loadSpacePages`, `onPageSave`, `onPageDelete`, `onPageReorder`, and `onPagePromote` read and write `MJ_BizApps_Collaboration: Space Pages` via `RunView` and `GetEntityObject`.
+   - Checked the local database (`__mj_BizAppsCollaboration.SpaceNote WHERE Body LIKE N'{"__collabPage":1%'`): 0 dev page-JSON rows were present in `SpaceNote` (only the 5 world-seeded plain notes exist).
+
+### Files touched
+
+- `migrations/V202610300100__v0.1.x__Space_Pages.sql` (new)
+- `Schema Files/__mj_BizAppsCollaboration.full.json`
+- `Schema Files/__mj_BizAppsCollaboration.full.min.json`
+- `Schema Files/__mj_BizAppsCollaboration.simple.json`
+- `Schema Files/__mj_BizAppsCollaboration.simple.min.json`
+- `metadata/row-level-security-filters/.row-level-security-filters.json`
+- `metadata/entities/.ui-role-permissions.json`
+- `metadata/entity-permissions/.entity-permissions.json`
+- `packages/Core/src/notes.ts`
+- `packages/Core/src/notes.test.ts`
+- `packages/Entities/src/generated/entities/__mj_BizAppsCollaboration.ts`
+- `packages/CoreEntitiesServer/src/SpacePageEntityServer.ts` (new)
+- `packages/CoreEntitiesServer/src/index.ts`
+- `packages/CoreEntitiesServer/src/stage1-servers.test.ts`
+- `packages/Server/src/generated/graphql-schemas/__mj_BizAppsCollaboration.ts`
+- `packages/Server/src/index.ts`
+- `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpacePage/mjbizappscollaborationspacepage.form.component.ts` (new)
+- `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpacePage/mjbizappscollaborationspacepage.form.component.html` (new)
+- `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpace/mjbizappscollaborationspace.form.component.ts`
+- `packages/Angular/src/lib/generated/Entities/mjBizAppsCollaborationSpace/mjbizappscollaborationspace.form.component.html`
+- `packages/Angular/src/lib/generated/generated-forms.module.ts`
+- `packages/Angular/src/lib/logic/space-pages.ts` (new, replaces `space-pages-storage.ts`)
+- `packages/Angular/src/lib/logic/space-pages.test.ts` (new, replaces `space-pages-storage.test.ts`)
+- `packages/Angular/src/lib/collaboration-section.component.ts`
+- `packages/AngularWidgets/src/lib/base-space-page-block.ts` (in `a52f906`)
+- `packages/AngularWidgets/src/lib/base-space-type-ui-driver.ts` (in `a52f906`)
+- `packages/AngularWidgets/src/lib/space-pages.component.ts` (in `a52f906`)
+- `packages/AngularWidgets/src/lib/space-chat.component.ts` (in `78f9f7c`)
+- `packages/AngularWidgets/src/lib/ui-driver.test.ts` (in `a52f906`)
+- `packages/AngularWidgets/src/lib/render.test.ts` (in `a52f906` and `78f9f7c`)
+- `scripts/check-registered-exports.mjs` (in `a52f906`)
+
+### Test changes and rationale
+
+1. **In `packages/Core/src/notes.test.ts`:**
+   - Added `describe('pageEditVerdict (Round 2b)', ...)` (3 tests) verifying that `pageEditVerdict` allows the space owner, a seat whose role has `canPromoteBand`, a viewer with `canEditSpaceSettings`, and a space administrator; refuses a plain member with a clear message; and refuses everyone when the space is closed or read-only.
+2. **In `packages/CoreEntitiesServer/src/stage1-servers.test.ts`:**
+   - Added `describe('Space Pages: customizable block-canvas pages in the space', ...)` (4 tests):
+     - An editor who did not create the page (`sam-id` with `canPromoteBand: true`) can save a page created by `ada-id`, stamping `LastEditedByUserID = 'sam-id'` while preserving `CreatedByUserID = 'ada-id'`.
+     - A plain member (`remy-id` with `canPromoteBand: false`) is refused on create, save, and delete with a clear validation message, and deleting a built-in tab page (`BuiltInTabKey != null`) is refused even for an owner.
+     - Every caller is refused in a closed space.
+     - An outside participant (`casey-id`, `canSeeTeamBand: false`) is refused when attempting to write a `Team` page, and the `Collaboration: Visible Pages` RLS filter only exposes `Band = N'Shared'` to seats with `CanSeeTeamBand = 0`.
+3. **In `packages/Angular/src/lib/logic/space-pages.test.ts`:**
+   - Replaced `space-pages-storage.test.ts` with `space-pages.test.ts`, testing `spacePageRowToModel`, `applyModelToSpacePageEntity`, and `buildPagesForSpace` against `SpacePageRow` entities instead of `SpaceNote` JSON bodies.
+
+### Gate outputs
+
+#### 1. `node scripts/check-mj-tokens.mjs`
+
+```text
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+```
+
+#### 2. `node scripts/check-mj-inputs.mjs`
+
+```text
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+```
+
+#### 3. `node scripts/check-registered-exports.mjs`
+
+```text
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+```
+
+#### 4. `pnpm exec mj sync validate --dir=metadata`
+
+```text
+Validating metadata files...
+
+✔ Metadata validation complete!
+
+Summary:
+  Files checked: 17
+  Entities validated: 112
+  Total records: 112
+  Errors: 0
+  Warnings: 0
+```
+
+#### 5. `node --experimental-strip-types --test packages/Core/src/notes.test.ts` & `node --experimental-strip-types --test packages/CoreEntitiesServer/src/stage1-servers.test.ts`
+
+```text
+▶ notePromotionVerdict (call 15)
+  ✔ the owner promotes (0.456833ms)
+  ✔ a seat whose role may promote the band promotes (0.043209ms)
+  ✔ an administrator promotes without a seat (0.038208ms)
+  ✔ a private note is not promoted (0.037208ms)
+  ✔ a member may not, nor the author by being the author (0.0475ms)
+  ✔ a Shared note is not promoted again (0.034667ms)
+  ✔ the consequence names the audience and says it is not undone (0.066042ms)
+✔ notePromotionVerdict (call 15) (1.100458ms)
+▶ pageEditVerdict (Round 2b)
+  ✔ allows the space owner, a seat whose role can promote the band, someone who can edit space settings, and a space administrator (0.078167ms)
+  ✔ refuses a plain member with a clear message (0.04425ms)
+  ✔ refuses everyone when the space is closed or read-only (0.062459ms)
+✔ pageEditVerdict (Round 2b) (0.258625ms)
+▶ noteDocument
+  ✔ names the file from the title and writes Markdown with the title as its heading (0.13675ms)
+  ✔ an empty body gives the heading alone; an unusable title gives note.md (0.050125ms)
+✔ noteDocument (0.228ms)
+ℹ tests 12
+ℹ suites 3
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53.350125
+
+▶ The staff-only promise and the anchors a retype carries (items 157 and 149)
+  ✔ reads a type's audience from its configuration, failing closed to StaffAndParticipants (0.257625ms)
+  ✔ sees participants on a space through an active seat whose role cannot see Team, and through an inheriting child (0.424584ms)
+  ✔ names the space of the new type that already holds the retyped space's primary anchor (0.147416ms)
+✔ The staff-only promise and the anchors a retype carries (items 157 and 149) (1.045625ms)
+▶ Space Anchors: the records a space is about
+  ✔ accepts a primary anchor from someone with Configure Spaces, and stamps the space's type on it (0.725958ms)
+  ✔ refuses an entity not in the database, a key the entity does not accept, a type that is not the space's, and a space that does not exist (0.240042ms)
+  ✔ refuses a writer without Configure Spaces, unless the type's driver vouches for the row in process (0.171125ms)
+  ✔ refuses a second primary anchor on a space, and a primary anchor on a record another space of the type already holds, naming that space (0.227041ms)
+  ✔ needs a role on a non-primary anchor, and gives a primary one the role "primary" (0.119875ms)
+✔ Space Anchors: the records a space is about (1.594459ms)
+▶ Space Grants: what the app, a type or a space offers
+  ✔ accepts a space's agent grant from an owner with Configure Spaces, and stamps the kind's entity (0.359042ms)
+  ✔ refuses a kind that is not one of the seven, a row that is both a type's and a space's, and a default that is not an agent (0.141833ms)
+  ✔ refuses a target entity that is not the kind's, and a target that does not exist (0.147375ms)
+  ✔ holds § 4's rules: a query goes only to a type that seats staff only (absent fails closed), a view with a binding nowhere (0.503125ms)
+  ✔ keeps an agent's settings inside its definition: skills for an agent that accepts none, a limit above its own (0.345042ms)
+  ✔ asks for Configure Spaces on a space's row and Configure Space Types on the app's or a type's (0.1015ms)
+✔ Space Grants: what the app, a type or a space offers (1.723583ms)
+▶ Space Notes: light notes in the space
+  ✔ stamps the caller as the author on create, and refuses another author (0.552959ms)
+  ✔ refuses a Team note from a seat that can't see Team, and anything from someone who does not reach the space (0.241291ms)
+  ✔ refuses a note in a space whose status is read-only (here a closed space of a type with no statuses) (0.183584ms)
+  ✔ lets only the author edit; a Team note moves to Shared by the owner (call 15), with nothing else changed, never back, and never a private one; the space stays (0.597834ms)
+✔ Space Notes: light notes in the space (1.6325ms)
+▶ Space Member Pins: what a member keeps at the top of a space
+  ✔ is the caller's own: it stamps the caller, refuses another user, and refuses someone who does not reach the space (0.394083ms)
+  ✔ pins a record only when it is in the space (an item of it, or one of its notes), and never a record with a grant (0.255208ms)
+  ✔ pins a grant only when it is in force in the space: the app's yes, an ancestor's yes, another space's no (0.392792ms)
+  ✔ is removed by its owner only (0.060417ms)
+✔ Space Member Pins: what a member keeps at the top of a space (1.148208ms)
+▶ Space Type Status: the statuses a type declares
+  ✔ accepts a status that keeps the type's list sound, from someone with Configure Space Types (0.194625ms)
+  ✔ refuses a writer without Configure Space Types (0.039583ms)
+  ✔ refuses a list that is not sound: a second default, a repeated code or sequence, a frozen status that is not terminal (0.168333ms)
+  ✔ refuses the delete of a status a space still names (0.081416ms)
+✔ Space Type Status: the statuses a type declares (0.521667ms)
+▶ Space Pages: customizable block-canvas pages in the space
+  ✔ lets an editor who did not create the page save it (0.226208ms)
+  ✔ refuses a plain member on create, save, and delete with a clear message (0.276666ms)
+  ✔ refuses everyone in a closed space (0.148959ms)
+  ✔ ensures an outside participant never reads a Team page (RLS filter and server band check) (0.926416ms)
+✔ Space Pages: customizable block-canvas pages in the space (1.659708ms)
+ℹ tests 30
+ℹ suites 7
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 207.663542
+```
+
+#### 6. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets test`
+
+```text
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (123 tests) 15ms
+ ✓ src/lib/render.test.ts (55 tests) 688ms
+
+ Test Files  3 passed (3)
+      Tests  188 passed (188)
+   Start at  02:04:59
+   Duration  12.62s (transform 18.92s, setup 0ms, import 25.41s, tests 709ms, environment 260ms)
+```
+
+#### 7. `pnpm --filter @mj-biz-apps/collaboration-ng test`
+
+```text
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+▶ the space's agent turn, as the page asks for it
+  ✔ always runs in the background, so the chat follows the reply row live instead of waiting for the whole run (0.601166ms)
+  ✔ answers the chat area in its own words: the reply rows and the run, or the server's refusal (0.097459ms)
+  ✔ turns a thrown error into a failed turn with its message, and a plain reason for anything else (0.063042ms)
+✔ the space's agent turn, as the page asks for it (1.213417ms)
+▶ running a Before hook
+  ✔ answers true, and logs nothing, when the hook returns (0.662ms)
+  ✔ answers false and logs the hook, the type and the space when BeforeStartChat throws (0.133375ms)
+  ✔ answers false and logs the hook, the type and the space when BeforeInvite throws (0.057041ms)
+  ✔ names an unknown type, and reads a thrown non-error (0.107459ms)
+✔ running a Before hook (1.448958ms)
+▶ the state of the Chat tab
+  ✔ is closed, with the closed note, when the space is closed, whatever the seat (0.611375ms)
+  ✔ is pending, with neither composer nor note, until the seat is known: an owner opening a space is not told they cannot post (0.07175ms)
+  ✔ says there is no seat that lets them post, in words for one conversation or for the space's list of them (0.104667ms)
+  ✔ says it couldn't check, not that there is no seat, when the seat lookup failed: an owner whose lookup failed is not told they can't post for want of a seat (0.071042ms)
+  ✔ is open when the seat is known and may post (0.049709ms)
+✔ the state of the Chat tab (1.394ms)
+▶ what closing does, in words
+  ✔ names the status the close moves to, says it is read-only for everyone, and that Closed moves forward only (0.363167ms)
+  ✔ leaves the assistant out when the status allows no agent retrieval, and says who can bring it back when someone can (0.075542ms)
+  ✔ says a hidden status disappears for everyone but the keeper, and tells the viewer they won't see it (0.089167ms)
+  ✔ says when the check of the right could not be made, and reads a type with no statuses as read-only and visible (0.054542ms)
+  ✔ has words for the read in progress and for a server that could not answer (0.045166ms)
+✔ what closing does, in words (1.031625ms)
+▶ reading the server's payload
+  ✔ needs a keeper, and takes the status and its attributes as given, with defaults for a type that names none (0.333291ms)
+✔ reading the server's payload (0.373667ms)
+▶ the rail conversation list
+  ✔ lists each conversation once, whatever the casing of its ID (0.536375ms)
+  ✔ puts an internal conversation on the Team band and the rest on Shared (0.064958ms)
+  ✔ skips a row with no conversation and names an unnamed one General (0.059083ms)
+✔ the rail conversation list (1.055666ms)
+▶ choosing the open conversation
+  ✔ opens the one asked for, matched as a UUID (0.112208ms)
+  ✔ opens the first when the one asked for is not in this space (0.387667ms)
+  ✔ opens nothing when the space has no conversation (0.089375ms)
+✔ choosing the open conversation (0.69575ms)
+▶ how a space's details are drawn
+  ✔ is nothing when the type's UI driver shows none (0.338334ms)
+  ✔ is the driver's own component when it gives one, without asking for a form (0.38175ms)
+  ✔ is the subtype's form when one is registered, whatever fields the driver hides (0.074458ms)
+  ✔ is the field list, though a form is registered, when the subtype's columns share a section with the space's (no sections to show alone) (0.094667ms)
+  ✔ is a field for each column when there is no form, less the optional ones the driver hides (0.084666ms)
+  ✔ is nothing when there is no form and no column to show (0.076083ms)
+✔ how a space's details are drawn (1.560708ms)
+▶ dates are shown in the locale asked for, with the year
+  ✔ follows the locale (11.03975ms)
+  ✔ adds the time when asked to (0.383125ms)
+  ✔ reads a bad or missing value as unknown, never "Invalid Date" (0.082667ms)
+✔ dates are shown in the locale asked for, with the year (11.990666ms)
+▶ the roles a seat may hand out
+  ✔ gives Sam (a member with ceiling 10) only Outside member and Guest, highest first (0.650709ms)
+  ✔ gives Casey (an outside admin, ceiling 10, no team band) the same two (0.08725ms)
+  ✔ gives an owner every active role (0.070375ms)
+  ✔ leaves out a role below the ceiling that carries a power the grantor lacks (0.084083ms)
+✔ the roles a seat may hand out (1.365542ms)
+▶ Home's lists
+  ✔ shows an invitation as a row that opens the People tab of its space (0.606625ms)
+  ✔ does not invent a date or a role for an invitation that has none (0.079583ms)
+  ✔ shows a task with its status, priority and due date, and skips what is missing (0.107292ms)
+  ✔ shows a dash, not zero, for a count that could not be read, and says so to a screen reader (0.064625ms)
+✔ Home's lists (1.313875ms)
+▶ pinRows (B22)
+  ✔ names each pin by its space and opens it (0.141667ms)
+✔ pinRows (B22) (0.189417ms)
+▶ two overlapping reads of the Overview messages
+  ✔ leaves the newer read on screen when the older read finishes last (0.567875ms)
+  ✔ applies reads that finish in order, each replacing the last (0.075125ms)
+  ✔ writes nothing once the person has moved to another space, even for the newest read (0.060375ms)
+✔ two overlapping reads of the Overview messages (1.080083ms)
+▶ making a new space
+  ✔ starts as its type, owned by the person, inheriting as the type says, with no detail fields for a plain type (0.587667ms)
+  ✔ offers a subtype's own fields and reports the required ones still empty (0.18775ms)
+  ✔ leaves a form section of only the columns the driver hides out of the sections shown, keeps a required column whatever the driver says, and is unchanged when nothing is hidden (0.342333ms)
+  ✔ collects what was typed into the subtype fields, and leaves out what has no value so the column default applies (0.099291ms)
+  ✔ asks the server to make the space and seat the person, sending the type, the name and the details, and returns the new id (0.11625ms)
+  ✔ sends no details for a plain type, and the description when there is one (0.07225ms)
+  ✔ returns the server's refusal, which leaves no space and no seat behind (0.085ms)
+✔ making a new space (1.904459ms)
+▶ a saved space's details
+  ✔ are its subtype record and fields when the space has a subtype (0.147042ms)
+  ✔ are none for a plain space or one that will not load (0.067334ms)
+  ✔ are dirty once a detail field changes, and missing while a required one is empty (0.147958ms)
+  ✔ save, or say why not, and are put back on Discard (0.107875ms)
+✔ a saved space's details (0.564458ms)
+▶ the kinds picked in the New space dialog
+  ✔ lets the last pick win when an earlier one finishes after it (0.544667ms)
+  ✔ lets the only pick through, and reports its failure (0.105709ms)
+  ✔ drops a pick that fails after a later one started: its error is nobody's to show (0.067084ms)
+  ✔ drops every pick in flight when the dialog is reset, so a draft from an earlier opening never lands in a later one (0.061791ms)
+✔ the kinds picked in the New space dialog (1.176125ms)
+▶ the kinds of space the New space dialog offers
+  ✔ are the active types, by rank and then name (5.866083ms)
+  ✔ carry the description, and fall back to the default icon and no colour (0.11825ms)
+  ✔ are none when no type is active (0.054125ms)
+✔ the kinds of space the New space dialog offers (6.516042ms)
+▶ the kinds that may sit under a parent
+  ✔ are those the parent type's Children.AllowedTypeCodes names, in the dialog's order (0.150209ms)
+  ✔ are every kind when the parent type names none, has no configuration, or its configuration does not parse (0.086083ms)
+✔ the kinds that may sit under a parent (0.320417ms)
+▶ opening a library file
+  ✔ opens the file in the viewer and records the open once (0.64775ms)
+  ✔ still opens when the open could not be recorded, and says it was not (0.080083ms)
+  ✔ says so when the screen has no viewer to open the file in, and records nothing (0.067292ms)
+  ✔ opens nothing for an item with no file (0.05075ms)
+✔ opening a library file (1.347709ms)
+▶ the item use an open writes
+  ✔ names the item, the space, the person and the time (0.0775ms)
+  ✔ is nothing when the person or the space is not known (never an empty user ID) (0.042542ms)
+✔ the item use an open writes (0.1875ms)
+▶ the Discussion card lines
+  ✔ shows what was typed, not the stored mention, and reads oldest first (0.699292ms)
+  ✔ draws an outside seat's sender as outside, and staff and the assistant as not (0.093333ms)
+  ✔ keeps the last five (0.083792ms)
+✔ the Discussion card lines (1.329708ms)
+▶ the space tree
+  ✔ dims and locks a closed space, and leaves an open one alone (0.547333ms)
+✔ the space tree (0.961417ms)
+▶ the rail mode follows the page
+  ✔ keeps the home rail on Home, Inbox, My tasks and Recent files (0.071459ms)
+  ✔ shows the space rail on a space (0.038291ms)
+✔ the rail mode follows the page (0.16875ms)
+▶ who reaches a space
+  ✔ walks up while each space inherits, nearest first (0.76425ms)
+  ✔ stops at a sealed space (0.08375ms)
+  ✔ lists Discovery through Northwind: Ada, Sam and Casey are reached, Bea and Remy sit on it (0.160208ms)
+  ✔ lists Field notes with Ada on it and Bea, Casey and Sam reached through its parents (0.111541ms)
+  ✔ lists only the sealed child's own seats, not the branch's or Northwind's (0.108417ms)
+  ✔ keeps Sam reaching Field notes through Northwind when the guest seat Sam holds there is Removed or Invited, and carries that seat beside Sam (0.140458ms)
+  ✔ lists a person nothing else reaches by their own Removed or Invited seat (0.065584ms)
+  ✔ follows a parent the viewer can't read, unnamed, and stops there (0.081333ms)
+  ✔ stops at a parent whose status hides it, and keeps one whose status is read-only but visible (0.139375ms)
+✔ who reaches a space (2.219834ms)
+▶ the section's list of who reaches a space, held against Core's
+  ✔ lists the same people under the same seats with no space closed (0.291291ms)
+  ✔ lists the same people under the same seats with an archived middle space (hidden) (0.057ms)
+  ✔ lists the same people under the same seats with a paused middle space (read-only, visible) (0.057125ms)
+  ✔ lists the same people under the same seats with a closed middle space (read-only, visible) (0.067583ms)
+  ✔ lists the same people under the same seats with an active middle space with a status row (0.050083ms)
+  ✔ lists the same people under the same seats with a closed middle space of a type with no statuses (0.040416ms)
+✔ the section's list of who reaches a space, held against Core's (0.677083ms)
+▶ the seat actions offered
+  ✔ offers Sam (a member who can invite) no Approve or Change role on a type that holds invites for approval, but Remove (0.671458ms)
+  ✔ offers Sam Approve and Change role on a type that approves automatically (0.091542ms)
+  ✔ offers an owner Approve, Change role and Remove on a guest (0.062584ms)
+  ✔ offers nothing on a seat above the viewer's ceiling, or one carrying a power they lack (0.068708ms)
+  ✔ hides Remove and Change role on the only active owner seat, whoever is looking, and offers nothing for someone who cannot invite (0.076ms)
+✔ the seat actions offered (1.470208ms)
+▶ the header seat summary
+  ✔ counts only Active seats (0.336625ms)
+  ✔ does not let an invited or removed outside seat make the space Shared (0.073709ms)
+  ✔ makes the space Shared once an outside seat is Active (0.054875ms)
+  ✔ summarizes a space with no seats (0.056625ms)
+✔ the header seat summary (1.033125ms)
+▶ a load for a selected space
+  ✔ may write while its selection is the current one, whatever the ID casing (0.295ms)
+  ✔ may not write once a later selection has started (0.043375ms)
+  ✔ may not write once the person is in another space, even with the same request number (0.044917ms)
+  ✔ may not write when no space is active (0.033792ms)
+✔ a load for a selected space (0.795459ms)
+▶ guardedLoad
+  ✔ leaves the newer space's lists alone when the older space's read lands last (0.354625ms)
+  ✔ writes when its selection is still the current one (0.06075ms)
+  ✔ does not write when the read fails, and lets the failure through (0.206417ms)
+✔ guardedLoad (0.699917ms)
+▶ a selection starts clean
+  ✔ closes the drawer, clears the item, resets both bands and drops the last save message (0.359541ms)
+  ✔ closes the share, upload and new-conversation dialogs, so none stays open over the next space (0.392375ms)
+✔ a selection starts clean (1.244917ms)
+▶ the loading flag of a selection
+  ✔ is raised while a selection loads and lowered when it finishes (0.103584ms)
+  ✔ stays raised when an older selection finishes after a newer one began (0.050375ms)
+✔ the loading flag of a selection (0.233958ms)
+▶ what Settings offers
+  ✔ offers nothing to someone with no right (0.593375ms)
+  ✔ offers Close, read-only, to an owner who holds the lifecycle authorization but not Configure Spaces (0.06125ms)
+  ✔ offers Reopen, read-only, on a closed space to an owner who may only reopen (0.045333ms)
+  ✔ offers the form without a close button to an owner who may configure but not close (0.043083ms)
+  ✔ offers the form and the button to someone who may do both (0.050458ms)
+  ✔ does not offer Close on a closed space, or Reopen on an open one, whatever the rights say (0.049584ms)
+✔ what Settings offers (1.32775ms)
+▶ a terminal status (stage 1: Closed moves forward only)
+  ✔ offers no reopen, whatever the rights say, and says so above the read-only view (0.074584ms)
+  ✔ offers nothing to someone with neither right on a terminal space (0.055333ms)
+  ✔ still offers the reopen on a closed space whose status is not terminal (0.045417ms)
+✔ a terminal status (stage 1: Closed moves forward only) (0.269291ms)
+▶ the Settings model
+  ✔ shows the space's status by name when the caller knows it, else Active or Closed from ClosedAt (0.347167ms)
+  ✔ takes the icon and color from the type when the space has none (0.061375ms)
+  ✔ marks a closed space (0.059166ms)
+✔ the Settings model (0.886542ms)
+▶ what a Settings save writes
+  ✔ writes nothing for a screen the person did not change (0.334541ms)
+  ✔ writes only the name when only the name changes (0.098209ms)
+  ✔ clears a background the person emptied (0.063417ms)
+✔ what a Settings save writes (0.586792ms)
+▶ the Settings session across two saves
+  ✔ writes only the second edit on the second save, after the form is rebuilt from what the first save wrote (1.139541ms)
+  ✔ does not count an edit made while a save was running as saved (0.081458ms)
+  ✔ starts from the new space when another is selected (0.090209ms)
+✔ the Settings session across two saves (1.417625ms)
+▶ writing the changes onto a space
+  ✔ sets exactly the fields that changed (0.106958ms)
+  ✔ can set a field to null (0.060916ms)
+✔ writing the changes onto a space (0.225208ms)
+▶ who a share reaches
+  ✔ says nobody new gains access in Studio, where only staff sit (0.54225ms)
+  ✔ lists only the Active outside seats in Discovery, not staff, the invited or the removed (0.111208ms)
+  ✔ does not fall back to everyone when the only outside seats are Invited or Removed (0.052167ms)
+✔ who a share reaches (1.158959ms)
+▶ space-pages
+  ✔ maps a SpacePage row and applies a CollabPageModel back to a SpacePage entity (0.474667ms)
+  ✔ builds starter pages for all built-in space tabs and merges saved customizations + user pages (0.767208ms)
+✔ space-pages (1.69325ms)
+▶ the rules from the server's configuration document
+  ✔ carries the type's labels, which a participant's browser cannot resolve itself (0.571083ms)
+  ✔ gives null for a missing, broken or shapeless document, so the browser keeps its own answer (0.057083ms)
+  ✔ tells the same rules from changed ones (0.136625ms)
+✔ the rules from the server's configuration document (1.12075ms)
+▶ a space's tabs
+  ✔ offers the built-in tabs, in order, when the type has every panel (1.0225ms)
+  ✔ reports a tab that names no built-in tab and has no component, and keeps building (0.182875ms)
+  ✔ shows no Library for a type with LibraryPanel off, even when the driver names it (0.110333ms)
+  ✔ mounts a contributed tab, and keeps the built-in id when the board's own 'overview' names the built-in Overview (0.25925ms)
+  ✔ drops a tab that names no built-in tab and brings nothing to draw (0.104ms)
+  ✔ relabels a tab from Labels.Tabs whatever the key casing (1.666583ms)
+  ✔ resolves a deep link to the tab id without regard to case, and by its alias (0.16525ms)
+✔ a space's tabs (4.162458ms)
+▶ a UI driver that throws
+  ✔ still gives the space its built-in tabs, and reports the failure (0.183041ms)
+  ✔ gives the driver its tabs when it does not throw (0.098584ms)
+  ✔ reads a deep link as the built-in tab it names, in any case, with discussions as Chat, and passes a contributed key through (0.10775ms)
+✔ a UI driver that throws (0.500833ms)
+▶ the Data tab (B19)
+  ✔ is offered only when the space offers data, between Library and Work (0.141792ms)
+  ✔ a driver naming Data cannot switch it on for a space with nothing to show (0.064917ms)
+  ✔ reads with the type's label (0.05725ms)
+✔ the Data tab (B19) (0.327875ms)
+▶ creating a space type's UI driver
+  ✔ returns the driver that was created, and reports nothing (0.587291ms)
+  ✔ falls back to the default driver, and reports the error, when the type's driver's constructor throws (0.08975ms)
+✔ creating a space type's UI driver (1.131791ms)
+▶ The notes a viewer is shown
+  ✔ keeps a space note and the viewer's own private note, and drops another person's private note (0.497709ms)
+  ✔ compares the author without regard to case, as MJ ids come back either way (0.059708ms)
+  ✔ shows a viewer with no id only the space notes (0.042416ms)
+✔ The notes a viewer is shown (0.975083ms)
+ℹ tests 158
+ℹ suites 45
+ℹ pass 158
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 210.288792
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 34ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  02:06:12
+   Duration  5.01s (transform 3.29s, setup 0ms, import 4.81s, tests 34ms, environment 115ms)
+```
+
+#### 8. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets --filter @mj-biz-apps/collaboration-ng build`
+
+```text
+Scope: 2 of 15 workspace projects
+packages/AngularWidgets build$ ngc
+packages/AngularWidgets build: src/lib/space-chat.component.ts:70:59 - warning NG8113: MJButtonDirective is not used within the template of CollabSpaceChatComponent
+packages/AngularWidgets build: 70   imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJClickableDirective],
+packages/AngularWidgets build:                                                              ~~~~~~~~~~~~~~~~~
+packages/AngularWidgets build: src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+packages/AngularWidgets build: 13   imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
+packages/AngularWidgets build:                                                                                ~~~~~~~~~~~~~~~~~~~
+packages/AngularWidgets build: Done in 2.7s
+packages/Angular build$ ngc
+packages/Angular build: src/lib/collaboration-section.component.ts:1445:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+packages/Angular build: 1445                                                                         <span class="config-meta">{{ reach.Fields?.length ? reach.Fields.length + ' field' + (reach.Fields.length === 1 ? '' : 's') : 'every field' }}</span>
+packages/Angular build:                                                                                                                         ~~~~~~
+packages/Angular build: Done in 2.7s
+```
+
+### Screenshots (`plans/space-focused-ux/shots/step-m/` and `plans/space-focused-ux/shots/round-2b/`, 1440×900, light and dark)
+
+- `plans/space-focused-ux/shots/step-m/chat-mention-light.png`
+- `plans/space-focused-ux/shots/step-m/chat-thread-reply-light.png`
+- `plans/space-focused-ux/shots/step-m/chat-unmentioned-followup-light.png`
+- `plans/space-focused-ux/shots/round-2b/home-light.png`
+- `plans/space-focused-ux/shots/round-2b/home-dark.png`
+- `plans/space-focused-ux/shots/round-2b/discovery-overview-light.png`
+- `plans/space-focused-ux/shots/round-2b/discovery-overview-dark.png`
+- `plans/space-focused-ux/shots/round-2b/field-notes-light.png`
+- `plans/space-focused-ux/shots/round-2b/field-notes-dark.png`
+- `plans/space-focused-ux/shots/round-2b/library-light.png`
+- `plans/space-focused-ux/shots/round-2b/library-dark.png`
+- `plans/space-focused-ux/shots/round-2b/work-light.png`
+- `plans/space-focused-ux/shots/round-2b/work-dark.png`
+- `plans/space-focused-ux/shots/round-2b/chat-thread-open-light.png`
+- `plans/space-focused-ux/shots/round-2b/chat-thread-open-dark.png`
+- `plans/space-focused-ux/shots/round-2b/page-edit-mode-light.png`
+- `plans/space-focused-ux/shots/round-2b/page-edit-mode-dark.png`
+- `plans/space-focused-ux/shots/round-2b/rail-collapsed-light.png`
+- `plans/space-focused-ux/shots/round-2b/rail-collapsed-dark.png`
+

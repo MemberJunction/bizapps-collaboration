@@ -15,7 +15,7 @@ import { spaceTurnFailure, spaceTurnInput, spaceTurnResult } from './logic/agent
 import { chatState, type ChatState, type SeatLookup } from './logic/chat-state.js';
 import { openSpaceFile, openUseFields } from './logic/open-file.js';
 import { applySettingsChanges, buildSettingsModel, DEFAULT_TYPE_COLOR, SettingsSession } from './logic/settings-model.js';
-import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
+import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSpaceRules, GrantsForViewer, noteDocument, notePromotionVerdict, pageEditVerdict, promotionConsequence, SPACE_UPLOAD_MAX_BYTES, uploadBandChoice } from '@mj-biz-apps/collaboration-core';
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
@@ -49,6 +49,7 @@ import {
     type mjBizAppsCollaborationSpaceRoleTypeEntity,
     mjBizAppsCollaborationItemUseEntity,
     mjBizAppsCollaborationSpaceNoteEntity,
+    mjBizAppsCollaborationSpacePageEntity,
     mjBizAppsCollaborationSpaceMemberPinEntity,
 } from '@mj-biz-apps/collaboration-entities';
 import { TaskEntity } from '@mj-biz-apps/tasks-entities';
@@ -140,12 +141,12 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
 import { notesVisibleTo } from './logic/visible-notes.js';
 import { pinRows } from './logic/home-lists.js';
 import {
+    applyCollabPageToEntity,
     buildStarterPagesForSpace,
-    isCollabPageNoteBody,
+    mapSpacePageRowToModel,
     mergeSpacePagesWithDefaults,
-    parseCollabPageFromNote,
-    serializeCollabPageBody,
-} from './logic/space-pages-storage.js';
+    type SpacePageRow,
+} from './logic/space-pages.js';
 
 /** The Space Notes entity's id on this host, which a pin names as its target entity. */
 const notesEntityId = (): string => Metadata.Provider.EntityByName('MJ_BizApps_Collaboration: Space Notes')?.ID ?? '';
@@ -2749,17 +2750,23 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
      * may customize page layouts, add/edit/remove blocks, or publish page changes.
      */
     public get canCustomizePages(): boolean {
-        if (this.isSpaceClosed) return false;
         const isSpaceOwner =
             !!this.activeSpaceRecord &&
             !!this.currentUser &&
             UUIDsEqual(this.activeSpaceRecord.OwnerID, this.currentUser.ID);
-        return (
-            this.settingsAccessNow.canEdit ||
-            isSpaceOwner ||
-            (this.callerSeat?.role.canPromoteBand ?? false) ||
-            this.mayAdministerSpaces
-        );
+        return pageEditVerdict(
+            {
+                userId: this.currentUser?.ID ?? '',
+                isSpaceOwner,
+                role: this.callerSeat?.role ?? null,
+                canEditSpaceSettings: this.settingsAccessNow.canEdit,
+                administers: this.mayAdministerSpaces,
+            },
+            {
+                closedAt: this.activeSpaceRecord?.ClosedAt ?? null,
+                isReadOnly: this.isSpaceClosed,
+            },
+        ).ok;
     }
 
     public get canEditCurrentTabPage(): boolean {
@@ -2887,10 +2894,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.spaceAnchors = [];
     }
 
-    /** The stage 4 reads for the space shown: notes, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
+    /** The stage 4 reads for the space shown: notes, pages, pins, the star and (for Settings) the anchors. The data entries follow the server's document. */
     private async loadStage4(spaceId: string, isCurrent: () => boolean): Promise<void> {
         await Promise.all([
             this.loadSpaceNotes(spaceId, isCurrent),
+            this.loadSpacePages(spaceId, isCurrent),
             this.loadSpacePins(spaceId, isCurrent),
             this.loadStar(spaceId, isCurrent),
             this.loadSpaceAnchors(spaceId, isCurrent),
@@ -2999,42 +3007,64 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!res?.Success) {
                 this.notesError = `The notes could not be read: ${res?.ErrorMessage ?? 'unknown error'}`;
                 this.spaceNotes = [];
-                this.persistedPages = [];
                 return;
             }
             // Another person's private note is never shown, whatever the viewer's roles read on the server
             const visibleRows = notesVisibleTo(res.Results ?? [], this.currentUser?.ID);
-            const plainNotes: NoteModel[] = [];
-            const pageModels: CollabPageModel[] = [];
-            for (const row of visibleRows) {
-                const mapped = this.noteModel(row);
-                if (isCollabPageNoteBody(row.Body)) {
-                    const page = parseCollabPageFromNote({
-                        id: row.ID,
-                        title: row.Title,
-                        body: row.Body,
-                        band: row.Band,
-                        authorName: mapped.authorName,
-                        updatedLabel: mapped.updatedLabel,
-                        canPromote: mapped.canPromote,
-                    });
-                    if (page) pageModels.push(page);
-                } else {
-                    plainNotes.push(mapped);
-                }
-            }
-            pageModels.sort((a, b) => a.sequence - b.sequence || a.title.localeCompare(b.title));
-            this.spaceNotes = plainNotes;
-            this.persistedPages = pageModels;
-            if (!this.activePageId && this.spacePages.length > 0) {
-                this.activePageId = this.spacePages[0].id;
-            }
+            this.spaceNotes = visibleRows.map((row) => this.noteModel(row));
         } catch (err) {
             if (!isCurrent()) return;
             this.notesError = `The notes could not be read: ${err instanceof Error ? err.message : String(err)}`;
         } finally {
             if (isCurrent()) {
                 this.isLoadingNotes = false;
+                this.RefreshView();
+            }
+        }
+    }
+
+    private async loadSpacePages(spaceId: string, isCurrent: () => boolean): Promise<void> {
+        if (!isValidUuid(spaceId)) return;
+        try {
+            const res = await new RunView(this.RunViewToUse).RunView<SpacePageRow>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Pages',
+                BypassCache: true,
+                ExtraFilter: `SpaceID = '${spaceId}'`,
+                OrderBy: 'Sequence ASC, __mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 200,
+            });
+            if (!isCurrent()) return;
+            if (!res?.Success) {
+                this.persistedPages = [];
+                return;
+            }
+            const me = this.currentUser?.ID ?? '';
+            const pageModels = (res.Results ?? []).map((row) => {
+                const author = this.spaceMembers.find((m) => UUIDsEqual(m.userId, row.PublishedByUserID ?? ''));
+                const authorName =
+                    row.PublishedByUser ||
+                    author?.name ||
+                    (row.PublishedByUserID && UUIDsEqual(row.PublishedByUserID, me) ? 'You' : 'Space Team');
+                const updatedLabel = formatDateLocale(
+                    row.__mj_UpdatedAt ?? (row.PublishedAt ? String(row.PublishedAt) : ''),
+                );
+                return mapSpacePageRowToModel(row, {
+                    authorName,
+                    updatedLabel,
+                    canPromote: row.Band === 'Team' && this.canCustomizePages,
+                });
+            });
+            pageModels.sort((a, b) => a.sequence - b.sequence || a.title.localeCompare(b.title));
+            this.persistedPages = pageModels;
+            if (!this.activePageId && this.spacePages.length > 0) {
+                this.activePageId = this.spacePages[0].id;
+            }
+        } catch (err) {
+            if (!isCurrent()) return;
+            LogError(`The pages of space ${spaceId} could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            if (isCurrent()) {
                 this.RefreshView();
             }
         }
@@ -3057,27 +3087,29 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             const md = new Metadata();
-            const note = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
-            const isExistingRecord = !!page.id && !page.isSeed && isValidUuid(page.id);
-            if (isExistingRecord) {
-                if (!(await note.Load(page.id))) throw new Error('The page could not be loaded.');
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
+            const existingByBuiltIn = page.builtInTabId
+                ? this.persistedPages.find((p) => p.builtInTabId === page.builtInTabId && isValidUuid(p.id))
+                : undefined;
+            const targetId =
+                !page.isSeed && isValidUuid(page.id)
+                    ? page.id
+                    : existingByBuiltIn?.id ?? '';
+            if (targetId) {
+                if (!(await entity.Load(targetId))) throw new Error('The page could not be loaded.');
             } else {
-                note.NewRecord();
-                note.SpaceID = spaceId;
-                note.AuthorUserID = this.currentUser?.ID ?? '';
+                entity.NewRecord();
+                entity.SpaceID = spaceId;
             }
-            note.Title = page.title.trim() || 'Untitled Page';
-            note.Body = serializeCollabPageBody(page);
-            note.Band = page.band;
-            note.Visibility = 'Space';
-            if (!(await note.Save())) throw new Error(note.LatestResult?.CompleteMessage || 'The page was not saved.');
-            this.activePageId = note.ID;
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            applyCollabPageToEntity(entity, page, this.currentUser?.ID);
+            if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not saved.');
+            this.activePageId = entity.ID;
+            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
             if (!page.builtInTabId) {
-                this.setTab(`page:${note.ID}`);
+                this.setTab(`page:${entity.ID}`);
                 this.UpdateQueryParams({ view: 'space', tab: this.activeTab });
             }
-            SharedService.Instance.CreateSimpleNotification(`Page "${note.Title}" saved.`, 'info', 2500);
+            SharedService.Instance.CreateSimpleNotification(`Page "${entity.Title}" saved.`, 'info', 2500);
         } catch (err) {
             this.pageSaveError = err instanceof Error ? err.message : String(err);
             LogError(`Page save failed: ${this.pageSaveError}`);
@@ -3095,7 +3127,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
             if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
             if (!(await entity.Delete())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not deleted.');
             this.activePageId = '';
@@ -3103,7 +3135,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.setTab('Overview');
                 this.UpdateQueryParams({ view: 'space', tab: 'overview' });
             }
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
             SharedService.Instance.CreateSimpleNotification(`Page "${page.title}" deleted.`, 'info', 2500);
         } catch (err) {
             this.pageSaveError = err instanceof Error ? err.message : String(err);
@@ -3123,13 +3155,13 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             const md = new Metadata();
             for (const page of pages) {
                 if (!page.id || page.isSeed || !isValidUuid(page.id)) continue;
-                const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+                const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
                 if (await entity.Load(page.id)) {
-                    entity.Body = serializeCollabPageBody(page);
+                    entity.Sequence = page.sequence ?? 0;
                     await entity.Save();
                 }
             }
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
         } catch (err) {
             this.pageSaveError = err instanceof Error ? err.message : String(err);
             LogError(`Page reorder failed: ${this.pageSaveError}`);
@@ -3147,12 +3179,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.RefreshView();
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpaceNoteEntity>('MJ_BizApps_Collaboration: Space Notes');
+            const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
             if (!(await entity.Load(page.id))) throw new Error('The page could not be loaded.');
             entity.Band = 'Shared';
             if (!(await entity.Save())) throw new Error(entity.LatestResult?.CompleteMessage || 'The page was not shared.');
             SharedService.Instance.CreateSimpleNotification(`"${page.title}" is now shared with ${this.sharedBandLabel}.`, 'success', 4000);
-            await this.loadSpaceNotes(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
+            await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));
         } catch (err) {
             this.pageSaveError = err instanceof Error ? err.message : String(err);
             LogError(`Page promote failed: ${this.pageSaveError}`);

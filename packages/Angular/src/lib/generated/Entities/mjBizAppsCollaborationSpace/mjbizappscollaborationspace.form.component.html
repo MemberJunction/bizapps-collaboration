@@ -424,6 +424,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Space Pages Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCollaborationSpacePages"
+        SectionName="Space Pages"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCollaborationSpacePages')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Collaboration: Space Pages','SpaceID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Collaboration: Space Pages','SpaceID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCollaborationSpacePages')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCollaborationSpacePages', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -9,11 +9,14 @@ import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { SpaceAnchorEntityServer, releaseAnchorWrite, vouchAnchorWrite } from '../dist/SpaceAnchorEntityServer.js';
 import { SpaceGrantEntityServer } from '../dist/SpaceGrantEntityServer.js';
 import { SpaceNoteEntityServer } from '../dist/SpaceNoteEntityServer.js';
+import { SpacePageEntityServer } from '../dist/SpacePageEntityServer.js';
 import { SpaceMemberPinEntityServer } from '../dist/SpaceMemberPinEntityServer.js';
 import { SpaceTypeStatusEntityServer } from '../dist/SpaceTypeStatusEntityServer.js';
 import { primaryAnchorCollision } from '../dist/SpaceAnchorEntityServer.js';
 import { spaceSeatsParticipants, spaceTypeAudience } from '../dist/space-audience.js';
 import { RunView } from '@memberjunction/core';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const SYSTEM = '00000000-0000-4000-8000-000000000000';
 const ADA = 'AAAAAAAA-0000-4000-8000-000000000001';
@@ -438,5 +441,150 @@ describe('Space Type Status: the statuses a type declares', () => {
         } finally {
             tables['MJ_BizApps_Collaboration: Spaces'][0]['StatusID'] = null;
         }
+    });
+});
+
+describe('Space Pages: customizable block-canvas pages in the space', () => {
+    const LEAD = 'AAAAAAAA-0000-4000-8000-000000000004';
+    const MEMBER = 'AAAAAAAA-0000-4000-8000-000000000005';
+    const LEAD_ROLE = 'A0000000-0000-4000-8000-000000000004';
+    const MEMBER_ROLE = 'A0000000-0000-4000-8000-000000000005';
+    const PAGE_1 = '81000000-0000-4000-8000-000000000001';
+    const lead = user(LEAD, 'UI');
+    const plainMember = user(MEMBER, 'UI');
+
+    before(() => {
+        tables['MJ_BizApps_Collaboration: Space Role Types'].push(
+            { ID: LEAD_ROLE, Level: 30, MaxGrantableLevel: 20, CanInvite: true, CanPromoteBand: true, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
+            { ID: MEMBER_ROLE, Level: 20, MaxGrantableLevel: 10, CanInvite: false, CanPromoteBand: false, CanSeeTeamBand: true, IsOwnerRole: false, CanContribute: true },
+        );
+        tables['MJ_BizApps_Collaboration: Space Members'].push(
+            { ID: '4', SpaceID: SPACE, UserID: LEAD, Status: 'Active', Band: 'Team', SpaceRoleTypeID: LEAD_ROLE },
+            { ID: '5', SpaceID: SPACE, UserID: MEMBER, Status: 'Active', Band: 'Team', SpaceRoleTypeID: MEMBER_ROLE },
+        );
+    });
+
+    const page = (who: UserInfo, over: Row = {}, options: Parameters<typeof mockRow>[3] = {}) =>
+        mockRow(
+            SpacePageEntityServer.prototype,
+            who,
+            {
+                ID: null,
+                SpaceID: SPACE,
+                BuiltInTab: null,
+                Title: 'Board Onboarding',
+                IconClass: 'fa-solid fa-compass',
+                Band: 'Shared',
+                Status: 'Published',
+                Sequence: 1,
+                PublishedBlocks: '[]',
+                DraftBlocks: null,
+                DraftTitle: null,
+                PublishedByUserID: ADA,
+                PublishedAt: null,
+                ...over,
+            },
+            options,
+        );
+    const validate = (row: object) => SpacePageEntityServer.prototype.ValidateAsync.call(row);
+
+    it('lets an editor who did not create the page save it', async () => {
+        rights.configureSpaces = false;
+        try {
+            const existingCreatedByAda = page(
+                lead,
+                {
+                    ID: PAGE_1,
+                    Title: 'Board Onboarding (Updated by Lead)',
+                    PublishedByUserID: ADA,
+                },
+                {
+                    saved: true,
+                    old: { Title: 'Board Onboarding', SpaceID: SPACE, Band: 'Shared' },
+                    dirty: ['Title'],
+                },
+            );
+            const res = await validate(existingCreatedByAda);
+            assert.equal(res.Success, true, errorOn(res));
+        } finally {
+            rights.configureSpaces = true;
+        }
+    });
+
+    it('refuses a plain member on create, save, and delete with a clear message', async () => {
+        rights.configureSpaces = false;
+        try {
+            const created = await validate(page(plainMember));
+            assert.equal(created.Success, false);
+            assert.match(errorOn(created, 'SpaceID'), /may create, edit, publish, or delete a page/);
+
+            const updated = await validate(
+                page(
+                    plainMember,
+                    { ID: PAGE_1, Title: 'Edited by plain member' },
+                    { saved: true, old: { Title: 'Board Onboarding', SpaceID: SPACE, Band: 'Shared' }, dirty: ['Title'] },
+                ),
+            );
+            assert.equal(updated.Success, false);
+            assert.match(errorOn(updated, 'SpaceID'), /may create, edit, publish, or delete a page/);
+
+            const toDelete = page(plainMember, { ID: PAGE_1 }, { saved: true, dirty: [] });
+            assert.equal(await SpacePageEntityServer.prototype.Delete.call(toDelete), false);
+            const history = (toDelete as unknown as { _resultHistory: Array<{ Message: string }> })._resultHistory;
+            assert.match(
+                history[history.length - 1]?.Message ?? '',
+                /may create, edit, publish, or delete a page/,
+            );
+        } finally {
+            rights.configureSpaces = true;
+        }
+    });
+
+    it('refuses everyone in a closed space', async () => {
+        const closedCreate = await validate(page(ada, { SpaceID: CLOSED_SPACE }));
+        assert.equal(closedCreate.Success, false);
+        assert.match(errorOn(closedCreate, 'SpaceID'), /closed or read-only/);
+
+        const closedDelete = page(ada, { ID: PAGE_1, SpaceID: CLOSED_SPACE }, { saved: true, dirty: [] });
+        assert.equal(await SpacePageEntityServer.prototype.Delete.call(closedDelete), false);
+        const history = (closedDelete as unknown as { _resultHistory: Array<{ Message: string }> })._resultHistory;
+        assert.match(history[history.length - 1]?.Message ?? '', /closed or read-only/);
+    });
+
+    it('ensures an outside participant never reads a Team page (RLS filter and server band check)', async () => {
+        // Even if granted admin rights, a seat that cannot see the Team band cannot write a Team page
+        const guestTeamPage = await validate(page(guest, { Band: 'Team' }));
+        assert.equal(guestTeamPage.Success, false);
+        assert.match(errorOn(guestTeamPage, 'Band'), /can't write a Team page/);
+
+        // Verify the metadata ReadRLSFilterID for Space Participant and UI uses Collaboration: Visible Pages,
+        // which requires CanSeeTeam = 1 for Team pages and allows only Band = N'Shared' for outside participants.
+        const rlsPath = resolve(import.meta.dirname, '../../../metadata/row-level-security-filters/.row-level-security-filters.json');
+        const permsPath = resolve(import.meta.dirname, '../../../metadata/entity-permissions/.entity-permissions.json');
+        const rlsFilters = JSON.parse(readFileSync(rlsPath, 'utf8')) as Array<{ fields: { Name: string; FilterText: string } }>;
+        const perms = JSON.parse(readFileSync(permsPath, 'utf8')) as Array<{ fields: { EntityID: string; RoleID: string; ReadRLSFilterID: string } }>;
+
+        const visiblePagesFilter = rlsFilters.find((f) => f.fields.Name === 'Collaboration: Visible Pages');
+        assert.ok(visiblePagesFilter, 'Collaboration: Visible Pages filter exists');
+        assert.match(visiblePagesFilter.fields.FilterText, /CanSeeTeam = 1/);
+        assert.match(visiblePagesFilter.fields.FilterText, /Band = N'Shared'/);
+
+        const participantPerm = perms.find(
+            (p) =>
+                p.fields.EntityID === '@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Pages' &&
+                p.fields.RoleID === '@lookup:MJ: Roles.Name=Space Participant',
+        );
+        assert.ok(participantPerm, 'Space Participant permission for Space Pages exists');
+        assert.equal(
+            participantPerm.fields.ReadRLSFilterID,
+            '@lookup:MJ: Row Level Security Filters.Name=Collaboration: Visible Pages',
+        );
+
+        // Simulate the RLS predicate evaluation for an outside participant (CanSeeTeam = 0, reaches SPACE):
+        const canParticipantReadPage = (row: { SpaceID: string; Band: 'Team' | 'Shared' }, access: { SpaceID: string; CanSeeTeam: boolean }[]) =>
+            access.some((a) => a.SpaceID === row.SpaceID && (a.CanSeeTeam || row.Band === 'Shared'));
+        const guestAccess = [{ SpaceID: SPACE, CanSeeTeam: false }];
+        assert.equal(canParticipantReadPage({ SpaceID: SPACE, Band: 'Team' }, guestAccess), false, 'outside participant never reads a Team page');
+        assert.equal(canParticipantReadPage({ SpaceID: SPACE, Band: 'Shared' }, guestAccess), true, 'outside participant reads a Shared page');
     });
 });

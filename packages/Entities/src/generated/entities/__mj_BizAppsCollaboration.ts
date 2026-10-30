@@ -630,7 +630,7 @@ export const mjBizAppsCollaborationSpaceMemberSchema = z.object({
     Person: z.string().nullable().describe(`
         * * Field Name: Person
         * * Display Name: Person
-        * * SQL Data Type: nvarchar(201)`),
+        * * SQL Data Type: nvarchar(250)`),
 });
 
 export type mjBizAppsCollaborationSpaceMemberEntityType = z.infer<typeof mjBizAppsCollaborationSpaceMemberSchema>;
@@ -707,6 +707,118 @@ export const mjBizAppsCollaborationSpaceNoteSchema = z.object({
 });
 
 export type mjBizAppsCollaborationSpaceNoteEntityType = z.infer<typeof mjBizAppsCollaborationSpaceNoteSchema>;
+
+/**
+ * zod schema definition for the entity MJ_BizApps_Collaboration: Space Pages
+ */
+export const mjBizAppsCollaborationSpacePageSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SpaceID: z.string().describe(`
+        * * Field Name: SpaceID
+        * * Display Name: Space ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+        * * Description: The space this page belongs to.`),
+    BuiltInTab: z.union([z.literal('Data'), z.literal('Library'), z.literal('Notes'), z.literal('Overview'), z.literal('People'), z.literal('Work')]).nullable().describe(`
+        * * Field Name: BuiltInTab
+        * * Display Name: Built In Tab
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Data
+    *   * Library
+    *   * Notes
+    *   * Overview
+    *   * People
+    *   * Work
+        * * Description: The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.`),
+    Title: z.string().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(200)
+        * * Description: The published title of the page.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class displayed beside the page title in the page rail and header.`),
+    Band: z.union([z.literal('Shared'), z.literal('Team')]).describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Shared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+        * * Description: Team or Shared: who in the space may read the page. A Shared page never moves back to Team.`),
+    Status: z.union([z.literal('Draft'), z.literal('Published')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Published
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+        * * Description: Draft or Published lifecycle state of the page.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order among pages in the space.`),
+    PublishedBlocks: z.string().nullable().describe(`
+        * * Field Name: PublishedBlocks
+        * * Display Name: Published Blocks
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of published canvas blocks (id, type, title, width, body, and block-specific properties).`),
+    DraftBlocks: z.string().nullable().describe(`
+        * * Field Name: DraftBlocks
+        * * Display Name: Draft Blocks
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress.`),
+    DraftTitle: z.string().nullable().describe(`
+        * * Field Name: DraftTitle
+        * * Display Name: Draft Title
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unpublished draft title while a draft is in progress.`),
+    PublishedByUserID: z.string().nullable().describe(`
+        * * Field Name: PublishedByUserID
+        * * Display Name: Published By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who most recently published this page.`),
+    PublishedAt: z.date().nullable().describe(`
+        * * Field Name: PublishedAt
+        * * Display Name: Published At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this page was most recently published.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Space: z.string().describe(`
+        * * Field Name: Space
+        * * Display Name: Space
+        * * SQL Data Type: nvarchar(200)`),
+    PublishedByUser: z.string().nullable().describe(`
+        * * Field Name: PublishedByUser
+        * * Display Name: Published By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type mjBizAppsCollaborationSpacePageEntityType = z.infer<typeof mjBizAppsCollaborationSpacePageSchema>;
 
 /**
  * zod schema definition for the entity MJ_BizApps_Collaboration: Space Role Types
@@ -2038,25 +2150,19 @@ export class mjBizAppsCollaborationSpaceGrantEntity extends BaseEntity<mjBizApps
         this.Set('Bindings', value);
     }
 
-    private _BindingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null | undefined = undefined;
-    private _BindingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Bindings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Bindings — a live view of the parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Bindings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get BindingsObject(): mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null {
-        const raw = this.Bindings;
-        if (raw !== this._BindingsObject_lastRaw) {
-            this._BindingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._BindingsObject_lastRaw = raw;
-        }
-        return this._BindingsObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings>('Bindings');
     }
     set BindingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Bindings = raw;
-        this._BindingsObject_cached = value;
-        this._BindingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings>('Bindings', value);
     }
 
     /**
@@ -2073,25 +2179,19 @@ export class mjBizAppsCollaborationSpaceGrantEntity extends BaseEntity<mjBizApps
         this.Set('Settings', value);
     }
 
-    private _SettingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null | undefined = undefined;
-    private _SettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Settings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Settings — a live view of the parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Settings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SettingsObject(): mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null {
-        const raw = this.Settings;
-        if (raw !== this._SettingsObject_lastRaw) {
-            this._SettingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._SettingsObject_lastRaw = raw;
-        }
-        return this._SettingsObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings>('Settings');
     }
     set SettingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Settings = raw;
-        this._SettingsObject_cached = value;
-        this._SettingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings>('Settings', value);
     }
 
     /**
@@ -2772,7 +2872,7 @@ export class mjBizAppsCollaborationSpaceMemberEntity extends BaseEntity<mjBizApp
     /**
     * * Field Name: Person
     * * Display Name: Person
-    * * SQL Data Type: nvarchar(201)
+    * * SQL Data Type: nvarchar(250)
     */
     get Person(): string | null {
         return this.Get('Person');
@@ -2949,6 +3049,266 @@ export class mjBizAppsCollaborationSpaceNoteEntity extends BaseEntity<mjBizAppsC
     */
     get AuthorUser(): string {
         return this.Get('AuthorUser');
+    }
+}
+
+
+/**
+ * MJ_BizApps_Collaboration: Space Pages - strongly typed entity sub-class
+ * * Schema: __mj_BizAppsCollaboration
+ * * Base Table: SpacePage
+ * * Base View: vwSpacePages
+ * * @description A customizable block-canvas page in a space: either the saved block layout for a built-in tab (BuiltInTab set) or a custom page in the space's Pages tab (BuiltInTab null).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ_BizApps_Collaboration: Space Pages')
+export class mjBizAppsCollaborationSpacePageEntity extends BaseEntity<mjBizAppsCollaborationSpacePageEntityType> {
+    /**
+    * Loads the MJ_BizApps_Collaboration: Space Pages record from the database
+    * @param ID: string - primary key value to load the MJ_BizApps_Collaboration: Space Pages record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof mjBizAppsCollaborationSpacePageEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SpaceID
+    * * Display Name: Space ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ_BizApps_Collaboration: Spaces (vwSpaces.ID)
+    * * Description: The space this page belongs to.
+    */
+    get SpaceID(): string {
+        return this.Get('SpaceID');
+    }
+    set SpaceID(value: string) {
+        this.Set('SpaceID', value);
+    }
+
+    /**
+    * * Field Name: BuiltInTab
+    * * Display Name: Built In Tab
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Data
+    *   * Library
+    *   * Notes
+    *   * Overview
+    *   * People
+    *   * Work
+    * * Description: The built-in tab this page lays out (Overview, Library, Data, Work, Notes, or People), or null for a custom page.
+    */
+    get BuiltInTab(): 'Data' | 'Library' | 'Notes' | 'Overview' | 'People' | 'Work' | null {
+        return this.Get('BuiltInTab');
+    }
+    set BuiltInTab(value: 'Data' | 'Library' | 'Notes' | 'Overview' | 'People' | 'Work' | null) {
+        this.Set('BuiltInTab', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(200)
+    * * Description: The published title of the page.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class displayed beside the page title in the page rail and header.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Band
+    * * Display Name: Band
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Shared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Shared
+    *   * Team
+    * * Description: Team or Shared: who in the space may read the page. A Shared page never moves back to Team.
+    */
+    get Band(): 'Shared' | 'Team' {
+        return this.Get('Band');
+    }
+    set Band(value: 'Shared' | 'Team') {
+        this.Set('Band', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Published
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+    * * Description: Draft or Published lifecycle state of the page.
+    */
+    get Status(): 'Draft' | 'Published' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Draft' | 'Published') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order among pages in the space.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: PublishedBlocks
+    * * Display Name: Published Blocks
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of published canvas blocks (id, type, title, width, body, and block-specific properties).
+    */
+    get PublishedBlocks(): string | null {
+        return this.Get('PublishedBlocks');
+    }
+    set PublishedBlocks(value: string | null) {
+        this.Set('PublishedBlocks', value);
+    }
+
+    /**
+    * * Field Name: DraftBlocks
+    * * Display Name: Draft Blocks
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of unpublished draft canvas blocks while a draft is in progress.
+    */
+    get DraftBlocks(): string | null {
+        return this.Get('DraftBlocks');
+    }
+    set DraftBlocks(value: string | null) {
+        this.Set('DraftBlocks', value);
+    }
+
+    /**
+    * * Field Name: DraftTitle
+    * * Display Name: Draft Title
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unpublished draft title while a draft is in progress.
+    */
+    get DraftTitle(): string | null {
+        return this.Get('DraftTitle');
+    }
+    set DraftTitle(value: string | null) {
+        this.Set('DraftTitle', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who most recently published this page.
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this page was most recently published.
+    */
+    get PublishedAt(): Date | null {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date | null) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Space
+    * * Display Name: Space
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Space(): string {
+        return this.Get('Space');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
     }
 }
 
@@ -3856,25 +4216,19 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings>('Configuration');
     }
     set ConfigurationObject(value: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings>('Configuration', value);
     }
 }
 
@@ -4224,25 +4578,19 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceEntity_CollaborationSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as mjBizAppsCollaborationSpaceEntity_CollaborationSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceEntity_CollaborationSettings>('Configuration');
     }
     set ConfigurationObject(value: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceEntity_CollaborationSettings>('Configuration', value);
     }
 
     /**
