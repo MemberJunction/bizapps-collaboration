@@ -457,12 +457,44 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             min-width: 0;
         }
         .recent-space-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             font-size: 13.5px;
             font-weight: 650;
             color: var(--mj-text-primary);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+        .recent-space-star {
+            font-size: 11px;
+            color: var(--mj-status-warning);
+            flex-shrink: 0;
+        }
+        .recent-spaces-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            border-top: 1px solid var(--mj-border-subtle);
+            background: var(--mj-bg-surface-sunken);
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+        }
+        .recent-spaces-toggle-btn {
+            border: none;
+            background: transparent;
+            color: var(--mj-brand-primary);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .recent-spaces-toggle-btn:hover {
+            background: var(--mj-bg-surface-hover);
         }
         .recent-space-meta {
             font-size: 12px;
@@ -766,9 +798,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [ParentSpaceName]="activeParentSpaceName"
                             [PagesCount]="spacePages.length"
                             [LibraryCount]="railMode === 'home' ? homeSharedFiles : libraryTotalCount"
-                            [TaskCount]="railMode === 'home' ? homeOpenTasks : taskCount"
+                            [TaskCount]="railMode === 'home' ? myTasksCount : taskCount"
                             [MemberCount]="headerTotalPeople"
-                            [InboxCount]="homeAwaitingApproval"
+                            [InboxCount]="inboxApprovalCount"
                             [CanCreateSpace]="canCreateSpace"
                             (SpaceCreateRequested)="openNewSpaceDialog()"
                             (SubSpaceCreateRequested)="openNewSpaceDialog(activeSpaceId)"
@@ -831,6 +863,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 [Badge]="homeCountValue('tasks')"
                                                 [BadgeLabel]="homeCountLabel('tasks')"
                                                 [ShowClose]="false"
+                                                [ShowActionLabel]="false"
                                                 [Rows]="homeTaskRows"
                                                 [TotalCount]="homeOpenTasks"
                                                 [IsLoading]="isLoadingHomeList"
@@ -846,6 +879,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [Badge]="'' + homePins.length"
                                                     [BadgeLabel]="homePinsLabel"
                                                     [ShowClose]="false"
+                                                    [ShowActionLabel]="false"
                                                     [Rows]="homePinRows"
                                                     [TotalCount]="homePins.length"
                                                     [IsLoading]="isLoadingHomePins"
@@ -903,7 +937,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 }
                                             } @else {
                                                 <div class="recent-spaces-card">
-                                                    @for (space of filteredSpaces; track space.id) {
+                                                    @for (space of displayedRecentSpaces; track space.id) {
                                                         <button
                                                             type="button"
                                                             class="recent-space-row"
@@ -917,7 +951,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                                 Size="md">
                                                             </mjc-type-tile>
                                                             <span class="recent-space-main">
-                                                                <span class="recent-space-name">{{ space.name }}</span>
+                                                                <span class="recent-space-name">
+                                                                    <span>{{ space.name }}</span>
+                                                                    @if (space.isStarred) {
+                                                                        <i class="fa-solid fa-star recent-space-star" aria-hidden="true" title="Starred space"></i>
+                                                                    }
+                                                                </span>
                                                                 <span class="recent-space-meta">
                                                                     {{ space.type }}@if (space.parentName) { · in {{ space.parentName }} }@if (space.description) { · {{ space.description }} }
                                                                 </span>
@@ -946,6 +985,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                             <i class="fa-solid fa-chevron-right recent-space-chev" aria-hidden="true"></i>
                                                         </button>
                                                     }
+                                                    @if (!spaceSearchQuery.trim() && filteredSpaces.length > 5) {
+                                                        <div class="recent-spaces-footer">
+                                                            <span>Showing {{ displayedRecentSpaces.length }} of {{ filteredSpaces.length }}</span>
+                                                            <button
+                                                                type="button"
+                                                                class="recent-spaces-toggle-btn"
+                                                                data-testid="recent-spaces-toggle-all"
+                                                                (click)="toggleShowAllRecentSpaces()">
+                                                                {{ showAllRecentSpaces ? 'Show fewer' : 'Show all ' + filteredSpaces.length }}
+                                                            </button>
+                                                        </div>
+                                                    }
                                                 </div>
                                             }
                                         </section>
@@ -967,6 +1018,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                             @if (currentPersonId) {
                                                 <bizapps-approval-inbox
                                                     [ApproverPersonID]="currentPersonId"
+                                                    (DecisionRecorded)="loadGlobalNavCounts()"
                                                 />
                                             } @else {
                                                 <div class="no-person-state">
@@ -996,6 +1048,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [PersonID]="currentPersonId"
                                                     [ShowCreateButton]="false"
                                                     (TaskDoubleClicked)="onTaskDoubleClicked($event.ID)"
+                                                    (TaskUpdated)="loadGlobalNavCounts()"
                                                 />
                                             } @else {
                                                 <div class="no-person-state">
@@ -1021,13 +1074,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         </header>
                                         <div class="files-content">
                                             <mjc-space-library
-                                                [TotalCount]="librarySharedCount"
-                                                [SharedCount]="librarySharedCount"
+                                                [TotalCount]="allSharedFilesRows.length"
+                                                [SharedCount]="allSharedFilesRows.length"
                                                 [TeamCount]="0"
-                                                [CanSeeTeamSide]="canSeeTeamSide"
-                                                [Collections]="libraryCollections"
-                                                [SmartViews]="librarySmartViews"
-                                                [Rows]="homeSharedRows"
+                                                [CanSeeTeamSide]="false"
+                                                [Collections]="allSharedFilesCollections"
+                                                [SmartViews]="allSharedFilesSmartViews"
+                                                [Rows]="allSharedFilesRows"
                                                 [SelectedRowId]="selectedItemId || ''"
                                                 [ShowDrawer]="isDrawerOpen"
                                                 [PreviewMeta]="previewMeta"
@@ -1313,7 +1366,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [AudienceBand]="chatAudienceBand"
                                                     [ParticipantCount]="conversationParticipantCount"
                                                     [DefaultAgentId]="chatDefaultAgentId"
-                                                    [DefaultAgentName]="chatDefaultAgentName || 'Sage'"
+                                                    [DefaultAgentName]="chatDefaultAgentName || ''"
                                                     [LinkedWorkstreamItem]="activeConversationLinkedItem"
                                                     [AgentReplyMode]="chatAgentReplyMode"
                                                     [AllowedAgentIDs]="chatAllowedAgentIds"
@@ -2549,6 +2602,16 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     // Home spaces search
     public spaceSearchQuery = '';
+    public showAllRecentSpaces = false;
+    public starredSpaceIds = new Set<string>();
+    public inboxApprovalCount = 0;
+    public myTasksCount = 0;
+    public allSharedFilesRows: LibraryRowModel[] = [];
+    public allSharedFilesCollections: LibraryCollection[] = [];
+    public allSharedFilesSmartViews: LibrarySmartView[] = [
+        { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: 0 },
+        { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: 0 },
+    ];
 
     public get activeConversationName(): string {
         const found = this.spaceConversations.find(c => UUIDsEqual(c.id, this.activeConversationId));
@@ -2564,6 +2627,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         color: string;
         parentName?: string;
         isClosed: boolean;
+        isStarred: boolean;
         staffAvatars: AvatarItem[];
         outsideAvatars: AvatarItem[];
         signal: HomeSpaceSignal | null;
@@ -2572,7 +2636,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const spaceMap = new Map<string, RawSpaceRecord>();
         this.rawSpaces.forEach(s => spaceMap.set(s.ID, s));
 
-        return this.rawSpaces
+        return [...this.rawSpaces]
             .filter(s => {
                 const isClosed = !!s.ClosedAt;
                 if (this.homeSpacesFilter === 'closed' ? !isClosed : isClosed) return false;
@@ -2583,6 +2647,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const matchesType = (s.SpaceType || '').toLowerCase().includes(query);
                 const matchesParent = parentName.toLowerCase().includes(query);
                 return matchesName || matchesDesc || matchesType || matchesParent;
+            })
+            .sort((a, b) => {
+                const aStar = this.starredSpaceIds.has(a.ID.toLowerCase()) ? 1 : 0;
+                const bStar = this.starredSpaceIds.has(b.ID.toLowerCase()) ? 1 : 0;
+                if (aStar !== bStar) return bStar - aStar;
+                const aRec = (a as unknown as { __mj_UpdatedAt?: string | Date }).__mj_UpdatedAt;
+                const bRec = (b as unknown as { __mj_UpdatedAt?: string | Date }).__mj_UpdatedAt;
+                const aTime = aRec ? new Date(aRec).getTime() : 0;
+                const bTime = bRec ? new Date(bRec).getTime() : 0;
+                if (aTime !== bTime) return bTime - aTime;
+                return a.Name.localeCompare(b.Name);
             })
             .map(s => {
                 const t = this.spaceTypeMap.get(s.SpaceTypeID);
@@ -2601,9 +2676,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const childCount = this.rawSpaces.filter(child => !child.ClosedAt && child.ParentID && UUIDsEqual(child.ParentID, s.ID)).length;
                 const isClosed = !!s.ClosedAt;
                 const isSealed = s.InheritsMembership === false && !!s.ParentID;
+                const isStarred = this.starredSpaceIds.has(s.ID.toLowerCase());
                 return {
                     id: s.ID,
                     isClosed,
+                    isStarred,
                     name: s.Name,
                     description: s.Description || '',
                     type: typeName || 'Unknown Type',
@@ -2622,6 +2699,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     }),
                 };
             });
+    }
+
+    public get displayedRecentSpaces(): typeof this.filteredSpaces {
+        const all = this.filteredSpaces;
+        if (this.spaceSearchQuery.trim() || this.showAllRecentSpaces) return all;
+        return all.slice(0, 5);
+    }
+
+    public toggleShowAllRecentSpaces(): void {
+        this.showAllRecentSpaces = !this.showAllRecentSpaces;
+        this.RefreshView();
     }
 
     // Chat tab state
@@ -2767,6 +2855,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                     void this.loadHomeLists();
                     void this.loadHomePins();
                     void this.loadHomeSpaceAvatars();
+                    void this.loadGlobalNavCounts();
+                    void this.loadAllSharedFiles();
+                    void this.loadStarredSpaces();
 
                     const params = this._pendingQueryParams ?? this.GetQueryParams();
                     this._pendingQueryParams = null;
@@ -2792,6 +2883,191 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         }
     }
 
+    /** Loads the global Home rail badge counts for Inbox (`bizapps-approval-inbox`) and My tasks (`bizapps-my-tasks`) using the exact same entity and filter as those components. */
+    public async loadGlobalNavCounts(): Promise<void> {
+        if (!this.currentPersonId) {
+            this.inboxApprovalCount = 0;
+            this.myTasksCount = 0;
+            this.RefreshView();
+            return;
+        }
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const personID = this.currentPersonId.replace(/'/g, "''");
+            const inboxFilter = [
+                `TypeID IN (SELECT ID FROM __mj_BizAppsTasks.vwTaskTypes WHERE IsApproval = 1)`,
+                `Status NOT IN ('Completed', 'Cancelled')`,
+                `ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}')`,
+                `ID NOT IN (SELECT d.TaskID FROM __mj_BizAppsTasks.vwTaskDecisions d INNER JOIN __mj_BizAppsTasks.vwTaskDecisionOutcomes o ON d.OutcomeID = o.ID WHERE o.IsTerminal = 1)`,
+            ].join(' AND ');
+            const myTasksFilter = `ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}')`;
+            const [approvalsRes, tasksRes] = await Promise.all([
+                rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ_BizApps_Tasks: Tasks',
+                    ExtraFilter: inboxFilter,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    MaxRows: 200,
+                }),
+                rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ_BizApps_Tasks: Tasks',
+                    ExtraFilter: myTasksFilter,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    MaxRows: 200,
+                }),
+            ]);
+            if (approvalsRes?.Success && approvalsRes.Results) {
+                this.inboxApprovalCount = approvalsRes.Results.length;
+            }
+            if (tasksRes?.Success && tasksRes.Results) {
+                this.myTasksCount = tasksRes.Results.length;
+            }
+            this.RefreshView();
+        } catch (err) {
+            this.logOnce('global-nav-counts', `Global nav counts could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Loads shared files across all visible spaces for the Home rail's "Recent files" view so its rows match `homeSharedFiles`. */
+    public async loadAllSharedFiles(): Promise<void> {
+        if (this.rawSpaces.length === 0) {
+            this.allSharedFilesRows = [];
+            this.allSharedFilesCollections = [];
+            this.allSharedFilesSmartViews = [
+                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: 0 },
+                { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: 0 },
+            ];
+            return;
+        }
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const fileEntityId = '29248F34-2837-EF11-86D4-6045BDEE16E6';
+            const itemsRes = await rv.RunView<{
+                ID: string;
+                SpaceID: string;
+                EntityID: string;
+                Entity?: string;
+                RecordID: string;
+                Band: SpaceBand;
+                Folder?: string | null;
+                PromotedAt?: string | null;
+                PromotedByUser?: string | null;
+                __mj_CreatedAt: string;
+                __mj_UpdatedAt: string;
+            }>({
+                EntityName: 'MJ_BizApps_Collaboration: Space Items',
+                ExtraFilter: `Band = 'Shared'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 100,
+            });
+            if (!itemsRes?.Success || !itemsRes.Results) return;
+            const fileItems = itemsRes.Results.filter(
+                (item) => UUIDsEqual(item.EntityID, fileEntityId) || item.Entity === 'MJ: Files',
+            );
+            const fileRecordIds: string[] = [];
+            for (const item of fileItems) {
+                const rawId = (item.RecordID ?? '').replace(/^ID\|/i, '');
+                if (rawId && isValidUuid(rawId)) {
+                    fileRecordIds.push(rawId);
+                }
+            }
+            const fileMap = new Map<string, { ID: string; Name: string; ProviderKey?: string; ContentType?: string | null }>();
+            if (fileRecordIds.length > 0) {
+                const uniqueFileIds = [...new Set(fileRecordIds)];
+                const filesRes = await rv.RunView<{ ID: string; Name: string; ProviderKey?: string; ContentType?: string | null }>({
+                    EntityName: 'MJ: Files',
+                    ExtraFilter: `ID IN ('${uniqueFileIds.join("','")}')`,
+                    ResultType: 'simple',
+                    MaxRows: 100,
+                });
+                if (filesRes?.Success && filesRes.Results) {
+                    for (const f of filesRes.Results) {
+                        fileMap.set(f.ID.toLowerCase(), f);
+                    }
+                }
+            }
+            const spaceNameById = new Map<string, string>();
+            for (const sp of this.rawSpaces) {
+                spaceNameById.set(sp.ID.toLowerCase(), sp.Name);
+            }
+            const rows: LibraryRowModel[] = [];
+            const folderCounts = new Map<string, number>();
+            const seenFileIds = new Set<string>();
+            for (const item of fileItems) {
+                const cleanRecordId = (item.RecordID ?? '').replace(/^ID\|/i, '');
+                const fileRec = fileMap.get(cleanRecordId.toLowerCase());
+                if (!fileRec || seenFileIds.has(cleanRecordId.toLowerCase())) {
+                    continue;
+                }
+                seenFileIds.add(cleanRecordId.toLowerCase());
+                const title = fileRec.Name || `Item ${cleanRecordId.slice(0, 8)}`;
+                const kind = this.detectFileKind(title, fileRec.ProviderKey, fileRec.ContentType ?? undefined);
+                const spaceName = spaceNameById.get(item.SpaceID.toLowerCase());
+                const folder = item.Folder || spaceName || 'Shared';
+                folderCounts.set(folder, (folderCounts.get(folder) ?? 0) + 1);
+                const who = item.PromotedByUser || 'Shared';
+                const when = this.formatDate(item.PromotedAt || item.__mj_UpdatedAt);
+                rows.push({
+                    id: item.ID,
+                    fileId: cleanRecordId,
+                    kind,
+                    name: title,
+                    folder,
+                    band: 'Shared',
+                    who,
+                    when,
+                    updatedAt: item.__mj_UpdatedAt,
+                });
+            }
+            this.allSharedFilesRows = rows;
+            this.allSharedFilesCollections = Array.from(folderCounts.entries()).map(([name, count], idx) => ({
+                id: 'folder-' + idx,
+                name,
+                band: 'Shared' as SpaceBand,
+                count,
+            }));
+            this.allSharedFilesSmartViews = [
+                { id: 'recent', name: 'Recently updated', iconClass: 'fa-solid fa-clock-rotate-left', count: rows.length },
+                { id: 'shared', name: 'Shared with everyone', iconClass: 'fa-solid fa-eye', count: rows.length },
+            ];
+            this.RefreshView();
+        } catch (err) {
+            this.logOnce('all-shared-files', `Recent shared files could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Loads all starred space IDs for the current user from `MJ: User Favorites` so the rail, switcher, and Home reflect starred spaces. */
+    public async loadStarredSpaces(): Promise<void> {
+        if (!this.currentUser?.ID || !this.spaceEntityId) return;
+        try {
+            const rv = new RunView(this.RunViewToUse);
+            const res = await rv.RunView<{ RecordID: string }>({
+                EntityName: 'MJ: User Favorites',
+                ExtraFilter: `UserID = '${this.currentUser.ID}' AND EntityID = '${this.spaceEntityId}'`,
+                Fields: ['RecordID'],
+                ResultType: 'simple',
+                MaxRows: 200,
+                BypassCache: true,
+            });
+            if (!res?.Success || !res.Results) return;
+            const next = new Set<string>();
+            for (const row of res.Results) {
+                const id = bareRecordId(row.RecordID ?? '').toLowerCase();
+                if (id) next.add(id);
+            }
+            this.starredSpaceIds = next;
+            if (this.activeSpaceId) {
+                this.isSpaceStarred = next.has(this.activeSpaceId.toLowerCase());
+            }
+            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
+            this.RefreshView();
+        } catch (err) {
+            this.logOnce('starred-spaces', `Starred spaces could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
     private buildSpaceRailNodes(rawSpaces: RawSpaceRecord[]): RailSpaceNode[] {
         const nodes: RailSpaceNode[] = [];
         const spaceMap = new Map<string, RawSpaceRecord>();
@@ -2810,6 +3086,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 level,
                 hasChildren: children.length > 0,
                 isExpanded: true,
+                isStarred: this.starredSpaceIds.has(space.ID.toLowerCase()),
                 ...railFlags(space),
             });
             for (const child of children) {
@@ -2866,7 +3143,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             lineage.unshift({ label: curr.Name, spaceId: curr.ID });
             curr = curr.ParentID ? this.rawSpaces.find(s => UUIDsEqual(s.ID, curr!.ParentID)) : undefined;
         }
-        this.breadcrumbs = [{ label: 'Spaces' }, ...lineage];
+        this.breadcrumbs = [{ label: 'All spaces' }, ...lineage];
     }
 
     /** Everything the last space left on screen goes, and the header shows the new space's own name at once, from what is already loaded. */
@@ -2927,6 +3204,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         spaceSubtitle: string;
         spaceTypeName: string;
         spaceTypeCode: string;
+        hasWork: boolean;
         contributedCards: readonly SpaceOverviewCardDescriptor[];
         libraryRows: LibraryRowModel[];
         spaceMembers: SpaceMemberModel[];
@@ -2941,6 +3219,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const spaceSubtitle = this.spaceSubtitle || '';
         const spaceTypeName = this.spaceTypeName || 'Workspace';
         const spaceTypeCode = this.activeSpaceTypeCode || '';
+        const hasWork = this.hasTab('Work');
         const contributedCards = this.overviewContributedCards;
         const libraryRows = this.libraryRows;
         const spaceMembers = this.spaceMembers;
@@ -2954,6 +3233,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             cached.spaceSubtitle === spaceSubtitle &&
             cached.spaceTypeName === spaceTypeName &&
             cached.spaceTypeCode === spaceTypeCode &&
+            cached.hasWork === hasWork &&
             cached.contributedCards === contributedCards &&
             cached.libraryRows === libraryRows &&
             cached.spaceMembers === spaceMembers &&
@@ -2970,6 +3250,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             spaceTypeCode,
             contributedCards,
             descriptors: assembleSpacePageBlocks(spaceTypeCode || '*', contributedCards),
+            hasWork,
             libraryRows,
             spaceMembers,
             defaultBand,
@@ -2981,6 +3262,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             spaceSubtitle,
             spaceTypeName,
             spaceTypeCode,
+            hasWork,
             contributedCards,
             libraryRows,
             spaceMembers,
@@ -3036,6 +3318,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             clientOrgName: this.clientOrgName,
             canSeeTeam: this.canSeeTeamSide,
             canWrite: this.canCustomizePages,
+            canAddHere: this.canAddHere,
             isReadOnly: this.isSpaceClosed,
             sharedLabel: this.sharedBandLabel,
             teamLabel: this.teamBandLabel,
@@ -3045,8 +3328,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             sharedItems: this.overviewSharedItems,
             sharedAudienceCount: this.headerTotalPeople,
             showLibraryLink: this.hasTab('Library'),
+            showWorkLink: this.hasTab('Work'),
             teamItems: this.overviewTeamItems,
             teamTotalCount: this.libraryTeamCount,
+            tasks: this.spaceTasks,
             canStartConversation: canChat,
             agentAvailable: this.chatDefaultAgentId !== null,
             isSubmittingAsk: this.isSubmittingAsk,
@@ -3063,7 +3348,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             onUnpin: (pin) => this.onUnpin(pin),
             onItemSelected: (item) => this.onItemSelected(item),
             onOpenLibraryRequested: () => this.onOpenLibraryRequested(),
+            onUploadFileRequested: () => this.onUploadClicked(),
             onShareRequested: (item) => this.onShareRequested(item),
+            onTaskSelected: (task) => this.onTaskSelected(task),
+            onTaskToggled: (task) => void this.onTaskToggled(task),
+            onOpenWorkRequested: () => this.onTabSelectRequested('Work'),
             onAskRequested: (msg) => this.onOverviewAskRequested(msg),
             onOpenChatRequested: () => this.onOpenChatRequested(),
             onSubSpaceSelected: (sub) => this.onSpaceOpenRequested(sub.id),
@@ -3873,9 +4162,17 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async loadStar(spaceId: string, isCurrent: () => boolean): Promise<void> {
         if (!this.currentUser) return;
         try {
-            const starred = await Metadata.Provider.GetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId));
+            const provider = this.ProviderToUse ?? Metadata.Provider;
+            const starred = await provider.GetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId));
             if (!isCurrent()) return;
             this.isSpaceStarred = starred;
+            const lower = spaceId.toLowerCase();
+            if (starred) {
+                this.starredSpaceIds.add(lower);
+            } else {
+                this.starredSpaceIds.delete(lower);
+            }
+            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
         } catch (err) {
             this.logOnce(`star:${spaceId}`, `The star could not be read: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -3888,7 +4185,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         this.isTogglingStar = true;
         this.RefreshView();
         try {
-            await Metadata.Provider.SetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId), wanted, this.currentUser);
+            const provider = this.ProviderToUse ?? Metadata.Provider;
+            await provider.SetRecordFavoriteStatus(this.currentUser.ID, 'MJ_BizApps_Collaboration: Spaces', CompositeKey.FromID(spaceId), wanted, this.currentUser);
+            const lower = spaceId.toLowerCase();
+            if (wanted) {
+                this.starredSpaceIds.add(lower);
+            } else {
+                this.starredSpaceIds.delete(lower);
+            }
+            this.spaces = this.buildSpaceRailNodes(this.rawSpaces);
             if (UUIDsEqual(this.activeSpaceId, spaceId)) this.isSpaceStarred = wanted;
         } catch (err) {
             SharedService.Instance.CreateSimpleNotification(`The star could not be saved: ${err instanceof Error ? err.message : String(err)}`, 'error', 6000);
@@ -4664,7 +4969,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         percentComplete: t.PercentComplete || 0,
                     };
                 });
-                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed').length;
+                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
             }
         } catch (err) {
             LogError('Error loading space tasks: ' + (err instanceof Error ? err.message : String(err)));
@@ -4775,6 +5080,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         }>({
                             EntityName: 'MJ: Users',
                             ExtraFilter: `ID IN (${userFilter})`,
+                            Fields: ['ID', 'Email', 'UserImageURL', 'UserImageIconClass'],
                             ResultType: 'simple',
                             MaxRows: userIds.length,
                         });
@@ -5040,7 +5346,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public onBreadcrumbSelected(crumb: BreadcrumbItem): void {
         if (crumb.spaceId) {
             this.onSpaceOpenRequested(crumb.spaceId);
-        } else if (crumb.label === 'Spaces') {
+        } else if (crumb.label === 'All spaces' || crumb.label === 'Spaces') {
             this.onBackToSpacesRequested();
         }
     }
@@ -5119,7 +5425,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     private async showPreviewFor(itemId: string): Promise<void> {
         const isLatest = this.previewReads.Begin();
         this.previewRecentUses = [];
-        const row = this.libraryRows.find((r) => UUIDsEqual(r.id, itemId));
+        const row = this.libraryRows.find((r) => UUIDsEqual(r.id, itemId)) ?? this.allSharedFilesRows.find((r) => UUIDsEqual(r.id, itemId));
         this.previewMeta = row ? `${row.folder} · ${row.who}, ${row.when}` : '';
         this.previewBandLabel = row?.band === 'Team' ? 'Team only' : 'Shared';
         this.previewAudienceSub = row?.band === 'Team'
@@ -5158,7 +5464,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
 
     public async onOpenFileRequested(fileId?: string): Promise<void> {
         if (!fileId) return;
-        const targetItem = this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
+        const targetItem =
+            this.libraryRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId)) ??
+            this.allSharedFilesRows.find(r => UUIDsEqual(r.id, fileId) || UUIDsEqual(r.fileId, fileId));
         if (!targetItem) {
             SharedService.Instance.CreateSimpleNotification('File not found in this space library.', 'error', 5000);
             return;
@@ -5793,6 +6101,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         const newEntityStatus: TaskEntity['Status'] = isCompleted ? 'InProgress' : 'Completed';
         const previousStatus = task.status;
         task.status = newEntityStatus;
+        this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
         this.RefreshView();
         try {
             const md = this.ProviderToUse;
@@ -5805,16 +6114,21 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const saved = await taskEntity.Save();
                 if (!saved) {
                     task.status = previousStatus;
+                    this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
                     this.RefreshView();
                     SharedService.Instance.CreateSimpleNotification('Failed to update task: ' + (taskEntity.LatestResult?.CompleteMessage ?? ''), 'error', 5000);
+                } else {
+                    void this.loadGlobalNavCounts();
                 }
             } else {
                 task.status = previousStatus;
+                this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
                 this.RefreshView();
                 SharedService.Instance.CreateSimpleNotification('Failed to load task for status update.', 'error', 5000);
             }
         } catch (err) {
             task.status = previousStatus;
+            this.taskCount = this.spaceTasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled').length;
             this.RefreshView();
             const msg = err instanceof Error ? err.message : String(err);
             LogError('Error toggling task: ' + msg);

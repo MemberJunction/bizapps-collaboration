@@ -265,6 +265,12 @@ export interface PendingAgentPromptState {
           <ng-template mjChatSlot="messageExtra" let-message="message">
             @if (message) {
               <div class="msg-thread-extra" [attr.data-message-id]="message.ID">
+                @if (getAskedByName(message); as askedBy) {
+                  <span class="msg-asked-by-chip" data-testid="message-asked-by">
+                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                    <span>Asked by {{ askedBy }}</span>
+                  </span>
+                }
                 @if (getParentMessage(message); as parentMsg) {
                   <button
                     type="button"
@@ -354,6 +360,11 @@ export interface PendingAgentPromptState {
                               @if (isAiMessage(reply)) {
                                 <span class="thread-reply-role-pill is-ai" data-testid="thread-reply-assistant-mark">
                                   Assistant
+                                </span>
+                              }
+                              @if (getAskedByName(reply); as askedBy) {
+                                <span class="thread-asked-by-pill" data-testid="thread-reply-asked-by">
+                                  Asked by {{ askedBy }}
                                 </span>
                               }
                               @if (getNestedReplyTargetName(reply, message.ID); as nestedTarget) {
@@ -798,6 +809,24 @@ export interface PendingAgentPromptState {
         flex-direction: column;
         gap: var(--mj-space-2);
         margin-top: var(--mj-space-2);
+      }
+
+      .msg-asked-by-chip,
+      .thread-asked-by-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1-5);
+        align-self: flex-start;
+        padding: 2px var(--mj-space-2);
+        border-radius: var(--mj-radius-full);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 24%, transparent);
+        color: var(--mj-brand-primary);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-semibold);
+      }
+      .msg-asked-by-chip i {
+        font-size: 10px;
       }
 
       .msg-thread-parent-chip {
@@ -1340,15 +1369,14 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
 
   /** Linked actionable item (Task or Document) when this conversation is a focused Workstream. */
   @Input() public LinkedWorkstreamItem: WorkstreamLinkedItem | null = null;
-  /** Friendly fallback name for the space's default AI agent. */
-  @Input() public DefaultAgentName = 'Sage';
+  /** Name of the space's default AI agent, when one is configured and allowed. */
+  @Input() public DefaultAgentName = '';
   /** Optional explicit thread messages list (used by tests or before chatArea populates). */
   @Input() public ThreadMessages: readonly ChatThreadMessageLike[] = [];
   /** Space roster members so thread avatars and outside participant rings use `mjc-avatar` without reading internal chat area state. */
   @Input() public SpaceMembers: readonly SpaceMemberModel[] = [];
 
   @Output() public LinkedItemOpenRequested = new EventEmitter<WorkstreamLinkedItem>();
-  @Output() public AgentStepInRequested = new EventEmitter<{ messageId: string; messageText: string; agentName: string }>();
 
   /** Active message being replied to in a thread (`ParentID`). */
   public replyToMessage: ChatThreadMessageLike | null = null;
@@ -1577,19 +1605,21 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
       });
     }
 
-    const agentName = this.DefaultAgentName || 'Sage';
-    list.push({
-      id: this.DefaultAgentId || 'agent-default',
-      name: agentName,
-      initials: 'AI',
-      imageUrl: null,
-      iconClass: '',
-      colorClass: '',
-      role: 'Assistant',
-      subtitle: 'Answers when mentioned or in a thread',
-      isAi: true,
-      isOutside: false,
-    });
+    const agentName = this.DefaultAgentName.trim();
+    if (agentName) {
+      list.push({
+        id: this.DefaultAgentId || 'agent-default',
+        name: agentName,
+        initials: 'AI',
+        imageUrl: null,
+        iconClass: '',
+        colorClass: '',
+        role: 'Assistant',
+        subtitle: 'Answers when mentioned or in a thread',
+        isAi: true,
+        isOutside: false,
+      });
+    }
 
     return list;
   }
@@ -1806,6 +1836,33 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     return person?.Name || 'Team Member';
   }
 
+  /**
+   * When an AI reply was explicitly requested via "Ask <Agent>", its `UserID` holds the asking
+   * member's UserID (rather than the System user). Returns the asking member's display name so
+   * the room can see who asked the agent to speak.
+   */
+  public getAskedByName(message: ChatThreadMessageLike | null | undefined): string | null {
+    if (!message || !this.isAiMessage(message)) return null;
+    const rawUserId = (message.UserID ?? '').trim();
+    const userIdNorm = rawUserId.toLowerCase();
+    if (!userIdNorm || userIdNorm === '00000000-0000-0000-0000-000000000000' || userIdNorm === 'system') {
+      return null;
+    }
+    const rawUserName = (message.User ?? '').trim();
+    if (rawUserName.toLowerCase() === 'system') {
+      return null;
+    }
+    if (this.CurrentUser?.ID && this.CurrentUser.ID.toLowerCase() === userIdNorm) {
+      return this.CurrentUser.Name || rawUserName || 'You';
+    }
+    const member = this.getMemberForUser(rawUserId, rawUserName);
+    if (member?.name) return member.name;
+    const person = this.MentionPeople?.find((p) => p.ID.toLowerCase() === userIdNorm);
+    if (person?.Name) return person.Name;
+    if (rawUserName) return rawUserName;
+    return null;
+  }
+
   public getSpeakerInitials(message: ChatThreadMessageLike | null | undefined): string {
     if (this.isAiMessage(message)) return 'AI';
     const member = this.getMemberForUser(message?.UserID, message?.User);
@@ -1943,6 +2000,13 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.activeAgentStatusText = '';
     this.activeAgentElapsed = '';
 
+    const resolvedAgentId = (this.DefaultAgentId ?? '').trim();
+    const resolvedAgentName = (this.DefaultAgentName ?? '').trim();
+    if (!resolvedAgentId || !resolvedAgentName) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
     const text = message.Message ?? '';
     const hasExplicitAgentMention = text.includes('"type":"agent"') || /@\b(sage|agent|assistant)\b/i.test(text);
     const msgIdNorm = (message.ID ?? '').trim().toLowerCase();
@@ -1972,8 +2036,8 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
           messageId: message.ID,
           messageText: text,
           reasonLabel,
-          suggestedAgentName: this.DefaultAgentName || 'Sage',
-          suggestedAgentId: this.DefaultAgentId,
+          suggestedAgentName: resolvedAgentName,
+          suggestedAgentId: resolvedAgentId,
         };
         this.cdr?.markForCheck();
       }
@@ -2016,27 +2080,57 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
     this.cdr?.markForCheck();
   }
 
-  public confirmAgentShouldGo(): void {
+  public async confirmAgentShouldGo(): Promise<void> {
     const prompt = this.pendingAgentPrompt;
     if (!prompt) return;
     this.pendingAgentPrompt = null;
-    this.onAgentTurnStarted({
-      agentName: prompt.suggestedAgentName,
-      route: 'ThreadReply',
-    });
-    this.AgentStepInRequested.emit({
-      messageId: prompt.messageId,
-      messageText: prompt.messageText,
-      agentName: prompt.suggestedAgentName,
+
+    const handler = this.effectiveAgentTurnHandler;
+    const targetAgentId = (prompt.suggestedAgentId || this.DefaultAgentId || '').trim();
+    if (!handler || !this.ConversationId || !targetAgentId) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
+    const result = await handler({
+      ConversationId: this.ConversationId,
+      BranchID: null,
+      UserMessageId: prompt.messageId,
+      MessageText: prompt.messageText,
+      AgentId: targetAgentId,
+      AgentName: prompt.suggestedAgentName,
+      Route: 'Redirect',
+      ApplicationId: this.ApplicationId,
+      AppContext: null,
+      AgentHistoryFrom: this.AgentHistoryFrom,
+      ConfigurationPresetId: null,
+      RequestedSkillIDs: [],
+      PlanMode: false,
+      TargetArtifactVersionId: null,
     });
 
-    const area = this.chatArea as { OnResendInPlaceRequested?: (msg: unknown) => void; messages?: ChatThreadMessageLike[] } | undefined;
-    const msgEntity = area?.messages?.find((m) => m.ID === prompt.messageId);
-    if (msgEntity && typeof area?.OnResendInPlaceRequested === 'function') {
-      area.OnResendInPlaceRequested(msgEntity);
-    } else {
-      this.ComposerDraft = `@${prompt.suggestedAgentName} Please weigh in on: "${this.getMessageExcerpt({ ID: prompt.messageId, Message: prompt.messageText }, 80)}"`;
-      this.syncParentMessageIdToComposer(prompt.messageId);
+    if (result?.Success && result.ReplyDetailIds?.length) {
+      const activeInput = this.getActiveMessageInput() as {
+        dataCache?: { getConversationDetail?: (id: string, user: UserInfo | null) => Promise<unknown> };
+        MessageSent?: { emit?: (detail: unknown) => void };
+      } | null;
+      const area = this.chatArea as { OnMessageSent?: (detail: unknown) => void } | undefined;
+
+      for (const detailId of result.ReplyDetailIds) {
+        if (!detailId) continue;
+        try {
+          const detail = await activeInput?.dataCache?.getConversationDetail?.(detailId, this.CurrentUser);
+          if (detail) {
+            if (typeof activeInput?.MessageSent?.emit === 'function') {
+              activeInput.MessageSent.emit(detail);
+            } else if (typeof area?.OnMessageSent === 'function') {
+              area.OnMessageSent(detail);
+            }
+          }
+        } catch {
+          // Live PubSub completion still delivers the reply if cache read fails
+        }
+      }
     }
     this.cdr?.markForCheck();
   }

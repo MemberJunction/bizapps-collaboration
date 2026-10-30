@@ -1933,15 +1933,17 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     });
   });
 
-  it('handles PR #6176 thread replies, live agent progress bar, and "Ask if an agent should go" prompt in CollabSpaceChatComponent', () => {
+  it('handles PR #6176 thread replies, live agent progress bar, and "Ask if an agent should go" prompt in CollabSpaceChatComponent', async () => {
     vi.useFakeTimers();
     const chat = new CollabSpaceChatComponent();
     chat.DefaultAgentName = 'Sage';
+    chat.DefaultAgentId = 'agent-sage';
+    chat.CurrentUser = { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as never;
     chat.LinkedWorkstreamItem = { kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' };
     chat.ThreadMessages = [
-      { ID: 'msg-1', Role: 'User', User: 'Ada Lovelace', Message: 'Can someone check the variance table on page 4?' },
-      { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', Message: 'I checked page 4 — variance is +4.2%.' },
-      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', User: 'Colin Brockman', Message: 'Thanks Ada, I will sign off on it.' },
+      { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check the variance table on page 4?' },
+      { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: 'user-colin', User: 'Colin Brockman', Message: 'I checked page 4 — variance is +4.2%.' },
+      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: 'Thanks Ada, I will sign off on it.' },
     ];
 
     // 1. Linked workstream item opens when clicked
@@ -1966,6 +1968,8 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Colin Brockman');
     expect(chat.getSpeakerName(chat.ThreadMessages[0])).toBe('Ada Lovelace');
     expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
+    expect(chat.getAskedByName(chat.ThreadMessages[1])).toBe('Colin Brockman');
+    expect(chat.getAskedByName(chat.ThreadMessages[4])).toBeNull();
     expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
     expect(chat.isAiMessage(chat.ThreadMessages[0])).toBe(false);
 
@@ -1986,22 +1990,49 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
       messageText: 'Sounds good to me.',
       reasonLabel: 'You replied to Ada Lovelace.',
       suggestedAgentName: 'Sage',
-      suggestedAgentId: null,
+      suggestedAgentId: 'agent-sage',
     });
 
-    // 4. Confirming "Ask Sage" starts the live agent working progress bar and emits AgentStepInRequested
-    const stepIns: unknown[] = [];
-    chat.AgentStepInRequested.subscribe((ev) => stepIns.push(ev));
-    chat.confirmAgentShouldGo();
+    // 4. Confirming "Ask Sage to answer?" runs AgentTurnHandler with Route: 'Redirect' for that message and agent
+    const turnRequests: unknown[] = [];
+    chat.ConversationId = 'conv-1';
+    chat.AgentTurnHandler = async (req) => {
+      turnRequests.push(req);
+      return { Success: true, ReplyDetailIds: ['reply-99'] };
+    };
+    const askDone = chat.confirmAgentShouldGo();
     expect(chat.pendingAgentPrompt).toBeNull();
     expect(chat.isAgentWorking).toBe(true);
     expect(chat.activeAgentName).toBe('Sage');
-    expect(chat.formatRouteBadge(chat.activeAgentRoute)).toBe('Replying in the thread');
-    expect(stepIns).toEqual([{ messageId: 'msg-4', messageText: 'Sounds good to me.', agentName: 'Sage' }]);
-
-    chat.onAgentTurnCompleted();
+    expect(chat.formatRouteBadge(chat.activeAgentRoute)).toBe('Handed to Sage');
+    await askDone;
+    expect(turnRequests).toEqual([
+      {
+        ConversationId: 'conv-1',
+        BranchID: null,
+        UserMessageId: 'msg-4',
+        MessageText: 'Sounds good to me.',
+        AgentId: 'agent-sage',
+        AgentName: 'Sage',
+        Route: 'Redirect',
+        ApplicationId: null,
+        AppContext: null,
+        AgentHistoryFrom: null,
+        ConfigurationPresetId: null,
+        RequestedSkillIDs: [],
+        PlanMode: false,
+        TargetArtifactVersionId: null,
+      },
+    ]);
     expect(chat.isAgentWorking).toBe(false);
     expect(chat.activeAgentRoute).toBeNull();
+
+    // 5. When no default agent is configured, the "Ask <Agent> to answer?" prompt does not appear
+    chat.DefaultAgentId = null;
+    chat.DefaultAgentName = '';
+    chat.onUserMessageSent({ ID: 'msg-7', ParentID: 'msg-1', Role: 'User', Message: 'No agent configured.' }, chat.ThreadMessages[0]);
+    vi.advanceTimersByTime(150);
+    expect(chat.pendingAgentPrompt).toBeNull();
     vi.useRealTimers();
   });
 
@@ -2037,7 +2068,53 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(pill.isOpen).toBe(false);
     expect(inviteCount).toBe(1);
   });
+
+  it('supports Round 5 header breadcrumbs, type tile click, starred spaces in rail, and Open tasks Overview block', async () => {
+    const { CollabSpaceHeaderComponent } = await import('./space-header.component.ts');
+    const { CollabSpaceRailComponent } = await import('./space-rail.component.ts');
+    const { CollabSpaceWorkComponent } = await import('./space-work.component.ts');
+    const { CollabOpenTasksPageBlockComponent } = await import('./base-space-page-block.ts');
+
+    const header = new CollabSpaceHeaderComponent();
+    header.Title = 'Audit committee';
+    header.TypeName = 'Committee';
+    header.Subtitle = 'Charter, agendas, and audit trail';
+    header.Breadcrumbs = [];
+    expect(header.headerBreadcrumbs).toEqual([{ label: 'All spaces' }]);
+
+    const selectedCrumbs: unknown[] = [];
+    header.BreadcrumbSelectRequested.subscribe((c) => selectedCrumbs.push(c));
+    header.onAllSpacesClick();
+    expect(selectedCrumbs).toEqual([{ label: 'All spaces' }]);
+
+    const rail = new CollabSpaceRailComponent();
+    rail.Spaces = [
+      { id: 's-1', name: 'Q3 Financial Audit', glyph: 'Briefcase', tone: 'blue', isStarred: true },
+      { id: 's-2', name: 'Board of Directors', glyph: 'Gavel', tone: 'purple', isStarred: false },
+    ];
+    expect(rail.starredSpaces.map((s) => s.id)).toEqual(['s-1']);
+    rail.jumpOpen = true;
+    rail.onDocumentKeyDown({ key: 'Escape', preventDefault: () => {} } as unknown as KeyboardEvent);
+    expect(rail.jumpOpen).toBe(false);
+
+    const work = new CollabSpaceWorkComponent();
+    work.Compact = true;
+    work.Tasks = [
+      { id: 't1', name: 'Open task', band: 'Shared', status: 'InProgress', priority: 'Medium' },
+      { id: 't2', name: 'Completed task', band: 'Shared', status: 'Completed', priority: 'Medium' },
+      { id: 't3', name: 'Cancelled task', band: 'Shared', status: 'Cancelled', priority: 'Low' },
+    ];
+    expect(work.openVisibleTasks.map((t) => t.id)).toEqual(['t1']);
+
+    const ctx = {
+      tasks: work.Tasks,
+      showWorkLink: true,
+    };
+    expect(CollabOpenTasksPageBlockComponent.canView(ctx)).toBe(true);
+    expect(CollabOpenTasksPageBlockComponent.isActive(ctx)).toBe(true);
+  });
 });
+
 
 
 

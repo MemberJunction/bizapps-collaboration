@@ -10,7 +10,8 @@ import {
 } from './base-space-type-ui-driver';
 import { CollabPinnedStripComponent } from './pinned-strip.component';
 import { CollabSpaceOverviewComponent, type RoomMiniMessage, type SubSpaceSummary } from './space-overview.component';
-import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, PinModel, SpaceBand } from './types';
+import { CollabSpaceWorkComponent } from './space-work.component';
+import type { ItemCardModel, ItemRowModel, NeedsYouItemModel, PinModel, SpaceBand, TaskItemModel } from './types';
 
 export interface SpacePageBlockConfig {
     id: string;
@@ -18,6 +19,11 @@ export interface SpacePageBlockConfig {
     title: string;
     width?: 'full' | 'half' | 'main' | 'side';
     [key: string]: unknown;
+}
+
+export interface SpacePageBlockEmptyAction {
+    label: string;
+    run: () => void;
 }
 
 export interface SpacePageBlockContext {
@@ -28,11 +34,13 @@ export interface SpacePageBlockContext {
     clientOrgName?: string;
     canSeeTeam?: boolean;
     canWrite?: boolean;
+    canAddHere?: boolean;
     isReadOnly?: boolean;
     sharedLabel?: string;
     teamLabel?: string;
     showLibraryLink?: boolean;
     showChatLink?: boolean;
+    showWorkLink?: boolean;
     canStartConversation?: boolean;
     agentAvailable?: boolean;
     isSubmittingAsk?: boolean;
@@ -46,6 +54,7 @@ export interface SpacePageBlockContext {
     sharedItems?: ItemCardModel[];
     teamItems?: ItemRowModel[];
     teamTotalCount?: number;
+    tasks?: TaskItemModel[];
     roomMessages?: RoomMiniMessage[];
     subSpaces?: SubSpaceSummary[];
     canAddSubSpace?: boolean;
@@ -60,6 +69,10 @@ export interface SpacePageBlockContext {
     onItemSelected?: (item: ItemCardModel | ItemRowModel) => void;
     onShareRequested?: (item: ItemRowModel) => void;
     onOpenLibraryRequested?: () => void;
+    onUploadFileRequested?: () => void;
+    onTaskSelected?: (task: TaskItemModel) => void;
+    onTaskToggled?: (task: TaskItemModel) => void;
+    onOpenWorkRequested?: () => void;
     onAskRequested?: (question: string) => void;
     onOpenChatRequested?: () => void;
     onSubSpaceSelected?: (subSpace: SubSpaceSummary) => void;
@@ -94,7 +107,9 @@ export interface SpacePageBlockDescriptor {
     spaceTypes: string[];
     kind: 'page-block' | 'card';
     component: Type<unknown>;
+    canView?: (ctx: SpacePageBlockContext | null) => boolean;
     isActive?: (ctx: SpacePageBlockContext | null) => boolean;
+    emptyAction?: (ctx: SpacePageBlockContext | null) => SpacePageBlockEmptyAction | null;
 }
 
 /**
@@ -231,7 +246,14 @@ export class CollabNeedsYouPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabSharedFilesPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean(ctx.showLibraryLink ?? true) : true;
+        return ctx ? (ctx.sharedItems?.length ?? 0) > 0 : true;
+    }
+
+    public static emptyAction(ctx: SpacePageBlockContext | null): SpacePageBlockEmptyAction | null {
+        if (!ctx?.canAddHere || ctx.isReadOnly) return null;
+        const fn = ctx.onUploadFileRequested ?? (ctx.showLibraryLink ? ctx.onOpenLibraryRequested : undefined);
+        if (!fn) return null;
+        return { label: 'Upload a file', run: () => fn() };
     }
 }
 
@@ -275,7 +297,69 @@ export class CollabSharedFilesPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabTeamFilesPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean(ctx.canSeeTeam && (ctx.showLibraryLink ?? true)) : true;
+        return ctx ? Boolean(ctx.canSeeTeam && (ctx.teamItems?.length ?? 0) > 0) : true;
+    }
+
+    public static emptyAction(ctx: SpacePageBlockContext | null): SpacePageBlockEmptyAction | null {
+        if (!ctx?.canSeeTeam || !ctx.canAddHere || ctx.isReadOnly) return null;
+        const fn = ctx.onUploadFileRequested ?? (ctx.showLibraryLink ? ctx.onOpenLibraryRequested : undefined);
+        if (!fn) return null;
+        return { label: 'Upload a file', run: () => fn() };
+    }
+}
+
+@RegisterClassEx(BaseSpacePageBlock, {
+    key: 'collab:open-tasks',
+    metadata: {
+        slot: 'page-block',
+        contributionKey: 'collab:open-tasks',
+        label: 'Open tasks',
+        icon: 'fa-solid fa-list-check',
+        description: 'Open tasks in this space',
+        emptyText: 'No open tasks',
+        side: 'Shared',
+        defaultZone: 'main',
+        defaultTabs: ['Overview'],
+        sortKey: 45,
+        spaceTypes: ['*'],
+    } satisfies SpacePageBlockMetadata,
+})
+@Component({
+    selector: 'mjc-page-block-open-tasks',
+    standalone: true,
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    imports: [CommonModule, CollabSpaceWorkComponent],
+    template: `
+        <mjc-space-work
+            [Compact]="true"
+            [CustomTitle]="Config?.title || 'Open tasks'"
+            [Tasks]="Context?.tasks || []"
+            [CanSeeTeamSide]="Context?.canSeeTeam ?? true"
+            [CanCreateTask]="(Context?.canAddHere ?? false) && !ReadOnly"
+            [ReadOnly]="ReadOnly || (Context?.isReadOnly ?? false)"
+            [ShowWorkLink]="Context?.showWorkLink ?? true"
+            (TaskSelectRequested)="Context?.onTaskSelected?.($event)"
+            (TaskToggleRequested)="Context?.onTaskToggled?.($event)"
+            (OpenWorkRequested)="Context?.onOpenWorkRequested?.()"
+        />
+    `,
+})
+export class CollabOpenTasksPageBlockComponent extends BaseSpacePageBlock {
+    public static canView(ctx: SpacePageBlockContext | null): boolean {
+        return ctx ? Boolean(ctx.showWorkLink ?? true) : true;
+    }
+
+    public static isActive(ctx: SpacePageBlockContext | null): boolean {
+        if (!ctx) return true;
+        const canSeeTeam = ctx.canSeeTeam ?? true;
+        return (ctx.tasks ?? []).some(
+            (t) => t.status !== 'Completed' && t.status !== 'Cancelled' && (canSeeTeam || t.band === 'Shared'),
+        );
+    }
+
+    public static emptyAction(ctx: SpacePageBlockContext | null): SpacePageBlockEmptyAction | null {
+        if (!ctx?.showWorkLink || !ctx.onOpenWorkRequested) return null;
+        return { label: 'Open Work', run: () => ctx.onOpenWorkRequested?.() };
     }
 }
 
@@ -317,8 +401,12 @@ export class CollabTeamFilesPageBlockComponent extends BaseSpacePageBlock {
 export class CollabAskPageBlockComponent extends BaseSpacePageBlock {
     @ViewChild('overviewRef') private overviewRef?: CollabSpaceOverviewComponent;
 
-    public static isActive(ctx: SpacePageBlockContext | null): boolean {
+    public static canView(ctx: SpacePageBlockContext | null): boolean {
         return ctx ? Boolean(ctx.canStartConversation && !ctx.isReadOnly && (ctx.showChatLink ?? true)) : true;
+    }
+
+    public static isActive(ctx: SpacePageBlockContext | null): boolean {
+        return ctx ? Boolean(ctx.canStartConversation && !ctx.isReadOnly && (ctx.showChatLink ?? true) && (ctx.agentAvailable ?? true)) : true;
     }
 
     public onAsk(question: string): void {
@@ -364,7 +452,12 @@ export class CollabAskPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabDiscussionPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean(ctx.showChatLink ?? true) : true;
+        return ctx ? Boolean((ctx.showChatLink ?? true) && (ctx.roomMessages?.length ?? 0) > 0) : true;
+    }
+
+    public static emptyAction(ctx: SpacePageBlockContext | null): SpacePageBlockEmptyAction | null {
+        if (!ctx?.showChatLink || !ctx.onOpenChatRequested) return null;
+        return { label: 'Open chat', run: () => ctx.onOpenChatRequested?.() };
     }
 }
 
@@ -404,7 +497,12 @@ export class CollabDiscussionPageBlockComponent extends BaseSpacePageBlock {
 })
 export class CollabSubSpacesPageBlockComponent extends BaseSpacePageBlock {
     public static isActive(ctx: SpacePageBlockContext | null): boolean {
-        return ctx ? Boolean((ctx.subSpaces?.length ?? 0) > 0 || (ctx.canAddSubSpace && !ctx.isReadOnly)) : true;
+        return ctx ? Boolean((ctx.subSpaces?.length ?? 0) > 0) : true;
+    }
+
+    public static emptyAction(ctx: SpacePageBlockContext | null): SpacePageBlockEmptyAction | null {
+        if (!ctx?.canAddSubSpace || ctx.isReadOnly || !ctx.onNewSubSpaceRequested) return null;
+        return { label: '+ Sub-space', run: () => ctx.onNewSubSpaceRequested?.() };
     }
 }
 
@@ -489,6 +587,7 @@ export const BUILT_IN_SPACE_PAGE_BLOCKS = [
     CollabNeedsYouPageBlockComponent,
     CollabSharedFilesPageBlockComponent,
     CollabTeamFilesPageBlockComponent,
+    CollabOpenTasksPageBlockComponent,
     CollabAskPageBlockComponent,
     CollabDiscussionPageBlockComponent,
     CollabSubSpacesPageBlockComponent,
@@ -512,7 +611,11 @@ function descriptorFromRegistration(reg: ClassRegistration): SpacePageBlockDescr
     const defaultTabs: readonly string[] = Array.isArray(meta.defaultTabs) ? meta.defaultTabs : [];
     const sortKey = typeof meta.sortKey === 'number' ? meta.sortKey : 100;
     const spaceTypes = Array.isArray(meta.spaceTypes) ? meta.spaceTypes : ['*'];
-    const subClass = reg.SubClass as Type<unknown> & { isActive?: (ctx: SpacePageBlockContext | null) => boolean };
+    const subClass = reg.SubClass as Type<unknown> & {
+        canView?: (ctx: SpacePageBlockContext | null) => boolean;
+        isActive?: (ctx: SpacePageBlockContext | null) => boolean;
+        emptyAction?: (ctx: SpacePageBlockContext | null) => SpacePageBlockEmptyAction | null;
+    };
 
     return {
         key,
@@ -527,7 +630,9 @@ function descriptorFromRegistration(reg: ClassRegistration): SpacePageBlockDescr
         spaceTypes,
         kind: 'page-block',
         component: subClass,
+        canView: typeof subClass.canView === 'function' ? subClass.canView : undefined,
         isActive: typeof subClass.isActive === 'function' ? subClass.isActive : undefined,
+        emptyAction: typeof subClass.emptyAction === 'function' ? subClass.emptyAction : undefined,
     };
 }
 

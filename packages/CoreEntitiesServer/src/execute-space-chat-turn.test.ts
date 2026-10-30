@@ -125,6 +125,7 @@ describe('executeSpaceChatTurn', () => {
         ID?: string;
         ConversationID?: string;
         ParentID?: string | null;
+        UserID?: string | null;
         Role?: string;
         AgentID?: string | null;
         Status?: string;
@@ -1056,6 +1057,59 @@ describe('executeSpaceChatTurn', () => {
             assert.ok(result.agentHistoryFrom instanceof Date);
             assert.equal(result.mentionPeople.length, 1);
             assert.equal(result.mentionPeople[0].ID, CALLER_ID);
+        }
+    });
+
+    it("executes an explicit ask (route: 'Redirect') on an untagged message in a MentionOnly space, threads the reply under that message, and records the caller on UserID so the room sees who asked", async () => {
+        const provider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            messageUserId: OTHER_USER_ID,
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, true, result.ok ? '' : result.message);
+        if (result.ok) {
+            assert.ok(result.replyDetailIds.length > 0);
+        }
+        const reply = provider.savedDetails[provider.savedDetails.length - 1];
+        assert.equal(reply.ParentID, USER_MESSAGE_ID, 'reply threads under the asked message');
+        assert.equal(reply.AgentID, ALLOWED_AGENT_ID, 'reply runs the requested allowed agent');
+        assert.equal(reply.UserID, CALLER_ID, 'reply records who asked on UserID so the room sees why the agent spoke');
+        assert.equal(reply.Status, 'Complete');
+    });
+
+    it("refuses an explicit ask (route: 'Redirect') when the caller cannot post or when the agent is not allowed in the space", async () => {
+        const nonContribProvider = createMockProvider({
+            canContribute: false,
+            messageText: 'Can someone check the Q3 variance numbers?',
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const nonContribResult = await executeSpaceChatTurn(nonContribProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(nonContribResult.ok, false);
+        if (!nonContribResult.ok) {
+            assert.match(nonContribResult.message, /cannot run an agent turn/i);
+        }
+
+        const disallowedAgentProvider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const disallowedResult = await executeSpaceChatTurn(disallowedAgentProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: DISALLOWED_AGENT_ID,
+        });
+        assert.equal(disallowedResult.ok, false);
+        if (!disallowedResult.ok) {
+            assert.match(disallowedResult.message, /not allowed in this space/i);
         }
     });
 });

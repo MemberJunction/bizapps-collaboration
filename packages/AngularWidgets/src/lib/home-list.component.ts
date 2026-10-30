@@ -55,14 +55,18 @@ export interface HomeListRow {
         <ul class="hl-rows">
           @for (row of Rows; track row.key) {
             <li>
-              <button type="button" class="hl-row" (click)="RowSelected.emit(row.key)">
+              <button
+                type="button"
+                class="hl-row"
+                [attr.aria-label]="!ShowActionLabel && row.actionLabel ? row.title + ' — ' + row.actionLabel : null"
+                (click)="RowSelected.emit(row.key)">
                 <span class="hl-ic"><i [class]="row.iconClass" aria-hidden="true"></i></span>
                 <span class="hl-main">
                   <span class="hl-row-title">{{ row.title }}</span>
                   <span class="hl-row-detail">{{ row.detail }}</span>
                 </span>
                 <span class="hl-space">{{ row.spaceName }}</span>
-                <span class="hl-action">{{ row.actionLabel }} <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
+                <span class="hl-action">@if (ShowActionLabel) { {{ row.actionLabel }} }<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
               </button>
             </li>
           }
@@ -222,6 +226,7 @@ export class CollabHomeListComponent {
   @Input() Badge = '';
   @Input() BadgeLabel = '';
   @Input() ShowClose = true;
+  @Input() ShowActionLabel = true;
   @Input() Rows: readonly HomeListRow[] = [];
   /** How many there are in all, when the rows are cut short. */
   @Input() TotalCount = 0;

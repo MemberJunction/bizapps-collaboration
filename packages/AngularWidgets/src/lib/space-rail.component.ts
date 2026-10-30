@@ -144,12 +144,37 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                       Size="sm">
                     </mjc-type-tile>
                     <span class="row-label">{{ match.name }}</span>
+                    @if (match.isStarred) {
+                      <i class="fa-solid fa-star row-star" aria-hidden="true"></i>
+                    }
                   </button>
                 }
                 @if (jumpMatches.length === 0) {
                   <div class="jump-none">No space matches.</div>
                 }
               } @else {
+                @if (starredSpaces.length > 0) {
+                  <div class="switcher-starred-group" data-testid="switcher-starred-spaces">
+                    <div class="switcher-group-label">Starred</div>
+                    @for (st of starredSpaces; track st.id) {
+                      <button
+                        type="button"
+                        class="rail-row jump-item"
+                        [class.active]="IsActiveSpace(st.id)"
+                        (click)="jumpTo(st)">
+                        <mjc-type-tile
+                          [IconClass]="st.iconClass"
+                          [Color]="st.color || ''"
+                          [IsClosed]="!!st.isLocked"
+                          Size="sm">
+                        </mjc-type-tile>
+                        <span class="row-label ellipsis">{{ st.name }}</span>
+                        <i class="fa-solid fa-star row-star" aria-hidden="true"></i>
+                      </button>
+                    }
+                  </div>
+                  <div class="switcher-divider"></div>
+                }
                 @for (s of visibleSpaces; track s.id) {
                   @let guides = treeGuidesFor($index);
                   <div
@@ -182,6 +207,9 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                       Size="sm">
                     </mjc-type-tile>
                     <span class="row-label ellipsis">{{ s.name }}</span>
+                    @if (s.isStarred) {
+                      <i class="fa-solid fa-star row-star" aria-hidden="true"></i>
+                    }
                     @if (s.unread) {
                       <span class="unread"></span>
                     } @else if (s.isLocked) {
@@ -453,6 +481,32 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
             </div>
           </div>
 
+          @if (starredSpaces.length > 0 && !isCollapsed) {
+            <div class="rail-group" data-testid="rail-starred-spaces">
+              <div class="rail-group-head nav-section">
+                <span class="rail-group-label section-title">Starred</span>
+              </div>
+              <div class="rail-group-list">
+                @for (st of starredSpaces; track st.id) {
+                  <button
+                    type="button"
+                    class="rail-row nav-item"
+                    [class.active]="IsActiveSpace(st.id)"
+                    (click)="selectSpace(st.id)">
+                    <mjc-type-tile
+                      [IconClass]="st.iconClass"
+                      [Color]="st.color || ''"
+                      [IsClosed]="!!st.isLocked"
+                      Size="sm">
+                    </mjc-type-tile>
+                    <span class="row-label ellipsis">{{ st.name }}</span>
+                    <i class="fa-solid fa-star row-star" aria-hidden="true"></i>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
           <div class="rail-group rail-spaces-group">
             @if (!isCollapsed) {
               <div class="rail-group-head nav-section">
@@ -502,6 +556,9 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                       Size="sm">
                     </mjc-type-tile>
                     <span class="row-label ellipsis">{{ s.name }}</span>
+                    @if (s.isStarred) {
+                      <i class="fa-solid fa-star row-star" aria-hidden="true"></i>
+                    }
                     @if (s.unread) {
                       <span class="unread"></span>
                     } @else if (s.isLocked) {
@@ -821,7 +878,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       flex-shrink: 0;
       transition: background var(--mj-transition-fast), color var(--mj-transition-fast);
     }
-    .rail.collapsed .rail-row {
+    .rail.collapsed .rail-body .rail-row {
       width: var(--mj-space-9);
       padding: 0;
       justify-content: center;
@@ -856,6 +913,27 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .row-star {
+      color: var(--mj-status-warning);
+      font-size: var(--mj-text-xs);
+      flex-shrink: 0;
+    }
+
+    .switcher-starred-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--mj-space-0-5);
+    }
+
+    .switcher-group-label {
+      font-size: 11px;
+      font-weight: var(--mj-font-bold);
+      text-transform: uppercase;
+      letter-spacing: var(--mj-tracking-wider);
+      color: var(--mj-text-muted);
+      padding: var(--mj-space-1) var(--mj-space-2-5);
     }
 
     .row-count {
@@ -1304,6 +1382,10 @@ export class CollabSpaceRailComponent implements OnInit {
     return this.jumpQuery.trim().length > 0;
   }
 
+  public get starredSpaces(): RailSpaceNode[] {
+    return this.Spaces.filter((s) => !!s.isStarred);
+  }
+
   /** The spaces whose names contain what was typed, in the tree's order. */
   public get jumpMatches(): RailSpaceNode[] {
     const needle = this.jumpQuery.trim().toLowerCase();
@@ -1343,12 +1425,15 @@ export class CollabSpaceRailComponent implements OnInit {
     this.SpaceOpenRequested.emit(space.id);
   }
 
-  /** ⌘J (Ctrl+J elsewhere) opens the palette from anywhere on the page. */
+  /** ⌘J (Ctrl+J elsewhere) opens the palette from anywhere on the page; Escape closes it. */
   @HostListener('document:keydown', ['$event'])
   onDocumentKeyDown(event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'preventDefault'>): void {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
       event.preventDefault();
       this.OpenJump();
+    } else if (event.key === 'Escape' && this.jumpOpen) {
+      event.preventDefault();
+      this.closeJump();
     }
   }
 

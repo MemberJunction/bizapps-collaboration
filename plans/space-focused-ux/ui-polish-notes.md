@@ -1821,3 +1821,296 @@ $ node test-harnesses/integration.mjs row-filters
 - `plans/space-focused-ux/shots/round-4/rail-collapsed-light.png`
 - `plans/space-focused-ux/shots/round-4/rail-collapsed-dark.png`
 
+---
+
+## Round 5
+
+### 1. Bugs Fixed & Items Restored (`F1` to `F10`, plus `N1` to `N3`)
+
+1. **`F1` — Space switcher popover when the rail is collapsed (`packages/AngularWidgets/src/lib/space-rail.component.ts`):**
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f1-before-home-collapsed.png`, `plans/space-focused-ux/shots/round-5/f1-before-space-collapsed.png`):** Clicking `[data-testid="rail-space-switcher"]` while `.rail.collapsed` was active reached `onJumpClick()` and rendered `.switcher-popover`, but the un-scoped CSS rules `.rail.collapsed .rail-row`, `.rail.collapsed .rail-row .row-lbl`, and `.rail.collapsed .rail-row .tree-caret` collapsed every `.rail-row` inside `.switcher-popover` to `38px` width and hid all space names (`display: none`), leaving a column of unlabeled icons.
+   - **Fix (`plans/space-focused-ux/shots/round-5/f1-after-home-collapsed.png`, `plans/space-focused-ux/shots/round-5/f1-after-space-collapsed.png`):** Scoped the collapsed row styles to `.rail.collapsed .rail-body .rail-row` so rows inside `.switcher-popover` keep their full `262px` width, carets, and labels; also added `Escape` handling in `onDocumentKeyDown` to close `switcherOpen`.
+2. **`F2` — Inbox badge counts `bizapps-approval-inbox` rows (`packages/Angular/src/lib/collaboration-section.component.ts`):**
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f2-before-inbox.png`):** `[InboxCount]` was bound to `homeAwaitingApproval` (`1`, Pat Invited's space seat invitation), while `<bizapps-approval-inbox [PersonID]="currentPersonId">` showed `0` rows (`"No approvals waiting on you."`).
+   - **Fix (`plans/space-focused-ux/shots/round-5/f2-after-inbox.png`):** Added `inboxApprovalCount` loaded by `loadGlobalNavCounts()` using the exact `MJ_BizApps_Tasks: Tasks` `ExtraFilter` as `ApprovalInboxComponent` (`TypeID IN (SELECT ID FROM __mj_BizAppsTasks.vwTaskTypes WHERE IsApproval = 1)`, `Status NOT IN ('Completed', 'Cancelled')`, `ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}')`, and `ID NOT IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskDecisions WHERE DecidedByPersonID = '${personID}')`) and bound `[InboxCount]="inboxApprovalCount"`. Space seat invitations remain in Home's `Needs you` section.
+3. **`F3` — Every number audited and aligned with its destination (`packages/Angular/src/lib/collaboration-section.component.ts`):**
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f3-before-my-tasks.png`, `plans/space-focused-ux/shots/round-5/f3-before-recent-files.png`):**
+     - Home rail `My tasks` showed `8` (`homeOpenTasks`, all open tasks across reachable spaces) while `<bizapps-my-tasks [PersonID]="currentPersonId">` showed `1` task (`Discovery plan`) assigned to Ada Owner.
+     - Home rail `Recent files` showed `3` (`homeSharedFiles`, all shared files across reachable spaces) while the `Recent files` view (`activeView === 'files'`) bound `[Rows]="homeSharedRows"` (which filtered `this.libraryRows`, the last-visited single space's library, showing `1` file).
+     - Space rail `Work` badge (`taskCount`) used `this.spaceTasks.length` (all tasks including Completed/Cancelled) whereas Home's space signal and `Coming up` count open tasks (`status !== 'Completed' && status !== 'Cancelled'`).
+   - **Fix (`plans/space-focused-ux/shots/round-5/f3-after-my-tasks.png`, `plans/space-focused-ux/shots/round-5/f3-after-recent-files.png`):**
+     - Added `myTasksCount` in `loadGlobalNavCounts()` using the exact `MJ_BizApps_Tasks: Tasks` `ExtraFilter` as `MyTasksComponent` (`ID IN (SELECT TaskID FROM __mj_BizAppsTasks.vwTaskAssignments WHERE AssigneeRecordID = '${personID}') AND Status NOT IN ('Completed', 'Cancelled')`) and bound `[TaskCount]="railMode === 'home' ? myTasksCount : taskCount"`.
+     - Added `loadAllSharedFiles()` populating `allSharedFilesRows`, `allSharedFilesCollections` (with `'folder-' + idx` IDs), and `allSharedFilesSmartViews` across all reachable spaces (deduplicated by `fileId` to match `resolveHomeCounts` `COUNT(DISTINCT RecordID)`) and bound them to the global `Recent files` `<mjc-space-library>`.
+     - Updated `taskCount` in `loadSpaceTasks` and `onTaskToggled` to count open tasks (`status !== 'Completed' && status !== 'Cancelled'`).
+4. **`F4` — Space type chip and inline subtitle on the header title row (`packages/AngularWidgets/src/lib/space-header.component.ts`):**
+   - Restored `<span class="type-chip" data-testid="space-header-type-chip">{{ TypeName }}</span>` and `<span class="subtitle" data-testid="space-header-subtitle" [title]="Subtitle">{{ Subtitle }}</span>` on `.title-row` alongside the status chip.
+5. **`F5` — Breadcrumb line on every space starting with `All spaces` (`packages/AngularWidgets/src/lib/space-header.component.ts`, `packages/Angular/src/lib/collaboration-section.component.ts`):**
+   - Added `headerBreadcrumbs` in `CollabSpaceHeaderComponent` so every space renders `<nav class="crumbs" aria-label="Breadcrumb" data-testid="space-header-breadcrumbs">` starting with `All spaces` (`[{ label: 'All spaces' }]` on root spaces, and `All spaces › Parent` on sub-spaces). Updated `showHeaderFor` and `onBreadcrumbSelected` in `CollaborationSectionResource` to label the root crumb `'All spaces'`.
+6. **`F7` — `"Ask <Agent> to answer?"` button runs an explicit-ask turn (`packages/CoreEntitiesServer/src/execute-space-chat-turn.ts`, `packages/AngularWidgets/src/lib/space-chat.component.ts`):**
+   - **Note on PR #19 overlap:** This change touches `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts` from PR #19 (`feat/multi-party-agent-routing`) in our branch and should be raised with PR #19's author when this branch becomes a PR.
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f7-before-prompt.png`, `plans/space-focused-ux/shots/round-5/f7-before-after-click.png`):** Clicking `Ask Sage` in `confirmAgentShouldGo()` emitted the unhandled `AgentStepInRequested` output, set a fake `activeAgentRoute = 'ThreadReply'` timer, and called `chatArea.OnResendInPlaceRequested()` on the same unmentioned message (`turnRequests: 0`, no agent reply).
+   - **Fix (`plans/space-focused-ux/shots/round-5/f7-after-prompt.png`, `plans/space-focused-ux/shots/round-5/f7-after-after-click.png`):**
+     - In `executeSpaceChatTurn` (`packages/CoreEntitiesServer/src/execute-space-chat-turn.ts`), added `const isExplicitAsk = input.route === 'Redirect' || input.route === 'StepIn';`. When `isExplicitAsk` is true, any contributor with reach to the space/conversation may ask an allowed space agent (`input.agentId` or the space's default agent) to answer `input.userMessageId` even in a `MentionOnly` space and even when the message was authored by another participant; the server threads the reply under `userMessageId` and stamps `assistantDetail.UserID = callerId` so the room sees who asked.
+     - In `CollabSpaceChatComponent` (`packages/AngularWidgets/src/lib/space-chat.component.ts`), removed the `'Sage'` default on `@Input() DefaultAgentName`, deleted the unhandled `@Output() AgentStepInRequested` and the private `OnResendInPlaceRequested` cast, guarded `onUserMessageSent` so the prompt only appears when a default agent is configured (`DefaultAgentId` or `DefaultAgentName`), updated `confirmAgentShouldGo()` to invoke `this.effectiveAgentTurnHandler` with `Route: 'Redirect'` and reload the conversation details when complete, and added `getAskedByName(message)` + `Asked by <Person>` chips (`[data-testid="message-asked-by"]`, `[data-testid="thread-reply-asked-by"]`).
+7. **`F8` — Clicking the space header type tile goes to `All spaces` (`packages/AngularWidgets/src/lib/space-header.component.ts`):**
+   - Wrapped `<mjc-type-tile>` in `<button type="button" class="type-tile-btn" data-testid="space-header-tile-btn" title="All spaces" aria-label="All spaces" (click)="onAllSpacesClick()">`, which emits `BreadcrumbSelectRequested` with `{ label: 'All spaces' }`.
+8. **`F9` — Empty blocks render their `emptyText` + action; compact `Open tasks` block on Overview (`packages/AngularWidgets/src/lib/space-pages.component.ts`, `packages/AngularWidgets/src/lib/base-space-page-block.ts`, `packages/AngularWidgets/src/lib/space-work.component.ts`, `packages/AngularWidgets/src/lib/space-overview.component.ts`, `packages/Angular/src/lib/logic/space-pages.ts`, `packages/Angular/src/lib/collaboration-section.component.ts`):**
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f9-before-audit-committee-overview.png`):** `shouldRenderBlock()` hid every block whose `isActive` returned `false`, leaving the entire left column of `Audit committee` Overview blank.
+   - **Fix (`plans/space-focused-ux/shots/round-5/f9-after-audit-committee-overview.png`):**
+     - Updated `shouldRenderBlock(block)` in `CollabSpacePagesComponent` so only side (`reg.side === 'Team' && !this.effectiveCanSeeTeam`) and permission/capability (`reg.canView`) checks hide a block. When `isRegisteredBlockActive(block, reg)` is `false`, the block renders inside `.sp-b-card.sp-block-empty-card` (`[data-testid="block-placeholder"]`) with its title, optional single action button (`emptyActionFor(reg)`, `[data-testid="block-empty-action"]`, e.g. `"Upload a file"`, `"Open Work"`, `"Open chat"`, `"+ Sub-space"`), and `reg.emptyText` (`[data-testid="block-empty-text"]`).
+     - Added `CollabOpenTasksPageBlockComponent` (`key: 'collab:open-tasks'`, `emptyText: 'No open tasks'`) backed by `<mjc-space-work [Compact]="true">`, included it in `DEFAULT_BUILT_IN_BLOCK_DESCRIPTORS` in `packages/Angular/src/lib/logic/space-pages.ts` when `hasWork !== false`, and removed the redundant outer `@if (ShowLibraryLink)` gate on `@case ('SharedFiles')` and `@case ('TeamFiles')` in `CollabSpaceOverviewComponent` so `Audit committee`'s 3 Team files render even though `Committee` omits the `Library` tab.
+9. **`F10` — Starring a space saves, survives reload, and shows in the rail and on Home (`packages/Angular/src/lib/collaboration-section.component.ts`, `packages/AngularWidgets/src/lib/space-rail.component.ts`, `packages/AngularWidgets/src/lib/types.ts`):**
+   - **Browser reproduction (`plans/space-focused-ux/shots/round-5/f10-before-star-space.png`, `plans/space-focused-ux/shots/round-5/f10-before-star-home.png`):** `onStarToggle()` saved a `MJ: User Favorites` record, but nothing in the rail, switcher popover, or Home space list read `User Favorites`, so starring had no visible effect outside the header icon.
+   - **Fix (`plans/space-focused-ux/shots/round-5/f10-after-star-space.png`, `plans/space-focused-ux/shots/round-5/f10-after-star-home.png`):** Added `starredSpaceIds` and `loadStarredSpaces()` in `CollaborationSectionResource`, synced `starredSpaceIds` and `this.spaces = this.buildSpaceRailNodes(this.rawSpaces)` in `loadStar` and `onStarToggle`, added `isStarred?: boolean` to `RailSpaceNode`, rendered `Starred` sections in both the switcher popover (`[data-testid="switcher-starred-spaces"]`) and the Home rail (`[data-testid="rail-starred-spaces"]`), added `.row-star` icons on starred space rows in the tree and on Home (`[data-testid="recent-space-star"]`), and sorted starred spaces first on Home.
+10. **Optional Nits (`N1`, `N2`, `N3`):**
+    - **`N1` (`packages/Angular/src/lib/collaboration-section.component.ts`):** Sorted `filteredSpaces` by starred + `__mj_UpdatedAt DESC` and capped `displayedRecentSpaces` on Home to the 5 most recent spaces by default with a `"Show all 9"` / `"Show fewer"` footer toggle (`[data-testid="recent-spaces-toggle-all"]`).
+    - **`N2` (`packages/AngularWidgets/src/lib/home-list.component.ts`, `packages/Angular/src/lib/collaboration-section.component.ts`):** Added `@Input() ShowActionLabel = true` on `CollabHomeListComponent` and bound `[ShowActionLabel]="false"` on Home's inline `Coming up` and `Pinned` lists so the row itself is the link without repeated `"Open in Work"` / `"Open"` text.
+    - **`N3` (`packages/Angular/src/lib/collaboration-section.component.ts`):** Added `Fields: ['ID', 'Name', 'UserImageURL', 'UserImageIconClass']` to the `MJ: Users` `RunView` call in `loadSpaceMembers`.
+
+---
+
+### 2. `F3` — Number Audit Table (Verified as Ada Owner)
+
+| Surface & Number | Value (Ada) | Where It Is Computed | Where It Leads (Destination) | Matched Before? | Fix Applied |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Home Rail:** `Inbox` badge | `0` (hidden) | `loadGlobalNavCounts()` → `inboxApprovalCount` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Inbox` view (`<bizapps-approval-inbox [PersonID]="currentPersonId">`, `0` rows) | **No** (`1` vs `0`; bound to `homeAwaitingApproval` space invitations) | Query `MJ_BizApps_Tasks: Tasks` with `ApprovalInboxComponent`'s exact `vwTaskTypes` / `vwTaskAssignments` / `vwTaskDecisions` filter (`F2`). |
+| **Home Rail:** `My tasks` badge | `1` | `loadGlobalNavCounts()` → `myTasksCount` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `My tasks` view (`<bizapps-my-tasks [PersonID]="currentPersonId">`, `1` row: `Discovery plan`) | **No** (`8` vs `1`; bound to `homeOpenTasks` across all spaces) | Query `MJ_BizApps_Tasks: Tasks` with `MyTasksComponent`'s exact `vwTaskAssignments` filter for `currentPersonId` (`F3`). |
+| **Home Rail:** `Recent files` badge | `3` | `loadAllSharedFiles()` / `loadHomeCounts()` → `allSharedFilesRows.length || homeSharedFiles` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Recent files` view (`<mjc-space-library>`, `3` rows: `executive-roadmap.pdf`, `welcome.html`, `site-photo.png`) | **No** (`3` badge vs `1` row; destination bound `homeSharedRows` from single space `libraryRows`) | Added `loadAllSharedFiles()` loading all shared `MJ: Files` items across reachable spaces deduplicated by `fileId` (`F3`). |
+| **Space Rail (`Discovery`):** `Documents` badge | `2` | `loadSpaceItems()` → `libraryTotalCount` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Discovery` → `Documents` tab (`All material 2`: `site-photo.png`, `discovery-brief.pdf`) | **Yes** (`2` vs `2`) | None needed. |
+| **Space Rail (`Discovery`):** `Work` badge | `2` | `loadSpaceTasks()` / `onTaskToggled()` → `taskCount` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Discovery` → `Work` tab & `Open tasks` Overview block (`2` open tasks: `Discovery plan`, `Internal prep`) | **Latent mismatch** (counted `spaceTasks.length` including Completed/Cancelled) | Filter `taskCount` to open tasks (`status !== 'Completed' && status !== 'Cancelled'`) in `loadSpaceTasks` and `onTaskToggled` (`F3`). |
+| **Space Rail (`Discovery`):** `People` badge | `5` | `loadSpaceMembers()` → `summarizeSeats()` → `headerTotalPeople` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Discovery` → `People` tab (`5` active seats: `3` Team, `2` Outside) | **Yes** (`5` vs `5`) | None needed. |
+| **Space Header (`Discovery`):** `mjc-audience-pill` | `5 people · 3 Team · 2 Outside` | `loadSpaceMembers()` → `summarizeSeats()` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Discovery` → `People` tab (`3` Team + `2` Outside active members) | **Yes** (`5` vs `5`) | None needed. |
+| **Home:** `Needs you` badge | `1` | `loadHomeCounts()` → `homeCountValue('approvals')` (`packages/CoreEntitiesServer/src/resolve-home-counts.ts`) | Inline `<mjc-needs-you-card>` list (`1` card: `Pat Invited is invited as Guest` on `Audit committee` → opens `Audit committee` `People` tab) | **Yes** (`1` vs `1`) | None needed. |
+| **Home:** `Coming up` badge | `8` | `loadHomeCounts()` → `homeCountValue('tasks')` (`packages/CoreEntitiesServer/src/resolve-home-counts.ts`) | Inline `<mjc-home-list Id="coming-up">` (`8` open task rows across reachable spaces) | **Yes** (`8` vs `8`) | None needed. |
+| **Home:** `Pinned` badge | `2` | `loadHomePins()` → `homePins.length` (`packages/Angular/src/lib/collaboration-section.component.ts`) | Inline `<mjc-home-list Id="pins">` (`2` pinned rows: `Kickoff recap`, `executive-roadmap.pdf`) | **Yes** (`2` vs `2`) | None needed. |
+| **Home:** `Active` / `Closed` tabs | `Active 9` / `Closed 4` | `activeSpacesCount` / `closedSpacesCount` (`packages/Angular/src/lib/collaboration-section.component.ts`) | `Your recent spaces` (`5` shown by default + `"Show all 9"` toggle = `9` active spaces; `Closed 4` tab shows `4` closed spaces) | **Yes** (`9` active, `4` closed) | Added 5-row default cap with `"Show all 9"` toggle (`N1`). |
+| **Home:** Space row signals (`Northwind relationship`, `Discovery`, `Sealed child`, etc.) | `1 open task`, `2 open tasks`, `Sealed` | `spaceSignal(...)` in `packages/Angular/src/lib/logic/home-lists.ts` from `homeInvitations`, `homeOpenTaskList`, `InheritsMembership`, `ClosedAt` | Clicking each space row opens that space (e.g. `Northwind relationship` has `1` open task; `Discovery` has `2` open tasks; `Sealed child` has `InheritsMembership = false`) | **Yes** | None needed. |
+
+---
+
+### 3. `F6` — Screen-by-Screen Comparison (`plans/space-focused-ux/shots/before/*` vs `plans/space-focused-ux/shots/round-4/*`)
+
+| Screen | Piece of Information or Shortcut Removed Since `plans/space-focused-ux/shots/before/*` | Restored in Round 5? | Rationale (`plans/space-focused-ux/ui-polish.md` §1 & `plans/space-focused-ux/ui-polish-review.md`) |
+| :--- | :--- | :--- | :--- |
+| **1. `home`** | Collapsed rail `Jump to a space` switcher popover rows had `38px` width and hidden labels (`F1`) | **Yes (`F1`)** | Scoped `.rail.collapsed .rail-body .rail-row` so the switcher popover renders full `262px` rows when collapsed. |
+| **1. `home`** | `Starred` spaces access in the Home rail and switcher popover (`F10`) | **Yes (`F10`)** | Added `Starred` sections in both the Home rail (`[data-testid="rail-starred-spaces"]`) and switcher popover (`[data-testid="switcher-starred-spaces"]`), plus `.row-star` indicators. |
+| **1. `home`** | Top-5 space cap on Home (`plans/space-focused-ux/shots/before/home-light.png` showed 5 spaces; `plans/space-focused-ux/shots/round-4/home-light.png` showed all 9) | **Yes (`N1`)** | Capped `displayedRecentSpaces` to the 5 most recently updated/starred spaces by default with a `"Show all 9"` / `"Show fewer"` toggle (`[data-testid="recent-spaces-toggle-all"]`). |
+| **1. `home`** | Welcome hero (`"Welcome to Collaboration"`) and 5 Title Case stat cards (`Active Spaces`, `Open Tasks`, `Invitations Waiting`, `Shared Files`, `My Pins`) | **No (Intentional)** | Explicitly removed per Round 4 (`plans/space-focused-ux/ui-polish-review.md` lines 403–410: *"Remove the welcome hero and the stat tiles. A count shows as a badge on the row or rail item it belongs to."*). All 5 counts are shown on their respective rows/rail badges. |
+| **2. `discovery-overview` & 3. `field-notes`** | Space type chip (`Workspace`, `Committee`) and inline subtitle on `.title-row` in `CollabSpaceHeaderComponent` (`F4`) | **Yes (`F4`)** | Restored `[data-testid="space-header-type-chip"]` and truncated `[data-testid="space-header-subtitle"]` with `[title]="Subtitle"` tooltip. |
+| **2. `discovery-overview` & 3. `field-notes`** | `All spaces` breadcrumb link on every space (including root spaces) (`F5`) | **Yes (`F5`)** | Restored `<nav class="crumbs" data-testid="space-header-breadcrumbs">` on every space starting with `All spaces`. |
+| **2. `discovery-overview` & 3. `field-notes`** | Clicking the space header type tile navigates to `All spaces` (`F8`) | **Yes (`F8`)** | Wrapped `<mjc-type-tile>` in `<button type="button" class="type-tile-btn" data-testid="space-header-tile-btn" title="All spaces" aria-label="All spaces">`. |
+| **2. `discovery-overview` & 3. `field-notes`** | Empty Overview blocks (`Pinned items`, `Needs your attention`, `Shared files`, `Recent discussion`, `About this space`) vanished when `isActive` was `false`, and spaces with `Work` had no tasks block on Overview (`F9`) | **Yes (`F9`)** | Empty blocks now render `.sp-block-empty-card` with `emptyText` and `emptyAction` (`"Upload a file"`, `"Open Work"`, `"Open chat"`, `"+ Sub-space"`), and spaces with `Work` include `CollabOpenTasksPageBlockComponent` (`collab:open-tasks`) on Overview. |
+| **2. `discovery-overview` & 3. `field-notes`** | Header sub-space pill strip (`• Field notes  + Sub-space`), default `Inside <Space>` Overview card, and rail `"Preferences synced"` footer | **No (Intentional)** | Removed per `plans/space-focused-ux/ui-polish.md` §2, §3, and `R1-10` so sub-spaces are not duplicated in 3 places on screen. Sub-spaces and `+` (`New sub-space`) remain one click away in the rail's `Sub-spaces` group and the header `⋯` menu, and `Sub-spaces` (`collab:sub-spaces`) can still be added via the page block picker. |
+| **2. `discovery-overview` & 3. `field-notes`** | Separate `+ Invite` button next to `+ New` in the space header | **No (Intentional)** | Moved to the header `⋯` menu (`Invite people`) and the `People` tab in Round 1 (`plans/space-focused-ux/ui-polish.md` §1 & §3: one primary button per screen). |
+| **4. `library` & 5. `work`** | Header breadcrumbs (`All spaces › Northwind relationship`), type chip (`Workspace`), and clickable type tile (`F4`, `F5`, `F8`) | **Yes (`F4`, `F5`, `F8`)** | Shared `CollabSpaceHeaderComponent` restores these across `Documents` (`library`) and `Work` (`work`). |
+| **6. `chat-thread-open`** | Duplicate `+ New Conversation` button in the chat sub-header | **No (Intentional)** | Removed per `R1-2` ("One primary button per screen"); `+` on `Conversations` in the rail starts a conversation. |
+| **6. `chat-thread-open`** | `"Ask <Agent> to answer?"` prompt button (`F7`) | **Yes (`F7`)** | Wired `confirmAgentShouldGo()` to `ExecuteSpaceChatTurn` (`Route: 'Redirect'`) with `Asked by <Person>` attribution. |
+| **7. `page-edit-mode`** | 5-button edit banner (`+ Add Block / Widget`, `Add Intro`, `Page Settings`, `New Page`, `Done Customizing`) and 6-button block toolbar | **No (Intentional)** | Consolidated in Round 1 & Round 2 (`plans/space-focused-ux/ui-polish.md` §7 & `plans/space-focused-ux/ui-polish-review.md` "Add to round 2") into the compact edit bar (`Publish` / `Discard`), inline `+ Add a block here` triggers, and the 4-icon hover toolbar (`Drag · ↑ · ↓ · ⋯` with `Column`, `Edit`, `Duplicate`, `Remove` inside `⋯`). |
+| **8. `rail-collapsed`** | Clicking the collapsed switcher button opened a broken `38px`-row popover (`F1`), and header lacked `All spaces` tile button (`F8`) and `Workspace` chip (`F4`) | **Yes (`F1`, `F4`, `F5`, `F8`)** | Restored in Round 5 (`plans/space-focused-ux/shots/round-5/rail-collapsed-light.png`, `plans/space-focused-ux/shots/round-5/f1-after-space-collapsed.png`). |
+
+---
+
+### 4. Files Touched
+
+- `packages/AngularWidgets/src/lib/types.ts`
+- `packages/AngularWidgets/src/lib/space-rail.component.ts`
+- `packages/AngularWidgets/src/lib/space-header.component.ts`
+- `packages/AngularWidgets/src/lib/home-list.component.ts`
+- `packages/AngularWidgets/src/lib/space-chat.component.ts`
+- `packages/AngularWidgets/src/lib/space-work.component.ts`
+- `packages/AngularWidgets/src/lib/space-overview.component.ts`
+- `packages/AngularWidgets/src/lib/base-space-page-block.ts`
+- `packages/AngularWidgets/src/lib/space-pages.component.ts`
+- `packages/AngularWidgets/src/public-api.ts`
+- `packages/AngularWidgets/src/lib/widgets.test.ts`
+- `packages/AngularWidgets/src/lib/render.test.ts`
+- `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts`
+- `packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts`
+- `packages/Angular/src/lib/logic/space-pages.ts`
+- `packages/Angular/src/lib/logic/space-pages.test.ts`
+- `packages/Angular/src/lib/collaboration-section.component.ts`
+- `plans/space-focused-ux/ui-polish-notes.md`
+- `plans/space-focused-ux/shots/round-5/*.png`
+
+---
+
+### 5. Test Changes and Rationale
+
+1. **`packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts`:**
+   - Added 2 unit tests for `F7`:
+     - `executes an explicit ask (route: 'Redirect') on an untagged message in a MentionOnly space, threads the reply under that message, and records the caller on UserID so the room sees who asked`
+     - `refuses an explicit ask (route: 'Redirect') when the caller cannot post or when the agent is not allowed in the space`
+2. **`packages/Angular/src/lib/logic/space-pages.test.ts`:**
+   - Updated `builds starter pages for all built-in space tabs and merges saved customizations + user pages` to verify that `collab:open-tasks` is included on the default `Overview` page (`9` blocks) when `hasWork` is not `false`, and omitted (`8` blocks) when `hasWork: false` (`F9`).
+3. **`packages/AngularWidgets/src/lib/widgets.test.ts`:**
+   - Updated `CollabSpacePagesComponent` unit tests for `F9` (`shouldRenderBlock` returns `true` for empty blocks so they render their `.sp-block-empty-card`, while `isRegisteredBlockActive` returns `false` when empty).
+4. **`packages/AngularWidgets/src/lib/render.test.ts`:**
+   - Updated existing header and page-block render assertions for `F4`, `F5`, `F8`, and `F9`.
+   - Added `Round 5 — F1, F4, F5, F7, F8, F9, F10` suite (4 comprehensive DOM render tests):
+     - `F1 & F10: collapsed rail switcher opens full-width popover with Starred section and emits SpaceOpenRequested`
+     - `F4, F5, F8: header renders All spaces breadcrumb on root space, type chip, subtitle, and clickable type tile`
+     - `F7: clicking Ask <Agent> in the redirect prompt invokes AgentTurnHandler with Route=Redirect and renders Asked by attribution`
+     - `F9: empty blocks render their emptyText and emptyAction in a card frame, and collab:open-tasks renders compact tasks`
+
+---
+
+### 6. Gate Outputs (Real Verbatim Output)
+
+#### 1. `node scripts/check-mj-tokens.mjs`, `node scripts/check-mj-inputs.mjs`, `node scripts/check-registered-exports.mjs`, & Grep Checks
+
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ node scripts/check-registered-exports.mjs
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/types.ts packages/AngularWidgets/src/lib/space-rail.component.ts packages/AngularWidgets/src/lib/space-header.component.ts packages/AngularWidgets/src/lib/home-list.component.ts packages/AngularWidgets/src/lib/space-chat.component.ts packages/AngularWidgets/src/lib/space-work.component.ts packages/AngularWidgets/src/lib/space-overview.component.ts packages/AngularWidgets/src/lib/base-space-page-block.ts packages/AngularWidgets/src/lib/space-pages.component.ts packages/Angular/src/lib/logic/space-pages.ts packages/Angular/src/lib/collaboration-section.component.ts packages/CoreEntitiesServer/src/execute-space-chat-turn.ts || true
+packages/AngularWidgets/src/lib/types.ts:0
+packages/AngularWidgets/src/lib/space-rail.component.ts:0
+packages/AngularWidgets/src/lib/space-header.component.ts:0
+packages/AngularWidgets/src/lib/home-list.component.ts:0
+packages/AngularWidgets/src/lib/space-chat.component.ts:0
+packages/AngularWidgets/src/lib/space-work.component.ts:0
+packages/AngularWidgets/src/lib/space-overview.component.ts:0
+packages/AngularWidgets/src/lib/base-space-page-block.ts:0
+packages/AngularWidgets/src/lib/space-pages.component.ts:0
+packages/Angular/src/lib/logic/space-pages.ts:0
+packages/Angular/src/lib/collaboration-section.component.ts:0
+packages/CoreEntitiesServer/src/execute-space-chat-turn.ts:0
+```
+
+#### 2. `pnpm --filter @mj-biz-apps/collaboration-ng-widgets test`
+
+```text
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (124 tests) 18ms
+ ✓ src/lib/render.test.ts (63 tests) 986ms
+
+ Test Files  3 passed (3)
+      Tests  197 passed (197)
+   Start at  14:14:42
+   Duration  13.63s (transform 19.19s, setup 0ms, import 26.65s, tests 1.01s, environment 319ms)
+```
+
+#### 3. `pnpm --filter @mj-biz-apps/collaboration-ng test`
+
+```text
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+▶ space-pages
+  ✔ maps a SpacePage row and applies a CollabPageModel back to a SpacePage entity (0.515458ms)
+  ✔ builds starter pages for all built-in space tabs and merges saved customizations + user pages (0.902542ms)
+  ✔ preserves contributed tab keys (e.g. BaseSpaceTab keys) on entity.BuiltInTab (0.090834ms)
+✔ space-pages (2.081667ms)
+...
+ℹ tests 161
+ℹ suites 45
+ℹ pass 161
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 277.860208
+
+ RUN  v4.1.11 /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 37ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  14:14:55
+   Duration  5.28s (transform 3.41s, setup 0ms, import 4.93s, tests 37ms, environment 231ms)
+```
+
+#### 4. `pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec node --experimental-strip-types --test 'src/execute-space-chat-turn.test.ts'`
+
+```text
+▶ executeSpaceChatTurn
+  ✔ executes an explicit ask (route: 'Redirect') on an untagged message in a MentionOnly space, threads the reply under that message, and records the caller on UserID so the room sees who asked (0.303791ms)
+  ✔ refuses an explicit ask (route: 'Redirect') when the caller cannot post or when the agent is not allowed in the space (0.260458ms)
+✔ executeSpaceChatTurn (134.402792ms)
+ℹ tests 33
+ℹ suites 2
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1960.540417
+```
+
+#### 5. `ngc -p tsconfig.json --noEmit` (`@mj-biz-apps/collaboration-ng-widgets` & `@mj-biz-apps/collaboration-ng`)
+
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets exec ngc -p tsconfig.json --noEmit
+src/lib/space-settings.component.ts:13:77 - warning NG8113: MJDropdownComponent is not used within the template of CollabSpaceSettingsComponent
+
+13   imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, MJDropdownComponent, SharedGenericModule],
+                                                                               ~~~~~~~~~~~~~~~~~~~
+
+$ pnpm --filter @mj-biz-apps/collaboration-ng exec ngc -p tsconfig.json --noEmit
+src/lib/collaboration-section.component.ts:1622:116 - warning NG8107: The left side of this optional chain operation does not include 'null' or 'undefined' in its type, therefore the '?.' operator can be replaced with the '.' operator.
+
+1622                                                                         <span class="config-meta">{{ reach.Fields?.length ? reach.Fields.length + ' field' + (reach.Fields.length === 1 ? '' : 's') : 'every field' }}</span>
+                                                                                                                        ~~~~~~
+```
+
+#### 6. Integration Gate (`node test-harnesses/integration.mjs row-filters`)
+
+```text
+$ DOTENV_CONFIG_PATH=/Users/colinbrockman/Projects/mjws-collab/MJ/.env node test-harnesses/integration.mjs row-filters
+  Collaboration integration SERVER (SQLServerDataProvider → localhost:1436/MJ_6_2_0_CLEAN_4789)
+
+  ok   row-filters.RF1              4ms  RF1 — Bea (Client on Discovery) sees Discovery and Field notes, but nothing from Harbor
+  ok   row-filters.RF2              5ms  RF2 — Bea sees only Shared band items; Team items (discovery-brief) are hidden
+  ok   row-filters.RF3              2ms  RF3 — Harper (Client on Harbor) sees Harbor, but nothing from Discovery or Committee
+  ok   row-filters.RF4              3ms  RF4 — Dana (Director on Committee) sees Committee, but not Discovery or Harbor
+  ok   row-filters.RF5              380ms  RF5 — Bea (outside Client on Discovery) reads Space Pages and gets Shared pages only, never a Team page
+
+  5 passed / 0 failed
+```
+
+---
+
+### 7. Screenshots (`plans/space-focused-ux/shots/round-5/`)
+
+#### Bug Reproduction (`before`) & Verification (`after`) Pairs
+- `plans/space-focused-ux/shots/round-5/f1-before-home-collapsed.png` & `plans/space-focused-ux/shots/round-5/f1-after-home-collapsed.png`
+- `plans/space-focused-ux/shots/round-5/f1-before-space-collapsed.png` & `plans/space-focused-ux/shots/round-5/f1-after-space-collapsed.png`
+- `plans/space-focused-ux/shots/round-5/f2-before-inbox.png` & `plans/space-focused-ux/shots/round-5/f2-after-inbox.png`
+- `plans/space-focused-ux/shots/round-5/f3-before-my-tasks.png` & `plans/space-focused-ux/shots/round-5/f3-after-my-tasks.png`
+- `plans/space-focused-ux/shots/round-5/f3-before-recent-files.png` & `plans/space-focused-ux/shots/round-5/f3-after-recent-files.png`
+- `plans/space-focused-ux/shots/round-5/f7-before-prompt.png` & `plans/space-focused-ux/shots/round-5/f7-after-prompt.png`
+- `plans/space-focused-ux/shots/round-5/f7-before-after-click.png` & `plans/space-focused-ux/shots/round-5/f7-after-after-click.png`
+- `plans/space-focused-ux/shots/round-5/f9-before-audit-committee-overview.png` & `plans/space-focused-ux/shots/round-5/f9-after-audit-committee-overview.png`
+- `plans/space-focused-ux/shots/round-5/f10-before-star-space.png` & `plans/space-focused-ux/shots/round-5/f10-after-star-space.png`
+- `plans/space-focused-ux/shots/round-5/f10-before-star-home.png` & `plans/space-focused-ux/shots/round-5/f10-after-star-home.png`
+
+#### Standard 16-Screenshot Suite (`8 screens × light/dark`, 1440×900)
+- `plans/space-focused-ux/shots/round-5/home-light.png`
+- `plans/space-focused-ux/shots/round-5/home-dark.png`
+- `plans/space-focused-ux/shots/round-5/discovery-overview-light.png`
+- `plans/space-focused-ux/shots/round-5/discovery-overview-dark.png`
+- `plans/space-focused-ux/shots/round-5/field-notes-light.png`
+- `plans/space-focused-ux/shots/round-5/field-notes-dark.png`
+- `plans/space-focused-ux/shots/round-5/library-light.png`
+- `plans/space-focused-ux/shots/round-5/library-dark.png`
+- `plans/space-focused-ux/shots/round-5/work-light.png`
+- `plans/space-focused-ux/shots/round-5/work-dark.png`
+- `plans/space-focused-ux/shots/round-5/chat-thread-open-light.png`
+- `plans/space-focused-ux/shots/round-5/chat-thread-open-dark.png`
+- `plans/space-focused-ux/shots/round-5/page-edit-mode-light.png`
+- `plans/space-focused-ux/shots/round-5/page-edit-mode-dark.png`
+- `plans/space-focused-ux/shots/round-5/rail-collapsed-light.png`
+- `plans/space-focused-ux/shots/round-5/rail-collapsed-dark.png`
+

@@ -226,6 +226,108 @@ Verified by the reviewer:
 
 **Next:** fix R3-1 to R3-4 and commit. Then do round 4 (Home) as written above. Run every gate, write "## Round 4" in the notes, save screenshots to `shots/round-4/`, commit, then stop.
 
+## Round 4 review: round 3 fixes and Home (`4827c06`, `fc7f6f7`, 2026-10-30)
+
+**Verdict: approved. The UI polish plan is done.** The three nits below are optional and can ride along with any later UI change.
+
+Verified by the reviewer:
+- The full `pnpm test` passes (192 widget tests, 161 section node tests); `check-mj-tokens` and `check-mj-inputs` pass; `ngc --noEmit` exits 0 in both packages.
+- All 35 paths named in the round 4 notes exist. Three are MJ-repo paths, named relative to MJ.
+- R3-1: member photos load from `UserImageURL` / `UserImageIconClass`, and the thread bar, replies and people pill show them (`shots/round-4/chat-thread-open-light.png`).
+- R3-2: `(BeforeAgentTurn)` / `(AfterAgentTurn)` are bound with `BeforeAgentTurnEventArgs`.
+- R3-4: the people list is an `mj-menu`.
+- Home: Needs you, Coming up, Pinned, then spaces with one signal each. The hero and the stat tiles are gone.
+
+### Optional nits
+
+**N1.** "Your recent spaces" lists every space, in no recency order, so it repeats the rail's tree. Show the five most recently active, newest first, and leave the full list to the rail.
+
+**N2.** Rows in Coming up and Pinned each carry an "Open in Work" or "Open" link. Make the row itself the link (`mjClickable`) and drop the repeated text, as the space rows already do.
+
+**N3.** The second `MJ: Users` load (a space's people, in `collaboration-section.component.ts`) has no `Fields` list. Name the four fields, as the Home load does.
+
+## Round 5: restore what helped, fix the bugs (Colin's click test, 2026-10-30)
+
+Colin: "it's slicker and nice, but we lost some key things, and there's some bug fixing." The restored items must still follow `ui-polish.md` §1. **Reproduce each bug in the browser before fixing it, and take a before and after screenshot of each.**
+
+### Bugs
+
+**F1. The space switcher doesn't work when the rail is collapsed.**
+- Reproduce it first, collapsed, at Home and inside a space.
+- The rail (`.rail`) and the shell (`.mjc-shell`, `.main`) don't clip the popover in CSS, so look at what actually happens in the browser:
+  - is the popover drawn off-screen or under something?
+  - does the click reach `onJumpClick()`?
+  - does the list render?
+- Fix the cause, not the symptom. Add a render test: with the rail collapsed, clicking the switcher shows the popover, and picking a space emits.
+
+**F2. The Inbox badge counts the wrong thing.**
+- Round 4 (`fc7f6f7`) bound `[InboxCount]="homeAwaitingApproval"`. That field's own comment says it counts invitations waiting on an owner, "not in the approval inbox". The Inbox page lists `bizapps-approval-inbox` for `currentPersonId`.
+- So the badge said 1 (Pat's invite) while the Inbox was empty.
+- The badge must count exactly the rows the Inbox shows, from the same source and filter as `bizapps-approval-inbox`. Invitations stay in "Needs you". Add a test.
+
+**F3. Audit every number.**
+- Check each count and signal:
+  - **rail:** Inbox, My tasks, Recent files, and the page badges (Documents, Work, People);
+  - **Home:** Needs you, Coming up, Pinned, the Active and Closed tabs, and each space row's signal;
+  - **header:** the people pill.
+- Each must equal the rows its destination shows to the same user.
+- Put a table in the notes: number, where it's computed, where it leads, whether they match, and the fix. Add a test for each one you fix.
+
+### Restore
+
+**F4. Show what kind of space this is.**
+- Put back the type name chip and the inline subtitle on the title row, as at the baseline: `8e64f22`'s `space-header.component.ts` template, around lines 74 to 86. The `TypeName` and `Subtitle` inputs still exist; the template stopped rendering them.
+- Keep the status chip.
+- The subtitle is one quiet line, truncated, with the full text in a tooltip.
+
+**F5. One click back to All spaces, from every space.**
+- Show the breadcrumb line on every space, not only on sub-spaces, starting with an "All spaces" link. A sub-space's breadcrumb continues through its parents.
+- It stays one quiet line above the title. The rail's switcher stays as it is.
+
+**F6. Sweep for anything else we lost.**
+- Compare `shots/before/*` with `shots/round-4/*`, screen by screen.
+- List every piece of information or shortcut that was removed, not just moved: what it was, where it was, and whether you restored it.
+- Restore the ones a person needs, within §1. For any you leave out, say why, so Colin can decide.
+
+**F7 (bug). "Ask Sage to answer?" → clicking the button does nothing.**
+
+The cause, in `confirmAgentShouldGo()` in `space-chat.component.ts`:
+- It emits `AgentStepInRequested`, which nothing in Collaboration listens to.
+- It calls the chat area's internal `OnResendInPlaceRequested` through a cast. That resends the same unmentioned message, so routing decides "no agent" again.
+- It shows a made-up "working" state labelled `ThreadReply`.
+- The agent name falls back to a hard-coded `'Sage'`.
+
+What it must do: **one click, and that agent answers that message.**
+- Turns run on Collaboration's server (`executeSpaceChatTurn`, with PR #19's routing). Add an explicit "the person asked this agent to answer this message" case there.
+- Allow it only when the caller may post in that conversation and the agent is allowed in the space, the same checks as a mention.
+- The reply threads under that message. The room can see who asked, so everyone knows why the agent spoke.
+- Call it through the same turn path the chat already uses. No private MJ methods, and no unhandled outputs: delete `AgentStepInRequested`, or handle it.
+- Use the space's resolved default agent's name. When there is no agent, don't show the prompt.
+- Add a test: clicking the button sends one turn request for that message and agent, and the server refuses it for someone who can't post.
+
+This touches #19's routing code in our branch. Say so in the notes, so it can be raised with its author when this becomes a PR.
+
+**F8 (restore, Colin). The space icon goes to All spaces.**
+- In the header, clicking the type tile next to the space name goes to All spaces. This is on top of the breadcrumb (F5).
+- It's a real button, with the tooltip and `aria-label` "All spaces".
+- The rail's switcher stays as it is.
+
+**F9 (restore, Colin). An empty block says it's empty; it doesn't vanish.**
+- Today, `shouldRenderBlock()` (`space-pages.component.ts`, around line 3135) hides any block whose `isActive` is false. A quiet space such as Audit committee shows an Overview that is mostly blank space.
+- New rule: a block on the page always renders for a viewer who may see it. When it has nothing, it shows its own `emptyText` inside the same card frame:
+  - one muted line;
+  - plus the one action the viewer can take, when there is one (for example "Upload a file" on Shared files).
+- Only the side and permission checks hide a block. `isActive` now only chooses between the content and the empty line.
+- **Tasks:** when the space has Work, the default Overview gets a compact "Open tasks" block, registered like the others. It reuses the Work data the host already loads (`mjc-space-work`), with "No open tasks" when empty.
+- Screenshot the Audit committee Overview before and after.
+
+**F10 (bug, Colin, raised in the chat). Starring a space does nothing.**
+- Reproduce it. Trace the header's `StarToggleRequested` to the host and find where it stops.
+- Fix it so the star saves, survives a reload, and shows in the rail and on Home.
+- Add a test.
+
+**Next:** do F1 to F10 and commit. Run every gate, write "## Round 5" in the notes (with the F3 table and the F6 list), save screenshots to `shots/round-5/`, commit, then stop.
+
 ### Now: turn off the floating chat bubble in the local install (Colin, 2026-10-29)
 
 MJ's floating chat bubble sits on top of the chat composer's controls.

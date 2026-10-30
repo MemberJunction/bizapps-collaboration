@@ -219,6 +219,8 @@ async function runClaimedTurn(
         return { ok: false, message: 'Caller cannot initiate an agent turn in an internal conversation without Team visibility.' };
     }
 
+    const isExplicitAsk = input.route === 'Redirect' || input.route === 'StepIn';
+
     // 3. Load persisted user message
     const userDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     if (!(await userDetail.Load(userMessageId))) {
@@ -229,7 +231,7 @@ async function runClaimedTurn(
         return { ok: false, message: 'The message does not belong to this conversation.' };
     }
 
-    if (parseUuid(userDetail.UserID) !== callerId || userDetail.Role !== 'User') {
+    if (userDetail.Role !== 'User' || (!isExplicitAsk && parseUuid(userDetail.UserID) !== callerId)) {
         return { ok: false, message: 'Only messages authored by the caller can initiate an agent turn.' };
     }
 
@@ -333,7 +335,13 @@ async function runClaimedTurn(
     const parentDetailId = parseUuid(userDetail.ParentID);
 
     let targetAgentId: string;
-    if (taggedAgentId) {
+    if (isExplicitAsk) {
+        const requestedAgentId = parseUuid(input.agentId) ?? taggedAgentId ?? resolvedDefault;
+        if (!requestedAgentId) {
+            return { ok: false, message: 'No assistant is available in this space right now.' };
+        }
+        targetAgentId = requestedAgentId;
+    } else if (taggedAgentId) {
         targetAgentId = taggedAgentId;
     } else if (hasHumanMentionOnly) {
         return { ok: false, message: 'The message is addressed to a person and does not mention an agent.' };
@@ -445,12 +453,12 @@ async function runClaimedTurn(
     const audienceQuoted = retrieval.quotedItems;
     const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
 
-    // 10. Write reply as system user (Item 5 / A19 Part 2)
+    // 10. Write reply as system user (Item 5 / A19 Part 2); when explicitly asked via Ask Agent, record the asking member in UserID
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
     (assistantDetail as MJConversationDetailEntity & { MarkServerAuthoredReply?: () => void }).MarkServerAuthoredReply?.();
     assistantDetail.ConversationID = conversationId;
-    assistantDetail.UserID = system.ID;
+    assistantDetail.UserID = isExplicitAsk ? callerId : system.ID;
     assistantDetail.AgentID = targetAgentId;
     assistantDetail.Role = 'AI';
     assistantDetail.Status = 'In-Progress';

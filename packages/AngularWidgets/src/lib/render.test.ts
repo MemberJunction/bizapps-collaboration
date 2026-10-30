@@ -218,7 +218,10 @@ describe('the header and page edit bar, rendered', () => {
     fixture.componentRef.setInput('CanConfigure', true);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.crumbs')).toBeNull();
+    const topCrumbs = root.querySelector('.crumbs');
+    expect(topCrumbs).not.toBeNull();
+    expect(topCrumbs?.textContent).toContain('All spaces');
+    expect(topCrumbs?.textContent).not.toContain('Northwind');
 
     fixture.componentRef.setInput('Breadcrumbs', [
       { label: 'Spaces' },
@@ -228,6 +231,7 @@ describe('the header and page edit bar, rendered', () => {
     fixture.detectChanges();
     const crumbs = root.querySelector('.crumbs');
     expect(crumbs).not.toBeNull();
+    expect(crumbs?.textContent).toContain('All spaces');
     expect(crumbs?.textContent).toContain('Board of Directors');
     expect(crumbs?.textContent).not.toContain('Audit Committee');
 
@@ -520,6 +524,9 @@ class ChatAreaStub {
   public get messageExtra(): TemplateRef<unknown> | null {
     return this.slots?.find((slot) => slot.SlotName === 'messageExtra')?.Template ?? null;
   }
+  public get composerExtra(): TemplateRef<unknown> | null {
+    return this.slots?.find((slot) => slot.SlotName === 'composerExtra')?.Template ?? null;
+  }
   public AllowRealtime = true;
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
@@ -547,6 +554,7 @@ declareComponent(ChatAreaStub, {
     @if (ShowAgentCharacter && agentPresence) {
       <ng-container *ngTemplateOutlet="agentPresence"></ng-container>
     }
+    <ng-container *ngTemplateOutlet="composerExtra"></ng-container>
   `,
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
@@ -1214,6 +1222,7 @@ describe('the conversation of a space, read-only', () => {
     const aiReply = { ID: 'msg-r2', ParentID: 'msg-r1', UserID: null, User: 'Sage', Role: 'AI', Message: 'Here is the variance breakdown.', __mj_CreatedAt: new Date() };
 
     fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Colin Brockman', Email: 'colin@acme.com' } as unknown as UserInfo);
     fixture.componentRef.setInput('ParticipantCount', 3);
     fixture.detectChanges();
@@ -1507,6 +1516,228 @@ describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(updatedPage?.blocks).toHaveLength(0);
   });
+
+  it('renders an empty block card with emptyText and emptyAction when a registered block is empty, and renders the compact Open tasks block when open tasks exist (F9)', () => {
+    const overviewWithEmptyAndWork = sampleOverviewPage([
+      { id: 'blk-needs-you', type: 'collab:needs-you', title: '', width: 'main' },
+      { id: 'blk-shared-files', type: 'collab:shared-files', title: '', width: 'main' },
+      { id: 'blk-open-tasks', type: 'collab:open-tasks', title: '', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-audit');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.componentRef.setInput('IsCustomizing', false);
+    fixture.componentRef.setInput('Pages', [overviewWithEmptyAndWork]);
+    let uploadClicked = 0;
+    let openWorkClicked = 0;
+    fixture.componentRef.setInput('BlockContext', {
+      needsYouItems: [],
+      sharedItems: [],
+      tasks: [],
+      showLibraryLink: true,
+      showWorkLink: true,
+      canAddHere: true,
+      canWrite: true,
+      onUploadFileRequested: () => { uploadClicked++; },
+      onOpenWorkRequested: () => { openWorkClicked++; },
+    });
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const placeholders = Array.from(host.querySelectorAll('[data-testid="block-placeholder"]'));
+    expect(placeholders.length).toBe(3);
+    const emptyTexts = Array.from(host.querySelectorAll('[data-testid="block-empty-text"]')).map((el) => el.textContent?.trim());
+    expect(emptyTexts).toContain('Items needing your attention show here when there are any.');
+    expect(emptyTexts).toContain('Shared files show here when there are any.');
+    expect(emptyTexts).toContain('No open tasks');
+
+    const emptyActions = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="block-empty-action"]'));
+    const uploadAction = emptyActions.find((b) => b.textContent?.includes('Upload a file'));
+    const openWorkAction = emptyActions.find((b) => b.textContent?.includes('Open Work'));
+    expect(uploadAction).toBeDefined();
+    expect(openWorkAction).toBeDefined();
+    uploadAction!.click();
+    openWorkAction!.click();
+    expect(uploadClicked).toBe(1);
+    expect(openWorkClicked).toBe(1);
+
+    // Populate an open task and verify collab:open-tasks mounts the compact CollabSpaceWorkComponent
+    fixture.componentRef.setInput('BlockContext', {
+      needsYouItems: [],
+      sharedItems: [],
+      tasks: [
+        { id: 'task-1', name: 'Finalize Q3 variance memo', band: 'Shared', status: 'InProgress', priority: 'High' },
+        { id: 'task-2', name: 'Archived task', band: 'Shared', status: 'Completed', priority: 'Low' },
+      ],
+      showLibraryLink: true,
+      showWorkLink: true,
+      canAddHere: true,
+      canWrite: true,
+      onOpenWorkRequested: () => { openWorkClicked++; },
+    });
+    fixture.detectChanges();
+
+    const compactWork = host.querySelector('[data-testid="space-work-compact"]');
+    expect(compactWork).not.toBeNull();
+    expect(compactWork?.textContent).toContain('Finalize Q3 variance memo');
+    expect(compactWork?.textContent).not.toContain('Archived task');
+  });
 });
+
+describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and starring, rendered', () => {
+  it('opens the full-width switcher popover when the rail is collapsed, shows Starred spaces, and picks a space or closes on Escape (F1, F10)', () => {
+    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+    fixture.componentRef.setInput('Mode', 'home');
+    fixture.componentRef.setInput('Spaces', [
+      { id: 's-1', name: 'Q3 Financial Audit', glyph: 'Briefcase', tone: 'blue', typeLabel: 'Workspace', isStarred: true },
+      { id: 's-2', name: 'Board of Directors', glyph: 'Gavel', tone: 'purple', typeLabel: 'Board', isStarred: false },
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const collapseBtn = host.querySelector<HTMLButtonElement>('.btn-nav-toggle')!;
+    collapseBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isCollapsed).toBe(true);
+
+    const switcherBtn = host.querySelector<HTMLButtonElement>('[data-testid="rail-space-switcher"]')!;
+    expect(switcherBtn).not.toBeNull();
+    switcherBtn.click();
+    fixture.detectChanges();
+
+    const popover = host.querySelector<HTMLElement>('.switcher-popover')!;
+    expect(popover).not.toBeNull();
+    const starredSection = popover.querySelector('[data-testid="switcher-starred-spaces"]');
+    expect(starredSection).not.toBeNull();
+    expect(starredSection?.textContent).toContain('Q3 Financial Audit');
+
+    // Verify popover rows are not matched by the collapsed rail-body rule
+    const popoverRows = Array.from(popover.querySelectorAll<HTMLButtonElement>('.rail-row'));
+    expect(popoverRows.length).toBeGreaterThan(0);
+    expect(popoverRows.some((r) => r.matches('.rail.collapsed .rail-body .rail-row'))).toBe(false);
+    const spaceRow = popoverRows.find((r) => r.querySelector('.row-label')?.textContent?.includes('Q3 Financial Audit'))!;
+    expect(spaceRow).toBeDefined();
+
+    const opened: string[] = [];
+    fixture.componentInstance.SpaceOpenRequested.subscribe((id) => opened.push(id));
+    spaceRow.click();
+    fixture.detectChanges();
+    expect(opened).toEqual(['s-1']);
+    expect(host.querySelector('.switcher-popover')).toBeNull();
+
+    // Reopen and close via Escape
+    switcherBtn.click();
+    fixture.detectChanges();
+    expect(host.querySelector('.switcher-popover')).not.toBeNull();
+    escape();
+    fixture.detectChanges();
+    expect(host.querySelector('.switcher-popover')).toBeNull();
+
+    // Uncollapsed Home rail shows Starred section above Spaces
+    collapseBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isCollapsed).toBe(false);
+    const railStarred = host.querySelector('[data-testid="rail-starred-spaces"]');
+    expect(railStarred).not.toBeNull();
+    expect(railStarred?.textContent).toContain('Q3 Financial Audit');
+  });
+
+  it('renders type chip, subtitle with tooltip, All spaces breadcrumb on every space, and clickable type tile button in CollabSpaceHeaderComponent (F4, F5, F8)', () => {
+    const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
+    fixture.componentRef.setInput('Title', 'Audit committee');
+    fixture.componentRef.setInput('TypeName', 'Committee');
+    fixture.componentRef.setInput('Subtitle', 'Charter, agendas, and audit trail for the committee');
+    fixture.componentRef.setInput('Breadcrumbs', []);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const typeChip = host.querySelector('[data-testid="space-header-type-chip"]');
+    expect(typeChip?.textContent?.trim()).toBe('Committee');
+
+    const subtitle = host.querySelector<HTMLElement>('[data-testid="space-header-subtitle"]');
+    expect(subtitle?.textContent?.trim()).toBe('Charter, agendas, and audit trail for the committee');
+    expect(subtitle?.getAttribute('title')).toBe('Charter, agendas, and audit trail for the committee');
+
+    const crumbs = host.querySelector('[data-testid="space-header-breadcrumbs"]');
+    expect(crumbs).not.toBeNull();
+    expect(crumbs?.textContent).toContain('All spaces');
+
+    const tileBtn = host.querySelector<HTMLButtonElement>('[data-testid="space-header-tile-btn"]')!;
+    expect(tileBtn).not.toBeNull();
+    expect(tileBtn.getAttribute('aria-label')).toBe('All spaces');
+
+    const selected: unknown[] = [];
+    fixture.componentInstance.BreadcrumbSelectRequested.subscribe((c) => selected.push(c));
+    tileBtn.click();
+    expect(selected).toEqual([{ label: 'All spaces' }]);
+  });
+
+  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Asked by <Person> on the reply (F7)', async () => {
+    vi.useFakeTimers();
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    const userMsg = { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check Q3 variance?' };
+    const aiMsg = { ID: 'msg-2', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', UserID: 'user-colin', User: 'Colin Brockman', Message: 'Variance is +4.2%.' };
+    fixture.componentRef.setInput('ConversationId', 'conv-1');
+    fixture.componentRef.setInput('ConversationName', 'General');
+    fixture.componentRef.setInput('SpaceId', 'space-1');
+    fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
+    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
+    const turnCalls: unknown[] = [];
+    fixture.componentRef.setInput('AgentTurnHandler', async (req: unknown) => {
+      turnCalls.push(req);
+      return { Success: true, ReplyDetailIds: ['reply-100'] };
+    });
+    fixture.detectChanges();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    area.DisplayMessages = [userMsg, aiMsg];
+    fixture.componentRef.setInput('ThreadMessages', [userMsg, aiMsg]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const askedByChip = host.querySelector('[data-testid="message-asked-by"]');
+    expect(askedByChip?.textContent?.trim()).toBe('Asked by Colin Brockman');
+
+    // Trigger a reply to Ada without @mentioning an agent -> prompt appears
+    fixture.componentInstance.onUserMessageSent(
+      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', Message: 'Let us ask Sage on this.' },
+      fixture.componentInstance.ThreadMessages[0],
+    );
+    vi.advanceTimersByTime(150);
+    fixture.detectChanges();
+
+    const askBtn = host.querySelector<HTMLButtonElement>('[data-testid="ask-agent-go-confirm"]')!;
+    expect(askBtn).not.toBeNull();
+    expect(askBtn.textContent).toContain('Ask Sage');
+    askBtn.click();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(turnCalls).toEqual([
+      {
+        ConversationId: 'conv-1',
+        BranchID: null,
+        UserMessageId: 'msg-3',
+        MessageText: 'Let us ask Sage on this.',
+        AgentId: 'agent-sage',
+        AgentName: 'Sage',
+        Route: 'Redirect',
+        ApplicationId: null,
+        AppContext: null,
+        AgentHistoryFrom: null,
+        ConfigurationPresetId: null,
+        RequestedSkillIDs: [],
+        PlanMode: false,
+        TargetArtifactVersionId: null,
+      },
+    ]);
+    vi.useRealTimers();
+  });
+});
+
 
 

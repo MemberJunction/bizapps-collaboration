@@ -104,7 +104,21 @@ describe('space-pages', () => {
         assert.equal(pages[0].blocks.find((b) => b.type === 'board:motions')?.width, 'side');
         assert.equal(pages[0].blocks.find((b) => b.type === 'collab:about')?.width, 'side');
         assert.equal(pages[0].blocks.some((b) => b.type === 'collab:sub-spaces'), false);
+        assert.equal(pages[0].blocks.find((b) => b.type === 'collab:open-tasks')?.width, 'main');
         assert.equal(pages[1].blocks.some((b) => b.type === 'collab:main-view'), true);
+
+        const pagesWithoutWork = buildStarterPagesForSpace({
+            spaceId: 's-1',
+            spaceTitle: 'Audit committee',
+            spaceSubtitle: 'Charter and agendas',
+            spaceTypeName: 'Committee',
+            spaceTypeCode: 'committee',
+            hasWork: false,
+            defaultBand: 'Shared',
+            libraryRows: [],
+            spaceMembers: [],
+        });
+        assert.equal(pagesWithoutWork[0].blocks.some((b) => b.type === 'collab:open-tasks'), false);
 
         const savedCustomOverview: CollabPageModel = {
             ...pages[0],

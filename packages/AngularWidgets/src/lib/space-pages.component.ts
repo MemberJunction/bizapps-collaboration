@@ -17,6 +17,7 @@ import {
     BUILT_IN_SPACE_PAGE_BLOCKS,
     type SpacePageBlockContext,
     type SpacePageBlockDescriptor,
+    type SpacePageBlockEmptyAction,
 } from './base-space-page-block';
 import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import { CollabBandChipComponent } from './band-chip.component';
@@ -681,10 +682,22 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                                 @if (registeredBlockFor(block.type); as reg) {
                                     @if (isRegisteredBlockActive(block, reg)) {
                                         <ng-container *ngComponentOutlet="reg.component; inputs: registeredBlockInputs(block, reg)"></ng-container>
-                                    } @else if (isCustomizing && canEditPage(page)) {
-                                        <div class="sp-widget-placeholder" data-testid="block-placeholder">
-                                            <i [class]="reg.icon" aria-hidden="true"></i>
-                                            <span>{{ reg.emptyText }}</span>
+                                    } @else {
+                                        <div class="sp-b-card sp-block-empty-card" data-testid="block-placeholder">
+                                            <div class="sp-block-empty-head">
+                                                <h4 class="sp-b-title">{{ block.title || reg.label }}</h4>
+                                                @if (emptyActionFor(reg); as act) {
+                                                    <button
+                                                        type="button"
+                                                        class="sp-block-empty-action"
+                                                        data-testid="block-empty-action"
+                                                        (click)="act.run()"
+                                                    >
+                                                        {{ act.label }}
+                                                    </button>
+                                                }
+                                            </div>
+                                            <p class="sp-block-empty-text" data-testid="block-empty-text">{{ reg.emptyText }}</p>
                                         </div>
                                     }
                                 } @else if (isCustomizing && canEditPage(page)) {
@@ -1786,6 +1799,39 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
             border-radius: 12px;
             padding: 14px 16px 16px;
             box-shadow: var(--mj-shadow-sm);
+        }
+        .sp-block-empty-card {
+            display: flex;
+            flex-direction: column;
+            gap: var(--mj-space-1-5);
+        }
+        .sp-block-empty-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--mj-space-2);
+        }
+        .sp-block-empty-head .sp-b-title {
+            margin: 0;
+        }
+        .sp-block-empty-action {
+            appearance: none;
+            border: none;
+            background: none;
+            padding: 0;
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-semibold);
+            color: var(--mj-brand-primary);
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .sp-block-empty-action:hover {
+            text-decoration: underline;
+        }
+        .sp-block-empty-text {
+            margin: 0;
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
         .sp-b-title {
             margin: 0 0 10px;
@@ -3132,6 +3178,10 @@ export class CollabSpacePagesComponent {
         return inputs;
     }
 
+    public emptyActionFor(reg: SpacePageBlockDescriptor): SpacePageBlockEmptyAction | null {
+        return reg.emptyAction ? reg.emptyAction(this.resolvedBlockContext) : null;
+    }
+
     public shouldRenderBlock(block: CollabPageBlock): boolean {
         if (!this.isWidgetBlock(block.type)) return true;
         const reg = this.registeredBlockFor(block.type);
@@ -3141,10 +3191,10 @@ export class CollabSpacePagesComponent {
         if (reg.side === 'Team' && !this.effectiveCanSeeTeam) {
             return false;
         }
-        if (this.isCustomizing && this.CanWrite && !this.IsReadOnly) {
-            return true;
+        if (reg.canView && !reg.canView(this.resolvedBlockContext)) {
+            return false;
         }
-        return this.isRegisteredBlockActive(block, reg);
+        return true;
     }
 
     public availableWidgetBlockOptions(page: CollabPageModel): CollabBlockOption[] {

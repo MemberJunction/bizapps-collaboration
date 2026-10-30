@@ -35,6 +35,7 @@ export interface RailSpaceNode {
   level?: 0 | 1 | 2;
   unread?: boolean;
   isLocked?: boolean;
+  isStarred?: boolean;
   meta?: string | number;
   isDim?: boolean;
   hasChildren?: boolean;

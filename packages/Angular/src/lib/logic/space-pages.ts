@@ -22,6 +22,7 @@ const DEFAULT_BUILT_IN_BLOCK_DESCRIPTORS: readonly StarterBlockDescriptor[] = [
     { key: 'collab:needs-you', defaultZone: 'main', defaultTabs: ['Overview'], sortKey: 20 },
     { key: 'collab:shared-files', defaultZone: 'main', defaultTabs: ['Overview'], sortKey: 30 },
     { key: 'collab:team-files', defaultZone: 'main', defaultTabs: ['Overview'], sortKey: 40 },
+    { key: 'collab:open-tasks', defaultZone: 'main', defaultTabs: ['Overview'], sortKey: 45 },
     { key: 'collab:ask-box', defaultZone: 'side', defaultTabs: ['Overview'], sortKey: 50 },
     { key: 'collab:discussion', defaultZone: 'side', defaultTabs: ['Overview'], sortKey: 60 },
     { key: 'collab:about', defaultZone: 'side', defaultTabs: ['Overview'], sortKey: 70 },
@@ -239,11 +240,12 @@ export function buildStarterPagesForSpace(opts: {
     spaceTypeCode?: string;
     contributedCards?: readonly SpaceOverviewCardDescriptor[];
     descriptors?: readonly StarterBlockDescriptor[];
+    hasWork?: boolean;
     libraryRows: LibraryRowModel[];
     spaceMembers: SpaceMemberModel[];
     defaultBand: SpaceBand;
 }): CollabPageModel[] {
-    const descriptors: readonly StarterBlockDescriptor[] =
+    const rawDescriptors: readonly StarterBlockDescriptor[] =
         opts.descriptors ?? [
             ...DEFAULT_BUILT_IN_BLOCK_DESCRIPTORS,
             ...(opts.contributedCards ?? []).map((card) => ({
@@ -253,6 +255,8 @@ export function buildStarterPagesForSpace(opts: {
                 sortKey: card.sortKey ?? 55,
             })),
         ];
+    const descriptors =
+        opts.hasWork === false ? rawDescriptors.filter((d) => d.key !== 'collab:open-tasks') : rawDescriptors;
 
     const overviewPage: CollabPageModel = {
         id: `seed-overview-${opts.spaceId}`,

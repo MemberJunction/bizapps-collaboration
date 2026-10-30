@@ -291,7 +291,6 @@ export type OverviewSectionKind =
             }
           }
           @case ('SharedFiles') {
-            @if (ShowLibraryLink) {
               <div class="card band-card shared-band">
                 <div class="band-h">
                   <span class="band-ic">
@@ -326,10 +325,9 @@ export type OverviewSectionKind =
                   }
                 </div>
               </div>
-            }
           }
           @case ('TeamFiles') {
-            @if (CanSeeTeamSide && ShowLibraryLink) {
+            @if (CanSeeTeamSide) {
               <div class="card band-card team-band">
                 <div class="band-h">
                   <span class="band-ic team">

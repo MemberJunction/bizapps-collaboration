@@ -31,27 +31,37 @@ import { SubSpaceSummary } from './space-overview.component';
       class="space-head"
       [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
 
-      <!-- Line 1: Breadcrumb ending at the parent (only when the space has a parent) -->
-      @if (hasParentSpace) {
-        <nav class="crumbs" aria-label="Breadcrumb">
-          @for (c of parentBreadcrumbs; track c.label; let last = $last) {
-            <span class="crumb-link" [mjClickable]="c.label" (click)="onCrumbClick(c)">{{ c.label }}</span>
-            @if (!last) {
-              <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            }
+      <!-- Line 1: Breadcrumb trail ('All spaces' on root spaces, 'All spaces › Parent' on sub-spaces) -->
+      <nav class="crumbs" aria-label="Breadcrumb" data-testid="space-header-breadcrumbs">
+        @for (c of headerBreadcrumbs; track c.label; let last = $last) {
+          <span
+            class="crumb-link"
+            data-testid="space-header-crumb"
+            [mjClickable]="c.label"
+            (click)="onCrumbClick(c)">{{ c.label }}</span>
+          @if (!last) {
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           }
-        </nav>
-      }
+        }
+      </nav>
 
-      <!-- Line 2: Type tile, title, star, non-Active status chip, and right actions -->
+      <!-- Line 2: Type tile, title, star, type chip, non-Active status chip, subtitle, and right actions -->
       <div class="top">
         <div class="title-row">
-          <mjc-type-tile
-            [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
-            [Color]="TypeColor || ''"
-            [IsClosed]="Status === 'Closed'"
-            Size="md">
-          </mjc-type-tile>
+          <button
+            type="button"
+            class="type-tile-btn"
+            data-testid="space-header-tile-btn"
+            title="All spaces"
+            aria-label="All spaces"
+            (click)="onAllSpacesClick()">
+            <mjc-type-tile
+              [IconClass]="TypeIconClass || 'fa-solid fa-compass'"
+              [Color]="TypeColor || ''"
+              [IsClosed]="Status === 'Closed'"
+              Size="md">
+            </mjc-type-tile>
+          </button>
 
           <h1 class="h1">{{ Title }}</h1>
 
@@ -69,8 +79,16 @@ import { SubSpaceSummary } from './space-overview.component';
             </button>
           }
 
+          @if (TypeName) {
+            <span class="chip type-chip" data-testid="space-header-type-chip">{{ TypeName }}</span>
+          }
+
           @if (Status && Status !== 'Active') {
             <span class="chip status-chip">{{ Status }}</span>
+          }
+
+          @if (Subtitle) {
+            <span class="sub-inline" data-testid="space-header-subtitle" [title]="Subtitle">{{ Subtitle }}</span>
           }
 
           <ng-content select="[chips]"></ng-content>
@@ -202,6 +220,21 @@ import { SubSpaceSummary } from './space-overview.component';
       flex: 1;
       min-width: 0;
     }
+    .type-tile-btn {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      border-radius: var(--mj-radius-md);
+      flex-shrink: 0;
+      transition: opacity var(--mj-transition-fast);
+    }
+    .type-tile-btn:hover {
+      opacity: 0.85;
+    }
     .h1 {
       font-size: var(--mj-text-lg);
       font-weight: var(--mj-font-bold);
@@ -212,6 +245,7 @@ import { SubSpaceSummary } from './space-overview.component';
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex-shrink: 0;
     }
     .star {
       border: 0;
@@ -255,6 +289,14 @@ import { SubSpaceSummary } from './space-overview.component';
       user-select: none;
       flex-shrink: 0;
     }
+    .sub-inline {
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
     .actions {
       margin-left: auto;
       display: flex;
@@ -265,6 +307,7 @@ import { SubSpaceSummary } from './space-overview.component';
 
     @media (prefers-reduced-motion: reduce) {
       .crumb-link,
+      .type-tile-btn,
       .star {
         transition: none;
       }
@@ -300,15 +343,31 @@ export class CollabSpaceHeaderComponent {
   @Output() NewPageRequested = new EventEmitter<void>();
   @Output() SpaceSettingsRequested = new EventEmitter<void>();
 
-  /** True when the space sits under a parent space (`Spaces › Parent › Child`). */
+  /** True when the space sits under a parent space (`All spaces › Parent › Child`). */
   public get hasParentSpace(): boolean {
     return this.parentCrumb !== null;
+  }
+
+  /**
+   * Breadcrumb trail rendered on every space:
+   * - Top-level space: `['All spaces']`
+   * - Sub-space: `['All spaces', 'Parent Space', ...]` (excludes the current space's own repeated title)
+   */
+  public get headerBreadcrumbs(): BreadcrumbItem[] {
+    if (this.Breadcrumbs && this.Breadcrumbs.length > 1) {
+      return this.Breadcrumbs.slice(0, -1).map((crumb, idx) =>
+        idx === 0 && (crumb.label === 'Spaces' || crumb.label === 'All spaces')
+          ? { ...crumb, label: 'All spaces' }
+          : crumb,
+      );
+    }
+    return [{ label: 'All spaces' }];
   }
 
   /** Breadcrumb trail ending at the parent space (excluding the current space's own repeated title). */
   public get parentBreadcrumbs(): BreadcrumbItem[] {
     if (!this.hasParentSpace) return [];
-    return this.Breadcrumbs.slice(0, -1);
+    return this.headerBreadcrumbs;
   }
 
   public get hasMoreMenu(): boolean {
@@ -325,11 +384,16 @@ export class CollabSpaceHeaderComponent {
     this.BreadcrumbSelectRequested.emit(crumb);
   }
 
+  public onAllSpacesClick(): void {
+    const firstCrumb = this.headerBreadcrumbs[0] ?? { label: 'All spaces' };
+    this.BreadcrumbSelectRequested.emit(firstCrumb);
+  }
+
   public onSubSpaceClick(sub: SubSpaceSummary): void {
     this.SubSpaceSelectRequested.emit(sub);
   }
 
-  /** Immediate parent space breadcrumb when inside a nested child space (`Spaces > Parent > Child`). */
+  /** Immediate parent space breadcrumb when inside a nested child space (`All spaces > Parent > Child`). */
   public get parentCrumb(): BreadcrumbItem | null {
     if (!this.Breadcrumbs || this.Breadcrumbs.length < 3) return null;
     const candidate = this.Breadcrumbs[this.Breadcrumbs.length - 2];
