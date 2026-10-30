@@ -18,7 +18,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
 
 export interface NewConversationSubmitPayload {
   name: string;
-  kind: 'General' | 'Topic' | 'Private';
+  kind: 'General' | 'Topic' | 'Private' | 'Assistant';
 }
 
 @Component({
@@ -78,6 +78,17 @@ export interface NewConversationSubmitPayload {
                 <div class="kind-card-text">
                   <div class="kind-title">Team only</div>
                   <div class="kind-desc">Restricted to internal staff and team members.</div>
+                </div>
+              </label>
+            }
+
+            @if (canShowAssistant) {
+              <label class="kind-card" [class.selected]="kind === 'Assistant'" data-testid="kind-card-assistant">
+                <input type="radio" name="convoKind" value="Assistant" [(ngModel)]="kind" [disabled]="IsSubmitting" class="sr-only" />
+                <div class="kind-card-icon assistant"><i class="fa-solid fa-robot" aria-hidden="true"></i></div>
+                <div class="kind-card-text">
+                  <div class="kind-title">1-to-1 Assistant</div>
+                  <div class="kind-desc">Private conversation between just you and the space assistant.</div>
                 </div>
               </label>
             }
@@ -248,6 +259,10 @@ export interface NewConversationSubmitPayload {
         background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, transparent);
         color: var(--mjc-team, #7c3aed);
       }
+      .kind-card-icon.assistant {
+        background: color-mix(in srgb, var(--mj-brand-accent, #0284c7) 12%, transparent);
+        color: var(--mj-brand-accent, #0284c7);
+      }
 
       .kind-card-text {
         display: flex;
@@ -272,7 +287,7 @@ export interface NewConversationSubmitPayload {
 })
 export class CollabNewConversationDialogComponent implements OnChanges, OnDestroy {
   @Input() public SpaceName = '';
-  @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private')[] = ['General', 'Topic'];
+  @Input() public AllowedKinds: readonly ('General' | 'Topic' | 'Private' | 'Assistant')[] = ['General', 'Topic', 'Assistant'];
   @Input() public IsSubmitting = false;
 
   @Output() public CancelRequested = new EventEmitter<void>();
@@ -282,7 +297,7 @@ export class CollabNewConversationDialogComponent implements OnChanges, OnDestro
   private refocusTimer: ReturnType<typeof setTimeout> | undefined;
 
   public name = '';
-  public kind: 'General' | 'Topic' | 'Private' = 'General';
+  public kind: 'General' | 'Topic' | 'Private' | 'Assistant' = 'General';
 
   /**
    * `mj-dialog` focuses the name field when the dialog opens, keeps Tab inside and gives focus back on close. What it can't know is
@@ -309,6 +324,10 @@ export class CollabNewConversationDialogComponent implements OnChanges, OnDestro
 
   public get canShowPrivate(): boolean {
     return this.AllowedKinds.includes('Private');
+  }
+
+  public get canShowAssistant(): boolean {
+    return this.AllowedKinds.includes('Assistant');
   }
 
   public get trimmedName(): string {

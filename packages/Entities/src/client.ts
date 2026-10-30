@@ -64,6 +64,7 @@ export interface ExecuteSpaceChatTurnGraphQLInput {
     ConversationID: string;
     UserMessageID: string;
     AgentID?: string;
+    RetrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Answer as soon as the reply row is written In-Progress, and send the run's progress and text to this session as it goes
      * (the messages MemberJunction's chat follows). Without it the call returns when the reply is final.
@@ -85,7 +86,7 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
 export interface CreateSpaceConversationGraphQLInput {
     SpaceID: string;
     Name: string;
-    Kind?: 'General' | 'Topic' | 'Private';
+    Kind?: 'General' | 'Topic' | 'Private' | 'Assistant';
 }
 
 export interface CreateSpaceConversationGraphQLPayload {

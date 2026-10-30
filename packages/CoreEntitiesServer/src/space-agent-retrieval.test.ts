@@ -916,6 +916,110 @@ describe('resolveSpaceAgentRetrieval', () => {
         });
         assert.equal(byDescriptionTeamAsBea.quotedItems.length, 0, 'Bea cannot retrieve Team XLSX by description query');
     });
+
+    it('supports ThisSpace narrowing to exclude child space items while keeping anchor space items', async () => {
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const resThisSpace = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
+            narrowing: 'ThisSpace',
+        });
+        assert.deepEqual(resThisSpace.searchedSpaceIds, [ROOT_SPACE_ID.toLowerCase()]);
+        const quotedNames = resThisSpace.quotedItems.map((q) => q.Name);
+        assert.deepEqual(quotedNames, ['root-notes.txt']);
+    });
+
+    it('supports Everything narrowing for a 1-to-1 Assistant conversation across multiple spaces with per-space band enforcement, and refuses to widen ExcludedEntirely or ExcludedFromParentScope floors', async () => {
+        const OTHER_ROOT_SPACE_ID = 'AAAAAAAA-1111-4000-8000-000000000006';
+        const OTHER_SHARED_REC_ID = '11111111-5555-4000-8000-000000000007';
+        const OTHER_TEAM_REC_ID = '11111111-5555-4000-8000-000000000008';
+
+        targetRecords[OTHER_SHARED_REC_ID] = { Name: 'partner-shared-charter.pdf', Description: 'Partner shared charter' };
+        targetRecords[OTHER_TEAM_REC_ID] = { Name: 'partner-internal-pricing.xlsx', Description: 'Partner internal pricing' };
+
+        mockSpacesOverride = [
+            ...spacesData,
+            {
+                ID: OTHER_ROOT_SPACE_ID,
+                ParentID: null,
+                InheritsMembership: false,
+                OwnerID: BEA_ID,
+                AgentRetrieval: 'Included',
+                AllowParentAssignees: true,
+            },
+        ];
+        mockItemsOverride = [
+            ...itemsData,
+            {
+                ID: 'EEEEEEEE-5555-4000-8000-000000000007',
+                SpaceID: OTHER_ROOT_SPACE_ID,
+                EntityID: FILES_ENTITY_ID,
+                RecordID: OTHER_SHARED_REC_ID,
+                Band: 'Shared' as const,
+            },
+            {
+                ID: 'EEEEEEEE-5555-4000-8000-000000000008',
+                SpaceID: OTHER_ROOT_SPACE_ID,
+                EntityID: FILES_ENTITY_ID,
+                RecordID: OTHER_TEAM_REC_ID,
+                Band: 'Team' as const,
+            },
+        ];
+        // Give Ada a Client (Shared-only) seat on OTHER_ROOT_SPACE_ID while she has Owner (Team) on ROOT_SPACE_ID / CHILD_SPACE_ID
+        membersData.push({
+            SpaceID: OTHER_ROOT_SPACE_ID,
+            UserID: ADA_ID,
+            Status: 'Active',
+            Band: 'Shared',
+            SpaceRoleTypeID: CLIENT_ROLE_ID,
+        });
+
+        try {
+            const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+
+            // 1. Asking from CHILD_SPACE_ID with Everything narrowing in an Assistant chat
+            const everythingRes = await resolveSpaceAgentRetrieval(provider, ada, CHILD_SPACE_ID, {
+                conversationKind: 'Assistant',
+                narrowing: 'Everything',
+            });
+            const quotedNames = everythingRes.quotedItems.map((q) => q.Name);
+
+            // Quotes both Shared and Team in CHILD_SPACE_ID, plus Shared in ROOT_SPACE_ID
+            assert.ok(quotedNames.includes('site-photo.png'), 'Quotes Shared item in anchor space');
+            assert.ok(quotedNames.includes('discovery-brief.pdf'), 'Quotes Team item in anchor space where Ada has Team seat');
+            assert.ok(quotedNames.includes('root-notes.txt'), 'Quotes parent space item under Everything narrowing');
+
+            // Quotes Shared in OTHER_ROOT_SPACE_ID, but NEVER Team in OTHER_ROOT_SPACE_ID where Ada only has a Shared seat
+            assert.ok(quotedNames.includes('partner-shared-charter.pdf'), 'Quotes Shared item from other reachable space');
+            assert.ok(!quotedNames.includes('partner-internal-pricing.xlsx'), 'Refuses Team item from space where caller only has Shared seat');
+
+            // Floor enforcement: NEVER quotes ExcludedFromParentScope (SIBLING_SPACE_ID) or ExcludedEntirely (CLOSED_SPACE_ID)
+            assert.ok(!quotedNames.includes('delivery-plan.docx'), 'Floor enforced: ExcludedFromParentScope space is excluded under Everything');
+            assert.ok(!quotedNames.includes('archive.zip'), 'Floor enforced: ExcludedEntirely space is excluded under Everything');
+
+            // 2. Asking directly from CLOSED_SPACE_ID (ExcludedEntirely) with Everything narrowing still excludes CLOSED_SPACE_ID
+            const fromExcludedEntirely = await resolveSpaceAgentRetrieval(provider, ada, CLOSED_SPACE_ID, {
+                conversationKind: 'Assistant',
+                narrowing: 'Everything',
+            });
+            assert.ok(
+                !fromExcludedEntirely.quotedItems.some((q) => q.Name === 'archive.zip'),
+                'ExcludedEntirely anchor space is never quoted even under Everything narrowing'
+            );
+
+            // 3. Multi-person General room ignores Everything narrowing and stays bounded to CHILD_SPACE_ID subtree + Shared band
+            const multiPersonEverything = await resolveSpaceAgentRetrieval(provider, ada, CHILD_SPACE_ID, {
+                conversationKind: 'General',
+                narrowing: 'Everything',
+            });
+            const multiNames = multiPersonEverything.quotedItems.map((q) => q.Name);
+            assert.deepEqual(multiNames, ['site-photo.png'], 'Multi-person conversation refuses Everything widening');
+        } finally {
+            mockSpacesOverride = null;
+            mockItemsOverride = null;
+            membersData.pop();
+            delete targetRecords[OTHER_SHARED_REC_ID];
+            delete targetRecords[OTHER_TEAM_REC_ID];
+        }
+    });
 });
 
 

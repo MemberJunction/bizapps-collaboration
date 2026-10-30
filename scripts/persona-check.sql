@@ -65,18 +65,31 @@ IF @AnyAgent IS NOT NULL
 
 DECLARE @Convo uniqueidentifier = NEWID();
 DECLARE @OtherConvo uniqueidentifier = NEWID();
+DECLARE @OurAssistantConvo uniqueidentifier = NEWID();
+DECLARE @OtherAssistantConvo uniqueidentifier = NEWID();
 DECLARE @Detail uniqueidentifier = NEWID();
+DECLARE @OurAssistantDetail uniqueidentifier = NEWID();
+DECLARE @OtherAssistantDetail uniqueidentifier = NEWID();
+DECLARE @OurAssistantChat uniqueidentifier = NEWID();
+DECLARE @OtherAssistantChat uniqueidentifier = NEWID();
 INSERT INTO __mj.Conversation (ID, Name, UserID, LinkedEntityID, LinkedRecordID)
 VALUES
     (@Convo, N'Ours', @Other, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Ours)),
-    (@OtherConvo, N'Sibling', @Other, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Sibling));
-INSERT INTO __mj.ConversationDetail (ID, ConversationID, Role, Message, HiddenToUser, IsPinned, Status, OriginalMessageChanged, Sequence)
-VALUES (@Detail, @Convo, N'User', N'Hello', 0, 0, N'Complete', 0, 1);
--- The conversations filter reads a conversation through the space chat that binds it to a space
-INSERT INTO __mj_BizAppsCollaboration.SpaceChat (SpaceID, ConversationID, Name, Kind, Status, ArchivedOnSpaceClose)
+    (@OtherConvo, N'Sibling', @Other, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Sibling)),
+    (@OurAssistantConvo, N'Our Assistant', @User, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Ours)),
+    (@OtherAssistantConvo, N'Other Assistant', @Other, '3648DC35-1DC4-4ED6-A1A6-5D87271A54DB', CONVERT(nvarchar(36), @Ours));
+INSERT INTO __mj.ConversationDetail (ID, ConversationID, UserID, Role, Message, HiddenToUser, IsPinned, Status, OriginalMessageChanged, Sequence)
 VALUES
-    (@Ours, @Convo, N'General', N'General', N'Active', 0),
-    (@Sibling, @OtherConvo, N'General', N'General', N'Active', 0);
+    (@Detail, @Convo, @User, N'User', N'Hello', 0, 0, N'Complete', 0, 1),
+    (@OurAssistantDetail, @OurAssistantConvo, @User, N'User', N'Ask my assistant', 0, 0, N'Complete', 0, 1),
+    (@OtherAssistantDetail, @OtherAssistantConvo, @User, N'User', N'Intrude on other assistant', 0, 0, N'Complete', 0, 1);
+-- The conversations filter reads a conversation through the space chat that binds it to a space
+INSERT INTO __mj_BizAppsCollaboration.SpaceChat (ID, SpaceID, ConversationID, Name, Kind, Status, ArchivedOnSpaceClose, OwnerUserID)
+VALUES
+    (NEWID(), @Ours, @Convo, N'General', N'General', N'Active', 0, NULL),
+    (NEWID(), @Sibling, @OtherConvo, N'General', N'General', N'Active', 0, NULL),
+    (@OurAssistantChat, @Ours, @OurAssistantConvo, N'Our Assistant', N'Assistant', N'Active', 0, @User),
+    (@OtherAssistantChat, @Ours, @OtherAssistantConvo, N'Other Assistant', N'Assistant', N'Active', 0, @Other);
 
 DECLARE @Seen int = (
     SELECT COUNT(*) FROM __mj_BizAppsCollaboration.fnCollaborationAccess(@User) a
@@ -187,6 +200,10 @@ EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @Con
 IF @n <> 1 THROW 50000, 'Conversations filter missed the bound conversation.', 1;
 EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OtherConvo, @n OUTPUT;
 IF @n <> 0 THROW 50000, 'Conversations filter returned the sibling conversation.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OurAssistantConvo, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Conversations filter missed the caller''s own Assistant conversation.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OtherAssistantConvo, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Conversations filter returned another user''s Assistant conversation.', 1;
 
 SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
 FROM __mj.RowLevelSecurityFilter f
@@ -196,6 +213,39 @@ WHERE p.RoleID = @Participant AND e.Name = N'MJ: Conversation Details';
 SET @countSql = N'SELECT @out = COUNT(*) FROM __mj.vwConversationDetails WHERE ID = @id AND ' + @pred;
 EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @Detail, @n OUTPUT;
 IF @n <> 1 THROW 50000, 'Conversation details filter missed the bound detail.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OurAssistantDetail, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Conversation details filter missed the caller''s own Assistant detail.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OtherAssistantDetail, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Conversation details filter returned another user''s Assistant detail.', 1;
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.CreateRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ: Conversation Details';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj.vwConversationDetails WHERE ID = @id AND ' + @pred;
+-- As a read-only guest (CanContribute = 0), creating a message is refused even on one's own Assistant chat
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OurAssistantDetail, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Conversation details create filter allowed a read-only guest to write.', 1;
+-- Promoted to a contributing seat, the caller may write to their own Assistant chat and never to another user's
+DECLARE @Contributor uniqueidentifier = (SELECT TOP 1 ID FROM __mj_BizAppsCollaboration.SpaceRoleType WHERE CanContribute = 1);
+UPDATE __mj_BizAppsCollaboration.SpaceMember SET SpaceRoleTypeID = @Contributor WHERE SpaceID = @Ours AND UserID = @User;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OurAssistantDetail, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Conversation details create filter refused a contributing caller''s own Assistant detail.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OtherAssistantDetail, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Conversation details create filter allowed writing to another user''s Assistant conversation.', 1;
+UPDATE __mj_BizAppsCollaboration.SpaceMember SET SpaceRoleTypeID = @Guest WHERE SpaceID = @Ours AND UserID = @User;
+
+SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')
+FROM __mj.RowLevelSecurityFilter f
+INNER JOIN __mj.EntityPermission p ON p.ReadRLSFilterID = f.ID
+INNER JOIN __mj.Entity e ON e.ID = p.EntityID
+WHERE p.RoleID = @Participant AND e.Name = N'MJ_BizApps_Collaboration: Space Chats';
+SET @countSql = N'SELECT @out = COUNT(*) FROM __mj_BizAppsCollaboration.vwSpaceChats WHERE ID = @id AND ' + @pred;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OurAssistantChat, @n OUTPUT;
+IF @n <> 1 THROW 50000, 'Space Chats filter missed the caller''s own Assistant chat.', 1;
+EXEC sys.sp_executesql @countSql, N'@id uniqueidentifier, @out int OUTPUT', @OtherAssistantChat, @n OUTPUT;
+IF @n <> 0 THROW 50000, 'Space Chats filter returned another user''s Assistant chat.', 1;
 
 -- Anchors: a participant reads the anchors of the spaces they reach, and no other space's
 SELECT @pred = REPLACE(REPLACE(f.FilterText, '{{UserID}}', @uid), '{{ScopeResourceID}}', N'')

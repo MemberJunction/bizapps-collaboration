@@ -11,7 +11,7 @@ import { ChatSlotDirective, ConversationStreamingService, ResolveAgentTurn } fro
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
-import { CollabSpaceChatComponent } from './space-chat.component.ts';
+import { CollabChatScopeBarComponent, CollabSpaceChatComponent } from './space-chat.component.ts';
 import { CollabNewConversationDialogComponent } from './new-conversation-dialog.component.ts';
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
@@ -439,7 +439,7 @@ const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamin
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -781,7 +781,7 @@ describe('the conversation of a space, read-only', () => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -805,7 +805,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'This space is closed. Conversations are read-only.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -845,7 +845,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -882,7 +882,7 @@ describe('the conversation of a space, read-only', () => {
   it('toggles the reason on the first Enter after tabbing to the lock, closes it on Escape without moving focus, and on a tap outside', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -930,7 +930,7 @@ describe('the conversation of a space, read-only', () => {
   it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const chats = [1, 2].map(() => {
       const fixture = TestBed.createComponent(CollabSpaceChatComponent);
       fixture.componentRef.setInput('ConversationId', null);
@@ -973,7 +973,7 @@ describe('the conversation of a space, read-only', () => {
   it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);

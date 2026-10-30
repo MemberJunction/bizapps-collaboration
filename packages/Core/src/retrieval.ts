@@ -221,18 +221,19 @@ export function effectiveRetrievalScope(input: EffectiveRetrievalScopeInput): Ef
         let excludedOnPath = false;
         let curr: SpaceNode | undefined = spaceNode;
         const walked = new Set<string>();
+        let reachedAnchor = false;
         while (curr && !walked.has(normalizeId(curr.id))) {
             const currId = normalizeId(curr.id);
             walked.add(currId);
-            if (curr.agentRetrieval === 'ExcludedEntirely') {
-                excludedOnPath = true;
-                break;
-            }
-            if (curr.agentRetrieval === 'ExcludedFromParentScope' && (!anchorId || anchorId !== currId)) {
+            if (!spaceAllowsAgentRetrieval(curr) || curr.agentRetrieval === 'ExcludedEntirely') {
                 excludedOnPath = true;
                 break;
             }
             if (anchorId && currId === anchorId) {
+                reachedAnchor = true;
+            }
+            if (!reachedAnchor && curr.agentRetrieval === 'ExcludedFromParentScope') {
+                excludedOnPath = true;
                 break;
             }
             curr = curr.parentId ? spaceMap.get(normalizeId(curr.parentId)) : undefined;

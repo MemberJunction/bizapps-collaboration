@@ -1109,6 +1109,9 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [MentionPeople]="chatMentionPeople"
                                                     [AgentHistoryFrom]="chatAgentHistoryFrom"
                                                     [AgentTurnHandler]="handleAgentTurn"
+                                                    [RetrievalScope]="chatRetrievalScope"
+                                                    [AllowEverythingScope]="isOneToOneActiveConversation"
+                                                    (RetrievalScopeChanged)="onChatRetrievalScopeChanged($event)"
                                                     [AutoNameConversation]="false"
                                                     [ComposerDraft]="composerDraft"
                                                     (ComposerDraftConsumed)="composerDraft = null"
@@ -1468,7 +1471,18 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public chatDefaultAgentName: string | null = null;
     public chatAgentHistoryFrom: Date | null = null;
     public chatMentionPeople: readonly MentionPerson[] = [];
+    public chatRetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
     private hostRulesRequestId = 0;
+
+    public get isOneToOneActiveConversation(): boolean {
+        const active = this.spaceConversations.find((c) => UUIDsEqual(c.id, this.activeConversationId));
+        return active?.kind === 'Assistant';
+    }
+
+    public onChatRetrievalScopeChanged(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+        this.chatRetrievalScope = scope;
+        this.RefreshView();
+    }
     private selectSpaceRequestId = 0;
 
     // Header metadata
@@ -4718,8 +4732,12 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.canStartConversation = res.CanStartConversation ?? false;
                 if (res.UploadMaxBytes && res.UploadMaxBytes > 0) this.uploadMaxBytes = res.UploadMaxBytes;
                 this.canStartConversationKinds = (res.AllowedConversationKinds ?? []).filter(
-                    (k): k is 'General' | 'Topic' | 'Private' => k === 'General' || k === 'Topic' || k === 'Private'
+                    (k): k is 'General' | 'Topic' | 'Private' | 'Assistant' =>
+                        k === 'General' || k === 'Topic' || k === 'Private' || k === 'Assistant'
                 );
+                if (!this.isOneToOneActiveConversation && this.chatRetrievalScope === 'Everything') {
+                    this.chatRetrievalScope = 'Subtree';
+                }
             } else {
                 this.chatAllowedAgentIds = [];
                 this.chatDefaultAgentId = null;
@@ -4743,7 +4761,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public handleAgentTurn: AgentTurnHandler = async (request: AgentTurnRequest): Promise<AgentTurnResult> => {
         try {
             const client = new CollaborationClient(this.graphQLExecutor);
-            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request)));
+            return spaceTurnResult(await client.ExecuteSpaceChatTurn(spaceTurnInput(this.activeSpaceId, request, this.chatRetrievalScope)));
         } catch (error) {
             LogError(`Failed to execute space chat turn: ${error instanceof Error ? error.message : String(error)}`);
             return spaceTurnFailure(error);

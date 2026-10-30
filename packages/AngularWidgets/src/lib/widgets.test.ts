@@ -1237,11 +1237,27 @@ describe('CollabNewConversationDialogComponent', () => {
     expect(comp.name).toBe('');
     expect(comp.kind).toBe('General');
     expect(comp.IsSubmitting).toBe(false);
-    expect(comp.AllowedKinds).toEqual(['General', 'Topic']);
+    expect(comp.AllowedKinds).toEqual(['General', 'Topic', 'Assistant']);
     expect(comp.canShowPrivate).toBe(false);
+    expect(comp.canShowAssistant).toBe(true);
 
     comp.name = '   Weekly Sync   ';
     expect(comp.trimmedName).toBe('Weekly Sync');
+  });
+
+  it('emits SubmitRequested for 1-to-1 Assistant conversation kind', () => {
+    const comp = new CollabNewConversationDialogComponent();
+    comp.name = '  audit-prep-assistant  ';
+    comp.kind = 'Assistant';
+    let submitted: NewConversationSubmitPayload | null = null;
+    comp.SubmitRequested.subscribe(payload => {
+      submitted = payload;
+    });
+    comp.onSubmit();
+    expect(submitted).toEqual({
+      name: 'audit-prep-assistant',
+      kind: 'Assistant',
+    });
   });
 
   it('allows Private kind only when explicitly permitted in AllowedKinds', () => {

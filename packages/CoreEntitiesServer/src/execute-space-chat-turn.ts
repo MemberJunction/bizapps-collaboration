@@ -58,6 +58,7 @@ export interface ExecuteSpaceChatTurnInput {
     conversationId: string;
     userMessageId: string;
     agentId?: string;
+    retrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Return as soon as the reply row is written In-Progress, and run the agent after that: the caller shows the row, and the
      * observer's callbacks carry the run's progress to it. Without it the call returns when the reply is final.
@@ -194,10 +195,10 @@ async function runClaimedTurn(
     }
 
     // 2. Verify conversation belongs to this space and is active
-    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string }>({
+    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; Status: string; OwnerUserID?: string | null }>({
         EntityName: SPACE_CHATS,
         ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${conversationId}' AND Status = 'Active'`,
-        Fields: ['ID', 'ConversationID', 'Kind', 'Status'],
+        Fields: ['ID', 'ConversationID', 'Kind', 'Status', 'OwnerUserID'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -209,6 +210,10 @@ async function runClaimedTurn(
     const foundChat = chatCheck.Results[0];
     if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
         return { ok: false, message: 'Caller cannot initiate an agent turn in an internal conversation without Team visibility.' };
+    }
+    const isOneToOneAssistant = foundChat.Kind === 'Assistant';
+    if (isOneToOneAssistant && parseUuid(foundChat.OwnerUserID) !== callerId) {
+        return { ok: false, message: 'Caller cannot initiate an agent turn in another member\'s assistant conversation.' };
     }
 
     // 3. Load persisted user message
@@ -267,7 +272,7 @@ async function runClaimedTurn(
     }
     let chatSettings: Awaited<ReturnType<typeof resolveSpaceChatSettings>>;
     try {
-        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system, loaded);
+        chatSettings = await resolveSpaceChatSettings(provider, spaceId, system, loaded, { isOneToOne: isOneToOneAssistant });
     } catch (settingsError) {
         return { ok: false, message: settingsError instanceof Error ? settingsError.message : 'Space settings refused.' };
     }
@@ -384,7 +389,9 @@ async function runClaimedTurn(
     }
 
     // 7b. The turn's tools (B20): the grants in force for the conversation's audience, and the agent grant's run settings
-    const audience = audienceOfConversationKind(foundChat.Kind);
+    const audience = isOneToOneAssistant
+        ? (reach.role.canSeeTeamBand ? 'Team' : 'Shared')
+        : audienceOfConversationKind(foundChat.Kind);
     let turnTools: Awaited<ReturnType<typeof resolveTurnTools>>;
     try {
         turnTools = await resolveTurnTools(provider, system, loaded.configuration, audience, targetAgentId);
@@ -417,11 +424,15 @@ async function runClaimedTurn(
         }, system);
         if (!seats.Success) throw new Error(seats.ErrorMessage ?? 'the space\'s seats could not be read');
         const viewerBands: Record<string, 'Team' | 'Shared'> = {};
-        for (const seat of seats.Results ?? []) {
-            const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
-            viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
-            if (seat.User?.trim()) {
-                speakerLabels.set(seatUserId, seat.User.trim());
+        if (isOneToOneAssistant) {
+            viewerBands[callerId.toUpperCase()] = reach.role.canSeeTeamBand ? 'Team' : 'Shared';
+        } else {
+            for (const seat of seats.Results ?? []) {
+                const seatUserId = parseUuid(seat.UserID) ?? seat.UserID;
+                viewerBands[seatUserId.toUpperCase()] = seat.Band === 'Team' ? 'Team' : 'Shared';
+                if (seat.User?.trim()) {
+                    speakerLabels.set(seatUserId, seat.User.trim());
+                }
             }
         }
         const built = await driver.call.driver.BuildAgentContext({ ...driver.call.base, chatId: foundChat.ID, viewerBands });
@@ -431,8 +442,17 @@ async function runClaimedTurn(
     }
 
     // 9. Bound agent to conversation audience (Item 23 / B2.3: what the room can reach)
+    const requestedScope = input.retrievalScope;
+    const effectiveNarrowing =
+        requestedScope === 'ThisSpace'
+            ? 'ThisSpace'
+            : requestedScope === 'Everything' && isOneToOneAssistant
+                ? 'Everything'
+                : 'Subtree';
     const retrieval = await resolveSpaceAgentRetrieval(provider, user, spaceId, {
         conversationKind: foundChat.Kind,
+        participantUserIds: isOneToOneAssistant ? [callerId] : undefined,
+        narrowing: effectiveNarrowing,
     });
     const audienceQuoted = retrieval.quotedItems;
     const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
