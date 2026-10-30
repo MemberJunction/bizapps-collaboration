@@ -1,5 +1,23 @@
 export { BaseSpaceTab } from './lib/base-space-tab';
 export { BaseSpaceOverviewCard } from './lib/base-space-overview-card';
+export {
+    BaseSpacePageBlock,
+    assembleSpacePageBlocks,
+    BUILT_IN_SPACE_PAGE_BLOCKS,
+    CollabPinnedPageBlockComponent,
+    CollabNeedsYouPageBlockComponent,
+    CollabSharedFilesPageBlockComponent,
+    CollabTeamFilesPageBlockComponent,
+    CollabAskPageBlockComponent,
+    CollabDiscussionPageBlockComponent,
+    CollabSubSpacesPageBlockComponent,
+    CollabAboutPageBlockComponent,
+    CollabMainViewPageBlockComponent,
+    type SpacePageBlockConfig,
+    type SpacePageBlockContext,
+    type SpacePageBlockMetadata,
+    type SpacePageBlockDescriptor,
+} from './lib/base-space-page-block';
 export { BaseSpaceSettingsSection } from './lib/base-space-settings-section';
 export {
     BaseSpaceTypeUIDriver,

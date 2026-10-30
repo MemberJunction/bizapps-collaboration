@@ -85,7 +85,7 @@ describe('space-pages-storage', () => {
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:TeamFiles')?.width, 'main');
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:AskBox')?.width, 'side');
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:Discussion')?.width, 'side');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:ContributedCards')?.width, 'side');
+    assert.equal(pages[0].blocks.some((b) => b.type === 'Widget:ContributedCards'), false);
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:About')?.width, 'side');
     assert.equal(pages[0].blocks.some((b) => b.type === 'Widget:SubSpaces'), false);
     assert.equal(pages[1].blocks.some((b) => b.type === 'Widget:MainView'), true);
@@ -98,6 +98,7 @@ describe('space-pages-storage', () => {
       widgetsInitialized: true,
       blocks: [
         { id: 'seed-blk-callout', type: 'Callout', title: 'Legacy Seed Callout', body: 'Should be stripped' },
+        { id: 'seed-blk-widget-contributed', type: 'Widget:ContributedCards', title: '', width: 'side' },
         { id: 'seed-blk-widget-shared-files', type: 'Widget:SharedFiles', title: '', width: 'half' },
         { id: 'seed-blk-widget-ask-box', type: 'Widget:AskBox', title: '', width: 'half' },
       ],
@@ -132,8 +133,9 @@ describe('space-pages-storage', () => {
     assert.equal(merged.length, 7);
     assert.equal(merged[0].id, 'saved-overview-1');
     assert.equal(merged[0].title, 'Custom Board Overview');
-    // Strips legacy synthetic seed-blk-callout and normalizes 'half' widget widths to 'main' / 'side'
+    // Strips legacy synthetic seed-blk-callout and seed-blk-widget-contributed, and normalizes 'half' widget widths to 'main' / 'side'
     assert.equal(merged[0].blocks.some((b) => b.id === 'seed-blk-callout'), false);
+    assert.equal(merged[0].blocks.some((b) => b.id === 'seed-blk-widget-contributed'), false);
     assert.equal(merged[0].blocks.find((b) => b.type === 'Widget:SharedFiles')?.width, 'main');
     assert.equal(merged[0].blocks.find((b) => b.type === 'Widget:AskBox')?.width, 'side');
     // Respects intentional removal of Widget:About when widgetsInitialized is true

@@ -1,8 +1,24 @@
-import { Component, EventEmitter, HostListener, Inject, Input, Optional, Output, TemplateRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, HostListener, Inject, Input, Optional, Output, TemplateRef, ViewChild } from '@angular/core';
+import { CommonModule, NgComponentOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { MJAlertComponent, MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
+import {
+    MJAlertComponent,
+    MJButtonDirective,
+    MJConfirmService,
+    MJMenuComponent,
+    MJMenuDividerComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
+import { normalizeContributionKey } from '@mj-biz-apps/collaboration-core';
+import {
+    assembleSpacePageBlocks,
+    BUILT_IN_SPACE_PAGE_BLOCKS,
+    type SpacePageBlockContext,
+    type SpacePageBlockDescriptor,
+} from './base-space-page-block';
+import type { SpaceOverviewCardDescriptor } from './base-space-type-ui-driver';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -30,10 +46,19 @@ export type CollabPageBlockType =
     | 'Widget:TeamFiles'
     | 'Widget:AskBox'
     | 'Widget:Discussion'
-    | 'Widget:ContributedCards'
     | 'Widget:About'
     | 'Widget:SubSpaces'
-    | 'Widget:MainView';
+    | 'Widget:MainView'
+    | 'collab:pinned'
+    | 'collab:needs-you'
+    | 'collab:shared-files'
+    | 'collab:team-files'
+    | 'collab:ask'
+    | 'collab:discussion'
+    | 'collab:sub-spaces'
+    | 'collab:about'
+    | 'collab:main-view'
+    | (string & {});
 
 export type CollabCalloutVariant = 'info' | 'success' | 'warning' | 'danger';
 export type CollabBlockWidth = 'full' | 'half' | 'main' | 'side';
@@ -45,10 +70,10 @@ export interface CollabWidgetVisibility {
     TeamFiles?: boolean;
     AskBox?: boolean;
     Discussion?: boolean;
-    ContributedCards?: boolean;
     About?: boolean;
     SubSpaces?: boolean;
     MainView?: boolean;
+    [key: string]: boolean | undefined;
 }
 
 export interface CollabFactPair {
@@ -165,16 +190,15 @@ export const COLLAB_BLOCK_OPTIONS: CollabBlockOption[] = [
 ];
 
 export const COLLAB_WIDGET_BLOCK_OPTIONS: CollabBlockOption[] = [
-    { type: 'Widget:SharedFiles', label: 'Shared files', icon: 'fa-solid fa-eye', hint: 'Deliverables and files shared with everyone in this space' },
-    { type: 'Widget:TeamFiles', label: 'Team working files', icon: 'fa-solid fa-lock', hint: 'Internal team-only files and working papers' },
-    { type: 'Widget:AskBox', label: 'Ask about this space', icon: 'fa-solid fa-wand-magic-sparkles', hint: 'Ask questions about this space' },
-    { type: 'Widget:Discussion', label: 'Recent discussion', icon: 'fa-solid fa-comments', hint: 'Recent messages in this space' },
-    { type: 'Widget:Pinned', label: 'Pinned items', icon: 'fa-solid fa-thumbtack', hint: 'Quick access to items pinned in this space' },
-    { type: 'Widget:NeedsYou', label: 'Needs your attention', icon: 'fa-solid fa-bell', hint: 'Approvals, reviews, or tasks waiting on you' },
-    { type: 'Widget:SubSpaces', label: 'Sub-spaces', icon: 'fa-solid fa-sitemap', hint: 'Sub-spaces inside this space' },
-    { type: 'Widget:About', label: 'About this space', icon: 'fa-solid fa-circle-info', hint: 'Key details for this space' },
-    { type: 'Widget:ContributedCards', label: 'Space cards', icon: 'fa-solid fa-puzzle-piece', hint: 'Cards for this type of space (such as Motions)' },
-    { type: 'Widget:MainView', label: 'Page content', icon: 'fa-solid fa-window-maximize', hint: 'Main content area for this page' },
+    { type: 'collab:shared-files', label: 'Shared files', icon: 'fa-solid fa-eye', hint: 'Deliverables and files shared with everyone in this space' },
+    { type: 'collab:team-files', label: 'Team working files', icon: 'fa-solid fa-lock', hint: 'Internal team-only files and working papers' },
+    { type: 'collab:ask', label: 'Ask about this space', icon: 'fa-solid fa-wand-magic-sparkles', hint: 'Ask questions about this space' },
+    { type: 'collab:discussion', label: 'Recent discussion', icon: 'fa-solid fa-comments', hint: 'Recent messages in this space' },
+    { type: 'collab:pinned', label: 'Pinned items', icon: 'fa-solid fa-thumbtack', hint: 'Quick access to items pinned in this space' },
+    { type: 'collab:needs-you', label: 'Needs your attention', icon: 'fa-solid fa-bell', hint: 'Approvals, reviews, or tasks waiting on you' },
+    { type: 'collab:sub-spaces', label: 'Sub-spaces', icon: 'fa-solid fa-sitemap', hint: 'Sub-spaces inside this space' },
+    { type: 'collab:about', label: 'About this space', icon: 'fa-solid fa-circle-info', hint: 'Key details for this space' },
+    { type: 'collab:main-view', label: 'Page content', icon: 'fa-solid fa-window-maximize', hint: 'Main content area for this page' },
 ];
 
 export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
@@ -190,12 +214,34 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
     { icon: 'fa-solid fa-shield-halved', label: 'Governance' },
 ];
 
+const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) => o.type));
+
 @Component({
     selector: 'mjc-space-pages',
     standalone: true,
-    imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, CollabBandChipComponent, CollabFileIconComponent],
+    imports: [
+        CommonModule,
+        NgComponentOutlet,
+        FormsModule,
+        MJAlertComponent,
+        MJButtonDirective,
+        MJMenuComponent,
+        MJMenuDividerComponent,
+        MJMenuItemComponent,
+        MJMenuTriggerDirective,
+        CollabBandChipComponent,
+        CollabFileIconComponent,
+        ...BUILT_IN_SPACE_PAGE_BLOCKS,
+    ],
     template: `
         <section class="sp-shell" [class.sp-shell--builtin]="!!activePage?.builtInTabId" aria-label="Space page">
+            <ng-template #aboutProjectedTpl>
+                <ng-content select="[mjcAbout]"></ng-content>
+            </ng-template>
+            <ng-template #mainProjectedTpl>
+                <ng-content></ng-content>
+            </ng-template>
+
             @if (activePage && canEditPage(activePage) && isCustomizing) {
                 <header class="sp-tabbar" data-testid="page-edit-bar">
                     <div class="sp-page-context">
@@ -243,8 +289,8 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
                     <section
                         class="sp-block"
                         [class.sp-block--half]="!isOverviewLayout(page) && (block.width === 'half' || block.width === 'main' || block.width === 'side')"
-                        [class.sp-block--main-view]="block.type === 'Widget:MainView'"
-                        [class.sp-block--workspace-padded]="isWorkspaceTabLayout(page) && block.type !== 'Widget:MainView'"
+                        [class.sp-block--main-view]="isMainViewBlock(block.type)"
+                        [class.sp-block--workspace-padded]="isWorkspaceTabLayout(page) && !isMainViewBlock(block.type)"
                         [class.sp-block--customizing]="isCustomizing && canEditPage(page)"
                         [class.sp-block--dragging]="draggedBlockIndex === idx"
                         [class.sp-block--dragover]="dragOverBlockIndex === idx"
@@ -257,75 +303,128 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
 
                         @if (isCustomizing && canEditPage(page)) {
                             <div class="sp-block-toolbar">
-                                <span class="sp-block-drag-handle" title="Drag to reorder block">
-                                    <i class="fa-solid fa-grip-vertical"></i>
-                                    <span class="sp-block-type-tag">{{ blockTypeLabel(block.type) }}</span>
+                                <span class="sp-block-type-tag" [title]="block.title || blockTypeLabel(block.type)">
+                                    {{ block.title || blockTypeLabel(block.type) }}
                                 </span>
-                                <div class="sp-block-tools">
-                                    @if (block.type !== 'Widget:MainView') {
-                                        <button
-                                            type="button"
-                                            class="sp-tool-btn"
-                                            [title]="blockWidthHint(page, block)"
-                                            (click)="toggleBlockWidth(page, idx)">
-                                            <i class="fa-solid" [class]="blockWidthIcon(page, block)"></i>
-                                            {{ blockWidthLabel(page, block) }}
-                                        </button>
-                                    }
+                                <div class="sp-block-tools" data-testid="block-toolbar">
                                     <button
                                         type="button"
+                                        mjButton
+                                        Variant="icon"
+                                        Size="sm"
+                                        class="sp-tool-btn sp-block-drag-handle"
+                                        title="Drag to reorder block"
+                                        aria-label="Drag to reorder block">
+                                        <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        mjButton
+                                        Variant="icon"
+                                        Size="sm"
                                         class="sp-tool-btn"
                                         [disabled]="!canMoveBlock(page, idx, -1)"
-                                        title="Move up"
+                                        title="Move block up"
                                         aria-label="Move block up"
                                         (click)="moveBlock(page, idx, -1)">
-                                        <i class="fa-solid fa-arrow-up"></i>
+                                        <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
                                     </button>
                                     <button
                                         type="button"
+                                        mjButton
+                                        Variant="icon"
+                                        Size="sm"
                                         class="sp-tool-btn"
                                         [disabled]="!canMoveBlock(page, idx, 1)"
-                                        title="Move down"
+                                        title="Move block down"
                                         aria-label="Move block down"
                                         (click)="moveBlock(page, idx, 1)">
-                                        <i class="fa-solid fa-arrow-down"></i>
+                                        <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
                                     </button>
                                     <button
                                         type="button"
+                                        mjButton
+                                        Variant="icon"
+                                        Size="sm"
                                         class="sp-tool-btn"
-                                        title="Insert a block or widget right after this one"
-                                        aria-label="Insert block after"
-                                        (click)="openBlockPicker(idx + 1, isOverviewLayout(page) ? overviewZoneFor(block) : undefined)">
-                                        <i class="fa-solid fa-plus"></i>
+                                        data-testid="block-more-btn"
+                                        [mjMenuTriggerFor]="blockMoreMenu"
+                                        title="Block options"
+                                        aria-label="Block options">
+                                        <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
                                     </button>
-                                    <button
-                                        type="button"
-                                        class="sp-tool-btn"
-                                        title="Edit block"
-                                        aria-label="Edit block"
-                                        (click)="openBlockEditor(block)">
-                                        <i class="fa-solid fa-pen"></i> Edit
-                                    </button>
-                                    @if (!isWidgetBlock(block.type)) {
-                                        <button
-                                            type="button"
-                                            class="sp-tool-btn"
-                                            title="Duplicate block"
-                                            aria-label="Duplicate block"
-                                            (click)="duplicateBlock(page, idx)">
-                                            <i class="fa-regular fa-copy"></i>
-                                        </button>
-                                    }
-                                    @if (block.type !== 'Widget:MainView') {
-                                        <button
-                                            type="button"
-                                            class="sp-tool-btn danger"
-                                            title="Remove from page"
-                                            aria-label="Remove block"
-                                            (click)="deleteBlock(page, idx)">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    }
+                                    <ng-template #blockMoreMenu>
+                                        <mj-menu AriaLabel="Block options">
+                                            @if (!isMainViewBlock(block.type)) {
+                                                <mj-menu-item
+                                                    Icon="fa-solid fa-table-columns"
+                                                    [mjMenuTriggerFor]="blockColumnMenu"
+                                                    data-testid="block-menu-column">
+                                                    Column ({{ blockWidthLabel(page, block) }})
+                                                </mj-menu-item>
+                                                <ng-template #blockColumnMenu>
+                                                    <mj-menu AriaLabel="Column">
+                                                        @if (isOverviewLayout(page)) {
+                                                            <mj-menu-item
+                                                                [Icon]="overviewZoneFor(block) === 'full' ? 'fa-solid fa-check' : 'fa-solid fa-arrows-left-right'"
+                                                                data-testid="block-column-full"
+                                                                (Triggered)="setBlockColumn(page, idx, 'full')">
+                                                                Full
+                                                            </mj-menu-item>
+                                                            <mj-menu-item
+                                                                [Icon]="overviewZoneFor(block) === 'main' ? 'fa-solid fa-check' : 'fa-solid fa-table-columns'"
+                                                                data-testid="block-column-main"
+                                                                (Triggered)="setBlockColumn(page, idx, 'main')">
+                                                                Main
+                                                            </mj-menu-item>
+                                                            <mj-menu-item
+                                                                [Icon]="overviewZoneFor(block) === 'side' ? 'fa-solid fa-check' : 'fa-solid fa-columns'"
+                                                                data-testid="block-column-side"
+                                                                (Triggered)="setBlockColumn(page, idx, 'side')">
+                                                                Side
+                                                            </mj-menu-item>
+                                                        } @else {
+                                                            <mj-menu-item
+                                                                [Icon]="block.width !== 'half' ? 'fa-solid fa-check' : 'fa-solid fa-arrows-left-right'"
+                                                                data-testid="block-column-full"
+                                                                (Triggered)="setBlockColumn(page, idx, 'full')">
+                                                                Full width
+                                                            </mj-menu-item>
+                                                            <mj-menu-item
+                                                                [Icon]="block.width === 'half' ? 'fa-solid fa-check' : 'fa-solid fa-table-columns'"
+                                                                data-testid="block-column-half"
+                                                                (Triggered)="setBlockColumn(page, idx, 'half')">
+                                                                Half width
+                                                            </mj-menu-item>
+                                                        }
+                                                    </mj-menu>
+                                                </ng-template>
+                                                <mj-menu-divider />
+                                            }
+                                            <mj-menu-item
+                                                Icon="fa-solid fa-pen"
+                                                data-testid="block-menu-edit"
+                                                (Triggered)="openBlockEditor(block)">
+                                                Edit
+                                            </mj-menu-item>
+                                            @if (!isWidgetBlock(block.type)) {
+                                                <mj-menu-item
+                                                    Icon="fa-regular fa-copy"
+                                                    data-testid="block-menu-duplicate"
+                                                    (Triggered)="duplicateBlock(page, idx)">
+                                                    Duplicate
+                                                </mj-menu-item>
+                                            }
+                                            @if (!isMainViewBlock(block.type)) {
+                                                <mj-menu-item
+                                                    Icon="fa-solid fa-trash"
+                                                    data-testid="block-menu-remove"
+                                                    (Triggered)="deleteBlock(page, idx)">
+                                                    Remove
+                                                </mj-menu-item>
+                                            }
+                                        </mj-menu>
+                                    </ng-template>
                                 </div>
                             </div>
                         }
@@ -620,18 +719,20 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
                             }
 
                             @default {
-                                @if (widgetTemplateFor(block.type); as widgetTpl) {
-                                    @if (isWidgetActive(block.type)) {
-                                        <ng-container *ngTemplateOutlet="widgetTpl; context: { $implicit: block, block: block, title: block.title }"></ng-container>
-                                    } @else if (isCustomizing) {
-                                        <div class="sp-widget-placeholder">
-                                            <i class="fa-solid fa-layer-group"></i>
-                                            <div>
-                                                <strong>{{ block.title || blockTypeLabel(block.type) }}</strong>
-                                                <span>Appears automatically on the page when items or data are present.</span>
-                                            </div>
+                                @if (registeredBlockFor(block.type); as reg) {
+                                    @if (isRegisteredBlockActive(block, reg)) {
+                                        <ng-container *ngComponentOutlet="reg.component; inputs: registeredBlockInputs(block, reg)"></ng-container>
+                                    } @else if (isCustomizing && canEditPage(page)) {
+                                        <div class="sp-widget-placeholder" data-testid="block-placeholder">
+                                            <i [class]="reg.icon" aria-hidden="true"></i>
+                                            <span>{{ reg.emptyText }}</span>
                                         </div>
                                     }
+                                } @else if (isCustomizing && canEditPage(page)) {
+                                    <div class="sp-widget-placeholder sp-widget-unavailable" data-testid="block-unavailable-notice">
+                                        <i class="fa-solid fa-circle-minus" aria-hidden="true"></i>
+                                        <span>This block is no longer available</span>
+                                    </div>
                                 }
                             }
                         }
@@ -807,10 +908,12 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
                         </div>
                     }
 
-                    <!-- Fallback Projected Content (when no Widget:MainView template is used) -->
-                    <div class="sp-projected-content">
-                        <ng-content></ng-content>
-                    </div>
+                    <!-- Fallback Projected Content (when no collab:main-view / Widget:MainView block is on the page) -->
+                    @if (!hasMainViewBlock(page)) {
+                        <div class="sp-projected-content">
+                            <ng-container *ngTemplateOutlet="mainProjectedTpl"></ng-container>
+                        </div>
+                    }
                 </div>
             }
 
@@ -820,7 +923,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
                     <aside class="sp-drawer" role="dialog" aria-modal="true" aria-label="Add a content block or widget" (click)="$event.stopPropagation()">
                         <header class="sp-drawer-head">
                             <div>
-                                <h3>Add Block or Workspace Widget</h3>
+                                <h3>Add block or widget</h3>
                                 <p>Choose a block or live workspace widget to insert into <strong>{{ page.title }}</strong>.</p>
                             </div>
                             <button type="button" class="sp-drawer-close" aria-label="Close block picker" (click)="closeBlockPicker()">
@@ -829,26 +932,26 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
                         </header>
                         <div class="sp-drawer-body sp-form-stack">
                             @if (availableWidgetBlockOptions(page).length > 0) {
-                                <div class="sp-field-lbl">Live Space Widgets</div>
+                                <div class="sp-field-lbl">Live space widgets</div>
                                 <div class="sp-picker-grid">
                                     @for (opt of availableWidgetBlockOptions(page); track opt.type) {
                                         <button type="button" class="sp-picker-card" (click)="chooseBlockType(page, opt.type)">
                                             <div class="sp-picker-ic"><i [class]="opt.icon"></i></div>
                                             <div class="sp-picker-text">
-                                                <span class="sp-picker-lbl">{{ opt.label }}</span>
+                                                <span class="sp-picker-lbl" [title]="opt.label">{{ opt.label }}</span>
                                                 <span class="sp-picker-hint">{{ opt.hint }}</span>
                                             </div>
                                         </button>
                                     }
                                 </div>
                             }
-                            <div class="sp-field-lbl">Content Blocks</div>
+                            <div class="sp-field-lbl">Content blocks</div>
                             <div class="sp-picker-grid">
                                 @for (opt of blockOptions; track opt.type) {
                                     <button type="button" class="sp-picker-card" (click)="chooseBlockType(page, opt.type)">
                                         <div class="sp-picker-ic"><i [class]="opt.icon"></i></div>
                                         <div class="sp-picker-text">
-                                            <span class="sp-picker-lbl">{{ opt.label }}</span>
+                                            <span class="sp-picker-lbl" [title]="opt.label">{{ opt.label }}</span>
                                             <span class="sp-picker-hint">{{ opt.hint }}</span>
                                         </div>
                                     </button>
@@ -1633,31 +1736,26 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
         .sp-widget-placeholder {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-radius: 10px;
+            gap: var(--mj-space-3);
+            padding: var(--mj-space-3) var(--mj-space-4);
+            border-radius: var(--mj-radius-md);
             border: 1px dashed var(--mj-border-default);
             background: var(--mj-bg-surface-sunken);
             color: var(--mj-text-secondary);
-            font-size: 12.5px;
+            font-size: var(--mj-text-xs);
         }
         .sp-widget-placeholder i {
-            font-size: 16px;
+            font-size: var(--mj-text-base);
             color: var(--mj-brand-primary);
+            flex-shrink: 0;
         }
-        .sp-widget-placeholder div {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .sp-widget-placeholder strong {
-            color: var(--mj-text-primary);
-            font-size: 13px;
+        .sp-widget-unavailable i {
+            color: var(--mj-text-muted);
         }
         .sp-block--customizing {
             border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
-            border-radius: 12px;
-            padding: 10px;
+            border-radius: var(--mj-radius-lg);
+            padding: var(--mj-space-2-5);
             background: color-mix(in srgb, var(--mj-bg-surface) 75%, transparent);
         }
         .sp-block--dragover {
@@ -1667,41 +1765,49 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 4px 8px 8px;
-            margin-bottom: 6px;
-            border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+            gap: var(--mj-space-2);
+            min-height: 28px;
+            padding: var(--mj-space-0-5) var(--mj-space-1-5) var(--mj-space-1-5);
+            margin-bottom: var(--mj-space-1-5);
+            border-bottom: 1px solid var(--mj-border-subtle);
+            min-width: 0;
         }
         .sp-block-drag-handle {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--mj-text-muted);
             cursor: grab;
-            font-size: 12px;
         }
         .sp-block-type-tag {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--mj-brand-primary);
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-semibold);
+            color: var(--mj-text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1;
         }
         .sp-block-tools {
-            display: inline-flex;
+            display: none;
             align-items: center;
-            gap: 4px;
+            gap: var(--mj-space-1);
+            flex-shrink: 0;
+        }
+        .sp-block--customizing:hover .sp-block-tools,
+        .sp-block--customizing:focus-within .sp-block-tools,
+        .sp-block--customizing .sp-block-tools:has([aria-expanded="true"]) {
+            display: inline-flex;
         }
         .sp-tool-btn {
+            width: 26px;
+            height: 26px;
             border: 1px solid var(--mj-border-default);
             background: var(--mj-bg-surface);
             color: var(--mj-text-secondary);
-            border-radius: 6px;
-            padding: 3px 8px;
-            font-size: 11.5px;
+            border-radius: var(--mj-radius-sm);
+            padding: 0;
+            font-size: var(--mj-text-xs);
             cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
+            display: inline-grid;
+            place-items: center;
         }
         .sp-tool-btn:hover:not(:disabled) {
             background: var(--mj-bg-surface-hover);
@@ -1710,10 +1816,6 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
         .sp-tool-btn:disabled {
             opacity: 0.4;
             cursor: default;
-        }
-        .sp-tool-btn.danger:hover {
-            color: var(--mj-status-error);
-            border-color: color-mix(in srgb, var(--mj-status-error) 40%, var(--mj-border-default));
         }
         .sp-b-card {
             background: var(--mj-bg-surface);
@@ -2378,11 +2480,15 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             display: flex;
             flex-direction: column;
             gap: 2px;
+            min-width: 0;
         }
         .sp-picker-lbl {
             font-size: 13px;
             font-weight: 700;
             color: var(--mj-text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .sp-picker-hint {
             font-size: 11.5px;
@@ -2552,17 +2658,14 @@ export class CollabSpacePagesComponent {
     }
     @Output() IsCustomizingChange = new EventEmitter<boolean>();
 
+    @Input() SpaceId = '';
+    @Input() SpaceTypeCode = '*';
+    @Input() ContributedCards: readonly SpaceOverviewCardDescriptor[] = [];
+    @Input() BlockContext: SpacePageBlockContext | null = null;
     @Input() WidgetVisibility: CollabWidgetVisibility = {};
-    @Input() PinnedWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() NeedsYouWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() SharedFilesWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() TeamFilesWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() AskBoxWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() DiscussionWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() ContributedCardsWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() AboutWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() SubSpacesWidgetTpl: TemplateRef<unknown> | null = null;
-    @Input() MainViewWidgetTpl: TemplateRef<unknown> | null = null;
+
+    @ViewChild('aboutProjectedTpl', { static: true }) public aboutProjectedTpl?: TemplateRef<unknown>;
+    @ViewChild('mainProjectedTpl', { static: true }) public mainProjectedTpl?: TemplateRef<unknown>;
 
     @Output() PageSelectRequested = new EventEmitter<string>();
     @Output() PageSaveRequested = new EventEmitter<CollabPageModel>();
@@ -2614,8 +2717,44 @@ export class CollabSpacePagesComponent {
     private openFaqs = new Set<string>();
     private safeUrlCache = new Map<string, SafeResourceUrl>();
 
+    public get effectiveCanSeeTeam(): boolean {
+        return this.CanSeeTeam || Boolean(this.BlockContext?.canSeeTeam);
+    }
+
+    public get resolvedSpaceId(): string {
+        return this.SpaceId || this.BlockContext?.spaceId || '';
+    }
+
+    public get resolvedSpaceTypeCode(): string {
+        return this.BlockContext?.spaceTypeCode || this.SpaceTypeCode || '*';
+    }
+
+    public get resolvedContributedCards(): readonly SpaceOverviewCardDescriptor[] {
+        return this.BlockContext?.contributedCards ?? this.ContributedCards;
+    }
+
+    public get registeredBlocks(): SpacePageBlockDescriptor[] {
+        return assembleSpacePageBlocks(this.resolvedSpaceTypeCode, this.resolvedContributedCards);
+    }
+
+    public get resolvedBlockContext(): SpacePageBlockContext {
+        return {
+            ...(this.BlockContext ?? {}),
+            spaceId: this.resolvedSpaceId,
+            spaceTypeCode: this.resolvedSpaceTypeCode,
+            canSeeTeam: this.effectiveCanSeeTeam,
+            canWrite: !this.IsReadOnly && this.CanWrite,
+            isReadOnly: this.IsReadOnly,
+            sharedLabel: this.BlockContext?.sharedLabel ?? this.SharedLabel,
+            teamLabel: this.BlockContext?.teamLabel ?? this.TeamLabel,
+            contributedCards: this.resolvedContributedCards,
+            aboutTemplate: this.BlockContext?.aboutTemplate ?? this.aboutProjectedTpl ?? null,
+            mainViewTemplate: this.BlockContext?.mainViewTemplate ?? this.mainProjectedTpl ?? null,
+        };
+    }
+
     public get visiblePages(): CollabPageModel[] {
-        return this.Pages.filter((p) => p.band === 'Shared' || this.CanSeeTeam);
+        return this.Pages.filter((p) => p.band === 'Shared' || this.effectiveCanSeeTeam);
     }
 
     public get activePage(): CollabPageModel | null {
@@ -2640,18 +2779,33 @@ export class CollabSpacePagesComponent {
         return Boolean(page?.builtInTabId && page.builtInTabId !== 'Overview');
     }
 
+    public isMainViewBlock(type: CollabPageBlockType): boolean {
+        return type === 'collab:main-view' || type === 'Widget:MainView';
+    }
+
+    public hasMainViewBlock(page: CollabPageModel): boolean {
+        return page.blocks.some((b) => this.isMainViewBlock(b.type));
+    }
+
     public overviewZoneFor(block: CollabPageBlock): 'full' | 'main' | 'side' {
         if (block.width === 'full') return 'full';
         if (block.width === 'side') return 'side';
         if (block.width === 'main') return 'main';
+        const reg = this.registeredBlockFor(block.type);
+        if (reg) return reg.defaultZone;
         switch (block.type) {
             case 'Widget:Pinned':
+            case 'collab:pinned':
                 return 'full';
             case 'Widget:AskBox':
+            case 'collab:ask':
             case 'Widget:Discussion':
+            case 'collab:discussion':
             case 'Widget:ContributedCards':
             case 'Widget:About':
+            case 'collab:about':
             case 'Widget:SubSpaces':
+            case 'collab:sub-spaces':
                 return 'side';
             default:
                 return 'main';
@@ -2883,69 +3037,122 @@ export class CollabSpacePagesComponent {
     // ── Block Picker & Block Editor ───────────────────────────────────────────
 
     public isWidgetBlock(type: CollabPageBlockType): boolean {
-        return type.startsWith('Widget:');
+        return !STATIC_CONTENT_BLOCK_TYPES.has(type);
+    }
+
+    public registeredBlockFor(type: CollabPageBlockType): SpacePageBlockDescriptor | null {
+        if (STATIC_CONTENT_BLOCK_TYPES.has(type)) return null;
+        return this.registeredBlocks.find((b) => b.key === type || b.legacyType === type) ?? null;
     }
 
     public blockTypeLabel(type: CollabPageBlockType): string {
         return (
             this.blockOptions.find((o) => o.type === type)?.label ??
+            this.registeredBlockFor(type)?.title ??
             this.widgetBlockOptions.find((o) => o.type === type)?.label ??
-            type.replace(/^Widget:/, '')
+            type.replace(/^(Widget:|collab:)/, '')
         );
     }
 
-    public widgetTemplateFor(type: CollabPageBlockType): TemplateRef<unknown> | null {
-        switch (type) {
-            case 'Widget:Pinned': return this.PinnedWidgetTpl;
-            case 'Widget:NeedsYou': return this.NeedsYouWidgetTpl;
-            case 'Widget:SharedFiles': return this.SharedFilesWidgetTpl;
-            case 'Widget:TeamFiles': return this.TeamFilesWidgetTpl;
-            case 'Widget:AskBox': return this.AskBoxWidgetTpl;
-            case 'Widget:Discussion': return this.DiscussionWidgetTpl;
-            case 'Widget:ContributedCards': return this.ContributedCardsWidgetTpl;
-            case 'Widget:About': return this.AboutWidgetTpl;
-            case 'Widget:SubSpaces': return this.SubSpacesWidgetTpl;
-            case 'Widget:MainView': return this.MainViewWidgetTpl;
-            default: return null;
+    public isRegisteredBlockActive(_block: CollabPageBlock, reg: SpacePageBlockDescriptor): boolean {
+        if (reg.side === 'Team' && !this.effectiveCanSeeTeam) {
+            return false;
+        }
+        switch (reg.key) {
+            case 'collab:pinned':
+                if (this.WidgetVisibility.Pinned !== undefined) return this.WidgetVisibility.Pinned;
+                return this.BlockContext ? (this.BlockContext.pinnedItems?.length ?? 0) > 0 : true;
+            case 'collab:needs-you':
+                if (this.WidgetVisibility.NeedsYou !== undefined) return this.WidgetVisibility.NeedsYou;
+                return this.BlockContext ? (this.BlockContext.needsYouItems?.length ?? 0) > 0 : true;
+            case 'collab:shared-files':
+                if (this.WidgetVisibility.SharedFiles !== undefined) return this.WidgetVisibility.SharedFiles;
+                return true;
+            case 'collab:team-files':
+                if (this.WidgetVisibility.TeamFiles !== undefined) return this.WidgetVisibility.TeamFiles;
+                return this.effectiveCanSeeTeam;
+            case 'collab:ask':
+                if (this.WidgetVisibility.AskBox !== undefined) return this.WidgetVisibility.AskBox;
+                return this.BlockContext ? Boolean(this.BlockContext.showAskBox) : true;
+            case 'collab:discussion':
+                if (this.WidgetVisibility.Discussion !== undefined) return this.WidgetVisibility.Discussion;
+                return this.BlockContext ? Boolean(this.BlockContext.showDiscussionSnippet) : true;
+            case 'collab:sub-spaces':
+                if (this.WidgetVisibility.SubSpaces !== undefined) return this.WidgetVisibility.SubSpaces;
+                return this.BlockContext ? Boolean(this.BlockContext.canSeeSubSpaces) : true;
+            case 'collab:about':
+                if (this.WidgetVisibility.About !== undefined) return this.WidgetVisibility.About;
+                return Boolean(this.BlockContext?.aboutTemplate || this.aboutProjectedTpl);
+            case 'collab:main-view':
+                if (this.WidgetVisibility.MainView !== undefined) return this.WidgetVisibility.MainView;
+                return Boolean(this.BlockContext?.mainViewTemplate || this.mainProjectedTpl);
+            default:
+                return true;
         }
     }
 
-    public isWidgetActive(type: CollabPageBlockType): boolean {
-        if (!this.widgetTemplateFor(type)) return false;
-        switch (type) {
-            case 'Widget:Pinned': return this.WidgetVisibility.Pinned !== false;
-            case 'Widget:NeedsYou': return this.WidgetVisibility.NeedsYou !== false;
-            case 'Widget:SharedFiles': return this.WidgetVisibility.SharedFiles !== false;
-            case 'Widget:TeamFiles': return this.WidgetVisibility.TeamFiles !== false;
-            case 'Widget:AskBox': return this.WidgetVisibility.AskBox !== false;
-            case 'Widget:Discussion': return this.WidgetVisibility.Discussion !== false;
-            case 'Widget:ContributedCards': return this.WidgetVisibility.ContributedCards !== false;
-            case 'Widget:About': return this.WidgetVisibility.About !== false;
-            case 'Widget:SubSpaces': return this.WidgetVisibility.SubSpaces !== false;
-            case 'Widget:MainView': return this.WidgetVisibility.MainView !== false;
-            default: return false;
+    public registeredBlockInputs(block: CollabPageBlock, reg: SpacePageBlockDescriptor): Record<string, unknown> {
+        if (reg.kind === 'card') {
+            return {
+                SpaceId: this.resolvedSpaceId,
+                Sequence: reg.sortKey,
+            };
         }
+        return {
+            SpaceId: this.resolvedSpaceId,
+            Config: block,
+            ReadOnly: this.IsReadOnly || !this.CanWrite,
+            Context: this.resolvedBlockContext,
+        };
     }
 
     public shouldRenderBlock(block: CollabPageBlock): boolean {
         if (!this.isWidgetBlock(block.type)) return true;
-        if (!this.widgetTemplateFor(block.type)) return false;
-        if (this.isCustomizing && this.CanWrite) return true;
-        return this.isWidgetActive(block.type);
+        const reg = this.registeredBlockFor(block.type);
+        if (!reg) {
+            return this.isCustomizing && this.CanWrite && !this.IsReadOnly;
+        }
+        if (reg.side === 'Team' && !this.effectiveCanSeeTeam) {
+            return false;
+        }
+        if (this.isCustomizing && this.CanWrite && !this.IsReadOnly) {
+            return true;
+        }
+        return this.isRegisteredBlockActive(block, reg);
     }
 
     public availableWidgetBlockOptions(page: CollabPageModel): CollabBlockOption[] {
-        const existingTypes = new Set(page.blocks.map((b) => b.type));
-        return this.widgetBlockOptions.filter(
-            (opt) => this.widgetTemplateFor(opt.type) !== null && !existingTypes.has(opt.type),
-        );
+        const existingKeys = new Set<string>();
+        for (const b of page.blocks) {
+            existingKeys.add(b.type);
+            const reg = this.registeredBlockFor(b.type);
+            if (reg) {
+                existingKeys.add(reg.key);
+                if (reg.legacyType) {
+                    existingKeys.add(reg.legacyType);
+                }
+            }
+        }
+        return this.registeredBlocks
+            .filter((reg) => {
+                if (reg.side === 'Team' && !this.effectiveCanSeeTeam) return false;
+                if (reg.key === 'collab:main-view' && !this.isWorkspaceTabLayout(page)) return false;
+                if (existingKeys.has(reg.key) || (reg.legacyType && existingKeys.has(reg.legacyType))) return false;
+                return true;
+            })
+            .map((reg) => ({
+                type: reg.key,
+                label: reg.title,
+                icon: reg.icon,
+                hint: reg.description || reg.title,
+            }));
     }
 
     public blockWidthLabel(page: CollabPageModel, block: CollabPageBlock): string {
         if (this.isOverviewLayout(page)) {
             const zone = this.overviewZoneFor(block);
             if (zone === 'main') return 'Main';
-            if (zone === 'side') return 'Right Rail';
+            if (zone === 'side') return 'Side';
             return 'Full';
         }
         return block.width === 'half' ? 'Half' : 'Full';
@@ -2964,11 +3171,19 @@ export class CollabSpacePagesComponent {
     public blockWidthHint(page: CollabPageModel, block: CollabPageBlock): string {
         if (this.isOverviewLayout(page)) {
             const zone = this.overviewZoneFor(block);
-            if (zone === 'main') return 'Move to Right Rail (340px column)';
-            if (zone === 'side') return 'Expand to Full Width banner';
-            return 'Move to Main Column';
+            if (zone === 'main') return 'Move to right column';
+            if (zone === 'side') return 'Expand to full width';
+            return 'Move to main column';
         }
-        return block.width === 'half' ? 'Switch to full width' : 'Switch to half width (2-column grid)';
+        return block.width === 'half' ? 'Switch to full width' : 'Switch to half width';
+    }
+
+    public setBlockColumn(page: CollabPageModel, index: number, width: CollabBlockWidth): void {
+        const current = page.blocks[index];
+        if (!current) return;
+        const blocks = page.blocks.map((b, i) => (i === index ? { ...b, width } : b));
+        this.editSessionDirty = true;
+        this.PageSaveRequested.emit({ ...page, blocks });
     }
 
     public toggleBlockWidth(page: CollabPageModel, index: number): void {
@@ -2981,9 +3196,7 @@ export class CollabSpacePagesComponent {
         } else {
             nextWidth = current.width === 'half' ? 'full' : 'half';
         }
-        const blocks = page.blocks.map((b, i) => (i === index ? { ...b, width: nextWidth } : b));
-        this.editSessionDirty = true;
-        this.PageSaveRequested.emit({ ...page, blocks });
+        this.setBlockColumn(page, index, nextWidth);
     }
 
     public openBlockPicker(insertIndex: number | null, zone?: 'full' | 'main' | 'side'): void {
@@ -3085,7 +3298,30 @@ export class CollabSpacePagesComponent {
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
-    public deleteBlock(page: CollabPageModel, index: number): void {
+    public deleteBlock(page: CollabPageModel, index: number): Promise<void> | void {
+        const target = page.blocks[index];
+        if (!target) return;
+        if (this.confirmService) {
+            return this.confirmAndDeleteBlock(page, index, target);
+        }
+        this.performDeleteBlock(page, index);
+    }
+
+    private async confirmAndDeleteBlock(page: CollabPageModel, index: number, target: CollabPageBlock): Promise<void> {
+        if (!this.confirmService) return;
+        const label = target.title || this.blockTypeLabel(target.type);
+        const confirmed = await this.confirmService.Confirm({
+            title: 'Remove block?',
+            message: `Remove "${label}" from this page?`,
+            confirmText: 'Remove',
+            cancelText: 'Cancel',
+            type: 'warning',
+        });
+        if (!confirmed) return;
+        this.performDeleteBlock(page, index);
+    }
+
+    private performDeleteBlock(page: CollabPageModel, index: number): void {
         const blocks = page.blocks.filter((_, i) => i !== index);
         this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
@@ -3493,26 +3729,11 @@ export class CollabSpacePagesComponent {
                 };
             case 'Divider':
                 return { id, type, title: '', width: 'full' };
-            case 'Widget:Pinned':
-                return { id, type, title: '', width: 'full' };
-            case 'Widget:NeedsYou':
-                return { id, type, title: '', width: 'main' };
-            case 'Widget:SharedFiles':
-                return { id, type, title: '', width: 'main' };
-            case 'Widget:TeamFiles':
-                return { id, type, title: '', width: 'main' };
-            case 'Widget:AskBox':
-                return { id, type, title: '', width: 'side' };
-            case 'Widget:Discussion':
-                return { id, type, title: '', width: 'side' };
-            case 'Widget:ContributedCards':
-                return { id, type, title: '', width: 'side' };
-            case 'Widget:About':
-                return { id, type, title: '', width: 'side' };
-            case 'Widget:SubSpaces':
-                return { id, type, title: '', width: 'side' };
-            case 'Widget:MainView':
-                return { id, type, title: '', width: 'full' };
+            default: {
+                const reg = this.registeredBlockFor(type);
+                const width: CollabBlockWidth = reg ? reg.defaultZone : 'main';
+                return { id, type, title: '', width };
+            }
         }
     }
 

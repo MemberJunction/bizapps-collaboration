@@ -1,0 +1,208 @@
+# Collaboration UI polish: reviews
+
+## Round 1 review (commit `3b99fcd`, 2026-10-29)
+
+**Verdict: good direction, 10 fixes before round 2.** The rail switcher, the one-row header, sentence case, the edit bar and the token cleanup are what the brief asked for.
+
+The gates were rerun by the reviewer, not copied from the notes:
+- `check-mj-tokens` and `check-mj-inputs` pass.
+- Widgets: 185 tests pass. Section: 5 vitest and 158 node tests pass.
+- `ngc --noEmit` is clean in both packages.
+- The touched files have 0 hex fallbacks.
+
+### Fix before round 2
+
+**R1-1. Use MJ's menu for the header `⋯`.** `@memberjunction/ng-ui-components` ships `mj-menu`, `mj-menu-item` (`Icon`, `(Triggered)`) and `mj-menu-divider`, opened by `[mjMenuTriggerFor]` (`MJ/packages/Angular/Generic/ui-components/src/lib/menu/menu.component.ts`, usage in its header comment). It is built on the CDK menu, so it brings arrow keys, Escape and focus return. Delete the hand-rolled `.more-menu-popover` and its `document:click` and `document:keydown.escape` listeners in `space-header.component.ts`. UI guide rule 4: check the MJ catalog before building.
+
+**R1-2. One primary button per screen.** The Chat screen shows two: the header's "Upload" and the chat's "New Conversation". The chat's "New Conversation" also repeats the rail's `+`. Remove it from the chat sub-header.
+
+**R1-3. One style for the `+` buttons on rail groups.** Sub-spaces uses a text button ("+ Sub-space"), while Conversations and Spaces use an icon `+`. Make all three icon buttons with an `aria-label`.
+
+**R1-4. Closed and sub-space rows match the tree.**
+- In the rail's Sub-spaces group, closed sub-spaces look like open ones ("Closed this month", "Closed last year", "Closed indefinite" on Northwind). Dim them and show the lock, as the tree does, and fold them under one "Closed (n)" row (the storyboard's rail does this).
+- Draw sub-space rows with `mjc-type-tile` `Size="sm"`, as the tree does. Today the group shows plain icons and the tree shows colored tiles.
+
+**R1-5. Hide the Sub-spaces group when there are none.** "New sub-space" is in the `⋯` menu. On Field notes, the rail shows a "Sub-spaces" heading with nothing under it.
+
+**R1-6. Collapsed rail: remove the two unlabeled `+` rows.** Two bare `+` icons with nothing to say what they add read as noise. Adding is available from the expanded rail and the `⋯` menu.
+
+**R1-7. One active cue at a time.** At Home, both "Home" and "Northwind relationship" are highlighted. Only the current location is active; an expanded tree node is not.
+
+**R1-8. The audience pill clips its first avatar.** In every header shot, the left avatar is cut off ("CB", "CE"). Fix the stack's overlap and padding so each avatar shows in full.
+
+**R1-9. The breadcrumb ends at the parent.** Its last crumb repeats the title on the line below ("… › Discovery" above "Discovery").
+
+**R1-10. The overview doesn't repeat the rail.** The "Inside <space>" card lists the same sub-spaces as the rail's group, and on Field notes it says "No sub-spaces yet". Remove it from the default overview layout. Keep it in the block picker for editors who want it.
+
+### Add to round 2 (page blocks)
+
+In edit mode (`shots/round-1/page-edit-mode-light.png`), every block carries a full toolbar at all times: Full/Main/Right Rail, up, down, `+`, Edit and delete. The labels are in all caps, and in the right column they wrap ("ASK / ABOUT / THIS / SPACE" on four lines, "Right / Rail" on two). When the blocks become registered parts:
+- Block labels: sentence case, one line, ellipsis.
+- The toolbar shows on hover or focus of the block, as icon buttons with `aria-label`s: a drag handle, move up, move down, and a `⋯` `mj-menu` holding Column (Full / Main / Side), Edit and Remove. Remove asks first, through `MJConfirmService`.
+- Placeholder copy names the block: "Pinned items show here when there are any," not "Appears automatically on the page when items or data are present."
+
+### Add to round 3 (chat)
+
+On `shots/round-1/chat-thread-open-light.png`, there are three ways to reply to the same thread: the thread bar's "Reply in thread", a dashed "Reply in thread" inside the open thread, and "Reply" on every message. Each reply also carries a "Participant" tag.
+- One "Reply" action per message.
+- The thread bar shows the reply count and the last reply.
+- The open thread ends with a single reply box.
+- Drop the "Participant" tag. Show only roles that tell the reader something: the outside ring and the Assistant mark.
+
+**Build on #6176 as merged, not on guesses.**
+- Type routes as MJ's `AgentTurnRoute` (exported from `@memberjunction/ng-conversations`, defined in `lib/models/agent-turn.model.ts`), so the compiler catches invented values.
+  - Today `formatRouteBadge` handles `'Pinned'` and `'Default'`, which don't exist.
+  - It misses `ConversationDefault`, `HostDefault`, `ConversationManager` and `Redirect`.
+- Show a reason only when it isn't obvious, in plain words with no emoji. Read each route's doc comment in that file.
+  - `ThreadReply`: "Replying in the thread".
+  - `DecisionRouted` and `Continuity`: "Following up".
+  - `Redirect`: "Handed to <agent>".
+  - `Mention` and the default routes: no label.
+- Remove "Evaluating addressee routing…" and "Checking speaker attribution & thread context…".
+- Collapsed threads use the opt-in `CollapseThreadReplies` from step M, set explicitly by `CollabSpaceChatComponent`.
+
+## Round 2 review (commits `3a08972` and `792b272`, 2026-10-29)
+
+**Verdict: R1-1 to R1-10 are all fixed, and the registry is the right shape. Fix R2-1 to R2-8 before step M.**
+
+Gates, rerun by the reviewer:
+- tokens and inputs pass;
+- widgets: 188 tests pass; section: 5 vitest and 158 node tests pass;
+- `ngc --noEmit` exits 0 in both packages;
+- the changed files have 0 hex fallbacks.
+
+What's right:
+- the nine built-in blocks are `@RegisterClassEx(BaseSpacePageBlock, …)` classes, mounted with `NgComponentOutlet`;
+- the ten `*WidgetTpl` inputs are gone;
+- an unknown key shows "This block is no longer available" to editors;
+- Team blocks are hidden from people who can't see Team;
+- the test at `render.test.ts:1137` proves that a new block needs no core edit.
+
+Not done: the chat bubble still shows in every round-2 screenshot, and the notes don't mention it. Do it with step M (see below).
+
+### Blockers
+
+**R2-1. A block that doesn't name its side must default to Team.** `assembleSpacePageBlocks` (`base-space-page-block.ts`) does `raw['side'] === 'Team' ? 'Team' : 'Shared'`, so a plug-in block that forgets `side` is shown to outside participants. `docs/EXTENSIBILITY_PLAN.md` §6 says the opposite: a part that doesn't say is a Team part. Flip the default, and add a test: a block registered with no `side` is hidden from a viewer who can't see Team.
+
+**R2-2. The UI driver has the final say on cards.** After taking the host's `contributedCards` (already the type driver's final list), `assembleSpacePageBlocks` reads the `BaseSpaceOverviewCard` registrations again from the ClassFactory. A card the driver removed comes back. Use only the `contributedCards` passed in.
+
+**R2-3. Reuse `assembleSpaceContributions`; don't write a second assembler.**
+- `base-space-type-ui-driver.ts` already dedupes contributions by `contributionKey`. It refuses a contribution that clashes with a built-in part, and it logs both cases.
+- The new assembler drops that rule. Any installed app that registers `contributionKey: 'collab:team-files'` with a higher priority silently replaces the Team files block in every space.
+- Call `assembleSpaceContributions(BaseSpacePageBlock, code, builtIns, factory)` with the built-in blocks as its `defaultItems`, so contributions only add.
+
+**R2-4. Regression: plug-in cards dropped off the default overview.**
+- `buildStarterPagesForSpace` (`packages/Angular/src/lib/logic/space-pages-storage.ts`) hard-codes the built-in blocks, under the legacy `Widget:*` names, and no contributed cards.
+- Before round 2, the overview showed every contributed card ("Notice from another app" is gone from `shots/round-2/discovery-overview-light.png`).
+- Derive the default layout from the descriptors instead. A descriptor says which built-in tabs it appears on by default, and in which zone. Contributed cards default to the Overview's side column.
+- Then a new built-in or a new plug-in appears by default without anyone editing a seed list.
+
+**R2-5. Remove the remaining hard-wired lists.** Today "one class + one decorator" still isn't true for built-ins, because space-pages keeps five parallel lists:
+- `COLLAB_WIDGET_BLOCK_OPTIONS` copies the registrations' labels, icons and hints.
+- `CollabPageBlockType` lists every built-in key plus every legacy `Widget:*` name.
+- `CollabWidgetVisibility`, with a boolean per built-in.
+- The `switch` over built-in keys in `space-pages.component.ts`, around line 3060.
+- `legacyType` and every `Widget:*` mapping.
+
+The fixes:
+- The picker reads the descriptors.
+- Whether a block has anything to show lives in that block's static `isActive`.
+- A block's type is a `string` key.
+- Delete `legacyType` and the `Widget:*` mappings. Round 2b moves pages to a new table with no stored data to translate.
+
+### Should-fix
+
+**R2-6. One name per thing in `SpacePageBlockContext`.**
+- Remove the aliases: `pins`/`pinnedItems`, `pinnedLabel`/`pinnedTitle`, `canSeeTeam`/`canSeeTeamSide`, `onUnpin`/`onPinUnpin`.
+- Replace the three `any` parameters (`onItemSelected`, `onShareRequested`, `onSubSpaceSelected`) with the real models.
+- Callbacks in the context are fine, because `NgComponentOutlet` can't bind outputs. Say so in the base class's doc comment.
+
+**R2-7. One metadata name per field, typed as `SpacePageBlockMetadata`.** The assembler accepts `title` or `label`, `hint` or `description`, and `defaultZone` or `defaultWidth`.
+
+**R2-8. Plain copy.** "Insert full-width banner or strip at top" becomes "Add a block here".
+
+**Next:** fix R2-1 to R2-8 and commit. Then step M, including the chat bubble. Then round 2b. Stop after round 2b.
+
+### Now: turn off the floating chat bubble in the local install (Colin, 2026-10-29)
+
+MJ's floating chat bubble sits on top of the chat composer's controls.
+- `Shell.ChatOverlay.Enabled` is an **instance-wide** MJ setting (`MJ: Instance Configurations`, record `6855118F-E692-4737-A125-AE267D2DC39C`). It belongs to whoever hosts MJ, not to Collaboration, so **don't ship it in Collaboration's metadata or code**, and don't register a `BaseShellChromePolicy` (that hook is the host's).
+- Set it in the local install only: open that record in Explorer, set `Value` to `false`, and save it through the form, so MJ's caches hear about it. No raw SQL.
+- Reload Explorer and confirm the bubble is gone. Restart the API you host if it isn't.
+
+### Step M: bring in MJ #6176 and Collaboration PR #19 (Colin, 2026-10-29)
+
+MJ #6176 (multi-party speaker attribution and addressee routing) merged into MJ `next` as `6c7f8665b8` on 2026-10-30 03:31Z. Collaboration's half is Ian's open PR #19 (`feat/multi-party-agent-routing`, head `11baad3`). It routes turns on the server and sets `[EnableDecisionRouting]` on the chat area. Its two failing checks are the expected kind: CI installs published MJ, which doesn't have #6176 yet.
+
+State of the workspace MJ (`~/Projects/mjws-collab/MJ`, branch `collab/e2e-combined`, at `2543e1462a`):
+- It has **no commits of its own**. It is an older `next`.
+- **14 of #6176's 19 files are staged as an older, partial copy** of the PR. `base-agent.ts`, `catalog-narrowing.ts`, `RunAIAgentResolver.ts` and two tests are missing.
+- Two uncommitted edits:
+  - `mj.config.cjs`: workspace config. Keep it. `next` doesn't touch it.
+  - `conversation-chat-area.component.ts`: the `CollapseThreadReplies` input the collapsed threads depend on. It applies cleanly on current `next`.
+- `next` is ahead by 1 migration (`V202610281836__v6.2.x__RecordChange_RecycleBin_Covering_Index.sql`, an index) and 2 `package.json` changes.
+
+**Do, in this order. No `git stash`. Nothing is pushed.**
+1. **Save the chat-area edit as its own commit.**
+   - Copy `git diff -- <chat-area path>` to a file outside the repo.
+   - Discard both that edit and the staged partial #6176 copy: `git restore --staged --worktree` on exactly the 14 staged paths plus the chat-area file. List the paths in the notes.
+   - Leave `mj.config.cjs` alone.
+2. **Catch up:** `git merge --ff-only origin/next` (after `git fetch origin next`). Confirm `HEAD` contains `6c7f8665b8`.
+3. **Re-apply the chat-area change as one local commit** on `collab/e2e-combined`: `feat(conversations): opt-in CollapseThreadReplies`. Fix it first:
+   - **It must be opt-in only.** Delete `|| this.SlotTemplate('messageExtra') !== null`. Betty and other hosts already project `messageExtra`, and as written their replies would start disappearing.
+   - Add a test: with the input off, a reply stays in the list; with it on, a reply whose parent is loaded leaves the top level.
+   - This commit is the content of a future MJ PR. Colin decides whether and when to open it.
+4. **Rebuild and migrate.**
+   - From `~/Projects/mjws-collab`, run `pnpm install`, then the workspace build.
+   - Apply the new MJ migration to the local DB with the repo's CLI, not the global `mj`: `node MJ/packages/MJCLI/bin/run.js migrate`, with the workspace's `MJ/.env` (`MJ_6_2_0_CLEAN_4789`). An index needs no CodeGen.
+   - Restart the API and Explorer you host.
+5. **Collaboration: include PR #19.**
+   - `git fetch origin feat/multi-party-agent-routing`, then merge it into `feat/collab-ui-polish`.
+   - Resolve the overlap in `space-chat.component.ts` and `render.test.ts`, keeping #19's `EnableDecisionRouting` and route forwarding.
+   - Note: when our branch becomes a PR, rebase it after #19 merges, so #19's changes aren't carried twice.
+6. Run every gate. Smoke the chat once: mention, reply in a thread, and an unmentioned follow-up after the agent has answered. Take screenshots.
+
+Then go straight on to round 2b without stopping.
+
+### Round 2b: pages get their own table and a server rule (Colin's decision, 2026-10-29)
+
+Do this after step M and before round 3. Round 2 changes the block format, so the new table stores round 2's shape.
+
+**Why:** pages are stored as JSON in Space Note bodies (`__collabPage: 1`, `packages/Angular/src/lib/logic/space-pages-storage.ts`), and the server's note rule fights them:
+- `SpaceNoteEntityServer` lets **only a note's author edit it**, so a second editor can't save a page someone else made.
+- Any member who may write notes can create a note that shows up as a page.
+- Every note reader has to filter page JSON out.
+
+The editor rule `canCustomizePages` exists only in the browser.
+
+**What to build:**
+1. **A `SpacePage` table**, in a new `V…` migration that follows this repo's `CLAUDE.md` § Metadata and MJ's Schema and Code Authoring Guide.
+   - Columns: the space, the built-in tab it lays out (null for a custom page), title, icon, band (Team or Shared, with a CHECK), status (Draft or Published), sequence, published blocks (JSON), draft blocks and draft title, and who published it and when.
+   - Keep only what the page component actually reads. Run CodeGen.
+2. **One shared rule in `collaboration-core`**, beside `notePromotionVerdict` in `packages/Core/src/notes.ts`: `pageEditVerdict(viewer, space)`. It says who may create, edit, publish or delete a page: the space owner, a seat whose role can promote the band, someone who can edit the space's settings, or someone who administers spaces.
+   - A closed or read-only space refuses everyone.
+   - The browser's `canCustomizePages` calls this rule instead of its own copy.
+3. **`SpacePageEntityServer`**, modeled on `SpaceNoteEntityServer`. It enforces `pageEditVerdict` on every save and delete. A Team page needs a seat that can see Team. A page stays in its space.
+4. **Metadata:** entity permissions and read and write row filters, modeled on `Collaboration: Visible Notes` and `Collaboration: Own Notes`. Members read Shared pages; Team pages are for those who can see Team. Writes go through the server rule.
+5. **Client:** save and load pages through the new entity. Delete `space-pages-storage.ts` and every `isCollabPageNoteBody` filter. Page notes on the local DB are dev data, so no data migration is needed; say which rows you removed.
+6. **Tests**, beside `stage1-servers.test.ts`:
+   - an editor who didn't create the page can save it;
+   - a plain member's create, save and delete are refused with a clear message;
+   - a closed space refuses everyone;
+   - an outside participant never reads a Team page.
+
+**Stop after round 2b for review** before running round 3.
+
+### Round 4: Home (approved by Colin, 2026-10-29)
+
+Home (`shots/round-1/home-light.png`) doesn't yet answer the storyboard's first question, "what needs me?":
+- It opens with marketing copy ("Welcome to Collaboration / Unified spaces, documents, tasks, and communications…").
+- Its stat tiles are in Title Case. "9 Active Spaces" sits above a "5 spaces" grid.
+- The grid repeats the rail's tree, with an "Open Space →" link on every card.
+
+Build Home as Needs you, then Coming up, then your recent spaces, each with one signal (`docs/ux/README.md`, frame 01). Each card is the link itself, with no separate "Open Space" link.
+- Reuse what exists: `mjc-home-list`, `needs-you-card.component.ts` and the server's `resolve-home-lists.ts` / `resolve-home-counts.ts`.
+- Remove the welcome hero and the stat tiles. A count shows as a badge on the row or rail item it belongs to.
+- When nothing needs you, show one quiet line, not an empty card.
+
+Order of the remaining work: **R2 fixes + step M + 2b (stop) → 3, chat (stop) → 4, Home (stop)**.

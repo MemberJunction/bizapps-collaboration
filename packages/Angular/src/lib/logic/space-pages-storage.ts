@@ -101,6 +101,7 @@ const LEGACY_SYNTHETIC_SEED_BLOCK_IDS = new Set([
     'seed-blk-resources',
     'seed-blk-contacts',
     'seed-blk-widget-subspaces',
+    'seed-blk-widget-contributed',
 ]);
 
 function normalizeOverviewWidgetBlock(block: CollabPageBlock): CollabPageBlock {
@@ -114,7 +115,6 @@ function normalizeOverviewWidgetBlock(block: CollabPageBlock): CollabPageBlock {
             return { ...block, width: 'main' };
         case 'Widget:AskBox':
         case 'Widget:Discussion':
-        case 'Widget:ContributedCards':
         case 'Widget:About':
         case 'Widget:SubSpaces':
             return { ...block, width: 'side' };
@@ -179,12 +179,6 @@ export function buildStarterPagesForSpace(opts: {
             {
                 id: 'seed-blk-widget-discussion',
                 type: 'Widget:Discussion',
-                title: '',
-                width: 'side',
-            },
-            {
-                id: 'seed-blk-widget-contributed',
-                type: 'Widget:ContributedCards',
                 title: '',
                 width: 'side',
             },

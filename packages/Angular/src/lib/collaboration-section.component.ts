@@ -124,6 +124,7 @@ import {
     CollabSpaceDataComponent,
     type CollabPageModel,
     type CollabWidgetVisibility,
+    type SpacePageBlockContext,
     type SpaceRailCustomPage,
     type NoteModel,
     type NoteDraft,
@@ -205,7 +206,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         MJViewToggleComponent,
         CollabSpaceRailComponent,
         CollabSpaceHeaderComponent,
-        CollabSpaceOverviewComponent,
         CollabSpaceLibraryComponent,
         CollabShareCheckDialogComponent,
         CollabAudiencePillComponent,
@@ -219,7 +219,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         CollabHomeListComponent,
         CollabSpaceNotesComponent,
         CollabSpacePagesComponent,
-        CollabPinnedStripComponent,
         CollabSpaceDataComponent,
         MJReactModule,
         CollaborationNoAccessComponent,
@@ -995,118 +994,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         } @else {
                                         @switch (activeTab) {
                                             @case ('Overview') {
-                                                <ng-template #pinnedWidgetTpl let-block="block">
-                                                    @if (spacePins.length > 0) {
-                                                        <mjc-pinned-strip [Pins]="spacePins" [Title]="block?.title || pinnedLabel" (OpenRequested)="onPinOpen($event)" (UnpinRequested)="onUnpin($event)" />
-                                                    }
-                                                </ng-template>
-                                                <ng-template #needsYouWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'NeedsYou'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [NeedsYouItems]="overviewNeedsYou"
-                                                        (ItemSelectRequested)="onItemSelected($event)"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #sharedFilesWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'SharedFiles'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [ShowLibraryLink]="hasTab('Library')"
-                                                        [SpaceName]="spaceTitle"
-                                                        [FirmName]="firmName"
-                                                        [ClientOrgName]="clientOrgName"
-                                                        [SharedAudienceCount]="headerTotalPeople"
-                                                        [SharedItems]="overviewSharedItems"
-                                                        (OpenLibraryRequested)="onOpenLibraryRequested()"
-                                                        (ItemSelectRequested)="onItemSelected($event)"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #teamFilesWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'TeamFiles'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [ShowLibraryLink]="hasTab('Library')"
-                                                        [FirmName]="firmName"
-                                                        [ClientOrgName]="clientOrgName"
-                                                        [TeamItems]="overviewTeamItems"
-                                                        [TeamTotalCount]="libraryTeamCount"
-                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                        (OpenLibraryRequested)="onOpenLibraryRequested()"
-                                                        (ItemSelectRequested)="onItemSelected($event)"
-                                                        (ShareRequested)="onShareRequested($event)"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #askBoxWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        #spaceOverview
-                                                        [Section]="'AskBox'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [SpaceName]="spaceTitle"
-                                                        [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
-                                                        [AgentAvailable]="chatDefaultAgentId !== null"
-                                                        [IsSubmittingAsk]="isSubmittingAsk"
-                                                        (AskRequested)="onOverviewAskRequested($event)"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #discussionWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'Discussion'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [ShowChatLink]="hasTab('Chat')"
-                                                        [CanStartConversation]="canStartConversation && !isSpaceClosed && hasTab('Chat')"
-                                                        [AudienceCount]="discussionAudienceCount"
-                                                        [RoomMessages]="overviewRoomMessages"
-                                                        [DiscussionBand]="chatAudienceBand"
-                                                        (OpenChatRequested)="onOpenChatRequested()"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #contributedCardsWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'ContributedCards'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [ContributedCards]="overviewContributedCards"
-                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                    />
-                                                </ng-template>
-                                                <ng-template #aboutWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'About'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [HasAbout]="hasDetails"
-                                                        [AboutTitle]="aboutTitle"
-                                                    >
-                                                        <div mjcAbout style="display: contents">
-                                                            @if (spaceDetails; as details) {
-                                                                @if (detailsView; as view) {
-                                                                    <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [FormSections]="view.formSections" [EditMode]="false" />
-                                                                }
-                                                            }
-                                                        </div>
-                                                    </mjc-space-overview>
-                                                </ng-template>
-                                                <ng-template #subSpacesWidgetTpl let-block="block">
-                                                    <mjc-space-overview
-                                                        [Section]="'SubSpaces'"
-                                                        [CustomTitle]="block?.title || ''"
-                                                        [SpaceId]="activeSpaceId"
-                                                        [SpaceName]="spaceTitle"
-                                                        [SubSpaces]="overviewSubSpaces"
-                                                        [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
-                                                        (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
-                                                        (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
-                                                    />
-                                                </ng-template>
-
                                                 <mjc-space-pages
                                                     #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
                                                     [Pages]="spacePages"
                                                     [BuiltInTabId]="'Overview'"
                                                     [LibraryRows]="libraryRows"
@@ -1125,25 +1018,54 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
                                                     [WidgetVisibility]="overviewWidgetVisibility"
-                                                    [PinnedWidgetTpl]="pinnedWidgetTpl"
-                                                    [NeedsYouWidgetTpl]="needsYouWidgetTpl"
-                                                    [SharedFilesWidgetTpl]="sharedFilesWidgetTpl"
-                                                    [TeamFilesWidgetTpl]="teamFilesWidgetTpl"
-                                                    [AskBoxWidgetTpl]="askBoxWidgetTpl"
-                                                    [DiscussionWidgetTpl]="discussionWidgetTpl"
-                                                    [ContributedCardsWidgetTpl]="contributedCardsWidgetTpl"
-                                                    [AboutWidgetTpl]="aboutWidgetTpl"
-                                                    [SubSpacesWidgetTpl]="subSpacesWidgetTpl"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
                                                     (PageReorderRequested)="onPageReorder($event)"
                                                     (PromotePageRequested)="onPagePromote($event)"
                                                     (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
+                                                >
+                                                    <div mjcAbout style="display: contents">
+                                                        @if (spaceDetails; as details) {
+                                                            @if (detailsView; as view) {
+                                                                <mjc-space-details-view [Record]="details.Leaf" [Presentation]="view.presentation" [Fields]="view.fields" [Component]="view.component" [FormSections]="view.formSections" [EditMode]="false" />
+                                                            }
+                                                        }
+                                                    </div>
+                                                </mjc-space-pages>
                                             }
                                             @case ('Library') {
-                                                <ng-template #libraryMainTpl>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Library'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                >
                                                     <mjc-space-library
                                                         [TotalCount]="libraryTotalCount"
                                                         [SharedCount]="librarySharedCount"
@@ -1170,11 +1092,17 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         (CloseDrawerRequested)="onCloseDrawerRequested()"
                                                         (OpenFileRequested)="onOpenFileRequested($event)"
                                                     />
-                                                </ng-template>
+                                                </mjc-space-pages>
+                                            }
+                                            @case ('Work') {
                                                 <mjc-space-pages
                                                     #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
                                                     [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Library'"
+                                                    [BuiltInTabId]="'Work'"
                                                     [LibraryRows]="libraryRows"
                                                     [SpaceMembers]="spaceMembers"
                                                     [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
@@ -1191,17 +1119,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
                                                     [WidgetVisibility]="{ MainView: true }"
-                                                    [MainViewWidgetTpl]="libraryMainTpl"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
                                                     (PageReorderRequested)="onPageReorder($event)"
                                                     (PromotePageRequested)="onPagePromote($event)"
                                                     (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
-                                            }
-                                            @case ('Work') {
-                                                <ng-template #workMainTpl>
+                                                >
                                                     <div class="work-tab-container">
                                                         <div class="work-view-toolbar">
                                                             <mj-view-toggle
@@ -1251,35 +1175,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                             }
                                                         </div>
                                                     </div>
-                                                </ng-template>
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Work'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
-                                                    [MainViewWidgetTpl]="workMainTpl"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
+                                                </mjc-space-pages>
                                             }
                                             @case ('Chat') {
                                                 <mjc-space-chat
@@ -1316,27 +1212,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 />
                                             }
                                             @case ('Data') {
-                                                <ng-template #dataMainTpl>
-                                                    <mjc-space-data
-                                                        [Entries]="dataEntries"
-                                                        [SelectedGrantId]="selectedDataGrantId"
-                                                        [SelectedLabel]="selectedDataLabel"
-                                                        [Run]="dataRun"
-                                                        [CanPin]="!!currentUser"
-                                                        [SharedLabel]="sharedBandLabel"
-                                                        [TeamLabel]="teamBandLabel"
-                                                        [EmptyMessage]="dataEmptyMessage"
-                                                        (EntrySelectRequested)="onDataEntrySelected($event)"
-                                                        (PinToggleRequested)="onDataPinToggle($event)"
-                                                        (RerunRequested)="rerunDataEntry()"
-                                                    >
-                                                        @if (dataEmbedded; as embedded) {
-                                                            <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
-                                                        }
-                                                    </mjc-space-data>
-                                                </ng-template>
                                                 <mjc-space-pages
                                                     #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
                                                     [Pages]="spacePages"
                                                     [BuiltInTabId]="'Data'"
                                                     [LibraryRows]="libraryRows"
@@ -1355,17 +1236,64 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
                                                     [WidgetVisibility]="{ MainView: true }"
-                                                    [MainViewWidgetTpl]="dataMainTpl"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
                                                     (PageReorderRequested)="onPageReorder($event)"
                                                     (PromotePageRequested)="onPagePromote($event)"
                                                     (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
+                                                >
+                                                    <mjc-space-data
+                                                        [Entries]="dataEntries"
+                                                        [SelectedGrantId]="selectedDataGrantId"
+                                                        [SelectedLabel]="selectedDataLabel"
+                                                        [Run]="dataRun"
+                                                        [CanPin]="!!currentUser"
+                                                        [SharedLabel]="sharedBandLabel"
+                                                        [TeamLabel]="teamBandLabel"
+                                                        [EmptyMessage]="dataEmptyMessage"
+                                                        (EntrySelectRequested)="onDataEntrySelected($event)"
+                                                        (PinToggleRequested)="onDataPinToggle($event)"
+                                                        (RerunRequested)="rerunDataEntry()"
+                                                    >
+                                                        @if (dataEmbedded; as embedded) {
+                                                            <mj-react-component [Component]="embedded.spec" [ComponentProps]="embedded.props" />
+                                                        }
+                                                    </mjc-space-data>
+                                                </mjc-space-pages>
                                             }
                                             @case ('Notes') {
-                                                <ng-template #notesMainTpl>
+                                                <mjc-space-pages
+                                                    #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
+                                                    [Pages]="spacePages"
+                                                    [BuiltInTabId]="'Notes'"
+                                                    [LibraryRows]="libraryRows"
+                                                    [SpaceMembers]="spaceMembers"
+                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
+                                                    [CurrentUserInitials]="currentUserInitials"
+                                                    [CanWrite]="canCustomizePages"
+                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
+                                                    [(IsCustomizing)]="isCustomizingPages"
+                                                    [CanSeeTeam]="canSeeTeamSide"
+                                                    [IsReadOnly]="isSpaceClosed"
+                                                    [IsSaving]="isSavingPage"
+                                                    [ErrorMessage]="notesError"
+                                                    [SaveError]="pageSaveError"
+                                                    [DefaultBand]="noteDefaultBand"
+                                                    [SharedLabel]="sharedBandLabel"
+                                                    [TeamLabel]="teamBandLabel"
+                                                    [WidgetVisibility]="{ MainView: true }"
+                                                    (PageSelectRequested)="onPageSelected($event)"
+                                                    (PageSaveRequested)="onPageSave($event)"
+                                                    (PageDeleteRequested)="onPageDelete($event)"
+                                                    (PageReorderRequested)="onPageReorder($event)"
+                                                    (PromotePageRequested)="onPagePromote($event)"
+                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
+                                                >
                                                     <mjc-space-notes
                                                         #notesPanel
                                                         [Title]="notesLabel"
@@ -1389,58 +1317,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         (TurnIntoDocumentRequested)="onNoteTurnIntoDocument($event)"
                                                         (PinToggleRequested)="onNotePinToggle($event)"
                                                     />
-                                                </ng-template>
-                                                <mjc-space-pages
-                                                    #spacePagesHost
-                                                    [Pages]="spacePages"
-                                                    [BuiltInTabId]="'Notes'"
-                                                    [LibraryRows]="libraryRows"
-                                                    [SpaceMembers]="spaceMembers"
-                                                    [CurrentUserName]="currentUser?.FirstLast || currentUser?.Name || 'Member'"
-                                                    [CurrentUserInitials]="currentUserInitials"
-                                                    [CanWrite]="canCustomizePages"
-                                                    [CanCollaborate]="canContribute && !isSpaceClosed"
-                                                    [(IsCustomizing)]="isCustomizingPages"
-                                                    [CanSeeTeam]="canSeeTeamSide"
-                                                    [IsReadOnly]="isSpaceClosed"
-                                                    [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
-                                                    [SaveError]="pageSaveError"
-                                                    [DefaultBand]="noteDefaultBand"
-                                                    [SharedLabel]="sharedBandLabel"
-                                                    [TeamLabel]="teamBandLabel"
-                                                    [WidgetVisibility]="{ MainView: true }"
-                                                    [MainViewWidgetTpl]="notesMainTpl"
-                                                    (PageSelectRequested)="onPageSelected($event)"
-                                                    (PageSaveRequested)="onPageSave($event)"
-                                                    (PageDeleteRequested)="onPageDelete($event)"
-                                                    (PageReorderRequested)="onPageReorder($event)"
-                                                    (PromotePageRequested)="onPagePromote($event)"
-                                                    (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
+                                                </mjc-space-pages>
                                             }
                                             @case ('People') {
-                                                <ng-template #peopleMainTpl>
-                                                    <mjc-space-people
-                                                        [Members]="spaceMembers"
-                                                        [SpaceName]="spaceTitle"
-                                                        [IsSendingInvite]="isSendingInvite"
-                                                        [InviteOutcome]="inviteOutcome"
-                                                        [RedemptionUrl]="inviteRedemptionUrl"
-                                                        [CanInvite]="canInviteHere"
-                                                        [CanSeeTeamSide]="canSeeTeamSide"
-                                                        [RoleOptions]="grantableRoleOptions"
-                                                        [CanManageSeats]="canInviteHere"
-                                                        [IsBusy]="isChangingSeat"
-                                                        (InviteMemberRequested)="onInviteMember($event)"
-                                                        (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
-                                                        (ApproveMemberRequested)="onApproveMember($event)"
-                                                        (RemoveMemberRequested)="onRemoveMember($event)"
-                                                        (ChangeRoleRequested)="onChangeMemberRole($event)"
-                                                    />
-                                                </ng-template>
                                                 <mjc-space-pages
                                                     #spacePagesHost
+                                                    [SpaceId]="activeSpaceId"
+                                                    [SpaceTypeCode]="activeSpaceTypeCode"
+                                                    [ContributedCards]="overviewContributedCards"
+                                                    [BlockContext]="spacePageBlockContext"
                                                     [Pages]="spacePages"
                                                     [BuiltInTabId]="'People'"
                                                     [LibraryRows]="libraryRows"
@@ -1459,14 +1344,31 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [SharedLabel]="sharedBandLabel"
                                                     [TeamLabel]="teamBandLabel"
                                                     [WidgetVisibility]="{ MainView: true }"
-                                                    [MainViewWidgetTpl]="peopleMainTpl"
                                                     (PageSelectRequested)="onPageSelected($event)"
                                                     (PageSaveRequested)="onPageSave($event)"
                                                     (PageDeleteRequested)="onPageDelete($event)"
                                                     (PageReorderRequested)="onPageReorder($event)"
                                                     (PromotePageRequested)="onPagePromote($event)"
                                                     (OpenLibraryFileRequested)="onOpenFileRequested($event)"
-                                                />
+                                                >
+                                                    <mjc-space-people
+                                                        [Members]="spaceMembers"
+                                                        [SpaceName]="spaceTitle"
+                                                        [IsSendingInvite]="isSendingInvite"
+                                                        [InviteOutcome]="inviteOutcome"
+                                                        [RedemptionUrl]="inviteRedemptionUrl"
+                                                        [CanInvite]="canInviteHere"
+                                                        [CanSeeTeamSide]="canSeeTeamSide"
+                                                        [RoleOptions]="grantableRoleOptions"
+                                                        [CanManageSeats]="canInviteHere"
+                                                        [IsBusy]="isChangingSeat"
+                                                        (InviteMemberRequested)="onInviteMember($event)"
+                                                        (InviteOutcomeDismissed)="inviteOutcome = null; inviteRedemptionUrl = null"
+                                                        (ApproveMemberRequested)="onApproveMember($event)"
+                                                        (RemoveMemberRequested)="onRemoveMember($event)"
+                                                        (ChangeRoleRequested)="onChangeMemberRole($event)"
+                                                    />
+                                                </mjc-space-pages>
                                             }
                                             @case ('Settings') {
                                                 <mjc-space-settings
@@ -1557,6 +1459,10 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 @if (activeTab.startsWith('page:')) {
                                                     <mjc-space-pages
                                                         #spacePagesHost
+                                                        [SpaceId]="activeSpaceId"
+                                                        [SpaceTypeCode]="activeSpaceTypeCode"
+                                                        [ContributedCards]="overviewContributedCards"
+                                                        [BlockContext]="spacePageBlockContext"
                                                         [Pages]="spacePages"
                                                         [ActivePageId]="activeCustomPageId"
                                                         [LibraryRows]="libraryRows"
@@ -1574,6 +1480,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         [DefaultBand]="noteDefaultBand"
                                                         [SharedLabel]="sharedBandLabel"
                                                         [TeamLabel]="teamBandLabel"
+                                                        [WidgetVisibility]="overviewWidgetVisibility"
                                                         (PageSelectRequested)="onPageSelected($event)"
                                                         (PageSaveRequested)="onPageSave($event)"
                                                         (PageDeleteRequested)="onPageDelete($event)"
@@ -2890,6 +2797,56 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         };
     }
 
+    public get spacePageBlockContext(): SpacePageBlockContext {
+        const canChat = this.canStartConversation && !this.isSpaceClosed && this.hasTab('Chat');
+        return {
+            spaceId: this.activeSpaceId,
+            spaceName: this.spaceTitle,
+            spaceTypeCode: this.activeSpaceTypeCode,
+            firmName: this.firmName,
+            clientOrgName: this.clientOrgName,
+            canSeeTeam: this.canSeeTeamSide,
+            canWrite: this.canCustomizePages,
+            isReadOnly: this.isSpaceClosed,
+            sharedLabel: this.sharedBandLabel,
+            teamLabel: this.teamBandLabel,
+            pinnedItems: this.spacePins,
+            pinnedTitle: this.pinnedLabel,
+            needsYouItems: this.overviewNeedsYou,
+            sharedItems: this.overviewSharedItems,
+            sharedAudienceCount: this.headerTotalPeople,
+            showLibraryLink: this.hasTab('Library'),
+            teamItems: this.overviewTeamItems,
+            teamTotalCount: this.libraryTeamCount,
+            showAskBox: canChat,
+            canStartConversation: canChat,
+            agentAvailable: this.chatDefaultAgentId !== null,
+            isSubmittingAsk: this.isSubmittingAsk,
+            showDiscussionSnippet: this.hasTab('Chat'),
+            showChatLink: this.hasTab('Chat'),
+            discussionAudienceCount: this.discussionAudienceCount,
+            roomMessages: this.overviewRoomMessages,
+            discussionBand: this.chatAudienceBand,
+            contributedCards: this.overviewContributedCards,
+            hasAbout: this.hasDetails,
+            aboutTitle: this.aboutTitle,
+            subSpaces: this.overviewSubSpaces,
+            canSeeSubSpaces:
+                this.overviewSubSpaces.length > 0 ||
+                (this.canCreateSpace && !this.isSpaceClosed),
+            canAddSubSpace: this.canCreateSpace && !this.isSpaceClosed,
+            onPinOpen: (pin) => this.onPinOpen(pin),
+            onPinUnpin: (pin) => this.onUnpin(pin),
+            onItemSelected: (id) => this.onItemSelected(id),
+            onOpenLibraryRequested: () => this.onOpenLibraryRequested(),
+            onShareRequested: (id) => this.onShareRequested(id),
+            onAskRequested: (msg) => this.onOverviewAskRequested(msg),
+            onOpenChatRequested: () => this.onOpenChatRequested(),
+            onSubSpaceSelected: (id) => this.onSpaceOpenRequested(id),
+            onNewSubSpaceRequested: () => this.openNewSpaceDialog(this.activeSpaceId),
+        };
+    }
+
     public get railCustomPages(): SpaceRailCustomPage[] {
         return this.spacePages
             .filter((p) => !p.builtInTabId && (p.band === 'Shared' || this.canSeeTeamSide))
@@ -3821,7 +3778,6 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!subType) {
                 LogError(`Missing space type for sub-space ID: ${c.ID}`);
             }
-            const statusName = CollaborationEngineBase.Instance.EffectiveStatusForSpace(c)?.Name ?? null;
             return {
                 id: c.ID,
                 name: c.Name,
@@ -3829,7 +3785,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
                 color: c.Color || cType?.color || '',
                 description: c.Description || '',
-                ...railFlags({ StatusName: statusName }),
+                ...railFlags(c),
             };
         });
 

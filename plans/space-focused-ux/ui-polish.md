@@ -140,7 +140,13 @@ Content blocks (Heading, Text, Callout and the rest) can stay a typed union insi
 
 ---
 
-## 6. Open decisions for Colin (not for Gemini)
+## 6. Decisions
+
+Decided 2026-10-29; the details are in `ui-polish-review.md`:
+- Item 1 below becomes **round 2b**: pages get their own table and a server rule.
+- Home becomes **round 4**.
+- The floating chat bubble is turned off in the local install only.
+- Item 2 below is still open.
 
 1. **Who may edit or publish a page is checked only in the browser.**
    - Pages are stored as JSON inside Note bodies (`__collabPage: 1`, `packages/Angular/src/lib/logic/space-pages-storage.ts`), and no server code knows a page exists.

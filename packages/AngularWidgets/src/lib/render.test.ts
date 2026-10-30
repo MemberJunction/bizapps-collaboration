@@ -16,13 +16,15 @@ import { CollabNewConversationDialogComponent } from './new-conversation-dialog.
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import { RegisterClassEx } from '@memberjunction/global';
+import { BaseSpacePageBlock } from './base-space-page-block.ts';
 import { CollabSpaceHeaderComponent } from './space-header.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
 import { CollabSpacePagesComponent } from './space-pages.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
-import type { SpaceSettingsModel } from './types';
+import type { CollabPageModel, SpaceSettingsModel } from './types';
 
 const settings: SpaceSettingsModel = {
   id: 's1', name: 'Northwind', description: '', spaceType: 'Workspace', spaceTypeId: 't1', iconClass: 'fa-solid fa-briefcase', color: '#0076b6',
@@ -1060,4 +1062,189 @@ describe('the conversation of a space, read-only', () => {
     expect(progress?.textContent).toContain('Drafting audit summary…');
   });
 });
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:custom-metric',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:custom-metric',
+    title: 'Custom metric block',
+    icon: 'fa-solid fa-gauge-high',
+    side: 'Shared',
+    defaultZone: 'main',
+    sortKey: 55,
+    spaceTypes: ['*'],
+    description: 'Live metric block registered via ClassFactory',
+    emptyText: 'No metrics yet',
+  },
+})
+@Component({
+  selector: 'mjc-test-custom-metric-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-custom-metric-block">
+      Metric block for {{ SpaceId }} (readonly={{ ReadOnly }})
+    </div>
+  `,
+})
+class TestCustomMetricBlockComponent extends BaseSpacePageBlock {}
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:team-audit',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:team-audit',
+    title: 'Team audit block',
+    icon: 'fa-solid fa-user-shield',
+    side: 'Team',
+    defaultZone: 'main',
+    sortKey: 56,
+    spaceTypes: ['*'],
+    description: 'Internal team audit block',
+    emptyText: 'No team audits yet',
+  },
+})
+@Component({
+  selector: 'mjc-test-team-audit-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-team-audit-block">
+      Internal team audit block for {{ SpaceId }}
+    </div>
+  `,
+})
+class TestTeamAuditBlockComponent extends BaseSpacePageBlock {}
+
+describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
+  const sampleOverviewPage = (blocks: CollabPageModel['blocks']): CollabPageModel => ({
+    id: 'page-overview',
+    builtInTabId: 'Overview',
+    title: 'Overview',
+    iconClass: 'fa-solid fa-house',
+    pageType: 'Overview',
+    band: 'Shared',
+    status: 'Published',
+    sequence: 0,
+    collaborative: true,
+    summary: 'Space overview',
+    body: '',
+    blocks,
+    comments: [],
+    updatedLabel: 'Today',
+    authorName: 'Ada',
+  });
+
+  it('discovers a @RegisterClassEx(BaseSpacePageBlock) component in the block picker and renders it on a page without changing space-pages or collaboration-section', () => {
+    void TestCustomMetricBlockComponent;
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-42');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.componentRef.setInput('Pages', [sampleOverviewPage([])]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const comp = fixture.componentInstance;
+    const options = comp.availableWidgetBlockOptions(comp.activePage!);
+    expect(options.some((o) => o.type === 'test:custom-metric' && o.label === 'Custom metric block')).toBe(true);
+
+    // Open the block picker via the main-column insert button and verify the registered block appears in the picker UI
+    let savedPage: CollabPageModel | null = null;
+    comp.PageSaveRequested.subscribe((p) => {
+      savedPage = p;
+      fixture.componentRef.setInput('Pages', [p]);
+    });
+
+    const insertButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('.sp-insert-btn'));
+    const mainInsertBtn = insertButtons.find((btn) => btn.textContent?.includes('Add to main column')) ?? insertButtons[0];
+    mainInsertBtn.click();
+    fixture.detectChanges();
+
+    const pickerCards = Array.from(host.querySelectorAll<HTMLButtonElement>('.sp-picker-card'));
+    const customCard = pickerCards.find((card) => card.querySelector('.sp-picker-lbl')?.textContent?.trim() === 'Custom metric block');
+    expect(customCard).toBeDefined();
+
+    // Click the custom block card in the picker and verify it mounts via NgComponentOutlet with its inputs
+    customCard!.click();
+    fixture.detectChanges();
+
+    expect(savedPage).not.toBeNull();
+    const rendered = host.querySelector('[data-testid="test-custom-metric-block"]');
+    expect(rendered).not.toBeNull();
+    expect(rendered?.textContent).toContain('Metric block for space-42 (readonly=false)');
+  });
+
+  it('filters the block picker and rendered page by side so non-Team viewers never see or render a Team block', () => {
+    void TestTeamAuditBlockComponent;
+    const pageWithTeamBlock = sampleOverviewPage([
+      { id: 'blk-team-1', type: 'test:team-audit', title: '', width: 'main' },
+      { id: 'blk-team-files', type: 'Widget:TeamFiles', title: '', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-99');
+    fixture.componentRef.setInput('CanWrite', false);
+    fixture.componentRef.setInput('CanSeeTeam', false);
+    fixture.componentRef.setInput('Pages', [pageWithTeamBlock]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const comp = fixture.componentInstance;
+
+    // Non-Team viewer does not see Team blocks in the picker or on the rendered page
+    const sharedOnlyOptions = comp.availableWidgetBlockOptions( sampleOverviewPage([]) );
+    expect(sharedOnlyOptions.some((o) => o.type === 'test:team-audit')).toBe(false);
+    expect(sharedOnlyOptions.some((o) => o.type === 'collab:team-files')).toBe(false);
+    expect(host.querySelector('[data-testid="test-team-audit-block"]')).toBeNull();
+
+    // Switching CanSeeTeam to true exposes Team blocks in the picker and renders them on the page
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.detectChanges();
+    const teamOptions = comp.availableWidgetBlockOptions(sampleOverviewPage([]));
+    expect(teamOptions.some((o) => o.type === 'test:team-audit')).toBe(true);
+    expect(teamOptions.some((o) => o.type === 'collab:team-files')).toBe(true);
+    expect(host.querySelector('[data-testid="test-team-audit-block"]')?.textContent).toContain('Internal team audit block for space-99');
+  });
+
+  it('renders a muted "This block is no longer available" notice in edit mode and nothing for viewers when a block key is unregistered', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(true);
+    TestBed.configureTestingModule({
+      providers: [{ provide: MJConfirmService, useValue: { Confirm: confirmSpy } }],
+    });
+    const pageWithRetiredBlock = sampleOverviewPage([
+      { id: 'blk-retired', type: 'custom:retired-widget', title: 'Retired widget', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-1');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('IsCustomizing', false);
+    fixture.componentRef.setInput('Pages', [pageWithRetiredBlock]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    // Viewer mode: nothing rendered for the unregistered block
+    expect(host.querySelector('[data-testid="block-unavailable-notice"]')).toBeNull();
+    expect(host.querySelectorAll('.sp-block').length).toBe(0);
+
+    // Edit mode: muted "This block is no longer available" card + compact block toolbar
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.detectChanges();
+    const unavailable = host.querySelector('[data-testid="block-unavailable-notice"]');
+    expect(unavailable).not.toBeNull();
+    expect(unavailable?.textContent).toContain('This block is no longer available');
+
+    const toolbar = host.querySelector('[data-testid="block-toolbar"]');
+    expect(toolbar).not.toBeNull();
+
+    // Removing a block confirms via MJConfirmService
+    let updatedPage: CollabPageModel | null = null;
+    fixture.componentInstance.PageSaveRequested.subscribe((p) => { updatedPage = p; });
+    await fixture.componentInstance.deleteBlock(fixture.componentInstance.activePage!, 0);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updatedPage?.blocks).toHaveLength(0);
+  });
+});
+
 
