@@ -20,12 +20,17 @@ export interface SpaceTurnResult {
  * written In-Progress, and the run's live status and text reach this session as they happen, the way MemberJunction's chat
  * follows any conversation's agent. Without `Background` the row would sit at "Starting…" until the whole run returned.
  */
-export function spaceTurnInput(spaceId: string, request: SpaceTurnRequest): ExecuteSpaceChatTurnGraphQLInput {
+export function spaceTurnInput(
+    spaceId: string,
+    request: SpaceTurnRequest,
+    retrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything',
+): ExecuteSpaceChatTurnGraphQLInput {
     return {
         SpaceID: spaceId,
         ConversationID: request.ConversationId,
         UserMessageID: request.UserMessageId,
         AgentID: request.AgentId,
+        ...(retrievalScope ? { RetrievalScope: retrievalScope } : {}),
         Background: true,
     };
 }

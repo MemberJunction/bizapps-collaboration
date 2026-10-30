@@ -440,8 +440,8 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 ### Data
 
 - **`SpaceChat`**, one per conversation in a space:
-  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (`General`, `Topic` or `Private`, which the page calls Internal Only), `Name`, `Subject` (text), `Status` (`Active` or `Archived`) and `ArchivedOnSpaceClose`;
-  - a chat about one record, such as a meeting, a document or a task, and a creator column, are planned;
+  - `SpaceID`, `ConversationID` (an MJ Conversation), `Kind` (`General`, `Topic`, `Private`, which the page calls Internal Only, or `Assistant`, a 1-to-1 private conversation with the space's assistant), `OwnerUserID` (populated for `Kind = 'Assistant'`), `Name`, `Subject` (text), `Status` (`Active` or `Archived`) and `ArchivedOnSpaceClose`;
+  - a chat about one record, such as a meeting, a document or a task, is planned;
   - it replaced the binding through `Conversation.LinkedRecordID`, which allowed only one conversation per space.
 - **A chat's people are MJ core's conversation participants,** `MJ: Conversation Participants` (the plan's A5 and D10). MJ has no such table today, in 6.1.3 or on `next` as of 2026-09-29; the nearest are the realtime bridges' `MJ: AI Agent Session Bridge Participants`, a conversation's owner (`Conversation.UserID`) and Resource Permission shares.
   - Each participant row carries `AddedByUserID`, `AddedAt`, `RemovedAt` and `HistoryFrom`.
@@ -455,8 +455,8 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
 
 ### Who sees what
 
-- **A space's conversations** are started on request, and none is created with the space (the plan's D25). Their participants are derived from the space's roster: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. Collaboration keeps them in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them. Until A5, the roster applies through Collaboration's row-level security on the conversations and their messages, Collaboration keeps each contributing seat's Edit grant in step with the seats, and sealing waits for A4 and A7.
-- **A chat with its own people** is B3's, and waits for A5. Only its participants will see it.
+- **A space's conversations** are started on request, and none is created with the space (the plan's D25). Their participants are derived from the space's roster for room-wide channels: everyone who reaches the space for General and Topic, and only those who see Team for Internal Only. A 1-to-1 Assistant chat (`Kind = 'Assistant'`) belongs solely to its `OwnerUserID`, enforced in row-level security, `Resource Permissions` grant synchronization, and the server operations. Collaboration keeps grants in step as seats change (the plan's B3). Each sees all of it, from its first message, like a Teams channel, except the AI messages sealed for them. Until A5, multi-person subset chats wait for MJ core's `MJ: Conversation Participants`, while room-wide channels and 1-to-1 Assistant chats apply through Collaboration's row-level security and Edit grant sync, and sealing waits for A4 and A7.
+- **A multi-person chat with its own subset of people** is B3's, and waits for A5. Only its participants will see it.
 - **Nothing else in a space is time-limited.** A seat opens everything its band allows, from the space's first day: the library, the tasks, the space's conversations and every chat the person is in.
 - **Sub-spaces keep their own membership** when `InheritsMembership` is off, as today. A compensation sub-committee under a board, for example, isn't open to the whole board. A type's server driver can set the switch for the sub-spaces it allows ([§ 5](#5-server-drivers)).
 - **Reads are enforced in SQL:** row-level security on `SpaceChat`, as Collaboration's metadata, and core's row-level security on Conversations and Conversation Details, keyed on participants and their `HistoryFrom` (the plan's A5). Core applies it to everyone, staff included, so the chat area needs no cutoff of its own. That's decision 14. Until A5, reads by the Space Participant role go through Collaboration's own filters on Conversations and Conversation Details, keyed on the space's roster and the conversation's kind.

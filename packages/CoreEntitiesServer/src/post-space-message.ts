@@ -76,10 +76,10 @@ export async function postSpaceMessage(
     if (!parsedTarget) {
         return { ok: false, message: 'The conversation ID is invalid.' };
     }
-    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string }>({
+    const chatCheck = await view.RunView<{ ID: string; ConversationID: string; Kind: string; OwnerUserID?: string | null }>({
         EntityName: 'MJ_BizApps_Collaboration: Space Chats',
         ExtraFilter: `SpaceID = '${spaceId}' AND ConversationID = '${parsedTarget}' AND Status = 'Active'`,
-        Fields: ['ID', 'ConversationID', 'Kind'],
+        Fields: ['ID', 'ConversationID', 'Kind', 'OwnerUserID'],
         MaxRows: 1,
         ResultType: 'simple',
     }, system);
@@ -90,6 +90,9 @@ export async function postSpaceMessage(
     }
     if (foundChat.Kind === 'Private' && !reach.role.canSeeTeamBand) {
         return { ok: false, message: 'Caller cannot post in this internal conversation without Team visibility.' };
+    }
+    if (foundChat.Kind === 'Assistant' && parseUuid(foundChat.OwnerUserID) !== callerId) {
+        return { ok: false, message: 'Caller cannot post in another member\'s assistant conversation.' };
     }
     const conversationId = parsedTarget;
     const parsedParentId = input.parentDetailId ? parseUuid(input.parentDetailId) : null;

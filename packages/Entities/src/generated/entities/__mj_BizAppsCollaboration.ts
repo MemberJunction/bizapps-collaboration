@@ -219,13 +219,14 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: Subject
         * * Display Name: Subject
         * * SQL Data Type: nvarchar(500)`),
-    Kind: z.union([z.literal('General'), z.literal('Private'), z.literal('Topic')]).describe(`
+    Kind: z.union([z.literal('Assistant'), z.literal('General'), z.literal('Private'), z.literal('Topic')]).describe(`
         * * Field Name: Kind
         * * Display Name: Kind
         * * SQL Data Type: nvarchar(50)
         * * Default Value: General
     * * Value List Type: List
     * * Possible Values 
+    *   * Assistant
     *   * General
     *   * Private
     *   * Topic`),
@@ -254,6 +255,12 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether this space chat conversation was archived when its space was closed so it can be restored on reopen.`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: For an Assistant space chat (1-to-1 with an agent): the user who owns the conversation. Null on General, Private, and Topic chats.`),
     Space: z.string().describe(`
         * * Field Name: Space
         * * Display Name: Space
@@ -262,6 +269,10 @@ export const mjBizAppsCollaborationSpaceChatSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type mjBizAppsCollaborationSpaceChatEntityType = z.infer<typeof mjBizAppsCollaborationSpaceChatSchema>;
@@ -1743,14 +1754,15 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     * * Default Value: General
     * * Value List Type: List
     * * Possible Values 
+    *   * Assistant
     *   * General
     *   * Private
     *   * Topic
     */
-    get Kind(): 'General' | 'Private' | 'Topic' {
+    get Kind(): 'Assistant' | 'General' | 'Private' | 'Topic' {
         return this.Get('Kind');
     }
-    set Kind(value: 'General' | 'Private' | 'Topic') {
+    set Kind(value: 'Assistant' | 'General' | 'Private' | 'Topic') {
         this.Set('Kind', value);
     }
 
@@ -1806,6 +1818,20 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: For an Assistant space chat (1-to-1 with an agent): the user who owns the conversation. Null on General, Private, and Topic chats.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Space
     * * Display Name: Space
     * * SQL Data Type: nvarchar(200)
@@ -1821,6 +1847,15 @@ export class mjBizAppsCollaborationSpaceChatEntity extends BaseEntity<mjBizAppsC
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 }
 
@@ -2038,25 +2073,19 @@ export class mjBizAppsCollaborationSpaceGrantEntity extends BaseEntity<mjBizApps
         this.Set('Bindings', value);
     }
 
-    private _BindingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null | undefined = undefined;
-    private _BindingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Bindings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Bindings — a live view of the parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Bindings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get BindingsObject(): mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null {
-        const raw = this.Bindings;
-        if (raw !== this._BindingsObject_lastRaw) {
-            this._BindingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._BindingsObject_lastRaw = raw;
-        }
-        return this._BindingsObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings>('Bindings');
     }
     set BindingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Bindings = raw;
-        this._BindingsObject_cached = value;
-        this._BindingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_SpaceGrantBindings>('Bindings', value);
     }
 
     /**
@@ -2073,25 +2102,19 @@ export class mjBizAppsCollaborationSpaceGrantEntity extends BaseEntity<mjBizApps
         this.Set('Settings', value);
     }
 
-    private _SettingsObject_cached: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null | undefined = undefined;
-    private _SettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Settings — returns parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Settings — a live view of the parsed JSON as mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Settings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SettingsObject(): mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null {
-        const raw = this.Settings;
-        if (raw !== this._SettingsObject_lastRaw) {
-            this._SettingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._SettingsObject_lastRaw = raw;
-        }
-        return this._SettingsObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings>('Settings');
     }
     set SettingsObject(value: mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Settings = raw;
-        this._SettingsObject_cached = value;
-        this._SettingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceGrantEntity_AgentGrantSettings>('Settings', value);
     }
 
     /**
@@ -3856,25 +3879,19 @@ export class mjBizAppsCollaborationSpaceTypeEntity extends BaseEntity<mjBizAppsC
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings>('Configuration');
     }
     set ConfigurationObject(value: mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceTypeEntity_CollaborationSettings>('Configuration', value);
     }
 }
 
@@ -4224,25 +4241,19 @@ export class mjBizAppsCollaborationSpaceEntity extends BaseEntity<mjBizAppsColla
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as mjBizAppsCollaborationSpaceEntity_CollaborationSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as mjBizAppsCollaborationSpaceEntity_CollaborationSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<mjBizAppsCollaborationSpaceEntity_CollaborationSettings>('Configuration');
     }
     set ConfigurationObject(value: mjBizAppsCollaborationSpaceEntity_CollaborationSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<mjBizAppsCollaborationSpaceEntity_CollaborationSettings>('Configuration', value);
     }
 
     /**

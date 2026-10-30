@@ -1,6 +1,6 @@
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { collaborationFileStore, createSpaceConversation, decideUploadBand, executeSpaceChatTurn, postSpaceMessage, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
+import { collaborationFileStore, createSpaceConversation, decideUploadBand, executeSpaceChatTurn, postSpaceMessage, resolveSpaceChatHostRules, uploadSpaceFile } from '@mj-biz-apps/collaboration-core-entities-server';
 import { mjBizAppsCollaborationSpaceEntity, mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceMemberEntity } from '@mj-biz-apps/collaboration-entities';
 import { COLLABORATION_TEST_AGENT_NAME } from '../agents/test-agent.js';
 import { SPACE_TYPE_STATUS_ENTITY, CONVERSATION_DETAIL_ENTITY, CONVERSATION_ENTITY, SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_MEMBER_ENTITY, SPACE_ROLE_TYPE_ENTITY } from '../entity-names.js';
@@ -77,6 +77,151 @@ const checks: NamedCheck[] = [
                 const systemUsers = await FindRows<{ ID: string }>(ctx, 'MJ: Users', "Email = 'not.set@nowhere.com'", ['ID']);
                 Assert(systemUsers.length === 1, 'System user found in MJ: Users');
                 Assert(conv.UserID.toLowerCase() === systemUsers[0].ID.toLowerCase(), `Space conversation must be bound to system user, saw: ${conv.UserID}`);
+
+                // Verify 1-to-1 Assistant conversation (Kind = 'Assistant', OwnerUserID = ada.ID) resolves MentionOrOneToOne -> Always and isolates from other space members
+                const sam = await GetPersonaUser(ctx, 'sam');
+                const bea = await GetPersonaUser(ctx, 'bea');
+                const casey = await GetPersonaUser(ctx, 'casey');
+                const view = View(ctx);
+                const oneToOneRes = await createSpaceConversation(ctx.Provider, ada, {
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    Name: `discovery-rm1-1to1-${Date.now()}`,
+                    Kind: 'Assistant',
+                });
+                Assert(oneToOneRes.ok === true && !!oneToOneRes.conversationId && !!oneToOneRes.spaceChatId, `Ada starts 1-to-1 Assistant conversation: ${oneToOneRes.message ?? ''}`);
+                let beaOneToOneConvId: string | undefined;
+                let beaOneToOneChatId: string | undefined;
+                try {
+                    const assistantChatRows = await FindRows<{
+                        ID: string;
+                        Kind: string;
+                        OwnerUserID: string | null;
+                    }>(
+                        ctx,
+                        SPACE_CHAT_ENTITY,
+                        `ID = '${oneToOneRes.spaceChatId}'`,
+                        ['ID', 'Kind', 'OwnerUserID'],
+                    );
+                    Assert(assistantChatRows.length === 1, 'Assistant SpaceChat row exists');
+                    Assert(assistantChatRows[0].Kind === 'Assistant', `Assistant SpaceChat Kind is Assistant, saw ${assistantChatRows[0].Kind}`);
+                    Assert(
+                        assistantChatRows[0].OwnerUserID?.toLowerCase() === ada.ID.toLowerCase(),
+                        `Assistant SpaceChat OwnerUserID is Ada, saw ${assistantChatRows[0].OwnerUserID ?? 'null'}`,
+                    );
+
+                    const roomRules = await resolveSpaceChatHostRules(ctx.Provider, ada, DISCOVERY_SPACE_ID, convId);
+                    Assert(roomRules.ok && roomRules.agentReplyMode === 'MentionOnly', `Room-wide conversation resolves MentionOrOneToOne to MentionOnly, saw ${roomRules.agentReplyMode}`);
+                    const oneToOneRules = await resolveSpaceChatHostRules(ctx.Provider, ada, DISCOVERY_SPACE_ID, oneToOneRes.conversationId!);
+                    Assert(oneToOneRules.ok && oneToOneRules.agentReplyMode === 'Always', `1-to-1 Assistant conversation resolves MentionOrOneToOne to Always, saw ${oneToOneRules.agentReplyMode}`);
+                    Assert(oneToOneRules.mentionPeople.length === 1 && oneToOneRules.mentionPeople[0].ID.toLowerCase() === ada.ID.toLowerCase(), '1-to-1 mentionPeople contains only Ada');
+
+                    // Ada posts an untagged message into her Assistant conversation
+                    const adaPost = await postSpaceMessage(ctx.Provider, ada, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: oneToOneRes.conversationId!,
+                        text: 'Untagged assistant question in Discovery.',
+                    });
+                    Assert(adaPost.ok === true && !!adaPost.detailId, `Ada posts untagged message in Assistant conversation: ${adaPost.ok ? '' : adaPost.message}`);
+                    if (adaPost.ok && adaPost.detailId) createdDetailIds.push(adaPost.detailId);
+
+                    // Non-owner Space Participants (Bea and Casey, both active contributing seats reaching Discovery) get 0 rows on direct RunView across all 3 chat entities
+                    for (const [label, user] of [['Bea', bea], ['Casey', casey]] as const) {
+                        const convView = await view.RunView<{ ID: string }>({
+                            EntityName: CONVERSATION_ENTITY,
+                            ExtraFilter: `ID = '${oneToOneRes.conversationId}'`,
+                            Fields: ['ID'],
+                            ResultType: 'simple',
+                        }, user);
+                        Assert(convView.Success && (convView.Results?.length ?? 0) === 0, `${label} RunView on MJ: Conversations for Ada's Assistant chat returns 0 rows`);
+
+                        const detailView = await view.RunView<{ ID: string }>({
+                            EntityName: CONVERSATION_DETAIL_ENTITY,
+                            ExtraFilter: `ConversationID = '${oneToOneRes.conversationId}'`,
+                            Fields: ['ID'],
+                            ResultType: 'simple',
+                        }, user);
+                        Assert(detailView.Success && (detailView.Results?.length ?? 0) === 0, `${label} RunView on MJ: Conversation Details for Ada's Assistant chat returns 0 rows`);
+
+                        const spaceChatView = await view.RunView<{ ID: string }>({
+                            EntityName: SPACE_CHAT_ENTITY,
+                            ExtraFilter: `ID = '${oneToOneRes.spaceChatId}'`,
+                            Fields: ['ID'],
+                            ResultType: 'simple',
+                        }, user);
+                        Assert(spaceChatView.Success && (spaceChatView.Results?.length ?? 0) === 0, `${label} RunView on Space Chats for Ada's Assistant chat returns 0 rows`);
+                    }
+
+                    // Bea (Space Participant) starts her own 1-to-1 Assistant chat, can read her own chat across all 3 entities, and Casey gets 0 rows on it
+                    const beaRes = await createSpaceConversation(ctx.Provider, bea, {
+                        SpaceID: DISCOVERY_SPACE_ID,
+                        Name: `discovery-rm1-bea-1to1-${Date.now()}`,
+                        Kind: 'Assistant',
+                    });
+                    Assert(beaRes.ok === true && !!beaRes.conversationId && !!beaRes.spaceChatId, `Bea starts her own 1-to-1 Assistant conversation: ${beaRes.message ?? ''}`);
+                    beaOneToOneConvId = beaRes.conversationId!;
+                    beaOneToOneChatId = beaRes.spaceChatId!;
+                    const beaPost = await postSpaceMessage(ctx.Provider, bea, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: beaOneToOneConvId,
+                        text: 'Bea untagged assistant question in Discovery.',
+                    });
+                    Assert(beaPost.ok === true && !!beaPost.detailId, `Bea posts in her own Assistant conversation: ${beaPost.ok ? '' : beaPost.message}`);
+                    if (beaPost.ok && beaPost.detailId) createdDetailIds.push(beaPost.detailId);
+
+                    const beaOwnConv = await view.RunView<{ ID: string }>({
+                        EntityName: CONVERSATION_ENTITY,
+                        ExtraFilter: `ID = '${beaOneToOneConvId}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, bea);
+                    Assert(beaOwnConv.Success && (beaOwnConv.Results?.length ?? 0) === 1, 'Bea RunView on her own Assistant MJ: Conversations returns 1 row');
+
+                    const beaOwnDetail = await view.RunView<{ ID: string }>({
+                        EntityName: CONVERSATION_DETAIL_ENTITY,
+                        ExtraFilter: `ConversationID = '${beaOneToOneConvId}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, bea);
+                    Assert(beaOwnDetail.Success && (beaOwnDetail.Results?.length ?? 0) === 1, 'Bea RunView on her own Assistant MJ: Conversation Details returns 1 row');
+
+                    const caseyOnBeaChat = await view.RunView<{ ID: string }>({
+                        EntityName: CONVERSATION_ENTITY,
+                        ExtraFilter: `ID = '${beaOneToOneConvId}'`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                    }, casey);
+                    Assert(caseyOnBeaChat.Success && (caseyOnBeaChat.Results?.length ?? 0) === 0, "Casey RunView on Bea's Assistant MJ: Conversations returns 0 rows");
+
+                    // Non-owners (Sam on Team and Bea on Shared) are refused host rules, postSpaceMessage, and direct MJConversationDetailEntity.Save()
+                    const samRules = await resolveSpaceChatHostRules(ctx.Provider, sam, DISCOVERY_SPACE_ID, oneToOneRes.conversationId!);
+                    Assert(!samRules.ok && /not the owner of this assistant conversation/i.test(samRules.message ?? ''), `Non-owner Sam is refused host rules on Ada's Assistant chat: ${samRules.message ?? ''}`);
+                    const samPost = await postSpaceMessage(ctx.Provider, sam, {
+                        spaceId: DISCOVERY_SPACE_ID,
+                        conversationId: oneToOneRes.conversationId!,
+                        text: 'Sam attempting to post in Ada Assistant chat',
+                    });
+                    Assert(!samPost.ok && /another member's assistant conversation|not the owner of this assistant conversation/i.test(samPost.message), `Non-owner Sam is refused postSpaceMessage on Ada's Assistant chat: ${samPost.ok ? '' : samPost.message}`);
+
+                    for (const [label, user] of [['Sam', sam], ['Bea', bea]] as const) {
+                        const directDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, user);
+                        directDetail.NewRecord();
+                        directDetail.ConversationID = oneToOneRes.conversationId!;
+                        directDetail.UserID = user.ID;
+                        directDetail.Role = 'User';
+                        directDetail.Message = `${label} attempting direct entity save into Ada Assistant chat`;
+                        directDetail.Status = 'Complete';
+                        const directSaved = await directDetail.Save();
+                        if (directSaved && directDetail.ID) {
+                            await deleteRowAndConfirm(ctx.Provider, ctx.User, CONVERSATION_DETAIL_ENTITY, directDetail.ID, `unexpected ${label} direct detail`);
+                        }
+                        Assert(!directSaved || !directDetail.ID, `Non-owner ${label} direct MJConversationDetailEntity.Save() into Ada's Assistant chat must be refused`);
+                    }
+                } finally {
+                    if (beaOneToOneConvId || beaOneToOneChatId) {
+                        await cleanupConversation(ctx.Provider, ctx.User, beaOneToOneConvId, beaOneToOneChatId);
+                    }
+                    await cleanupConversation(ctx.Provider, ctx.User, oneToOneRes.conversationId!, oneToOneRes.spaceChatId!);
+                }
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, convId, chatId);
             }

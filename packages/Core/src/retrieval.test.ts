@@ -445,6 +445,55 @@ describe('Audience-Bounded Retrieval & Verification Matrix (§ 10)', () => {
         });
         assert.deepEqual(scopeMatchingAnchor.allowedSpaceIds, ['space-isolated-only'], 'ExcludedFromParentScope with matching anchor must be included');
     });
+
+    it('enforces AgentRetrieval floor under Everything narrowing (ExcludedEntirely on ancestor/self and ExcludedFromParentScope on non-anchor)', () => {
+        const excludedParent: SpaceNode = {
+            id: 'space-excluded-parent',
+            parentId: null,
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'ExcludedEntirely',
+        };
+        const childOfExcludedParent: SpaceNode = {
+            id: 'space-child-of-excluded',
+            parentId: 'space-excluded-parent',
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'Included',
+        };
+        const siblingIsolated: SpaceNode = {
+            id: 'space-sibling-isolated',
+            parentId: 'space-board',
+            inheritsMembership: true,
+            ownerId: 'user-admin',
+            agentRetrieval: 'ExcludedFromParentScope',
+        };
+        const user: PrincipalReach = {
+            userId: 'user-a',
+            reachableSpaceIds: ['space-board', 'space-acme', 'space-excluded-parent', 'space-child-of-excluded', 'space-sibling-isolated'],
+            canSeeTeamSpaceIds: ['space-board', 'space-excluded-parent', 'space-child-of-excluded', 'space-sibling-isolated'],
+            isInternalOrg: true,
+        };
+
+        const scopeEverything = effectiveRetrievalScope({
+            audience: {
+                principals: ['user-a'],
+                mode: 'Private',
+                anchorSpaceId: 'space-child-of-excluded',
+                narrowing: 'Everything',
+            },
+            spaces: [boardSpace, acmeSpace, excludedParent, childOfExcludedParent, siblingIsolated],
+            principalReaches: [user],
+        });
+
+        assert.deepEqual(
+            [...scopeEverything.allowedSpaceIds].sort(),
+            ['space-acme', 'space-board'],
+            'Everything narrowing must still exclude child of ExcludedEntirely parent and non-anchor ExcludedFromParentScope space'
+        );
+        assert.equal(scopeEverything.spaceBands.get('space-board'), 'Team');
+        assert.equal(scopeEverything.spaceBands.get('space-acme'), 'Shared');
+    });
 });
 
 describe('closure and cycles in the retrieval scope (item 28)', () => {

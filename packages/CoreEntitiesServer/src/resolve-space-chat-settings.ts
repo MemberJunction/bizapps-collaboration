@@ -19,12 +19,16 @@ export async function resolveSpaceChatSettings(
     provider: IMetadataProvider,
     spaceId: string,
     contextUser?: UserInfo,
-    loaded?: LoadedSpaceConfiguration,
+    loaded?: Pick<LoadedSpaceConfiguration, 'configuration' | 'typeSettings'>,
+    options?: { isOneToOne?: boolean },
 ): Promise<ResolvedSpaceChatSettings> {
     const { configuration, typeSettings } = loaded ?? (await loadSpaceConfiguration(provider, spaceId, { reader: contextUser }));
     const resolvedSettings = configuration.Settings;
     const rawReplyMode = resolvedSettings.Chats?.AgentReplyMode ?? 'MentionOrOneToOne';
-    const agentReplyMode: 'Always' | 'MentionOnly' = rawReplyMode === 'Always' ? 'Always' : 'MentionOnly';
+    const agentReplyMode: 'Always' | 'MentionOnly' =
+        rawReplyMode === 'Always' || (rawReplyMode === 'MentionOrOneToOne' && options?.isOneToOne === true)
+            ? 'Always'
+            : 'MentionOnly';
     const historyOnAdd: 'None' | 'All' | 'Since' = resolvedSettings.Chats?.HistoryOnAdd ?? 'None';
     return { resolvedSettings, agentReplyMode, historyOnAdd, typeConfig: typeSettings, configuration };
 }

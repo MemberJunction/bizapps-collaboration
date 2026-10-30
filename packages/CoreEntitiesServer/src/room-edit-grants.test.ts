@@ -43,6 +43,7 @@ describe('syncRoomEditGrantsForSpace', () => {
         existingGrants?: MockPermission[];
         failMembersRead?: boolean;
         customMembers?: { ID: string; SpaceID: string; UserID: string; SpaceRoleTypeID: string; Band?: string; Status?: string }[];
+        customChats?: { ID: string; ConversationID: string; Kind?: string; Status: string; OwnerUserID?: string | null }[];
     }) {
         const grants: MockPermission[] = [...(options.existingGrants ?? [])];
         const deletedIds: string[] = [];
@@ -56,7 +57,7 @@ describe('syncRoomEditGrantsForSpace', () => {
                 if (EntityName === 'MJ_BizApps_Collaboration: Space Chats') {
                     return {
                         Success: true,
-                        Results: [{ ID: 'chat-1', ConversationID: CONVERSATION_ID, Status: 'Active' }],
+                        Results: options.customChats ?? [{ ID: 'chat-1', ConversationID: CONVERSATION_ID, Status: 'Active' }],
                     };
                 }
 
@@ -295,5 +296,70 @@ describe('syncRoomEditGrantsForSpace', () => {
         await syncRoomEditGrantsForSpace(mockProvider, SPACE_ID);
         const overrideGrant = grants.find((g) => g.UserID === OVERRIDE_USER_ID);
         assert.equal(overrideGrant, undefined, 'Nearest seat on child space (non-contributing) overrides parent seat');
+    });
+
+    it('grants Edit on an Assistant conversation only to OwnerUserID and revokes other members', async () => {
+        const SECOND_CONTRIB_USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        const staleOtherGrant: MockPermission = {
+            ID: 'other-member-grant',
+            ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+            ResourceRecordID: CONVERSATION_ID,
+            Type: 'User',
+            UserID: SECOND_CONTRIB_USER_ID,
+            PermissionLevel: 'Edit',
+            Status: 'Approved',
+        };
+        const { mockProvider, grants, deletedIds } = createMockEnvironment({
+            isClosed: false,
+            existingGrants: [staleOtherGrant],
+            customChats: [
+                {
+                    ID: 'chat-assistant-1',
+                    ConversationID: CONVERSATION_ID,
+                    Kind: 'Assistant',
+                    Status: 'Active',
+                    OwnerUserID: CONTRIBUTING_USER_ID,
+                },
+            ],
+            customMembers: [
+                { ID: 'm1', SpaceID: SPACE_ID, UserID: CONTRIBUTING_USER_ID, SpaceRoleTypeID: ROLE_CONTRIB_ID },
+                { ID: 'm2', SpaceID: SPACE_ID, UserID: SECOND_CONTRIB_USER_ID, SpaceRoleTypeID: ROLE_CONTRIB_ID },
+            ],
+        });
+
+        await syncRoomEditGrantsForSpace(mockProvider, SPACE_ID);
+        assert.ok(deletedIds.includes('other-member-grant'), 'Non-owner contributing member grant must be revoked');
+        assert.equal(grants.length, 1, 'Only OwnerUserID receives an Edit grant on an Assistant conversation');
+        assert.equal(grants[0].UserID, CONTRIBUTING_USER_ID);
+        assert.equal(grants[0].PermissionLevel, 'Edit');
+    });
+
+    it('revokes Edit grant on an Assistant conversation when OwnerUserID is not a contributing member', async () => {
+        const existingOwnerGrant: MockPermission = {
+            ID: 'owner-grant-1',
+            ResourceTypeID: CONVERSATIONS_RESOURCE_TYPE_ID,
+            ResourceRecordID: CONVERSATION_ID,
+            Type: 'User',
+            UserID: NON_CONTRIBUTING_USER_ID,
+            PermissionLevel: 'Edit',
+            Status: 'Approved',
+        };
+        const { mockProvider, grants, deletedIds } = createMockEnvironment({
+            isClosed: false,
+            existingGrants: [existingOwnerGrant],
+            customChats: [
+                {
+                    ID: 'chat-assistant-2',
+                    ConversationID: CONVERSATION_ID,
+                    Kind: 'Assistant',
+                    Status: 'Active',
+                    OwnerUserID: NON_CONTRIBUTING_USER_ID,
+                },
+            ],
+        });
+
+        await syncRoomEditGrantsForSpace(mockProvider, SPACE_ID);
+        assert.ok(deletedIds.includes('owner-grant-1'), 'Non-contributing OwnerUserID grant must be revoked');
+        assert.equal(grants.length, 0);
     });
 });

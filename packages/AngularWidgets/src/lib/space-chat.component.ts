@@ -23,6 +23,102 @@ import type { SpaceBand } from './types';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 
+@Component({
+  selector: 'mjc-chat-scope-bar',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="scope-bar" role="group" aria-label="Retrieval scope" data-testid="space-chat-scope-bar">
+      <span class="scope-label"><i class="fa-solid fa-compass" aria-hidden="true"></i> Scope:</span>
+      <button
+        type="button"
+        class="scope-pill"
+        data-testid="scope-pill-this-space"
+        [class.active]="RetrievalScope === 'ThisSpace'"
+        [attr.aria-pressed]="RetrievalScope === 'ThisSpace'"
+        (click)="onScopeChange('ThisSpace')">
+        This Space
+      </button>
+      <button
+        type="button"
+        class="scope-pill"
+        data-testid="scope-pill-subtree"
+        [class.active]="RetrievalScope === 'Subtree'"
+        [attr.aria-pressed]="RetrievalScope === 'Subtree'"
+        (click)="onScopeChange('Subtree')">
+        This Space &amp; Sub-spaces
+      </button>
+      @if (AllowEverythingScope) {
+        <button
+          type="button"
+          class="scope-pill"
+          data-testid="scope-pill-everything"
+          [class.active]="RetrievalScope === 'Everything'"
+          [attr.aria-pressed]="RetrievalScope === 'Everything'"
+          (click)="onScopeChange('Everything')">
+          All My Spaces
+        </button>
+      }
+    </div>
+  `,
+  styles: [
+    COLLAB_TOKENS_CSS,
+    `
+      :host {
+        display: block;
+      }
+      .scope-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 16px;
+        background: var(--mj-bg-surface-sunken, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      }
+      .scope-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #64748b);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 2px;
+      }
+      .scope-pill {
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .scope-pill:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .scope-pill.active {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
+      }
+    `,
+  ],
+})
+export class CollabChatScopeBarComponent {
+  @Input() public RetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+  @Input() public AllowEverythingScope = false;
+  @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
+
+  public onScopeChange(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+    this.RetrievalScope = scope;
+    this.RetrievalScopeChanged.emit(scope);
+  }
+}
+
 /**
  * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules.
  *
@@ -34,7 +130,7 @@ import { COLLAB_TOKENS_CSS } from './tokens';
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
+  imports: [CollabBandChipComponent, CollabChatScopeBarComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
   template: `
     <div class="chat-container">
       @if (IsPending) {
@@ -127,6 +223,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 }
               </div>
             </div>
+
+            <mjc-chat-scope-bar
+              [RetrievalScope]="RetrievalScope"
+              [AllowEverythingScope]="AllowEverythingScope"
+              (RetrievalScopeChanged)="onScopeChange($event)" />
           </ng-template>
 
         </mj-conversation-chat-area>
@@ -261,6 +362,47 @@ import { COLLAB_TOKENS_CSS } from './tokens';
         display: inline-flex;
         align-items: center;
         gap: 6px;
+      }
+
+      .scope-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 16px;
+        background: var(--mj-bg-surface-sunken, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      }
+
+      .scope-label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-secondary, #64748b);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 2px;
+      }
+
+      .scope-pill {
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .scope-pill:hover {
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-primary, #0f172a);
+      }
+      .scope-pill.active {
+        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
       }
 
 
@@ -425,13 +567,21 @@ export class CollabSpaceChatComponent implements OnInit {
   @Input() public ComposerDraft: string | null = null;
   @Input() public PendingMessage: string | null = null;
   @Input() public PendingMessageConversationId: string | null = null;
+  @Input() public RetrievalScope: 'ThisSpace' | 'Subtree' | 'Everything' = 'Subtree';
+  @Input() public AllowEverythingScope = false;
 
   @Output() public NewConversationRequested = new EventEmitter<void>();
   @Output() public ComposerDraftConsumed = new EventEmitter<void>();
   @Output() public PendingMessageConsumed = new EventEmitter<void>();
+  @Output() public RetrievalScopeChanged = new EventEmitter<'ThisSpace' | 'Subtree' | 'Everything'>();
 
   public onNewConversation(): void {
     this.NewConversationRequested.emit();
+  }
+
+  public onScopeChange(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
+    this.RetrievalScope = scope;
+    this.RetrievalScopeChanged.emit(scope);
   }
 
   public onComposerDraftConsumed(): void {

@@ -17,6 +17,9 @@ export class ExecuteSpaceChatTurnInput {
     @Field({ nullable: true })
     AgentID?: string;
 
+    @Field({ nullable: true })
+    RetrievalScope?: string;
+
     /** Answer once the reply row is written In-Progress; the run goes on, and its progress and text reach this session. */
     @Field({ nullable: true })
     Background?: boolean;
@@ -67,11 +70,16 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) return { Success: false, ErrorMessage: 'The chat turn needs a signed-in person.' };
         try {
+            const validScope =
+                input.RetrievalScope === 'ThisSpace' || input.RetrievalScope === 'Subtree' || input.RetrievalScope === 'Everything'
+                    ? input.RetrievalScope
+                    : undefined;
             const result = await executeSpaceChatTurn(provider, user, {
                 spaceId: input.SpaceID,
                 conversationId: input.ConversationID,
                 userMessageId: input.UserMessageID,
                 agentId: input.AgentID,
+                retrievalScope: validScope,
                 // A background turn answers at once, and the run's progress and text reach the browser as they happen
                 background: input.Background === true,
                 observer: input.Background === true ? this.observeTurn(pubSub, context.userPayload) : undefined,
