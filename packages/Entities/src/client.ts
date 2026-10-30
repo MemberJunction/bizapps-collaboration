@@ -78,6 +78,8 @@ export interface ExecuteSpaceChatTurnGraphQLPayload {
     AgentRunID?: string;
     QuotedCount?: number;
     AllowedItemNames?: string[];
+    /** Candidate items in retrieval scope for the turn (sources-in-scope chips), as JSON. */
+    CitationsJSON?: string;
     /** The turn's tools (B20) as JSON: audience, actionIds, dataGrantNames, knowledgeSourceIds, withheld. */
     ToolsJSON?: string;
     ErrorMessage?: string;
@@ -446,7 +448,8 @@ mutation ExecuteSpaceChatTurn($input: ExecuteSpaceChatTurnInput!) {
         AgentRunID
         QuotedCount
         AllowedItemNames
-            ToolsJSON
+        CitationsJSON
+        ToolsJSON
         ErrorMessage
     }
 }

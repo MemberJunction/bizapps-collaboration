@@ -41,6 +41,11 @@ export class ExecuteSpaceChatTurnPayload {
 
     @Field(() => [String], { nullable: true })
     AllowedItemNames?: string[];
+
+    /** Candidate items in retrieval scope for the turn (sources-in-scope chips), as JSON. */
+    @Field({ nullable: true })
+    CitationsJSON?: string;
+
     /** What the turn gave the agent (B20): the audience, the action ids, the data grant names, the knowledge sources and what was withheld, as JSON. */
     @Field({ nullable: true })
     ToolsJSON?: string;
@@ -93,6 +98,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 AgentRunID: result.agentRunId,
                 QuotedCount: result.quotedCount,
                 AllowedItemNames: result.allowedItemNames,
+                CitationsJSON: result.citations ? JSON.stringify(result.citations) : undefined,
                 ToolsJSON: result.tools ? JSON.stringify(result.tools) : undefined,
             };
         } catch (error) {

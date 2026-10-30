@@ -1670,3 +1670,21 @@ describe('CollabPinnedStripComponent (B22)', async () => {
     expect(unpinned).toEqual(['p1']);
   });
 });
+
+describe('CollabChatScopeBarComponent sources-in-scope chips', async () => {
+  const { CollabChatScopeBarComponent } = await import('./space-chat.component.ts');
+  it('emits CitationClicked when a source-in-scope chip is clicked', () => {
+    const bar = new CollabChatScopeBarComponent();
+    const clicked: string[] = [];
+    bar.CitationClicked.subscribe((c) => clicked.push(c.SpaceItemID));
+    bar.onCitationClick({
+      SpaceItemID: 'item-1',
+      SpaceID: 'space-1',
+      EntityID: 'entity-1',
+      RecordID: 'rec-1',
+      Name: 'FY2026 Audit Pack.pdf',
+      Band: 'Shared',
+    });
+    expect(clicked).toEqual(['item-1']);
+  });
+});

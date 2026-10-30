@@ -132,6 +132,15 @@ test.describe('Frame 08 — Board & Committee Member Portal', () => {
         await expect(subtreePill).toHaveAttribute('aria-pressed', 'true');
         await expect(everythingPill).toHaveCount(0);
 
+        // Verify sources-in-scope chips bar renders candidate items in scope for the turn
+        const sourcesBar = page.getByTestId('sources-in-scope-bar');
+        await expect(sourcesBar).toBeVisible();
+        await expect(sourcesBar).toContainText('Sources in scope (2):');
+        const chips = page.getByTestId('source-in-scope-chip');
+        await expect(chips).toHaveCount(2);
+        await expect(chips.nth(0)).toContainText('FY2026 Audit Committee Pack.pdf');
+        await expect(chips.nth(1)).toContainText('Audit Charter Review Memo.docx');
+
         // Narrow to This Space
         await thisSpacePill.click();
         await expect(thisSpacePill).toHaveAttribute('aria-pressed', 'true');

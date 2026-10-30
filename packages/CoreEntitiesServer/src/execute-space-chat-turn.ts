@@ -69,6 +69,16 @@ export interface ExecuteSpaceChatTurnInput {
     decisionRunner?: SpaceChatDecisionRunner;
 }
 
+/** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
+export interface SpaceAgentCitation {
+    SpaceItemID: string;
+    SpaceID: string;
+    EntityID: string;
+    RecordID: string;
+    Name: string;
+    Band: 'Shared' | 'Team';
+}
+
 /** What the turn gave the agent (B20), for the harness and the log: never the values, only the names and ids. */
 export interface TurnToolsGiven {
     /** The conversation's audience, which cut the grants. */
@@ -84,7 +94,15 @@ export interface TurnToolsGiven {
 }
 
 export type ExecuteSpaceChatTurnResult =
-    | { ok: true; replyDetailIds: string[]; agentRunId?: string; quotedCount?: number; allowedItemNames?: string[]; tools?: TurnToolsGiven }
+    | {
+          ok: true;
+          replyDetailIds: string[];
+          agentRunId?: string;
+          quotedCount?: number;
+          allowedItemNames?: string[];
+          citations?: SpaceAgentCitation[];
+          tools?: TurnToolsGiven;
+      }
     | { ok: false; message: string };
 
 /** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
@@ -455,6 +473,14 @@ async function runClaimedTurn(
         narrowing: effectiveNarrowing,
     });
     const audienceQuoted = retrieval.quotedItems;
+    const citations: SpaceAgentCitation[] = audienceQuoted.map((item) => ({
+        SpaceItemID: item.ID,
+        SpaceID: item.SpaceID,
+        EntityID: item.EntityID,
+        RecordID: item.RecordID,
+        Name: item.Name,
+        Band: item.Band,
+    }));
     const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
 
     // 10. Write reply as system user (Item 5 / A19 Part 2)
@@ -632,6 +658,7 @@ async function runClaimedTurn(
             agentRunId,
             quotedCount: audienceQuoted.length,
             allowedItemNames: audienceQuoted.map((item) => item.Name),
+            citations,
             tools: toolsGiven,
         };
     };
@@ -666,7 +693,7 @@ async function runClaimedTurn(
         // The reply row is written and the call returns; the agent runs on, and its end is told to the observer
         handoff.runsOn = true;
         void settleTurn().finally(handoff.release);
-        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), tools: toolsGiven };
+        return { ok: true, replyDetailIds: [assistantDetail.ID], quotedCount: audienceQuoted.length, allowedItemNames: audienceQuoted.map((item) => item.Name), citations, tools: toolsGiven };
     }
     return settleTurn();
 }
