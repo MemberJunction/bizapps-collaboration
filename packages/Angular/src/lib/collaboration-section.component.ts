@@ -673,7 +673,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [Mode]="railMode"
                             [ActiveNav]="activeView"
                             [Spaces]="spaces"
-                            [ActiveSpaceId]="activeSpaceId"
+                            [ActiveSpaceId]="railMode === 'space' ? activeSpaceId : ''"
                             [SpaceTitle]="spaceTitle"
                             [SpaceIcon]="headerTypeIcon"
                             [SpaceColor]="headerTypeColor"
@@ -3821,6 +3821,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!subType) {
                 LogError(`Missing space type for sub-space ID: ${c.ID}`);
             }
+            const statusName = CollaborationEngineBase.Instance.EffectiveStatusForSpace(c)?.Name ?? null;
             return {
                 id: c.ID,
                 name: c.Name,
@@ -3828,6 +3829,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 iconClass: c.IconClass || cType?.icon || 'fa-solid fa-compass',
                 color: c.Color || cType?.color || '',
                 description: c.Description || '',
+                ...railFlags({ StatusName: statusName }),
             };
         });
 

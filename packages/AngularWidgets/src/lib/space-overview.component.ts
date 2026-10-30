@@ -33,6 +33,8 @@ export interface SubSpaceSummary {
   iconClass: string;
   color?: string;
   description: string;
+  isLocked?: boolean;
+  isDim?: boolean;
 }
 
 export type OverviewSectionKind =
@@ -635,8 +637,8 @@ export type OverviewSectionKind =
     }
 
     .mention {
-      color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
+      color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
       padding: 1px 5px;
       border-radius: 4px;
       font-weight: 600;

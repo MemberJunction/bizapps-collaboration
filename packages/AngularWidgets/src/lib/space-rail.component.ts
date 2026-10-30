@@ -278,15 +278,6 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                     </button>
                   }
                 </div>
-              } @else if (CanStartConversation) {
-                <button
-                  type="button"
-                  class="rail-row"
-                  (click)="onNewConversation()"
-                  title="New conversation"
-                  aria-label="New conversation">
-                  <i class="fa-solid fa-plus row-icon" aria-hidden="true"></i>
-                </button>
               }
 
               <div class="rail-group-list nav-links-list">
@@ -319,7 +310,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
           }
 
           <!-- Group 3: Sub-spaces (direct children only) -->
-          @if (SubSpaces.length > 0 || CanAddSubSpace) {
+          @if (SubSpaces.length > 0) {
             <div class="rail-group nav-section-group">
               @if (!isCollapsed) {
                 <div class="rail-group-head section-title-row">
@@ -327,30 +318,19 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                   @if (CanAddSubSpace) {
                     <button
                       type="button"
-                      mjButton Variant="flat" Size="sm" class="btn-add-subspace"
+                      mjButton Variant="icon" Size="sm" class="btn-add-section"
                       data-testid="rail-add-subspace"
                       (click)="onNewSubSpace()"
                       title="New sub-space"
                       aria-label="New sub-space">
                       <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                      <span>Sub-space</span>
                     </button>
                   }
                 </div>
-              } @else if (CanAddSubSpace) {
-                <button
-                  type="button"
-                  class="rail-row"
-                  data-testid="rail-add-subspace"
-                  (click)="onNewSubSpace()"
-                  title="New sub-space"
-                  aria-label="New sub-space">
-                  <i class="fa-solid fa-plus row-icon" aria-hidden="true"></i>
-                </button>
               }
 
               <div class="rail-group-list nav-links-list">
-                @for (sub of SubSpaces; track sub.id) {
+                @for (sub of openSubSpaces; track sub.id) {
                   <button
                     type="button"
                     class="rail-row space-nav-link subspace-link"
@@ -358,11 +338,50 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
                     (click)="selectSpace(sub.id)"
                     [title]="isCollapsed ? sub.name : ''"
                     [attr.aria-label]="isCollapsed ? sub.name : null">
-                    <i class="fa-solid row-icon link-icon" [class]="sub.iconClass || 'fa-folder'" aria-hidden="true"></i>
+                    <mjc-type-tile
+                      [IconClass]="sub.iconClass || 'fa-folder'"
+                      [Color]="subSpaceColor(sub)"
+                      [IsClosed]="false"
+                      Size="sm">
+                    </mjc-type-tile>
                     @if (!isCollapsed) {
                       <span class="row-label link-label">{{ sub.name }}</span>
                     }
                   </button>
+                }
+
+                @if (closedSubSpaces.length > 0 && !isCollapsed) {
+                  <button
+                    type="button"
+                    class="rail-row space-nav-link subspace-link dim"
+                    data-testid="rail-closed-subspaces-toggle"
+                    [attr.aria-expanded]="closedSubSpacesExpanded"
+                    (click)="toggleClosedSubSpaces()">
+                    <i
+                      class="fa-solid row-icon"
+                      [class]="closedSubSpacesExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"
+                      aria-hidden="true"></i>
+                    <span class="row-label link-label">Closed ({{ closedSubSpaces.length }})</span>
+                  </button>
+
+                  @if (closedSubSpacesExpanded) {
+                    @for (sub of closedSubSpaces; track sub.id) {
+                      <button
+                        type="button"
+                        class="rail-row space-nav-link subspace-link dim"
+                        data-testid="rail-subspace-row"
+                        (click)="selectSpace(sub.id)">
+                        <mjc-type-tile
+                          [IconClass]="sub.iconClass || 'fa-folder'"
+                          [Color]="subSpaceColor(sub)"
+                          [IsClosed]="true"
+                          Size="sm">
+                        </mjc-type-tile>
+                        <span class="row-label link-label">{{ sub.name }}</span>
+                        <span class="meta"><i class="fa-solid fa-lock" aria-hidden="true"></i><span class="sr-only">(closed)</span></span>
+                      </button>
+                    }
+                  }
                 }
               </div>
             </div>
@@ -866,7 +885,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       padding: 0 var(--mj-space-2-5) 0 var(--mj-space-2);
       position: relative;
     }
-    .tree-item.dim {
+    .rail-row.dim {
       opacity: 0.55;
     }
 
@@ -963,7 +982,7 @@ const DEFAULT_RAIL_TABS: TabItem[] = [
       border: 0;
     }
 
-    .tree-item .meta {
+    .rail-row .meta {
       margin-left: auto;
       font-size: var(--mj-text-xs);
       color: var(--mj-text-muted);
@@ -1009,9 +1028,9 @@ export class CollabSpaceRailComponent implements OnInit {
   @Input() ParentSpaceName = '';
   @Input() PagesCount = 0;
 
-  /** Whether the tree row is the open space. Ids are compared as UUIDs: the URL keeps the casing it was given. */
+  /** Whether the tree row is the open space. Only active when Mode is 'space' so Home never highlights two items. */
   public IsActiveSpace(spaceId: string): boolean {
-    return !!this.ActiveSpaceId && UUIDsEqual(spaceId, this.ActiveSpaceId);
+    return this.Mode === 'space' && !!this.ActiveSpaceId && UUIDsEqual(spaceId, this.ActiveSpaceId);
   }
 
   public IsActiveConversation(conversationId: string): boolean {
@@ -1045,12 +1064,37 @@ export class CollabSpaceRailComponent implements OnInit {
   public navWidth = 264;
   public isCollapsed = false;
   public showSpacesTreeInWorkspace = false;
+  public closedSubSpacesExpanded = false;
   private isDraggingResizer = false;
   private startDragX = 0;
   private startWidth = 264;
 
   ngOnInit(): void {
     this.loadLayoutPreference();
+  }
+
+  public isSubSpaceClosed(sub: SubSpaceSummary): boolean {
+    if (sub.isLocked || sub.isDim) return true;
+    const node = this.Spaces.find((s) => UUIDsEqual(s.id, sub.id));
+    return !!node?.isLocked || !!node?.isDim;
+  }
+
+  public subSpaceColor(sub: SubSpaceSummary): string {
+    if (sub.color) return sub.color;
+    const node = this.Spaces.find((s) => UUIDsEqual(s.id, sub.id));
+    return node?.color ?? '';
+  }
+
+  public get openSubSpaces(): SubSpaceSummary[] {
+    return this.SubSpaces.filter((sub) => !this.isSubSpaceClosed(sub));
+  }
+
+  public get closedSubSpaces(): SubSpaceSummary[] {
+    return this.SubSpaces.filter((sub) => this.isSubSpaceClosed(sub));
+  }
+
+  public toggleClosedSubSpaces(): void {
+    this.closedSubSpacesExpanded = !this.closedSubSpacesExpanded;
   }
 
   public get switcherLabel(): string {

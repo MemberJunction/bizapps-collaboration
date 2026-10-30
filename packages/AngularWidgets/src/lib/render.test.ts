@@ -191,7 +191,7 @@ describe('the rail, rendered', () => {
 });
 
 describe('the header and page edit bar, rendered', () => {
-  it('shows breadcrumbs only for a sub-space and routes Invite, New sub-space, Edit page, New page, and Space settings through the ⋯ menu', async () => {
+  it('shows breadcrumbs only for a sub-space (ending at the parent space) and routes Invite, New sub-space, Edit page, New page, and Space settings through the mj-menu ⋯ trigger', async () => {
     const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
     fixture.componentRef.setInput('Title', 'Northwind');
     fixture.componentRef.setInput('Breadcrumbs', [{ label: 'Spaces' }, { label: 'Northwind' }]);
@@ -210,18 +210,24 @@ describe('the header and page edit bar, rendered', () => {
       { label: 'Audit Committee', spaceId: 'sub-1' },
     ]);
     fixture.detectChanges();
-    expect(root.querySelector('.crumbs')).not.toBeNull();
+    const crumbs = root.querySelector('.crumbs');
+    expect(crumbs).not.toBeNull();
+    expect(crumbs?.textContent).toContain('Board of Directors');
+    expect(crumbs?.textContent).not.toContain('Audit Committee');
 
     const moreBtn = root.querySelector<HTMLButtonElement>('[data-testid="space-header-more-btn"]')!;
     expect(moreBtn).not.toBeNull();
     moreBtn.click();
     fixture.detectChanges();
-    expect(root.querySelector('[data-testid="space-header-more-menu"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="space-header-more-menu"]')).not.toBeNull();
 
     const editRequested = vi.fn();
     fixture.componentInstance.EditPageRequested.subscribe(editRequested);
-    root.querySelector<HTMLButtonElement>('[data-testid="header-menu-edit-page"]')!.click();
+    const editItem = document.body.querySelector<HTMLElement>('[data-testid="header-menu-edit-page"] button, [data-testid="header-menu-edit-page"]')!;
+    editItem.click();
+    fixture.detectChanges();
     expect(editRequested).toHaveBeenCalledTimes(1);
+    fixture.destroy();
   });
 
   it('hides the page edit bar for viewers and shows Editing · Draft with [Publish] [Discard] in edit mode, confirming discard via MJConfirmService', async () => {

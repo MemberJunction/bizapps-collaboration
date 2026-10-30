@@ -212,20 +212,6 @@ export interface PendingAgentPromptState {
                       }
                     </div>
                   }
-                  @if (CanStartConversation && !IsReadOnly) {
-                    <button
-                      type="button"
-                      mjButton
-                      Variant="primary"
-                      Size="sm"
-                      class="btn-new-convo-header"
-                      (click)="onNewConversation()"
-                      title="New Conversation"
-                      aria-label="New Conversation">
-                      <i class="fa-solid fa-plus"></i>
-                      <span>New Conversation</span>
-                    </button>
-                  }
                 </div>
               </div>
 

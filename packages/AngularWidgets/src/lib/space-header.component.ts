@@ -1,5 +1,12 @@
-import { Component, ElementRef, EventEmitter, HostListener, Inject, Input, Optional, Output } from '@angular/core';
-import { MJButtonDirective, MJClickableDirective } from '@memberjunction/ng-ui-components';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  MJButtonDirective,
+  MJClickableDirective,
+  MJMenuComponent,
+  MJMenuDividerComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import { CommonModule } from '@angular/common';
 import { CollabTypeTileComponent } from './type-tile.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -9,21 +16,28 @@ import { SubSpaceSummary } from './space-overview.component';
 @Component({
   selector: 'mjc-space-header',
   standalone: true,
-  imports: [CommonModule, CollabTypeTileComponent, MJButtonDirective, MJClickableDirective],
+  imports: [
+    CommonModule,
+    CollabTypeTileComponent,
+    MJButtonDirective,
+    MJClickableDirective,
+    MJMenuComponent,
+    MJMenuDividerComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+  ],
   template: `
     <section
       class="space-head"
       [style.background-image]="BackgroundImageUrl ? 'linear-gradient(to bottom, color-mix(in srgb, var(--mj-bg-surface-card) 88%, transparent), var(--mj-bg-surface-card)), url(' + BackgroundImageUrl + ')' : null">
 
-      <!-- Line 1: Breadcrumb (only when the space has a parent) -->
+      <!-- Line 1: Breadcrumb ending at the parent (only when the space has a parent) -->
       @if (hasParentSpace) {
         <nav class="crumbs" aria-label="Breadcrumb">
-          @for (c of Breadcrumbs; track c.label; let last = $last) {
+          @for (c of parentBreadcrumbs; track c.label; let last = $last) {
+            <span class="crumb-link" [mjClickable]="c.label" (click)="onCrumbClick(c)">{{ c.label }}</span>
             @if (!last) {
-              <span class="crumb-link" [mjClickable]="c.label" (click)="onCrumbClick(c)">{{ c.label }}</span>
               <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            } @else {
-              <span class="crumb-current">{{ c.label }}</span>
             }
           }
         </nav>
@@ -66,80 +80,63 @@ import { SubSpaceSummary } from './space-overview.component';
           <ng-content select="[actions]"></ng-content>
 
           @if (hasMoreMenu) {
-            <div class="more-menu-wrap">
-              <button
-                type="button"
-                mjButton Variant="icon" Size="sm"
-                class="more-menu-btn"
-                data-testid="space-header-more-btn"
-                [attr.aria-expanded]="moreMenuOpen"
-                aria-haspopup="menu"
-                aria-label="More actions"
-                title="More actions"
-                (click)="toggleMoreMenu($event)">
-                <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
-              </button>
-
-              @if (moreMenuOpen) {
-                <div class="more-menu-popover" data-testid="space-header-more-menu" role="menu" aria-label="Space actions">
-                  @if (CanInvite) {
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="more-menu-item"
-                      data-testid="header-menu-invite"
-                      (click)="onMenuAction('invite', $event)">
-                      <i class="fa-solid fa-user-plus menu-icon" aria-hidden="true"></i>
-                      <span>Invite</span>
-                    </button>
+            <button
+              type="button"
+              mjButton Variant="icon" Size="sm"
+              class="more-menu-btn"
+              data-testid="space-header-more-btn"
+              aria-label="More actions"
+              title="More actions"
+              [mjMenuTriggerFor]="headerMoreMenu">
+              <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+            </button>
+            <ng-template #headerMoreMenu>
+              <mj-menu AriaLabel="More actions" data-testid="space-header-more-menu">
+                @if (CanInvite) {
+                  <mj-menu-item
+                    data-testid="header-menu-invite"
+                    Icon="fa-solid fa-user-plus"
+                    (Triggered)="InviteRequested.emit()">
+                    Invite
+                  </mj-menu-item>
+                }
+                @if (CanAddSubSpace) {
+                  <mj-menu-item
+                    data-testid="header-menu-new-subspace"
+                    Icon="fa-solid fa-folder-plus"
+                    (Triggered)="NewSubSpaceRequested.emit()">
+                    New sub-space
+                  </mj-menu-item>
+                }
+                @if (CanEditPages && CanEditCurrentPage) {
+                  <mj-menu-item
+                    data-testid="header-menu-edit-page"
+                    Icon="fa-solid fa-pen"
+                    (Triggered)="EditPageRequested.emit()">
+                    Edit page
+                  </mj-menu-item>
+                }
+                @if (CanEditPages) {
+                  <mj-menu-item
+                    data-testid="header-menu-new-page"
+                    Icon="fa-solid fa-file-circle-plus"
+                    (Triggered)="NewPageRequested.emit()">
+                    New page
+                  </mj-menu-item>
+                }
+                @if (CanConfigure) {
+                  @if (CanInvite || CanAddSubSpace || CanEditPages) {
+                    <mj-menu-divider></mj-menu-divider>
                   }
-                  @if (CanAddSubSpace) {
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="more-menu-item"
-                      data-testid="header-menu-new-subspace"
-                      (click)="onMenuAction('subspace', $event)">
-                      <i class="fa-solid fa-folder-plus menu-icon" aria-hidden="true"></i>
-                      <span>New sub-space</span>
-                    </button>
-                  }
-                  @if (CanEditPages && CanEditCurrentPage) {
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="more-menu-item"
-                      data-testid="header-menu-edit-page"
-                      (click)="onMenuAction('edit-page', $event)">
-                      <i class="fa-solid fa-pen menu-icon" aria-hidden="true"></i>
-                      <span>Edit page</span>
-                    </button>
-                  }
-                  @if (CanEditPages) {
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="more-menu-item"
-                      data-testid="header-menu-new-page"
-                      (click)="onMenuAction('new-page', $event)">
-                      <i class="fa-solid fa-file-circle-plus menu-icon" aria-hidden="true"></i>
-                      <span>New page</span>
-                    </button>
-                  }
-                  @if (CanConfigure) {
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="more-menu-item"
-                      data-testid="header-menu-settings"
-                      (click)="onMenuAction('settings', $event)">
-                      <i class="fa-solid fa-sliders menu-icon" aria-hidden="true"></i>
-                      <span>Space settings</span>
-                    </button>
-                  }
-                </div>
-              }
-            </div>
+                  <mj-menu-item
+                    data-testid="header-menu-settings"
+                    Icon="fa-solid fa-sliders"
+                    (Triggered)="SpaceSettingsRequested.emit()">
+                    Space settings
+                  </mj-menu-item>
+                }
+              </mj-menu>
+            </ng-template>
           }
         </div>
       </div>
@@ -190,10 +187,6 @@ import { SubSpaceSummary } from './space-overview.component';
     .crumb-link:hover {
       color: var(--mj-brand-primary);
       text-decoration: underline;
-    }
-    .crumb-current {
-      color: var(--mj-text-secondary);
-      font-weight: var(--mj-font-medium);
     }
     .top {
       display: flex;
@@ -270,74 +263,15 @@ import { SubSpaceSummary } from './space-overview.component';
       flex-shrink: 0;
     }
 
-    .more-menu-wrap {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-    }
-    .more-menu-popover {
-      position: absolute;
-      top: calc(100% + var(--mj-space-1-5));
-      right: 0;
-      z-index: var(--mj-z-popover);
-      min-width: 190px;
-      padding: var(--mj-space-1);
-      background: var(--mj-bg-surface);
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md);
-      box-shadow: var(--mj-shadow-lg);
-      display: flex;
-      flex-direction: column;
-      gap: var(--mj-space-0-5);
-    }
-    .more-menu-item {
-      display: flex;
-      align-items: center;
-      gap: var(--mj-space-2-5);
-      height: var(--mj-space-9);
-      padding: 0 var(--mj-space-2-5);
-      border: none;
-      border-radius: var(--mj-radius-sm);
-      background: transparent;
-      color: var(--mj-text-primary);
-      font: inherit;
-      font-size: var(--mj-text-sm);
-      font-weight: var(--mj-font-medium);
-      cursor: pointer;
-      text-align: left;
-      width: 100%;
-      box-sizing: border-box;
-      transition: background var(--mj-transition-fast), color var(--mj-transition-fast);
-    }
-    .more-menu-item:hover {
-      background: var(--mj-bg-surface-hover);
-      color: var(--mj-brand-primary);
-    }
-    .menu-icon {
-      width: 18px;
-      text-align: center;
-      font-size: var(--mj-text-sm);
-      color: var(--mj-text-muted);
-      flex-shrink: 0;
-    }
-    .more-menu-item:hover .menu-icon {
-      color: var(--mj-brand-primary);
-    }
-
     @media (prefers-reduced-motion: reduce) {
       .crumb-link,
-      .star,
-      .more-menu-item {
+      .star {
         transition: none;
       }
     }
   `]
 })
 export class CollabSpaceHeaderComponent {
-  constructor(
-    @Optional() @Inject(ElementRef) private readonly host?: ElementRef<HTMLElement>,
-  ) {}
-
   @Input() Title = '';
   /** The star (B22): the space in MJ's User Favorites, offered to a signed-in viewer. */
   @Input() ShowStar = false;
@@ -366,11 +300,15 @@ export class CollabSpaceHeaderComponent {
   @Output() NewPageRequested = new EventEmitter<void>();
   @Output() SpaceSettingsRequested = new EventEmitter<void>();
 
-  public moreMenuOpen = false;
-
   /** True when the space sits under a parent space (`Spaces › Parent › Child`). */
   public get hasParentSpace(): boolean {
     return this.parentCrumb !== null;
+  }
+
+  /** Breadcrumb trail ending at the parent space (excluding the current space's own repeated title). */
+  public get parentBreadcrumbs(): BreadcrumbItem[] {
+    if (!this.hasParentSpace) return [];
+    return this.Breadcrumbs.slice(0, -1);
   }
 
   public get hasMoreMenu(): boolean {
@@ -381,37 +319,6 @@ export class CollabSpaceHeaderComponent {
       this.CanEditPages ||
       this.CanConfigure
     );
-  }
-
-  public toggleMoreMenu(event?: MouseEvent): void {
-    event?.stopPropagation();
-    this.moreMenuOpen = !this.moreMenuOpen;
-  }
-
-  public closeMoreMenu(): void {
-    this.moreMenuOpen = false;
-  }
-
-  public onMenuAction(action: 'invite' | 'subspace' | 'edit-page' | 'new-page' | 'settings', event?: MouseEvent): void {
-    event?.stopPropagation();
-    this.moreMenuOpen = false;
-    switch (action) {
-      case 'invite':
-        this.InviteRequested.emit();
-        break;
-      case 'subspace':
-        this.NewSubSpaceRequested.emit();
-        break;
-      case 'edit-page':
-        this.EditPageRequested.emit();
-        break;
-      case 'new-page':
-        this.NewPageRequested.emit();
-        break;
-      case 'settings':
-        this.SpaceSettingsRequested.emit();
-        break;
-    }
   }
 
   public onCrumbClick(crumb: BreadcrumbItem): void {
@@ -435,22 +342,5 @@ export class CollabSpaceHeaderComponent {
       return this.Subtitle.split('·').map(s => s.trim());
     }
     return [this.Subtitle];
-  }
-
-  @HostListener('document:click', ['$event'])
-  public onDocumentClick(event: Pick<MouseEvent, 'target'>): void {
-    if (!this.moreMenuOpen) return;
-    const target = event.target;
-    if (target instanceof Node && this.host?.nativeElement.contains(target)) {
-      return;
-    }
-    this.moreMenuOpen = false;
-  }
-
-  @HostListener('document:keydown.escape')
-  public onEscapeKey(): void {
-    if (this.moreMenuOpen) {
-      this.moreMenuOpen = false;
-    }
   }
 }

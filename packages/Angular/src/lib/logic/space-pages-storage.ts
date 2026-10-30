@@ -100,6 +100,7 @@ const LEGACY_SYNTHETIC_SEED_BLOCK_IDS = new Set([
     'seed-blk-checklist',
     'seed-blk-resources',
     'seed-blk-contacts',
+    'seed-blk-widget-subspaces',
 ]);
 
 function normalizeOverviewWidgetBlock(block: CollabPageBlock): CollabPageBlock {
@@ -190,12 +191,6 @@ export function buildStarterPagesForSpace(opts: {
             {
                 id: 'seed-blk-widget-about',
                 type: 'Widget:About',
-                title: '',
-                width: 'side',
-            },
-            {
-                id: 'seed-blk-widget-subspaces',
-                type: 'Widget:SubSpaces',
                 title: '',
                 width: 'side',
             },

@@ -193,7 +193,7 @@ export interface AudiencePopoverPersonItem {
       align-items: center;
       gap: var(--mj-space-2-5);
       margin-right: var(--mj-space-1);
-      padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-1-5);
+      padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-2);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-full);
       background: var(--mj-bg-surface);

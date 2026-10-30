@@ -87,7 +87,7 @@ describe('space-pages-storage', () => {
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:Discussion')?.width, 'side');
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:ContributedCards')?.width, 'side');
     assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:About')?.width, 'side');
-    assert.equal(pages[0].blocks.find((b) => b.type === 'Widget:SubSpaces')?.width, 'side');
+    assert.equal(pages[0].blocks.some((b) => b.type === 'Widget:SubSpaces'), false);
     assert.equal(pages[1].blocks.some((b) => b.type === 'Widget:MainView'), true);
 
     const savedCustomOverview: CollabPageModel = {
