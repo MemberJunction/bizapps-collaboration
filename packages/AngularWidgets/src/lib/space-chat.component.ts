@@ -92,6 +92,7 @@ export interface PendingAgentPromptState {
           [AllowSkillCommands]="false"
           [AllowAttachments]="AllowAttachments"
           [AllowRealtime]="false"
+          [CollapseThreadReplies]="true"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
           [EnableDecisionRouting]="EnableDecisionRouting"
