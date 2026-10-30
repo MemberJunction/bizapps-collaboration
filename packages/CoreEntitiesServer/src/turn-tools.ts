@@ -22,6 +22,11 @@ import {
 export const RUN_SPACE_DATA_ACTION_ID = 'EAE6CFED-E2EB-4B6E-816D-6CFE5156A5F5';
 export const RUN_SPACE_DATA_ACTION_NAME = 'Collaboration: Run Space Data';
 
+/** MJ's shipped *Scoped Search* action, as MJ's `metadata/actions/` ships it. */
+export const SCOPED_SEARCH_ACTION_ID = '3671FCE1-E4A1-4AB2-83E8-552D19E80A4F';
+/** The shipped *Collaboration Space Scope*: the space subtree and the chat's audience are derived on the server from the run's chat. */
+export const COLLABORATION_SPACE_SCOPE_ID = '6E5187CF-7E5B-447F-893D-D291994083C0';
+
 /** One query or view the turn may run through *Run space data*: what the model is told, and what the action checks against. */
 export interface TurnSpaceDataGrant {
     GrantID: string;
@@ -59,6 +64,7 @@ export interface ResolvedTurnTools {
 const QUERIES = 'MJ: Queries';
 const QUERY_PARAMETERS = 'MJ: Query Parameters';
 const USER_VIEWS = 'MJ: User Views';
+const AGENT_SEARCH_SCOPES = 'MJ: AI Agent Search Scopes';
 const AGENT_ACTIONS = 'MJ: AI Agent Actions';
 
 const esc = (value: string): string => value.replace(/'/g, "''");
@@ -91,6 +97,9 @@ export async function resolveTurnTools(
     // Collaboration's action and the granted ones (B20, step 2)
     const given = new Set<string>(tools.Actions.map((grant) => grant.TargetRecordID.trim().toUpperCase()));
     if (spaceData.length) given.add(RUN_SPACE_DATA_ACTION_ID);
+    // The space's own search is Collaboration's too, for an agent assigned the Collaboration scope as a tool: the scope
+    // derives the space and the audience from the run's chat, so the model cannot widen it
+    if (await searchesSpaceScope(rv, system, targetAgentId)) given.add(SCOPED_SEARCH_ACTION_ID);
     const own = await rv.RunView<{ ActionID: string }>({
         EntityName: AGENT_ACTIONS,
         ExtraFilter: `AgentID = '${esc(targetAgentId)}' AND Status = 'Active'`,
@@ -113,6 +122,19 @@ export async function resolveTurnTools(
     if (withheld.length) LogStatus(`resolveTurnTools: withheld this turn: ${withheld.join('; ')}`);
 
     return { tools, spaceData, actionIds: [...given], actionChanges, runSettings, agentGrant, withheld };
+}
+
+/** True when the agent holds an active tool-phase (`AgentInvoked` or `Both`) assignment of the Collaboration Space Scope. */
+async function searchesSpaceScope(rv: RunView, system: UserInfo, agentId: string): Promise<boolean> {
+    const rows = await rv.RunView<{ ID: string }>({
+        EntityName: AGENT_SEARCH_SCOPES,
+        ExtraFilter: `AgentID = '${esc(agentId)}' AND SearchScopeID = '${COLLABORATION_SPACE_SCOPE_ID}' AND Status = 'Active' AND Phase IN ('AgentInvoked', 'Both')`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        MaxRows: 1,
+    }, system);
+    if (!rows.Success) LogError(`resolveTurnTools: the agent's search scopes could not be read, so the space search is not offered: ${rows.ErrorMessage ?? 'unknown error'}`);
+    return (rows.Results ?? []).length > 0;
 }
 
 /** The data grants as the model and the action see them: names, descriptions and the parameters the model may set. */

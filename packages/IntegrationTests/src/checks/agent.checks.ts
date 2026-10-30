@@ -1,14 +1,18 @@
 import { CompositeKey, RunView, type UserInfo } from '@memberjunction/core';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { SearchEngine } from '@memberjunction/search-engine';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
-import { noteDocument } from '@mj-biz-apps/collaboration-core';
+import { audienceOfConversationKind, noteDocument } from '@mj-biz-apps/collaboration-core';
 import {
     collaborationFileStore,
     createSpaceConversation,
     decideUploadBand,
     executeSpaceChatTurn,
+    loadSpaceConfiguration,
     postSpaceMessage,
     resolveSpaceAgentRetrieval,
+    resolveTurnTools,
+    SCOPED_SEARCH_ACTION_ID,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
 import type { mjBizAppsCollaborationSpaceItemEntity, mjBizAppsCollaborationSpaceNoteEntity } from '@mj-biz-apps/collaboration-entities';
@@ -1886,6 +1890,83 @@ const checks: NamedCheck[] = [
                         .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'an AG12 uploaded space item')),
                     () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, trackedItemIds),
                 ]);
+            }
+        },
+    },
+    {
+        Id: 'agent.AG13',
+        Name: "AG13 — A granted MJ agent (Sage) searches the space through Scoped Search: offered only to an agent assigned the space scope, bounded to the chat's space and audience",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            if (isClientTransport(ctx)) {
+                // Turn tools and an action's run scope are server-side; covered on the server harness
+                return;
+            }
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const sage = await FindRows<{ ID: string; SearchScopeAccess: string }>(ctx, AI_AGENT_ENTITY, `Name = 'Sage'`, ['ID', 'SearchScopeAccess']);
+            Assert(sage.length === 1, 'MJ ships Sage');
+            Assert(sage[0].SearchScopeAccess === 'Assigned', `Sage searches only the scopes assigned to it (got ${sage[0].SearchScopeAccess})`);
+            const sageId = sage[0].ID;
+
+            // 1. Turn tools: the space search is given to Sage (assigned the scope as a tool), not to the shipped agent (PreExecution only)
+            const { configuration } = await loadSpaceConfiguration(ctx.Provider, DISCOVERY_SPACE_ID);
+            const audience = audienceOfConversationKind('General');
+            const sageTools = await resolveTurnTools(ctx.Provider, ctx.User, configuration, audience, sageId);
+            Assert(sageTools.actionIds.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'Sage is given Scoped Search for a space turn');
+            const removed = sageTools.actionChanges.filter((change) => change.mode === 'remove').flatMap((change) => change.actionIds);
+            Assert(!removed.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'Scoped Search is not among the actions removed for the turn');
+            const shippedTools = await resolveTurnTools(ctx.Provider, ctx.User, configuration, audience, AGENT_ID);
+            Assert(!shippedTools.actionIds.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'The shipped agent (its scope is PreExecution only) is not given the tool');
+
+            // 2. The real action as Sage, under each chat's run scope: the space and the audience come from the chat, never the model
+            const engine = ActionEngineServer.Instance;
+            await engine.Config(false, ada, ctx.Provider);
+            const action = engine.Actions.find((a) => SameID(a.ID, SCOPED_SEARCH_ACTION_ID));
+            Assert(!!action, 'Scoped Search is registered');
+            const search = async (chatId: string, query: string): Promise<Array<{ RecordID: string }>> => {
+                const result = await engine.RunAction({
+                    Action: action!,
+                    ContextUser: ada,
+                    Params: [
+                        { Name: 'Query', Type: 'Input', Value: query },
+                        { Name: 'AgentID', Type: 'Input', Value: sageId },
+                    ],
+                    Filters: [],
+                    Provider: ctx.Provider,
+                    SkipActionLog: true,
+                    RunScope: { PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats', PrimaryScopeRecordID: chatId, SecondaryScopes: null },
+                });
+                Assert(result.Success === true, `Scoped Search as Sage runs in chat ${chatId}: ${result.Message ?? ''}`);
+                return (result.Params?.find((p) => p.Name === 'Results')?.Value ?? []) as Array<{ RecordID: string }>;
+            };
+            const finds = (hits: Array<{ RecordID: string }>, root: string): boolean => hits.some((hit) => hit.RecordID.toLowerCase().endsWith(root));
+
+            // Discovery files a Shared and a Team root task; the Tasks lane is the one a name search reaches (as in AG8)
+            const taskEntity = ctx.Provider.EntityByName(TASK_ENTITY);
+            const taskItems = await FindRows<{ RecordID: string; Band: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${taskEntity?.ID}'`, ['RecordID', 'Band']);
+            const rootOf = (recordId: string): string => (recordId.toLowerCase().startsWith('id|') ? recordId.slice(3) : recordId).toLowerCase();
+            const sharedRoot = taskItems.find((t) => t.Band === 'Shared');
+            const teamRoot = taskItems.find((t) => t.Band === 'Team');
+            Assert(!!sharedRoot && !!teamRoot, 'Discovery holds a Shared and a Team root task');
+            const nameOf = async (root: string) => (await FindRows<{ Name: string }>(ctx, TASK_ENTITY, `ID = '${root}'`, ['Name']))[0]?.Name;
+            const sharedId = rootOf(sharedRoot!.RecordID);
+            const teamId = rootOf(teamRoot!.RecordID);
+            const sharedName = await nameOf(sharedId);
+            const teamName = await nameOf(teamId);
+            Assert(!!sharedName && !!teamName, 'The seeded Shared and Team root tasks have names');
+
+            const general = await createSpaceConversation(ctx.Provider, ada, { SpaceID: DISCOVERY_SPACE_ID, Name: `discovery-ag13-gen-${Date.now()}`, Kind: 'General' });
+            Assert(general.ok === true && !!general.conversationId && !!general.spaceChatId, `Ada starts a General conversation: ${general.message ?? ''}`);
+            const privateChat = await createSpaceConversation(ctx.Provider, ada, { SpaceID: DISCOVERY_SPACE_ID, Name: `discovery-ag13-priv-${Date.now()}`, Kind: 'Private' });
+            Assert(privateChat.ok === true && !!privateChat.conversationId && !!privateChat.spaceChatId, `Ada starts a Private conversation: ${privateChat.message ?? ''}`);
+            try {
+                Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Sage in a General chat finds the Shared task "${sharedName}"`);
+                Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Sage in a General chat never finds the Team task "${teamName}"`);
+                // The negative control: the same words find the Team task in a staff member's Private chat, so its absence above is the audience's doing
+                Assert(finds(await search(privateChat.spaceChatId!, teamName!), teamId), `Sage in a Private chat finds the Team task "${teamName}"`);
+            } finally {
+                await cleanupConversation(ctx.Provider, ctx.User, general.conversationId!, general.spaceChatId!);
+                await cleanupConversation(ctx.Provider, ctx.User, privateChat.conversationId!, privateChat.spaceChatId!);
             }
         },
     },

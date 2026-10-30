@@ -8,7 +8,7 @@ export const EXPECTED_BUNDLES: Record<string, number> = {
     'subtypes': 7,
     'row-filters': 5,
     'library': 7,
-    'agent': 12,
+    'agent': 13,
     'features': 5,
     'stage1': 11,
     'stage2': 5,

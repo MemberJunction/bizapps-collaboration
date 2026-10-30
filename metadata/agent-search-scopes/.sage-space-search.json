@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Sage",
+      "SearchScopeID": "@lookup:MJ: Search Scopes.Name=Collaboration Space Scope",
+      "Phase": "AgentInvoked",
+      "IsDefault": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DEB7A208-7B3E-419D-96F8-6CA67C0702A8"
+    }
+  }
+]
