@@ -415,7 +415,7 @@ export class CollabSpaceChatComponent implements OnInit {
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] = [];
-  @Input() public EnableDecisionRouting = true;
+  @Input() public EnableDecisionRouting = false;
   @Input() public CanStartConversation = false;
   @Input() public HasConversations = false;
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;

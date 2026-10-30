@@ -7,7 +7,7 @@ import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import { ChatSlotDirective, ConversationStreamingService } from '@memberjunction/ng-conversations';
+import { ChatSlotDirective, ConversationStreamingService, ResolveAgentTurn } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
@@ -449,8 +449,46 @@ describe("a space's conversation, rendered", () => {
     expect(area).not.toBeNull();
     // MJ's chat area defaults AllowRealtime to true; the space must turn it off
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
-    // Multi-party space chats turn on Jev decision routing by default for active-agent follow-ups
-    expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(true);
+    // Multi-party space chats default Jev decision routing to off until a decision model and labelled corpus are configured
+    expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(false);
+  });
+
+  it('exercises MJ client-side ResolveAgentTurn for thread replies under MentionOnly and person-only suppression under Always', () => {
+    const baseCandidates = {
+      MentionedAgentIds: [] as string[],
+      MentionedUserIds: [] as string[],
+      ReplyParentAgentId: null as string | null,
+      ReplyParentIsHuman: false,
+      ContinuityAgentId: 'a-sage',
+      ConversationDefaultAgentId: 'a-sage',
+      HostDefaultAgentId: 'a-sage',
+      ConversationManagerAgentId: 'a-mgr',
+    };
+    const isKnown = (id: string) => id === 'a-sage' || id === 'a-mgr';
+
+    // Under MentionOnly, replying to an AI message (ParentID) routes as ThreadReply without a mention
+    const threadTarget = ResolveAgentTurn(
+      { ...baseCandidates, ReplyParentAgentId: 'a-sage' },
+      { ReplyMode: 'MentionOnly', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(threadTarget).toEqual({ AgentId: 'a-sage', Route: 'ThreadReply' });
+
+    // Under Always, tagging a person (@Person) without tagging an agent suppresses the turn
+    const humanMentionTarget = ResolveAgentTurn(
+      { ...baseCandidates, MentionedUserIds: ['u-bob'] },
+      { ReplyMode: 'Always', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(humanMentionTarget).toBeNull();
+
+    // Under Always, replying to another person's message without tagging an agent suppresses the turn
+    const humanReplyTarget = ResolveAgentTurn(
+      { ...baseCandidates, ReplyParentIsHuman: true },
+      { ReplyMode: 'Always', AllowedAgentIDs: ['a-sage'] },
+      isKnown,
+    );
+    expect(humanReplyTarget).toBeNull();
   });
 });
 

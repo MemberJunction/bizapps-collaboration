@@ -506,7 +506,7 @@ const checks: NamedCheck[] = [
                     }
                 }
 
-                // Multi-party routing: 2) untagged follow-up with route='DecisionRouted' routes to active agent
+                // Multi-party routing: 2) untagged follow-up with client route='DecisionRouted' is refused under MentionOnly
                 const followUpPost = await postSpaceMessage(ctx.Provider, bea, {
                     spaceId: DISCOVERY_SPACE_ID,
                     conversationId: convId,
@@ -522,10 +522,12 @@ const checks: NamedCheck[] = [
                         agentId: COLLABORATION_TEST_AGENT_ID,
                         route: 'DecisionRouted',
                     });
-                    Assert(followUpTurn.ok === true, `DecisionRouted follow-up turn succeeds: ${followUpTurn.ok ? '' : followUpTurn.message}`);
-                    if (followUpTurn.ok) {
-                        createdDetailIds.push(...followUpTurn.replyDetailIds);
-                        Assert(followUpTurn.replyDetailIds.length > 0, 'DecisionRouted follow-up created assistant reply');
+                    Assert(!followUpTurn.ok, 'Untagged DecisionRouted follow-up under MentionOnly is refused by server');
+                    if (!followUpTurn.ok) {
+                        Assert(
+                            followUpTurn.message === 'The message does not mention an agent.',
+                            `Untagged follow-up refusal matches: ${followUpTurn.message}`,
+                        );
                     }
                 }
 

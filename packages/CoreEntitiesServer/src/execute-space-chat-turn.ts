@@ -7,7 +7,6 @@ import {
 } from '@memberjunction/core';
 import {
     ConversationEngine,
-    ConversationWindowFields,
     MJConversationDetailEntity,
     MJAIAgentRunEntity,
 } from '@memberjunction/core-entities';
@@ -29,15 +28,6 @@ import { spaceWriteRefusal, spaceWriteRefusalMessage } from './space-status-gate
 const DETAILS = 'MJ: Conversation Details';
 const SPACE_CHATS = 'MJ_BizApps_Collaboration: Space Chats';
 const SPACES = 'MJ_BizApps_Collaboration: Spaces';
-const SPEAKER_WINDOW_FIELDS = ['UserID', 'User', 'AgentID', 'Agent', 'ParentID'] as const;
-if (Array.isArray(ConversationWindowFields) && !Object.isFrozen(ConversationWindowFields)) {
-    const mutableFields = ConversationWindowFields as string[];
-    for (const field of SPEAKER_WINDOW_FIELDS) {
-        if (!mutableFields.includes(field)) {
-            mutableFields.push(field);
-        }
-    }
-}
 
 /** How a turn ended, told to whoever is watching it once its reply row is final. */
 export interface TurnOutcome {
@@ -323,14 +313,13 @@ async function runClaimedTurn(
         }
     }
 
-    // 7. Mention, thread-reply, and active-agent continuity rules (Item 6)
+    // 7. Mention and thread-reply rules (Item 6)
     const parser = new MentionParser();
     const parseResult = parser.parseMentions(messageText, availableAgents);
     const taggedAgentId = parseResult.agentMention?.id
         ? parseUuid(parseResult.agentMention.id)
         : null;
-    const hasMarkdownUserMention = /@\[[^\]]+\]\(\s*user:[^)]+\)/i.test(messageText);
-    const hasHumanMentionOnly = !taggedAgentId && ((parseResult.userMentions?.length ?? 0) > 0 || hasMarkdownUserMention);
+    const hasHumanMentionOnly = !taggedAgentId && (parseResult.userMentions?.length ?? 0) > 0;
     const parentDetailId = parseUuid(userDetail.ParentID);
 
     let targetAgentId: string;
@@ -350,13 +339,6 @@ async function runClaimedTurn(
                 return { ok: false, message: 'No assistant is available in this space right now.' };
             }
             targetAgentId = resolvedDefault;
-        } else if (input.route === 'DecisionRouted' && parseUuid(input.agentId)) {
-            const requestedAgentId = parseUuid(input.agentId)!;
-            const hasPriorReply = await hasAgentRepliedInConversation(view, system, conversationId, requestedAgentId, conversationHistoryFrom);
-            if (!hasPriorReply) {
-                return { ok: false, message: 'The message does not mention an agent.' };
-            }
-            targetAgentId = requestedAgentId;
         } else {
             return { ok: false, message: 'The message does not mention an agent.' };
         }
@@ -365,15 +347,8 @@ async function runClaimedTurn(
             return { ok: false, message: 'No assistant is available in this space right now.' };
         }
         targetAgentId = resolvedDefault;
-    } else if (input.route === 'DecisionRouted' && parseUuid(input.agentId)) {
-        const requestedAgentId = parseUuid(input.agentId)!;
-        const hasPriorReply = await hasAgentRepliedInConversation(view, system, conversationId, requestedAgentId, conversationHistoryFrom);
-        if (!hasPriorReply) {
-            return { ok: false, message: 'The message does not mention an agent.' };
-        }
-        targetAgentId = requestedAgentId;
     } else {
-        // Under MentionOnly without a tagged agent, thread reply to AI, or decision-routed active agent: refuse!
+        // Under MentionOnly without a tagged agent or thread reply to AI: refuse!
         return { ok: false, message: 'The message does not mention an agent.' };
     }
 
@@ -494,26 +469,13 @@ async function runClaimedTurn(
                 provider,
                 conversationHistoryFrom
             );
-            const windowOptions: NonNullable<Parameters<typeof ConversationEngine.AssembleContextWindow>[1]> & {
-                speakerAttribution?: 'off' | 'auto' | 'always';
-                speakerLabels?: ReadonlyMap<string, string>;
-            } = {
+            const assembledMessages = ConversationEngine.AssembleContextWindow(windowRows, {
                 excludeDetailIds: [assistantDetail.ID],
                 historyFrom: conversationHistoryFrom ?? null,
                 maxTailMessages: 20,
                 speakerAttribution: 'always',
                 speakerLabels,
-            };
-            const assembledWindow: ReadonlyArray<
-                ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
-                    metadata?: { rawContent?: string };
-                }
-            > = ConversationEngine.AssembleContextWindow(windowRows, windowOptions);
-            const assembledMessages = ensureSpeakerAttributedMessages(
-                assembledWindow,
-                windowRows as ReadonlyArray<WindowRowWithSpeaker>,
-                speakerLabels,
-            );
+            });
 
             const agentEntity = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', system);
             if (agentEntity && (await agentEntity.Load(targetAgentId))) {
@@ -706,110 +668,3 @@ async function resolveParentReplyAgent(
     return { ok: false, message: 'The message does not mention an agent.' };
 }
 
-async function hasAgentRepliedInConversation(
-    view: RunView,
-    system: UserInfo,
-    conversationId: string,
-    agentId: string,
-    historyFrom: Date | undefined,
-): Promise<boolean> {
-    const res = await view.RunView<{ ID: string; Role?: string | null; AgentID?: string | null; __mj_CreatedAt?: string | Date | null }>({
-        EntityName: DETAILS,
-        ExtraFilter: `ConversationID = '${conversationId}' AND Role = 'AI' AND AgentID = '${agentId}'`,
-        Fields: ['ID', 'Role', 'AgentID', '__mj_CreatedAt'],
-        MaxRows: 50,
-        ResultType: 'simple',
-    }, system);
-    if (!res.Success || !res.Results?.length) {
-        return false;
-    }
-    return res.Results.some((row) => {
-        if (row.AgentID && (parseUuid(row.AgentID) ?? '').toLowerCase() !== agentId.toLowerCase()) {
-            return false;
-        }
-        if (historyFrom && row.__mj_CreatedAt) {
-            return new Date(row.__mj_CreatedAt).getTime() >= historyFrom.getTime();
-        }
-        return true;
-    });
-}
-
-type WindowRowWithSpeaker = ReturnType<typeof ConversationEngine.LoadWindowRowsFresh> extends Promise<Array<infer R>>
-    ? R & {
-          UserID?: string | null;
-          User?: string | null;
-          AgentID?: string | null;
-          Agent?: string | null;
-          ParentID?: string | null;
-      }
-    : never;
-
-function resolveRowSpeakerLabel(
-    row: WindowRowWithSpeaker | undefined,
-    speakerLabels: ReadonlyMap<string, string>,
-): string | null {
-    if (!row) return null;
-    const role = (row.Role ?? '').trim().toLowerCase();
-    const isAssistant = role === 'ai' || role === 'assistant' || role === 'system';
-    const rawId = isAssistant ? row.AgentID : row.UserID;
-    const normalizedId = rawId ? (parseUuid(rawId) ?? rawId) : null;
-    if (normalizedId) {
-        for (const [k, v] of speakerLabels.entries()) {
-            if (k.toLowerCase() === normalizedId.toLowerCase() && v.trim()) {
-                return v.trim();
-            }
-        }
-    }
-    const nameField = isAssistant ? row.Agent : row.User;
-    if (nameField?.trim()) {
-        return nameField.trim();
-    }
-    return isAssistant ? 'Assistant' : 'User';
-}
-
-function ensureSpeakerAttributedMessages(
-    assembledWindow: ReadonlyArray<
-        ReturnType<typeof ConversationEngine.AssembleContextWindow>[number] & {
-            metadata?: { rawContent?: string };
-        }
-    >,
-    windowRows: ReadonlyArray<WindowRowWithSpeaker>,
-    speakerLabels: ReadonlyMap<string, string>,
-): ExecuteAgentParams['conversationMessages'] {
-    const rowsById = new Map<string, WindowRowWithSpeaker>();
-    for (const r of windowRows) {
-        rowsById.set((parseUuid(r.ID) ?? r.ID).toLowerCase(), r);
-    }
-    return assembledWindow.map((m) => {
-        const textContent = typeof m.content === 'string' ? m.content : '';
-        if (m.metadata?.rawContent !== undefined || m.metadata?.isConversationSummary === true || typeof m.content !== 'string') {
-            return {
-                role: m.role,
-                content: m.content,
-                ...(m.metadata ? { metadata: m.metadata } : {}),
-            };
-        }
-        const detailId = m.metadata?.conversationDetailId;
-        const row = detailId ? rowsById.get((parseUuid(detailId) ?? detailId).toLowerCase()) : undefined;
-        const speaker = resolveRowSpeakerLabel(row, speakerLabels);
-        if (!speaker) {
-            return {
-                role: m.role,
-                content: m.content,
-                ...(m.metadata ? { metadata: m.metadata } : {}),
-            };
-        }
-        const parentKey = row?.ParentID ? (parseUuid(row.ParentID) ?? row.ParentID).toLowerCase() : null;
-        const parentRow = parentKey ? rowsById.get(parentKey) : undefined;
-        const replyTo = resolveRowSpeakerLabel(parentRow, speakerLabels);
-        const prefix = replyTo ? `[${speaker} -> replying to ${replyTo}]: ` : `[${speaker}]: `;
-        return {
-            role: m.role,
-            content: `${prefix}${textContent}`,
-            metadata: {
-                ...(m.metadata ?? {}),
-                rawContent: textContent,
-            },
-        };
-    });
-}
