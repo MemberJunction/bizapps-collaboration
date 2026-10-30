@@ -1,8 +1,8 @@
-import { Component, EventEmitter, HostListener, Input, Optional, Output, TemplateRef } from '@angular/core';
+import { Component, EventEmitter, HostListener, Inject, Input, Optional, Output, TemplateRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { CollabBandChipComponent } from './band-chip.component';
 import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
@@ -165,16 +165,16 @@ export const COLLAB_BLOCK_OPTIONS: CollabBlockOption[] = [
 ];
 
 export const COLLAB_WIDGET_BLOCK_OPTIONS: CollabBlockOption[] = [
-    { type: 'Widget:SharedFiles', label: 'Shared Files Card', icon: 'fa-solid fa-eye', hint: 'Live deliverables and files shared with everyone in this space' },
-    { type: 'Widget:TeamFiles', label: 'Team Working Set Card', icon: 'fa-solid fa-lock', hint: 'Internal team-only files and working papers' },
-    { type: 'Widget:AskBox', label: 'Ask Space Assistant', icon: 'fa-solid fa-wand-magic-sparkles', hint: 'AI prompt box to ask questions about this space' },
-    { type: 'Widget:Discussion', label: 'Recent Discussion Card', icon: 'fa-solid fa-comments', hint: 'Live feed of recent chat messages in this space' },
-    { type: 'Widget:Pinned', label: 'Pinned Items Strip', icon: 'fa-solid fa-thumbtack', hint: 'Quick-access strip of items pinned in this space' },
-    { type: 'Widget:NeedsYou', label: 'Needs Your Attention', icon: 'fa-solid fa-bell', hint: 'Action cards for approvals, reviews, or tasks awaiting you' },
-    { type: 'Widget:SubSpaces', label: 'Sub-Spaces Card', icon: 'fa-solid fa-Sitemap', hint: 'Directory of child sub-spaces inside this space' },
-    { type: 'Widget:About', label: 'About & Space Details', icon: 'fa-solid fa-circle-info', hint: 'Structured fields from this space type form' },
-    { type: 'Widget:ContributedCards', label: 'Space Type Cards', icon: 'fa-solid fa-puzzle-piece', hint: 'Specialized cards contributed by this space type (e.g. Motions)' },
-    { type: 'Widget:MainView', label: 'Main Workspace View', icon: 'fa-solid fa-window-maximize', hint: 'Primary interactive workspace for this built-in page' },
+    { type: 'Widget:SharedFiles', label: 'Shared files', icon: 'fa-solid fa-eye', hint: 'Deliverables and files shared with everyone in this space' },
+    { type: 'Widget:TeamFiles', label: 'Team working files', icon: 'fa-solid fa-lock', hint: 'Internal team-only files and working papers' },
+    { type: 'Widget:AskBox', label: 'Ask about this space', icon: 'fa-solid fa-wand-magic-sparkles', hint: 'Ask questions about this space' },
+    { type: 'Widget:Discussion', label: 'Recent discussion', icon: 'fa-solid fa-comments', hint: 'Recent messages in this space' },
+    { type: 'Widget:Pinned', label: 'Pinned items', icon: 'fa-solid fa-thumbtack', hint: 'Quick access to items pinned in this space' },
+    { type: 'Widget:NeedsYou', label: 'Needs your attention', icon: 'fa-solid fa-bell', hint: 'Approvals, reviews, or tasks waiting on you' },
+    { type: 'Widget:SubSpaces', label: 'Sub-spaces', icon: 'fa-solid fa-sitemap', hint: 'Sub-spaces inside this space' },
+    { type: 'Widget:About', label: 'About this space', icon: 'fa-solid fa-circle-info', hint: 'Key details for this space' },
+    { type: 'Widget:ContributedCards', label: 'Space cards', icon: 'fa-solid fa-puzzle-piece', hint: 'Cards for this type of space (such as Motions)' },
+    { type: 'Widget:MainView', label: 'Page content', icon: 'fa-solid fa-window-maximize', hint: 'Main content area for this page' },
 ];
 
 export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
@@ -195,138 +195,36 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
     standalone: true,
     imports: [CommonModule, FormsModule, MJAlertComponent, MJButtonDirective, CollabBandChipComponent, CollabFileIconComponent],
     template: `
-        <section class="sp-shell" [class.sp-shell--builtin]="!!activePage?.builtInTabId" aria-label="Customizable space page">
-            <!-- Page Studio Bar (only rendered when ShowPageTabs is true or an authorized admin is actively customizing / has a draft) -->
-            @if (ShowPageTabs || (activePage && canEditPage(activePage) && (isCustomizing || hasUnpublishedDraft(activePage)))) {
-            <header class="sp-tabbar">
-                @if (ShowPageTabs) {
-                    <div class="sp-tabs" role="tablist" aria-label="Space pages">
-                        @for (p of visiblePages; track p.id; let idx = $index) {
-                            <div class="sp-tab-wrap" [class.active]="activePage?.id === p.id">
-                                @if (isCustomizing && CanWrite && !IsReadOnly && idx > 0) {
-                                    <button
-                                        type="button"
-                                        class="sp-tab-move"
-                                        title="Move page left"
-                                        aria-label="Move page left"
-                                        (click)="movePage(p, -1, $event)">
-                                        <i class="fa-solid fa-chevron-left"></i>
-                                    </button>
-                                }
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    class="sp-tab"
-                                    [class.active]="activePage?.id === p.id"
-                                    [attr.aria-selected]="activePage?.id === p.id"
-                                    (click)="selectPage(p.id)">
-                                    <i [class]="p.iconClass || 'fa-solid fa-file-lines'" class="sp-tab-ic" aria-hidden="true"></i>
-                                    <span class="sp-tab-lbl">{{ p.title }}</span>
-                                    @if (p.status === 'Draft' || hasUnpublishedDraft(p)) {
-                                        <span class="sp-tab-dot" title="Has unpublished draft changes"></span>
-                                    }
-                                    @if (p.band === 'Team') {
-                                        <span class="sp-tab-band team" title="{{ TeamLabel }} only"><i class="fa-solid fa-lock"></i></span>
-                                    }
-                                </button>
-                                @if (isCustomizing && CanWrite && !IsReadOnly && idx < visiblePages.length - 1) {
-                                    <button
-                                        type="button"
-                                        class="sp-tab-move"
-                                        title="Move page right"
-                                        aria-label="Move page right"
-                                        (click)="movePage(p, 1, $event)">
-                                        <i class="fa-solid fa-chevron-right"></i>
-                                    </button>
-                                }
-                            </div>
-                        }
-                    </div>
-                } @else if (activePage; as page) {
+        <section class="sp-shell" [class.sp-shell--builtin]="!!activePage?.builtInTabId" aria-label="Space page">
+            @if (activePage && canEditPage(activePage) && isCustomizing) {
+                <header class="sp-tabbar" data-testid="page-edit-bar">
                     <div class="sp-page-context">
-                        <span class="sp-context-pill"><i class="fa-solid fa-pen-ruler"></i> Page Studio</span>
-                        <span class="sp-context-title">{{ page.draftTitle || page.title }}</span>
-                        @if (page.summary) {
-                            <span class="sp-context-sep">·</span>
-                            <span class="sp-context-summary">{{ page.summary }}</span>
-                        }
-                        @if (hasUnpublishedDraft(page)) {
-                            <span class="sp-badge dirty"><i class="fa-solid fa-circle-dot"></i> Unpublished draft</span>
-                        }
+                        <span class="sp-edit-dot" aria-hidden="true"></span>
+                        <span class="sp-edit-status" data-testid="page-edit-status">Editing · Draft</span>
                     </div>
-                }
-
-                <div class="sp-toolbar-right">
-                    @if (activePage; as page) {
-                        @if (!page.builtInTabId) {
-                            <mjc-band-chip [Band]="page.band" [Label]="page.band === 'Shared' ? SharedLabel : TeamLabel" />
-                        }
-                        @if (!page.builtInTabId && CanSeeTeam && page.band === 'Team' && page.canPromote && !IsReadOnly && canEditPage(page)) {
-                            <button
-                                type="button"
-                                mjButton
-                                Variant="secondary"
-                                Size="sm"
-                                title="Share this page with everyone in the space"
-                                (click)="PromotePageRequested.emit(page)">
-                                <i class="fa-solid fa-share-nodes"></i> Share with {{ SharedLabel }}
-                            </button>
-                        }
-                        @if (canEditPage(page) && hasUnpublishedDraft(page)) {
-                            <button type="button" mjButton Variant="primary" Size="sm" (click)="openReviewDiff(page)">
-                                <i class="fa-solid fa-code-compare"></i> Review &amp; Publish
-                            </button>
-                        }
-                        @if (canEditPage(page)) {
-                            <button
-                                type="button"
-                                mjButton
-                                Variant="secondary"
-                                Size="sm"
-                                title="Add a content block or workspace widget to this page"
-                                (click)="setCustomizing(true); openBlockPicker(null)">
-                                <i class="fa-solid fa-plus"></i> Add Block / Widget
-                            </button>
-                            <button
-                                type="button"
-                                mjButton
-                                Variant="flat"
-                                Size="sm"
-                                title="Edit page introduction or executive summary"
-                                (click)="startIntroEdit(page)">
-                                <i class="fa-solid fa-pen"></i> {{ page.body || page.draftBody ? 'Edit Intro' : 'Add Intro' }}
-                            </button>
-                            <button
-                                type="button"
-                                mjButton
-                                Variant="flat"
-                                Size="sm"
-                                title="Page settings"
-                                (click)="openPageSettings(page)">
-                                <i class="fa-solid fa-gear"></i> Page Settings
-                            </button>
-                            <button
-                                type="button"
-                                mjButton
-                                Variant="flat"
-                                Size="sm"
-                                title="Create a new custom page in this space"
-                                (click)="openNewPageModal()">
-                                <i class="fa-solid fa-file-circle-plus"></i> New Page
-                            </button>
-                            <button
-                                type="button"
-                                mjButton
-                                [Variant]="isCustomizing ? 'primary' : 'secondary'"
-                                Size="sm"
-                                (click)="toggleCustomizeMode()">
-                                <i class="fa-solid" [class]="isCustomizing ? 'fa-check' : 'fa-sliders'"></i>
-                                {{ isCustomizing ? 'Done Customizing' : 'Customize Page' }}
-                            </button>
-                        }
-                    }
-                </div>
-            </header>
+                    <div class="sp-toolbar-right">
+                        <button
+                            type="button"
+                            mjButton
+                            Variant="primary"
+                            Size="sm"
+                            data-testid="page-edit-publish-btn"
+                            [disabled]="IsSaving"
+                            (click)="publishChanges(activePage)">
+                            Publish
+                        </button>
+                        <button
+                            type="button"
+                            mjButton
+                            Variant="secondary"
+                            Size="sm"
+                            data-testid="page-edit-discard-btn"
+                            [disabled]="IsSaving"
+                            (click)="discardChanges(activePage)">
+                            Discard
+                        </button>
+                    </div>
+                </header>
             }
 
             @if (ErrorMessage) {
@@ -1345,25 +1243,37 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             flex-direction: column;
             flex: 1;
             min-height: 0;
-            background: var(--mj-bg-page, #ffffff);
+            background: var(--mj-bg-page);
         }
         .sp-tabbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            padding: 8px 20px;
-            background: var(--mj-bg-surface, #ffffff);
-            border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+            gap: var(--mj-space-3);
+            padding: var(--mj-space-2) var(--mj-space-5);
+            background: var(--mj-bg-surface);
+            border-bottom: 1px solid var(--mj-border-default);
             flex-wrap: wrap;
         }
         .sp-page-context {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--mj-space-2);
             min-width: 0;
             flex: 1;
             flex-wrap: wrap;
+        }
+        .sp-edit-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: var(--mj-radius-full);
+            background: var(--mj-status-warning);
+            flex-shrink: 0;
+        }
+        .sp-edit-status {
+            font-size: var(--mj-text-sm);
+            font-weight: var(--mj-font-semibold);
+            color: var(--mj-text-primary);
         }
         .sp-context-ic {
             color: var(--mj-brand-primary);
@@ -1465,12 +1375,12 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
         }
         .sp-tab-band.team {
             font-size: 10px;
-            color: var(--mjc-team, #7c3aed);
+            color: var(--mjc-team);
         }
         .sp-toolbar-right {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--mj-space-2);
             flex-wrap: wrap;
         }
         .sp-alert-wrap {
@@ -1949,7 +1859,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             height: 38px;
             border-radius: 99px;
             background: var(--mj-brand-primary);
-            color: var(--mj-brand-on-primary, #ffffff);
+            color: var(--mj-brand-on-primary);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2289,7 +2199,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             align-items: center;
             gap: 6px;
             font-size: 12.5px;
-            color: var(--mjc-team, #7c3aed);
+            color: var(--mjc-team);
             font-weight: 600;
             cursor: pointer;
         }
@@ -2308,7 +2218,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             border: 1px solid var(--mj-border-subtle, var(--mj-border-default));
         }
         .sp-comment.team-only {
-            border-left: 3px solid var(--mjc-team, #7c3aed);
+            border-left: 3px solid var(--mjc-team);
         }
         .sp-comment.resolved {
             opacity: 0.72;
@@ -2318,7 +2228,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             height: 30px;
             border-radius: 99px;
             background: var(--mj-brand-primary);
-            color: var(--mj-brand-on-primary, #ffffff);
+            color: var(--mj-brand-on-primary);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2348,8 +2258,8 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             border-radius: 99px;
         }
         .sp-comment-band.team {
-            color: var(--mjc-team, #7c3aed);
-            background: color-mix(in srgb, var(--mjc-team, #7c3aed) 12%, var(--mj-bg-surface));
+            color: var(--mjc-team);
+            background: color-mix(in srgb, var(--mjc-team) 12%, var(--mj-bg-surface));
         }
         .sp-comment-band.resolved {
             color: var(--mj-status-success);
@@ -2373,7 +2283,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
         .sp-drawer-backdrop {
             position: fixed;
             inset: 0;
-            background: var(--mj-bg-overlay, rgba(15, 23, 42, 0.45));
+            background: var(--mj-bg-overlay);
             z-index: 1050;
             display: flex;
             justify-content: flex-end;
@@ -2382,7 +2292,7 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             width: 520px;
             max-width: 94vw;
             height: 100%;
-            background: var(--mj-bg-surface, #ffffff);
+            background: var(--mj-bg-surface);
             border-left: 1px solid var(--mj-border-default);
             display: flex;
             flex-direction: column;
@@ -2591,11 +2501,24 @@ export const COLLAB_PAGE_ICONS: { icon: string; label: string }[] = [
             border-radius: 3px;
             padding: 0 2px;
         }
+        @media (prefers-reduced-motion: reduce) {
+            .sp-tab,
+            .sp-block,
+            .sp-b-resource-row,
+            .sp-b-progress-bar,
+            .sp-b-link-card,
+            .sp-picker-card {
+                transition: none;
+            }
+        }
         `,
     ],
 })
 export class CollabSpacePagesComponent {
-    constructor(@Optional() private readonly sanitizer?: DomSanitizer) {}
+    constructor(
+        @Optional() @Inject(DomSanitizer) private readonly sanitizer?: DomSanitizer,
+        @Optional() @Inject(MJConfirmService) private readonly confirmService?: MJConfirmService,
+    ) {}
 
     @Input() Pages: CollabPageModel[] = [];
     @Input() ActivePageId = '';
@@ -2621,7 +2544,11 @@ export class CollabSpacePagesComponent {
         return this.isCustomizing;
     }
     public set IsCustomizing(value: boolean) {
-        this.isCustomizing = Boolean(value);
+        const next = Boolean(value);
+        if (next && !this.isCustomizing) {
+            this.captureEditSnapshot();
+        }
+        this.isCustomizing = next;
     }
     @Output() IsCustomizingChange = new EventEmitter<boolean>();
 
@@ -2649,6 +2576,8 @@ export class CollabSpacePagesComponent {
     public readonly pageIcons = COLLAB_PAGE_ICONS;
 
     public isCustomizing = false;
+    public editSessionDirty = false;
+    private editSessionSnapshot: CollabPageModel | null = null;
     public commentsExpanded = false;
     public editingIntro = false;
     public introTitleDraft = '';
@@ -2754,12 +2683,91 @@ export class CollabSpacePagesComponent {
     }
 
     public setCustomizing(val: boolean): void {
+        if (val && !this.isCustomizing) {
+            this.captureEditSnapshot();
+        }
         this.isCustomizing = val;
         this.IsCustomizingChange.emit(this.isCustomizing);
     }
 
     public toggleCustomizeMode(): void {
         this.setCustomizing(!this.isCustomizing);
+    }
+
+    private captureEditSnapshot(): void {
+        const current = this.activePage;
+        this.editSessionSnapshot = current ? structuredClone(current) : null;
+        this.editSessionDirty = false;
+    }
+
+    public hasUnsavedEditChanges(page: CollabPageModel): boolean {
+        if (this.editSessionDirty || this.editingIntro || this.hasUnpublishedDraft(page)) {
+            return true;
+        }
+        if (this.editSessionSnapshot && this.editSessionSnapshot.id === page.id) {
+            return (
+                this.editSessionSnapshot.title !== page.title ||
+                this.editSessionSnapshot.summary !== page.summary ||
+                this.editSessionSnapshot.body !== page.body ||
+                JSON.stringify(this.editSessionSnapshot.blocks) !== JSON.stringify(page.blocks)
+            );
+        }
+        return false;
+    }
+
+    public publishChanges(page: CollabPageModel): void {
+        const nextTitle = this.editingIntro
+            ? this.introTitleDraft.trim() || page.title
+            : (page.draftTitle ?? page.title).trim() || page.title;
+        const nextSummary = this.editingIntro ? this.introSummaryDraft.trim() : page.summary;
+        const nextBody = this.editingIntro ? this.introBodyDraft : page.draftBody ?? page.body;
+        const updated: CollabPageModel = {
+            ...page,
+            title: nextTitle,
+            summary: nextSummary,
+            body: nextBody,
+            draftTitle: null,
+            draftBody: null,
+            status: 'Published',
+        };
+        this.editingIntro = false;
+        this.reviewDiffOpen = false;
+        this.editSessionSnapshot = null;
+        this.editSessionDirty = false;
+        this.PageSaveRequested.emit(updated);
+        this.setCustomizing(false);
+    }
+
+    public async discardChanges(page: CollabPageModel): Promise<void> {
+        const hasChanges = this.hasUnsavedEditChanges(page);
+        if (hasChanges && this.confirmService) {
+            const confirmed = await this.confirmService.Confirm({
+                title: 'Discard changes?',
+                message: 'Your unsaved changes to this page will be lost.',
+                confirmText: 'Discard',
+                cancelText: 'Keep editing',
+                type: 'warning',
+            });
+            if (!confirmed) {
+                return;
+            }
+        }
+        const snapshot = this.editSessionSnapshot && this.editSessionSnapshot.id === page.id ? this.editSessionSnapshot : null;
+        if (snapshot || this.hasUnpublishedDraft(page)) {
+            const base = snapshot ?? page;
+            const restored: CollabPageModel = {
+                ...base,
+                draftTitle: null,
+                draftBody: null,
+                status: 'Published',
+            };
+            this.PageSaveRequested.emit(restored);
+        }
+        this.editingIntro = false;
+        this.reviewDiffOpen = false;
+        this.editSessionSnapshot = null;
+        this.editSessionDirty = false;
+        this.setCustomizing(false);
     }
 
     /**
@@ -2814,6 +2822,7 @@ export class CollabSpacePagesComponent {
             status: 'Draft',
         };
         this.editingIntro = false;
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit(updated);
     }
 
@@ -2828,6 +2837,7 @@ export class CollabSpacePagesComponent {
             status: 'Published',
         };
         this.editingIntro = false;
+        this.editSessionDirty = false;
         this.PageSaveRequested.emit(updated);
     }
 
@@ -2854,6 +2864,7 @@ export class CollabSpacePagesComponent {
             status: 'Published',
         };
         this.reviewDiffOpen = false;
+        this.editSessionDirty = false;
         this.PageSaveRequested.emit(updated);
     }
 
@@ -2865,6 +2876,7 @@ export class CollabSpacePagesComponent {
             status: 'Published',
         };
         this.reviewDiffOpen = false;
+        this.editSessionDirty = false;
         this.PageSaveRequested.emit(updated);
     }
 
@@ -2970,6 +2982,7 @@ export class CollabSpacePagesComponent {
             nextWidth = current.width === 'half' ? 'full' : 'half';
         }
         const blocks = page.blocks.map((b, i) => (i === index ? { ...b, width: nextWidth } : b));
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
@@ -2995,6 +3008,7 @@ export class CollabSpacePagesComponent {
         blocks.splice(idx, 0, newBlock);
         this.closeBlockPicker();
         const updated: CollabPageModel = { ...page, blocks };
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit(updated);
         if (!this.isWidgetBlock(type)) {
             this.openBlockEditor(newBlock);
@@ -3014,6 +3028,7 @@ export class CollabSpacePagesComponent {
         const edited = this.editingBlock;
         const blocks = page.blocks.map((b) => (b.id === edited.id ? edited : b));
         this.editingBlock = null;
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
@@ -3046,6 +3061,7 @@ export class CollabSpacePagesComponent {
             const temp = blocks[index];
             blocks[index] = blocks[targetIndex];
             blocks[targetIndex] = temp;
+            this.editSessionDirty = true;
             this.PageSaveRequested.emit({ ...page, blocks });
             return;
         }
@@ -3054,6 +3070,7 @@ export class CollabSpacePagesComponent {
         const blocks = [...page.blocks];
         const [moved] = blocks.splice(index, 1);
         blocks.splice(target, 0, moved);
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
@@ -3064,11 +3081,13 @@ export class CollabSpacePagesComponent {
         };
         const blocks = [...page.blocks];
         blocks.splice(index + 1, 0, copy);
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
     public deleteBlock(page: CollabPageModel, index: number): void {
         const blocks = page.blocks.filter((_, i) => i !== index);
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 
@@ -3099,6 +3118,7 @@ export class CollabSpacePagesComponent {
             moved.width = this.overviewZoneFor(targetBlock);
         }
         blocks.splice(dropIndex, 0, moved);
+        this.editSessionDirty = true;
         this.PageSaveRequested.emit({ ...page, blocks });
     }
 

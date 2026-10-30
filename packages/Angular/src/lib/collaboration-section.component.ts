@@ -257,7 +257,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            background: var(--mj-bg-page, #ffffff);
+            background: var(--mj-bg-page);
         }
         .content-area {
             flex: 1 1 auto;
@@ -268,7 +268,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         }
         .tab-placeholder {
             padding: 32px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
             font-size: 14px;
         }
         .row { display: flex; align-items: center; }
@@ -279,13 +279,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             flex-direction: column;
             height: 100%;
             overflow-y: auto;
-            background: var(--mj-bg-surface-sunken, #f8fafc);
+            background: var(--mj-bg-surface-sunken);
             padding: 24px;
             box-sizing: border-box;
         }
         .home-header {
-            background: var(--mj-bg-surface-card, #ffffff);
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 12px;
             padding: 24px;
             margin-bottom: 24px;
@@ -315,12 +315,12 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             margin: 0;
             font-size: 22px;
             font-weight: 700;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .home-subtitle {
             margin: 4px 0 0;
             font-size: 13.5px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
         }
         .home-quick-stats {
             display: grid;
@@ -328,8 +328,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             gap: 12px;
         }
         .stat-pill {
-            background: var(--mj-bg-surface-sunken, #f8fafc);
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
             padding: 12px 16px;
             display: flex;
@@ -339,13 +339,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             transition: all 0.15s ease;
         }
         .stat-pill:hover {
-            background: var(--mj-bg-surface-hover, #f1f5f9);
-            border-color: var(--mj-brand-primary, #0284c7);
+            background: var(--mj-bg-surface-hover);
+            border-color: var(--mj-brand-primary);
             transform: translateY(-1px);
         }
         .stat-pill.active {
-            border-color: var(--mj-brand-primary, #0284c7);
-            background: var(--mj-bg-surface-hover, #f1f5f9);
+            border-color: var(--mj-brand-primary);
+            background: var(--mj-bg-surface-hover);
         }
         .home-list-wrap {
             padding: 0 32px 8px;
@@ -353,11 +353,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         .stat-val {
             font-size: 20px;
             font-weight: 700;
-            color: var(--mj-brand-primary, #0284c7);
+            color: var(--mj-brand-primary);
         }
         .stat-lbl {
             font-size: 12px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
             font-weight: 500;
         }
         .spaces-directory-grid {
@@ -366,8 +366,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             gap: 16px;
         }
         .space-directory-card {
-            background: var(--mj-bg-surface-card, #ffffff);
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 10px;
             padding: 18px;
             cursor: pointer;
@@ -379,7 +379,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
         .space-directory-card.closed { opacity: 0.7; }
         .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
         .space-directory-card:hover {
-            border-color: var(--mj-brand-primary, #0284c7);
+            border-color: var(--mj-brand-primary);
             box-shadow: var(--mj-shadow-md);
             transform: translateY(-2px);
         }
@@ -404,19 +404,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             font-weight: 600;
             padding: 2px 8px;
             border-radius: 999px;
-            background: var(--mj-bg-surface-sunken, #f1f5f9);
-            color: var(--mj-text-secondary, #475569);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
         }
         .space-name {
             margin: 0;
             font-size: 15px;
             font-weight: 600;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .space-desc {
             margin: 0;
             font-size: 12.5px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
             line-height: 1.4;
             flex: 1;
         }
@@ -424,13 +424,13 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            border-top: 1px solid var(--mj-border-default, #f1f5f9);
+            border-top: 1px solid var(--mj-border-default);
             padding-top: 8px;
         }
         .open-link {
             font-size: 12px;
             font-weight: 600;
-            color: var(--mj-brand-primary, #0284c7);
+            color: var(--mj-brand-primary);
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -447,11 +447,11 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             gap: 8px;
             font-size: 16px;
             font-weight: 700;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .section-badge {
             font-size: 12px;
-            color: var(--mj-text-muted, #64748b);
+            color: var(--mj-text-muted);
         }
         .collab-inbox-view, .collab-tasks-view, .collab-files-view {
             display: flex;
@@ -460,15 +460,15 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             overflow-y: auto;
             padding: 20px 24px;
             box-sizing: border-box;
-            background: var(--mj-bg-surface-sunken, #f8fafc);
+            background: var(--mj-bg-surface-sunken);
             gap: 16px;
         }
         .section-view-header {
             display: flex;
             align-items: center;
             gap: 14px;
-            background: var(--mj-bg-surface-card, #ffffff);
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 10px;
             padding: 16px 20px;
         }
@@ -496,16 +496,16 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             margin: 0;
             font-size: 19px;
             font-weight: 700;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .view-subtitle {
             margin: 3px 0 0;
             font-size: 13px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
         }
         .inbox-content, .tasks-content, .files-content {
-            background: var(--mj-bg-surface-card, #ffffff);
-            border: 1px solid var(--mj-border-default, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 10px;
             padding: 16px;
             min-height: 480px;
@@ -513,18 +513,18 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             flex: 1;
         }
         .pinned-wrap { padding: 12px 16px 0; }
-        .config-card { margin: 16px; padding: 14px 16px; border: 1px solid var(--mj-border-default, #e5e7eb); border-radius: 10px; background: var(--mj-bg-surface-card, #fff); }
+        .config-card { margin: 16px; padding: 14px 16px; border: 1px solid var(--mj-border-default); border-radius: 10px; background: var(--mj-bg-surface-card); }
         .config-title { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-        .config-sub { margin: 4px 0 12px; font-size: 12px; color: var(--mj-text-muted, #6b7280); }
+        .config-sub { margin: 4px 0 12px; font-size: 12px; color: var(--mj-text-muted); }
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-        .config-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted, #6b7280); margin-bottom: 6px; }
+        .config-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 6px; }
         .config-row { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
         .config-row.static { cursor: default; }
-        .config-row:not(.static):hover { background: var(--mj-bg-surface-sunken, #f3f4f6); }
-        .config-kind { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary, #2563eb); align-self: center; }
+        .config-row:not(.static):hover { background: var(--mj-bg-surface-sunken); }
+        .config-kind { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); align-self: center; }
         .config-main { font-weight: 600; overflow-wrap: anywhere; }
-        .config-meta { grid-column: 2; font-size: 11px; color: var(--mj-text-muted, #6b7280); overflow-wrap: anywhere; }
-        .config-empty { font-size: 12px; color: var(--mj-text-muted, #6b7280); }
+        .config-meta { grid-column: 2; font-size: 11px; color: var(--mj-text-muted); overflow-wrap: anywhere; }
+        .config-empty { font-size: 12px; color: var(--mj-text-muted); }
         .work-tab-container {
             display: flex;
             flex-direction: column;
@@ -537,8 +537,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             align-items: center;
             justify-content: flex-end;
             padding: 8px 16px;
-            border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
-            background: var(--mj-bg-surface, #ffffff);
+            border-bottom: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface);
         }
         .work-view-body {
             flex: 1 1 auto;
@@ -562,24 +562,24 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             width: 100%;
             padding: 10px 14px 10px 38px;
             border-radius: 8px;
-            border: 1px solid var(--mj-border-default, #e2e8f0);
-            background: var(--mj-bg-surface, #ffffff);
+            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface);
             font-size: 13.5px;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
             box-sizing: border-box;
             outline: none;
             transition: border-color 0.15s ease;
         }
         .home-search-input:focus {
-            border-color: var(--mj-brand-primary, #0076b6);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary, #0076b6) 20%, transparent);
+            border-color: var(--mj-brand-primary);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
         }
         .home-search-icon {
             position: absolute;
             left: 12px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
             font-size: 14px;
         }
 
@@ -598,19 +598,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             height: 100%;
             min-height: 400px;
             gap: 12px;
-            color: var(--mj-text-secondary, #64748b);
+            color: var(--mj-text-secondary);
             padding: 40px;
             text-align: center;
         }
         .collab-error-state i {
             font-size: 32px;
-            color: var(--mj-status-warning, #f59e0b);
+            color: var(--mj-status-warning);
         }
         .collab-error-state h3 {
             margin: 0;
             font-size: 16px;
             font-weight: 600;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .collab-error-state p {
             margin: 0;
@@ -624,24 +624,31 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
             justify-content: center;
             padding: 48px 24px;
             text-align: center;
-            color: var(--mj-text-muted, #64748b);
+            color: var(--mj-text-muted);
             gap: 8px;
         }
         .no-person-state i {
             font-size: 28px;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
             margin-bottom: 8px;
         }
         .no-person-state h3 {
             margin: 0;
             font-size: 15px;
             font-weight: 600;
-            color: var(--mj-text-primary, #0f172a);
+            color: var(--mj-text-primary);
         }
         .no-person-state p {
             margin: 0;
             font-size: 13px;
             max-width: 360px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stat-pill,
+            .space-directory-card,
+            .home-search-input {
+                transition: none;
+            }
         }
     `],
     template: `
@@ -669,6 +676,8 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                             [ActiveSpaceId]="activeSpaceId"
                             [SpaceTitle]="spaceTitle"
                             [SpaceIcon]="headerTypeIcon"
+                            [SpaceColor]="headerTypeColor"
+                            [SpaceIsClosed]="isSpaceClosed"
                             [SpaceBand]="spaceAudienceBand"
                             [ActiveTab]="activeTab"
                             [Tabs]="tabs"
@@ -941,11 +950,19 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                         [IsStarred]="isSpaceStarred"
                                         [StarBusy]="isTogglingStar"
                                         [SubSpaces]="overviewSubSpaces"
+                                        [CanInvite]="canInviteHere"
                                         [CanAddSubSpace]="canCreateSpace && !isSpaceClosed"
+                                        [CanEditPages]="canCustomizePages"
+                                        [CanEditCurrentPage]="canEditCurrentTabPage"
+                                        [CanConfigure]="showsSettings"
                                         (BreadcrumbSelectRequested)="onBreadcrumbSelected($event)"
                                         (StarToggleRequested)="onStarToggle()"
                                         (SubSpaceSelectRequested)="onSpaceOpenRequested($event.id)"
+                                        (InviteRequested)="onInviteClicked()"
                                         (NewSubSpaceRequested)="openNewSpaceDialog(activeSpaceId)"
+                                        (EditPageRequested)="onToggleCustomizePages()"
+                                        (NewPageRequested)="onNewPageRequestedFromRail()"
+                                        (SpaceSettingsRequested)="onTabSelectRequested('Settings')"
                                     >
                                         <div actions class="row gap8">
                                             <mjc-audience-pill
@@ -959,11 +976,6 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                 (InviteRequested)="onInviteClicked()"
                                             />
                                             @if (activeTab === 'Overview') {
-                                                @if (canInviteHere) {
-                                                    <button mjButton Variant="secondary" Size="sm" (click)="onInviteClicked()">
-                                                        <i class="fa-solid fa-user-plus"></i>Invite
-                                                    </button>
-                                                }
                                                 @if (canAddHere && hasTab('Work')) {
                                                     <button mjButton Variant="primary" Size="sm" (click)="onNewClicked()">
                                                         <i class="fa-solid fa-plus"></i>New
@@ -2844,6 +2856,15 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             isSpaceOwner ||
             (this.callerSeat?.role.canPromoteBand ?? false) ||
             this.mayAdministerSpaces
+        );
+    }
+
+    public get canEditCurrentTabPage(): boolean {
+        return (
+            this.canCustomizePages &&
+            this.activeTab !== 'Chat' &&
+            this.activeTab !== 'Settings' &&
+            !this.contributedTabComponent
         );
     }
 

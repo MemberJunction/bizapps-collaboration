@@ -504,7 +504,7 @@ export interface PendingAgentPromptState {
         display: block;
         height: 100%;
         min-height: 0;
-        background: var(--mj-bg-surface, #ffffff);
+        background: var(--mj-bg-surface);
       }
 
       .chat-container {
@@ -518,8 +518,8 @@ export interface PendingAgentPromptState {
       .space-chat-header-wrap {
         display: flex;
         flex-direction: column;
-        background: var(--mj-bg-surface, #ffffff);
-        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface);
+        border-bottom: 1px solid var(--mj-border-default);
       }
 
       .space-chat-header-slot {
@@ -527,7 +527,7 @@ export interface PendingAgentPromptState {
         align-items: center;
         justify-content: space-between;
         padding: 10px 16px;
-        background: var(--mj-bg-surface, #ffffff);
+        background: var(--mj-bg-surface);
         gap: 12px;
       }
 
@@ -548,13 +548,13 @@ export interface PendingAgentPromptState {
 
       .hash-icon {
         font-size: 14px;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
       }
 
       .chat-title {
         font-size: 15px;
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -567,25 +567,25 @@ export interface PendingAgentPromptState {
         gap: 6px;
         padding: 3px 10px;
         border-radius: 999px;
-        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary, #059669) 35%, var(--mj-border-default, #cbd5e1));
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 8%, var(--mj-bg-surface, #ffffff));
-        color: var(--mj-text-primary, #0f172a);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 8%, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.14s ease;
+        transition: all var(--mj-transition-fast);
         max-width: 280px;
       }
       .linked-workstream-pill:hover {
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 14%, var(--mj-bg-surface, #ffffff));
-        border-color: var(--mj-brand-tertiary, #059669);
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 14%, var(--mj-bg-surface));
+        border-color: var(--mj-brand-tertiary);
       }
       .linked-workstream-pill i:first-child {
-        color: var(--mj-brand-tertiary, #059669);
+        color: var(--mj-brand-tertiary);
         font-size: 11px;
       }
       .linked-kind-label {
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
         font-weight: 600;
       }
       .linked-title-text {
@@ -596,20 +596,20 @@ export interface PendingAgentPromptState {
       .linked-status-badge {
         padding: 1px 6px;
         border-radius: 999px;
-        background: var(--mj-bg-surface, #ffffff);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default);
         font-size: 10px;
         font-weight: 700;
-        color: var(--mj-text-secondary, #475569);
+        color: var(--mj-text-secondary);
       }
       .linked-jump-icon {
         font-size: 10px;
-        color: var(--mj-text-muted, #94a3b8);
+        color: var(--mj-text-muted);
       }
 
       .subtitle-row {
         font-size: 12px;
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
       }
 
       .header-right {
@@ -629,26 +629,26 @@ export interface PendingAgentPromptState {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        color: var(--mj-text-secondary, #475569);
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
+        color: var(--mj-text-secondary);
         padding: 4px 10px;
         border-radius: 999px;
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.14s ease;
+        transition: all var(--mj-transition-fast);
       }
       .participant-count-pill:hover,
       .participant-count-pill.open {
-        border-color: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-brand-primary, #0076b6);
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 7%, var(--mj-bg-surface, #ffffff));
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface));
       }
       .participant-pill-caret {
         font-size: 9px;
         opacity: 0.7;
-        transition: transform 0.14s ease;
+        transition: transform var(--mj-transition-fast);
       }
       .participant-pill-caret.open {
         transform: rotate(180deg);
@@ -663,10 +663,10 @@ export interface PendingAgentPromptState {
         max-height: 360px;
         display: flex;
         flex-direction: column;
-        background: var(--mj-bg-surface, #ffffff);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default);
         border-radius: 12px;
-        box-shadow: var(--mj-shadow-lg, 0 12px 28px -6px rgba(15, 23, 42, 0.16));
+        box-shadow: var(--mj-shadow-lg);
         overflow: hidden;
       }
 
@@ -675,20 +675,20 @@ export interface PendingAgentPromptState {
         align-items: center;
         justify-content: space-between;
         padding: 10px 14px;
-        border-bottom: 1px solid var(--mj-border-subtle, #f1f5f9);
-        background: var(--mj-bg-surface-sunken, #f8fafc);
+        border-bottom: 1px solid var(--mj-border-subtle);
+        background: var(--mj-bg-surface-sunken);
       }
 
       .chat-participants-title {
         font-size: 12px;
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
       }
 
       .chat-participants-sub {
         font-size: 10.5px;
         font-weight: 600;
-        color: var(--mj-text-muted, #64748b);
+        color: var(--mj-text-muted);
       }
 
       .chat-participants-list {
@@ -707,7 +707,7 @@ export interface PendingAgentPromptState {
         border-radius: 8px;
       }
       .chat-participant-row:hover {
-        background: var(--mj-bg-surface-hover, #f8fafc);
+        background: var(--mj-bg-surface-hover);
       }
 
       .chat-participant-avatar {
@@ -717,15 +717,15 @@ export interface PendingAgentPromptState {
         display: grid;
         place-items: center;
         font-size: 12px;
-        background: var(--mj-text-primary, #0f172a);
-        color: var(--mj-text-inverse, #ffffff);
+        background: var(--mj-text-primary);
+        color: var(--mj-text-inverse);
         flex-shrink: 0;
         overflow: hidden;
       }
       .chat-participant-avatar.is-ai {
         border-radius: 7px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse, #ffffff);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
       }
 
       .avatar-img {
@@ -751,7 +751,7 @@ export interface PendingAgentPromptState {
       .chat-participant-name {
         font-size: 12.5px;
         font-weight: 650;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -762,17 +762,17 @@ export interface PendingAgentPromptState {
         font-weight: 600;
         padding: 1px 6px;
         border-radius: 999px;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        color: var(--mj-text-secondary, #475569);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
       }
       .chat-participant-badge.is-ai {
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 12%, transparent);
-        color: var(--mj-brand-tertiary, #059669);
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 12%, transparent);
+        color: var(--mj-brand-tertiary);
       }
 
       .chat-participant-sub {
         font-size: 11px;
-        color: var(--mj-text-muted, #64748b);
+        color: var(--mj-text-muted);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -781,38 +781,38 @@ export interface PendingAgentPromptState {
       .chat-participant-mention-btn {
         padding: 3px 8px;
         border-radius: 6px;
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-brand-primary, #0076b6);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-brand-primary);
         font-size: 11px;
         font-weight: 600;
         cursor: pointer;
         flex-shrink: 0;
       }
       .chat-participant-mention-btn:hover {
-        border-color: var(--mj-brand-primary, #0076b6);
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 8%, var(--mj-bg-surface, #ffffff));
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
       }
 
       /* PR #6176: Live Agent Activity & Routing Decision Progress Bar */
       .agent-working-progress-banner {
         display: flex;
         flex-direction: column;
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, var(--mj-bg-surface, #ffffff));
-        border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary, #0076b6) 18%, var(--mj-border-default, #e2e8f0));
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+        border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-border-default));
       }
 
       .agent-progress-track {
         width: 100%;
         height: 3px;
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 14%, transparent);
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
         overflow: hidden;
         position: relative;
       }
 
       .agent-progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, var(--mj-brand-primary, #0076b6), var(--mj-brand-tertiary, #059669));
+        background: linear-gradient(90deg, var(--mj-brand-primary), var(--mj-brand-tertiary));
         transition: width 0.25s ease;
       }
 
@@ -848,18 +848,18 @@ export interface PendingAgentPromptState {
         width: 7px;
         height: 7px;
         border-radius: 999px;
-        background: var(--mj-brand-primary, #0076b6);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary, #0076b6) 24%, transparent);
+        background: var(--mj-brand-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 24%, transparent);
       }
 
       .agent-progress-icon {
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
         font-size: 12px;
       }
 
       .agent-progress-title {
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
       }
 
       .agent-route-badge {
@@ -869,13 +869,13 @@ export interface PendingAgentPromptState {
         border-radius: 999px;
         font-size: 10.5px;
         font-weight: 700;
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, var(--mj-bg-surface, #ffffff));
-        color: var(--mj-brand-primary, #0076b6);
-        border: 1px solid color-mix(in srgb, var(--mj-brand-primary, #0076b6) 25%, transparent);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
       }
 
       .agent-progress-step {
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -884,7 +884,7 @@ export interface PendingAgentPromptState {
       .agent-progress-elapsed {
         font-size: 11px;
         font-weight: 600;
-        color: var(--mj-text-muted, #94a3b8);
+        color: var(--mj-text-muted);
         font-variant-numeric: tabular-nums;
       }
 
@@ -903,30 +903,30 @@ export interface PendingAgentPromptState {
         align-self: flex-start;
         padding: 3px 9px;
         border-radius: 6px;
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        border-left: 3px solid var(--mj-brand-primary, #0076b6);
-        background: var(--mj-bg-surface-sunken, #f8fafc);
-        color: var(--mj-text-secondary, #475569);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-brand-primary);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
         font-size: 11.5px;
         cursor: pointer;
         max-width: 100%;
         text-align: left;
       }
       .msg-thread-parent-chip:hover {
-        background: var(--mj-bg-surface-hover, #f1f5f9);
-        color: var(--mj-text-primary, #0f172a);
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
       }
       .msg-thread-parent-chip i {
         font-size: 10px;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
       }
       .parent-speaker {
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
         white-space: nowrap;
       }
       .parent-excerpt {
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -936,8 +936,8 @@ export interface PendingAgentPromptState {
         border-radius: 999px;
         font-size: 10px;
         font-weight: 700;
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
-        color: var(--mj-brand-primary, #0076b6);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+        color: var(--mj-brand-primary);
         white-space: nowrap;
       }
 
@@ -956,17 +956,17 @@ export interface PendingAgentPromptState {
         padding: 4px 10px 4px 6px;
         border-radius: 8px;
         border: 1px solid transparent;
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, var(--mj-bg-surface, #ffffff));
-        color: var(--mj-text-secondary, #64748b);
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+        color: var(--mj-text-secondary);
         font-size: 12px;
         cursor: pointer;
-        transition: all 0.14s ease;
+        transition: all var(--mj-transition-fast);
         max-width: 100%;
       }
       .msg-thread-replies-btn.slack-thread-bar:hover,
       .msg-thread-replies-btn.slack-thread-bar.expanded {
-        border-color: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 35%, var(--mj-border-default, #cbd5e1));
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 9%, var(--mj-bg-surface, #ffffff));
+        border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface));
       }
 
       .thread-avatar-stack {
@@ -981,9 +981,9 @@ export interface PendingAgentPromptState {
         display: inline-grid;
         place-items: center;
         font-size: 9.5px;
-        background: var(--mj-text-primary, #0f172a);
-        color: var(--mj-text-inverse, #ffffff);
-        border: 1.5px solid var(--mj-bg-surface, #ffffff);
+        background: var(--mj-text-primary);
+        color: var(--mj-text-inverse);
+        border: 1.5px solid var(--mj-bg-surface);
         margin-left: -4px;
         overflow: hidden;
       }
@@ -992,19 +992,19 @@ export interface PendingAgentPromptState {
       }
       .thread-mini-avatar.is-ai {
         border-radius: 5px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse, #ffffff);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
       }
 
       .thread-reply-count {
         font-weight: 700;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
         white-space: nowrap;
       }
 
       .thread-last-speaker {
         font-size: 11.5px;
-        color: var(--mj-text-muted, #64748b);
+        color: var(--mj-text-muted);
         white-space: nowrap;
       }
 
@@ -1014,14 +1014,14 @@ export interface PendingAgentPromptState {
         gap: 5px;
         font-size: 11px;
         font-weight: 600;
-        color: var(--mj-brand-tertiary, #059669);
+        color: var(--mj-brand-tertiary);
       }
 
       .thread-live-dot {
         width: 6px;
         height: 6px;
         border-radius: 999px;
-        background: var(--mj-brand-tertiary, #059669);
+        background: var(--mj-brand-tertiary);
       }
 
       .thread-view-cue {
@@ -1030,7 +1030,7 @@ export interface PendingAgentPromptState {
         gap: 4px;
         font-size: 11px;
         font-weight: 600;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
         margin-left: 2px;
       }
       .thread-view-cue i {
@@ -1043,19 +1043,19 @@ export interface PendingAgentPromptState {
         gap: 5px;
         padding: 3px 9px;
         border-radius: 6px;
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-secondary, #64748b);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.12s ease;
+        transition: all var(--mj-transition-fast);
       }
       .msg-reply-btn:hover,
       .msg-reply-btn.active {
-        border-color: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-brand-primary, #0076b6);
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 8%, var(--mj-bg-surface, #ffffff));
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
       }
 
       .msg-thread-replies-drawer {
@@ -1064,11 +1064,11 @@ export interface PendingAgentPromptState {
         gap: 8px;
         padding: 10px 12px;
         margin-top: 4px;
-        border-left: 3px solid var(--mj-brand-primary, #0076b6);
-        background: var(--mj-bg-surface-sunken, #f8fafc);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        border-left: 3px solid var(--mj-brand-primary);
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
         border-left-width: 3px;
-        border-left-color: var(--mj-brand-primary, #0076b6);
+        border-left-color: var(--mj-brand-primary);
         border-radius: 0 10px 10px 0;
       }
 
@@ -1078,8 +1078,8 @@ export interface PendingAgentPromptState {
         gap: 10px;
         padding: 8px 10px;
         border-radius: 8px;
-        background: var(--mj-bg-surface, #ffffff);
-        border: 1px solid var(--mj-border-subtle, #f1f5f9);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-subtle);
       }
 
       .thread-reply-avatar {
@@ -1089,16 +1089,16 @@ export interface PendingAgentPromptState {
         display: grid;
         place-items: center;
         font-size: 11px;
-        background: var(--mj-text-primary, #0f172a);
-        color: var(--mj-text-inverse, #ffffff);
+        background: var(--mj-text-primary);
+        color: var(--mj-text-inverse);
         flex-shrink: 0;
         margin-top: 1px;
         overflow: hidden;
       }
       .thread-reply-avatar.is-ai {
         border-radius: 6px;
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse, #ffffff);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
       }
 
       .thread-reply-content {
@@ -1126,10 +1126,10 @@ export interface PendingAgentPromptState {
 
       .thread-reply-author {
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
       }
       .thread-reply-author.is-ai {
-        color: var(--mj-brand-tertiary, #059669);
+        color: var(--mj-brand-tertiary);
       }
 
       .thread-reply-role-pill {
@@ -1137,12 +1137,12 @@ export interface PendingAgentPromptState {
         font-weight: 600;
         padding: 1px 6px;
         border-radius: 999px;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        color: var(--mj-text-secondary, #64748b);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
       }
       .thread-reply-role-pill.is-ai {
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 12%, transparent);
-        color: var(--mj-brand-tertiary, #059669);
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 12%, transparent);
+        color: var(--mj-brand-tertiary);
       }
 
       .thread-nested-target {
@@ -1150,7 +1150,7 @@ export interface PendingAgentPromptState {
         align-items: center;
         gap: 4px;
         font-size: 10.5px;
-        color: var(--mj-text-muted, #64748b);
+        color: var(--mj-text-muted);
       }
       .thread-nested-target i {
         font-size: 9px;
@@ -1162,23 +1162,23 @@ export interface PendingAgentPromptState {
         gap: 4px;
         padding: 2px 7px;
         border-radius: 5px;
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-secondary, #64748b);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
         font-size: 10.5px;
         font-weight: 600;
         cursor: pointer;
       }
       .thread-inline-reply-btn:hover,
       .thread-inline-reply-btn.active {
-        border-color: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-brand-primary, #0076b6);
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
       }
 
       .thread-reply-body {
         font-size: 12.5px;
         line-height: 1.45;
-        color: var(--mj-text-primary, #1e293b);
+        color: var(--mj-text-primary);
         white-space: pre-wrap;
         word-break: break-word;
       }
@@ -1195,15 +1195,15 @@ export interface PendingAgentPromptState {
         gap: 6px;
         padding: 4px 10px;
         border-radius: 6px;
-        border: 1px dashed color-mix(in srgb, var(--mj-brand-primary, #0076b6) 40%, var(--mj-border-default, #cbd5e1));
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-brand-primary, #0076b6);
+        border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+        background: var(--mj-bg-surface);
+        color: var(--mj-brand-primary);
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
       }
       .thread-drawer-reply-btn:hover {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 6%, var(--mj-bg-surface, #ffffff));
+        background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
       }
 
       /* PR #6176: Composer Thread Reply Banner */
@@ -1215,8 +1215,8 @@ export interface PendingAgentPromptState {
         padding: 8px 14px;
         margin: 0 12px 6px;
         border-radius: 10px;
-        border: 1px solid color-mix(in srgb, var(--mj-brand-primary, #0076b6) 28%, var(--mj-border-default, #cbd5e1));
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, var(--mj-bg-surface, #ffffff));
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
       }
 
       .reply-banner-left {
@@ -1228,7 +1228,7 @@ export interface PendingAgentPromptState {
 
       .reply-banner-icon {
         margin-top: 3px;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
         font-size: 12px;
       }
 
@@ -1248,7 +1248,7 @@ export interface PendingAgentPromptState {
 
       .reply-banner-label {
         font-size: 12px;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
       }
 
       .route-preview-pill {
@@ -1261,17 +1261,17 @@ export interface PendingAgentPromptState {
         font-weight: 600;
       }
       .route-preview-pill.agent {
-        background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, var(--mj-bg-surface, #ffffff));
-        color: var(--mj-brand-primary, #0076b6);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
       }
       .route-preview-pill.human {
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        color: var(--mj-text-secondary, #475569);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
       }
 
       .reply-banner-excerpt {
         font-size: 11.5px;
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1283,15 +1283,15 @@ export interface PendingAgentPromptState {
         border-radius: 6px;
         border: 1px solid transparent;
         background: transparent;
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
         cursor: pointer;
         display: grid;
         place-items: center;
         flex-shrink: 0;
       }
       .reply-banner-close:hover {
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        color: var(--mj-text-primary, #0f172a);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-primary);
       }
 
       /* PR #6176: "Ask if an agent should go" Prompt Bar */
@@ -1303,8 +1303,8 @@ export interface PendingAgentPromptState {
         padding: 8px 14px;
         margin: 0 12px 6px;
         border-radius: 10px;
-        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary, #059669) 35%, var(--mj-border-default, #cbd5e1));
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 6%, var(--mj-bg-surface, #ffffff));
+        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 6%, var(--mj-bg-surface));
         flex-wrap: wrap;
       }
 
@@ -1321,8 +1321,8 @@ export interface PendingAgentPromptState {
         border-radius: 7px;
         display: grid;
         place-items: center;
-        background: color-mix(in srgb, var(--mj-brand-tertiary, #059669) 14%, transparent);
-        color: var(--mj-brand-tertiary, #059669);
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 14%, transparent);
+        color: var(--mj-brand-tertiary);
         font-size: 12px;
         flex-shrink: 0;
       }
@@ -1337,11 +1337,11 @@ export interface PendingAgentPromptState {
 
       .ask-agent-title {
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
       }
 
       .ask-agent-reason {
-        color: var(--mj-text-secondary, #475569);
+        color: var(--mj-text-secondary);
       }
 
       .ask-agent-actions {
@@ -1357,15 +1357,15 @@ export interface PendingAgentPromptState {
         gap: 6px;
         padding: 5px 11px;
         border-radius: 7px;
-        border: 1px solid var(--mj-brand-primary, #0076b6);
-        background: var(--mj-brand-primary, #0076b6);
-        color: var(--mj-text-inverse, #ffffff);
+        border: 1px solid var(--mj-brand-primary);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
       }
       .ask-agent-confirm-btn:hover {
-        filter: brightness(0.95);
+        background: var(--mj-brand-primary-hover);
       }
 
       .ask-agent-dismiss-btn {
@@ -1373,16 +1373,16 @@ export interface PendingAgentPromptState {
         align-items: center;
         padding: 5px 10px;
         border-radius: 7px;
-        border: 1px solid var(--mj-border-default, #cbd5e1);
-        background: var(--mj-bg-surface, #ffffff);
-        color: var(--mj-text-secondary, #475569);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
         font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
       }
       .ask-agent-dismiss-btn:hover {
-        color: var(--mj-text-primary, #0f172a);
-        border-color: var(--mj-border-strong, #94a3b8);
+        color: var(--mj-text-primary);
+        border-color: var(--mj-border-strong);
       }
 
       .no-conversation-state {
@@ -1417,13 +1417,13 @@ export interface PendingAgentPromptState {
         padding: 0;
         border-radius: 999px;
         font-size: 13px;
-        color: var(--mj-status-warning, #d97706);
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        color: var(--mj-status-warning);
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
         cursor: pointer;
       }
       .read-only-lock:focus-visible {
-        outline: 2px solid var(--mj-brand-primary, #0076b6);
+        outline: 2px solid var(--mj-brand-primary);
         outline-offset: 2px;
       }
       .read-only-reason {
@@ -1439,7 +1439,7 @@ export interface PendingAgentPromptState {
         line-height: 1.4;
         color: var(--mj-text-primary);
         background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        border: 1px solid var(--mj-border-default);
         box-shadow: var(--mj-shadow-md);
       }
       .read-only-lock-corner {

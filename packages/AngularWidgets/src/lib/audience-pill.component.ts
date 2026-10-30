@@ -1,6 +1,8 @@
 import { Component, ElementRef, EventEmitter, HostListener, Inject, Input, Optional, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { CollabAvatarComponent } from './avatar.component';
 import { CollabAvatarStackComponent } from './avatar-stack.component';
+import { COLLAB_TOKENS_CSS } from './tokens';
 import { AvatarItem, SpaceMemberModel } from './types';
 
 export interface AudiencePopoverPersonItem {
@@ -17,7 +19,7 @@ export interface AudiencePopoverPersonItem {
 @Component({
   selector: 'mjc-audience-pill',
   standalone: true,
-  imports: [CommonModule, CollabAvatarStackComponent],
+  imports: [CommonModule, CollabAvatarComponent, CollabAvatarStackComponent],
   template: `
     <div class="aud-wrap">
       <button
@@ -70,7 +72,7 @@ export interface AudiencePopoverPersonItem {
             @if (teamDisplayList.length > 0) {
               <div class="aud-pop-section">
                 <div class="aud-pop-sec-head">
-                  <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                  <i class="fa-solid fa-lock" aria-hidden="true"></i>
                   <span>Team ({{ teamDisplayList.length }})</span>
                 </div>
                 @for (person of teamDisplayList; track person.id) {
@@ -79,13 +81,14 @@ export interface AudiencePopoverPersonItem {
                     class="aud-person-row"
                     data-testid="audience-pill-person-row"
                     (click)="onPersonClicked(person, $event)">
-                    <span class="aud-person-avatar">
-                      @if (person.avatarUrl) {
-                        <img [src]="person.avatarUrl" [alt]="person.name" />
-                      } @else {
-                        {{ person.initials }}
-                      }
-                    </span>
+                    <mjc-avatar
+                      [PersonId]="person.id"
+                      [Name]="person.name"
+                      [Initials]="person.initials"
+                      [AvatarUrl]="person.avatarUrl || ''"
+                      [IsOutside]="false"
+                      Size="sm">
+                    </mjc-avatar>
                     <span class="aud-person-info">
                       <span class="aud-person-name-row">
                         <span class="aud-person-name">{{ person.name }}</span>
@@ -108,8 +111,8 @@ export interface AudiencePopoverPersonItem {
             @if (outsideDisplayList.length > 0) {
               <div class="aud-pop-section">
                 <div class="aud-pop-sec-head outside">
-                  <i class="fa-solid fa-user-group" aria-hidden="true"></i>
-                  <span>Outside Participants ({{ outsideDisplayList.length }})</span>
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                  <span>Outside participants ({{ outsideDisplayList.length }})</span>
                 </div>
                 @for (person of outsideDisplayList; track person.id) {
                   <button
@@ -117,13 +120,14 @@ export interface AudiencePopoverPersonItem {
                     class="aud-person-row"
                     data-testid="audience-pill-person-row"
                     (click)="onPersonClicked(person, $event)">
-                    <span class="aud-person-avatar outside">
-                      @if (person.avatarUrl) {
-                        <img [src]="person.avatarUrl" [alt]="person.name" />
-                      } @else {
-                        {{ person.initials }}
-                      }
-                    </span>
+                    <mjc-avatar
+                      [PersonId]="person.id"
+                      [Name]="person.name"
+                      [Initials]="person.initials"
+                      [AvatarUrl]="person.avatarUrl || ''"
+                      [IsOutside]="true"
+                      Size="sm">
+                    </mjc-avatar>
                     <span class="aud-person-info">
                       <span class="aud-person-name-row">
                         <span class="aud-person-name">{{ person.name }}</span>
@@ -153,7 +157,7 @@ export interface AudiencePopoverPersonItem {
               data-testid="audience-pill-manage-btn"
               (click)="onManagePeople($event)">
               <i class="fa-solid fa-users-gear" aria-hidden="true"></i>
-              <span>Manage People &amp; Access</span>
+              <span>Manage people &amp; access</span>
             </button>
             @if (CanInvite) {
               <button
@@ -170,14 +174,14 @@ export interface AudiencePopoverPersonItem {
       }
     </div>
   `,
-  styles: [`
+  styles: [COLLAB_TOKENS_CSS, `
     :host {
       display: inline-flex;
       vertical-align: middle;
       color: var(--mj-text-primary);
-      font-family: var(--mj-font-family, Inter, sans-serif);
-      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
-      line-height: var(--mjc-line-height, 1.45);
+      font-family: var(--mj-font-family);
+      font-feature-settings: var(--mjc-font-feature-settings);
+      line-height: var(--mjc-line-height);
     }
     .aud-wrap {
       position: relative;
@@ -187,55 +191,55 @@ export interface AudiencePopoverPersonItem {
     .aud {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-right: 4px;
-      padding: 4px 12px 4px 6px;
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      border-radius: 99px;
-      background: var(--mj-bg-surface, #ffffff);
-      height: 38px;
+      gap: var(--mj-space-2-5);
+      margin-right: var(--mj-space-1);
+      padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-1-5);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-full);
+      background: var(--mj-bg-surface);
+      height: 36px;
       box-sizing: border-box;
       user-select: none;
       cursor: pointer;
       font: inherit;
       text-align: left;
-      transition: border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+      transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast), box-shadow var(--mj-transition-fast);
     }
     .aud:hover,
     .aud.is-open {
-      border-color: var(--mj-brand-primary, #0076b6);
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 5%, var(--mj-bg-surface, #ffffff));
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+      box-shadow: var(--mj-shadow-sm);
     }
     .aud-div {
       width: 1px;
       height: 18px;
-      background: var(--mj-border-default, #e2e8f0);
+      background: var(--mj-border-default);
     }
     .aud-t {
       display: flex;
       flex-direction: column;
-      line-height: 1.15;
+      line-height: var(--mj-leading-tight);
     }
     .aud-t b {
-      font-size: 12.5px;
-      font-weight: 650;
-      color: var(--mj-text-primary, #0f172a);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-primary);
     }
     .aud-t span {
-      font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
       white-space: nowrap;
     }
     .aud-caret {
-      font-size: 10px;
-      color: var(--mj-text-muted, #64748b);
-      margin-left: 2px;
-      transition: transform 0.14s ease, color 0.14s ease;
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      margin-left: var(--mj-space-0-5);
+      transition: transform var(--mj-transition-fast), color var(--mj-transition-fast);
     }
     .aud:hover .aud-caret,
     .aud-caret.open {
-      color: var(--mj-brand-primary, #0076b6);
+      color: var(--mj-brand-primary);
     }
     .aud-caret.open {
       transform: rotate(180deg);
@@ -243,17 +247,17 @@ export interface AudiencePopoverPersonItem {
 
     .aud-popover {
       position: absolute;
-      top: calc(100% + 8px);
-      right: 4px;
-      z-index: 60;
+      top: calc(100% + var(--mj-space-2));
+      right: var(--mj-space-1);
+      z-index: var(--mj-z-popover);
       width: 330px;
       max-height: 420px;
       display: flex;
       flex-direction: column;
-      background: var(--mj-bg-surface, #ffffff);
-      border: 1px solid var(--mj-border-default, #e2e8f0);
-      border-radius: 14px;
-      box-shadow: var(--mj-shadow-lg, 0 14px 32px -6px rgba(15, 23, 42, 0.18));
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
       overflow: hidden;
     }
 
@@ -261,48 +265,48 @@ export interface AudiencePopoverPersonItem {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      padding: 11px 14px;
-      border-bottom: 1px solid var(--mj-border-subtle, #f1f5f9);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-3) var(--mj-space-3-5);
+      border-bottom: 1px solid var(--mj-border-subtle);
+      background: var(--mj-bg-surface-sunken);
     }
     .aud-pop-head-text {
       display: flex;
       flex-direction: column;
-      gap: 1px;
+      gap: var(--mj-space-0-5);
       min-width: 0;
     }
     .aud-pop-title {
-      font-size: 12.5px;
-      font-weight: 700;
-      color: var(--mj-text-primary, #0f172a);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-primary);
     }
     .aud-pop-sub {
-      font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
     }
     .aud-pop-close {
       width: 24px;
       height: 24px;
-      border-radius: 6px;
+      border-radius: var(--mj-radius-sm);
       border: none;
       background: transparent;
-      color: var(--mj-text-muted, #64748b);
+      color: var(--mj-text-muted);
       cursor: pointer;
       display: grid;
       place-items: center;
       flex-shrink: 0;
     }
     .aud-pop-close:hover {
-      background: var(--mj-bg-surface-hover, #e2e8f0);
-      color: var(--mj-text-primary, #0f172a);
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
     }
 
     .aud-pop-body {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 8px;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
       overflow-y: auto;
       max-height: 290px;
     }
@@ -310,63 +314,38 @@ export interface AudiencePopoverPersonItem {
     .aud-pop-section {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: var(--mj-space-0-5);
     }
 
     .aud-pop-sec-head {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      font-size: 10.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--mj-text-secondary, #475569);
+      gap: var(--mj-space-1-5);
+      padding: var(--mj-space-1) var(--mj-space-2);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-muted);
     }
     .aud-pop-sec-head.outside {
-      color: var(--mj-status-warning, #b45309);
+      color: var(--mjc-shared);
     }
 
     .aud-person-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: var(--mj-space-2-5);
       width: 100%;
-      padding: 6px 8px;
-      border-radius: 8px;
+      padding: var(--mj-space-1-5) var(--mj-space-2);
+      border-radius: var(--mj-radius-md);
       border: none;
       background: transparent;
       text-align: left;
       font: inherit;
       cursor: pointer;
-      transition: background 0.12s ease;
+      transition: background var(--mj-transition-fast);
     }
     .aud-person-row:hover {
-      background: var(--mj-bg-surface-hover, #f1f5f9);
-    }
-
-    .aud-person-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      font-size: 11px;
-      font-weight: 700;
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 14%, var(--mj-bg-surface, #ffffff));
-      color: var(--mj-brand-primary, #0076b6);
-      flex-shrink: 0;
-      overflow: hidden;
-    }
-    .aud-person-avatar.outside {
-      background: color-mix(in srgb, var(--mj-status-warning, #d97706) 15%, var(--mj-bg-surface, #ffffff));
-      color: var(--mj-status-warning, #b45309);
-    }
-    .aud-person-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+      background: var(--mj-bg-surface-hover);
     }
 
     .aud-person-info {
@@ -379,101 +358,113 @@ export interface AudiencePopoverPersonItem {
     .aud-person-name-row {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--mj-space-1-5);
       flex-wrap: wrap;
     }
 
     .aud-person-name {
-      font-size: 12.5px;
-      font-weight: 650;
-      color: var(--mj-text-primary, #0f172a);
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-medium);
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .aud-person-role {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: var(--mj-bg-surface-sunken, #f1f5f9);
-      color: var(--mj-text-secondary, #475569);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-medium);
+      padding: var(--mj-space-0-5) var(--mj-space-1-5);
+      border-radius: var(--mj-radius-full);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
     }
     .aud-person-role.outside {
-      background: color-mix(in srgb, var(--mj-status-warning, #d97706) 12%, transparent);
-      color: var(--mj-status-warning, #b45309);
+      background: var(--mjc-shared-bg);
+      color: var(--mjc-shared);
     }
 
     .aud-person-invited {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, transparent);
-      color: var(--mj-brand-primary, #0076b6);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-medium);
+      padding: var(--mj-space-0-5) var(--mj-space-1-5);
+      border-radius: var(--mj-radius-full);
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .aud-person-email {
-      font-size: 11px;
-      color: var(--mj-text-muted, #64748b);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .aud-pop-empty {
-      padding: 16px;
+      padding: var(--mj-space-4);
       text-align: center;
-      font-size: 12px;
-      color: var(--mj-text-muted, #64748b);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
     }
 
     .aud-pop-foot {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      padding: 9px 12px;
-      border-top: 1px solid var(--mj-border-subtle, #f1f5f9);
-      background: var(--mj-bg-surface-sunken, #f8fafc);
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2-5) var(--mj-space-3);
+      border-top: 1px solid var(--mj-border-subtle);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .aud-manage-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--mj-border-default, #cbd5e1);
-      background: var(--mj-bg-surface, #ffffff);
-      color: var(--mj-text-primary, #0f172a);
-      font-size: 11.5px;
-      font-weight: 600;
+      gap: var(--mj-space-1-5);
+      padding: var(--mj-space-1-5) var(--mj-space-2-5);
+      border-radius: var(--mj-radius-md);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
       cursor: pointer;
       flex: 1;
       justify-content: center;
+      transition: border-color var(--mj-transition-fast), color var(--mj-transition-fast);
     }
     .aud-manage-btn:hover {
-      border-color: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-brand-primary, #0076b6);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
     }
 
     .aud-invite-btn {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--mj-brand-primary, #0076b6);
-      background: var(--mj-brand-primary, #0076b6);
-      color: var(--mj-text-inverse, #ffffff);
-      font-size: 11.5px;
-      font-weight: 600;
+      gap: var(--mj-space-1);
+      padding: var(--mj-space-1-5) var(--mj-space-3);
+      border-radius: var(--mj-radius-md);
+      border: 1px solid var(--mj-brand-primary);
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-semibold);
       cursor: pointer;
+      transition: background var(--mj-transition-fast);
     }
     .aud-invite-btn:hover {
-      filter: brightness(0.95);
+      background: var(--mj-brand-primary-hover);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .aud,
+      .aud-caret,
+      .aud-person-row,
+      .aud-manage-btn,
+      .aud-invite-btn {
+        transition: none;
+      }
     }
   `]
 })

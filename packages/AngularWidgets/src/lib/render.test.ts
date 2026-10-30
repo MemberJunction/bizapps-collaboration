@@ -5,7 +5,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJConfirmService, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
 import { ChatSlotDirective, ConversationStreamingService } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -16,7 +16,9 @@ import { CollabNewConversationDialogComponent } from './new-conversation-dialog.
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import { CollabSpaceHeaderComponent } from './space-header.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
+import { CollabSpacePagesComponent } from './space-pages.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
@@ -158,17 +160,16 @@ describe('the rail, rendered', () => {
     without.componentRef.setInput('Mode', 'space');
     without.componentRef.setInput('Tabs', [overview]);
     without.detectChanges();
-    expect((without.nativeElement as HTMLElement).textContent).not.toContain('CONVERSATIONS');
+    expect((without.nativeElement as HTMLElement).textContent).not.toContain('Conversations');
     without.destroy();
     const withChat = TestBed.createComponent(CollabSpaceRailComponent);
     withChat.componentRef.setInput('Mode', 'space');
     withChat.componentRef.setInput('Tabs', [overview, chat]);
     withChat.detectChanges();
-    expect((withChat.nativeElement as HTMLElement).textContent).toContain('CONVERSATIONS');
+    expect((withChat.nativeElement as HTMLElement).textContent).toContain('Conversations');
   });
 
-
-  it('lets the collapsed space tile be operated from the keyboard', async () => {
+  it('lets the collapsed space switcher tile open the space switcher popover and return to All spaces', async () => {
     const fixture = TestBed.createComponent(CollabSpaceRailComponent);
     fixture.componentRef.setInput('SpaceTitle', 'Northwind');
     fixture.componentRef.setInput('Mode', 'space');
@@ -177,11 +178,93 @@ describe('the rail, rendered', () => {
     fixture.componentInstance.BackToSpacesRequested.subscribe(back);
     fixture.detectChanges();
     await fixture.whenStable();
-    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.collapsed-tile')!;
-    expect(tile.getAttribute('role')).toBe('button');
-    expect(tile.getAttribute('tabindex')).toBe('0');
-    tile.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.collapsed-tile')!;
+    expect(tile.tagName).toBe('BUTTON');
+    expect(tile.getAttribute('aria-haspopup')).toBe('dialog');
+    tile.click();
+    fixture.detectChanges();
+    const allSpacesBtn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="switcher-all-spaces"]')!;
+    expect(allSpacesBtn).not.toBeNull();
+    allSpacesBtn.click();
     expect(back).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the header and page edit bar, rendered', () => {
+  it('shows breadcrumbs only for a sub-space and routes Invite, New sub-space, Edit page, New page, and Space settings through the ⋯ menu', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
+    fixture.componentRef.setInput('Title', 'Northwind');
+    fixture.componentRef.setInput('Breadcrumbs', [{ label: 'Spaces' }, { label: 'Northwind' }]);
+    fixture.componentRef.setInput('CanInvite', true);
+    fixture.componentRef.setInput('CanAddSubSpace', true);
+    fixture.componentRef.setInput('CanEditPages', true);
+    fixture.componentRef.setInput('CanEditCurrentPage', true);
+    fixture.componentRef.setInput('CanConfigure', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.crumbs')).toBeNull();
+
+    fixture.componentRef.setInput('Breadcrumbs', [
+      { label: 'Spaces' },
+      { label: 'Board of Directors', spaceId: 'parent-1' },
+      { label: 'Audit Committee', spaceId: 'sub-1' },
+    ]);
+    fixture.detectChanges();
+    expect(root.querySelector('.crumbs')).not.toBeNull();
+
+    const moreBtn = root.querySelector<HTMLButtonElement>('[data-testid="space-header-more-btn"]')!;
+    expect(moreBtn).not.toBeNull();
+    moreBtn.click();
+    fixture.detectChanges();
+    expect(root.querySelector('[data-testid="space-header-more-menu"]')).not.toBeNull();
+
+    const editRequested = vi.fn();
+    fixture.componentInstance.EditPageRequested.subscribe(editRequested);
+    root.querySelector<HTMLButtonElement>('[data-testid="header-menu-edit-page"]')!.click();
+    expect(editRequested).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the page edit bar for viewers and shows Editing · Draft with [Publish] [Discard] in edit mode, confirming discard via MJConfirmService', async () => {
+    const confirmMock = { Confirm: vi.fn().mockResolvedValue(true) };
+    TestBed.overrideComponent(CollabSpacePagesComponent, {
+      add: { providers: [{ provide: MJConfirmService, useValue: confirmMock }] },
+    });
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('Pages', [
+      {
+        id: 'p1',
+        title: 'Overview',
+        iconClass: 'fa-solid fa-compass',
+        pageType: 'Overview',
+        band: 'Shared',
+        status: 'Published',
+        sequence: 0,
+        collaborative: true,
+        summary: 'Welcome',
+        body: 'Initial body',
+        blocks: [],
+        comments: [],
+        updatedLabel: 'Just now',
+        authorName: 'Ada',
+      },
+    ]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="page-edit-bar"]')).toBeNull();
+
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.detectChanges();
+    const bar = root.querySelector<HTMLElement>('[data-testid="page-edit-bar"]')!;
+    expect(bar).not.toBeNull();
+    expect(bar.textContent).toContain('Editing · Draft');
+    const buttons = Array.from(bar.querySelectorAll('button')).map((b) => b.textContent?.trim());
+    expect(buttons).toEqual(['Publish', 'Discard']);
+
+    fixture.componentInstance.editSessionDirty = true;
+    await fixture.componentInstance.discardChanges(fixture.componentInstance.activePage!);
+    expect(confirmMock.Confirm).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.isCustomizing).toBe(false);
   });
 });
 
