@@ -17,6 +17,9 @@ export class ExecuteSpaceChatTurnInput {
     @Field({ nullable: true })
     AgentID?: string;
 
+    @Field({ nullable: true })
+    Route?: string;
+
     /** Answer once the reply row is written In-Progress; the run goes on, and its progress and text reach this session. */
     @Field({ nullable: true })
     Background?: boolean;
@@ -72,6 +75,7 @@ export class ExecuteSpaceChatTurnResolver extends ResolverBase {
                 conversationId: input.ConversationID,
                 userMessageId: input.UserMessageID,
                 agentId: input.AgentID,
+                route: input.Route,
                 // A background turn answers at once, and the run's progress and text reach the browser as they happen
                 background: input.Background === true,
                 observer: input.Background === true ? this.observeTurn(pubSub, context.userPayload) : undefined,

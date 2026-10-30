@@ -94,6 +94,7 @@ export interface PendingAgentPromptState {
           [AllowRealtime]="false"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
+          [EnableDecisionRouting]="EnableDecisionRouting"
           [MentionPeople]="MentionPeople"
           [AgentHistoryFrom]="AgentHistoryFrom"
           [AgentTurnHandler]="AgentTurnHandler"
@@ -1601,6 +1602,7 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   @Input() public AllowAttachments = false;
   @Input() public AgentReplyMode: AgentReplyMode = 'MentionOnly';
   @Input() public AllowedAgentIDs: readonly string[] = [];
+  @Input() public EnableDecisionRouting = true;
   @Input() public CanStartConversation = false;
   @Input() public HasConversations = false;
   @Input() public MentionPeople: readonly MentionPerson[] | null = null;
