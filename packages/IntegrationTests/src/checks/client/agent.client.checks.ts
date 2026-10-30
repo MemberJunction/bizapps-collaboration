@@ -401,6 +401,44 @@ const checks: NamedCheck[] = [
                 });
                 Assert(!secondTurnRes.Success, 'Second turn on already-processed UserMessageID must be refused over wire');
                 Assert(secondTurnRes.ErrorMessage === 'This message has already been processed by an agent turn.', `Second turn refusal matches: ${secondTurnRes.ErrorMessage}`);
+
+                // 5. Person-only @mention is refused a turn over the wire
+                const personMentionMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: `@{"type":"user","id":"${beaCtx.User.ID}","name":"Bea"} can you check the shared photo?`,
+                });
+                Assert(personMentionMsg.Success === true && !!personMentionMsg.DetailID, `Ada posted person-mention message: ${personMentionMsg.ErrorMessage ?? ''}`);
+                if (personMentionMsg.DetailID) createdDetailIds.push(personMentionMsg.DetailID);
+
+                const personTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: personMentionMsg.DetailID!,
+                });
+                Assert(!personTurnRes.Success, 'Message mentioning only a person must be refused a turn over wire');
+                Assert(/addressed to a person/i.test(personTurnRes.ErrorMessage ?? ''), `Person mention refusal matches: ${personTurnRes.ErrorMessage}`);
+
+                // 6. Thread reply (ParentDetailID pointing to assistant reply) routes to the parent's agent without @mention over the wire
+                const assistantReplyId = genTurnRes.ReplyDetailIDs?.[0];
+                Assert(!!assistantReplyId, 'General turn returned at least one ReplyDetailID');
+                const threadReplyMsg = await adaClient.PostSpaceMessage({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    Text: 'What else can you tell me about that file?',
+                    ParentDetailID: assistantReplyId,
+                });
+                Assert(threadReplyMsg.Success === true && !!threadReplyMsg.DetailID, `Ada posted thread reply: ${threadReplyMsg.ErrorMessage ?? ''}`);
+                if (threadReplyMsg.DetailID) createdDetailIds.push(threadReplyMsg.DetailID);
+
+                const threadTurnRes = await adaClient.ExecuteSpaceChatTurn({
+                    SpaceID: DISCOVERY_SPACE_ID,
+                    ConversationID: genConvId,
+                    UserMessageID: threadReplyMsg.DetailID!,
+                    Route: 'ThreadReply',
+                });
+                Assert(threadTurnRes.Success === true, `Thread-reply agent turn succeeded over wire without @mention: ${threadTurnRes.ErrorMessage ?? ''}`);
+                if (threadTurnRes.ReplyDetailIDs) createdDetailIds.push(...threadTurnRes.ReplyDetailIDs);
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, genConvId, genChatId);
                 await cleanupConversation(ctx.Provider, ctx.User, privConvId, privChatId);

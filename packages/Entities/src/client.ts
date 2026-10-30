@@ -50,6 +50,7 @@ export interface PostSpaceMessageGraphQLInput {
     SpaceID: string;
     Text: string;
     ConversationID?: string;
+    ParentDetailID?: string;
 }
 
 export interface PostSpaceMessageGraphQLPayload {
