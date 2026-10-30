@@ -1837,30 +1837,18 @@ export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChe
   }
 
   /**
-   * When an AI reply was explicitly requested via "Ask <Agent>", its `UserID` holds the asking
-   * member's UserID (rather than the System user). Returns the asking member's display name so
-   * the room can see who asked the agent to speak.
+   * Resolves "Asked by" from the author of the message the AI reply answers (`ParentID`).
+   * Every AI reply keeps `UserID = system.ID` on the server (A19 / R5-B1), and only a
+   * message's author can ask an agent to answer it (R5-B2).
    */
   public getAskedByName(message: ChatThreadMessageLike | null | undefined): string | null {
     if (!message || !this.isAiMessage(message)) return null;
-    const rawUserId = (message.UserID ?? '').trim();
-    const userIdNorm = rawUserId.toLowerCase();
-    if (!userIdNorm || userIdNorm === '00000000-0000-0000-0000-000000000000' || userIdNorm === 'system') {
-      return null;
-    }
-    const rawUserName = (message.User ?? '').trim();
-    if (rawUserName.toLowerCase() === 'system') {
-      return null;
-    }
-    if (this.CurrentUser?.ID && this.CurrentUser.ID.toLowerCase() === userIdNorm) {
-      return this.CurrentUser.Name || rawUserName || 'You';
-    }
-    const member = this.getMemberForUser(rawUserId, rawUserName);
-    if (member?.name) return member.name;
-    const person = this.MentionPeople?.find((p) => p.ID.toLowerCase() === userIdNorm);
-    if (person?.Name) return person.Name;
-    if (rawUserName) return rawUserName;
-    return null;
+    const parentId = (message.ParentID ?? '').trim().toLowerCase();
+    if (!parentId || parentId === 'null') return null;
+    const parent = this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === parentId) ?? null;
+    if (!parent || this.isAiMessage(parent)) return null;
+    if (!parent.User?.trim() && !parent.UserID?.trim()) return null;
+    return this.getSpeakerName(parent);
   }
 
   public getSpeakerInitials(message: ChatThreadMessageLike | null | undefined): string {

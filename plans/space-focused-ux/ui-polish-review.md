@@ -328,6 +328,43 @@ This touches #19's routing code in our branch. Say so in the notes, so it can be
 
 **Next:** do F1 to F10 and commit. Run every gate, write "## Round 5" in the notes (with the F3 table and the F6 list), save screenshots to `shots/round-5/`, commit, then stop.
 
+## Round 5 review (`a764518`, 2026-10-30)
+
+**Verdict: F1 to F6, F8 to F10 and N1 to N3 are approved. F7 needs one more pass.**
+
+Verified by the reviewer:
+- tokens and inputs pass; `ngc --noEmit` exits 0 in both Angular packages;
+- 197 widget tests and 161 section node tests pass. CoreEntitiesServer's suite waits for U2's commit, because U2's uncommitted files are in the same tree.
+
+The screenshots show each fix:
+- the collapsed switcher works (F1);
+- the "Committee" and "Workspace" chips and the "All spaces" breadcrumb are back (F4, F5);
+- Audit committee shows every block, with its empty line (F9);
+- starring sticks (F10).
+
+The F3 table found and fixed four wrong numbers: Inbox, My tasks (8 vs 1), Recent files, and the Work badge.
+
+### F7 blockers
+
+`shots/round-5/f7-after-after-click.png` shows Sage answering Colin's "hi", labelled "Asked by Ada Owner".
+
+**R5-B1. The agent's reply must stay the server's.**
+- `execute-space-chat-turn.ts` (around line 461) sets `assistantDetail.UserID = isExplicitAsk ? callerId : system.ID`. That records the agent's reply as the asking person's own message. It breaks A19 (only the server writes an agent's reply), and an author-based rule could let that person edit or delete it.
+- Keep `UserID = system.ID` for every reply.
+- Show "Asked by" from the author of the message it answers (its `ParentID`). With R5-B2, that's always the person who asked.
+
+**R5-B2. Only a message's author can ask an agent to answer it.**
+- `isExplicitAsk` skips the check that the message belongs to the caller. So any member can make the agent answer someone else's message, for example a client's.
+- The prompt only ever appears to the author, so put the author check back for explicit asks too.
+- Add a test: another member's ask is refused.
+
+**R5-S1. One route, and a real one.** `'StepIn'` isn't an MJ `AgentTurnRoute`. Keep `'Redirect'` only, and say in a comment why it fits: the person redirects a "no agent" turn to the agent they picked.
+
+**Next (UI chat):**
+- Fix R5-B1, R5-B2 and R5-S1, and add tests.
+- **U2 is in progress in this same tree** in the other chat. Stage only the files you change (`git add <paths>`), never `git add -A`. Don't touch U2's files: `upload-space-file.ts`, `SpaceItemEntityServer.ts`, `space-agent-retrieval.ts`, `packages/IntegrationTests/**`, `metadata/**`, `packages/CoreEntitiesServer/package.json`.
+- Run the Angular gates plus `execute-space-chat-turn.test.ts`, write "## Round 5 fixes" in the notes, commit, then stop.
+
 ### Now: turn off the floating chat bubble in the local install (Colin, 2026-10-29)
 
 MJ's floating chat bubble sits on top of the chat composer's controls.

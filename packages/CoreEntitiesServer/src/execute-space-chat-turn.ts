@@ -219,7 +219,9 @@ async function runClaimedTurn(
         return { ok: false, message: 'Caller cannot initiate an agent turn in an internal conversation without Team visibility.' };
     }
 
-    const isExplicitAsk = input.route === 'Redirect' || input.route === 'StepIn';
+    // 'Redirect' is the MJ AgentTurnRoute used when the message's author clicks "Ask <Agent>":
+    // the person redirects a "no agent" turn to the agent they picked.
+    const isExplicitAsk = input.route === 'Redirect';
 
     // 3. Load persisted user message
     const userDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
@@ -231,7 +233,7 @@ async function runClaimedTurn(
         return { ok: false, message: 'The message does not belong to this conversation.' };
     }
 
-    if (userDetail.Role !== 'User' || (!isExplicitAsk && parseUuid(userDetail.UserID) !== callerId)) {
+    if (parseUuid(userDetail.UserID) !== callerId || userDetail.Role !== 'User') {
         return { ok: false, message: 'Only messages authored by the caller can initiate an agent turn.' };
     }
 
@@ -453,12 +455,12 @@ async function runClaimedTurn(
     const audienceQuoted = retrieval.quotedItems;
     const participantUserIds = retrieval.audienceUserIds.length > 0 ? retrieval.audienceUserIds : [callerId];
 
-    // 10. Write reply as system user (Item 5 / A19 Part 2); when explicitly asked via Ask Agent, record the asking member in UserID
+    // 10. Write reply as system user (Item 5 / A19 Part 2)
     const assistantDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     assistantDetail.NewRecord();
     (assistantDetail as MJConversationDetailEntity & { MarkServerAuthoredReply?: () => void }).MarkServerAuthoredReply?.();
     assistantDetail.ConversationID = conversationId;
-    assistantDetail.UserID = isExplicitAsk ? callerId : system.ID;
+    assistantDetail.UserID = system.ID;
     assistantDetail.AgentID = targetAgentId;
     assistantDetail.Role = 'AI';
     assistantDetail.Status = 'In-Progress';

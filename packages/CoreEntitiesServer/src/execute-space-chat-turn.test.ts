@@ -1060,10 +1060,10 @@ describe('executeSpaceChatTurn', () => {
         }
     });
 
-    it("executes an explicit ask (route: 'Redirect') on an untagged message in a MentionOnly space, threads the reply under that message, and records the caller on UserID so the room sees who asked", async () => {
+    it("executes an explicit ask (route: 'Redirect') by the message's author on an untagged message in a MentionOnly space, threads the reply under that message, and keeps UserID as the system user (R5-B1, R5-B2, R5-S1)", async () => {
         const provider = createMockProvider({
             messageText: 'Can someone check the Q3 variance numbers?',
-            messageUserId: OTHER_USER_ID,
+            messageUserId: CALLER_ID,
             spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
         });
         const result = await executeSpaceChatTurn(provider, callerUser, {
@@ -1078,11 +1078,26 @@ describe('executeSpaceChatTurn', () => {
         const reply = provider.savedDetails[provider.savedDetails.length - 1];
         assert.equal(reply.ParentID, USER_MESSAGE_ID, 'reply threads under the asked message');
         assert.equal(reply.AgentID, ALLOWED_AGENT_ID, 'reply runs the requested allowed agent');
-        assert.equal(reply.UserID, CALLER_ID, 'reply records who asked on UserID so the room sees why the agent spoke');
+        assert.equal(reply.UserID, SYSTEM_USER_ID, 'reply stays authored by the server system user (R5-B1)');
         assert.equal(reply.Status, 'Complete');
     });
 
-    it("refuses an explicit ask (route: 'Redirect') when the caller cannot post or when the agent is not allowed in the space", async () => {
+    it("refuses an explicit ask (route: 'Redirect') from another member who did not author the message, when the caller cannot post, or when the agent is not allowed in the space (R5-B2)", async () => {
+        const nonAuthorProvider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            messageUserId: OTHER_USER_ID,
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const nonAuthorResult = await executeSpaceChatTurn(nonAuthorProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(nonAuthorResult.ok, false);
+        if (!nonAuthorResult.ok) {
+            assert.match(nonAuthorResult.message, /Only messages authored by the caller can initiate an agent turn/i);
+        }
+
         const nonContribProvider = createMockProvider({
             canContribute: false,
             messageText: 'Can someone check the Q3 variance numbers?',

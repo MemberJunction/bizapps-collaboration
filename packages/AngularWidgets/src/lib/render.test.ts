@@ -1673,14 +1673,14 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
     expect(selected).toEqual([{ label: 'All spaces' }]);
   });
 
-  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Asked by <Person> on the reply (F7)', async () => {
+  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Asked by <Person> from the parent message author while AI reply UserID stays system (F7, R5-B1)', async () => {
     vi.useFakeTimers();
     TestBed.resetTestingModule();
     provideStreamingStub();
     TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     const userMsg = { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check Q3 variance?' };
-    const aiMsg = { ID: 'msg-2', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', UserID: 'user-colin', User: 'Colin Brockman', Message: 'Variance is +4.2%.' };
+    const aiMsg = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Variance is +4.2%.' };
     fixture.componentRef.setInput('ConversationId', 'conv-1');
     fixture.componentRef.setInput('ConversationName', 'General');
     fixture.componentRef.setInput('SpaceId', 'space-1');
@@ -1700,7 +1700,7 @@ describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and st
 
     const host = fixture.nativeElement as HTMLElement;
     const askedByChip = host.querySelector('[data-testid="message-asked-by"]');
-    expect(askedByChip?.textContent?.trim()).toBe('Asked by Colin Brockman');
+    expect(askedByChip?.textContent?.trim()).toBe('Asked by Ada Lovelace');
 
     // Trigger a reply to Ada without @mentioning an agent -> prompt appears
     fixture.componentInstance.onUserMessageSent(

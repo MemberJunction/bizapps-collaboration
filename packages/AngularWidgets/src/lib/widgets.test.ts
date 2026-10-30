@@ -1942,7 +1942,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     chat.LinkedWorkstreamItem = { kind: 'task', id: 'task-1', title: 'Q3 Financial Audit Review', status: 'InProgress' };
     chat.ThreadMessages = [
       { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check the variance table on page 4?' },
-      { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: 'user-colin', User: 'Colin Brockman', Message: 'I checked page 4 — variance is +4.2%.' },
+      { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'I checked page 4 — variance is +4.2%.' },
       { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: 'Thanks Ada, I will sign off on it.' },
     ];
 
@@ -1958,7 +1958,7 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     chat.ThreadMessages = [
       ...chat.ThreadMessages,
       { ID: 'msg-5', ParentID: 'msg-3', Role: 'User', User: 'Riku Sato', Message: 'Good catch @Sage — can you also check page 5?' },
-      { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', Message: 'Page 5 is within tolerance.' },
+      { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', Agent: 'Sage', AgentID: 'agent-sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Page 5 is within tolerance.' },
     ];
     expect(chat.getParentMessage(chat.ThreadMessages[1])).toBeNull();
     expect(chat.getParentMessage(chat.ThreadMessages[2])?.ID).toBe('msg-1');
@@ -1968,8 +1968,9 @@ describe('Workstream actionable item linking & MJ PR #6176 multi-party chat UI',
     expect(chat.getNestedReplyTargetName(chat.ThreadMessages[3], 'msg-1')).toBe('Colin Brockman');
     expect(chat.getSpeakerName(chat.ThreadMessages[0])).toBe('Ada Lovelace');
     expect(chat.getSpeakerName(chat.ThreadMessages[1])).toBe('Sage');
-    expect(chat.getAskedByName(chat.ThreadMessages[1])).toBe('Colin Brockman');
-    expect(chat.getAskedByName(chat.ThreadMessages[4])).toBeNull();
+    expect(chat.getAskedByName(chat.ThreadMessages[1])).toBe('Ada Lovelace');
+    expect(chat.getAskedByName(chat.ThreadMessages[4])).toBe('Riku Sato');
+    expect(chat.getAskedByName({ ID: 'msg-ai-root', Role: 'AI', Agent: 'Sage', Message: 'Welcome' })).toBeNull();
     expect(chat.isAiMessage(chat.ThreadMessages[1])).toBe(true);
     expect(chat.isAiMessage(chat.ThreadMessages[0])).toBe(false);
 

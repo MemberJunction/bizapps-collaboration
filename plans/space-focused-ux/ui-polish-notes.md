@@ -2114,3 +2114,111 @@ $ DOTENV_CONFIG_PATH=/Users/colinbrockman/Projects/mjws-collab/MJ/.env node test
 - `plans/space-focused-ux/shots/round-5/rail-collapsed-light.png`
 - `plans/space-focused-ux/shots/round-5/rail-collapsed-dark.png`
 
+---
+
+## Round 5 fixes
+
+### 1. Review Blockers Fixed (`R5-B1`, `R5-B2`, `R5-S1`)
+
+- **`R5-B1` — Keep `assistantDetail.UserID = system.ID` on Every Agent Reply & Resolve `"Asked by"` from `ParentID`:**
+  - In `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts` (line 462), restored `assistantDetail.UserID = system.ID;` unconditionally for every agent reply so `A19` holds (only the server writes an agent's reply, and no author-based rule can let a member edit or delete it).
+  - In `packages/AngularWidgets/src/lib/space-chat.component.ts` (`getAskedByName`, lines 1844–1852), updated `"Asked by"` attribution to resolve the author of the message the AI reply answers (`message.ParentID`) via `this.allMessages` and `this.getSpeakerName(parent)`. With `R5-B2`, only a message's author can ask an agent to answer it, so the parent message's author is always the person who asked.
+
+- **`R5-B2` — Only a Message's Author Can Ask an Agent to Answer It:**
+  - In `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts` (line 233), restored the unconditional caller authorship check (`if (parseUuid(userDetail.UserID) !== callerId || userDetail.Role !== 'User')`) so explicit asks (`route === 'Redirect'`) also require `userDetail.UserID === callerId`.
+  - Added a test in `packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts` verifying that another member's `route: 'Redirect'` ask on a message authored by `OTHER_USER_ID` is refused with `/Only messages authored by the caller can initiate an agent turn/i`, and that the author's own ask succeeds with `reply.UserID === SYSTEM_USER_ID`.
+
+- **`R5-S1` — Keep `'Redirect'` Only as the MJ `AgentTurnRoute`:**
+  - In `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts` (lines 222–224), removed `'StepIn'` and kept `const isExplicitAsk = input.route === 'Redirect';` with a comment explaining why `'Redirect'` fits: the message's author redirects a "no agent" turn to the agent they picked.
+
+### 2. Files Touched
+
+- `packages/CoreEntitiesServer/src/execute-space-chat-turn.ts`
+- `packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts`
+- `packages/AngularWidgets/src/lib/space-chat.component.ts`
+- `packages/AngularWidgets/src/lib/widgets.test.ts`
+- `packages/AngularWidgets/src/lib/render.test.ts`
+
+### 3. Verification Gate Outputs
+
+#### Token, Input, Registered Exports, and Hex Fallback Checks
+```text
+$ node scripts/check-mj-tokens.mjs
+mj tokens ok (119 used, 296 defined; 16 mjc used, 16 defined)
+
+$ node scripts/check-mj-inputs.mjs
+mj inputs ok (none of the 14 deprecated names of mjButton and mj-loading is bound)
+
+$ node scripts/check-registered-exports.mjs
+registered exports ok (8 published packages and 3 example packages: every @RegisterClass class is exported from its entry)
+
+$ grep -c 'var(--[^)]*#[0-9a-fA-F]' packages/AngularWidgets/src/lib/space-chat.component.ts || true
+0
+```
+
+#### `@mj-biz-apps/collaboration-ng-widgets` Unit & DOM Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng-widgets test
+
+> @mj-biz-apps/collaboration-ng-widgets@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/AngularWidgets
+> vitest run
+
+ ✓ src/lib/ui-driver.test.ts (10 tests) 6ms
+ ✓ src/lib/widgets.test.ts (124 tests) 18ms
+ ✓ src/lib/render.test.ts (63 tests) 861ms
+
+ Test Files  3 passed (3)
+      Tests  197 passed (197)
+   Start at  14:30:14
+   Duration  13.75s (transform 20.07s, setup 0ms, import 27.14s, tests 885ms, environment 300ms)
+```
+
+#### `@mj-biz-apps/collaboration-ng` Logic & Render Tests
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-ng test
+
+> @mj-biz-apps/collaboration-ng@0.1.0 test /Users/colinbrockman/Projects/mjws-collab/bizapps-collaboration/packages/Angular
+> tsc -p tsconfig.test.json && node --experimental-strip-types --test 'src/lib/logic/*.test.ts' && vitest run
+
+ℹ tests 161
+ℹ suites 45
+ℹ pass 161
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 269.753417
+
+ ✓ src/lib/space-details-view.render.test.ts (5 tests) 53ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  14:30:31
+   Duration  7.75s (transform 4.97s, setup 0ms, import 7.48s, tests 53ms, environment 139ms)
+```
+
+#### `@mj-biz-apps/collaboration-core-entities-server` `packages/CoreEntitiesServer/src/execute-space-chat-turn.test.ts`
+```text
+$ pnpm --filter @mj-biz-apps/collaboration-core-entities-server exec node --experimental-strip-types --test 'src/execute-space-chat-turn.test.ts'
+▶ executeSpaceChatTurn
+  ✔ executes an explicit ask (route: 'Redirect') by the message's author on an untagged message in a MentionOnly space, threads the reply under that message, and keeps UserID as the system user (R5-B1, R5-B2, R5-S1) (0.672959ms)
+  ✔ refuses an explicit ask (route: 'Redirect') from another member who did not author the message, when the caller cannot post, or when the agent is not allowed in the space (R5-B2) (0.640625ms)
+✔ executeSpaceChatTurn (143.361375ms)
+ℹ tests 33
+ℹ suites 2
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2670.578625
+```
+
+#### Angular Template Type-Checks (`ngc --noEmit`)
+```text
+$ (cd packages/AngularWidgets && ./node_modules/.bin/ngc -p tsconfig.json --noEmit && echo "AngularWidgets ngc --noEmit: exit 0")
+AngularWidgets ngc --noEmit: exit 0
+
+$ (cd packages/Angular && ./node_modules/.bin/ngc -p tsconfig.json --noEmit && echo "Angular ngc --noEmit: exit 0")
+Angular ngc --noEmit: exit 0
+```
