@@ -19,6 +19,7 @@ import { DEFAULT_SPACE_RULES, type EffectiveSpaceConfiguration, type EffectiveSp
 import { summarizeSeats } from './logic/seat-summary.js';
 import { LatestOnly } from './logic/latest-only.js';
 import { formatDate as formatDateLocale, formatDateTime } from './logic/format-date.js';
+import { taskAssigneeLabels, type AssigneeKind, type TaskAssignmentRow } from './logic/task-assignee.js';
 import { freshSelectionState, LoadingFlag } from './logic/selection-reset.js';
 import { runBeforeHookSafely } from './logic/before-hook.js';
 import { resolveDriverSafely } from './logic/ui-driver-safe.js';
@@ -3715,8 +3716,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 Status?: string | null;
                 Priority?: string | null;
                 PercentComplete?: number | null;
-                TargetEndDate?: string | null;
-                AssignedTo?: string | null;
+                DueAt?: string | null;
             }>({
                 EntityName: 'MJ_BizApps_Tasks: Tasks',
                 ExtraFilter: `ID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
@@ -3730,9 +3730,11 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 this.spaceTasks = [];
                 this.taskCount = 0;
             } else if (tasksRes.Results) {
+                const assignees = await this.loadTaskAssignees(rv, taskIds);
+                if (!isCurrent()) return;
                 this.spaceTasks = tasksRes.Results.map(t => {
                     const spaceItem = taskItemMap.get(t.ID.toLowerCase());
-                    const assigned = t.AssignedTo || undefined;
+                    const assigned = assignees.get(t.ID.toLowerCase());
                     return {
                         id: t.ID,
                         name: t.Name,
@@ -3742,7 +3744,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                         band: spaceItem?.Band || 'Shared',
                         assigneeName: assigned,
                         assigneeInitials: assigned ? assigned.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : undefined,
-                        dueDate: t.TargetEndDate ? this.formatDate(t.TargetEndDate) : undefined,
+                        dueDate: t.DueAt ? this.formatDate(t.DueAt) : undefined,
                         percentComplete: t.PercentComplete || 0,
                     };
                 });
@@ -3925,6 +3927,67 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
         if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.svg') || (contentType && contentType.startsWith('image/'))) return 'img';
         if (lowerName.endsWith('.zip') || lowerName.endsWith('.tar') || lowerName.endsWith('.gz')) return 'zip';
         return 'doc';
+    }
+
+    /**
+     * Who each task is assigned to, by lower-case task ID. Tasks keep assignees in Task Assignments, each naming a People
+     * record (or an IS-A subtype of People) or a User, so the names are read from those two. A failed read leaves the
+     * rows Unassigned rather than failing the Work tab.
+     */
+    private async loadTaskAssignees(rv: RunView, taskIds: string[]): Promise<Map<string, string>> {
+        try {
+            const md = this.ProviderToUse;
+            const assignmentsRes = await rv.RunView<TaskAssignmentRow>({
+                EntityName: 'MJ_BizApps_Tasks: Task Assignments',
+                ExtraFilter: `TaskID IN (${taskIds.map(id => `'${id}'`).join(',')})`,
+                Fields: ['TaskID', 'AssigneeEntityID', 'AssigneeRecordID', 'Status', 'AssignedAt'],
+                ResultType: 'simple',
+            });
+            if (!assignmentsRes?.Success) {
+                LogError(`Failed to load task assignments: ${assignmentsRes?.ErrorMessage ?? 'unknown error'}`);
+                return new Map();
+            }
+            const rows = assignmentsRes.Results ?? [];
+            const usersEntityId = md.EntityByName('MJ: Users')?.ID;
+            const kindOf = (entityId: string): AssigneeKind => {
+                if (usersEntityId && UUIDsEqual(entityId, usersEntityId)) return 'user';
+                const entity = md.EntityByID(entityId);
+                const people = 'MJ_BizApps_Common: People';
+                return entity && (entity.Name === people || (entity.ParentChain ?? []).some(parent => parent.Name === people)) ? 'person' : null;
+            };
+            const idsOf = (kind: AssigneeKind) =>
+                [...new Set(rows.filter(r => kindOf(r.AssigneeEntityID) === kind && isValidUuid(r.AssigneeRecordID)).map(r => r.AssigneeRecordID))];
+            const personIds = idsOf('person');
+            const userIds = idsOf('user');
+            const [peopleRes, usersRes] = await rv.RunViews([
+                {
+                    EntityName: 'MJ_BizApps_Common: People',
+                    ExtraFilter: personIds.length ? `ID IN (${personIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    Fields: ['ID', 'DisplayName', 'FirstName', 'LastName'],
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: userIds.length ? `ID IN (${userIds.map(id => `'${id}'`).join(',')})` : '1=0',
+                    Fields: ['ID', 'FirstLast', 'Name'],
+                    ResultType: 'simple',
+                },
+            ]);
+            const person = new Map<string, string>();
+            for (const p of (peopleRes?.Results ?? []) as { ID: string; DisplayName?: string | null; FirstName?: string | null; LastName?: string | null }[]) {
+                const name = p.DisplayName || [p.FirstName, p.LastName].filter(Boolean).join(' ');
+                if (name) person.set(p.ID.toLowerCase(), name);
+            }
+            const user = new Map<string, string>();
+            for (const u of (usersRes?.Results ?? []) as { ID: string; FirstLast?: string | null; Name?: string | null }[]) {
+                const name = u.FirstLast || u.Name;
+                if (name) user.set(u.ID.toLowerCase(), name);
+            }
+            return taskAssigneeLabels(rows, kindOf, { person, user });
+        } catch (err) {
+            LogError('Error loading task assignees: ' + (err instanceof Error ? err.message : String(err)));
+            return new Map();
+        }
     }
 
     private formatDate(isoStr: string): string {
