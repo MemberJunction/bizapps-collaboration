@@ -153,3 +153,33 @@ Decided 2026-10-29; the details are in `ui-polish-review.md`:
    - So anyone who may edit notes in a space can change a published page through the Notes API.
    - The fix is a server rule: either a page entity with its own permission (a migration), or a check on Note save for page bodies.
 2. **Threads and the agent indicator are general chat features.** They work in Collaboration through MJ's slots today. Longer term they belong in `ng-conversations` (an MJ PR), so every MJ app gets them.
+
+---
+
+## 7. Round 7: Ian's review of PR #24, the UI side
+
+Ian's review (PR #24, review 5720705871) listed the items below. The server and security items are already fixed on the branch, so **don't touch** `SpacePageEntityServer.ts`, `space-page-comments.ts`, `video-embed.ts`, the discard-draft path in `logic/space-pages.ts` (`discardDraft`), or the pages error state (`pagesError`). The §2 rules apply: commit locally, never push, never `git stash`, paste the real gate output.
+
+1. **Members are offered actions the server refuses (Ian 7).** Page settings say members can tick checklists and comment (`canParticipateInPage`), but every such change saves the whole page, and `SpacePageEntityServer` refuses anyone `pageEditVerdict` doesn't allow. Offer ticking and commenting only to people who may edit the page. Delete the "members can participate" setting copy until a participation operation exists. Test: a viewer who can't edit sees no comment box and no live checkboxes.
+2. **Whole-page last-writer-wins (Ian 8).** `onPageSave` in `collaboration-section.component.ts` loads the row and overwrites every field. Carry the row's `__mj_UpdatedAt` on the page model when it is mapped (`mapSpacePageRowToModel`). In `onPageSave`, if the loaded row's `__mj_UpdatedAt` differs, don't save: show "This page changed since you opened it. Reload to see the latest." through `pageSaveError`. Unit-test the comparison as a pure function in `logic/space-pages.ts`.
+3. **Home counts (Ian 11).** The Inbox and My tasks badges come from `Results.length` under `MaxRows: 200`, and `loadGlobalNavCounts` writes `__mj_BizAppsTasks.vw…` view names into client SQL. Use the server's counts instead: the `GetHomeCounts` resolver (`resolveHomeCounts`) and the `Collaboration Home Counts` query already exist. No view names in client code.
+4. **Tokens and literals.**
+   - Put back the hex fallbacks `tokens.ts` dropped.
+   - Replace the ~30 new raw colors (`new-conversation-dialog.component.ts` 269–310, `space-chat.component.ts` 175–181) with `--mj-*` tokens.
+   - Replace the px literals in `space-pages.component.ts` with `--mj-space-*` / `--mj-text-*` tokens wherever a token exists.
+   - `node scripts/check-mj-tokens.mjs` must report 0.
+5. **Dialogs.** The pages drawers are hand-built `<aside role="dialog">` with raw inputs. Use MJ's dialog and form controls (`mj-dialog`, `mj-input`, `mj-dropdown`) as the rest of the app does.
+6. **Leftovers.** Delete each of these:
+   - the unbound rail inputs/outputs (`space-rail.component.ts` 1098, 1100, 1147, 1212, 1246, 1250) and the `widgets.test.ts` lines that only keep them alive;
+   - the stale duplicate block list in `logic/space-pages.ts` (it registers `collab:ask-box`; the registry key is `collab:ask`);
+   - the agent name baked into the mention regex (`space-chat.component.ts` ~2427), which must come from the allowed agents;
+   - `firmName` / `clientOrgName` if nothing sets them.
+7. **Tests (Ian).** Unit tests for:
+   - `parsePagePayload`;
+   - `submitPageSettings`;
+   - `movePage`;
+   - `visibleComments`;
+   - more `page-diff` cases than the one there now.
+8. **The visual pass.** Add a Playwright spec in `e2e/` (`@mj-biz-apps/collaboration-e2e`) that opens each screen in §2's list in light and dark and asserts it rendered (no error state, key landmarks present). Commit the captures to `plans/space-focused-ux/shots/round-7/`. Run it twice.
+
+Gates: §2's list, plus `pnpm test` at the root. Write "## Round 7" in `ui-polish-notes.md`, then stop for review.

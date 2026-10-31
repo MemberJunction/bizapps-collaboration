@@ -71,6 +71,26 @@ describe('space-pages', () => {
         assert.equal(mapped.canPromote, true);
     });
 
+    it('discarding a draft drops it and keeps the published blocks, summary and comments as stored', () => {
+        const published = JSON.stringify({ blocks: [{ id: 'p', type: 'Heading', title: 'Published' }], summary: 'Old', comments: [] });
+        const draft = JSON.stringify({ blocks: [{ id: 'd', type: 'Heading', title: 'Draft' }], summary: 'New', comments: [{ id: 'c1' }] });
+        const row = {
+            ID: 'page-1', SpaceID: 'space-1', BuiltInTab: null, Title: 'Guide', IconClass: null, Band: 'Shared' as const,
+            Status: 'Draft' as const, Sequence: 0, PublishedBlocks: published, DraftBlocks: draft, DraftTitle: 'Guide v2',
+            PublishedByUserID: 'user-0', PublishedAt: null,
+        };
+        const model = mapSpacePageRowToModel(row, { authorName: 'Ada', updatedLabel: 'now', canPromote: true });
+        assert.equal(model.blocks[0].title, 'Draft');
+
+        const entity: SpacePageEntityTarget = { ...row };
+        applyCollabPageToEntity(entity, { ...model, draftTitle: null, draftBody: null, status: 'Published', discardDraft: true }, 'user-1');
+        assert.equal(entity.Status, 'Published');
+        assert.equal(entity.PublishedBlocks, published);
+        assert.equal(entity.DraftBlocks, null);
+        assert.equal(entity.DraftTitle, null);
+        assert.equal(entity.PublishedByUserID, 'user-0');
+    });
+
     it('builds starter pages for all built-in space tabs and merges saved customizations + user pages', () => {
         const DummyCard = class {} as unknown as SpaceOverviewCardDescriptor['component'];
         const pages = buildStarterPagesForSpace({

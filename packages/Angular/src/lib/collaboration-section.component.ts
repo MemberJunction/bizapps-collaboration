@@ -1192,7 +1192,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1232,7 +1232,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1291,7 +1291,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1414,7 +1414,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1464,7 +1464,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1520,7 +1520,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                     [CanSeeTeam]="canSeeTeamSide"
                                                     [IsReadOnly]="isSpaceClosed"
                                                     [IsSaving]="isSavingPage"
-                                                    [ErrorMessage]="notesError"
+                                                    [ErrorMessage]="pagesError || notesError"
                                                     [SaveError]="pageSaveError"
                                                     [DefaultBand]="noteDefaultBand"
                                                     [SharedLabel]="sharedBandLabel"
@@ -1656,7 +1656,7 @@ export type WorkViewMode = 'list' | 'kanban' | 'gantt';
                                                         [CanSeeTeam]="canSeeTeamSide"
                                                         [IsReadOnly]="isSpaceClosed"
                                                         [IsSaving]="isSavingPage"
-                                                        [ErrorMessage]="notesError"
+                                                        [ErrorMessage]="pagesError || notesError"
                                                         [SaveError]="pageSaveError"
                                                         [DefaultBand]="noteDefaultBand"
                                                         [SharedLabel]="sharedBandLabel"
@@ -3177,6 +3177,8 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
     public activePageId = '';
     public isSavingPage = false;
     public pageSaveError = '';
+    /** Why the space's pages could not be read, shown on the page host; empty when they loaded. */
+    public pagesError = '';
     public isLoadingNotes = false;
     public notesError = '';
     public isSavingNote = false;
@@ -3596,8 +3598,10 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             if (!isCurrent()) return;
             if (!res?.Success) {
                 this.persistedPages = [];
+                this.pagesError = res?.ErrorMessage || 'The pages of this space could not be read.';
                 return;
             }
+            this.pagesError = '';
             const me = this.currentUser?.ID ?? '';
             const pageModels = (res.Results ?? []).map((row) => {
                 const author = this.spaceMembers.find((m) => UUIDsEqual(m.userId, row.PublishedByUserID ?? ''));
@@ -3621,6 +3625,7 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
             }
         } catch (err) {
             if (!isCurrent()) return;
+            this.pagesError = 'The pages of this space could not be read.';
             LogError(`The pages of space ${spaceId} could not be read: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             if (isCurrent()) {
@@ -3717,7 +3722,9 @@ export class CollaborationSectionResource extends BaseResourceComponent implemen
                 const entity = await md.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>('MJ_BizApps_Collaboration: Space Pages');
                 if (await entity.Load(page.id)) {
                     entity.Sequence = page.sequence ?? 0;
-                    await entity.Save();
+                    if (!(await entity.Save())) {
+                        this.pageSaveError = entity.LatestResult?.CompleteMessage || `"${page.title}" could not be moved.`;
+                    }
                 }
             }
             await this.loadSpacePages(spaceId, () => UUIDsEqual(this.activeSpaceId, spaceId));

@@ -485,6 +485,7 @@ This section's rules come from decisions of 2026-09-25 and 2026-09-26, and the p
   - for a chat with one person and one agent under `MentionOrOneToOne`, `Always`, with that agent as the default and the only allowed agent;
   - for any other chat, `MentionOnly`, unless the space's mode is `Always`.
   - `EnableDecisionRouting` defaults to `false` on `mj-collab-space-chat` until a decision model and labelled evaluation corpus are configured; the server never trusts a client `route: 'DecisionRouted'` string to bypass `MentionOnly`.
+- **An explicit ask is the one client route the server honors** (decided 2026-10-31, PR #24). When a message tags no agent, the chat offers "Ask <Agent> to answer?"; pressing "Ask <Agent>" sends the turn with `Route: 'Redirect'`, and the server takes it as the author's intent for that message, in place of a tag, so the mention, person-only and thread rules don't refuse it. Nothing else is relaxed: the caller must be the message's author, the agent must be one the space allows, a message gets one turn, and the turn is bounded by the chat's kind and audience like any other. Harness check AG14 holds each of these.
 
 ### Every agent turn goes through Collaboration's server
 

@@ -1,8 +1,10 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
+import { MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { mjBizAppsCollaborationSpacePageEntity } from '@mj-biz-apps/collaboration-entities';
 import { SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_PAGE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { deleteRowAndConfirm, registerChecks } from './cleanup-helpers.js';
+import { COLLABORATION_STORAGE_PROVIDER_ID } from '../world/local-storage-account.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const HARBOR_SPACE_ID = 'C1000001-0000-4000-8000-000000000006';
@@ -172,7 +174,7 @@ const checks: NamedCheck[] = [
     {
         Id: 'row-filters.RF6',
         Name: "RF6 — a staff (UI) user reads the files, indexed documents and chats of spaces they reach, never another space's; everything outside Collaboration stays readable",
-        RequiresMutation: false,
+        RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const harbor = await GetPersonaUser(ctx, 'harbor');
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -209,13 +211,73 @@ const checks: NamedCheck[] = [
             Assert(await readable(ada, 'MJ: Conversations', `ID IN (${inChats})`) === chats.length, "Ada reads every one of Discovery's chats");
             Assert(await readable(ada, 'MJ: Conversation Details', messages) === await readable(ctx.User, 'MJ: Conversation Details', messages), "Ada reads every message in Discovery's chats");
 
-            // Outside Collaboration nothing changes for a UI user: every record link not on a space item stays readable
+            // Outside Collaboration nothing changes for a UI user. Every record link and conversation the world holds outside a
+            // space stays readable (a database built from empty may hold none), and so do a file and a conversation this check
+            // creates on no space, so the leg is never vacuous.
             const spaceItemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
             const outside = `EntityID <> '${spaceItemsEntity?.ID}'`;
-            const all = await readable(ctx.User, 'MJ: Entity Record Documents', outside);
-            Assert(all > 0 && (await readable(harbor, 'MJ: Entity Record Documents', outside)) === all, "Harbor's owner reads every record link outside Collaboration");
+            Assert((await readable(harbor, 'MJ: Entity Record Documents', outside)) === (await readable(ctx.User, 'MJ: Entity Record Documents', outside)), "Harbor's owner reads every record link outside Collaboration");
             const notChats = 'ID NOT IN (SELECT ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] WHERE ConversationID IS NOT NULL)';
             Assert((await readable(harbor, 'MJ: Conversations', notChats)) === (await readable(ctx.User, 'MJ: Conversations', notChats)), "Harbor's owner reads every conversation outside Collaboration");
+
+            let fileId: string | null = null;
+            let conversationId: string | null = null;
+            try {
+                const file = await ctx.Provider.GetEntityObject<MJFileEntity>('MJ: Files', ctx.User);
+                file.NewRecord();
+                file.Name = 'RF6 file outside Collaboration';
+                file.ProviderID = COLLABORATION_STORAGE_PROVIDER_ID;
+                Assert(await file.Save(), `Saving the outside file failed: ${file.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                fileId = file.ID;
+                const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+                conversation.NewRecord();
+                conversation.Name = 'RF6 conversation outside Collaboration';
+                conversation.UserID = ctx.User.ID;
+                Assert(await conversation.Save(), `Saving the outside conversation failed: ${conversation.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                conversationId = conversation.ID;
+
+                Assert(await readable(harbor, 'MJ: Files', `ID = '${fileId}'`) === 1, "Harbor's owner reads a file on no space");
+                Assert(await readable(harbor, 'MJ: Conversations', `ID = '${conversationId}'`) === 1, "Harbor's owner reads a conversation outside Collaboration");
+            } finally {
+                if (conversationId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Conversations', conversationId, 'RF6 outside conversation');
+                if (fileId) await deleteRowAndConfirm(ctx.Provider, ctx.User, 'MJ: Files', fileId, 'RF6 outside file');
+            }
+        },
+    },
+    {
+        Id: 'row-filters.RF7',
+        Name: "RF7 — a Shared page never carries a Team comment (every reader receives its payload), and a comment's author is whoever saved it",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const comment = (id: string, band: string) => ({ id, band, body: 'RF7', authorName: 'The CEO', authorInitials: 'CE', createdAtLabel: 'now', status: 'Open' });
+            const newSharedPage = async (comments: unknown[]) => {
+                const page = await ctx.Provider.GetEntityObject<mjBizAppsCollaborationSpacePageEntity>(SPACE_PAGE_ENTITY, ada);
+                page.NewRecord();
+                page.SpaceID = DISCOVERY_SPACE_ID;
+                page.Title = 'RF7 Shared Discovery Page';
+                page.Band = 'Shared';
+                page.Status = 'Published';
+                page.Sequence = 12;
+                page.PublishedBlocks = JSON.stringify({ blocks: [], comments });
+                return page;
+            };
+
+            let pageId: string | null = null;
+            try {
+                const refused = await newSharedPage([comment('rf7-team', 'Team')]);
+                Assert(!(await refused.Save()), 'A Shared page carrying a Team comment must be refused');
+                Assert(/can't carry Team comments/.test(refused.LatestResult?.CompleteMessage ?? ''), `Refused for another reason: ${refused.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+                const page = await newSharedPage([comment('rf7-shared', 'Shared')]);
+                Assert(await page.Save(), `Ada failed to save the Shared page: ${page.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                pageId = page.ID;
+                const [row] = await FindRows<{ PublishedBlocks: string }>(ctx, SPACE_PAGE_ENTITY, `ID = '${pageId}'`, ['PublishedBlocks']);
+                const stored = JSON.parse(row?.PublishedBlocks ?? '{}') as { comments?: Array<{ authorName?: string }> };
+                Assert(stored.comments?.[0]?.authorName === (ada.FirstLast || ada.Name), `The comment's author is '${stored.comments?.[0]?.authorName}', not the saver`);
+            } finally {
+                if (pageId) await deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_PAGE_ENTITY, pageId, 'RF7 Shared Space Page');
+            }
         },
     },
 ];

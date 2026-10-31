@@ -13,6 +13,7 @@ import { mjBizAppsCollaborationSpacePageEntity } from '@mj-biz-apps/collaboratio
 import { CollaborationEngine } from './CollaborationEngine.js';
 import { callerUuid, loadWriteContext, mayAdminister } from './load-graph.js';
 import { failDelete } from './space-driver-call.js';
+import { authorInitials, hasTeamComment, stampCommentAuthors } from './space-page-comments.js';
 import { asMetadata, parseUuid } from './uuid.js';
 
 const ENTITY = 'MJ_BizApps_Collaboration: Space Pages';
@@ -104,8 +105,26 @@ export class SpacePageEntityServer extends mjBizAppsCollaborationSpacePageEntity
         return { ok: true };
     }
 
+    /** Comment authors come from the server: a stored comment keeps its author, a new one gets the saving user. */
+    private stampCommentAuthors(): void {
+        const user = this.ContextCurrentUser;
+        if (!user) return;
+        const name = user.FirstLast || user.Name || 'Member';
+        const author = { name, initials: authorInitials(name) };
+        const published = this.GetFieldByName('PublishedBlocks');
+        const draft = this.GetFieldByName('DraftBlocks');
+        const previous = this.IsSaved ? [published?.OldValue as string | null, draft?.OldValue as string | null] : [];
+        if (!this.IsSaved || published?.Dirty) {
+            this.PublishedBlocks = stampCommentAuthors(this.PublishedBlocks, previous, author) ?? null;
+        }
+        if (!this.IsSaved || draft?.Dirty) {
+            this.DraftBlocks = stampCommentAuthors(this.DraftBlocks, previous, author) ?? null;
+        }
+    }
+
     public override async Save(options?: Parameters<BaseEntity['Save']>[0]): Promise<boolean> {
         this.stampDefaults();
+        this.stampCommentAuthors();
         return super.Save(options);
     }
 
@@ -129,6 +148,11 @@ export class SpacePageEntityServer extends mjBizAppsCollaborationSpacePageEntity
             }
         }
 
+        // Every reader of a page receives its whole payload, so a Shared page carries no Team comment.
+        if (this.Band === 'Shared' && (hasTeamComment(this.PublishedBlocks) || hasTeamComment(this.DraftBlocks))) {
+            return fail(result, 'Band', "Page change refused: a Shared page can't carry Team comments; everyone who reads the page would receive them.");
+        }
+
         const check = await this.checkEditPermission(caller, user, spaceId, 'Page change refused', this.Band);
         if (!check.ok) {
             return fail(result, check.field, check.message);
@@ -144,7 +168,7 @@ export class SpacePageEntityServer extends mjBizAppsCollaborationSpacePageEntity
         const spaceId = parseUuid(this.SpaceID);
         if (!spaceId) return failDelete(this, 'Page delete refused: the space id is not valid.');
 
-        const check = await this.checkEditPermission(caller, user, spaceId, 'Page delete refused');
+        const check = await this.checkEditPermission(caller, user, spaceId, 'Page delete refused', this.Band);
         if (!check.ok) {
             return failDelete(this, check.message);
         }

@@ -2101,6 +2101,46 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'agent.AG14',
+        Name: "AG14 — An explicit ask (Route 'Redirect', the chat's \"Ask <Agent> to answer?\" prompt) answers an untagged message, but only for the message's author and only with an agent the space allows",
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const bea = await GetPersonaUser(ctx, 'bea');
+            const start = await createSpaceConversation(ctx.Provider, ada, { SpaceID: DISCOVERY_SPACE_ID, Name: `discovery-ag14-${Date.now()}`, Kind: 'General' });
+            Assert(start.ok === true && !!start.conversationId && !!start.spaceChatId, `Ada starts a General conversation: ${start.message ?? ''}`);
+            try {
+                const post = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: start.conversationId!,
+                    text: 'What shared materials are available in Discovery?',
+                });
+                Assert(post.ok === true && !!post.detailId, 'Bea posts an untagged question');
+                if (!post.ok || !post.detailId) return;
+                const messageId = post.detailId;
+                createdDetailIds.push(messageId);
+                const turn = (who: typeof ada, agentId: string, route?: string) =>
+                    executeSpaceChatTurn(ctx.Provider, who, { spaceId: DISCOVERY_SPACE_ID, conversationId: start.conversationId!, userMessageId: messageId, agentId, route });
+
+                // The control: without the explicit ask, an untagged message in a MentionOnly chat starts no turn
+                const untagged = await turn(bea, COLLABORATION_TEST_AGENT_ID);
+                Assert(!untagged.ok, 'Without the explicit ask, the untagged message starts no turn');
+
+                const notAuthor = await turn(ada, COLLABORATION_TEST_AGENT_ID, 'Redirect');
+                Assert(!notAuthor.ok && notAuthor.message === 'Only messages authored by the caller can initiate an agent turn.', `Only the author may ask: ${notAuthor.ok ? 'it ran' : notAuthor.message}`);
+
+                const notAllowed = await turn(bea, '00000000-0000-4000-8000-0000000000a1', 'Redirect');
+                Assert(!notAllowed.ok && /is not allowed in this space/.test(notAllowed.message), `Only an allowed agent may be asked: ${notAllowed.ok ? 'it ran' : notAllowed.message}`);
+
+                const asked = await turn(bea, COLLABORATION_TEST_AGENT_ID, 'Redirect');
+                Assert(asked.ok === true, `Bea's explicit ask runs the turn: ${asked.ok ? '' : asked.message}`);
+                if (asked.ok) createdDetailIds.push(...(asked.replyDetailIds ?? []));
+            } finally {
+                await cleanupConversation(ctx.Provider, ctx.User, start.conversationId!, start.spaceChatId!);
+            }
+        },
+    },
 ];
 
 registerChecks(checks);

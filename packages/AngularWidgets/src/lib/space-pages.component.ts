@@ -25,6 +25,7 @@ import { CollabFileIconComponent } from './file-icon.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
 import { LibraryRowModel, SpaceBand, SpaceMemberModel } from './types';
 import { DiffSegment, DiffWords, HasTextChange, SummarizeDiff } from './page-diff';
+import { videoEmbedUrl } from './video-embed';
 
 export type CollabContentBlockType =
     | 'Heading'
@@ -130,6 +131,8 @@ export interface CollabPageModel {
     authorName: string;
     canPromote?: boolean;
     isSeed?: boolean;
+    /** Set only on the model a discard emits: the host drops the draft and keeps the published version as stored. */
+    discardDraft?: boolean;
     /** If set, this page backs one of the space's built-in tabs ('Overview' | 'Library' | 'Work' | 'Notes' | 'Data' | 'People'). */
     builtInTabId?: string | null;
     /** True when the built-in page's base workspace widget blocks have been initialized in `blocks`. */
@@ -2716,7 +2719,6 @@ export class CollabSpacePagesComponent {
     public diffSummary = { addedWords: 0, removedWords: 0 };
 
     public newCommentBody = '';
-    public newCommentTeamOnly = false;
 
     public draggedBlockIndex: number | null = null;
     public dragOverBlockIndex: number | null = null;
@@ -2989,6 +2991,8 @@ export class CollabSpacePagesComponent {
                 draftTitle: null,
                 draftBody: null,
                 status: 'Published',
+                // Without a snapshot the model holds the draft's content, so drop the draft rather than publish it.
+                discardDraft: !snapshot,
             };
             this.PageSaveRequested.emit(restored);
         }
@@ -3103,6 +3107,7 @@ export class CollabSpacePagesComponent {
             draftTitle: null,
             draftBody: null,
             status: 'Published',
+            discardDraft: true,
         };
         this.reviewDiffOpen = false;
         this.editSessionDirty = false;
@@ -3501,17 +3506,14 @@ export class CollabSpacePagesComponent {
     }
 
     public isEmbeddableVideo(url: string): boolean {
-        return /youtube\.com|youtu\.be|vimeo\.com/i.test(url);
+        return videoEmbedUrl(url) !== null;
     }
 
+    /** Only the provider player URL {@link videoEmbedUrl} rewrites is ever trusted as an iframe source. */
     public safeVideoUrl(url: string): SafeResourceUrl {
         const cached = this.safeUrlCache.get(url);
         if (cached) return cached;
-        let embed = url;
-        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
-        if (ytMatch) embed = `https://www.youtube.com/embed/${ytMatch[1]}`;
-        const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
-        if (vimeoMatch) embed = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+        const embed = videoEmbedUrl(url) ?? 'about:blank';
         const safe = this.sanitizer ? this.sanitizer.bypassSecurityTrustResourceUrl(embed) : (embed as unknown as SafeResourceUrl);
         this.safeUrlCache.set(url, safe);
         return safe;
@@ -3680,13 +3682,13 @@ export class CollabSpacePagesComponent {
             id: `cmt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             authorName: this.CurrentUserName,
             authorInitials: this.CurrentUserInitials,
-            band: this.CanSeeTeam && this.newCommentTeamOnly ? 'Team' : page.band,
+            // A comment is read by whoever reads the page, so it takes the page's band (the server refuses anything else).
+            band: page.band,
             body,
             createdAtLabel: 'Just now',
             status: 'Open',
         };
         this.newCommentBody = '';
-        this.newCommentTeamOnly = false;
         this.PageSaveRequested.emit({
             ...page,
             comments: [...(page.comments || []), comment],

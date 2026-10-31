@@ -183,6 +183,13 @@ export function applyCollabPageToEntity(
     page: CollabPageModel,
     currentUserId: string | null | undefined,
 ): void {
+    if (page.discardDraft) {
+        // The model carries the draft's blocks, summary and comments; discarding keeps the published version as stored.
+        entity.Status = 'Published';
+        entity.DraftTitle = null;
+        entity.DraftBlocks = null;
+        return;
+    }
     const builtInTab = page.builtInTabId?.trim() || null;
     entity.BuiltInTab = builtInTab;
     entity.Title = page.title.trim() || 'Untitled Page';
