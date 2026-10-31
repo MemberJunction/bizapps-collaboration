@@ -381,5 +381,53 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    },
+    "fields": {
+      "Name": "MJ: Conversations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversations In Reach Or Outside Collaboration"
+          },
+          "sync": {
+            "lastModified": "2026-10-31T02:15:51.832Z",
+            "checksum": "661867f64fde18541f22bfc99b71d910b2bbc536886beb2bdc23f09faa1efe1d"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
+    },
+    "fields": {
+      "Name": "MJ: Conversation Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Conversation Details&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Conversation Details In Reach Or Outside Collaboration"
+          },
+          "sync": {
+            "lastModified": "2026-10-31T02:15:51.844Z",
+            "checksum": "fe2c23820a983f6f4e80b017a1046b289c405cdf2fd809d8f3f1e6c70e192a5f"
+          }
+        }
+      ]
+    }
   }
 ]

@@ -1,6 +1,6 @@
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration/registry';
 import { mjBizAppsCollaborationSpacePageEntity } from '@mj-biz-apps/collaboration-entities';
-import { SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_PAGE_ENTITY } from '../entity-names.js';
+import { SPACE_CHAT_ENTITY, SPACE_ENTITY, SPACE_ITEM_ENTITY, SPACE_PAGE_ENTITY } from '../entity-names.js';
 import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { deleteRowAndConfirm, registerChecks } from './cleanup-helpers.js';
 
@@ -171,7 +171,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'row-filters.RF6',
-        Name: "RF6 — a staff (UI) user reads the files and indexed documents of spaces they reach, never another space's; everything outside Collaboration stays readable",
+        Name: "RF6 — a staff (UI) user reads the files, indexed documents and chats of spaces they reach, never another space's; everything outside Collaboration stays readable",
         RequiresMutation: false,
         Fn: async (ctx: IntegrationCheckContext) => {
             const harbor = await GetPersonaUser(ctx, 'harbor');
@@ -199,11 +199,23 @@ const checks: NamedCheck[] = [
             Assert(await readable(harbor, 'MJ: Content Item Chunks', chunks) === 0, "Harbor's owner reads no text indexed from Discovery");
             Assert(await readable(ada, 'MJ: Content Items', docs) === await readable(ctx.User, 'MJ: Content Items', docs), "Ada reads every document indexed from Discovery");
 
+            // Discovery's chats: Harbor's owner reads none of their conversations or messages; Ada reads every one
+            const chats = await FindRows<{ ConversationID: string }>(ctx, SPACE_CHAT_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND ConversationID IS NOT NULL`, ['ConversationID']);
+            Assert(chats.length > 0, 'Discovery holds space chats');
+            const inChats = chats.map((chat) => `'${chat.ConversationID}'`).join(', ');
+            const messages = `ConversationID IN (${inChats})`;
+            Assert(await readable(harbor, 'MJ: Conversations', `ID IN (${inChats})`) === 0, "Harbor's owner reads none of Discovery's chats");
+            Assert(await readable(harbor, 'MJ: Conversation Details', messages) === 0, "Harbor's owner reads no message in Discovery's chats");
+            Assert(await readable(ada, 'MJ: Conversations', `ID IN (${inChats})`) === chats.length, "Ada reads every one of Discovery's chats");
+            Assert(await readable(ada, 'MJ: Conversation Details', messages) === await readable(ctx.User, 'MJ: Conversation Details', messages), "Ada reads every message in Discovery's chats");
+
             // Outside Collaboration nothing changes for a UI user: every record link not on a space item stays readable
             const spaceItemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
             const outside = `EntityID <> '${spaceItemsEntity?.ID}'`;
             const all = await readable(ctx.User, 'MJ: Entity Record Documents', outside);
             Assert(all > 0 && (await readable(harbor, 'MJ: Entity Record Documents', outside)) === all, "Harbor's owner reads every record link outside Collaboration");
+            const notChats = 'ID NOT IN (SELECT ConversationID FROM [__mj_BizAppsCollaboration].[SpaceChat] WHERE ConversationID IS NOT NULL)';
+            Assert((await readable(harbor, 'MJ: Conversations', notChats)) === (await readable(ctx.User, 'MJ: Conversations', notChats)), "Harbor's owner reads every conversation outside Collaboration");
         },
     },
 ];

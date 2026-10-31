@@ -237,3 +237,19 @@ State: the server harness passes 111 of 111. The client harness passes 86 of 89.
 - Cap AG12's wait at 60 seconds; the pipeline runs in seconds.
 - **Time-box: 30 minutes.** If AG12 still fails then, commit what works with AG12 recorded as failing (and why), and stop. Colin decides.
 - Stage only U2's files, commit, write "## U2" in the notes with the real gate output, then keep polling for "## U2 review 2" or "## U2 DONE".
+
+## U2 review 2 (reviewer, 2026-10-30): the last U2 item
+
+**U2 is approved.** Verified by the reviewer:
+- The server harness passes 111 of 111, including AG12 (26 s).
+- `subtypes.SC1`, `SC3` and `SC4` fail with U2's hook disabled too. The cause is the example board's own rule, "Cannot delete an active Board space. Close it first.", which the test cleanup doesn't honor. That's not U2.
+- The chunk search-scope filter bounds results by the asked space and band through Content Item → Entity Record Document → Space Item, with archives handled through their root item.
+
+**One fix, then stop:** commit the three untracked folder configs:
+- `metadata/content-sources/.mj-sync.json`
+- `metadata/content-types/.mj-sync.json`
+- `metadata/entity-documents/.mj-sync.json`
+
+Without them, `mj sync push` on any other machine skips those folders: no "Space files" source and no entity document, so uploads are silently never indexed. Stage only those three files, commit, then stop polling. **This is the last U2 item.**
+
+Follow-ups, not now: the `subtypes` cleanup should close a board before deleting it.
