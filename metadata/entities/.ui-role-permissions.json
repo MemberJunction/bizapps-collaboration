@@ -301,5 +301,85 @@
         }
       ]
     }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Files"
+    },
+    "fields": {
+      "Name": "MJ: Files"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Files&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Files In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Items"
+    },
+    "fields": {
+      "Name": "MJ: Content Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Content Items&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Content Items In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Record Documents"
+    },
+    "fields": {
+      "Name": "MJ: Entity Record Documents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Record Documents&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Entity Record Documents In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Content Item Chunks"
+    },
+    "relatedEntities": {
+      "MJ: Entity Permissions": [
+        {
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Content Item Chunks&RoleID=@lookup:MJ: Roles.Name=UI"
+          },
+          "fields": {
+            "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Collaboration: Content Item Chunks In Reach Or Outside Collaboration"
+          }
+        }
+      ]
+    }
   }
 ]

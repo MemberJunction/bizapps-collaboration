@@ -169,6 +169,43 @@ const checks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'row-filters.RF6',
+        Name: "RF6 — a staff (UI) user reads the files and indexed documents of spaces they reach, never another space's; everything outside Collaboration stays readable",
+        RequiresMutation: false,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const harbor = await GetPersonaUser(ctx, 'harbor');
+            const ada = await GetPersonaUser(ctx, 'ada');
+            const view = View(ctx);
+            const readable = async (user: typeof ada, entity: string, filter: string): Promise<number> => {
+                const res = await view.RunView<{ ID: string }>({ EntityName: entity, ExtraFilter: filter, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true }, user);
+                Assert(res.Success, `${user.Name} RunView ${entity} failed: ${res.ErrorMessage ?? 'unknown'}`);
+                return (res.Results ?? []).length;
+            };
+
+            // Discovery's files: Harbor's owner (UI, Harbor only) reads none; Ada (UI, reaches Discovery) reads every one
+            const filesEntity = ctx.Provider.EntityByName('MJ: Files');
+            const items = await FindRows<{ RecordID: string }>(ctx, SPACE_ITEM_ENTITY, `SpaceID = '${DISCOVERY_SPACE_ID}' AND EntityID = '${filesEntity?.ID}'`, ['RecordID']);
+            const fileIds = items.map((item) => item.RecordID.replace(/^ID\|/i, ''));
+            Assert(fileIds.length > 0, 'Discovery holds world files');
+            const inFiles = fileIds.map((id) => `'${id}'`).join(', ');
+            Assert(await readable(harbor, 'MJ: Files', `ID IN (${inFiles})`) === 0, "Harbor's owner reads none of Discovery's files");
+            Assert(await readable(ada, 'MJ: Files', `ID IN (${inFiles})`) === fileIds.length, "Ada reads every one of Discovery's files");
+
+            // Their indexed documents and text, wherever the pipeline has indexed them
+            const docs = `FileID IN (${inFiles})`;
+            const chunks = `ContentItemID IN (SELECT ID FROM [__mj].[ContentItem] WHERE ${docs})`;
+            Assert(await readable(harbor, 'MJ: Content Items', docs) === 0, "Harbor's owner reads no document indexed from Discovery");
+            Assert(await readable(harbor, 'MJ: Content Item Chunks', chunks) === 0, "Harbor's owner reads no text indexed from Discovery");
+            Assert(await readable(ada, 'MJ: Content Items', docs) === await readable(ctx.User, 'MJ: Content Items', docs), "Ada reads every document indexed from Discovery");
+
+            // Outside Collaboration nothing changes for a UI user: every record link not on a space item stays readable
+            const spaceItemsEntity = ctx.Provider.EntityByName(SPACE_ITEM_ENTITY);
+            const outside = `EntityID <> '${spaceItemsEntity?.ID}'`;
+            const all = await readable(ctx.User, 'MJ: Entity Record Documents', outside);
+            Assert(all > 0 && (await readable(harbor, 'MJ: Entity Record Documents', outside)) === all, "Harbor's owner reads every record link outside Collaboration");
+        },
+    },
 ];
 
 registerChecks(checks);
