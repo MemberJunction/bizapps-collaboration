@@ -64,7 +64,6 @@ export interface ResolvedTurnTools {
 const QUERIES = 'MJ: Queries';
 const QUERY_PARAMETERS = 'MJ: Query Parameters';
 const USER_VIEWS = 'MJ: User Views';
-const AGENT_SEARCH_SCOPES = 'MJ: AI Agent Search Scopes';
 const AGENT_ACTIONS = 'MJ: AI Agent Actions';
 
 const esc = (value: string): string => value.replace(/'/g, "''");
@@ -97,9 +96,9 @@ export async function resolveTurnTools(
     // Collaboration's action and the granted ones (B20, step 2)
     const given = new Set<string>(tools.Actions.map((grant) => grant.TargetRecordID.trim().toUpperCase()));
     if (spaceData.length) given.add(RUN_SPACE_DATA_ACTION_ID);
-    // The space's own search is Collaboration's too, for an agent assigned the Collaboration scope as a tool: the scope
+    // The space's own search is Collaboration's too: the turn hands every agent the space scope (SearchScopeIDs), which
     // derives the space and the audience from the run's chat, so the model cannot widen it
-    if (await searchesSpaceScope(rv, system, targetAgentId)) given.add(SCOPED_SEARCH_ACTION_ID);
+    given.add(SCOPED_SEARCH_ACTION_ID);
     const own = await rv.RunView<{ ActionID: string }>({
         EntityName: AGENT_ACTIONS,
         ExtraFilter: `AgentID = '${esc(targetAgentId)}' AND Status = 'Active'`,
@@ -124,18 +123,6 @@ export async function resolveTurnTools(
     return { tools, spaceData, actionIds: [...given], actionChanges, runSettings, agentGrant, withheld };
 }
 
-/** True when the agent holds an active tool-phase (`AgentInvoked` or `Both`) assignment of the Collaboration Space Scope. */
-async function searchesSpaceScope(rv: RunView, system: UserInfo, agentId: string): Promise<boolean> {
-    const rows = await rv.RunView<{ ID: string }>({
-        EntityName: AGENT_SEARCH_SCOPES,
-        ExtraFilter: `AgentID = '${esc(agentId)}' AND SearchScopeID = '${COLLABORATION_SPACE_SCOPE_ID}' AND Status = 'Active' AND Phase IN ('AgentInvoked', 'Both')`,
-        Fields: ['ID'],
-        ResultType: 'simple',
-        MaxRows: 1,
-    }, system);
-    if (!rows.Success) LogError(`resolveTurnTools: the agent's search scopes could not be read, so the space search is not offered: ${rows.ErrorMessage ?? 'unknown error'}`);
-    return (rows.Results ?? []).length > 0;
-}
 
 /** The data grants as the model and the action see them: names, descriptions and the parameters the model may set. */
 async function describeDataGrants(rv: RunView, system: UserInfo, grants: readonly EffectiveGrant[]): Promise<TurnSpaceDataGrant[]> {

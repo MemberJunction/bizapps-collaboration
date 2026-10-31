@@ -17,7 +17,7 @@ import { MentionParser } from '@memberjunction/conversations-runtime';
 import { audienceOfConversationKind, spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { loadSpaceConfiguration } from './space-configuration.js';
-import { resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
+import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
@@ -536,6 +536,8 @@ async function runClaimedTurn(
                     ConversationHistoryFrom: conversationHistoryFrom,
                     PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
                     PrimaryScopeRecordID: foundChat.ID,
+                    // The space's search, for whichever agent runs: the scope derives the space and the audience from the chat
+                    SearchScopeIDs: [COLLABORATION_SPACE_SCOPE_ID],
                     Audience: {
                         Mode: 'Intersection',
                         UserIDs: participantUserIds,

@@ -1,7 +1,0 @@
-{
-  "entity": "MJ: AI Agent Search Scopes",
-  "filePattern": "**/.*.json",
-  "defaults": {
-    "Status": "Active"
-  }
-}

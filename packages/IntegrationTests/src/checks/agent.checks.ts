@@ -12,6 +12,7 @@ import {
     postSpaceMessage,
     resolveSpaceAgentRetrieval,
     resolveTurnTools,
+    COLLABORATION_SPACE_SCOPE_ID,
     SCOPED_SEARCH_ACTION_ID,
     uploadSpaceFile,
 } from '@mj-biz-apps/collaboration-core-entities-server';
@@ -1895,7 +1896,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'agent.AG13',
-        Name: "AG13 — A granted MJ agent (Sage) searches the space through Scoped Search: offered only to an agent assigned the space scope, bounded to the chat's space and audience",
+        Name: "AG13 — Any agent the space runs can search the space: the turn hands it the space scope, which stands in for the agent's own SearchScopeAccess and stays bounded to the chat's space and audience",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             if (isClientTransport(ctx)) {
@@ -1903,40 +1904,48 @@ const checks: NamedCheck[] = [
                 return;
             }
             const ada = await GetPersonaUser(ctx, 'ada');
-            const sage = await FindRows<{ ID: string; SearchScopeAccess: string }>(ctx, AI_AGENT_ENTITY, `Name = 'Sage'`, ['ID', 'SearchScopeAccess']);
-            Assert(sage.length === 1, 'MJ ships Sage');
-            Assert(sage[0].SearchScopeAccess === 'Assigned', `Sage searches only the scopes assigned to it (got ${sage[0].SearchScopeAccess})`);
-            const sageId = sage[0].ID;
+            // An MJ agent that ships with SearchScopeAccess 'None' and no scope rows: nothing of its own lets it search
+            const research = await FindRows<{ ID: string; SearchScopeAccess: string }>(ctx, AI_AGENT_ENTITY, `Name = 'Research Agent'`, ['ID', 'SearchScopeAccess']);
+            Assert(research.length === 1, 'MJ ships Research Agent');
+            Assert(research[0].SearchScopeAccess === 'None', `Research Agent ships unable to search on its own (got ${research[0].SearchScopeAccess})`);
+            const agentId = research[0].ID;
 
-            // 1. Turn tools: the space search is given to Sage (assigned the scope as a tool), not to the shipped agent (PreExecution only)
+            // 1. Turn tools: the space search is Collaboration's own tool, given to whichever agent runs
             const { configuration } = await loadSpaceConfiguration(ctx.Provider, DISCOVERY_SPACE_ID);
             const audience = audienceOfConversationKind('General');
-            const sageTools = await resolveTurnTools(ctx.Provider, ctx.User, configuration, audience, sageId);
-            Assert(sageTools.actionIds.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'Sage is given Scoped Search for a space turn');
-            const removed = sageTools.actionChanges.filter((change) => change.mode === 'remove').flatMap((change) => change.actionIds);
-            Assert(!removed.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'Scoped Search is not among the actions removed for the turn');
-            const shippedTools = await resolveTurnTools(ctx.Provider, ctx.User, configuration, audience, AGENT_ID);
-            Assert(!shippedTools.actionIds.some((id) => SameID(id, SCOPED_SEARCH_ACTION_ID)), 'The shipped agent (its scope is PreExecution only) is not given the tool');
+            for (const [label, id] of [['Research Agent', agentId], ['the shipped agent', AGENT_ID]] as const) {
+                const tools = await resolveTurnTools(ctx.Provider, ctx.User, configuration, audience, id);
+                Assert(tools.actionIds.some((a) => SameID(a, SCOPED_SEARCH_ACTION_ID)), `${label} is given Scoped Search for a space turn`);
+                const removed = tools.actionChanges.filter((change) => change.mode === 'remove').flatMap((change) => change.actionIds);
+                Assert(!removed.some((a) => SameID(a, SCOPED_SEARCH_ACTION_ID)), `Scoped Search is not removed for ${label}`);
+            }
 
-            // 2. The real action as Sage, under each chat's run scope: the space and the audience come from the chat, never the model
+            // 2. The real action as Research Agent, under each chat's run scope as BaseAgent stamps it for a space turn
             const engine = ActionEngineServer.Instance;
             await engine.Config(false, ada, ctx.Provider);
             const action = engine.Actions.find((a) => SameID(a.ID, SCOPED_SEARCH_ACTION_ID));
             Assert(!!action, 'Scoped Search is registered');
-            const search = async (chatId: string, query: string): Promise<Array<{ RecordID: string }>> => {
-                const result = await engine.RunAction({
+            const run = (chatId: string, query: string, hostScope: boolean) =>
+                engine.RunAction({
                     Action: action!,
                     ContextUser: ada,
                     Params: [
                         { Name: 'Query', Type: 'Input', Value: query },
-                        { Name: 'AgentID', Type: 'Input', Value: sageId },
+                        { Name: 'AgentID', Type: 'Input', Value: agentId },
                     ],
                     Filters: [],
                     Provider: ctx.Provider,
                     SkipActionLog: true,
-                    RunScope: { PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats', PrimaryScopeRecordID: chatId, SecondaryScopes: null },
+                    RunScope: {
+                        PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
+                        PrimaryScopeRecordID: chatId,
+                        SecondaryScopes: null,
+                        ...(hostScope ? { SearchScopeIDs: [COLLABORATION_SPACE_SCOPE_ID] } : {}),
+                    },
                 });
-                Assert(result.Success === true, `Scoped Search as Sage runs in chat ${chatId}: ${result.Message ?? ''}`);
+            const search = async (chatId: string, query: string): Promise<Array<{ RecordID: string }>> => {
+                const result = await run(chatId, query, true);
+                Assert(result.Success === true, `Scoped Search as Research Agent runs in chat ${chatId}: ${result.Message ?? ''}`);
                 return (result.Params?.find((p) => p.Name === 'Results')?.Value ?? []) as Array<{ RecordID: string }>;
             };
             const finds = (hits: Array<{ RecordID: string }>, root: string): boolean => hits.some((hit) => hit.RecordID.toLowerCase().endsWith(root));
@@ -1960,10 +1969,13 @@ const checks: NamedCheck[] = [
             const privateChat = await createSpaceConversation(ctx.Provider, ada, { SpaceID: DISCOVERY_SPACE_ID, Name: `discovery-ag13-priv-${Date.now()}`, Kind: 'Private' });
             Assert(privateChat.ok === true && !!privateChat.conversationId && !!privateChat.spaceChatId, `Ada starts a Private conversation: ${privateChat.message ?? ''}`);
             try {
-                Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Sage in a General chat finds the Shared task "${sharedName}"`);
-                Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Sage in a General chat never finds the Team task "${teamName}"`);
+                // Without the space's scope the agent's own 'None' refuses: the stand-in comes only from the host
+                const unhosted = await run(general.spaceChatId!, sharedName!, false);
+                Assert(unhosted.Success === false && unhosted.Result?.ResultCode === 'ACCESS_DENIED', `Without the space's scope, Research Agent may not search (got ${unhosted.Result?.ResultCode ?? unhosted.Message})`);
+                Assert(finds(await search(general.spaceChatId!, sharedName!), sharedId), `Research Agent in a General chat finds the Shared task "${sharedName}"`);
+                Assert(!finds(await search(general.spaceChatId!, teamName!), teamId), `Research Agent in a General chat never finds the Team task "${teamName}"`);
                 // The negative control: the same words find the Team task in a staff member's Private chat, so its absence above is the audience's doing
-                Assert(finds(await search(privateChat.spaceChatId!, teamName!), teamId), `Sage in a Private chat finds the Team task "${teamName}"`);
+                Assert(finds(await search(privateChat.spaceChatId!, teamName!), teamId), `Research Agent in a Private chat finds the Team task "${teamName}"`);
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, general.conversationId!, general.spaceChatId!);
                 await cleanupConversation(ctx.Provider, ctx.User, privateChat.conversationId!, privateChat.spaceChatId!);

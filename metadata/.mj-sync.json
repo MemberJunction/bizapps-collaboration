@@ -32,7 +32,6 @@
     "ai-skills",
     "search-scopes",
     "agents",
-    "agent-search-scopes",
     "task-types"
   ],
   "emitSyncNotes": false,

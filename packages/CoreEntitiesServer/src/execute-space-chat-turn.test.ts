@@ -6,6 +6,7 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
+import { COLLABORATION_SPACE_SCOPE_ID } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
@@ -568,6 +569,30 @@ describe('executeSpaceChatTurn', () => {
             route: 'ThreadReply',
         });
         assert.equal(result.ok, true);
+    });
+
+    it("hands every agent's run the space's search scope, whichever agent runs", async () => {
+        const parentAiDetailId = 'aaaaaaaa-1111-4111-8111-111111111112';
+        const provider = createMockProvider({
+            messageText: 'What does the account plan say?',
+            messageParentId: parentAiDetailId,
+            conversationDetails: [
+                { ID: parentAiDetailId, Role: 'AI', AgentID: ALLOWED_AGENT_ID, Agent: 'Sage', Message: 'Earlier answer.', __mj_CreatedAt: new Date('2026-02-01T00:00:00Z') },
+            ],
+        });
+        let searchScopeIDs: string[] | undefined;
+        const heldRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            searchScopeIDs = params.SearchScopeIDs;
+            return heldRunAgent.call(AgentRunner.prototype, params) as never;
+        };
+        try {
+            const result = await executeSpaceChatTurn(provider, callerUser, { ...defaultInput, agentId: ALLOWED_AGENT_ID, route: 'ThreadReply' });
+            assert.equal(result.ok, true, result.ok ? '' : result.message);
+            assert.deepEqual(searchScopeIDs, [COLLABORATION_SPACE_SCOPE_ID]);
+        } finally {
+            AgentRunner.prototype.RunAgent = heldRunAgent;
+        }
     });
 
     it('refuses when replying (ParentID) to a human message without mentioning an agent', async () => {
