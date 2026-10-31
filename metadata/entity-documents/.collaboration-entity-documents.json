@@ -1,0 +1,19 @@
+[
+  {
+    "primaryKey": {
+      "ID": "195C260F-EE9C-4C6D-8F20-64D62DA8B649"
+    },
+    "fields": {
+      "Name": "Space Item",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Collaboration: Space Items",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "TemplateID": "@lookup:MJ: Templates.Name=Collaboration Space Item Document",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    }
+  }
+]

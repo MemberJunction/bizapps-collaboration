@@ -917,6 +917,84 @@ describe('resolveSpaceAgentRetrieval', () => {
         assert.equal(byDescriptionTeamAsBea.quotedItems.length, 0, 'Bea cannot retrieve Team XLSX by description query');
     });
 
+    it('attaches ChunkTexts from MJ: Content Item Chunks only to allowed Space Items and matches query against chunk text', async () => {
+        const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
+        const bea = { ID: BEA_ID, Name: 'Bea' } as UserInfo;
+        const ERD_SHARED_ID = '55555555-1111-4111-8111-111111111111';
+        const ERD_TEAM_ID = '55555555-2222-4222-8222-222222222222';
+        const CI_SHARED_ID = '66666666-1111-4111-8111-111111111111';
+        const CI_TEAM_ID = '66666666-2222-4222-8222-222222222222';
+        const SHARED_ITEM_ID = itemsData[0].ID; // site-photo.png (Shared in CHILD_SPACE_ID)
+        const TEAM_ITEM_ID = itemsData[1].ID;   // discovery-brief.pdf (Team in CHILD_SPACE_ID)
+
+        const chunkProvider = {
+            ...provider,
+            EntityByID: provider.EntityByID.bind(provider),
+            EntityByName(name: string): EntityInfo | undefined {
+                if (name === 'MJ: Content Item Chunks') {
+                    return { Name: 'MJ: Content Item Chunks' } as Partial<EntityInfo> as EntityInfo;
+                }
+                return undefined;
+            },
+            async GetEntityObject() {
+                return {
+                    RunViewProviderToUse: chunkProvider as unknown as IRunViewProvider,
+                    ProviderToUse: chunkProvider as unknown as IMetadataProvider,
+                } as unknown as BaseEntity;
+            },
+            async RunView(params: RunViewParams) {
+                const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : String(params.ExtraFilter ?? '');
+                if (params.EntityName === 'MJ: Entity Record Documents') {
+                    const erds = [
+                        { ID: ERD_SHARED_ID, RecordID: `ID|${SHARED_ITEM_ID}` },
+                        { ID: ERD_TEAM_ID, RecordID: `ID|${TEAM_ITEM_ID}` },
+                    ].filter((e) => filter.toLowerCase().includes(e.RecordID.slice(3).toLowerCase()));
+                    return { Success: true, Results: erds, ErrorMessage: '', RowCount: erds.length, TotalRowCount: erds.length, ExecutionTime: 0 };
+                }
+                if (params.EntityName === 'MJ: Content Items') {
+                    const cis = [
+                        { ID: CI_SHARED_ID, EntityRecordDocumentID: ERD_SHARED_ID, RootParentID: null },
+                        { ID: CI_TEAM_ID, EntityRecordDocumentID: ERD_TEAM_ID, RootParentID: null },
+                    ].filter((c) => filter.toLowerCase().includes(c.EntityRecordDocumentID.toLowerCase()));
+                    return { Success: true, Results: cis, ErrorMessage: '', RowCount: cis.length, TotalRowCount: cis.length, ExecutionTime: 0 };
+                }
+                if (params.EntityName === 'MJ: Content Item Chunks') {
+                    const chunks = [
+                        { ContentItemID: CI_SHARED_ID, Text: ' Dock door 7 bay sensor calibration phrase ', SortOrder: 0 },
+                        { ContentItemID: CI_TEAM_ID, Text: ' Confidential margin floor 41 percent phrase ', SortOrder: 0 },
+                    ].filter((ch) => filter.toLowerCase().includes(ch.ContentItemID.toLowerCase()));
+                    return { Success: true, Results: chunks, ErrorMessage: '', RowCount: chunks.length, TotalRowCount: chunks.length, ExecutionTime: 0 };
+                }
+                return (provider as unknown as { RunView: (p: RunViewParams) => Promise<unknown> }).RunView(params);
+            },
+            async RunViews(params: RunViewParams[]) {
+                return Promise.all(params.map((p) => (chunkProvider as unknown as { RunView: (p: RunViewParams) => Promise<unknown> }).RunView(p)));
+            },
+        } as unknown as IMetadataProvider;
+
+        const beaRes = await resolveSpaceAgentRetrieval(chunkProvider, bea, CHILD_SPACE_ID);
+        const beaShared = beaRes.quotedItems.find((i) => i.ID === SHARED_ITEM_ID);
+        assert.deepEqual(beaShared?.ChunkTexts, ['Dock door 7 bay sensor calibration phrase']);
+        const beaTeamDecision = beaRes.decisions.find((d) => d.item.ID === TEAM_ITEM_ID);
+        assert.equal(beaTeamDecision?.allowed, false);
+        assert.equal(beaTeamDecision?.item.ChunkTexts, undefined, 'Disallowed Team item never gets ChunkTexts');
+
+        const bySharedChunk = await resolveSpaceAgentRetrieval(chunkProvider, bea, CHILD_SPACE_ID, {
+            query: 'bay sensor calibration',
+        });
+        assert.deepEqual(bySharedChunk.quotedItems.map((i) => i.ID), [SHARED_ITEM_ID]);
+
+        const byTeamChunkAsBea = await resolveSpaceAgentRetrieval(chunkProvider, bea, CHILD_SPACE_ID, {
+            query: 'Confidential margin floor',
+        });
+        assert.equal(byTeamChunkAsBea.quotedItems.length, 0, 'Client Bea cannot match disallowed Team chunk text');
+
+        const byTeamChunkAsAda = await resolveSpaceAgentRetrieval(chunkProvider, ada, CHILD_SPACE_ID, {
+            query: 'Confidential margin floor',
+        });
+        assert.deepEqual(byTeamChunkAsAda.quotedItems.map((i) => i.ID), [TEAM_ITEM_ID]);
+    });
+
     it('supports ThisSpace narrowing to exclude child space items while keeping anchor space items', async () => {
         const ada = { ID: ADA_ID, Name: 'Ada' } as UserInfo;
         const resThisSpace = await resolveSpaceAgentRetrieval(provider, ada, ROOT_SPACE_ID, {
@@ -1021,5 +1099,6 @@ describe('resolveSpaceAgentRetrieval', () => {
         }
     });
 });
+
 
 

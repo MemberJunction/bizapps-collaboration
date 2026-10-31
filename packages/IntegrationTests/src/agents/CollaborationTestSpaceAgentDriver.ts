@@ -8,6 +8,7 @@ import type { ActionChange, ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRun
 /** The items the space chat turn hands an agent: what its audience may quote. */
 interface AllowedItem {
     readonly Name: string;
+    readonly ChunkTexts?: readonly string[];
 }
 
 /** A query or view the turn says Run space data may run (B20). */
@@ -45,7 +46,12 @@ export class CollaborationTestSpaceAgentDriver extends BaseAgent {
 
         let replyText: string;
         if (allowedItems.length > 0) {
-            const list = allowedItems.map((item) => `- ${item.Name}`).join('\n');
+            const list = allowedItems
+                .map((item) => {
+                    const chunks = (item.ChunkTexts ?? []).map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean);
+                    return chunks.length > 0 ? `- ${item.Name}: ${chunks.join(' | ')}` : `- ${item.Name}`;
+                })
+                .join('\n');
             replyText = `Here are the available materials in this space:\n${list}`;
         } else {
             replyText = 'I found no shared materials in this space.';

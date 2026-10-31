@@ -6,6 +6,7 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
+import { COLLABORATION_SPACE_SCOPE_ID } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
 import { BaseSpaceTypeServerDriver } from '../dist/base-space-type-server-driver.js';
 import { ServerDriverRegistry } from '../dist/server-driver-registry.js';
@@ -125,6 +126,7 @@ describe('executeSpaceChatTurn', () => {
         ID?: string;
         ConversationID?: string;
         ParentID?: string | null;
+        UserID?: string | null;
         Role?: string;
         AgentID?: string | null;
         Status?: string;
@@ -565,6 +567,30 @@ describe('executeSpaceChatTurn', () => {
             agentId: ALLOWED_AGENT_ID,
         });
         assert.equal(result.ok, true);
+    });
+
+    it("hands every agent's run the space's search scope, whichever agent runs", async () => {
+        const parentAiDetailId = 'aaaaaaaa-1111-4111-8111-111111111112';
+        const provider = createMockProvider({
+            messageText: 'What does the account plan say?',
+            messageParentId: parentAiDetailId,
+            conversationDetails: [
+                { ID: parentAiDetailId, Role: 'AI', AgentID: ALLOWED_AGENT_ID, Agent: 'Sage', Message: 'Earlier answer.', __mj_CreatedAt: new Date('2026-02-01T00:00:00Z') },
+            ],
+        });
+        let searchScopeIDs: string[] | undefined;
+        const heldRunAgent = AgentRunner.prototype.RunAgent;
+        AgentRunner.prototype.RunAgent = async (params) => {
+            searchScopeIDs = params.SearchScopeIDs;
+            return heldRunAgent.call(AgentRunner.prototype, params) as never;
+        };
+        try {
+            const result = await executeSpaceChatTurn(provider, callerUser, { ...defaultInput, agentId: ALLOWED_AGENT_ID, route: 'ThreadReply' });
+            assert.equal(result.ok, true, result.ok ? '' : result.message);
+            assert.deepEqual(searchScopeIDs, [COLLABORATION_SPACE_SCOPE_ID]);
+        } finally {
+            AgentRunner.prototype.RunAgent = heldRunAgent;
+        }
     });
 
     it('refuses when replying (ParentID) to a human message without mentioning an agent', async () => {
@@ -1171,6 +1197,74 @@ describe('executeSpaceChatTurn', () => {
             assert.ok(result.agentHistoryFrom instanceof Date);
             assert.equal(result.mentionPeople.length, 1);
             assert.equal(result.mentionPeople[0].ID, CALLER_ID);
+        }
+    });
+
+    it("executes an explicit ask (route: 'Redirect') by the message's author on an untagged message in a MentionOnly space, threads the reply under that message, and keeps UserID as the system user (R5-B1, R5-B2, R5-S1)", async () => {
+        const provider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            messageUserId: CALLER_ID,
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const result = await executeSpaceChatTurn(provider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(result.ok, true, result.ok ? '' : result.message);
+        if (result.ok) {
+            assert.ok(result.replyDetailIds.length > 0);
+        }
+        const reply = provider.savedDetails[provider.savedDetails.length - 1];
+        assert.equal(reply.ParentID, USER_MESSAGE_ID, 'reply threads under the asked message');
+        assert.equal(reply.AgentID, ALLOWED_AGENT_ID, 'reply runs the requested allowed agent');
+        assert.equal(reply.UserID, SYSTEM_USER_ID, 'reply stays authored by the server system user (R5-B1)');
+        assert.equal(reply.Status, 'Complete');
+    });
+
+    it("refuses an explicit ask (route: 'Redirect') from another member who did not author the message, when the caller cannot post, or when the agent is not allowed in the space (R5-B2)", async () => {
+        const nonAuthorProvider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            messageUserId: OTHER_USER_ID,
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const nonAuthorResult = await executeSpaceChatTurn(nonAuthorProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(nonAuthorResult.ok, false);
+        if (!nonAuthorResult.ok) {
+            assert.match(nonAuthorResult.message, /Only messages authored by the caller can initiate an agent turn/i);
+        }
+
+        const nonContribProvider = createMockProvider({
+            canContribute: false,
+            messageText: 'Can someone check the Q3 variance numbers?',
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const nonContribResult = await executeSpaceChatTurn(nonContribProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: ALLOWED_AGENT_ID,
+        });
+        assert.equal(nonContribResult.ok, false);
+        if (!nonContribResult.ok) {
+            assert.match(nonContribResult.message, /cannot run an agent turn/i);
+        }
+
+        const disallowedAgentProvider = createMockProvider({
+            messageText: 'Can someone check the Q3 variance numbers?',
+            spaceConfiguration: JSON.stringify({ Chats: { AgentReplyMode: 'MentionOnly' } }),
+        });
+        const disallowedResult = await executeSpaceChatTurn(disallowedAgentProvider, callerUser, {
+            ...defaultInput,
+            route: 'Redirect',
+            agentId: DISALLOWED_AGENT_ID,
+        });
+        assert.equal(disallowedResult.ok, false);
+        if (!disallowedResult.ok) {
+            assert.match(disallowedResult.message, /not allowed in this space/i);
         }
     });
 });

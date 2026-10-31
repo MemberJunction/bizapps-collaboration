@@ -1,8 +1,15 @@
 import { type BaseEntity, CompositeKey, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { ContentPipelineStartup, ContentUploadIngestor } from '@memberjunction/content-pipeline';
 import { SPACE_UPLOAD_MAX_BYTES, storedContentType, type Band } from '@mj-biz-apps/collaboration-core';
 import { mjBizAppsCollaborationSpaceItemEntity } from '@mj-biz-apps/collaboration-entities';
 import { recordItemUse } from './library-events.js';
-import { releaseStoredFile, vouchStoredFile } from './SpaceItemEntityServer.js';
+import {
+    releaseStoredFile,
+    SPACE_FILES_CONTENT_SOURCE_ID,
+    vouchStoredFile,
+} from './SpaceItemEntityServer.js';
+
+export { SPACE_FILES_CONTENT_SOURCE_ID };
 
 const FILES = 'MJ: Files';
 const ITEMS = 'MJ_BizApps_Collaboration: Space Items';
@@ -229,7 +236,50 @@ export async function uploadSpaceFile(request: UploadSpaceFileRequest): Promise<
             LogError('The upload was saved, but the item use was not recorded.');
         }
     }
+    startSpaceFileIngest({
+        provider: request.provider,
+        storageUser: request.storageUser,
+        fileId: stored.fileId,
+        fileName,
+        description: null,
+        itemId: item.ID,
+    });
     return { ok: true, itemId: item.ID, fileId: stored.fileId, artifactVersionId: artifact.versionId };
+}
+
+function startSpaceFileIngest(params: {
+    provider: IMetadataProvider;
+    storageUser: UserInfo;
+    fileId: string;
+    fileName: string;
+    description: string | null;
+    itemId: string;
+}): void {
+    if (typeof params.provider.EntityByName !== 'function' || !params.provider.EntityByName('MJ: Content Items')) {
+        return;
+    }
+    void (async () => {
+        try {
+            await ContentPipelineStartup.Instance.HandleStartup(params.storageUser, params.provider);
+            await ContentUploadIngestor.Ingest({
+                ContentSourceID: SPACE_FILES_CONTENT_SOURCE_ID,
+                FileID: params.fileId,
+                Name: params.fileName,
+                Description: params.description,
+                Origin: {
+                    EntityName: ITEMS,
+                    RecordID: params.itemId,
+                },
+                RunNow: true,
+                ContextUser: params.storageUser,
+                Provider: params.provider,
+            });
+        } catch (error) {
+            LogError(
+                `Space file content pipeline ingest failed for file ${params.fileId} (item ${params.itemId}): ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+    })();
 }
 
 async function removeStored(request: UploadSpaceFileRequest, stored: StoredSpaceFile): Promise<void> {

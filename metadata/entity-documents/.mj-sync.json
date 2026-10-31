@@ -1,0 +1,21 @@
+{
+  "entity": "MJ: Entity Documents",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "Status": "Active"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".collaboration-entity-documents.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'Space Item'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true
+  }
+}

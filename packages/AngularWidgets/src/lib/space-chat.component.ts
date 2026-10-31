@@ -1,27 +1,95 @@
 import {
+  AfterViewChecked,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ElementRef,
   EventEmitter,
   HostListener,
   Inject,
   Input,
+  OnChanges,
+  OnDestroy,
   OnInit,
+  Optional,
   Output,
+  SimpleChanges,
+  ViewChild,
 } from '@angular/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { UserInfo } from '@memberjunction/core';
 import {
   ConversationsModule,
   ConversationStreamingService,
+  type AfterAgentTurnEventArgs,
   type AgentReplyMode,
   type AgentTurnHandler,
+  type AgentTurnRequest,
+  type AgentTurnRoute,
+  type BeforeAgentTurnEventArgs,
 } from '@memberjunction/ng-conversations';
-import type { MentionPerson } from '@memberjunction/conversations-runtime';
-import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MentionAutocomplete, type MentionPerson } from '@memberjunction/conversations-runtime';
+import {
+  MJButtonDirective,
+  MJEmptyStateComponent,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import type { SpaceBand } from './types';
+import type { SpaceBand, SpaceMemberModel } from './types';
+import { CollabAvatarComponent } from './avatar.component';
 import { CollabBandChipComponent } from './band-chip.component';
 import { COLLAB_TOKENS_CSS } from './tokens';
+
+export interface WorkstreamLinkedItem {
+  kind: 'task' | 'file';
+  id: string;
+  title: string;
+  status?: string;
+}
+
+export interface ChatThreadMessageLike {
+  ID: string;
+  ParentID?: string | null;
+  Role?: string | null;
+  Message?: string | null;
+  UserID?: string | null;
+  AgentID?: string | null;
+  User?: string | null;
+  Agent?: string | null;
+  Status?: string | null;
+  __mj_CreatedAt?: Date | string | null;
+}
+
+export interface PendingAgentPromptState {
+  messageId: string;
+  messageText: string;
+  reasonLabel: string;
+  suggestedAgentName: string;
+  suggestedAgentId: string | null;
+}
+
+export interface CachedAiAgentMetadata {
+  ID: string;
+  Name: string;
+  LogoURL: string | null;
+  IconClass: string | null;
+  Description: string | null;
+}
+
+export interface ChatParticipantListItem {
+  id: string;
+  name: string;
+  initials: string;
+  imageUrl: string | null;
+  iconClass: string;
+  colorClass: string;
+  role: string;
+  subtitle: string;
+  isAi: boolean;
+  isOutside: boolean;
+}
 
 /** Candidate item in retrieval scope for the turn (sources-in-scope chip). */
 export interface SpaceChatCitationModel {
@@ -197,17 +265,25 @@ export class CollabChatScopeBarComponent {
 }
 
 /**
- * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules.
- *
- * MemberJunction's chat area follows an agent's live status and streamed reply through one app-wide subscription to the server's status
- * pushes, and only its own workspace starts it. A space embeds the chat area without that workspace, so this starts the subscription
- * (`initialize` does nothing once it is running); without it a reply stays at "Starting..." until the page is reloaded.
+ * The conversation of a space: MemberJunction's chat area, held to the space's audience and rules,
+ * with collapsed threads in `messageExtra` and the live Assistant indicator in `agentPresence`.
  */
 @Component({
   selector: 'mjc-space-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CollabBandChipComponent, CollabChatScopeBarComponent, ConversationsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
+  imports: [
+    CollabAvatarComponent,
+    CollabBandChipComponent,
+    CollabChatScopeBarComponent,
+    ConversationsModule,
+    MJButtonDirective,
+    MJEmptyStateComponent,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+    SharedGenericModule,
+  ],
   template: `
     <div class="chat-container">
       @if (IsPending) {
@@ -216,6 +292,7 @@ export class CollabChatScopeBarComponent {
         </div>
       } @else if (ConversationId && CurrentUser) {
         <mj-conversation-chat-area
+          #chatAreaRef
           [EnvironmentId]="EnvironmentId"
           [CurrentUser]="CurrentUser"
           [ConversationId]="ConversationId"
@@ -231,73 +308,193 @@ export class CollabChatScopeBarComponent {
           [AllowSkillCommands]="false"
           [AllowAttachments]="AllowAttachments"
           [AllowRealtime]="false"
+          [CollapseThreadReplies]="true"
+          [ShowAgentCharacter]="isRoutingCheck || isAgentWorking"
           [AgentReplyMode]="AgentReplyMode"
           [AllowedAgentIDs]="AllowedAgentIDs"
           [EnableDecisionRouting]="EnableDecisionRouting"
           [MentionPeople]="MentionPeople"
           [AgentHistoryFrom]="AgentHistoryFrom"
-          [AgentTurnHandler]="AgentTurnHandler"
+          [AgentTurnHandler]="effectiveAgentTurnHandler"
           [AutoNameConversation]="AutoNameConversation"
           [ComposerDraft]="ComposerDraft"
           [PendingMessage]="PendingMessage"
           [PendingMessageConversationId]="PendingMessageConversationId"
+          (BeforeAgentTurn)="onBeforeAgentTurn($event)"
+          (AfterAgentTurn)="onAfterAgentTurn($event)"
           (ComposerDraftConsumed)="onComposerDraftConsumed()"
           (PendingMessageConsumed)="onPendingMessageConsumed()">
-          
-          <ng-template mjChatSlot="header">
-            <div class="space-chat-header-slot">
-              <div class="header-left">
-                <div class="title-row">
-                  <i [class]="AudienceBand === 'Team' ? 'fa-solid fa-lock hash-icon' : 'fa-solid fa-hashtag hash-icon'" aria-hidden="true"></i>
-                  <span class="chat-title">{{ ConversationName || (SpaceName ? SpaceName + ' General' : 'General') }}</span>
-                  <mjc-band-chip [Band]="AudienceBand" />
+
+          <ng-template mjChatSlot="agentPresence">
+            @if (isRoutingCheck || isAgentWorking) {
+              <div class="agent-working-progress-banner" data-testid="agent-working-progress-bar" role="status" aria-live="polite">
+                <div class="agent-progress-track">
+                  <div
+                    class="agent-progress-fill"
+                    [class.indeterminate]="activeAgentProgressPercent === null"
+                    [style.width.%]="activeAgentProgressPercent ?? 42">
+                  </div>
                 </div>
-                <div class="subtitle-row">
-                  {{ AudienceSubtitle }}
+                <div class="agent-progress-body">
+                  <div class="agent-progress-left">
+                    <i class="fa-solid fa-robot agent-progress-icon" aria-hidden="true"></i>
+                    @if (isRoutingCheck && !isAgentWorking) {
+                      <span class="agent-progress-title">Deciding whether the Assistant should answer…</span>
+                    } @else {
+                      <span class="agent-progress-title">
+                        {{ activeAgentName || DefaultAgentName || 'Assistant' }} is answering{{ activeAgentElapsed ? ' · ' + activeAgentElapsed : '' }}
+                      </span>
+                      @if (formatRouteBadge(activeAgentRoute); as routeReason) {
+                        <span class="agent-route-badge" data-testid="agent-route-badge">{{ routeReason }}</span>
+                      }
+                      @if (activeAgentStatusText) {
+                        <span class="agent-progress-step">{{ activeAgentStatusText }}</span>
+                      }
+                    }
+                  </div>
                 </div>
               </div>
+            }
+          </ng-template>
 
-              <div class="header-right">
-                @if (IsReadOnly) {
-                  <span class="read-only-lock-wrap">
+          <ng-template mjChatSlot="header">
+            <div class="space-chat-header-wrap">
+              <div class="space-chat-header-slot">
+                <div class="header-left">
+                  <div class="title-row">
+                    <i [class]="AudienceBand === 'Team' ? 'fa-solid fa-lock hash-icon' : (LinkedWorkstreamItem ? 'fa-solid fa-bullseye hash-icon' : 'fa-solid fa-hashtag hash-icon')" aria-hidden="true"></i>
+                    <span class="chat-title">{{ ConversationName || (SpaceName ? SpaceName + ' General' : 'General') }}</span>
+                    <mjc-band-chip [Band]="AudienceBand" />
+                    @if (LinkedWorkstreamItem) {
+                      <button
+                        type="button"
+                        class="linked-workstream-pill"
+                        data-testid="linked-workstream-pill"
+                        (click)="onOpenLinkedItem()"
+                        [title]="'Open linked ' + (LinkedWorkstreamItem.kind === 'task' ? 'task' : 'document') + ': ' + LinkedWorkstreamItem.title">
+                        <i [class]="LinkedWorkstreamItem.kind === 'task' ? 'fa-solid fa-list-check' : 'fa-solid fa-file-lines'" aria-hidden="true"></i>
+                        <span class="linked-kind-label">{{ LinkedWorkstreamItem.kind === 'task' ? 'Task:' : 'Doc:' }}</span>
+                        <span class="linked-title-text">{{ LinkedWorkstreamItem.title }}</span>
+                        @if (LinkedWorkstreamItem.status) {
+                          <span class="linked-status-badge">{{ LinkedWorkstreamItem.status }}</span>
+                        }
+                        <i class="fa-solid fa-arrow-up-right-from-square linked-jump-icon" aria-hidden="true"></i>
+                      </button>
+                    }
+                  </div>
+                  <div class="subtitle-row">
+                    {{ AudienceSubtitle }}
+                  </div>
+                </div>
+
+                <div class="header-right">
+                  @if (IsReadOnly) {
+                    <span class="read-only-lock-wrap">
+                      <button
+                        type="button"
+                        class="read-only-lock"
+                        [title]="ReadOnlyNote"
+                        [attr.aria-label]="ReadOnlyNote"
+                        [attr.aria-expanded]="ReasonShown"
+                        [attr.aria-controls]="ReasonId"
+                        (focus)="onLockFocus()"
+                        (blur)="onLockBlur()"
+                        (keydown.escape)="onLockEscape()"
+                        (click)="onLockClick($event)">
+                        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                      </button>
+                      @if (ReasonShown) {
+                        <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
+                      }
+                    </span>
+                  }
+                  @if (conversationParticipantTotal > 0) {
                     <button
                       type="button"
-                      class="read-only-lock"
-                      [title]="ReadOnlyNote"
-                      [attr.aria-label]="ReadOnlyNote"
-                      [attr.aria-expanded]="ReasonShown"
-                      [attr.aria-controls]="ReasonId"
-                      (focus)="onLockFocus()"
-                      (blur)="onLockBlur()"
-                      (keydown.escape)="onLockEscape()"
-                      (click)="onLockClick($event)">
-                      <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                      class="participant-count-pill"
+                      data-testid="chat-participants-pill"
+                      [mjMenuTriggerFor]="participantsMenu"
+                      title="View people and agents in this conversation">
+                      <i class="fa-solid fa-users" aria-hidden="true"></i>
+                      <span>{{ conversationParticipantTotal }}</span>
+                      <i class="fa-solid fa-chevron-down participant-pill-caret" aria-hidden="true"></i>
                     </button>
-                    @if (ReasonShown) {
-                      <span class="read-only-reason" [id]="ReasonId">{{ ReadOnlyNote }}</span>
-                    }
-                  </span>
-                }
-                @if (ParticipantCount > 0) {
-                  <div class="participant-count-pill" title="People who can see this conversation">
-                    <i class="fa-solid fa-users"></i>
-                    <span>{{ ParticipantCount }}</span>
-                  </div>
-                }
-                @if (CanStartConversation && !IsReadOnly) {
-                  <button
-                    type="button"
-                    mjButton
-                    Variant="primary"
-                    Size="sm"
-                    class="btn-new-convo-header"
-                    (click)="onNewConversation()"
-                    title="New Conversation"
-                    aria-label="New Conversation">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>New Conversation</span>
-                  </button>
-                }
+                    <ng-template #participantsMenu>
+                      <mj-menu AriaLabel="In this conversation" data-testid="chat-participants-popover">
+                        @if (conversationPeopleList.length > 0) {
+                          <div class="chat-participants-section-head" data-testid="chat-participants-people-heading">
+                            <span>People ({{ conversationPeopleList.length }})</span>
+                          </div>
+                          @for (person of conversationPeopleList; track person.id) {
+                            <mj-menu-item
+                              data-testid="chat-participant-mention-btn"
+                              [Disabled]="IsReadOnly"
+                              (Triggered)="mentionParticipant(person.name)">
+                              <div class="chat-participant-row">
+                                <mjc-avatar
+                                  Size="sm"
+                                  [Initials]="person.initials"
+                                  [Name]="person.name"
+                                  [AvatarUrl]="person.imageUrl || ''"
+                                  [IconClass]="person.iconClass"
+                                  [ColorClass]="person.colorClass"
+                                  [PersonId]="person.id"
+                                  [IsAi]="false"
+                                  [IsOutside]="person.isOutside" />
+                                <div class="chat-participant-info">
+                                  <div class="chat-participant-name-line">
+                                    <span class="chat-participant-name">{{ person.name }}</span>
+                                    @if (person.role) {
+                                      <span class="chat-participant-badge">{{ person.role }}</span>
+                                    }
+                                  </div>
+                                  @if (person.subtitle) {
+                                    <span class="chat-participant-sub">{{ person.subtitle }}</span>
+                                  }
+                                </div>
+                              </div>
+                            </mj-menu-item>
+                          }
+                        }
+                        @if (conversationAgentsList.length > 0) {
+                          <div class="chat-participants-section-head is-ai" data-testid="chat-participants-agents-heading">
+                            <span>Agents ({{ conversationAgentsList.length }})</span>
+                          </div>
+                          @for (agent of conversationAgentsList; track agent.id) {
+                            <mj-menu-item
+                              data-testid="chat-participant-mention-btn"
+                              [Disabled]="IsReadOnly"
+                              (Triggered)="mentionParticipant(agent.name)">
+                              <div class="chat-participant-row">
+                                <mjc-avatar
+                                  Size="sm"
+                                  [Initials]="agent.initials"
+                                  [Name]="agent.name"
+                                  [AvatarUrl]="agent.imageUrl || ''"
+                                  [IconClass]="agent.iconClass"
+                                  [ColorClass]="agent.colorClass"
+                                  [PersonId]="agent.id"
+                                  [IsAi]="true"
+                                  [IsOutside]="false" />
+                                <div class="chat-participant-info">
+                                  <div class="chat-participant-name-line">
+                                    <span class="chat-participant-name">{{ agent.name }}</span>
+                                    @if (agent.role) {
+                                      <span class="chat-participant-badge is-ai">{{ agent.role }}</span>
+                                    }
+                                  </div>
+                                  @if (agent.subtitle) {
+                                    <span class="chat-participant-sub">{{ agent.subtitle }}</span>
+                                  }
+                                </div>
+                              </div>
+                            </mj-menu-item>
+                          }
+                        }
+                      </mj-menu>
+                    </ng-template>
+                  }
+                </div>
               </div>
             </div>
 
@@ -307,6 +504,216 @@ export class CollabChatScopeBarComponent {
               [Citations]="Citations"
               (RetrievalScopeChanged)="onScopeChange($event)"
               (CitationClicked)="onCitationClick($event)" />
+          </ng-template>
+
+          <ng-template mjChatSlot="messageExtra" let-message="message">
+            @if (message) {
+              <div class="msg-thread-extra" [attr.data-message-id]="message.ID">
+                @if (getParentMessage(message); as parentMsg) {
+                  <button
+                    type="button"
+                    class="msg-thread-parent-chip"
+                    data-testid="message-thread-parent"
+                    (click)="scrollToMessage(parentMsg.ID)"
+                    [title]="getFormattedMessageBody(parentMsg)">
+                    <i class="fa-solid fa-reply" aria-hidden="true"></i>
+                    <span class="parent-speaker">Replying to {{ getSpeakerName(parentMsg) }}</span>
+                    @if (getMessageExcerpt(parentMsg, 64); as parentExcerpt) {
+                      <span class="parent-excerpt">"{{ parentExcerpt }}"</span>
+                    }
+                  </button>
+                }
+
+                <div class="msg-thread-actions-row">
+                  @if (getRepliesFor(message.ID).length > 0) {
+                    <button
+                      type="button"
+                      class="msg-thread-replies-btn slack-thread-bar"
+                      data-testid="message-thread-replies"
+                      [class.expanded]="isThreadExpanded(message.ID)"
+                      [attr.aria-expanded]="isThreadExpanded(message.ID)"
+                      (click)="toggleThreadExpanded(message.ID)">
+                      <span class="thread-avatar-stack">
+                        @for (part of getThreadParticipants(message.ID); track part.key) {
+                          <mjc-avatar
+                            Size="xs"
+                            [Stacked]="true"
+                            [Initials]="part.initials"
+                            [Name]="part.name"
+                            [AvatarUrl]="part.imageUrl || ''"
+                            [IconClass]="part.iconClass"
+                            [ColorClass]="part.colorClass"
+                            [PersonId]="part.personId"
+                            [IsAi]="part.isAi"
+                            [IsOutside]="part.isOutside" />
+                        }
+                      </span>
+                      <span class="thread-reply-count">
+                        {{ getRepliesFor(message.ID).length }} {{ getRepliesFor(message.ID).length === 1 ? 'reply' : 'replies' }}
+                      </span>
+                      @if (hasInProgressReply(message.ID)) {
+                        <span class="thread-live-pill">
+                          {{ activeAgentName || DefaultAgentName || 'Assistant' }} is answering…
+                        </span>
+                      } @else {
+                        <span class="thread-last-speaker">Last reply from {{ getLastReplySpeaker(message.ID) }}</span>
+                      }
+                      <span class="thread-view-cue">
+                        <span>{{ isThreadExpanded(message.ID) ? 'Hide thread' : 'View thread' }}</span>
+                        <i [class]="isThreadExpanded(message.ID) ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-right'" aria-hidden="true"></i>
+                      </span>
+                    </button>
+                  }
+
+                  @if (!IsReadOnly && message.ID && !isThreadExpanded(message.ID)) {
+                    <button
+                      type="button"
+                      class="msg-reply-btn"
+                      data-testid="message-reply-btn"
+                      [class.active]="replyToMessage?.ID === message.ID"
+                      (click)="startReplyTo(message)"
+                      title="Reply">
+                      <i class="fa-solid fa-reply" aria-hidden="true"></i>
+                      <span>Reply</span>
+                    </button>
+                  }
+                </div>
+
+                @if (isThreadExpanded(message.ID) && getRepliesFor(message.ID).length > 0) {
+                  <div class="msg-thread-replies-drawer" data-testid="message-thread-drawer" role="region" aria-label="Thread replies">
+                    @for (reply of getRepliesFor(message.ID); track reply.ID) {
+                      <div class="thread-reply-item" [attr.data-message-id]="reply.ID">
+                        <mjc-avatar
+                          Size="sm"
+                          [Initials]="getSpeakerInitials(reply)"
+                          [Name]="getSpeakerName(reply)"
+                          [AvatarUrl]="getSpeakerAvatarUrl(reply) || ''"
+                          [IconClass]="getSpeakerIconClass(reply)"
+                          [ColorClass]="getSpeakerColorClass(reply)"
+                          [PersonId]="getSpeakerPersonId(reply)"
+                          [IsAi]="isAiMessage(reply)"
+                          [IsOutside]="isOutsideSpeaker(reply)" />
+                        <div class="thread-reply-content">
+                          <div class="thread-reply-meta">
+                            <div class="thread-reply-meta-left">
+                              <span class="thread-reply-author" [class.is-ai]="isAiMessage(reply)">
+                                {{ getSpeakerName(reply) }}
+                              </span>
+                              @if (isAiMessage(reply)) {
+                                <span class="thread-reply-role-pill is-ai" data-testid="thread-reply-assistant-mark">
+                                  Assistant
+                                </span>
+                              }
+                              @if (getThreadReplyTarget(reply, message.ID); as replyTarget) {
+                                <span
+                                  class="thread-nested-target"
+                                  data-testid="thread-reply-target"
+                                  [title]="getFormattedMessageBody(replyTarget)">
+                                  <i class="fa-solid fa-reply" aria-hidden="true"></i>
+                                  <span class="parent-speaker">Replying to {{ getSpeakerName(replyTarget) }}</span>
+                                  @if (getMessageExcerpt(replyTarget, 64); as targetExcerpt) {
+                                    <span class="parent-excerpt">"{{ targetExcerpt }}"</span>
+                                  }
+                                </span>
+                              }
+                            </div>
+                          </div>
+                          <div class="thread-reply-body">{{ getFormattedMessageBody(reply) }}</div>
+                        </div>
+                      </div>
+                    }
+                    @if (!IsReadOnly) {
+                      <div class="thread-reply-box" data-testid="thread-reply-box">
+                        <input
+                          type="text"
+                          class="thread-reply-input"
+                          data-testid="thread-reply-input"
+                          placeholder="Reply in thread…"
+                          aria-label="Reply in thread"
+                          [value]="getThreadDraft(message.ID)"
+                          (input)="onThreadDraftInput(message.ID, $any($event.target).value)"
+                          (keydown.enter)="$event.preventDefault(); submitThreadReply(message)" />
+                        <button
+                          mjButton
+                          Variant="primary"
+                          Size="sm"
+                          type="button"
+                          data-testid="thread-reply-send"
+                          [disabled]="!getThreadDraft(message.ID).trim()"
+                          (click)="submitThreadReply(message)">
+                          Reply
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </ng-template>
+
+          <ng-template mjChatSlot="composerExtra">
+            @if (replyToMessage) {
+              <div class="composer-reply-banner" data-testid="composer-reply-banner" role="region" aria-label="Replying in thread">
+                <div class="reply-banner-left">
+                  <i class="fa-solid fa-reply reply-banner-icon" aria-hidden="true"></i>
+                  <div class="reply-banner-info">
+                    <div class="reply-banner-top">
+                      <span class="reply-banner-label">Replying to <strong>{{ getSpeakerName(replyToMessage) }}</strong></span>
+                      @if (isAiMessage(replyToMessage)) {
+                        <span class="route-preview-pill agent" data-testid="reply-route-pill">
+                          <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                          <span>{{ getSpeakerName(replyToMessage) }} will reply in the thread</span>
+                        </span>
+                      } @else {
+                        <span class="route-preview-pill human" data-testid="reply-route-pill">
+                          <span>Replying in the thread</span>
+                        </span>
+                      }
+                    </div>
+                    <div class="reply-banner-excerpt">"{{ getMessageExcerpt(replyToMessage, 90) }}"</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="reply-banner-close"
+                  data-testid="composer-reply-cancel"
+                  (click)="clearReplyTo()"
+                  title="Cancel reply"
+                  aria-label="Cancel reply">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+            }
+
+            @if (pendingAgentPrompt) {
+              <div class="ask-agent-prompt-bar" data-testid="ask-agent-should-go-bar" role="region" aria-label="Ask if the Assistant should answer">
+                <div class="ask-agent-left">
+                  <div class="ask-agent-icon">
+                    <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                  </div>
+                  <div class="ask-agent-text">
+                    <span class="ask-agent-title">Ask {{ pendingAgentPrompt.suggestedAgentName }} to answer?</span>
+                    <span class="ask-agent-reason">{{ pendingAgentPrompt.reasonLabel }}</span>
+                  </div>
+                </div>
+                <div class="ask-agent-actions">
+                  <button
+                    type="button"
+                    class="ask-agent-confirm-btn"
+                    data-testid="ask-agent-go-confirm"
+                    (click)="confirmAgentShouldGo()">
+                    <span>Ask {{ pendingAgentPrompt.suggestedAgentName }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="ask-agent-dismiss-btn"
+                    data-testid="ask-agent-go-dismiss"
+                    (click)="dismissAgentPrompt()">
+                    <span>Dismiss</span>
+                  </button>
+                </div>
+              </div>
+            }
           </ng-template>
 
         </mj-conversation-chat-area>
@@ -350,7 +757,7 @@ export class CollabChatScopeBarComponent {
         display: block;
         height: 100%;
         min-height: 0;
-        background: var(--mj-bg-surface, #ffffff);
+        background: var(--mj-bg-surface);
       }
 
       .chat-container {
@@ -361,13 +768,19 @@ export class CollabChatScopeBarComponent {
         position: relative;
       }
 
+      .space-chat-header-wrap {
+        display: flex;
+        flex-direction: column;
+        background: var(--mj-bg-surface);
+        border-bottom: 1px solid var(--mj-border-default);
+      }
+
       .space-chat-header-slot {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 10px 16px;
-        background: var(--mj-bg-surface, #ffffff);
-        border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface);
         gap: 12px;
       }
 
@@ -383,25 +796,73 @@ export class CollabChatScopeBarComponent {
         align-items: center;
         gap: 8px;
         min-width: 0;
+        flex-wrap: wrap;
       }
 
       .hash-icon {
         font-size: 14px;
-        color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary);
       }
 
       .chat-title {
         font-size: 15px;
         font-weight: 700;
-        color: var(--mj-text-primary, #0f172a);
+        color: var(--mj-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
+      /* Linked Actionable Item pill on Workstreams */
+      .linked-workstream-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 8%, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--mj-transition-fast);
+        max-width: 280px;
+      }
+      .linked-workstream-pill:hover {
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 14%, var(--mj-bg-surface));
+        border-color: var(--mj-brand-tertiary);
+      }
+      .linked-workstream-pill i:first-child {
+        color: var(--mj-brand-tertiary);
+        font-size: 11px;
+      }
+      .linked-kind-label {
+        color: var(--mj-text-secondary);
+        font-weight: 600;
+      }
+      .linked-title-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .linked-status-badge {
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-default);
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-secondary);
+      }
+      .linked-jump-icon {
+        font-size: 10px;
+        color: var(--mj-text-muted);
+      }
+
       .subtitle-row {
         font-size: 12px;
-        color: var(--mj-text-secondary, #64748b);
+        color: var(--mj-text-secondary);
       }
 
       .header-right {
@@ -414,14 +875,617 @@ export class CollabChatScopeBarComponent {
       .participant-count-pill {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
-        color: var(--mj-text-secondary, #475569);
-        padding: 3px 8px;
+        gap: 6px;
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
+        color: var(--mj-text-secondary);
+        padding: 4px 10px;
         border-radius: 999px;
         font-size: 11.5px;
         font-weight: 600;
+        cursor: pointer;
+        transition: all var(--mj-transition-fast);
+      }
+      .participant-count-pill:hover,
+      .participant-count-pill[aria-expanded='true'] {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface));
+      }
+      .participant-pill-caret {
+        font-size: 9px;
+        opacity: 0.7;
+        transition: transform var(--mj-transition-fast);
+      }
+      .participant-count-pill[aria-expanded='true'] .participant-pill-caret {
+        transform: rotate(180deg);
+      }
+
+      .chat-participants-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--mj-space-1-5) var(--mj-space-3) var(--mj-space-1);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-semibold);
+        color: var(--mj-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        user-select: none;
+      }
+      .chat-participants-section-head.is-ai {
+        border-top: 1px solid var(--mj-border-subtle);
+        margin-top: var(--mj-space-1);
+        padding-top: var(--mj-space-2);
+        color: var(--mj-brand-tertiary);
+      }
+
+      .chat-participant-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 220px;
+      }
+
+      .chat-participant-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .chat-participant-name-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .chat-participant-name {
+        font-size: 12.5px;
+        font-weight: 650;
+        color: var(--mj-text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .chat-participant-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+      .chat-participant-badge.is-ai {
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 12%, transparent);
+        color: var(--mj-brand-tertiary);
+      }
+
+      .chat-participant-sub {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Live Assistant presence bar in mjChatSlot="agentPresence" */
+      .agent-working-progress-banner {
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+        border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-border-default));
+      }
+
+      .agent-progress-track {
+        width: 100%;
+        height: 3px;
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .agent-progress-fill {
+        height: 100%;
+        background: var(--mj-brand-primary);
+        transition: width var(--mj-transition-fast);
+      }
+
+      .agent-progress-fill.indeterminate {
+        width: 38%;
+        animation: mjcAgentProgressSlide 1.4s ease-in-out infinite;
+      }
+
+      @keyframes mjcAgentProgressSlide {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(120%); }
+        100% { transform: translateX(260%); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .agent-progress-fill,
+        .linked-workstream-pill,
+        .participant-count-pill,
+        .participant-pill-caret,
+        .msg-thread-replies-btn.slack-thread-bar,
+        .msg-reply-btn {
+          transition: none;
+        }
+        .agent-progress-fill.indeterminate {
+          animation: none;
+          width: 100%;
+        }
+      }
+
+      .agent-progress-body {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        font-size: var(--mj-text-xs);
+      }
+
+      .agent-progress-left {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+
+      .agent-progress-icon {
+        color: var(--mj-brand-primary);
+        font-size: var(--mj-text-xs);
+      }
+
+      .agent-progress-title {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .agent-route-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px var(--mj-space-2);
+        border-radius: 999px;
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+      }
+
+      .agent-progress-step {
+        color: var(--mj-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Collapsed thread bar & expandable thread replies in mjChatSlot="messageExtra" */
+      .msg-thread-extra {
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-2);
+        margin-top: var(--mj-space-2);
+      }
+
+      .msg-thread-parent-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        align-self: flex-start;
+        padding: var(--mj-space-1) var(--mj-space-2);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-brand-primary);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-xs);
+        cursor: pointer;
+        max-width: 100%;
+        text-align: left;
+      }
+      .msg-thread-parent-chip:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+      .msg-thread-parent-chip i {
+        font-size: 10px;
+        color: var(--mj-brand-primary);
+      }
+      .parent-speaker {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        white-space: nowrap;
+      }
+      .parent-excerpt {
+        color: var(--mj-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .msg-thread-actions-row {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      /* Collapsed Thread Bar */
+      .msg-thread-replies-btn.slack-thread-bar {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-1) var(--mj-space-3) var(--mj-space-1) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
+        border: 1px solid transparent;
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-xs);
+        cursor: pointer;
+        transition: all var(--mj-transition-fast);
+        max-width: 100%;
+      }
+      .msg-thread-replies-btn.slack-thread-bar:hover,
+      .msg-thread-replies-btn.slack-thread-bar.expanded {
+        border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface));
+      }
+
+      .thread-avatar-stack {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .thread-avatar-stack mjc-avatar + mjc-avatar {
+        margin-left: -4px;
+      }
+
+      .thread-reply-count {
+        font-weight: 700;
+        color: var(--mj-brand-primary);
+        white-space: nowrap;
+      }
+
+      .thread-last-speaker {
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+      }
+
+      .thread-live-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        color: var(--mj-brand-tertiary);
+      }
+
+      .thread-view-cue {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        color: var(--mj-brand-primary);
+        margin-left: 2px;
+      }
+      .thread-view-cue i {
+        font-size: 9.5px;
+      }
+
+      .msg-reply-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        padding: 3px var(--mj-space-2);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--mj-transition-fast);
+      }
+      .msg-reply-btn:hover,
+      .msg-reply-btn.active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+      }
+
+      .msg-thread-replies-drawer {
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-3);
+        margin-top: var(--mj-space-1);
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-brand-primary);
+        border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
+      }
+
+      .thread-reply-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-md);
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-subtle);
+      }
+
+      .thread-reply-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--mj-space-1);
+        min-width: 0;
+        flex: 1;
+      }
+
+      .thread-reply-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--mj-space-2);
+        font-size: var(--mj-text-xs);
+      }
+
+      .thread-reply-meta-left {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      .thread-reply-author {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+      }
+      .thread-reply-author.is-ai {
+        color: var(--mj-brand-tertiary);
+      }
+
+      .thread-reply-role-pill {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px var(--mj-space-2);
+        border-radius: 999px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+      .thread-reply-role-pill.is-ai {
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 12%, transparent);
+        color: var(--mj-brand-tertiary);
+      }
+
+      .thread-nested-target {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        font-size: 10.5px;
+        color: var(--mj-text-muted);
+      }
+      .thread-nested-target i {
+        font-size: 9px;
+      }
+
+      .thread-reply-body {
+        font-size: var(--mj-text-sm);
+        line-height: 1.45;
+        color: var(--mj-text-primary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .thread-reply-box {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        padding-top: var(--mj-space-1);
+      }
+
+      .thread-reply-input {
+        flex: 1;
+        min-width: 0;
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: var(--mj-text-xs);
+      }
+      .thread-reply-input:focus {
+        outline: 2px solid var(--mj-brand-primary);
+        outline-offset: 1px;
+        border-color: var(--mj-brand-primary);
+      }
+
+      /* Composer Thread Reply Banner */
+      .composer-reply-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        margin: 0 var(--mj-space-3) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+      }
+
+      .reply-banner-left {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--mj-space-3);
+        min-width: 0;
+      }
+
+      .reply-banner-icon {
+        margin-top: 3px;
+        color: var(--mj-brand-primary);
+        font-size: var(--mj-text-xs);
+      }
+
+      .reply-banner-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .reply-banner-top {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+      }
+
+      .reply-banner-label {
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-primary);
+      }
+
+      .route-preview-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-1);
+        padding: 2px var(--mj-space-2);
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .route-preview-pill.agent {
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+      .route-preview-pill.human {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .reply-banner-excerpt {
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .reply-banner-close {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+      }
+      .reply-banner-close:hover {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-primary);
+      }
+
+      /* Ask if the Assistant should answer prompt bar */
+      .ask-agent-prompt-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--mj-space-3);
+        padding: var(--mj-space-2) var(--mj-space-4);
+        margin: 0 var(--mj-space-3) var(--mj-space-2);
+        border-radius: var(--mj-radius-md);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-tertiary) 35%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 6%, var(--mj-bg-surface));
+        flex-wrap: wrap;
+      }
+
+      .ask-agent-left {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-3);
+        min-width: 0;
+      }
+
+      .ask-agent-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--mj-radius-sm);
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--mj-brand-tertiary) 14%, transparent);
+        color: var(--mj-brand-tertiary);
+        font-size: var(--mj-text-xs);
+        flex-shrink: 0;
+      }
+
+      .ask-agent-text {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-wrap: wrap;
+        font-size: var(--mj-text-xs);
+      }
+
+      .ask-agent-title {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+      }
+
+      .ask-agent-reason {
+        color: var(--mj-text-secondary);
+      }
+
+      .ask-agent-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        flex-shrink: 0;
+      }
+
+      .ask-agent-confirm-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--mj-space-2);
+        padding: var(--mj-space-1) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-brand-primary);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .ask-agent-confirm-btn:hover {
+        background: var(--mj-brand-primary-hover);
+      }
+
+      .ask-agent-dismiss-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--mj-space-1) var(--mj-space-3);
+        border-radius: var(--mj-radius-sm);
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-xs);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .ask-agent-dismiss-btn:hover {
+        color: var(--mj-text-primary);
+        border-color: var(--mj-border-strong);
       }
 
       .no-conversation-state {
@@ -434,13 +1498,10 @@ export class CollabChatScopeBarComponent {
         text-align: center;
       }
 
-
-
-
       .btn-new-convo-header {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--mj-space-2);
       }
 
       .scope-bar {
@@ -501,13 +1562,13 @@ export class CollabChatScopeBarComponent {
         padding: 0;
         border-radius: 999px;
         font-size: 13px;
-        color: var(--mj-status-warning, #d97706);
-        background: var(--mj-bg-surface-sunken, #f1f5f9);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        color: var(--mj-status-warning);
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
         cursor: pointer;
       }
       .read-only-lock:focus-visible {
-        outline: 2px solid var(--mj-brand-primary, #0076b6);
+        outline: 2px solid var(--mj-brand-primary);
         outline-offset: 2px;
       }
       .read-only-reason {
@@ -517,13 +1578,13 @@ export class CollabChatScopeBarComponent {
         z-index: 2;
         min-width: 220px;
         max-width: 320px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        font-size: 12px;
+        padding: var(--mj-space-2) var(--mj-space-3);
+        border-radius: var(--mj-radius-md);
+        font-size: var(--mj-text-xs);
         line-height: 1.4;
         color: var(--mj-text-primary);
         background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-default, #e2e8f0);
+        border: 1px solid var(--mj-border-default);
         box-shadow: var(--mj-shadow-md);
       }
       .read-only-lock-corner {
@@ -541,15 +1602,49 @@ export class CollabChatScopeBarComponent {
     `,
   ],
 })
-export class CollabSpaceChatComponent implements OnInit {
+export class CollabSpaceChatComponent implements OnInit, OnChanges, AfterViewChecked, OnDestroy {
   constructor(
-    @Inject(ConversationStreamingService) private readonly streaming: ConversationStreamingService,
+    @Optional() @Inject(ConversationStreamingService) private readonly streaming?: ConversationStreamingService,
     /** This chat's own element: a click in another chat's lock on the same page is outside it. */
-    @Inject(ElementRef) private readonly host: ElementRef<HTMLElement>,
+    @Optional() @Inject(ElementRef) private readonly host?: ElementRef<HTMLElement>,
+    @Optional() @Inject(ChangeDetectorRef) private readonly cdr?: ChangeDetectorRef,
   ) {}
 
+  @ViewChild('chatAreaRef') private chatArea?: unknown;
+
+  private boundChatArea: unknown = null;
+  private boundInputInstance: unknown = null;
+  private cleanups: Array<() => void> = [];
+  private noAgentPromptTimer: ReturnType<typeof setTimeout> | undefined;
+  private threadDrafts = new Map<string, string>();
+  private cachedRawTurnHandler: AgentTurnHandler | null = null;
+  private cachedWrappedTurnHandler: AgentTurnHandler | null = null;
+
   public ngOnInit(): void {
-    this.streaming.initialize();
+    this.streaming?.initialize();
+  }
+
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (changes['ConversationId'] && !changes['ConversationId'].firstChange) {
+      this.replyToMessage = null;
+      this.pendingAgentPrompt = null;
+      this.onAgentTurnCompleted();
+      this.expandedThreadIds.clear();
+      this.threadDrafts.clear();
+      this.syncParentMessageIdToComposer(null);
+    }
+  }
+
+  public ngAfterViewChecked(): void {
+    this.bindChatAreaListeners();
+    this.syncLiveProgressFromChatArea();
+  }
+
+  public ngOnDestroy(): void {
+    this.clearSubscriptions();
+    if (this.noAgentPromptTimer !== undefined) {
+      clearTimeout(this.noAgentPromptTimer);
+    }
   }
 
   /** The conversation can be read and not posted in: MJ's chat area takes `ReadOnly` and shows `ReadOnlyNote` where the composer was, and the header's lock says why. */
@@ -557,6 +1652,59 @@ export class CollabSpaceChatComponent implements OnInit {
   /** The caller's seat is not known yet: neither a composer nor a note nor a lock, only a quiet wait, so nobody is told they can't post before the page knows. */
   @Input() public IsPending = false;
   @Input() public ReadOnlyNote = 'This space is closed. Conversations are read-only.';
+
+  /** Linked actionable item (Task or Document) when this conversation is a focused Workstream. */
+  @Input() public LinkedWorkstreamItem: WorkstreamLinkedItem | null = null;
+  /** Name of the space's default AI agent, when one is configured and allowed. */
+  @Input() public DefaultAgentName = '';
+  /** Optional explicit thread messages list (used by tests or before chatArea populates). */
+  @Input() public ThreadMessages: readonly ChatThreadMessageLike[] = [];
+  /** Space roster members so thread avatars and outside participant rings use `mjc-avatar` without reading internal chat area state. */
+  @Input() public SpaceMembers: readonly SpaceMemberModel[] = [];
+
+  @Output() public LinkedItemOpenRequested = new EventEmitter<WorkstreamLinkedItem>();
+
+  /** Active message being replied to in a thread (`ParentID`). */
+  public replyToMessage: ChatThreadMessageLike | null = null;
+  /** Expanded inline thread drawers keyed by parent message ID. */
+  public expandedThreadIds = new Set<string>();
+  /** True while routing decision is checking whether the Assistant should answer. */
+  public isRoutingCheck = false;
+  /** True while an AI agent turn is actively running. */
+  public isAgentWorking = false;
+  public activeAgentName = '';
+  public activeAgentRoute: AgentTurnRoute | null = null;
+  public activeAgentStatusText = '';
+  public activeAgentElapsed = '';
+  public activeAgentProgressPercent: number | null = null;
+  /** Prompt shown when a user message resolves to `NoAgent` so the user can ask the Assistant to answer if desired. */
+  public pendingAgentPrompt: PendingAgentPromptState | null = null;
+
+  public get effectiveAgentTurnHandler(): AgentTurnHandler | null {
+    const raw = this.AgentTurnHandler;
+    if (!raw) return null;
+    if (raw === this.cachedRawTurnHandler && this.cachedWrappedTurnHandler) {
+      return this.cachedWrappedTurnHandler;
+    }
+    this.cachedRawTurnHandler = raw;
+    this.cachedWrappedTurnHandler = async (request: AgentTurnRequest) => {
+      this.onAgentTurnStarted({
+        agentName: request.AgentName ?? this.DefaultAgentName,
+        route: request.Route,
+      });
+      try {
+        return await raw(request);
+      } finally {
+        this.onAgentTurnCompleted();
+      }
+    };
+    return this.cachedWrappedTurnHandler;
+  }
+
+  public get hasRealChatArea(): boolean {
+    const area = this.chatArea as { slotTemplate?: unknown } | undefined;
+    return typeof area?.slotTemplate === 'function';
+  }
 
   /** What the empty conversation area says, for someone who may start a conversation and for someone who may only read. */
   public get emptyMessage(): string {
@@ -568,13 +1716,7 @@ export class CollabSpaceChatComponent implements OnInit {
   /** This instance's id for the reason, which the lock's `aria-controls` names: several chats can be on one page. */
   public readonly ReasonId = `mjc-read-only-reason-${++CollabSpaceChatComponent.nextReasonId}`;
 
-  /**
-   * The lock's reason is on screen: shown while the lock has focus, toggled by a tap, a click, Enter or Space, and closed by
-   * Escape or by a tap or click anywhere else. It is the button's own label too, so it carries no live-region role of its own:
-   * a screen reader has already read it.
-   */
   public ReasonShown = false;
-  /** Focus opened the reason, so the pointer's click that follows the mouse-down that focused the lock keeps it open. */
   private reasonOpenedByFocus = false;
 
   public onLockFocus(): void {
@@ -587,28 +1729,27 @@ export class CollabSpaceChatComponent implements OnInit {
     this.reasonOpenedByFocus = false;
   }
 
-  /** A click made by Enter or Space (`detail` 0) always toggles; only a pointer's click right after focus is the one that keeps the reason open. */
   public onLockClick(event: Pick<MouseEvent, 'detail'>): void {
     const pointerAfterFocus = this.reasonOpenedByFocus && event.detail > 0;
     this.reasonOpenedByFocus = false;
     this.ReasonShown = pointerAfterFocus ? true : !this.ReasonShown;
   }
 
-  /** Escape closes the reason and leaves the focus on the lock. */
   public onLockEscape(): void {
     this.ReasonShown = false;
     this.reasonOpenedByFocus = false;
   }
 
-  /** A tap or click outside this chat's own lock closes the reason: it covers what is under it. Another chat's lock on the same page is outside. */
   @HostListener('document:click', ['$event'])
   public onDocumentClick(event: Pick<MouseEvent, 'target'>): void {
-    if (!this.ReasonShown) return;
     const target = event.target;
-    const lockWrap = target instanceof Element ? target.closest('.read-only-lock-wrap') : null;
-    if (lockWrap && this.host.nativeElement.contains(lockWrap)) return;
-    this.ReasonShown = false;
-    this.reasonOpenedByFocus = false;
+    if (this.ReasonShown) {
+      const lockWrap = target instanceof Element ? target.closest('.read-only-lock-wrap') : null;
+      if (!lockWrap || !this.host?.nativeElement.contains(lockWrap)) {
+        this.ReasonShown = false;
+        this.reasonOpenedByFocus = false;
+      }
+    }
   }
 
   @Input() public ConversationId: string | null = null;
@@ -622,9 +1763,8 @@ export class CollabSpaceChatComponent implements OnInit {
   @Input() public ApplicationId: string | null = null;
   @Input() public DefaultAgentId: string | null = null;
   @Input() public ParticipantCount = 0;
-  /** How many Active outside seats reach the space: the subtitle claims outside participants only when there are some. */
   @Input() public OutsideParticipantCount = 0;
-  /** Who can read this conversation, in words, from the space's real audience. */
+
   public get AudienceSubtitle(): string {
     if (this.AudienceBand === 'Team') return 'Only the team can see this conversation.';
     return this.OutsideParticipantCount > 0
@@ -660,6 +1800,12 @@ export class CollabSpaceChatComponent implements OnInit {
     this.NewConversationRequested.emit();
   }
 
+  public onOpenLinkedItem(): void {
+    if (this.LinkedWorkstreamItem) {
+      this.LinkedItemOpenRequested.emit(this.LinkedWorkstreamItem);
+    }
+  }
+
   public onScopeChange(scope: 'ThisSpace' | 'Subtree' | 'Everything'): void {
     this.RetrievalScope = scope;
     this.RetrievalScopeChanged.emit(scope);
@@ -677,5 +1823,834 @@ export class CollabSpaceChatComponent implements OnInit {
   public onPendingMessageConsumed(): void {
     this.PendingMessage = null;
     this.PendingMessageConsumed.emit();
+  }
+
+  // ── Cached AI Agent Metadata (`MJ: AI Agents`) & Participants Menu ────────
+
+  public getCachedAgents(): CachedAiAgentMetadata[] {
+    const out: CachedAiAgentMetadata[] = [];
+    const seen = new Set<string>();
+    try {
+      const agents = AIEngineBase.Instance.Agents ?? [];
+      for (const agent of agents) {
+        if (!agent) continue;
+        const id = typeof agent.ID === 'string' ? agent.ID.trim() : '';
+        const name = typeof agent.Name === 'string' ? agent.Name.trim() : '';
+        if (!id && !name) continue;
+        const key = (id || name).toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          ID: id,
+          Name: name,
+          LogoURL: typeof agent.LogoURL === 'string' && agent.LogoURL.trim() ? agent.LogoURL.trim() : null,
+          IconClass: typeof agent.IconClass === 'string' && agent.IconClass.trim() ? agent.IconClass.trim() : null,
+          Description: typeof agent.Description === 'string' && agent.Description.trim() ? agent.Description.trim() : null,
+        });
+      }
+    } catch {
+      // AIEngineBase.Instance.Agents throws when not loaded or permission-constrained
+    }
+    return out;
+  }
+
+  public resolveAgentMetadata(agentId?: string | null, agentName?: string | null): CachedAiAgentMetadata | null {
+    const agents = this.getCachedAgents();
+    if (agents.length === 0) return null;
+    const idNorm = (agentId ?? '').trim().toLowerCase();
+    if (idNorm) {
+      const byId = agents.find((a) => a.ID.toLowerCase() === idNorm);
+      if (byId) return byId;
+    }
+    const nameNorm = (agentName ?? '').trim().toLowerCase();
+    if (nameNorm) {
+      const byName = agents.find((a) => a.Name.toLowerCase() === nameNorm);
+      if (byName) return byName;
+    }
+    return null;
+  }
+
+  public normalizeAgentIconClass(iconClass?: string | null, hasLogoUrl = false): string {
+    const raw = (iconClass ?? '').trim();
+    if (!raw) {
+      return hasLogoUrl ? '' : 'fa-solid fa-robot';
+    }
+    if (
+      raw.startsWith('fa-') &&
+      !/\b(fa-solid|fa-regular|fa-brands|fa-light|fa-thin|fa-duotone|fas|far|fab)\b/.test(raw)
+    ) {
+      return `fa-solid ${raw}`;
+    }
+    return raw;
+  }
+
+  private getMemberForUser(userId: string | null | undefined, name?: string | null): SpaceMemberModel | null {
+    const uid = (userId ?? '').trim().toLowerCase();
+    if (uid) {
+      const byId = this.SpaceMembers.find((m) => (m.userId ?? '').trim().toLowerCase() === uid || (m.id ?? '').trim().toLowerCase() === uid);
+      if (byId) return byId;
+    }
+    const cleanName = (name ?? '').trim().toLowerCase();
+    if (cleanName) {
+      return this.SpaceMembers.find((m) => (m.name ?? '').trim().toLowerCase() === cleanName) ?? null;
+    }
+    return null;
+  }
+
+  private isSystemUser(userId?: string | null, userName?: string | null): boolean {
+    const uid = (userId ?? '').trim().toLowerCase();
+    if (uid === '00000000-0000-0000-0000-000000000000' || uid === 'ecafccec-6a37-ef11-86d4-000d3a4e707e') {
+      return true;
+    }
+    const uname = (userName ?? '').trim().toLowerCase();
+    return uname === 'system';
+  }
+
+  public get conversationPeopleList(): ChatParticipantListItem[] {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    const list: ChatParticipantListItem[] = [];
+
+    const addPerson = (opts: {
+      id?: string | null;
+      name?: string | null;
+      email?: string | null;
+      role?: string;
+      member?: SpaceMemberModel | null;
+    }): void => {
+      const rawId = (opts.id ?? opts.member?.userId ?? opts.member?.id ?? '').trim();
+      const rawName = (opts.name ?? opts.member?.name ?? '').trim();
+      if (!rawId && !rawName) return;
+      if (this.isSystemUser(rawId, rawName)) return;
+      const idKey = rawId.toLowerCase();
+      const nameKey = rawName.toLowerCase();
+      if ((idKey && seenIds.has(idKey)) || (nameKey && seenNames.has(nameKey))) return;
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+
+      const member = opts.member ?? this.getMemberForUser(rawId, rawName);
+      const displayName = rawName || member?.name || 'Team Member';
+      list.push({
+        id: rawId || member?.userId || member?.id || `person-${nameKey}`,
+        name: displayName,
+        initials: member?.initials || this.computeInitials(displayName),
+        imageUrl: member?.avatarUrl ?? null,
+        iconClass: member?.iconClass ?? '',
+        colorClass: member?.colorClass ?? '',
+        role: opts.role ?? '',
+        subtitle: (opts.email ?? member?.email ?? '').trim(),
+        isAi: false,
+        isOutside: member?.band === 'Shared',
+      });
+    };
+
+    if (this.CurrentUser?.ID || this.CurrentUser?.Name) {
+      addPerson({
+        id: this.CurrentUser.ID,
+        name: this.CurrentUser.Name || 'You',
+        email: this.CurrentUser.Email,
+        role: 'You',
+      });
+    }
+
+    for (const person of this.MentionPeople ?? []) {
+      addPerson({
+        id: person.ID,
+        name: person.Name || 'Team Member',
+        email: person.Email,
+      });
+    }
+
+    for (const member of this.SpaceMembers ?? []) {
+      if (member.status && member.status !== 'Active') continue;
+      if (this.AudienceBand === 'Team' && member.band !== 'Team') continue;
+      addPerson({
+        id: member.userId || member.id,
+        name: member.name,
+        email: member.email,
+        member,
+      });
+    }
+
+    for (const msg of this.allMessages) {
+      if (this.isAiMessage(msg)) continue;
+      if (!msg.UserID?.trim() && !msg.User?.trim()) continue;
+      addPerson({
+        id: msg.UserID,
+        name: msg.User || this.getSpeakerName(msg),
+      });
+    }
+
+    return list;
+  }
+
+  public get conversationAgentsList(): ChatParticipantListItem[] {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+    const list: ChatParticipantListItem[] = [];
+
+    const addAgent = (agentId?: string | null, agentName?: string | null): void => {
+      const meta = this.resolveAgentMetadata(agentId, agentName);
+      const displayName = (meta?.Name || agentName || '').trim();
+      const resolvedId = (meta?.ID || agentId || '').trim();
+      if (!displayName && !resolvedId) return;
+      const finalName = displayName || 'Assistant';
+      const finalId = resolvedId || `agent-${finalName.toLowerCase()}`;
+      const idKey = finalId.toLowerCase();
+      const nameKey = finalName.toLowerCase();
+      if ((idKey && seenIds.has(idKey)) || (nameKey && seenNames.has(nameKey))) return;
+      if (idKey) seenIds.add(idKey);
+      if (nameKey) seenNames.add(nameKey);
+
+      const logoUrl = meta?.LogoURL?.trim() || null;
+      const iconClass = this.normalizeAgentIconClass(meta?.IconClass, !!logoUrl);
+      list.push({
+        id: finalId,
+        name: finalName,
+        initials: this.computeInitials(finalName),
+        imageUrl: logoUrl,
+        iconClass,
+        colorClass: '',
+        role: 'Assistant',
+        subtitle: meta?.Description?.trim() || 'Answers when mentioned or in a thread',
+        isAi: true,
+        isOutside: false,
+      });
+    };
+
+    if (this.DefaultAgentName.trim() || this.DefaultAgentId?.trim()) {
+      addAgent(this.DefaultAgentId, this.DefaultAgentName);
+    }
+
+    for (const msg of this.allMessages) {
+      if (!this.isAiMessage(msg)) continue;
+      addAgent(msg.AgentID, msg.Agent || this.DefaultAgentName);
+    }
+
+    if (this.isAgentWorking && this.activeAgentName.trim()) {
+      addAgent(null, this.activeAgentName);
+    }
+
+    return list;
+  }
+
+  public get conversationParticipantsList(): ChatParticipantListItem[] {
+    return [...this.conversationPeopleList, ...this.conversationAgentsList];
+  }
+
+  public get conversationParticipantTotal(): number {
+    return this.conversationParticipantsList.length;
+  }
+
+  public mentionParticipant(name: string): void {
+    if (this.IsReadOnly || !name) return;
+    const prefix = `@${name.trim()} `;
+    const existing = (this.ComposerDraft ?? '').trim();
+    this.ComposerDraft = existing ? `${existing} ${prefix}` : prefix;
+    this.cdr?.markForCheck();
+  }
+
+  // ── Threads & Replies (`ParentID` & `ThreadReply`) ────────────────────────
+
+  public get allMessages(): readonly ChatThreadMessageLike[] {
+    const area = this.chatArea as { DisplayMessages?: ChatThreadMessageLike[]; messages?: ChatThreadMessageLike[] } | undefined;
+    if (Array.isArray(area?.messages) && area.messages.length > 0) {
+      return area.messages;
+    }
+    if (this.ThreadMessages.length > 0) {
+      return this.ThreadMessages;
+    }
+    if (Array.isArray(area?.DisplayMessages) && area.DisplayMessages.length > 0) {
+      return area.DisplayMessages;
+    }
+    return this.ThreadMessages;
+  }
+
+  /**
+   * Resolves the message `ParentID` points to in `allMessages` (for both person replies and agent replies).
+   */
+  public getParentMessage(message: ChatThreadMessageLike | null | undefined): ChatThreadMessageLike | null {
+    const parentId = message?.ParentID;
+    if (!parentId) return null;
+    const norm = parentId.trim().toLowerCase();
+    if (!norm || norm === 'null') return null;
+    return this.allMessages.find((m) => (m.ID ?? '').trim().toLowerCase() === norm) ?? null;
+  }
+
+  /**
+   * Collects all transitive replies in the thread rooted at `parentId`
+   * (person replies to `parentId`, plus person or agent replies to those thread replies),
+   * preserving chronological order. An agent's direct answer to a top-level message stays in
+   * the main flow and is not part of the thread.
+   */
+  public getRepliesFor(parentId: string | null | undefined): ChatThreadMessageLike[] {
+    if (!parentId) return [];
+    const rootNorm = parentId.trim().toLowerCase();
+    if (!rootNorm) return [];
+    const all = this.allMessages;
+    const inThread = new Set<string>([rootNorm]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const m of all) {
+        const id = (m.ID ?? '').trim().toLowerCase();
+        const pid = (m.ParentID ?? '').trim().toLowerCase();
+        if (!id || !pid || pid === 'null' || !inThread.has(pid) || inThread.has(id)) {
+          continue;
+        }
+        if (pid === rootNorm && this.isAiMessage(m)) {
+          continue;
+        }
+        inThread.add(id);
+        added = true;
+      }
+    }
+    inThread.delete(rootNorm);
+    if (inThread.size === 0) return [];
+    return all.filter((m) => inThread.has((m.ID ?? '').trim().toLowerCase()));
+  }
+
+  public getThreadParticipants(parentId: string | null | undefined): Array<{
+    key: string;
+    name: string;
+    initials: string;
+    imageUrl: string | null;
+    iconClass: string;
+    colorClass: string;
+    personId: string;
+    isAi: boolean;
+    isOutside: boolean;
+  }> {
+    const replies = this.getRepliesFor(parentId);
+    const seen = new Set<string>();
+    const participants: Array<{
+      key: string;
+      name: string;
+      initials: string;
+      imageUrl: string | null;
+      iconClass: string;
+      colorClass: string;
+      personId: string;
+      isAi: boolean;
+      isOutside: boolean;
+    }> = [];
+    for (const r of replies) {
+      const isAi = this.isAiMessage(r);
+      const name = this.getSpeakerName(r);
+      const key = `${isAi ? 'ai' : 'user'}:${name.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      participants.push({
+        key,
+        name,
+        initials: this.getSpeakerInitials(r),
+        imageUrl: this.getSpeakerAvatarUrl(r),
+        iconClass: this.getSpeakerIconClass(r),
+        colorClass: this.getSpeakerColorClass(r),
+        personId: this.getSpeakerPersonId(r),
+        isAi,
+        isOutside: this.isOutsideSpeaker(r),
+      });
+      if (participants.length >= 4) break;
+    }
+    return participants;
+  }
+
+  public getLastReplySpeaker(parentId: string | null | undefined): string {
+    const replies = this.getRepliesFor(parentId);
+    if (replies.length === 0) return '';
+    return this.getSpeakerName(replies[replies.length - 1]);
+  }
+
+  public hasInProgressReply(parentId: string | null | undefined): boolean {
+    const replies = this.getRepliesFor(parentId);
+    return replies.some((r) => (r.Status ?? '').trim().toLowerCase() === 'in-progress');
+  }
+
+  public getLatestThreadTarget(rootMessage: ChatThreadMessageLike): ChatThreadMessageLike {
+    const replies = this.getRepliesFor(rootMessage.ID);
+    return replies.length > 0 ? replies[replies.length - 1] : rootMessage;
+  }
+
+  /**
+   * Returns the message a thread drawer item is replying to:
+   * - for an AI reply in the thread, the message it answers (`ParentID`);
+   * - for a nested human reply in the thread (`ParentID !== rootMessageId`), the message it answers.
+   */
+  public getThreadReplyTarget(reply: ChatThreadMessageLike, rootMessageId: string): ChatThreadMessageLike | null {
+    const pid = (reply?.ParentID ?? '').trim().toLowerCase();
+    const rootNorm = (rootMessageId ?? '').trim().toLowerCase();
+    if (!pid || pid === 'null') return null;
+    if (!this.isAiMessage(reply) && pid === rootNorm) return null;
+    return this.getParentMessage(reply);
+  }
+
+  public getNestedReplyTargetName(reply: ChatThreadMessageLike, rootMessageId: string): string | null {
+    const target = this.getThreadReplyTarget(reply, rootMessageId);
+    return target ? this.getSpeakerName(target) : null;
+  }
+
+  public isThreadExpanded(messageId: string): boolean {
+    return this.expandedThreadIds.has(messageId);
+  }
+
+  public toggleThreadExpanded(messageId: string): void {
+    if (this.expandedThreadIds.has(messageId)) {
+      this.expandedThreadIds.delete(messageId);
+    } else {
+      this.expandedThreadIds.add(messageId);
+    }
+    this.cdr?.markForCheck();
+  }
+
+  public getThreadDraft(rootMessageId: string): string {
+    return this.threadDrafts.get(rootMessageId) ?? '';
+  }
+
+  public onThreadDraftInput(rootMessageId: string, value: string): void {
+    this.threadDrafts.set(rootMessageId, value);
+    this.cdr?.markForCheck();
+  }
+
+  public async submitThreadReply(rootMessage: ChatThreadMessageLike): Promise<void> {
+    if (this.IsReadOnly) return;
+    const draft = (this.threadDrafts.get(rootMessage.ID) ?? '').trim();
+    if (!draft) return;
+    const target = this.getLatestThreadTarget(rootMessage);
+    this.threadDrafts.set(rootMessage.ID, '');
+    this.replyToMessage = target;
+    this.syncParentMessageIdToComposer(target.ID);
+    const input = this.getActiveMessageInput() as { SendMessageWithText?: (text: string) => Promise<boolean> } | null;
+    if (typeof input?.SendMessageWithText === 'function') {
+      await input.SendMessageWithText(draft);
+      this.replyToMessage = null;
+      this.syncParentMessageIdToComposer(null);
+    } else {
+      this.PendingMessageConversationId = this.ConversationId;
+      this.PendingMessage = draft;
+    }
+    this.cdr?.markForCheck();
+  }
+
+  public isAiMessage(message: ChatThreadMessageLike | null | undefined): boolean {
+    if (!message) return false;
+    const role = (message.Role ?? '').trim().toLowerCase();
+    return role === 'ai' || role === 'assistant' || !!message.AgentID;
+  }
+
+  public isOutsideSpeaker(message: ChatThreadMessageLike | null | undefined): boolean {
+    if (!message || this.isAiMessage(message)) return false;
+    const member = this.getMemberForUser(message.UserID, message.User);
+    return member?.band === 'Shared';
+  }
+
+  public getSpeakerName(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message) return 'Member';
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      return meta?.Name || message.Agent?.trim() || this.DefaultAgentName || 'Assistant';
+    }
+    if (message.User?.trim() && !this.isSystemUser(message.UserID, message.User)) {
+      return message.User.trim();
+    }
+    if (message.UserID && this.CurrentUser?.ID && message.UserID.toLowerCase() === this.CurrentUser.ID.toLowerCase()) {
+      return this.CurrentUser.Name || 'You';
+    }
+    const member = this.getMemberForUser(message.UserID);
+    if (member?.name) return member.name;
+    const person = this.MentionPeople?.find((p) => p.ID.toLowerCase() === (message.UserID ?? '').toLowerCase());
+    return person?.Name || 'Team Member';
+  }
+
+  public getSpeakerInitials(message: ChatThreadMessageLike | null | undefined): string {
+    if (this.isAiMessage(message)) {
+      return this.computeInitials(this.getSpeakerName(message));
+    }
+    const member = this.getMemberForUser(message?.UserID, message?.User);
+    if (member?.initials) return member.initials;
+    return this.computeInitials(this.getSpeakerName(message));
+  }
+
+  public getSpeakerAvatarUrl(message: ChatThreadMessageLike | null | undefined): string | null {
+    if (!message) return null;
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      return meta?.LogoURL?.trim() || null;
+    }
+    const member = this.getMemberForUser(message.UserID, message.User);
+    return member?.avatarUrl ?? null;
+  }
+
+  public getSpeakerIconClass(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message) return '';
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent)
+        ?? this.resolveAgentMetadata(this.DefaultAgentId, this.DefaultAgentName);
+      const hasLogo = !!meta?.LogoURL?.trim();
+      return this.normalizeAgentIconClass(meta?.IconClass, hasLogo);
+    }
+    return this.getMemberForUser(message.UserID, message.User)?.iconClass ?? '';
+  }
+
+  public getSpeakerColorClass(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message || this.isAiMessage(message)) return '';
+    return this.getMemberForUser(message.UserID, message.User)?.colorClass ?? '';
+  }
+
+  public getSpeakerPersonId(message: ChatThreadMessageLike | null | undefined): string {
+    if (!message) return '';
+    if (this.isAiMessage(message)) {
+      const meta = this.resolveAgentMetadata(message.AgentID, message.Agent);
+      return meta?.ID || message.AgentID || this.DefaultAgentId || 'assistant';
+    }
+    return message.UserID || this.getMemberForUser(message.UserID, message.User)?.userId || '';
+  }
+
+  private computeInitials(name: string): string {
+    const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'P';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  public getFormattedMessageBody(message: ChatThreadMessageLike | null | undefined): string {
+    const cleaned = (message?.Message ?? '')
+      .replace(/@\{[^}]+\}/g, (match) => {
+        try {
+          const parsed = JSON.parse(match.slice(1)) as { name?: string };
+          return parsed.name ? `@${parsed.name}` : '@mention';
+        } catch {
+          return '@mention';
+        }
+      })
+      .trim();
+    if (!cleaned && (message?.Status ?? '').trim().toLowerCase() === 'in-progress') {
+      return 'Answering…';
+    }
+    return cleaned;
+  }
+
+  public getMessageExcerpt(message: ChatThreadMessageLike | null | undefined, maxLen = 80): string {
+    const raw = this.getFormattedMessageBody(message).replace(/\s+/g, ' ').trim();
+    if (raw.length <= maxLen) return raw;
+    return raw.slice(0, Math.max(0, maxLen - 1)).trimEnd() + '…';
+  }
+
+  public startReplyTo(message: ChatThreadMessageLike): void {
+    if (this.IsReadOnly) return;
+    if (this.getRepliesFor(message.ID).length > 0) {
+      this.expandedThreadIds.add(message.ID);
+    }
+    this.replyToMessage = message;
+    this.pendingAgentPrompt = null;
+    this.syncParentMessageIdToComposer(message.ID);
+    this.cdr?.markForCheck();
+  }
+
+  public clearReplyTo(): void {
+    this.replyToMessage = null;
+    this.syncParentMessageIdToComposer(null);
+    this.cdr?.markForCheck();
+  }
+
+  public scrollToMessage(messageId: string): void {
+    const area = this.chatArea as { OnJumpToMessage?: (id: string) => void } | undefined;
+    if (typeof area?.OnJumpToMessage === 'function') {
+      area.OnJumpToMessage(messageId);
+      return;
+    }
+    const el = this.host?.nativeElement.querySelector(`[data-message-id="${messageId}"]`);
+    if (el && typeof (el as HTMLElement).scrollIntoView === 'function') {
+      (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  // ── Live Assistant Presence & Route Reason ────────────────────────────────
+
+  /**
+   * Formats a plain-words reason for `AgentTurnRoute` only when the reason isn't obvious
+   * (no emoji, no invented route names). A null route shows no label.
+   */
+  public formatRouteBadge(route: AgentTurnRoute | null | undefined): string {
+    if (!route) return '';
+    switch (route) {
+      case 'ThreadReply':
+        return 'Replying in the thread';
+      case 'DecisionRouted':
+      case 'Continuity':
+        return 'Following up';
+      case 'Redirect':
+        return `Handed to ${this.activeAgentName || this.DefaultAgentName || 'Assistant'}`;
+      case 'Mention':
+      case 'ConversationDefault':
+      case 'HostDefault':
+      case 'ConversationManager':
+        return '';
+      default: {
+        const _exhaustive: never = route;
+        return _exhaustive;
+      }
+    }
+  }
+
+  /**
+   * Called when a user sends a message so we can track whether it started an Assistant turn
+   * or settled without one, and clear any active thread `ParentMessageId`.
+   */
+  public onUserMessageSent(message: ChatThreadMessageLike, hadReplyParent: ChatThreadMessageLike | null = this.replyToMessage): void {
+    if (this.isAiMessage(message)) {
+      if (this.noAgentPromptTimer !== undefined) {
+        clearTimeout(this.noAgentPromptTimer);
+        this.noAgentPromptTimer = undefined;
+      }
+      this.pendingAgentPrompt = null;
+      this.cdr?.markForCheck();
+      return;
+    }
+    this.replyToMessage = null;
+    this.syncParentMessageIdToComposer(null);
+    this.pendingAgentPrompt = null;
+    this.activeAgentRoute = null;
+    this.activeAgentStatusText = '';
+    this.activeAgentElapsed = '';
+
+    const resolvedAgentId = (this.DefaultAgentId ?? '').trim();
+    const resolvedAgentName = (this.DefaultAgentName ?? '').trim();
+    if (!resolvedAgentId || !resolvedAgentName) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
+    const text = message.Message ?? '';
+    const hasExplicitAgentMention = text.includes('"type":"agent"') || /@\b(sage|agent|assistant)\b/i.test(text);
+    const msgIdNorm = (message.ID ?? '').trim().toLowerCase();
+    const alreadyAnsweredByAi =
+      (hadReplyParent != null && this.isAiMessage(hadReplyParent)) ||
+      (msgIdNorm.length > 0 &&
+        this.allMessages.some((m) => this.isAiMessage(m) && (m.ParentID ?? '').trim().toLowerCase() === msgIdNorm));
+    if (hasExplicitAgentMention || alreadyAnsweredByAi) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
+    let reasonLabel = 'The Assistant only steps in when mentioned or in a thread.';
+    if (hadReplyParent && !this.isAiMessage(hadReplyParent)) {
+      reasonLabel = `You replied to ${this.getSpeakerName(hadReplyParent)}.`;
+    } else if (text.includes('"type":"user"')) {
+      reasonLabel = 'Your message was addressed to a person.';
+    }
+
+    if (this.noAgentPromptTimer !== undefined) {
+      clearTimeout(this.noAgentPromptTimer);
+    }
+    this.noAgentPromptTimer = setTimeout(() => {
+      this.noAgentPromptTimer = undefined;
+      if (!this.isAgentWorking && !this.isRoutingCheck) {
+        this.pendingAgentPrompt = {
+          messageId: message.ID,
+          messageText: text,
+          reasonLabel,
+          suggestedAgentName: resolvedAgentName,
+          suggestedAgentId: resolvedAgentId,
+        };
+        this.cdr?.markForCheck();
+      }
+    }, 120);
+  }
+
+  public onBeforeAgentTurn(args: BeforeAgentTurnEventArgs): void {
+    this.onAgentTurnStarted({
+      agentName: args.AgentName,
+      route: args.Route,
+    });
+  }
+
+  public onAfterAgentTurn(_args: AfterAgentTurnEventArgs): void {
+    this.onAgentTurnCompleted();
+  }
+
+  public onAgentTurnStarted(info: { agentName?: string | null; route?: AgentTurnRoute | null; statusText?: string | null }): void {
+    if (this.noAgentPromptTimer !== undefined) {
+      clearTimeout(this.noAgentPromptTimer);
+      this.noAgentPromptTimer = undefined;
+    }
+    this.pendingAgentPrompt = null;
+    this.isRoutingCheck = false;
+    this.isAgentWorking = true;
+    this.activeAgentName = info.agentName?.trim() || this.DefaultAgentName || 'Assistant';
+    this.activeAgentRoute = info.route ?? null;
+    this.activeAgentStatusText = info.statusText?.trim() || '';
+    this.cdr?.markForCheck();
+  }
+
+  public onAgentTurnCompleted(): void {
+    this.isRoutingCheck = false;
+    this.isAgentWorking = false;
+    this.activeAgentName = '';
+    this.activeAgentRoute = null;
+    this.activeAgentStatusText = '';
+    this.activeAgentElapsed = '';
+    this.activeAgentProgressPercent = null;
+    this.cdr?.markForCheck();
+  }
+
+  public async confirmAgentShouldGo(): Promise<void> {
+    const prompt = this.pendingAgentPrompt;
+    if (!prompt) return;
+    this.pendingAgentPrompt = null;
+
+    const handler = this.effectiveAgentTurnHandler;
+    const targetAgentId = (prompt.suggestedAgentId || this.DefaultAgentId || '').trim();
+    if (!handler || !this.ConversationId || !targetAgentId) {
+      this.cdr?.markForCheck();
+      return;
+    }
+
+    const result = await handler({
+      ConversationId: this.ConversationId,
+      BranchID: null,
+      UserMessageId: prompt.messageId,
+      MessageText: prompt.messageText,
+      AgentId: targetAgentId,
+      AgentName: prompt.suggestedAgentName,
+      Route: 'Redirect',
+      ApplicationId: this.ApplicationId,
+      AppContext: null,
+      AgentHistoryFrom: this.AgentHistoryFrom,
+      ConfigurationPresetId: null,
+      RequestedSkillIDs: [],
+      PlanMode: false,
+      TargetArtifactVersionId: null,
+    });
+
+    if (result?.Success && result.ReplyDetailIds?.length) {
+      const activeInput = this.getActiveMessageInput() as {
+        dataCache?: { getConversationDetail?: (id: string, user: UserInfo | null) => Promise<unknown> };
+        MessageSent?: { emit?: (detail: unknown) => void };
+      } | null;
+      const area = this.chatArea as { OnMessageSent?: (detail: unknown) => void } | undefined;
+
+      for (const detailId of result.ReplyDetailIds) {
+        if (!detailId) continue;
+        try {
+          const detail = await activeInput?.dataCache?.getConversationDetail?.(detailId, this.CurrentUser);
+          if (detail) {
+            if (typeof activeInput?.MessageSent?.emit === 'function') {
+              activeInput.MessageSent.emit(detail);
+            } else if (typeof area?.OnMessageSent === 'function') {
+              area.OnMessageSent(detail);
+            }
+          }
+        } catch {
+          // Live PubSub completion still delivers the reply if cache read fails
+        }
+      }
+    }
+    this.cdr?.markForCheck();
+  }
+
+  public dismissAgentPrompt(): void {
+    this.pendingAgentPrompt = null;
+    this.cdr?.markForCheck();
+  }
+
+  private getActiveMessageInput(): Record<string, unknown> | null {
+    const area = this.chatArea as {
+      messageInputComponents?: { toArray?: () => Array<Record<string, unknown>> };
+    } | undefined;
+    const list = area?.messageInputComponents?.toArray?.() ?? [];
+    if (list.length === 0) return null;
+    const matching = list.find((inp) => inp['ConversationId'] === this.ConversationId || inp['conversationId'] === this.ConversationId);
+    return matching ?? list[0] ?? null;
+  }
+
+  private syncParentMessageIdToComposer(parentId: string | null): void {
+    const input = this.getActiveMessageInput();
+    if (input) {
+      input['ParentMessageId'] = parentId;
+    }
+  }
+
+  private bindChatAreaListeners(): void {
+    if (this.chatArea && this.chatArea !== this.boundChatArea) {
+      this.clearSubscriptions();
+      this.boundChatArea = this.chatArea;
+    }
+
+    const activeInput = this.getActiveMessageInput();
+    if (activeInput && activeInput !== this.boundInputInstance) {
+      this.boundInputInstance = activeInput;
+      if (this.replyToMessage) {
+        activeInput['ParentMessageId'] = this.replyToMessage.ID;
+      }
+      const messageSent = activeInput['MessageSent'] as { subscribe?: (fn: (msg: ChatThreadMessageLike) => void) => { unsubscribe: () => void } } | undefined;
+      if (typeof messageSent?.subscribe === 'function') {
+        const sub = messageSent.subscribe((msg) => {
+          this.onUserMessageSent(msg, this.replyToMessage);
+        });
+        this.cleanups.push(() => sub.unsubscribe());
+      }
+      const intentStart = activeInput['IntentCheckStarted'] as { subscribe?: (fn: () => void) => { unsubscribe: () => void } } | undefined;
+      if (typeof intentStart?.subscribe === 'function') {
+        const sub = intentStart.subscribe(() => {
+          this.isRoutingCheck = true;
+          this.cdr?.markForCheck();
+        });
+        this.cleanups.push(() => sub.unsubscribe());
+      }
+      const intentEnd = activeInput['IntentCheckCompleted'] as { subscribe?: (fn: () => void) => { unsubscribe: () => void } } | undefined;
+      if (typeof intentEnd?.subscribe === 'function') {
+        const sub = intentEnd.subscribe(() => {
+          this.isRoutingCheck = false;
+          this.cdr?.markForCheck();
+        });
+        this.cleanups.push(() => sub.unsubscribe());
+      }
+    }
+  }
+
+  private lastKnownMessageCount = 0;
+
+  private syncLiveProgressFromChatArea(): void {
+    const currentMessageCount = this.allMessages.length;
+    if (currentMessageCount !== this.lastKnownMessageCount) {
+      this.lastKnownMessageCount = currentMessageCount;
+      this.cdr?.markForCheck();
+    }
+    const area = this.chatArea as {
+      isProcessing?: boolean;
+      StatusText?: string | null;
+      StatusElapsed?: string | null;
+    } | undefined;
+    if (!area) return;
+    if (area.isProcessing && !this.isAgentWorking) {
+      this.isAgentWorking = true;
+      if (!this.activeAgentName) {
+        this.activeAgentName = this.DefaultAgentName || 'Assistant';
+      }
+    } else if (area.isProcessing === false && this.isAgentWorking) {
+      const hasInProgress = this.allMessages.some((m) => (m.Status ?? '').trim().toLowerCase() === 'in-progress');
+      if (!hasInProgress) {
+        this.onAgentTurnCompleted();
+        return;
+      }
+    }
+    if (area.StatusText && area.StatusText !== this.activeAgentStatusText) {
+      this.activeAgentStatusText = area.StatusText;
+    }
+    if (area.StatusElapsed !== undefined && (area.StatusElapsed ?? '') !== this.activeAgentElapsed) {
+      this.activeAgentElapsed = area.StatusElapsed ?? '';
+    }
+  }
+
+  private clearSubscriptions(): void {
+    for (const fn of this.cleanups) {
+      fn();
+    }
+    this.cleanups = [];
+    this.boundChatArea = null;
+    this.boundInputInstance = null;
   }
 }

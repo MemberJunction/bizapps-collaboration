@@ -14,6 +14,7 @@ import { FindRows, GetPersonaUser, View } from '../wire.js';
 import { COLLABORATION_STORAGE_ACCOUNT_ID, ensureLocalStorageAccount, readStoredFile, storedFileExists } from '../world/local-storage-account.js';
 import { worldStorageRoot } from '../world/seed-files.js';
 import { deleteRowAndConfirm, registerChecks, runAllSteps } from './cleanup-helpers.js';
+import { purgeTestSpaceItemPipelineRows } from './content-pipeline-fixtures.js';
 
 const DISCOVERY_SPACE_ID = 'C1000001-0000-4000-8000-000000000002';
 const COHORT_SPACE_ID = 'C1000001-0000-4000-8000-000000000005';
@@ -625,9 +626,19 @@ registerChecks(checks);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('library', {
     Setup: async () => {},
     // Every step runs and reads back, newest first; the first failure is thrown at the end
-    Teardown: async (ctx: IntegrationCheckContext) =>
-        runAllSteps([
-            ...createdItemIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
-            ...createdFileIds.splice(0).reverse().map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'a library file')),
-        ]),
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        const itemsToPurge = createdItemIds.splice(0);
+        const filesToPurge = createdFileIds.splice(0);
+        await runAllSteps([
+            ...itemsToPurge
+                .slice()
+                .reverse()
+                .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, SPACE_ITEM_ENTITY, id, 'a library item')),
+            () => purgeTestSpaceItemPipelineRows(ctx.Provider, ctx.User, itemsToPurge),
+            ...filesToPurge
+                .slice()
+                .reverse()
+                .map((id) => () => deleteRowAndConfirm(ctx.Provider, ctx.User, FILE_ENTITY, id, 'a library file')),
+        ]);
+    },
 });

@@ -35,9 +35,10 @@ async function seatOther(ada: PersonaContext, spaceId: string, userId: string, r
 /** Closes a space as its owner (an open board is not deleted), then removes it and what hangs on it. */
 async function closeAndRemove(ctx: IntegrationCheckContext, ada: PersonaContext, spaceId: string): Promise<void> {
     const space = await ada.Provider.GetEntityObject<mjBizAppsCollaborationSpaceEntity>(SPACE_ENTITY, ada.User);
-    if (await space.Load(spaceId) && !space.ClosedAt) {
+    Assert(await space.Load(spaceId), `Ada loads the space to close it: ${space.LatestResult?.CompleteMessage ?? 'not found'}`);
+    if (!space.ClosedAt) {
         space.ClosedAt = new Date(Date.now() - 60_000);
-        await space.Save();
+        Assert(await space.Save(), `Ada closes the space before removing it: ${space.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
     await cleanupSpace(ctx.Provider, ctx.User, spaceId);
 }

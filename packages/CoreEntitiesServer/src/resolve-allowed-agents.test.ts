@@ -167,6 +167,32 @@ describe('Resolve Allowed Agents, Knowledge Sources, and Skills down Space Hiera
         assert.equal(result.defaultAgentId, TYPE_AGENT_ID);
     });
 
+    it('keeps the shipped assistant as default when a space has only an unflagged space-level Agent grant and no app grants', async () => {
+        currentOptions = {
+            agentRows: [
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: false },
+            ],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, [COLLABORATION_DEFAULT_AGENT_ID, CHILD_AGENT_ID]);
+        assert.equal(result.defaultAgentId, COLLABORATION_DEFAULT_AGENT_ID);
+    });
+
+    it('lets a flagged space-level Agent grant win over the shipped assistant when no app grants exist', async () => {
+        currentOptions = {
+            agentRows: [
+                { TargetRecordID: CHILD_AGENT_ID, SpaceTypeID: null, SpaceID: CHILD_SPACE_ID, IsDefault: true },
+            ],
+        };
+        await CollaborationEngine.Instance.Config(true, undefined, provider);
+        const result = await resolveAllowedAgents(provider, CHILD_SPACE_ID);
+
+        assert.deepEqual(result.allowedAgentIds, [COLLABORATION_DEFAULT_AGENT_ID, CHILD_AGENT_ID]);
+        assert.equal(result.defaultAgentId, CHILD_AGENT_ID);
+    });
+
     it('replaces app agent with type agent when type ListMode is Replace', async () => {
         currentOptions = {
             typeConfig: JSON.stringify({ Agents: { ListMode: 'Replace' } }),

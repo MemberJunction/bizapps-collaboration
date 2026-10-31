@@ -35,6 +35,17 @@
             "ExtraFilter": "{% if context.SecondaryScopes.SpaceID | length %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}') AND Entity = 'MJ_BizApps_Tasks: Tasks'{% if context.SecondaryScopes.Audience | length %} AND Band IN ('{{ context.SecondaryScopes.Audience | join(\"','\") }}'){% else %} AND (Band IS NULL AND 1 = 0){% endif %}){% else %}CONCAT('ID|', RootParentID) IN (SELECT RecordID FROM [__mj_BizAppsCollaboration].[vwSpaceItems] WHERE SpaceID IS NULL AND 1 = 0 AND Entity = 'MJ_BizApps_Tasks: Tasks'){% endif %}",
             "RequiredMetadataKeys": "[\"SpaceID\"]"
           }
+        },
+        {
+          "primaryKey": {
+            "ID": "EFE04A5E-A66C-459A-98D9-01BFB2A163DD"
+          },
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks",
+            "ExtraFilter": "DeleteStatus IS NULL AND {% if context.SecondaryScopes.SpaceID | length %}ContentItemID IN (SELECT ci.ID FROM [__mj].[vwContentItems] AS ci LEFT JOIN [__mj].[vwContentItems] AS rootCi ON rootCi.ID = ci.RootParentID INNER JOIN [__mj].[vwEntityRecordDocuments] AS erd ON erd.ID = COALESCE(ci.EntityRecordDocumentID, rootCi.EntityRecordDocumentID) INNER JOIN [__mj_BizAppsCollaboration].[vwSpaceItems] AS si ON erd.Entity = 'MJ_BizApps_Collaboration: Space Items' AND REPLACE(erd.RecordID, 'ID|', '') = CAST(si.ID AS NVARCHAR(36)) WHERE ci.DeleteStatus IS NULL AND (rootCi.ID IS NULL OR rootCi.DeleteStatus IS NULL) AND si.SpaceID IN ('{{ context.SecondaryScopes.SpaceID | join(\"','\") }}'){% if context.SecondaryScopes.Audience | length %} AND si.Band IN ('{{ context.SecondaryScopes.Audience | join(\"','\") }}'){% else %} AND (si.Band IS NULL AND 1 = 0){% endif %}){% else %}ContentItemID IN (SELECT ci.ID FROM [__mj].[vwContentItems] AS ci INNER JOIN [__mj].[vwEntityRecordDocuments] AS erd ON erd.ID = ci.EntityRecordDocumentID INNER JOIN [__mj_BizAppsCollaboration].[vwSpaceItems] AS si ON erd.Entity = 'MJ_BizApps_Collaboration: Space Items' AND REPLACE(erd.RecordID, 'ID|', '') = CAST(si.ID AS NVARCHAR(36)) WHERE SpaceID IS NULL AND 1 = 0){% endif %}",
+            "RequiredMetadataKeys": "[\"SpaceID\"]"
+          }
         }
       ],
       "MJ: Search Scope Providers": [

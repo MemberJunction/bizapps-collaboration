@@ -25,6 +25,7 @@
   "peerDependencies": {
     "@memberjunction/ai-agents": "6.2.0-edge.2",
     "@memberjunction/ai-core-plus": "6.2.0-edge.2",
+    "@memberjunction/content-pipeline": "6.2.0-edge.2",
     "@memberjunction/conversations-runtime": "6.2.0-edge.2",
     "@memberjunction/core": "6.2.0-edge.2",
     "@memberjunction/core-entities": "6.2.0-edge.2",
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@memberjunction/ai-agents": "6.2.0-edge.2",
     "@memberjunction/ai-core-plus": "6.2.0-edge.2",
+    "@memberjunction/content-pipeline": "6.2.0-edge.2",
     "@memberjunction/conversations-runtime": "6.2.0-edge.2",
     "@memberjunction/core": "6.2.0-edge.2",
     "@memberjunction/core-entities": "6.2.0-edge.2",

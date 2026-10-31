@@ -1,6 +1,12 @@
 export { LoadSpaceEntityServer, SpaceEntityServer } from './SpaceEntityServer.js';
 export { CollaborationEngine } from './CollaborationEngine.js';
-export { LoadSpaceItemEntityServer, releaseStoredFile, SpaceItemEntityServer, vouchStoredFile } from './SpaceItemEntityServer.js';
+export {
+    LoadSpaceItemEntityServer,
+    releaseStoredFile,
+    SPACE_FILES_CONTENT_SOURCE_ID,
+    SpaceItemEntityServer,
+    vouchStoredFile,
+} from './SpaceItemEntityServer.js';
 export { LoadSpaceMemberEntityServer, SpaceMemberEntityServer } from './SpaceMemberEntityServer.js';
 export { LoadSpaceTypeEntityServer, SpaceTypeEntityServer } from './SpaceTypeEntityServer.js';
 export { LoadItemUseEntityServer, ItemUseEntityServer } from './ItemUseEntityServer.js';
@@ -9,12 +15,14 @@ export { LoadSpaceAnchorEntityServer, SpaceAnchorEntityServer, primaryAnchorColl
 export { spaceSeatsParticipants, spaceTypeAudience, type SeatsAudience } from './space-audience.js';
 export { LoadSpaceGrantEntityServer, SpaceGrantEntityServer, grantRuleRefusal } from './SpaceGrantEntityServer.js';
 export { LoadSpaceNoteEntityServer, SpaceNoteEntityServer } from './SpaceNoteEntityServer.js';
+export { LoadSpacePageEntityServer, SpacePageEntityServer } from './SpacePageEntityServer.js';
 export { LoadSpaceMemberPinEntityServer, SpaceMemberPinEntityServer } from './SpaceMemberPinEntityServer.js';
 export { LoadSpaceTypeStatusEntityServer, SpaceTypeStatusEntityServer } from './SpaceTypeStatusEntityServer.js';
 export { notifySpaceStatusChange, SPACE_STATUS_NOTIFICATION_TYPE } from './space-status-notices.js';
 export type { SpaceStatusNoticeInput } from './space-status-notices.js';
 export { loadWriteContext, requireSystemUser } from './load-graph.js';
 export { uploadSpaceFile } from './upload-space-file.js';
+export { backfillSpaceFiles, type BackfillSpaceFilesResult } from './backfill-space-files.js';
 export { collaborationFileStore } from './collaboration-file-store.js';
 export { createSpaceTask, removeUnfiledTask } from './create-space-task.js';
 export { filterRoomReplyItems, postSpaceMessage } from './post-space-message.js';
@@ -95,7 +103,14 @@ export { createSpaceConversation, evaluateCanStartSpaceConversation } from './cr
 export type { CreateSpaceConversationInput, CreateSpaceConversationResult } from './create-space-conversation.js';
 
 
-export { resolveTurnTools, findSpaceDataGrant, RUN_SPACE_DATA_ACTION_ID, RUN_SPACE_DATA_ACTION_NAME } from './turn-tools.js';
+export {
+    resolveTurnTools,
+    findSpaceDataGrant,
+    RUN_SPACE_DATA_ACTION_ID,
+    RUN_SPACE_DATA_ACTION_NAME,
+    SCOPED_SEARCH_ACTION_ID,
+    COLLABORATION_SPACE_SCOPE_ID,
+} from './turn-tools.js';
 export type { ResolvedTurnTools, SpaceTurnContext, TurnSpaceDataGrant } from './turn-tools.js';
 export { RunSpaceDataAction, LoadRunSpaceDataAction } from './RunSpaceDataAction.js';
 export type { TurnToolsGiven } from './execute-space-chat-turn.js';

@@ -145,6 +145,11 @@ import { COLLAB_TOKENS_CSS } from './tokens';
                 <div class="td-person">
                   <mjc-avatar
                     [Initials]="m.initials"
+                    [Name]="m.name"
+                    [AvatarUrl]="m.avatarUrl || ''"
+                    [IconClass]="m.iconClass || ''"
+                    [PersonId]="m.userId || m.id"
+                    [IsOutside]="m.band === 'Shared'"
                     [ColorClass]="m.colorClass || 'c1'"
                     Size="md"
                   />

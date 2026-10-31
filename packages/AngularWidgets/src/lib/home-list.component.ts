@@ -29,10 +29,17 @@ export interface HomeListRow {
   template: `
     <section class="hl" [attr.aria-labelledby]="'hl-title-' + Id">
       <header class="hl-head">
-        <h2 class="hl-title" [id]="'hl-title-' + Id">{{ Title }}</h2>
-        <button type="button" mjButton Variant="icon" Size="sm" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
-        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-      </button>
+        <div class="hl-title-group">
+          <h2 class="hl-title" [id]="'hl-title-' + Id">{{ Title }}</h2>
+          @if (Badge) {
+            <span class="hl-badge" [attr.aria-label]="BadgeLabel || null">{{ Badge }}</span>
+          }
+        </div>
+        @if (ShowClose) {
+          <button type="button" mjButton Variant="icon" Size="sm" class="hl-close" aria-label="Close this list" (click)="CloseRequested.emit()">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        }
       </header>
       @if (IsLoading) {
         <div class="hl-state" role="status"><mj-loading Size="small" [ShowText]="false"></mj-loading> <span>Reading…</span></div>
@@ -48,14 +55,18 @@ export interface HomeListRow {
         <ul class="hl-rows">
           @for (row of Rows; track row.key) {
             <li>
-              <button type="button" class="hl-row" (click)="RowSelected.emit(row.key)">
+              <button
+                type="button"
+                class="hl-row"
+                [attr.aria-label]="!ShowActionLabel && row.actionLabel ? row.title + ' — ' + row.actionLabel : null"
+                (click)="RowSelected.emit(row.key)">
                 <span class="hl-ic"><i [class]="row.iconClass" aria-hidden="true"></i></span>
                 <span class="hl-main">
                   <span class="hl-row-title">{{ row.title }}</span>
                   <span class="hl-row-detail">{{ row.detail }}</span>
                 </span>
                 <span class="hl-space">{{ row.spaceName }}</span>
-                <span class="hl-action">{{ row.actionLabel }} <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
+                <span class="hl-action">@if (ShowActionLabel) { {{ row.actionLabel }} }<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
               </button>
             </li>
           }
@@ -77,7 +88,7 @@ export interface HomeListRow {
       }
       .hl {
         border: 1px solid var(--mj-border-default);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--mj-bg-surface);
         overflow: hidden;
       }
@@ -85,19 +96,38 @@ export interface HomeListRow {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
+        padding: 10px 14px;
         border-bottom: 1px solid var(--mj-border-default);
+      }
+      .hl-title-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
       }
       .hl-title {
         margin: 0;
         font-size: 14px;
         font-weight: 700;
       }
+      .hl-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      }
       .hl-rows {
         list-style: none;
         margin: 0;
         padding: 0;
-        max-height: 360px;
+        max-height: 220px;
         overflow-y: auto;
       }
       .hl-row {
@@ -105,7 +135,7 @@ export interface HomeListRow {
         align-items: center;
         gap: 12px;
         width: 100%;
-        padding: 10px 16px;
+        padding: 8px 14px;
         border: none;
         border-bottom: 1px solid var(--mj-border-subtle);
         background: transparent;
@@ -113,6 +143,9 @@ export interface HomeListRow {
         color: inherit;
         text-align: left;
         cursor: pointer;
+      }
+      .hl-rows li:last-child .hl-row {
+        border-bottom: none;
       }
       .hl-row:hover {
         background: var(--mj-bg-surface-hover);
@@ -122,13 +155,13 @@ export interface HomeListRow {
         outline-offset: -2px;
       }
       .hl-ic {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: grid;
         place-items: center;
         flex: none;
-        font-size: 13px;
+        font-size: 12.5px;
         color: var(--mj-brand-primary);
         background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
       }
@@ -139,7 +172,7 @@ export interface HomeListRow {
         flex: 1;
       }
       .hl-row-title {
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -148,11 +181,14 @@ export interface HomeListRow {
       .hl-row-detail {
         font-size: 12px;
         color: var(--mj-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .hl-space {
         font-size: 12px;
         color: var(--mj-text-secondary);
-        max-width: 200px;
+        max-width: 180px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -167,7 +203,7 @@ export interface HomeListRow {
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 16px;
+        padding: 14px;
         font-size: 13px;
         color: var(--mj-text-secondary);
       }
@@ -176,7 +212,7 @@ export interface HomeListRow {
       }
       .hl-more {
         margin: 0;
-        padding: 8px 16px;
+        padding: 8px 14px;
         font-size: 12px;
         color: var(--mj-text-secondary);
       }
@@ -187,6 +223,10 @@ export class CollabHomeListComponent {
   /** Makes the heading's id unique when two lists are on a page. */
   @Input() Id = 'list';
   @Input() Title = '';
+  @Input() Badge = '';
+  @Input() BadgeLabel = '';
+  @Input() ShowClose = true;
+  @Input() ShowActionLabel = true;
   @Input() Rows: readonly HomeListRow[] = [];
   /** How many there are in all, when the rows are cut short. */
   @Input() TotalCount = 0;

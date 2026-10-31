@@ -16,7 +16,7 @@ import { MentionParser } from '@memberjunction/conversations-runtime';
 import { audienceOfConversationKind, spaceIsReadOnly, membershipReaches } from '@mj-biz-apps/collaboration-core';
 import { loadWriteContext, requireSystemUser } from './load-graph.js';
 import { loadSpaceConfiguration } from './space-configuration.js';
-import { resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
+import { COLLABORATION_SPACE_SCOPE_ID, resolveTurnTools, type SpaceTurnContext } from './turn-tools.js';
 import type { AgentContextResult } from './base-space-type-server-driver.js';
 import { resolveAllowedAgents } from './resolve-allowed-agents.js';
 import { resolveSpaceAgentRetrieval } from './space-agent-retrieval.js';
@@ -58,6 +58,8 @@ export interface ExecuteSpaceChatTurnInput {
     conversationId: string;
     userMessageId: string;
     agentId?: string;
+    /** The MJ AgentTurnRoute the client resolved; 'Redirect' marks the author's explicit "Ask <Agent>" on a no-agent message. */
+    route?: string;
     retrievalScope?: 'ThisSpace' | 'Subtree' | 'Everything';
     /**
      * Return as soon as the reply row is written In-Progress, and run the agent after that: the caller shows the row, and the
@@ -234,6 +236,10 @@ async function runClaimedTurn(
         return { ok: false, message: 'Caller cannot initiate an agent turn in another member\'s assistant conversation.' };
     }
 
+    // 'Redirect' is the MJ AgentTurnRoute used when the message's author clicks "Ask <Agent>":
+    // the person redirects a "no agent" turn to the agent they picked.
+    const isExplicitAsk = input.route === 'Redirect';
+
     // 3. Load persisted user message
     const userDetail = await provider.GetEntityObject<MJConversationDetailEntity>(DETAILS, system);
     if (!(await userDetail.Load(userMessageId))) {
@@ -348,7 +354,13 @@ async function runClaimedTurn(
     const parentDetailId = parseUuid(userDetail.ParentID);
 
     let targetAgentId: string;
-    if (taggedAgentId) {
+    if (isExplicitAsk) {
+        const requestedAgentId = parseUuid(input.agentId) ?? taggedAgentId ?? resolvedDefault;
+        if (!requestedAgentId) {
+            return { ok: false, message: 'No assistant is available in this space right now.' };
+        }
+        targetAgentId = requestedAgentId;
+    } else if (taggedAgentId) {
         targetAgentId = taggedAgentId;
     } else if (hasHumanMentionOnly) {
         return { ok: false, message: 'The message is addressed to a person and does not mention an agent.' };
@@ -551,6 +563,8 @@ async function runClaimedTurn(
                     ConversationHistoryFrom: conversationHistoryFrom,
                     PrimaryScopeEntityName: 'MJ_BizApps_Collaboration: Space Chats',
                     PrimaryScopeRecordID: foundChat.ID,
+                    // The space's search, for whichever agent runs: the scope derives the space and the audience from the chat
+                    SearchScopeIDs: [COLLABORATION_SPACE_SCOPE_ID],
                     Audience: {
                         Mode: 'Intersection',
                         UserIDs: participantUserIds,

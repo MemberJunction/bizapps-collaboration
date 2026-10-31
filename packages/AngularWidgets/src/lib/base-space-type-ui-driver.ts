@@ -251,6 +251,9 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
 ): TDescriptor[] {
     const factory = MJGlobal.Instance.ClassFactory;
     const normalizedCode = spaceTypeCode.toLowerCase().trim();
+    const defaultComponents = new Set<unknown>(
+        defaultItems.map((item) => (item as { component?: unknown }).component).filter(Boolean),
+    );
 
     const registrations = factory.GetAllRegistrationsByMetadata(baseClass, (meta) => {
         if (!meta) return false;
@@ -259,7 +262,7 @@ export function assembleSpaceContributions<TDescriptor extends { key: string; so
         const spaceTypes = Array.isArray(m['spaceTypes']) ? (m['spaceTypes'] as string[]) : [];
         if (!contributionKey || spaceTypes.length === 0) return false;
         return spaceTypes.some((t) => t === '*' || t.toLowerCase().trim() === normalizedCode);
-    });
+    }).filter((reg) => !defaultComponents.has(reg.SubClass));
 
     // Deduplicate on contributionKey (compared without case): the highest Priority wins, and on a tie the first registered
     const map = new Map<string, { reg: ClassRegistration; meta: SpaceContributionMetadata }>();

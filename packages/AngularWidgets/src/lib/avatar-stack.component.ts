@@ -15,9 +15,11 @@ import { AvatarItem } from './types';
           [Initials]="av.initials"
           [Name]="av.name || ''"
           [AvatarUrl]="av.avatarUrl || ''"
+          [IconClass]="av.iconClass || ''"
           [ColorClass]="av.colorClass || ''"
           [PersonId]="av.id || ''"
           [Size]="Size"
+          [IsAi]="!!av.isAi"
           [IsOutside]="!!av.isOutside"
           [IsOnline]="!!av.isOnline"
           [Stacked]="true">
@@ -33,17 +35,18 @@ import { AvatarItem } from './types';
       display: inline-flex;
       align-items: center;
       color: var(--mj-text-primary);
-      font-family: var(--mj-font-family, Inter, sans-serif);
-      font-feature-settings: var(--mjc-font-feature-settings, 'cv11', 'ss01');
-      line-height: var(--mjc-line-height, 1.45);
+      font-family: var(--mj-font-family);
+      font-feature-settings: var(--mjc-font-feature-settings);
+      line-height: var(--mjc-line-height);
     }
     .stack {
       display: inline-flex;
       align-items: center;
+      padding: 0 var(--mj-space-0-5);
     }
     /* The avatars' own elements are in this template, so they overlap from here; what each draws inside, its ring, is its own (Stacked) */
     .stack mjc-avatar {
-      margin-left: -6px;
+      margin-left: -2px;
     }
     .stack mjc-avatar:first-child {
       margin-left: 0;
@@ -52,10 +55,10 @@ import { AvatarItem } from './types';
       margin-left: -2px;
     }
     .more {
-      margin-left: 4px;
-      font-size: 12px;
+      margin-left: var(--mj-space-1);
+      font-size: var(--mj-text-xs);
       color: var(--mj-text-muted);
-      font-weight: 600;
+      font-weight: var(--mj-font-semibold);
       user-select: none;
     }
   `]

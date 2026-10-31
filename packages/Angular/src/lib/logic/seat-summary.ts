@@ -6,12 +6,14 @@ export interface SeatSummaryInput {
     initials: string;
     band: SpaceBand | string;
     status: string;
+    avatarUrl?: string;
+    iconClass?: string;
 }
 
 export interface SeatSummary {
     totalPeople: number;
-    staffAvatars: Array<{ initials: string; name: string; colorClass: string }>;
-    outsideAvatars: Array<{ initials: string; name: string; isOutside: boolean; colorClass: string }>;
+    staffAvatars: Array<{ initials: string; name: string; colorClass: string; avatarUrl?: string; iconClass?: string }>;
+    outsideAvatars: Array<{ initials: string; name: string; isOutside: boolean; colorClass: string; avatarUrl?: string; iconClass?: string }>;
     audienceSummary: string;
     audienceBand: SpaceBand;
 }
@@ -24,10 +26,23 @@ export function summarizeSeats(seats: readonly SeatSummaryInput[]): SeatSummary 
     const active = seats.filter((seat) => seat.status === 'Active');
     const staffAvatars = active
         .filter((seat) => seat.band === 'Team')
-        .map((seat) => ({ initials: seat.initials, name: seat.name, colorClass: 'c1' }));
+        .map((seat) => ({
+            initials: seat.initials,
+            name: seat.name,
+            colorClass: 'c1',
+            ...(seat.avatarUrl ? { avatarUrl: seat.avatarUrl } : {}),
+            ...(seat.iconClass ? { iconClass: seat.iconClass } : {}),
+        }));
     const outsideAvatars = active
         .filter((seat) => seat.band === 'Shared')
-        .map((seat) => ({ initials: seat.initials, name: seat.name, isOutside: true, colorClass: 'c2' }));
+        .map((seat) => ({
+            initials: seat.initials,
+            name: seat.name,
+            isOutside: true,
+            colorClass: 'c2',
+            ...(seat.avatarUrl ? { avatarUrl: seat.avatarUrl } : {}),
+            ...(seat.iconClass ? { iconClass: seat.iconClass } : {}),
+        }));
     return {
         totalPeople: active.length,
         staffAvatars,

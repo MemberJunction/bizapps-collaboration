@@ -5,10 +5,26 @@ import { NgTemplateOutlet } from '@angular/common';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TestBed, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJConfirmService,
+  MJDialogComponent,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import { ChatSlotDirective, ConversationStreamingService, ResolveAgentTurn } from '@memberjunction/ng-conversations';
+import {
+  type AfterAgentTurnEventArgs,
+  type AgentTurnRoute,
+  type BeforeAgentTurnEventArgs,
+  ChatSlotDirective,
+  ConversationStreamingService,
+  ResolveAgentTurn,
+} from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CollabAudiencePillComponent } from './audience-pill.component.ts';
+import { CollabAvatarComponent } from './avatar.component.ts';
 import { CollabBandChipComponent } from './band-chip.component.ts';
 import { CollabItemRowComponent } from './item-row.component.ts';
 import { CollabChatScopeBarComponent, CollabSpaceChatComponent } from './space-chat.component.ts';
@@ -16,11 +32,16 @@ import { CollabNewConversationDialogComponent } from './new-conversation-dialog.
 import { CollabHomeListComponent, type HomeListRow } from './home-list.component.ts';
 import { CollabNewSpaceDialogComponent, type NewSpaceTypeOption } from './new-space-dialog.component.ts';
 import { CollabShareCheckDialogComponent } from './share-check-dialog.component.ts';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { RegisterClassEx } from '@memberjunction/global';
+import { BaseSpacePageBlock } from './base-space-page-block.ts';
+import { CollabSpaceHeaderComponent } from './space-header.component.ts';
 import { CollabSpaceOverviewComponent } from './space-overview.component.ts';
+import { CollabSpacePagesComponent } from './space-pages.component.ts';
 import { CollabSpaceRailComponent } from './space-rail.component.ts';
 import { CollabSpaceSettingsComponent } from './space-settings.component.ts';
 import { CollabUploadDialogComponent } from './upload-dialog.component.ts';
-import type { SpaceSettingsModel } from './types';
+import type { CollabPageModel, SpaceSettingsModel } from './types';
 
 const settings: SpaceSettingsModel = {
   id: 's1', name: 'Northwind', description: '', spaceType: 'Workspace', spaceTypeId: 't1', iconClass: 'fa-solid fa-briefcase', color: '#0076b6',
@@ -158,17 +179,16 @@ describe('the rail, rendered', () => {
     without.componentRef.setInput('Mode', 'space');
     without.componentRef.setInput('Tabs', [overview]);
     without.detectChanges();
-    expect((without.nativeElement as HTMLElement).textContent).not.toContain('CONVERSATIONS');
+    expect((without.nativeElement as HTMLElement).textContent).not.toContain('Conversations');
     without.destroy();
     const withChat = TestBed.createComponent(CollabSpaceRailComponent);
     withChat.componentRef.setInput('Mode', 'space');
     withChat.componentRef.setInput('Tabs', [overview, chat]);
     withChat.detectChanges();
-    expect((withChat.nativeElement as HTMLElement).textContent).toContain('CONVERSATIONS');
+    expect((withChat.nativeElement as HTMLElement).textContent).toContain('Conversations');
   });
 
-
-  it('lets the collapsed space tile be operated from the keyboard', async () => {
+  it('lets the collapsed space switcher tile open the space switcher popover and return to All spaces', async () => {
     const fixture = TestBed.createComponent(CollabSpaceRailComponent);
     fixture.componentRef.setInput('SpaceTitle', 'Northwind');
     fixture.componentRef.setInput('Mode', 'space');
@@ -177,11 +197,103 @@ describe('the rail, rendered', () => {
     fixture.componentInstance.BackToSpacesRequested.subscribe(back);
     fixture.detectChanges();
     await fixture.whenStable();
-    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.collapsed-tile')!;
-    expect(tile.getAttribute('role')).toBe('button');
-    expect(tile.getAttribute('tabindex')).toBe('0');
-    tile.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.collapsed-tile')!;
+    expect(tile.tagName).toBe('BUTTON');
+    expect(tile.getAttribute('aria-haspopup')).toBe('dialog');
+    tile.click();
+    fixture.detectChanges();
+    const allSpacesBtn = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-testid="switcher-all-spaces"]')!;
+    expect(allSpacesBtn).not.toBeNull();
+    allSpacesBtn.click();
     expect(back).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the header and page edit bar, rendered', () => {
+  it('shows breadcrumbs only for a sub-space (ending at the parent space) and routes Invite, New sub-space, Edit page, New page, and Space settings through the mj-menu ⋯ trigger', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
+    fixture.componentRef.setInput('Title', 'Northwind');
+    fixture.componentRef.setInput('Breadcrumbs', [{ label: 'Spaces' }, { label: 'Northwind' }]);
+    fixture.componentRef.setInput('CanInvite', true);
+    fixture.componentRef.setInput('CanAddSubSpace', true);
+    fixture.componentRef.setInput('CanEditPages', true);
+    fixture.componentRef.setInput('CanEditCurrentPage', true);
+    fixture.componentRef.setInput('CanConfigure', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const topCrumbs = root.querySelector('.crumbs');
+    expect(topCrumbs).not.toBeNull();
+    expect(topCrumbs?.textContent).toContain('All spaces');
+    expect(topCrumbs?.textContent).not.toContain('Northwind');
+
+    fixture.componentRef.setInput('Breadcrumbs', [
+      { label: 'Spaces' },
+      { label: 'Board of Directors', spaceId: 'parent-1' },
+      { label: 'Audit Committee', spaceId: 'sub-1' },
+    ]);
+    fixture.detectChanges();
+    const crumbs = root.querySelector('.crumbs');
+    expect(crumbs).not.toBeNull();
+    expect(crumbs?.textContent).toContain('All spaces');
+    expect(crumbs?.textContent).toContain('Board of Directors');
+    expect(crumbs?.textContent).not.toContain('Audit Committee');
+
+    const moreBtn = root.querySelector<HTMLButtonElement>('[data-testid="space-header-more-btn"]')!;
+    expect(moreBtn).not.toBeNull();
+    moreBtn.click();
+    fixture.detectChanges();
+    expect(document.body.querySelector('[data-testid="space-header-more-menu"]')).not.toBeNull();
+
+    const editRequested = vi.fn();
+    fixture.componentInstance.EditPageRequested.subscribe(editRequested);
+    const editItem = document.body.querySelector<HTMLElement>('[data-testid="header-menu-edit-page"] button, [data-testid="header-menu-edit-page"]')!;
+    editItem.click();
+    fixture.detectChanges();
+    expect(editRequested).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+  });
+
+  it('hides the page edit bar for viewers and shows Editing · Draft with [Publish] [Discard] in edit mode, confirming discard via MJConfirmService', async () => {
+    const confirmMock = { Confirm: vi.fn().mockResolvedValue(true) };
+    TestBed.overrideComponent(CollabSpacePagesComponent, {
+      add: { providers: [{ provide: MJConfirmService, useValue: confirmMock }] },
+    });
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('Pages', [
+      {
+        id: 'p1',
+        title: 'Overview',
+        iconClass: 'fa-solid fa-compass',
+        pageType: 'Overview',
+        band: 'Shared',
+        status: 'Published',
+        sequence: 0,
+        collaborative: true,
+        summary: 'Welcome',
+        body: 'Initial body',
+        blocks: [],
+        comments: [],
+        updatedLabel: 'Just now',
+        authorName: 'Ada',
+      },
+    ]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="page-edit-bar"]')).toBeNull();
+
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.detectChanges();
+    const bar = root.querySelector<HTMLElement>('[data-testid="page-edit-bar"]')!;
+    expect(bar).not.toBeNull();
+    expect(bar.textContent).toContain('Editing · Draft');
+    const buttons = Array.from(bar.querySelectorAll('button')).map((b) => b.textContent?.trim());
+    expect(buttons).toEqual(['Publish', 'Discard']);
+
+    fixture.componentInstance.editSessionDirty = true;
+    await fixture.componentInstance.discardChanges(fixture.componentInstance.activePage!);
+    expect(confirmMock.Confirm).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.isCustomizing).toBe(false);
   });
 });
 
@@ -404,33 +516,70 @@ function declareComponent(target: Type<unknown>, metadata: Component): void {
 
 /** Stands in for MJ's chat area and keeps what the space bound to it, so a test can read the bindings that decide what the composer offers. */
 class ChatAreaStub {
-  /** The slots the space projects, by MJ's own directive: only one marked `mjChatSlot="header"` is drawn, as MJ's chat area draws it. */
+  /** The slots the space projects, by MJ's own directive: header, agentPresence, and messageExtra are drawn as MJ's chat area draws them. */
   @ContentChildren(ChatSlotDirective) public slots?: QueryList<ChatSlotDirective>;
   public get header(): TemplateRef<unknown> | null {
     return this.slots?.find((slot) => slot.SlotName === 'header')?.Template ?? null;
+  }
+  public get agentPresence(): TemplateRef<unknown> | null {
+    return this.slots?.find((slot) => slot.SlotName === 'agentPresence')?.Template ?? null;
+  }
+  public get messageExtra(): TemplateRef<unknown> | null {
+    return this.slots?.find((slot) => slot.SlotName === 'messageExtra')?.Template ?? null;
+  }
+  public get composerExtra(): TemplateRef<unknown> | null {
+    return this.slots?.find((slot) => slot.SlotName === 'composerExtra')?.Template ?? null;
   }
   public AllowRealtime = true;
   /** MJ's chat area: when true, its own banner with `ReadOnlyMessage` replaces the composer, and pin, edit and delete follow. */
   public ReadOnly = false;
   public ReadOnlyMessage: string | null = null;
   public EnableDecisionRouting = false;
+  public CollapseThreadReplies = false;
+  public ShowAgentCharacter = false;
+  public DisplayMessages: Record<string, unknown>[] = [];
   /** MJ's chat area names a reply after the agent that made it when this is null. */
   public assistantDisplayName: string | null = null;
+  public BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  public AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
   public ComposerDraftConsumed = new EventEmitter<void>();
   public PendingMessageConsumed = new EventEmitter<void>();
 }
 declareComponent(ChatAreaStub, {
   selector: 'mj-conversation-chat-area',
   imports: [NgTemplateOutlet],
-  template: '<ng-content></ng-content><ng-container *ngTemplateOutlet="header"></ng-container>',
+  template: `
+    <ng-content></ng-content>
+    <ng-container *ngTemplateOutlet="header"></ng-container>
+    @for (m of DisplayMessages; track $index) {
+      <ng-container *ngTemplateOutlet="messageExtra; context: { message: m }"></ng-container>
+    }
+    @if (ShowAgentCharacter && agentPresence) {
+      <ng-container *ngTemplateOutlet="agentPresence"></ng-container>
+    }
+    <ng-container *ngTemplateOutlet="composerExtra"></ng-container>
+  `,
   inputs: [
     'EnvironmentId', 'CurrentUser', 'ConversationId', 'ApplicationScope', 'ApplicationId', 'LinkedEntityId', 'LinkedRecordId', 'DefaultAgentId',
     'assistantDisplayName', 'ReadOnly', 'ReadOnlyMessage', 'AllowMentions', 'AllowEntityMentions', 'AllowSkillCommands', 'AllowAttachments', 'AllowRealtime',
-    'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
+    'CollapseThreadReplies', 'ShowAgentCharacter', 'AgentReplyMode', 'AllowedAgentIDs', 'EnableDecisionRouting', 'MentionPeople', 'AgentHistoryFrom',
     'AgentTurnHandler', 'AutoNameConversation', 'ComposerDraft', 'PendingMessage', 'PendingMessageConversationId',
   ],
-  outputs: ['ComposerDraftConsumed', 'PendingMessageConsumed'],
+  outputs: ['BeforeAgentTurn', 'AfterAgentTurn', 'ComposerDraftConsumed', 'PendingMessageConsumed'],
 });
+
+const chatTestImports = [
+  CollabAvatarComponent,
+  CollabBandChipComponent,
+  CollabChatScopeBarComponent,
+  MJButtonDirective,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+  SharedGenericModule,
+  ChatSlotDirective,
+  ChatAreaStub,
+];
 
 /** MJ's status-push subscription, as the space's chat starts it. */
 const streamingStub = { initialize: vi.fn() };
@@ -439,7 +588,7 @@ const provideStreamingStub = () => TestBed.overrideProvider(ConversationStreamin
 describe("a space's conversation, rendered", () => {
   it("offers no voice call: a call doesn't go through the turn that holds an agent to the conversation's audience", async () => {
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -451,6 +600,8 @@ describe("a space's conversation, rendered", () => {
     expect(area.injector.get(ChatAreaStub).AllowRealtime).toBe(false);
     // Multi-party space chats default Jev decision routing to off until a decision model and labelled corpus are configured
     expect(area.injector.get(ChatAreaStub).EnableDecisionRouting).toBe(false);
+    // Space chats opt into collapsing thread replies under their parent message
+    expect(area.injector.get(ChatAreaStub).CollapseThreadReplies).toBe(true);
   });
 
   it('exercises MJ client-side ResolveAgentTurn for thread replies under MentionOnly and person-only suppression under Always', () => {
@@ -747,6 +898,33 @@ describe("Home's lists, rendered", () => {
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[aria-label="Close this list"]')!.click();
     expect(closed).toHaveBeenCalledTimes(1);
   });
+
+  it('renders an inline count badge beside the heading and hides the close button when ShowClose is false', async () => {
+    const fixture = await render({ Id: 'coming-up', Title: 'Coming up', Badge: '8', BadgeLabel: '8 open tasks', ShowClose: false, Rows: rows });
+    const host = fixture.nativeElement as HTMLElement;
+    const badge = host.querySelector('.hl-badge');
+    expect(badge?.textContent?.trim()).toBe('8');
+    expect(badge?.getAttribute('aria-label')).toBe('8 open tasks');
+    expect(host.querySelector('[aria-label="Close this list"]')).toBeNull();
+  });
+
+  it('renders Inbox, My tasks, and Recent files count badges in the Home rail', async () => {
+    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+    fixture.componentRef.setInput('Mode', 'home');
+    fixture.componentRef.setInput('InboxCount', 1);
+    fixture.componentRef.setInput('TaskCount', 8);
+    fixture.componentRef.setInput('LibraryCount', 14);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const rowsByLabel = Array.from(host.querySelectorAll<HTMLButtonElement>('.rail-row')).map((btn) => ({
+      label: btn.querySelector('.row-label')?.textContent?.trim(),
+      count: btn.querySelector('.row-count')?.textContent?.trim() ?? null,
+    }));
+    expect(rowsByLabel).toContainEqual({ label: 'Inbox', count: '1' });
+    expect(rowsByLabel).toContainEqual({ label: 'My tasks', count: '8' });
+    expect(rowsByLabel).toContainEqual({ label: 'Recent files', count: '14' });
+  });
 });
 
 describe("The Overview's contributed cards, rendered", () => {
@@ -781,7 +959,7 @@ describe('the conversation of a space, read-only', () => {
     // A test may render twice: each render starts from a fresh test module
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -805,7 +983,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'This space is closed. Conversations are read-only.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -845,7 +1023,7 @@ describe('the conversation of a space, read-only', () => {
     const note = 'You can read this conversation, but you have no seat that lets you post.';
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -882,7 +1060,7 @@ describe('the conversation of a space, read-only', () => {
   it('toggles the reason on the first Enter after tabbing to the lock, closes it on Escape without moving focus, and on a tap outside', async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', null);
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -930,7 +1108,7 @@ describe('the conversation of a space, read-only', () => {
   it("closes one chat's reason on a tap on another chat's lock: a tap that moves no focus (Safari) is outside the first chat", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const chats = [1, 2].map(() => {
       const fixture = TestBed.createComponent(CollabSpaceChatComponent);
       fixture.componentRef.setInput('ConversationId', null);
@@ -973,7 +1151,7 @@ describe('the conversation of a space, read-only', () => {
   it("leaves the reply's name to MJ's chat area, so the agent that answered is the one named", async () => {
     TestBed.resetTestingModule();
     provideStreamingStub();
-    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: [CollabBandChipComponent, CollabChatScopeBarComponent, MJButtonDirective, SharedGenericModule, ChatSlotDirective, ChatAreaStub] } });
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
     const fixture = TestBed.createComponent(CollabSpaceChatComponent);
     fixture.componentRef.setInput('ConversationId', 'c1');
     fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
@@ -988,4 +1166,788 @@ describe('the conversation of a space, read-only', () => {
     await render({});
     expect(streamingStub.initialize).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the linked workstream pill in the header and binds BeforeAgentTurn / AfterAgentTurn typed outputs for the agentPresence indicator', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Ada' } as unknown as UserInfo);
+    fixture.componentRef.setInput('LinkedWorkstreamItem', { kind: 'task', id: 'task-1', title: 'Audit Charter Review', status: 'InProgress' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+
+    // Emit typed BeforeAgentTurn from chat area
+    area.BeforeAgentTurn.emit({
+      AgentId: 'agent-1',
+      AgentName: 'Sage',
+      Route: 'ThreadReply',
+      ConversationId: 'c1',
+      UserMessageId: 'm1',
+      ParentMessageId: 'm0',
+      MessageText: 'Follow up',
+      Cancel: false,
+    });
+    fixture.componentInstance.activeAgentStatusText = 'Drafting audit summary…';
+    fixture.detectChanges();
+    expect(area.ShowAgentCharacter).toBe(true);
+
+    const pill = host.querySelector('[data-testid="linked-workstream-pill"]');
+    expect(pill?.textContent).toContain('Audit Charter Review');
+    expect(pill?.textContent).toContain('InProgress');
+
+    // Indicator renders in agentPresence (not inside the header slot)
+    expect(host.querySelector('.space-chat-header-slot [data-testid="agent-working-progress-bar"]')).toBeNull();
+    const progress = host.querySelector('[data-testid="agent-working-progress-bar"]');
+    expect(progress?.textContent).toContain('Sage is answering');
+    expect(progress?.textContent).toContain('Replying in the thread');
+    expect(progress?.textContent).toContain('Drafting audit summary…');
+
+    // Emitting AfterAgentTurn resets ShowAgentCharacter and clears activeAgentRoute to null so it never sticks across turns
+    area.AfterAgentTurn.emit({
+      AgentId: 'agent-1',
+      AgentName: 'Sage',
+      Route: 'ThreadReply',
+      ConversationId: 'c1',
+      UserMessageId: 'm1',
+      AgentMessage: null,
+      Success: true,
+    });
+    fixture.detectChanges();
+    expect(area.ShowAgentCharacter).toBe(false);
+    expect(fixture.componentInstance.activeAgentRoute).toBeNull();
+    expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).toBeNull();
+
+    // A null route shows no route badge label
+    fixture.componentInstance.onAgentTurnStarted({ agentName: 'Sage', route: null });
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="agent-working-progress-bar"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="agent-route-badge"]')).toBeNull();
+  });
+
+  it('formats AgentTurnRoute values in plain words and hides obvious or null routes', () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    const comp = fixture.componentInstance;
+    comp.activeAgentName = 'Sage';
+
+    const cases: Array<[AgentTurnRoute | null, string]> = [
+      ['ThreadReply', 'Replying in the thread'],
+      ['DecisionRouted', 'Following up'],
+      ['Continuity', 'Following up'],
+      ['Redirect', 'Handed to Sage'],
+      ['Mention', ''],
+      ['ConversationDefault', ''],
+      ['HostDefault', ''],
+      ['ConversationManager', ''],
+      [null, ''],
+    ];
+    for (const [route, expected] of cases) {
+      expect(comp.formatRouteBadge(route)).toBe(expected);
+    }
+  });
+
+  it('renders a member with a UserImageURL as an <img> in the thread bar and thread drawer, preserves outside ring, and opens the people menu via mj-menu', async () => {
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    const rootMsg = { ID: 'msg-root', ParentID: null, UserID: 'u1', User: 'Colin Brockman', Message: 'Root question about Q3 variances', __mj_CreatedAt: new Date() };
+    const memberPhotoReply = { ID: 'msg-r0', ParentID: 'msg-root', UserID: 'u1', User: 'Colin Brockman', Role: 'User', Message: 'Adding context in thread', __mj_CreatedAt: new Date() };
+    const outsideReply = { ID: 'msg-r1', ParentID: 'msg-root', UserID: 'u-ext', User: 'Priya Nair', Role: 'User', Message: 'External client perspective on Q3', __mj_CreatedAt: new Date() };
+    const aiReply = { ID: 'msg-r2', ParentID: 'msg-r1', UserID: null, User: 'Sage', Role: 'AI', Message: 'Here is the variance breakdown.', __mj_CreatedAt: new Date() };
+
+    fixture.componentRef.setInput('ConversationId', 'c1');
+    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'u1', Name: 'Colin Brockman', Email: 'colin@acme.com' } as unknown as UserInfo);
+    fixture.componentRef.setInput('ParticipantCount', 3);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    area.DisplayMessages = [rootMsg];
+    fixture.componentRef.setInput('SpaceMembers', [
+      {
+        id: 'm1',
+        userId: 'u1',
+        name: 'Colin Brockman',
+        email: 'colin@acme.com',
+        initials: 'CB',
+        avatarUrl: 'https://example.com/colin-photo.jpg',
+        roleName: 'Lead',
+        roleCode: 'Lead',
+        band: 'Team',
+        status: 'Active',
+      },
+      {
+        id: 'm2',
+        userId: 'u-ext',
+        name: 'Priya Nair',
+        email: 'priya@partner.org',
+        initials: 'PN',
+        roleName: 'Client',
+        roleCode: 'Client',
+        band: 'Shared',
+        status: 'Active',
+      },
+    ]);
+    fixture.componentRef.setInput('ThreadMessages', [rootMsg, memberPhotoReply, outsideReply, aiReply]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    // Collapsed: thread bar shows reply count & last reply, one Reply action button, and an <img> for the member with UserImageURL
+    const threadBar = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-replies"]')!;
+    expect(threadBar.textContent).toContain('3 replies');
+    expect(threadBar.textContent).toContain('Last reply from Sage');
+    const threadBarImg = threadBar.querySelector<HTMLImageElement>('mjc-avatar img.av-img');
+    expect(threadBarImg).not.toBeNull();
+    expect(threadBarImg?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
+    expect(host.querySelectorAll('[data-message-id="msg-root"] [data-testid="message-reply-btn"]').length).toBe(1);
+    expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')).toBeNull();
+
+    // Open thread: Reply action button disappears and one reply box appears at the bottom of the open thread
+    fixture.componentInstance.toggleThreadExpanded('msg-root');
+    fixture.detectChanges();
+    expect(host.querySelector('[data-message-id="msg-root"] [data-testid="message-reply-btn"]')).toBeNull();
+    const threadContainer = host.querySelector('[data-message-id="msg-root"] [data-testid="message-thread-drawer"]')!;
+    expect(threadContainer).not.toBeNull();
+    expect(threadContainer.querySelectorAll('[data-testid="thread-reply-box"]').length).toBe(1);
+
+    // Thread replies use <mjc-avatar>, render <img> for member with avatarUrl, and preserve the outside ring (.ext)
+    const avatars = threadContainer.querySelectorAll('.thread-reply-item mjc-avatar .av');
+    expect(avatars.length).toBe(3);
+    expect(avatars[0].querySelector('img.av-img')?.getAttribute('src')).toBe('https://example.com/colin-photo.jpg');
+    expect(avatars[1].classList.contains('ext')).toBe(true);
+    expect(avatars[2].classList.contains('ext')).toBe(false);
+
+    // AI reply shows Assistant mark; human reply has no "Participant" tag
+    const assistantMarks = threadContainer.querySelectorAll('[data-testid="thread-reply-assistant-mark"]');
+    expect(assistantMarks.length).toBe(1);
+    expect(assistantMarks[0].textContent?.trim()).toBe('Assistant');
+    expect(threadContainer.textContent).not.toContain('Participant');
+
+    // People popover uses mj-menu opened by [mjMenuTriggerFor] and mentions a participant when triggered
+    const participantsPill = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
+    expect(participantsPill).not.toBeNull();
+    participantsPill.click();
+    fixture.detectChanges();
+    const menu = document.body.querySelector('[data-testid="chat-participants-popover"]');
+    expect(menu).not.toBeNull();
+    const firstMenuItemBtn = document.body.querySelector<HTMLElement>('[data-testid="chat-participant-mention-btn"] button, [data-testid="chat-participant-mention-btn"]')!;
+    firstMenuItemBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.ComposerDraft).toBe('@Colin Brockman ');
+  });
 });
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:custom-metric',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:custom-metric',
+    label: 'Custom metric block',
+    icon: 'fa-solid fa-gauge-high',
+    side: 'Shared',
+    defaultZone: 'main',
+    sortKey: 55,
+    spaceTypes: ['*'],
+    description: 'Live metric block registered via ClassFactory',
+    emptyText: 'No metrics yet',
+  },
+})
+@Component({
+  selector: 'mjc-test-custom-metric-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-custom-metric-block">
+      Metric block for {{ SpaceId }} (readonly={{ ReadOnly }})
+    </div>
+  `,
+})
+class TestCustomMetricBlockComponent extends BaseSpacePageBlock {}
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:team-audit',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:team-audit',
+    label: 'Team audit block',
+    icon: 'fa-solid fa-user-shield',
+    side: 'Team',
+    defaultZone: 'main',
+    sortKey: 56,
+    spaceTypes: ['*'],
+    description: 'Internal team audit block',
+    emptyText: 'No team audits yet',
+  },
+})
+@Component({
+  selector: 'mjc-test-team-audit-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-team-audit-block">
+      Internal team audit block for {{ SpaceId }}
+    </div>
+  `,
+})
+class TestTeamAuditBlockComponent extends BaseSpacePageBlock {}
+
+@RegisterClassEx(BaseSpacePageBlock, {
+  key: 'test:omitted-side',
+  metadata: {
+    slot: 'page-block',
+    contributionKey: 'test:omitted-side',
+    label: 'Omitted side block',
+    icon: 'fa-solid fa-shield-halved',
+    defaultZone: 'main',
+    sortKey: 57,
+    spaceTypes: ['*'],
+    description: 'Block registered with no side in metadata',
+  },
+})
+@Component({
+  selector: 'mjc-test-omitted-side-block',
+  standalone: true,
+  template: `
+    <div data-testid="test-omitted-side-block">
+      Omitted side block for {{ SpaceId }}
+    </div>
+  `,
+})
+class TestOmittedSideBlockComponent extends BaseSpacePageBlock {}
+
+describe('Registered page blocks (BaseSpacePageBlock), rendered', () => {
+  const sampleOverviewPage = (blocks: CollabPageModel['blocks']): CollabPageModel => ({
+    id: 'page-overview',
+    builtInTabId: 'Overview',
+    title: 'Overview',
+    iconClass: 'fa-solid fa-house',
+    pageType: 'Overview',
+    band: 'Shared',
+    status: 'Published',
+    sequence: 0,
+    collaborative: true,
+    summary: 'Space overview',
+    body: '',
+    blocks,
+    comments: [],
+    updatedLabel: 'Today',
+    authorName: 'Ada',
+  });
+
+  it('discovers a @RegisterClassEx(BaseSpacePageBlock) component in the block picker and renders it on a page without changing space-pages or collaboration-section', () => {
+    void TestCustomMetricBlockComponent;
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-42');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.componentRef.setInput('Pages', [sampleOverviewPage([])]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const comp = fixture.componentInstance;
+    const options = comp.availableWidgetBlockOptions(comp.activePage!);
+    expect(options.some((o) => o.type === 'test:custom-metric' && o.label === 'Custom metric block')).toBe(true);
+
+    // Open the block picker via the main-column insert button and verify the registered block appears in the picker UI
+    let savedPage: CollabPageModel | null = null;
+    comp.PageSaveRequested.subscribe((p) => {
+      savedPage = p;
+      fixture.componentRef.setInput('Pages', [p]);
+    });
+
+    const insertButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('.sp-insert-btn'));
+    const mainInsertBtn = insertButtons.find((btn) => btn.textContent?.includes('Add to main column')) ?? insertButtons[0];
+    mainInsertBtn.click();
+    fixture.detectChanges();
+
+    const pickerCards = Array.from(host.querySelectorAll<HTMLButtonElement>('.sp-picker-card'));
+    const customCard = pickerCards.find((card) => card.querySelector('.sp-picker-lbl')?.textContent?.trim() === 'Custom metric block');
+    expect(customCard).toBeDefined();
+
+    // Click the custom block card in the picker and verify it mounts via NgComponentOutlet with its inputs
+    customCard!.click();
+    fixture.detectChanges();
+
+    expect(savedPage).not.toBeNull();
+    const rendered = host.querySelector('[data-testid="test-custom-metric-block"]');
+    expect(rendered).not.toBeNull();
+    expect(rendered?.textContent).toContain('Metric block for space-42 (readonly=false)');
+  });
+
+  it('filters the block picker and rendered page by side (including blocks registered with no side, which default to Team) so non-Team viewers never see or render a Team block', () => {
+    void TestTeamAuditBlockComponent;
+    void TestOmittedSideBlockComponent;
+    const pageWithTeamBlock = sampleOverviewPage([
+      { id: 'blk-team-1', type: 'test:team-audit', title: '', width: 'main' },
+      { id: 'blk-omitted-side', type: 'test:omitted-side', title: '', width: 'main' },
+      { id: 'blk-team-files', type: 'collab:team-files', title: '', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-99');
+    fixture.componentRef.setInput('CanWrite', false);
+    fixture.componentRef.setInput('CanSeeTeam', false);
+    fixture.componentRef.setInput('Pages', [pageWithTeamBlock]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const comp = fixture.componentInstance;
+
+    // Non-Team viewer does not see Team blocks or omitted-side blocks in the picker or on the rendered page
+    const sharedOnlyOptions = comp.availableWidgetBlockOptions(sampleOverviewPage([]));
+    expect(sharedOnlyOptions.some((o) => o.type === 'test:team-audit')).toBe(false);
+    expect(sharedOnlyOptions.some((o) => o.type === 'test:omitted-side')).toBe(false);
+    expect(sharedOnlyOptions.some((o) => o.type === 'collab:team-files')).toBe(false);
+    expect(host.querySelector('[data-testid="test-team-audit-block"]')).toBeNull();
+    expect(host.querySelector('[data-testid="test-omitted-side-block"]')).toBeNull();
+
+    // Switching CanSeeTeam to true exposes Team blocks and omitted-side blocks in the picker and renders them on the page
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.detectChanges();
+    const teamOptions = comp.availableWidgetBlockOptions(sampleOverviewPage([]));
+    expect(teamOptions.some((o) => o.type === 'test:team-audit')).toBe(true);
+    expect(teamOptions.some((o) => o.type === 'test:omitted-side')).toBe(true);
+    expect(teamOptions.some((o) => o.type === 'collab:team-files')).toBe(true);
+    expect(host.querySelector('[data-testid="test-team-audit-block"]')?.textContent).toContain('Internal team audit block for space-99');
+    expect(host.querySelector('[data-testid="test-omitted-side-block"]')?.textContent).toContain('Omitted side block for space-99');
+  });
+
+  it('renders a muted "This block is no longer available" notice in edit mode and nothing for viewers when a block key is unregistered', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(true);
+    TestBed.configureTestingModule({
+      providers: [{ provide: MJConfirmService, useValue: { Confirm: confirmSpy } }],
+    });
+    const pageWithRetiredBlock = sampleOverviewPage([
+      { id: 'blk-retired', type: 'custom:retired-widget', title: 'Retired widget', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-1');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('IsCustomizing', false);
+    fixture.componentRef.setInput('Pages', [pageWithRetiredBlock]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    // Viewer mode: nothing rendered for the unregistered block
+    expect(host.querySelector('[data-testid="block-unavailable-notice"]')).toBeNull();
+    expect(host.querySelectorAll('.sp-block').length).toBe(0);
+
+    // Edit mode: muted "This block is no longer available" card + compact block toolbar
+    fixture.componentRef.setInput('IsCustomizing', true);
+    fixture.detectChanges();
+    const unavailable = host.querySelector('[data-testid="block-unavailable-notice"]');
+    expect(unavailable).not.toBeNull();
+    expect(unavailable?.textContent).toContain('This block is no longer available');
+
+    const toolbar = host.querySelector('[data-testid="block-toolbar"]');
+    expect(toolbar).not.toBeNull();
+
+    // Removing a block confirms via MJConfirmService
+    let updatedPage: CollabPageModel | null = null;
+    fixture.componentInstance.PageSaveRequested.subscribe((p) => { updatedPage = p; });
+    await fixture.componentInstance.deleteBlock(fixture.componentInstance.activePage!, 0);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(updatedPage?.blocks).toHaveLength(0);
+  });
+
+  it('renders an empty block card with emptyText and emptyAction when a registered block is empty, and renders the compact Open tasks block when open tasks exist (F9)', () => {
+    const overviewWithEmptyAndWork = sampleOverviewPage([
+      { id: 'blk-needs-you', type: 'collab:needs-you', title: '', width: 'main' },
+      { id: 'blk-shared-files', type: 'collab:shared-files', title: '', width: 'main' },
+      { id: 'blk-open-tasks', type: 'collab:open-tasks', title: '', width: 'main' },
+    ]);
+
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('SpaceId', 'space-audit');
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.componentRef.setInput('CanSeeTeam', true);
+    fixture.componentRef.setInput('IsCustomizing', false);
+    fixture.componentRef.setInput('Pages', [overviewWithEmptyAndWork]);
+    let uploadClicked = 0;
+    let openWorkClicked = 0;
+    fixture.componentRef.setInput('BlockContext', {
+      needsYouItems: [],
+      sharedItems: [],
+      tasks: [],
+      showLibraryLink: true,
+      showWorkLink: true,
+      canAddHere: true,
+      canWrite: true,
+      onUploadFileRequested: () => { uploadClicked++; },
+      onOpenWorkRequested: () => { openWorkClicked++; },
+    });
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const placeholders = Array.from(host.querySelectorAll('[data-testid="block-placeholder"]'));
+    expect(placeholders.length).toBe(3);
+    const emptyTexts = Array.from(host.querySelectorAll('[data-testid="block-empty-text"]')).map((el) => el.textContent?.trim());
+    expect(emptyTexts).toContain('Items needing your attention show here when there are any.');
+    expect(emptyTexts).toContain('Shared files show here when there are any.');
+    expect(emptyTexts).toContain('No open tasks');
+
+    const emptyActions = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="block-empty-action"]'));
+    const uploadAction = emptyActions.find((b) => b.textContent?.includes('Upload a file'));
+    const openWorkAction = emptyActions.find((b) => b.textContent?.includes('Open Work'));
+    expect(uploadAction).toBeDefined();
+    expect(openWorkAction).toBeDefined();
+    uploadAction!.click();
+    openWorkAction!.click();
+    expect(uploadClicked).toBe(1);
+    expect(openWorkClicked).toBe(1);
+
+    // Populate an open task and verify collab:open-tasks mounts the compact CollabSpaceWorkComponent
+    fixture.componentRef.setInput('BlockContext', {
+      needsYouItems: [],
+      sharedItems: [],
+      tasks: [
+        { id: 'task-1', name: 'Finalize Q3 variance memo', band: 'Shared', status: 'InProgress', priority: 'High' },
+        { id: 'task-2', name: 'Archived task', band: 'Shared', status: 'Completed', priority: 'Low' },
+      ],
+      showLibraryLink: true,
+      showWorkLink: true,
+      canAddHere: true,
+      canWrite: true,
+      onOpenWorkRequested: () => { openWorkClicked++; },
+    });
+    fixture.detectChanges();
+
+    const compactWork = host.querySelector('[data-testid="space-work-compact"]');
+    expect(compactWork).not.toBeNull();
+    expect(compactWork?.textContent).toContain('Finalize Q3 variance memo');
+    expect(compactWork?.textContent).not.toContain('Archived task');
+  });
+});
+
+describe('Round 5 UI Polish: switcher popover, header, explicit-ask turn, and starring, rendered', () => {
+  it('opens the full-width switcher popover when the rail is collapsed, shows Starred spaces, and picks a space or closes on Escape (F1, F10)', () => {
+    const fixture = TestBed.createComponent(CollabSpaceRailComponent);
+    fixture.componentRef.setInput('Mode', 'home');
+    fixture.componentRef.setInput('Spaces', [
+      { id: 's-1', name: 'Q3 Financial Audit', glyph: 'Briefcase', tone: 'blue', typeLabel: 'Workspace', isStarred: true },
+      { id: 's-2', name: 'Board of Directors', glyph: 'Gavel', tone: 'purple', typeLabel: 'Board', isStarred: false },
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const collapseBtn = host.querySelector<HTMLButtonElement>('.btn-nav-toggle')!;
+    collapseBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isCollapsed).toBe(true);
+
+    const switcherBtn = host.querySelector<HTMLButtonElement>('[data-testid="rail-space-switcher"]')!;
+    expect(switcherBtn).not.toBeNull();
+    switcherBtn.click();
+    fixture.detectChanges();
+
+    const popover = host.querySelector<HTMLElement>('.switcher-popover')!;
+    expect(popover).not.toBeNull();
+    const starredSection = popover.querySelector('[data-testid="switcher-starred-spaces"]');
+    expect(starredSection).not.toBeNull();
+    expect(starredSection?.textContent).toContain('Q3 Financial Audit');
+
+    // Verify popover rows are not matched by the collapsed rail-body rule
+    const popoverRows = Array.from(popover.querySelectorAll<HTMLButtonElement>('.rail-row'));
+    expect(popoverRows.length).toBeGreaterThan(0);
+    expect(popoverRows.some((r) => r.matches('.rail.collapsed .rail-body .rail-row'))).toBe(false);
+    const spaceRow = popoverRows.find((r) => r.querySelector('.row-label')?.textContent?.includes('Q3 Financial Audit'))!;
+    expect(spaceRow).toBeDefined();
+
+    const opened: string[] = [];
+    fixture.componentInstance.SpaceOpenRequested.subscribe((id) => opened.push(id));
+    spaceRow.click();
+    fixture.detectChanges();
+    expect(opened).toEqual(['s-1']);
+    expect(host.querySelector('.switcher-popover')).toBeNull();
+
+    // Reopen and close via Escape
+    switcherBtn.click();
+    fixture.detectChanges();
+    expect(host.querySelector('.switcher-popover')).not.toBeNull();
+    escape();
+    fixture.detectChanges();
+    expect(host.querySelector('.switcher-popover')).toBeNull();
+
+    // Uncollapsed Home rail shows Starred section above Spaces
+    collapseBtn.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isCollapsed).toBe(false);
+    const railStarred = host.querySelector('[data-testid="rail-starred-spaces"]');
+    expect(railStarred).not.toBeNull();
+    expect(railStarred?.textContent).toContain('Q3 Financial Audit');
+  });
+
+  it('renders type chip, subtitle with tooltip, All spaces breadcrumb on every space, and clickable type tile button in CollabSpaceHeaderComponent (F4, F5, F8)', () => {
+    const fixture = TestBed.createComponent(CollabSpaceHeaderComponent);
+    fixture.componentRef.setInput('Title', 'Audit committee');
+    fixture.componentRef.setInput('TypeName', 'Committee');
+    fixture.componentRef.setInput('Subtitle', 'Charter, agendas, and audit trail for the committee');
+    fixture.componentRef.setInput('Breadcrumbs', []);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const typeChip = host.querySelector('[data-testid="space-header-type-chip"]');
+    expect(typeChip?.textContent?.trim()).toBe('Committee');
+
+    const subtitle = host.querySelector<HTMLElement>('[data-testid="space-header-subtitle"]');
+    expect(subtitle?.textContent?.trim()).toBe('Charter, agendas, and audit trail for the committee');
+    expect(subtitle?.getAttribute('title')).toBe('Charter, agendas, and audit trail for the committee');
+
+    const crumbs = host.querySelector('[data-testid="space-header-breadcrumbs"]');
+    expect(crumbs).not.toBeNull();
+    expect(crumbs?.textContent).toContain('All spaces');
+
+    const tileBtn = host.querySelector<HTMLButtonElement>('[data-testid="space-header-tile-btn"]')!;
+    expect(tileBtn).not.toBeNull();
+    expect(tileBtn.getAttribute('aria-label')).toBe('All spaces');
+
+    const selected: unknown[] = [];
+    fixture.componentInstance.BreadcrumbSelectRequested.subscribe((c) => selected.push(c));
+    tileBtn.click();
+    expect(selected).toEqual([{ label: 'All spaces' }]);
+  });
+
+  it('executes a Route: Redirect agent turn when clicking "Ask <Agent> to answer?" and renders Replying to <Person> + excerpt from the parent message while AI reply UserID stays system (F7, R5-B1, R5-S2)', async () => {
+    vi.useFakeTimers();
+    TestBed.resetTestingModule();
+    provideStreamingStub();
+    TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+    const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+    const userMsg = { ID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Can someone check Q3 variance?' };
+    const aiMsg = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', UserID: '00000000-0000-0000-0000-000000000000', User: 'System', Message: 'Variance is +4.2%.' };
+    fixture.componentRef.setInput('ConversationId', 'conv-1');
+    fixture.componentRef.setInput('ConversationName', 'General');
+    fixture.componentRef.setInput('SpaceId', 'space-1');
+    fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
+    fixture.componentRef.setInput('DefaultAgentName', 'Sage');
+    fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
+    const turnCalls: unknown[] = [];
+    fixture.componentRef.setInput('AgentTurnHandler', async (req: unknown) => {
+      turnCalls.push(req);
+      return { Success: true, ReplyDetailIds: ['reply-100'] };
+    });
+    fixture.detectChanges();
+    const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+    area.DisplayMessages = [userMsg, aiMsg];
+    fixture.componentRef.setInput('ThreadMessages', [userMsg, aiMsg]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const replyParent = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]');
+    expect(replyParent).not.toBeNull();
+    expect(replyParent?.textContent).toContain('Replying to Ada Lovelace');
+    expect(replyParent?.textContent).toContain('Can someone check Q3 variance?');
+    expect(replyParent?.getAttribute('title')).toBe('Can someone check Q3 variance?');
+    expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
+
+    // Trigger a reply to Ada without @mentioning an agent -> prompt appears
+    fixture.componentInstance.onUserMessageSent(
+      { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-colin', Message: 'Let us ask Sage on this.' },
+      fixture.componentInstance.ThreadMessages[0],
+    );
+    vi.advanceTimersByTime(150);
+    fixture.detectChanges();
+
+    const askBtn = host.querySelector<HTMLButtonElement>('[data-testid="ask-agent-go-confirm"]')!;
+    expect(askBtn).not.toBeNull();
+    expect(askBtn.textContent).toContain('Ask Sage');
+    askBtn.click();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(turnCalls).toEqual([
+      {
+        ConversationId: 'conv-1',
+        BranchID: null,
+        UserMessageId: 'msg-3',
+        MessageText: 'Let us ask Sage on this.',
+        AgentId: 'agent-sage',
+        AgentName: 'Sage',
+        Route: 'Redirect',
+        ApplicationId: null,
+        AppContext: null,
+        AgentHistoryFrom: null,
+        ConfigurationPresetId: null,
+        RequestedSkillIDs: [],
+        PlanMode: false,
+        TargetArtifactVersionId: null,
+      },
+    ]);
+    vi.useRealTimers();
+  });
+});
+
+describe('Round 6 UI Polish: reply parent excerpt, AI agent marks, people & agents menu, and audience pill, rendered', () => {
+  it('renders Replying to <author> + excerpt with full hover text on every reply, AI agent rounded-square marks with cached MJ: AI Agents LogoURL/IconClass, and matching People & Agents list + button count that update live without reload (R5-S2, G1, G2, R6-S1)', () => {
+    const agentsSpy = vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue([
+      {
+        ID: 'agent-sage',
+        Name: 'Sage',
+        LogoURL: null,
+        IconClass: 'fa-brands fa-superpowers',
+        Description: 'Ambient assistant',
+      },
+      {
+        ID: 'agent-codesmith',
+        Name: 'Codesmith',
+        LogoURL: 'https://cdn.example.com/codesmith.png',
+        IconClass: 'fa-solid fa-code',
+        Description: 'Coding specialist',
+      },
+    ] as unknown as typeof AIEngineBase.Instance.Agents);
+    try {
+
+      TestBed.resetTestingModule();
+      provideStreamingStub();
+      TestBed.overrideComponent(CollabSpaceChatComponent, { set: { imports: chatTestImports } });
+      const fixture = TestBed.createComponent(CollabSpaceChatComponent);
+
+      const fullRootText =
+        'Can someone verify the Q3 variance schedule on page 4 and confirm whether the revenue adjustment was booked in September?';
+      const msg1 = { ID: 'msg-1', Role: 'User', UserID: 'user-colin', User: 'Colin Brockman', Message: fullRootText };
+      const msg2 = { ID: 'msg-2', ParentID: 'msg-1', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'I verified page 4 — the variance is +4.2%.' };
+      const msg3 = { ID: 'msg-3', ParentID: 'msg-1', Role: 'User', UserID: 'user-ada', User: 'Ada Lovelace', Message: 'Thanks Colin, checking the September journal entry now.' };
+      const msg4 = { ID: 'msg-4', ParentID: 'msg-3', Role: 'AI', AgentID: 'agent-sage', Agent: 'Sage', Message: 'Journal entry #418 matches the September adjustment.' };
+
+      fixture.componentRef.setInput('ConversationId', 'conv-r6');
+      fixture.componentRef.setInput('ConversationName', 'Variance Review');
+      fixture.componentRef.setInput('SpaceId', 'space-1');
+      fixture.componentRef.setInput('DefaultAgentId', 'agent-sage');
+      fixture.componentRef.setInput('DefaultAgentName', 'Sage');
+      fixture.componentRef.setInput('CurrentUser', { ID: 'user-colin', Name: 'Colin Brockman', Email: 'colin@example.com' } as unknown as UserInfo);
+      fixture.componentRef.setInput('SpaceMembers', [
+        { id: 'm1', userId: 'user-colin', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+        { id: 'm2', userId: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+        { id: 'm3', userId: 'user-client', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
+      ]);
+      fixture.detectChanges();
+
+      const area = fixture.debugElement.query((node) => node.name === 'mj-conversation-chat-area').injector.get(ChatAreaStub);
+      area.DisplayMessages = [msg1, msg2];
+      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+
+      // R5-S2: Main-flow reply (msg-2) shows "Replying to Colin Brockman" + truncated excerpt + full hover title
+      const mainReplyCue = host.querySelector<HTMLElement>('[data-testid="message-thread-parent"]')!;
+      expect(mainReplyCue).not.toBeNull();
+      expect(mainReplyCue.textContent).toContain('Replying to Colin Brockman');
+      expect(mainReplyCue.textContent).toContain('Can someone verify the Q3 variance schedule on page 4');
+      expect(mainReplyCue.getAttribute('title')).toBe(fullRootText);
+      expect(host.querySelector('[data-testid="message-asked-by"]')).toBeNull();
+
+      // G1: Thread bar shows AI agent avatar with rounded-square .ai-av and Sage's IconClass from cached MJ: AI Agents (not plain "AI" text)
+      const threadToggleBtn = host.querySelector<HTMLButtonElement>('[data-testid="message-thread-replies"]')!;
+      expect(threadToggleBtn).not.toBeNull();
+      const threadBarAiAv = threadToggleBtn.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(threadBarAiAv).not.toBeNull();
+      expect(threadBarAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+      expect(threadBarAiAv.textContent?.trim()).toBe('');
+
+      // Expand the thread drawer and verify R5-S2 + G1 inside the thread
+      threadToggleBtn.click();
+      fixture.detectChanges();
+
+      const drawer = host.querySelector<HTMLElement>('[data-testid="message-thread-drawer"]')!;
+      expect(drawer).not.toBeNull();
+      const drawerAiAv = drawer.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(drawerAiAv).not.toBeNull();
+      expect(drawerAiAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+
+      const nestedTargetCue = drawer.querySelector<HTMLElement>('[data-testid="thread-reply-target"]')!;
+      expect(nestedTargetCue).not.toBeNull();
+      expect(nestedTargetCue.textContent).toContain('Replying to Ada Lovelace');
+      expect(nestedTargetCue.textContent).toContain('Thanks Colin, checking the September journal entry now.');
+      expect(nestedTargetCue.getAttribute('title')).toBe('Thanks Colin, checking the September journal entry now.');
+
+      // G2: Header participants button count matches the menu items (3 people + 1 agent = 4)
+      const partBtn = host.querySelector<HTMLButtonElement>('[data-testid="chat-participants-pill"]')!;
+      expect(partBtn).not.toBeNull();
+      expect(partBtn.textContent?.trim()).toBe('4');
+
+      partBtn.click();
+      fixture.detectChanges();
+      const popover = document.body.querySelector<HTMLElement>('[data-testid="chat-participants-popover"]')!;
+      expect(popover).not.toBeNull();
+      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (3)');
+      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (1)');
+      const menuRows = popover.querySelectorAll('.chat-participant-row');
+      expect(menuRows.length).toBe(Number(partBtn.textContent?.trim()));
+      const agentMenuAv = popover.querySelector<HTMLElement>('.av.ai-av')!;
+      expect(agentMenuAv).not.toBeNull();
+      expect(agentMenuAv.querySelector('i.fa-brands.fa-superpowers')).not.toBeNull();
+
+      // Live update without reload when a new person posts and a second agent (with LogoURL) answers
+      const msg5 = { ID: 'msg-5', ParentID: 'msg-1', Role: 'User', UserID: 'user-riku', User: 'Riku Sato', Message: '@Codesmith please check the SQL script.' };
+      const msg6 = { ID: 'msg-6', ParentID: 'msg-5', Role: 'AI', AgentID: 'agent-codesmith', Agent: 'Codesmith', Message: 'SQL script looks clean.' };
+      fixture.componentRef.setInput('ThreadMessages', [msg1, msg2, msg3, msg4, msg5, msg6]);
+      fixture.detectChanges();
+
+      expect(partBtn.textContent?.trim()).toBe('6');
+      expect(popover.querySelector('[data-testid="chat-participants-people-heading"]')?.textContent?.trim()).toBe('People (4)');
+      expect(popover.querySelector('[data-testid="chat-participants-agents-heading"]')?.textContent?.trim()).toBe('Agents (2)');
+      expect(popover.querySelectorAll('.chat-participant-row').length).toBe(6);
+      const logoImg = popover.querySelector<HTMLImageElement>('.av.ai-av img.av-img')!;
+      expect(logoImg).not.toBeNull();
+      expect(logoImg.getAttribute('src')).toBe('https://cdn.example.com/codesmith.png');
+    } finally {
+      agentsSpy.mockRestore();
+    }
+  });
+
+  it('groups faces by side on CollabAudiencePillComponent with "Team N" and teal "Outside N", drops the separate summary line, and shows only Team when there are no outside people (G3)', () => {
+    const fixture = TestBed.createComponent(CollabAudiencePillComponent);
+    fixture.componentRef.setInput('CanInvite', true);
+    fixture.componentRef.setInput('Members', [
+      { id: 'm1', userId: 'u1', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+      { id: 'm2', userId: 'u2', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+      { id: 'm3', userId: 'u3', name: 'Riku Sato', email: 'riku@example.com', initials: 'RS', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+      { id: 'm4', userId: 'u4', name: 'Client Partner', email: 'client@partner.org', initials: 'CP', roleName: 'Reviewer', roleCode: 'Reviewer', band: 'Shared', status: 'Active' },
+    ]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLButtonElement>('[data-testid="audience-pill-trigger"]')!;
+    expect(trigger).not.toBeNull();
+
+    const teamLabel = trigger.querySelector<HTMLElement>('[data-testid="audience-pill-team-label"]')!;
+    const outsideLabel = trigger.querySelector<HTMLElement>('[data-testid="audience-pill-outside-label"]')!;
+    expect(teamLabel?.textContent?.trim()).toBe('Team 3');
+    expect(outsideLabel?.textContent?.trim()).toBe('Outside 1');
+    expect(outsideLabel.classList.contains('outside')).toBe(true);
+    expect(trigger.textContent).not.toContain('3 Team · 1 Outside');
+    expect(trigger.textContent).not.toContain('4 people');
+
+    // Open popover and verify the same two headings ("Team 3" and "Outside 1") appear
+    trigger.click();
+    fixture.detectChanges();
+    const popover = host.querySelector<HTMLElement>('[data-testid="audience-pill-popover"]')!;
+    expect(popover).not.toBeNull();
+    expect(popover.querySelector('[data-testid="audience-pop-team-heading"]')?.textContent?.trim()).toBe('Team 3');
+    expect(popover.querySelector('[data-testid="audience-pop-outside-heading"]')?.textContent?.trim()).toBe('Outside 1');
+
+    // When there are no outside people, only the Team group shows on the pill
+    fixture.componentRef.setInput('Members', [
+      { id: 'm1', userId: 'u1', name: 'Colin Brockman', email: 'colin@example.com', initials: 'CB', roleName: 'Owner', roleCode: 'Owner', band: 'Team', status: 'Active' },
+      { id: 'm2', userId: 'u2', name: 'Ada Lovelace', email: 'ada@example.com', initials: 'AL', roleName: 'Contributor', roleCode: 'Contributor', band: 'Team', status: 'Active' },
+    ]);
+    fixture.detectChanges();
+
+    expect(trigger.querySelector('[data-testid="audience-pill-team-label"]')?.textContent?.trim()).toBe('Team 2');
+    expect(trigger.querySelector('[data-testid="audience-pill-outside-group"]')).toBeNull();
+    expect(trigger.querySelector('[data-testid="audience-pill-outside-label"]')).toBeNull();
+  });
+});
+
+
+
+
