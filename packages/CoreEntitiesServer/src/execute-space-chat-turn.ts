@@ -107,6 +107,12 @@ export type ExecuteSpaceChatTurnResult =
       }
     | { ok: false; message: string };
 
+/**
+ * Stored as the reply row's `ExternalID` when the turn came from the author's explicit ask (`route: 'Redirect'`), so the reply
+ * shows why the agent spoke; a tagged or routed turn's reply has none. It is written in the insert that starts the turn.
+ */
+export const EXPLICIT_ASK_MARKER = 'collab:explicit-ask';
+
 /** What everyone in the space reads when a turn fails; the cause goes to the log, not to the conversation. */
 const ASSISTANT_FAILED_MESSAGE = 'The assistant could not answer that. Please try again.';
 
@@ -509,6 +515,7 @@ async function runClaimedTurn(
     assistantDetail.IsPinned = false;
     assistantDetail.OriginalMessageChanged = false;
     assistantDetail.Message = '⏳ Starting...';
+    if (isExplicitAsk) assistantDetail.ExternalID = EXPLICIT_ASK_MARKER;
     if (!(await assistantDetail.Save()) || !assistantDetail.ID) {
         const errMsg = assistantDetail.LatestResult?.CompleteMessage ?? 'Failed to initialize assistant detail record.';
         LogError(`executeSpaceChatTurn: ${errMsg}`);

@@ -87,7 +87,7 @@ export type { ResolvedAllowedAgentsResult, SpaceAgentItem } from './resolve-allo
 export { resolveSpaceKnowledgeSources, resolveSpaceAgentSkills } from './resolve-space-agent-context.js';
 export type { SpaceFileStore, StoredSpaceFile, UploadSpaceFileRequest, UploadSpaceFileOutcome } from './upload-space-file.js';
 export { syncRoomEditGrantsForSpace, CONVERSATIONS_RESOURCE_TYPE_ID } from './room-edit-grants.js';
-export { executeSpaceChatTurn } from './execute-space-chat-turn.js';
+export { EXPLICIT_ASK_MARKER, executeSpaceChatTurn } from './execute-space-chat-turn.js';
 export type { ExecuteSpaceChatTurnInput, ExecuteSpaceChatTurnResult, SpaceAgentCitation, TurnObserver, TurnOutcome } from './execute-space-chat-turn.js';
 export { isDecisionRoutingAvailable, resolveTurnAgentViaDecision, SERVER_DECISION_ROUTING_TIMEOUT_MS } from './space-chat-decision-routing.js';
 export type { SpaceChatDecisionRunner, ResolveTurnAgentViaDecisionParams, ResolveTurnAgentViaDecisionResult } from './space-chat-decision-routing.js';

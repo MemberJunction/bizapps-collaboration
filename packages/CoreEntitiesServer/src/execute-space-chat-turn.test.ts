@@ -4,7 +4,7 @@ import { ConversationEngine } from '@memberjunction/core-entities';
 import { WellKnownUserSource, type EntityInfo, type IMetadataProvider, type IRunViewProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import { executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
+import { EXPLICIT_ASK_MARKER, executeSpaceChatTurn, type ExecuteSpaceChatTurnInput } from '../dist/execute-space-chat-turn.js';
 import { resolveSpaceChatHostRules } from '../dist/resolve-space-chat-host-rules.js';
 import { COLLABORATION_SPACE_SCOPE_ID } from '../dist/turn-tools.js';
 import { CollaborationEngine } from '../dist/CollaborationEngine.js';
@@ -131,6 +131,7 @@ describe('executeSpaceChatTurn', () => {
         AgentID?: string | null;
         Status?: string;
         Message?: string;
+        ExternalID?: string | null;
         serverAuthoredReplyMarked?: boolean;
     }
 
@@ -924,6 +925,7 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(initialReply.Role, 'AI');
         assert.equal(initialReply.Status, 'In-Progress');
         assert.equal(initialReply.serverAuthoredReplyMarked, true, 'Assistant reply must call MarkServerAuthoredReply() before Save()');
+        assert.equal(initialReply.ExternalID ?? null, null, 'a tagged turn\'s reply carries no explicit-ask marker');
         const finalReply = provider.savedDetails[provider.savedDetails.length - 1];
         assert.equal(finalReply.ParentID, USER_MESSAGE_ID);
         assert.equal(finalReply.Role, 'AI');
@@ -1220,6 +1222,7 @@ describe('executeSpaceChatTurn', () => {
         assert.equal(reply.AgentID, ALLOWED_AGENT_ID, 'reply runs the requested allowed agent');
         assert.equal(reply.UserID, SYSTEM_USER_ID, 'reply stays authored by the server system user (R5-B1)');
         assert.equal(reply.Status, 'Complete');
+        assert.equal(provider.savedDetails[0].ExternalID, EXPLICIT_ASK_MARKER, 'the reply row is inserted with the explicit-ask marker');
     });
 
     it("refuses an explicit ask (route: 'Redirect') from another member who did not author the message, when the caller cannot post, or when the agent is not allowed in the space (R5-B2)", async () => {

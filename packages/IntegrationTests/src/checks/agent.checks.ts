@@ -7,6 +7,7 @@ import {
     collaborationFileStore,
     createSpaceConversation,
     decideUploadBand,
+    EXPLICIT_ASK_MARKER,
     executeSpaceChatTurn,
     isDecisionRoutingAvailable,
     loadSpaceConfiguration,
@@ -2103,7 +2104,7 @@ const checks: NamedCheck[] = [
     },
     {
         Id: 'agent.AG14',
-        Name: "AG14 — An explicit ask (Route 'Redirect', the chat's \"Ask <Agent> to answer?\" prompt) answers an untagged message, but only for the message's author and only with an agent the space allows",
+        Name: "AG14 — An explicit ask (Route 'Redirect', the chat's \"Ask <Agent> to answer?\" prompt) answers an untagged message, but only for the message's author and only with an agent the space allows, and its reply records the ask",
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const ada = await GetPersonaUser(ctx, 'ada');
@@ -2136,6 +2137,23 @@ const checks: NamedCheck[] = [
                 const asked = await turn(bea, COLLABORATION_TEST_AGENT_ID, 'Redirect');
                 Assert(asked.ok === true, `Bea's explicit ask runs the turn: ${asked.ok ? '' : asked.message}`);
                 if (asked.ok) createdDetailIds.push(...(asked.replyDetailIds ?? []));
+
+                // The ask is recorded on its reply; a tagged turn's reply carries no marker
+                const marker = async (replyId: string | undefined) =>
+                    (await FindRows<{ ExternalID: string | null }>(ctx, CONVERSATION_DETAIL_ENTITY, `ID = '${replyId}'`, ['ExternalID']))[0]?.ExternalID ?? null;
+                Assert(asked.ok && (await marker(asked.replyDetailIds?.[0])) === EXPLICIT_ASK_MARKER, "The asked turn's reply records the explicit ask");
+                const tagged = await postSpaceMessage(ctx.Provider, bea, {
+                    spaceId: DISCOVERY_SPACE_ID,
+                    conversationId: start.conversationId!,
+                    text: `@${COLLABORATION_TEST_AGENT_NAME} what shared materials are available in Discovery?`,
+                });
+                Assert(tagged.ok === true && !!tagged.detailId, 'Bea posts a tagged question');
+                if (!tagged.ok || !tagged.detailId) return;
+                createdDetailIds.push(tagged.detailId);
+                const taggedTurn = await executeSpaceChatTurn(ctx.Provider, bea, { spaceId: DISCOVERY_SPACE_ID, conversationId: start.conversationId!, userMessageId: tagged.detailId });
+                Assert(taggedTurn.ok === true, `The tagged turn runs: ${taggedTurn.ok ? '' : taggedTurn.message}`);
+                if (taggedTurn.ok) createdDetailIds.push(...(taggedTurn.replyDetailIds ?? []));
+                Assert(taggedTurn.ok && (await marker(taggedTurn.replyDetailIds?.[0])) === null, "The tagged turn's reply carries no ask marker");
             } finally {
                 await cleanupConversation(ctx.Provider, ctx.User, start.conversationId!, start.spaceChatId!);
             }

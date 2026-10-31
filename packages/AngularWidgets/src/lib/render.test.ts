@@ -297,6 +297,41 @@ describe('the header and page edit bar, rendered', () => {
   });
 });
 
+describe('a page checklist, rendered', () => {
+  it('lets only page editors tick a checklist, and offers no Collaborative badge or setting until members can participate', () => {
+    const fixture = TestBed.createComponent(CollabSpacePagesComponent);
+    fixture.componentRef.setInput('CanWrite', false);
+    fixture.componentRef.setInput('Pages', [
+      {
+        id: 'p1',
+        title: 'Overview',
+        iconClass: 'fa-solid fa-compass',
+        pageType: 'Overview',
+        band: 'Shared',
+        status: 'Published',
+        sequence: 0,
+        collaborative: true,
+        summary: 'Welcome',
+        body: '',
+        blocks: [{ id: 'b1', type: 'Checklist', title: 'Launch', width: 'main', checklist: [{ id: 'c1', text: 'Kickoff', done: false }] }],
+        comments: [],
+        updatedLabel: 'Just now',
+        authorName: 'Ada',
+      },
+    ]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const box = () => root.querySelector<HTMLInputElement>('.sp-b-checklist input[type="checkbox"]')!;
+    expect(box().disabled).toBe(true);
+    expect(root.textContent).not.toContain('Collaborative');
+
+    fixture.componentRef.setInput('CanWrite', true);
+    fixture.detectChanges();
+    expect(box().disabled).toBe(false);
+    fixture.destroy();
+  });
+});
+
 describe('the dialogs, rendered', () => {
   it('closes each dialog on Escape, and not the upload while it is saving', async () => {
     const upload = TestBed.createComponent(CollabUploadDialogComponent);

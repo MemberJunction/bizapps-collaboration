@@ -606,7 +606,7 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                                                     <input
                                                         type="checkbox"
                                                         [checked]="item.done"
-                                                        [disabled]="!canParticipateInPage(page)"
+                                                        [disabled]="!canEditPage(page)"
                                                         (change)="toggleChecklistItem(page, block, item)" />
                                                     <span>{{ item.text }}</span>
                                                 </label>
@@ -730,9 +730,6 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                                     <span class="sp-badge type">{{ page.pageType }}</span>
                                     @if (page.status === 'Draft') {
                                         <span class="sp-badge draft"><i class="fa-solid fa-pen-ruler"></i> Draft</span>
-                                    }
-                                    @if (page.collaborative) {
-                                        <span class="sp-badge collab"><i class="fa-solid fa-users"></i> Collaborative</span>
                                     }
                                     @if (hasUnpublishedDraft(page)) {
                                         <span class="sp-badge dirty"><i class="fa-solid fa-circle-dot"></i> Unpublished edits</span>
@@ -1232,10 +1229,6 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
                                     </select>
                                 </label>
                             }
-                            <label class="sp-b-check-label">
-                                <input type="checkbox" [(ngModel)]="pageFormDraft.collaborative" />
-                                <span>Allow space members to check off checklist items and post comments</span>
-                            </label>
                         </div>
                         <footer class="sp-drawer-foot">
                             @if (pageFormMode === 'edit' && activePage && !activePage.isSeed && !activePage.builtInTabId && visiblePages.length > 1) {
@@ -1575,10 +1568,6 @@ const STATIC_CONTENT_BLOCK_TYPES = new Set<string>(COLLAB_BLOCK_OPTIONS.map((o) 
         .sp-badge.draft, .sp-badge.dirty {
             background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
             color: var(--mj-status-warning);
-        }
-        .sp-badge.collab {
-            background: color-mix(in srgb, var(--mj-status-success) 14%, var(--mj-bg-surface));
-            color: var(--mj-status-success);
         }
         .sp-page-title {
             margin: 0;
@@ -2647,7 +2636,6 @@ export class CollabSpacePagesComponent {
     @Input() CurrentUserName = 'Member';
     @Input() CurrentUserInitials = 'ME';
     @Input() CanWrite = false;
-    @Input() CanCollaborate = false;
     @Input() CanSeeTeam = false;
     @Input() IsReadOnly = false;
     @Input() IsSaving = false;
@@ -3006,17 +2994,10 @@ export class CollabSpacePagesComponent {
     /**
      * Only authorized space page admins (`CanWrite`) can customize page layout,
      * add/edit/remove blocks, edit page intros, or publish page changes.
+     * Ticking a checklist saves the whole page too, so it is theirs alone until a participation operation exists.
      */
     public canEditPage(_page: CollabPageModel): boolean {
         return !this.IsReadOnly && this.CanWrite;
-    }
-
-    /**
-     * Contributors can participate in interactive page elements (e.g. checking off
-     * collaborative checklists or posting questions/comments) when `page.collaborative` is true.
-     */
-    public canParticipateInPage(page: CollabPageModel): boolean {
-        return !this.IsReadOnly && (this.CanWrite || (this.CanCollaborate && page.collaborative));
     }
 
     public hasUnpublishedDraft(page: CollabPageModel): boolean {
